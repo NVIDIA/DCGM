@@ -87,7 +87,7 @@ class DcgmCollectdPlugin(DcgmReader):
     ###########################################################################
     def __init__(self):
         collectd.debug('Initializing DCGM with interval={}s'.format(g_intervalSec))
-        DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin', updateFrequency=g_intervalSec*1000)
+        DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin', updateFrequency=g_intervalSec*1000000)
 
     ###########################################################################
     def CustomDataHandler(self, fvs):

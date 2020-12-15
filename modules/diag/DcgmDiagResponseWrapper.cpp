@@ -27,7 +27,7 @@ const std::string cudaTkLibName("CUDA Toolkit Libraries");
 const std::string permissionsName("Permissions and OS-related Blocks");
 const std::string persistenceName("Persistence Mode");
 const std::string envName("Environmental Variables");
-const std::string pageRetirementName("Page Retirement");
+const std::string pageRetirementName("Page Retirement/Row Remap");
 const std::string graphicsName("Graphics Processes");
 const std::string inforomName("Inforom");
 

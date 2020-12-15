@@ -32,15 +32,22 @@ if (BUILD_TESTING)
             StringHelpersTests.cpp
     )
 
+    find_package(Threads REQUIRED)
+    
     target_link_libraries(commontests
         PRIVATE
             common_interface
-            common_objects
+            transport_objects
+            dcgm
+            dcgm_common
+            dcgm_logging
+            dcgm_mutex
             Catch2::Catch2
             sdk_nvml_essentials_objects
             sdk_nvml_interface
             sdk_nvml_loader
-            dcgm
+            ${CMAKE_THREAD_LIBS_INIT}
+            rt
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

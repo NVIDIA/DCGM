@@ -11,7 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_library(transport_objects OBJECT)
+
+add_library(transport_interface INTERFACE)
+target_include_directories(transport_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(transport_objects STATIC)
 target_link_libraries(transport_objects PUBLIC
     dcgm_interface
     common_interface

@@ -48,7 +48,7 @@ public:
         CUresult cuSt = cuInit(0);
         if (cuSt)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
@@ -67,7 +67,7 @@ public:
         cuSt = cuDeviceGetByPCIBusId(&cuDevice, pciBusId);
         if (cuSt)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDeviceGetByPCIBusId");
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
@@ -87,7 +87,7 @@ public:
         cuSt = cuCtxGetCurrent(&cuContext);
         if (cuSt)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxGetCurrent");
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
@@ -104,7 +104,7 @@ public:
 
             if (cuSt != CUDA_SUCCESS)
             {
-                DcgmError d;
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate");
 
                 cuGetErrorString(cuSt, &errorString);

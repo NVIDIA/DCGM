@@ -549,8 +549,8 @@ std::string Policy::HelperFormatTimestamp(long long timestamp)
 /*****************************************************************************/
 GetPolicy::GetPolicy(std::string hostname, unsigned int groupId, bool verbose, bool json)
 {
-    mHostName     = hostname;
-    mJson         = json;
+    m_hostName    = hostname;
+    m_json        = json;
     this->groupId = groupId;
     this->verbose = verbose;
 
@@ -561,7 +561,7 @@ GetPolicy::GetPolicy(std::string hostname, unsigned int groupId, bool verbose, b
 /*****************************************************************************/
 dcgmReturn_t GetPolicy::DoExecuteConnected()
 {
-    return policyObj.DisplayCurrentViolationPolicy(mNvcmHandle, groupId, verbose, mJson);
+    return policyObj.DisplayCurrentViolationPolicy(m_dcgmHandle, groupId, verbose, m_json);
 }
 
 
@@ -574,7 +574,7 @@ dcgmReturn_t GetPolicy::DoExecuteConnected()
 /*****************************************************************************/
 SetPolicy::SetPolicy(std::string hostname, dcgmPolicy_t &setPolicy, unsigned int groupId)
 {
-    mHostName       = hostname;
+    m_hostName      = hostname;
     this->setPolicy = setPolicy;
     this->groupId   = groupId;
 
@@ -585,7 +585,7 @@ SetPolicy::SetPolicy(std::string hostname, dcgmPolicy_t &setPolicy, unsigned int
 /*****************************************************************************/
 dcgmReturn_t SetPolicy::DoExecuteConnected()
 {
-    return policyObj.SetCurrentViolationPolicy(mNvcmHandle, groupId, setPolicy);
+    return policyObj.SetCurrentViolationPolicy(m_dcgmHandle, groupId, setPolicy);
 }
 
 
@@ -598,7 +598,7 @@ dcgmReturn_t SetPolicy::DoExecuteConnected()
 /*****************************************************************************/
 RegPolicy::RegPolicy(std::string hostname, unsigned int groupId, unsigned int condition)
 {
-    mHostName       = hostname;
+    m_hostName      = hostname;
     this->groupId   = groupId;
     this->condition = condition;
 
@@ -609,11 +609,11 @@ RegPolicy::RegPolicy(std::string hostname, unsigned int groupId, unsigned int co
 /*****************************************************************************/
 RegPolicy::~RegPolicy()
 {
-    policyObj.UnregisterPolicyUpdates(mNvcmHandle, groupId, condition);
+    policyObj.UnregisterPolicyUpdates(m_dcgmHandle, groupId, condition);
 }
 
 /*****************************************************************************/
 dcgmReturn_t RegPolicy::DoExecuteConnected()
 {
-    return policyObj.RegisterForPolicyUpdates(mNvcmHandle, groupId, condition);
+    return policyObj.RegisterForPolicyUpdates(m_dcgmHandle, groupId, condition);
 }

@@ -66,7 +66,7 @@ if (BUILD_TESTING)
         PRIVATE
         fake_plugin.cpp
     )
-    
+
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
         catch_discover_tests(nvvscoretests EXTRA_ARGS --use-colour yes)
     endif()

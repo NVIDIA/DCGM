@@ -45,6 +45,12 @@ public:
 
     /*************************************************************************/
     /*
+     * Track logging initialization.
+     */
+    void InitializeLogging(std::string logFile, DcgmLoggingSeverity_t logLevel);
+
+    /*************************************************************************/
+    /*
      * Process Argument sets.
      */
     dcgmReturn_t Process(std::function<dcgmReturn_t(std::shared_ptr<DcgmNs::ProfTester::Arguments_t> arguments)>);
@@ -63,13 +69,17 @@ public:
      * Run the tests that were specified on the command line
      *
      * Arguments:
-     *     reportingIterval - time to poll/report field in seconds
-     *     duration         - total running time in seconds
-     *     testFieldId      - test field ID (for error reporting)
+     *     reportingIterval  - time to poll/report field in seconds
+     *     duration          - total running time in seconds
+     *     testFieldId       - test field ID (for error reporting)
+     *     maxGpusInParallel - max simultaneous GPUs tested.
      *
      * Returns 0 on success. !0 on failure.
      */
-    dcgmReturn_t RunTests(double reportingInterval, double duration, unsigned int testFieldId);
+    dcgmReturn_t RunTests(double reportingInterval,
+                          double duration,
+                          unsigned int testFieldId,
+                          unsigned int maxGpusInParallel);
 
     /*************************************************************************/
     /*
@@ -133,6 +143,18 @@ private:
     dcgmReturn_t UnwatchFields(void);
 
     /* Child process control. */
+    dcgmReturn_t CreateWorkers(unsigned int testFieldId); /* Create workers (MIG and whole GPU) */
+
+    /* Start/Restart child processes. */
+    dcgmReturn_t StartTests(unsigned int maxGpusInParallel,
+                            unsigned int &runningGpus,
+                            std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus);
+
+    /* Process worker process test responses. */
+    dcgmReturn_t ProcessResponses(unsigned int maxGpusInParallel,
+                                  unsigned int &runningGpus,
+                                  std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus,
+                                  double duration);
 
     void AbortOtherChildren(unsigned int gpuId); /* Abort other GPU tests before test start. */
     void NukeChildren(bool force = false);       /* Call after test start. force aborts */
@@ -140,6 +162,9 @@ private:
     DcgmNs::ProfTester::ArgumentSet_t m_argumentSet;
 
     /*************************************************************************/
+
+    /* Manage one-of actions across all test runs. */
+    bool m_isLoggingInitialized { false };
 
     /* Manage Test one-of actions across all physical GPUs. */
 

@@ -17,19 +17,19 @@
 #include "dcgm_agent.h"
 #include "dcgm_test_apis.h"
 #include "timelib.h"
+
 #include <DcgmLogging.h>
 #include <DcgmSettings.h>
+
 #include <csignal>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 
-CommandLineParser *g_cl;
 
 /*****************************************************************************/
 void sig_handler(int signum)
 {
-    delete g_cl;
     exit(128 + signum); // Exit with UNIX fatal error signal code for the received signal
 }
 
@@ -62,8 +62,7 @@ int InstallCtrlHandler()
 
 int main(int argc, char *argv[])
 {
-    int ret = 0;
-    dcgmReturn_t result;
+    dcgmReturn_t result = DCGM_ST_OK;
 
     const std::string logFile
         = DcgmLogging::getLogFilenameFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_FILE, DCGM_ENV_LOG_PREFIX);
@@ -76,32 +75,19 @@ int main(int argc, char *argv[])
 
     DCGM_LOG_INFO << "Initialized DCGMI logger";
 
-    g_cl = new CommandLineParser();
-
     // Install the signal handler
     InstallCtrlHandler();
 
     try
     {
-        result = (dcgmReturn_t)g_cl->processCommandLine(argc, argv);
+        result = CommandLineParser::ProcessCommandLine(argc, argv);
     }
     catch (std::exception &e)
     {
         std::cerr << e.what() << std::endl;
-        ret = -2;
-        goto cleanup;
+        result = static_cast<dcgmReturn_t>(-2);
     }
 
-    // Check if any errors thrown in dcgmi
-    if (DCGM_ST_OK != result)
-    {
-        ret = result;
-        goto cleanup;
-    }
-
-
-cleanup:
-    delete g_cl;
     dcgmShutdown();
-    return ret;
+    return result;
 }

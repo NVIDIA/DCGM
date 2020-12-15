@@ -17,7 +17,7 @@
 #define DCGMI_CLI_PARSER_H
 
 #include "dcgmi_common.h"
-#include <list>
+
 #include <map>
 
 
@@ -27,46 +27,44 @@
 class CommandLineParser
 {
 public:
-    // ctor/dtor
-    CommandLineParser();
-    ~CommandLineParser()
-    {}
-
     // entry point to start CL processing
     // only accepts a subsytem name
-    int processCommandLine(int argc, char *argv[]);
-
-    // map of subsystem function pointers
-    std::map<std::string, int (CommandLineParser::*)(int argc, char *argv[])> mFunctionMap;
+    static dcgmReturn_t ProcessCommandLine(int argc, char const *const *argv);
 
 private:
+    struct StaticConstructor
+    {
+        StaticConstructor();
+    };
+    // map of subsystem function pointers
+    static inline std::map<std::string, dcgmReturn_t (*)(int argc, char const *const *argv)> m_functionMap;
+    static inline StaticConstructor m_staticConstructor;
+
     // subsystem CL processing
-    int processQueryCommandLine(int argc, char *argv[]);
-    int processPolicyCommandLine(int argc, char *argv[]);
-    int processGroupCommandLine(int argc, char *argv[]);
-    int processFieldGroupCommandLine(int argc, char *argv[]);
-    int processConfigCommandLine(int argc, char *argv[]);
-    int processHealthCommandLine(int argc, char *argv[]);
-    int processDiagCommandLine(int argc, char *argv[]);
-    int processStatsCommandLine(int argc, char *argv[]);
-    int processTopoCommandLine(int argc, char *argv[]);
-    int processIntrospectCommandLine(int argc, char *argv[]);
-    int processNvlinkCommandLine(int argc, char *argv[]);
-    int processDmonCommandLine(int argc, char *argv[]);
-    int processModuleCommandLine(int argc, char *argv[]);
-    int processProfileCommandLine(int argc, char *argv[]);
-    int processSettingsCommandLine(int argc, char *argv[]);
-    int processVersionInfoCommandLine(int argc, char *argv[]);
-    unsigned int CheckGroupIdArgument(const std::string &groupId) const;
+    static dcgmReturn_t ProcessQueryCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessPolicyCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessGroupCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessFieldGroupCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessConfigCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessHealthCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessDiagCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessStatsCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessTopoCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessIntrospectCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessNvlinkCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessDmonCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessModuleCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessProfileCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessSettingsCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessVersionInfoCommandLine(int argc, char const *const *argv);
+    static unsigned int CheckGroupIdArgument(const std::string &groupId);
 
     // Helper to validate the throttle mask parameter
-    void ValidateThrottleMask(const std::string &throttleMask);
+    static void ValidateThrottleMask(const std::string &throttleMask);
 
 #ifdef DEBUG
-    int processAdminCommandLine(int argc, char *argv[]);
+    static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
 #endif
 };
-
-typedef std::map<std::string, int (CommandLineParser::*)(int argc, char *argv[])>::iterator functionIterator;
 
 #endif // DCGMI_CLI_PARSER_H

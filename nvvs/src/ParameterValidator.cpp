@@ -36,16 +36,6 @@ void TestInfo::Clear()
     m_subtests.clear();
 }
 
-void TestInfo::AddSubtest(const std::string &subtest)
-{
-    m_subtests[subtest].testname = subtest;
-}
-
-void TestInfo::AddSubtestParameter(const std::string &subtest, const std::string &parameter)
-{
-    m_subtests[subtest].parameters.insert(parameter);
-}
-
 bool TestInfo::HasParameter(const std::string &parameter) const
 {
     return m_info.parameters.find(parameter) != m_info.parameters.end();
@@ -53,42 +43,52 @@ bool TestInfo::HasParameter(const std::string &parameter) const
 
 bool TestInfo::HasSubtestParameter(const std::string &subtest, const std::string &parameter) const
 {
-    auto iter = m_subtests.find(subtest);
+    auto iter = m_info.parameters.find(parameter);
 
-    return !(iter == m_subtests.end() || iter->second.parameters.find(parameter) == iter->second.parameters.end());
+    return !(iter == m_info.parameters.end());
 }
 
 bool TestInfo::HasSubtest(const std::string &subtest) const
 {
-    return m_subtests.find(subtest) != m_subtests.end();
+    return m_info.parameters.find(subtest) != m_info.parameters.end();
+}
+
+std::string ParameterValidator::TransformTestName(const std::string &testname)
+{
+    std::string name(testname);
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+        if (c == ' ')
+        {
+            return '_';
+        }
+        return (char)std::tolower(c);
+    });
+
+    return name;
 }
 
 bool ParameterValidator::IsValidTestName(const std::string &testname) const
 {
-    std::string loweredTest(testname);
-    std::transform(loweredTest.begin(), loweredTest.end(), loweredTest.begin(), ::tolower);
-    return m_possiblePlugins.find(loweredTest) != m_possiblePlugins.end();
+    return m_possiblePlugins.find(TransformTestName(testname)) != m_possiblePlugins.end();
 }
 
 bool ParameterValidator::IsValidParameter(const std::string &testname, const std::string &parameter) const
 {
-    std::string loweredTest(testname);
+    std::string compareTest = TransformTestName(testname);
     std::string loweredParam(parameter);
-    std::transform(loweredTest.begin(), loweredTest.end(), loweredTest.begin(), ::tolower);
     std::transform(loweredParam.begin(), loweredParam.end(), loweredParam.begin(), ::tolower);
-    auto iter = m_possiblePlugins.find(loweredTest);
+    auto iter = m_possiblePlugins.find(compareTest);
 
     return !(iter == m_possiblePlugins.end() || !iter->second.HasParameter(loweredParam));
 }
 
 bool ParameterValidator::IsValidSubtest(const std::string &testname, const std::string &subtest) const
 {
-    std::string loweredTest(testname);
+    std::string compareTest = TransformTestName(testname);
     std::string loweredSub(subtest);
-    std::transform(loweredTest.begin(), loweredTest.end(), loweredTest.begin(), ::tolower);
     std::transform(loweredSub.begin(), loweredSub.end(), loweredSub.begin(), ::tolower);
 
-    auto iter = m_possiblePlugins.find(loweredTest);
+    auto iter = m_possiblePlugins.find(compareTest);
 
     return !(iter == m_possiblePlugins.end() || !iter->second.HasSubtest(loweredSub));
 }
@@ -97,30 +97,39 @@ bool ParameterValidator::IsValidSubtestParameter(const std::string &testname,
                                                  const std::string &subtest,
                                                  const std::string &parameter) const
 {
-    std::string loweredTest(testname);
+    std::string compareTest = TransformTestName(testname);
     std::string loweredSub(subtest);
     std::string loweredParam(parameter);
 
-    std::transform(loweredTest.begin(), loweredTest.end(), loweredTest.begin(), ::tolower);
     std::transform(loweredSub.begin(), loweredSub.end(), loweredSub.begin(), ::tolower);
     std::transform(loweredParam.begin(), loweredParam.end(), loweredParam.begin(), ::tolower);
 
-    auto iter = m_possiblePlugins.find(loweredTest);
+    auto iter = m_possiblePlugins.find(compareTest);
 
     return !(iter == m_possiblePlugins.end() || !iter->second.HasSubtestParameter(subtest, parameter));
 }
 
 ParameterValidator::ParameterValidator(const std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> &parms)
 {
+    Initialize(parms);
+}
+
+void ParameterValidator::Initialize(const std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> &parms)
+{
     for (auto const &cur : parms)
     {
         TestInfo ti;
-        ti.SetName(cur.first);
+        std::string testname = TransformTestName(cur.first);
+        ti.SetName(testname);
         for (auto const &iter : cur.second)
         {
             ti.AddParameter(iter.parameterName);
         }
 
-        m_possiblePlugins[cur.first] = ti;
+        m_possiblePlugins[testname] = ti;
     }
 }
+
+ParameterValidator::ParameterValidator()
+    : m_possiblePlugins()
+{}

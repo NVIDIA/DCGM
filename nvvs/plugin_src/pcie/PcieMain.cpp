@@ -284,7 +284,7 @@ int bg_check_pci_link(BusGrindGlobals *bgGlobals, std::string subTest)
         /* Now check the link generation we read */
         if (linkgenValue.value.i64 < minPcieLinkGen)
         {
-            DcgmError d;
+            DcgmError d { gpu->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_GENERATION, d, gpu->gpuId, linkgenValue.value.i64, minPcieLinkGen, PCIE_STR_MIN_PCI_GEN);
             PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
@@ -296,7 +296,7 @@ int bg_check_pci_link(BusGrindGlobals *bgGlobals, std::string subTest)
         /* And check the link width we read */
         if (widthValue.value.i64 < minPcieLinkWidth)
         {
-            DcgmError d;
+            DcgmError d { gpu->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_WIDTH, d, gpu->gpuId, widthValue.value.i64, minPcieLinkWidth, PCIE_STR_MIN_PCI_WIDTH);
             PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
@@ -465,7 +465,7 @@ int outputHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool pinned)
 
             if (bandwidth < minimumBandwidth)
             {
-                DcgmError d;
+                DcgmError d { bgGlobals->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bgGlobals->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
                 bgGlobals->busGrind->AddErrorForGpu(bgGlobals->gpu[j]->gpuId, d);
@@ -646,7 +646,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
 
             if (bandwidth < minimumBandwidth)
             {
-                DcgmError d;
+                DcgmError d { bgGlobals->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bgGlobals->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
                 bgGlobals->busGrind->AddErrorForGpu(bgGlobals->gpu[j]->gpuId, d);
@@ -830,7 +830,7 @@ int outputHostDeviceLatencyMatrix(BusGrindGlobals *bgGlobals, bool pinned)
 
             if (latency > maxLatency)
             {
-                DcgmError d;
+                DcgmError d { bgGlobals->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_HIGH_LATENCY, d, labels[i], bgGlobals->gpu[j]->gpuId, latency, maxLatency);
                 PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
@@ -1069,7 +1069,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
     {
         if (!bgGlobals->m_printedConcurrentGpuErrorMessage)
         {
-            DcgmError d;
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CONCURRENT_GPUS, d);
             bgGlobals->busGrind->AddInfo(d.GetMessage());
             bgGlobals->m_printedConcurrentGpuErrorMessage = true;
@@ -1273,7 +1273,7 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
     {
         if (!bgGlobals->m_printedConcurrentGpuErrorMessage)
         {
-            DcgmError d;
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CONCURRENT_GPUS, d);
             bgGlobals->busGrind->AddInfo(d.GetMessage());
             bgGlobals->m_printedConcurrentGpuErrorMessage = true;
@@ -1667,7 +1667,7 @@ int bg_should_stop(BusGrindGlobals *bgGlobals)
         return 0;
     }
 
-    DcgmError d;
+    DcgmError d { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
     bgGlobals->busGrind->AddError(d);
     bgGlobals->busGrind->SetResult(NVVS_RESULT_SKIP);
@@ -2012,7 +2012,7 @@ int main_entry(const dcgmDiagPluginGpuList_t &gpuInfo, BusGrind *busGrind, TestP
     }
     catch (const std::runtime_error &e)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         const char *err_str = e.what();
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err_str);
         PRINT_ERROR("%s", "Caught runtime_error %s", err_str);

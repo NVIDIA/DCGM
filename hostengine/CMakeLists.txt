@@ -21,8 +21,10 @@ target_sources(nv-hostengine
                src/HostEngineOutput.h
                src/main.cpp)
 
-target_link_libraries(nv-hostengine PRIVATE dcgm common_interface dcgm_interface)
-target_link_libraries(nv-hostengine PRIVATE buildinfo_objects)
+target_link_libraries(nv-hostengine PRIVATE common_interface dcgm_interface dcgm)
+target_link_libraries(nv-hostengine PRIVATE buildinfo_objects dcgm_common transport_objects)
 
 find_package(Libevent REQUIRED)
 target_link_libraries(nv-hostengine PUBLIC ${LIBEVENT_STATIC_LIBS})
+
+target_link_options(nv-hostengine PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/hostengine.linux_def)

@@ -15,9 +15,15 @@ add_library(module_common_interface INTERFACE)
 target_include_directories(module_common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(module_common_interface INTERFACE modules_interface)
 
-add_library(module_common_objects OBJECT)
+add_library(module_common_objects STATIC)
 target_sources(module_common_objects PRIVATE
         DcgmCoreProxy.cpp
 )
 
-target_link_libraries(module_common_objects PUBLIC module_common_interface dcgm_interface)
+target_link_libraries(module_common_objects
+    PUBLIC
+        module_common_interface
+        transport_interface
+        common_interface
+        dcgm_common
+)

@@ -76,6 +76,7 @@ private:
     int checkForGraphicsProcesses();
     int checkForBadEnvVaribles();
     int checkPageRetirement();
+    int checkRowRemapping();
     int checkInforom();
 };
 

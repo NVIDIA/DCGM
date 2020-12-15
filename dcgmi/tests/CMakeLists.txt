@@ -25,8 +25,8 @@ if (BUILD_TESTING)
         dcgmi_tests
         PRIVATE
             dcgmi_objects
-            dcgmmodulediag
             dcgm
+            dcgm_common
             Catch2::Catch2
             ${JSONCPP_STATIC_LIBS}
     )

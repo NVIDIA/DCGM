@@ -18,6 +18,7 @@
 #include "DcgmConfigManager.h"
 #include "DcgmLogging.h"
 #include "dcgm_structs.h"
+#include <dcgm_api_export.h>
 
 /*****************************************************************************/
 DcgmModuleConfig::DcgmModuleConfig(dcgmCoreCallbacks_t &dcc)
@@ -153,8 +154,8 @@ dcgmReturn_t DcgmModuleConfig::ProcessCoreMessage(dcgm_module_command_header_t *
             break;
 
         default:
-            PRINT_ERROR("%d", "Unknown subcommand: %d", (int)moduleCommand->subCommand);
-            return DCGM_ST_BADPARAM;
+            DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
+            return DCGM_ST_FUNCTION_NOT_FOUND;
     }
 
     return retSt;
@@ -190,8 +191,8 @@ dcgmReturn_t DcgmModuleConfig::ProcessMessage(dcgm_module_command_header_t *modu
                 break;
 
             default:
-                PRINT_ERROR("%d", "Unknown subcommand: %d", (int)moduleCommand->subCommand);
-                return DCGM_ST_BADPARAM;
+                DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
+                return DCGM_ST_FUNCTION_NOT_FOUND;
                 break;
         }
     }
@@ -199,21 +200,21 @@ dcgmReturn_t DcgmModuleConfig::ProcessMessage(dcgm_module_command_header_t *modu
     return retSt;
 }
 
+extern "C" {
 /*****************************************************************************/
-extern "C" DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc)
+DCGM_PUBLIC_API DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc)
 {
     return SafeWrapper([=] { return new DcgmModuleConfig(*dcc); });
 }
 
-/*****************************************************************************/
-extern "C" void dcgm_free_module_instance(DcgmModule *freeMe)
+DCGM_PUBLIC_API void dcgm_free_module_instance(DcgmModule *freeMe)
 {
     delete (freeMe);
 }
 
-extern "C" dcgmReturn_t dcgm_module_process_message(DcgmModule *module, dcgm_module_command_header_t *moduleCommand)
+DCGM_PUBLIC_API dcgmReturn_t dcgm_module_process_message(DcgmModule *module,
+                                                         dcgm_module_command_header_t *moduleCommand)
 {
     return PassMessageToModule(module, moduleCommand);
 }
-
-/*****************************************************************************/
+} // extern "C"

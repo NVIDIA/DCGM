@@ -207,7 +207,7 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
                 if (delta >= dfv.value.dbl)
                 {
                     double timeDelta = (values[i].ts - startTime) / 1000000.0;
-                    DcgmError d;
+                    DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS_DBL, d, fieldName, dfv.value.dbl, delta, timeDelta);
                     errorList.push_back(d);
@@ -222,7 +222,7 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
                 if (delta >= dfv.value.i64)
                 {
                     double timeDelta = (values[i].ts - startTime) / 1000000.0;
-                    DcgmError d;
+                    DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS, d, fieldName, dfv.value.i64, delta, timeDelta);
                     errorList.push_back(d);

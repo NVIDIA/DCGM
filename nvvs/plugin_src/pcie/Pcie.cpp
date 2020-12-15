@@ -151,7 +151,7 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
 
     if (gpuInfo == nullptr)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified.");
         AddError(d);
     }
@@ -178,7 +178,7 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
 
     if (!testParameters.GetBoolFromString(PCIE_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -188,7 +188,7 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     int st = main_entry(m_gpuInfo, this, &testParameters);
     if (main_should_stop)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
         AddError(d);
         SetResult(NVVS_RESULT_SKIP);

@@ -15,30 +15,21 @@ add_library(health_interface INTERFACE)
 target_include_directories(health_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(health_interface INTERFACE dcgm_interface modules_interface)
 
-add_library(health_objects OBJECT)
-target_link_libraries(health_objects PUBLIC health_interface)
-target_compile_options(health_objects PRIVATE -fPIC)
-target_sources(
-    health_objects
-    PRIVATE
-    DcgmHealthWatch.h
-    DcgmModuleHealth.h
-    dcgm_health_structs.h
-    DcgmHealthResponse.h
-    DcgmModuleHealth.cpp
-    DcgmHealthWatch.cpp
-    DcgmHealthResponse.cpp
-)
-
 add_library(dcgmmodulehealth SHARED)
-target_compile_options(dcgmmodulehealth PRIVATE -fPIC)
-dcgm_macro_modules_link_options(dcgmmodulehealth)
-target_link_libraries(
-    dcgmmodulehealth
+define_dcgm_module(dcgmmodulehealth)
+target_link_libraries(dcgmmodulehealth
     PRIVATE
-        health_objects
-        modules_objects
+        health_interface
         sdk_nvml_essentials_objects
-        dcgm
+)
+target_sources(dcgmmodulehealth
+    PRIVATE
+        DcgmHealthWatch.h
+        DcgmModuleHealth.h
+        dcgm_health_structs.h
+        DcgmHealthResponse.h
+        DcgmModuleHealth.cpp
+        DcgmHealthWatch.cpp
+        DcgmHealthResponse.cpp
 )
 update_lib_ver(dcgmmodulehealth)

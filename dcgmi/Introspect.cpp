@@ -432,7 +432,7 @@ ToggleIntrospect::ToggleIntrospect(std::string hostname, bool enabled)
     : Command()
     , enabled(enabled)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -440,7 +440,7 @@ ToggleIntrospect::ToggleIntrospect(std::string hostname, bool enabled)
 
 dcgmReturn_t ToggleIntrospect::DoExecuteConnected()
 {
-    return enabled ? introspectObj.EnableIntrospect(mNvcmHandle) : introspectObj.DisableIntrospect(mNvcmHandle);
+    return enabled ? introspectObj.EnableIntrospect(m_dcgmHandle) : introspectObj.DisableIntrospect(m_dcgmHandle);
 }
 
 DisplayIntrospectSummary::DisplayIntrospectSummary(std::string hostname,
@@ -454,7 +454,7 @@ DisplayIntrospectSummary::DisplayIntrospectSummary(std::string hostname,
     , forAllFieldGroups(forAllFieldGroups)
     , forFieldGroups(std::move(forFieldGroups))
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -462,5 +462,5 @@ DisplayIntrospectSummary::DisplayIntrospectSummary(std::string hostname,
 
 dcgmReturn_t DisplayIntrospectSummary::DoExecuteConnected()
 {
-    return introspectObj.DisplayStats(mNvcmHandle, forHostengine, forAllFields, forAllFieldGroups, forFieldGroups);
+    return introspectObj.DisplayStats(m_dcgmHandle, forHostengine, forAllFields, forAllFieldGroups, forFieldGroups);
 }

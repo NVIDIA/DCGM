@@ -34,6 +34,7 @@ DcgmGpuInstance::DcgmGpuInstance(DcgmNs::Mig::GpuInstanceId dcgmInstanceId,
     , m_placement(placement)
     , m_profileInfo(profileInfo)
     , m_computeInstances()
+    , m_gpuInstanceProfileName()
 {
     m_maxGpcs = profileInfo.sliceCount;
     switch (sliceProfile)
@@ -70,16 +71,17 @@ DcgmGpuInstance &DcgmGpuInstance::operator=(DcgmGpuInstance const &other)
     {
         return *this;
     }
-    m_dcgmInstanceId   = other.m_dcgmInstanceId;
-    m_nvmlInstanceId   = other.m_nvmlInstanceId;
-    m_profileId        = other.m_profileId;
-    m_sliceProfile     = other.m_sliceProfile;
-    m_instance         = other.m_instance;
-    m_placement        = other.m_placement;
-    m_profileInfo      = other.m_profileInfo;
-    m_computeInstances = other.m_computeInstances;
-    m_maxGpcs          = other.m_maxGpcs;
-    m_usedGpcs         = other.m_usedGpcs;
+    m_dcgmInstanceId         = other.m_dcgmInstanceId;
+    m_nvmlInstanceId         = other.m_nvmlInstanceId;
+    m_profileId              = other.m_profileId;
+    m_sliceProfile           = other.m_sliceProfile;
+    m_instance               = other.m_instance;
+    m_placement              = other.m_placement;
+    m_profileInfo            = other.m_profileInfo;
+    m_computeInstances       = other.m_computeInstances;
+    m_maxGpcs                = other.m_maxGpcs;
+    m_usedGpcs               = other.m_usedGpcs;
+    m_gpuInstanceProfileName = other.m_gpuInstanceProfileName;
     return (*this);
 }
 
@@ -208,4 +210,39 @@ std::optional<DcgmNs::Mig::ComputeInstanceId> DcgmGpuInstance::ConvertCIIdNvmlTo
 dcgmMigProfile_t DcgmGpuInstance::GetMigProfileType() const
 {
     return m_sliceProfile;
+}
+
+void DcgmGpuInstance::SetProfileName(std::string const &gpuInstanceProfileName)
+{
+    m_gpuInstanceProfileName = gpuInstanceProfileName;
+}
+
+std::string DcgmGpuInstance::DeriveGpuInstanceName(std::string const &ciName)
+{
+    std::size_t firstDot = ciName.find_first_of('.');
+    std::size_t lastDot  = ciName.find_last_of('.');
+
+    if (firstDot != lastDot)
+    {
+        return ciName.substr(firstDot + 1);
+    }
+
+    return ciName;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmGpuInstance::TruncateCIDeviceName(std::string const &ciNameToEdit, std::string &ciNameEdited)
+{
+    std::size_t pos = ciNameToEdit.find("MIG ");
+
+    if (pos == std::string::npos)
+    {
+        DCGM_LOG_ERROR << "Device name '" << ciNameToEdit
+                       << "' isn't the name of a MIG device: MIG doesn't appear in the name.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    ciNameEdited = ciNameToEdit.substr(pos + 4); // 4 moves us past 'MIG '
+
+    return DCGM_ST_OK;
 }

@@ -778,7 +778,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupI
 
     if (pciReplayRate > DCGM_LIMIT_MAX_PCIREPLAY_RATE)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCI_REPLAY_RATE, d, DCGM_LIMIT_MAX_PCIREPLAY_RATE, entityId, pciReplayRate);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, d, response);
     }
@@ -838,7 +838,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemVolatileDbes(dcgm_field_entity_group_t e
     // Fail for any volatile DBEs
     if (sample.val.i64 > 0)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(
             DCGM_FR_VOLATILE_DBE_DETECTED, d, static_cast<unsigned int>(sample.val.i64), entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
@@ -873,7 +873,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemRetiredPending(dcgm_field_entity_group_t
 
     if (!DCGM_INT64_IS_BLANK(retiredPending.val.i64) && retiredPending.val.i64 != 0)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_PAGE_RETIREMENTS, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, d, response);
     }
@@ -938,7 +938,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemSbeDbeRetiredPages(dcgm_field_entity_gro
     // which is set via bug 1665722
     if (totalRetiredPages >= DCGM_LIMIT_MAX_RETIRED_PAGES)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_RETIRED_PAGES_LIMIT, d, DCGM_LIMIT_MAX_RETIRED_PAGES, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
         return ret;
@@ -982,7 +982,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemSbeDbeRetiredPages(dcgm_field_entity_gro
         if (dbePagesRetiredThisWeek > 1)
         {
             // More than one page retired due to DBE in the past week, failure condition met.
-            DcgmError d;
+            DcgmError d { entityId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_RETIRED_PAGES_DBE_LIMIT, d, DCGM_LIMIT_MAX_RETIRED_PAGES_SOFT_LIMIT, entityId);
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
@@ -1030,7 +1030,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemRowRemapFailures(dcgm_field_entity_group
     // Fail for any volatile DBEs
     if (sample.val.i64 > 0)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
     }
@@ -1059,7 +1059,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorUncontainedErrors(dcgm_field_entity_group_t
 
     DCGM_LOG_ERROR << "gpuId " << entityId << " has had an uncontained error";
 
-    DcgmError d;
+    DcgmError d { entityId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCONTAINED_ERROR, d);
     SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
     return DCGM_ST_OK;
@@ -1159,7 +1159,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorInforom(dcgm_field_entity_group_t entityGro
 
     if (!(sample.val.i64))
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CORRUPT_INFOROM, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_INFOROM, d, response);
     }
@@ -1221,7 +1221,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorThermal(dcgm_field_entity_group_t entityGro
 
     if (violationTime)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCK_THROTTLE_THERMAL, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, d, response);
     }
@@ -1254,7 +1254,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
         if (ret == DCGM_ST_OK && DCGM_FP64_IS_BLANK(sample.val.d) && sample.val.d != DCGM_FP64_NOT_SUPPORTED)
         {
             // We aren't successfully reading the power for this GPU, add a warning
-            DcgmError d;
+            DcgmError d { entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_POWER_UNREADABLE, d, entityId);
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, d, response);
         }
@@ -1299,7 +1299,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
 
     if (violationTime)
     {
-        DcgmError d;
+        DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCK_THROTTLE_POWER, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, d, response);
     }
@@ -1385,7 +1385,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
             dcgm_field_meta_p fm = DcgmFieldGetById(fieldIds[nvLinkField]);
             char fieldTag[128];
             dcgmHealthWatchResults_t res = DCGM_HEALTH_RESULT_WARN;
-            DcgmError d;
+            DcgmError d { entityId };
 
             if (fm != NULL)
             {
@@ -1451,7 +1451,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
     {
         if (linkStates[i] == DcgmNvLinkLinkStateDown)
         {
-            DcgmError d;
+            DcgmError d { entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, entityId, i);
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
         }
@@ -1526,7 +1526,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
         if (!DCGM_INT64_IS_BLANK(sample.val.i64) && sample.val.i64 > 0)
         {
             unsigned int linkId = (*fieldIdIter) - fieldIds->at(0);
-            DcgmError d;
+            DcgmError d { entityId };
             if (fatal)
             {
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVSWITCH_FATAL_ERROR, d, entityId, linkId);
@@ -1555,7 +1555,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
         {
             if (linkStates[i] == DcgmNvLinkLinkStateDown)
             {
-                DcgmError d;
+                DcgmError d { entityId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, entityId, i);
                 SetResponse(entityGroupId, entityId, healthWatchResult, healthWatchSystems, d, response);
             }

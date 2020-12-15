@@ -905,5 +905,11 @@ DCGM_ENTRY_POINT(dcgmHostengineIsHealthy,
                  dcgmHandle,
                  heHealth)
 
+DCGM_ENTRY_POINT(dcgmModuleIdToName,
+                 tsapiDcgmModuleIdToName,
+                 (dcgmModuleId_t id, char const **name),
+                 "(%d, %p)",
+                 id,
+                 name)
 
 /*****************************************************************************/

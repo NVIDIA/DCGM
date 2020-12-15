@@ -43,7 +43,7 @@ public:
      * This method is used to get Connection to the host engine corresponding to
      * the IP address
      *****************************************************************************/
-    dcgmReturn_t GetConnHandleForHostEngine(char *identifier,
+    dcgmReturn_t GetConnHandleForHostEngine(const char *identifier,
                                             dcgmHandle_t *pDcgmHandle,
                                             unsigned int timeoutMs,
                                             bool addressIsUnixSocket);

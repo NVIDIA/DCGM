@@ -65,7 +65,7 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
 
     if (Init(gpuInfo) == false)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Failed to initialize the plugin.");
         AddError(d);
     }
@@ -235,7 +235,7 @@ int ConstantPerf::CudaInit()
                 std::stringstream ss;
                 ss << "for GPU " << device->gpuId << "(Cuda device index " << device->cudaDeviceIdx
                    << "): " << cudaGetErrorString(cuSt);
-                DcgmError d;
+                DcgmError d { device->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaStreamCreate");
                 d.AddDetail(ss.str());
                 AddError(d);
@@ -391,7 +391,7 @@ void ConstantPerf::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
 
     if (!m_testParameters->GetBoolFromString(TS_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TS_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -408,7 +408,7 @@ void ConstantPerf::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
     result = RunTest();
     if (main_should_stop)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
         AddError(d);
         SetResult(NVVS_RESULT_SKIP);
@@ -432,7 +432,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
     data = GetCustomGpuStat(device->gpuId, PERF_STAT_NAME);
     if (data.size() == 0)
     {
-        DcgmError d;
+        DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_GET_STAT, d, PERF_STAT_NAME, device->gpuId);
         errorList.push_back(d);
         return false;
@@ -469,7 +469,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
 
     if (maxVal < discountMultiplier * minRatio * m_targetPerf)
     {
-        DcgmError d;
+        DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_STRESS_LEVEL, d, maxVal, m_targetPerf, device->gpuId);
         std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime, endTime);
         if (utilNote.empty() == false)
@@ -662,7 +662,7 @@ bool ConstantPerf::RunTest()
     catch (const std::runtime_error &e)
     {
         PRINT_ERROR("%s", "Caught exception %s", e.what());
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
         SetResult(NVVS_RESULT_FAIL);

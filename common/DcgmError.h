@@ -18,8 +18,9 @@
 #include <sstream>
 #include <string>
 
-#include "dcgm_errors.h"
-#include "dcgm_structs.h"
+#include <dcgm_agent.h>
+#include <dcgm_errors.h>
+#include <dcgm_structs.h>
 
 /*****************************************************************************/
 /*
@@ -37,7 +38,12 @@ class DcgmError
 {
     /***************************PUBLIC***********************************/
 public:
-    DcgmError()
+    enum class GpuIdTag : std::uint8_t
+    {
+        Unknown
+    };
+
+    explicit DcgmError(GpuIdTag /*unused*/)
         : m_code(DCGM_FR_OK)
         , m_formatMessage(nullptr)
         , m_nextSteps()
@@ -49,7 +55,7 @@ public:
         , m_gpuId(-1)
     {}
 
-    DcgmError(unsigned int gpuId)
+    explicit DcgmError(unsigned int gpuId)
         : m_code(DCGM_FR_OK)
         , m_formatMessage(nullptr)
         , m_nextSteps()
@@ -193,10 +199,10 @@ private:
     do                                                                             \
     {                                                                              \
         char buf_2M8SD15I[1024];                                                   \
-        const char *fmt_2M8SD15I = dcgmErrorMeta[errCode].msgFormat;               \
+        const char *fmt_2M8SD15I = dcgmGetErrorMeta(errCode)->msgFormat;           \
         snprintf(buf_2M8SD15I, sizeof(buf_2M8SD15I), fmt_2M8SD15I, ##__VA_ARGS__); \
         errorObj.SetMessage(buf_2M8SD15I);                                         \
-        errorObj.SetNextSteps(dcgmErrorMeta[errCode].suggestion);                  \
+        errorObj.SetNextSteps(dcgmGetErrorMeta(errCode)->suggestion);              \
         errorObj.SetCode(errCode);                                                 \
     } while (0)
 

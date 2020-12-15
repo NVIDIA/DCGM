@@ -25,14 +25,14 @@
  * If the conversion does not succeed the return value is undefined.
  */
 template <typename T>
-T strTo(std::string str, bool *success)
+T strTo(std::string const &str, bool *success)
 {
     char extraChar;
     T val;
     std::stringstream ss(str);
     ss >> val;
 
-    if (success != NULL)
+    if (success != nullptr)
     {
         *success = !ss.fail() && !ss.get(extraChar);
     }
@@ -47,9 +47,9 @@ T strTo(std::string str, bool *success)
  * succeeded or not use "strTo(std::string str, bool *success)" instead.
  */
 template <typename T>
-T strTo(std::string str)
+T strTo(std::string const &str)
 {
-    return strTo<T>(str, NULL);
+    return strTo<T>(str, nullptr);
 }
 
 /**
@@ -57,7 +57,7 @@ T strTo(std::string str)
  * The type of the value must support the streaming operator "<<".
  */
 template <typename T>
-std::string toStr(T value)
+std::string toStr(T const &value)
 {
     std::stringstream ss;
     ss << value;

@@ -11,45 +11,48 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set(CMAKE_CXX_VISIBILITY_PRESET default)
+set(CMAKE_C_VISIBILITY_PRESET default)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
+
 add_subdirectory(tests)
 
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
 
 add_library(nvvs_without_main_objects OBJECT)
-target_link_libraries(nvvs_without_main_objects PUBLIC nvvs_interface dcgm)
+target_link_libraries(nvvs_without_main_objects PUBLIC nvvs_interface dcgm dcgm_common dcgm_logging dcgm_mutex)
 target_include_directories(nvvs_without_main_objects PRIVATE ${YAML_INCLUDE_DIR})
 target_include_directories(nvvs_without_main_objects PRIVATE ${JSONCPP_INCLUDE_DIR})
-target_sources(
-    nvvs_without_main_objects
+target_sources(nvvs_without_main_objects
     PRIVATE
-    ConfigFileParser_v2.cpp
-    DcgmGdFieldGroup.cpp
-    DcgmGroup.cpp
-    DcgmHandle.cpp
-    DcgmRecorder.cpp
-    DcgmSystem.cpp
-    DcgmValuesSinceHolder.cpp
-    GoldenValueCalculator.cpp
-    Gpu.cpp
-    GpuSet.cpp
-    JsonOutput.cpp
-    NvidiaValidationSuite.cpp
-    NvvsCommon.cpp
-    NvvsDeviceList.cpp
-    NvvsSystemChecker.cpp
-    NvvsThread.cpp
-    Output.cpp
-    ParameterValidator.cpp
-    ParsingUtility.cpp
-    Plugin.cpp
-    Test.cpp
-    TestFramework.cpp
-    TestParameters.cpp
-    Whitelist.cpp
-    PluginLib.cpp
-    PluginCoreFunctionality.cpp
-    CustomStatHolder.cpp
+        ConfigFileParser_v2.cpp
+        DcgmGdFieldGroup.cpp
+        DcgmGroup.cpp
+        DcgmHandle.cpp
+        DcgmRecorder.cpp
+        DcgmSystem.cpp
+        DcgmValuesSinceHolder.cpp
+        GoldenValueCalculator.cpp
+        Gpu.cpp
+        GpuSet.cpp
+        JsonOutput.cpp
+        NvidiaValidationSuite.cpp
+        NvvsCommon.cpp
+        NvvsDeviceList.cpp
+        NvvsSystemChecker.cpp
+        NvvsThread.cpp
+        Output.cpp
+        ParameterValidator.cpp
+        ParsingUtility.cpp
+        Plugin.cpp
+        Test.cpp
+        TestFramework.cpp
+        TestParameters.cpp
+        Whitelist.cpp
+        PluginLib.cpp
+        PluginCoreFunctionality.cpp
+        CustomStatHolder.cpp
 )
 
 add_library(nvvs_main_objects OBJECT)

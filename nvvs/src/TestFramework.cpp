@@ -248,7 +248,7 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
     if (!strncmp("libpluginCommon.so", libraryName, 18))
     {
         /* libpluginCommon.so is a resource for the plugins, so it won't contain the symbols a pure plugin has.
-           Process it separately. */
+           Process it separately and load it immediately. */
         void *dlib = dlopen(libraryPath, RTLD_LAZY);
         if (dlib == NULL)
         {
@@ -370,8 +370,8 @@ void TestFramework::loadPlugins()
 
     if (chdir(pluginDir.c_str()))
     {
-        errbuf << "Cannot load plugins: unable to change to the plugin dir '" << pluginDir << "': '" << strerror(errno)
-               << "'";
+        errbuf << "Error: Cannot load plugins. Unable to change to the plugin dir '" << pluginDir << "': '"
+               << strerror(errno) << "'";
         PRINT_ERROR("%s", "%s", errbuf.str().c_str());
         throw std::runtime_error(errbuf.str());
     }
@@ -698,7 +698,7 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
                         tp->AddString(SW_STR_DO_TEST, "persistence_mode");
                     else if (name == "Environmental Variables")
                         tp->AddString(SW_STR_DO_TEST, "env_variables");
-                    else if (name == "Page Retirement")
+                    else if (name == "Page Retirement/Row Remap")
                         tp->AddString(SW_STR_DO_TEST, "page_retirement");
                     else if (name == "Graphics Processes")
                         tp->AddString(SW_STR_DO_TEST, "graphics_processes");
@@ -720,6 +720,12 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
                                    m_plugins[pluginIndex]->GetResults(),
                                    m_plugins[pluginIndex]->GetErrors(),
                                    m_plugins[pluginIndex]->GetInfo());
+                }
+
+                if (classNum == Test::NVVS_CLASS_SOFTWARE)
+                {
+                    /* reinitialize plugin, reset errors between software runs */
+                    m_plugins[pluginIndex]->InitializePlugin(dcgmHandle.GetHandle(), m_gpuInfo);
                 }
             }
             else

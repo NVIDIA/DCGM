@@ -51,7 +51,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
            --rpm            : Generate *.rpm packages once the build is done
         -c --clean          : Make clean rebuild
         -a --arch <arch>    : Make build for specified architecture. Supported are: amd64, ppc64le, aarch64
-        -n --no-tests       : Do not run CTest tests after the build
+        -n --no-tests       : Do not run build-time tests
            --no-install     : Do not perform local installation to the _out directory
            --sa-mode <mode> : Run static analysis on build. <mode> := 0|1
         -h --help           : This information
@@ -158,6 +158,8 @@ function run_cmake() {
     cp compile_commands.json ${DIR}/
 
     if [[ ${runtests} -eq 1 ]]; then
+        echo "Linting Python code"
+        (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint3 --rcfile pylintrc $(find . -type f -a -iname '*.py'))
         ctest --output-on-failure
     fi
 
@@ -189,7 +191,6 @@ function install_lfs() {
     if [[ ! ${is_lfs_installed} -eq 0 ]]; then
         echo 'Installing git-lfs locally'
         git-lfs install --local
-#        git lfs pull
     fi
 }
 

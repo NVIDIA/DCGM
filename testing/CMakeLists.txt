@@ -11,64 +11,74 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(PYTHON_VER python)
-#set(PYTHON_VER python3)
 
 find_package(Jsoncpp REQUIRED)
+find_package(Threads REQUIRED)
 
 add_executable(testdcgmunittests)
-target_link_libraries(
-    testdcgmunittests
+target_link_libraries(testdcgmunittests
     PRIVATE
-        dcgm
-        public_vgpu_interface
-        dcgmmodulediag
-        sdk_nvml_essentials_objects
-        diag_interface
-        module_common_objects
         module_common_interface
+        diag_interface
+
+        module_common_objects
+        dcgm_static_private
+        modules_objects
+        transport_objects
+        dcgm_common
+        dcgm_logging
+        dcgm_mutex
+        common_protobuf_objects
+        sdk_nvml_essentials_objects
+        sdk_nvml_loader
+        dcgm
+        dcgmmodulediag_private_static
         ${JSONCPP_STATIC_LIBS}
+        ${CMAKE_THREAD_LIBS_INIT}
+        rt
+        dl
 )
 
-target_sources(
-    testdcgmunittests
+target_sources(testdcgmunittests
     PRIVATE
-    TestPolicyManager.cpp
-    TestAllocator.cpp
-    TestAllocator.h
-    TestCacheManager.cpp
-    TestCacheManager.h
-    TestDcgmConnections.cpp
-    TestDcgmConnections.h
-    TestDcgmMutex.cpp
-    TestDcgmMutex.h
-    TestDiagManager.cpp
-    TestDiagManager.h
-    TestDiagManagerStrings.h
-    TestDiagResponseWrapper.cpp
-    TestDiagResponseWrapper.h
-    TestFieldGroups.cpp
-    TestFieldGroups.h
-    TestGroupManager.cpp
-    TestGroupManager.h
-    TestHealthMonitor.cpp
-    TestHealthMonitor.h
-    TestKeyedVector.cpp
-    TestKeyedVector.h
-    TestDcgmModule.h
-    TestDcgmUnitTests.cpp
-    TestDcgmValue.cpp
-    TestDcgmValue.h
-    TestPolicyManager.h
-    TestProtobuf.cpp
-    TestProtobuf.h
-    TestStatCollection.cpp
-    TestStatCollection.h
-    TestTopology.cpp
-    TestTopology.h
-    TestVersioning.cpp
-    TestVersioning.h
+        TestPolicyManager.cpp
+        TestAllocator.cpp
+        TestAllocator.h
+        TestCacheManager.cpp
+        TestCacheManager.h
+        TestDcgmConnections.cpp
+        TestDcgmConnections.h
+        TestDcgmMutex.cpp
+        TestDcgmMutex.h
+        TestDiagManager.cpp
+        TestDiagManager.h
+        TestDiagManagerStrings.h
+        TestDiagResponseWrapper.cpp
+        TestDiagResponseWrapper.h
+        TestFieldGroups.cpp
+        TestFieldGroups.h
+        TestGroupManager.cpp
+        TestGroupManager.h
+        TestHealthMonitor.cpp
+        TestHealthMonitor.h
+        TestKeyedVector.cpp
+        TestKeyedVector.h
+        TestDcgmModule.h
+        TestDcgmUnitTests.cpp
+        TestDcgmValue.cpp
+        TestDcgmValue.h
+        TestPolicyManager.h
+        TestProtobuf.cpp
+        TestProtobuf.h
+        TestStatCollection.cpp
+        TestStatCollection.h
+        TestTopology.cpp
+        TestTopology.h
+        TestVersioning.cpp
+        TestVersioning.h
 )
+
+target_link_options(testdcgmunittests PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/unittests.linux_def)
 
 add_subdirectory(stub)
 
@@ -81,39 +91,78 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/version.py DESTINATION ${DCGM_TESTS_IN
 install(TARGETS testdcgmunittests stub_library_test RUNTIME DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests)
 
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/generate_coverage_report.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
 
 # Install python bindings
+set(DCGM_BINDINGS_PYTHON2_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR})
+set(DCGM_BINDINGS_PYTHON3_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR}/python3)
+
 install(
     FILES 
-        ${CMAKE_CURRENT_SOURCE_DIR}/${PYTHON_VER}/common/__init__.py 
-        ${CMAKE_CURRENT_SOURCE_DIR}/${PYTHON_VER}/common/dcgm_client_cli_parser.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/${PYTHON_VER}/common/dcgm_client_main.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/__init__.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/dcgm_client_cli_parser.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/dcgm_client_main.py
     DESTINATION
-        ${DCGM_BINDINGS_INSTALL_DIR}/common
+        ${DCGM_BINDINGS_PYTHON2_INSTALL_DIR}/common
     COMPONENT DCGM)
 
 install(
     FILES
-        ${PYTHON_VER}/dcgm_agent.py
-        ${PYTHON_VER}/dcgm_fields.py
-        ${PYTHON_VER}/dcgm_structs.py
-        ${PYTHON_VER}/dcgmvalue.py
-        ${PYTHON_VER}/DcgmDiag.py
-        ${PYTHON_VER}/DcgmGroup.py
-        ${PYTHON_VER}/DcgmHandle.py
-        ${PYTHON_VER}/DcgmJsonReader.py
-        ${PYTHON_VER}/DcgmReader.py
-        ${PYTHON_VER}/DcgmStatus.py
-        ${PYTHON_VER}/DcgmSystem.py
-        ${PYTHON_VER}/DcgmFieldGroup.py
-        ${PYTHON_VER}/pydcgm.py
-        ${PYTHON_VER}/dcgm_field_helpers.py
-        ${PYTHON_VER}/dcgm_errors.py
-        ${PYTHON_VER}/dcgm_collectd_plugin.py
-        ${PYTHON_VER}/dcgm_fluentd.py
-        ${PYTHON_VER}/dcgm_prometheus.py
-        ${PYTHON_VER}/dcgm_telegraf.py
-        ${PYTHON_VER}/blacklist_recommendations.py
+        python/dcgm_agent.py
+        python/dcgm_fields.py
+        python/dcgm_structs.py
+        python/dcgmvalue.py
+        python/DcgmDiag.py
+        python/DcgmGroup.py
+        python/DcgmHandle.py
+        python/DcgmJsonReader.py
+        python/DcgmReader.py
+        python/DcgmStatus.py
+        python/DcgmSystem.py
+        python/DcgmFieldGroup.py
+        python/pydcgm.py
+        python/dcgm_field_helpers.py
+        python/dcgm_errors.py
+        python/dcgm_collectd_plugin.py
+        python/dcgm_fluentd.py
+        python/dcgm_prometheus.py
+        python/dcgm_telegraf.py
+        python/blacklist_recommendations.py
     DESTINATION
-        ${DCGM_BINDINGS_INSTALL_DIR}
+        ${DCGM_BINDINGS_PYTHON2_INSTALL_DIR}
+    COMPONENT DCGM)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/__init__.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/dcgm_client_cli_parser.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/dcgm_client_main.py
+    DESTINATION
+        ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}/common
+    COMPONENT DCGM)
+
+install(
+    FILES
+        python3/dcgm_agent.py
+        python3/dcgm_fields.py
+        python3/dcgm_structs.py
+        python3/dcgmvalue.py
+        python3/DcgmDiag.py
+        python3/DcgmGroup.py
+        python3/DcgmHandle.py
+        python3/DcgmJsonReader.py
+        python3/DcgmReader.py
+        python3/DcgmStatus.py
+        python3/DcgmSystem.py
+        python3/DcgmFieldGroup.py
+        python3/pydcgm.py
+        python3/dcgm_field_helpers.py
+        python3/dcgm_errors.py
+        python3/dcgm_collectd_plugin.py
+        python3/dcgm_fluentd.py
+        python3/dcgm_prometheus.py
+        python3/dcgm_telegraf.py
+        python3/blacklist_recommendations.py
+    DESTINATION
+        ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}
     COMPONENT DCGM)

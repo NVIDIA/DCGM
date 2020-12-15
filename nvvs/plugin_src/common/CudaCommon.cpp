@@ -69,7 +69,7 @@ std::string AddAPIError(Plugin *p,
                         size_t bytes,
                         bool isGpuSpecific)
 {
-    DcgmError d;
+    DcgmError d { gpuId };
 
     if (isGpuSpecific)
     {

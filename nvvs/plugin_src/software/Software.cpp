@@ -51,7 +51,7 @@ Software::Software(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
 
     if (gpuInfo == nullptr)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
         AddError(d);
     }
@@ -106,7 +106,10 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     else if (testParameters.GetString(SW_STR_DO_TEST) == "graphics_processes")
         checkForGraphicsProcesses();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "page_retirement")
+    {
         checkPageRetirement();
+        checkRowRemapping();
+    }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "inforom")
         checkInforom();
 }
@@ -166,7 +169,7 @@ bool Software::checkPermissions()
             ss << dirName << "/" << entryName;
             if (access(ss.str().c_str(), R_OK) != 0)
             {
-                DcgmError d;
+                DcgmError d { DcgmError::GpuIdTag::Unknown };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NO_ACCESS_TO_FILE, d, ss.str().c_str(), strerror(errno));
                 AddError(d);
                 SetResult(NVVS_RESULT_WARN);
@@ -179,7 +182,7 @@ bool Software::checkPermissions()
 
     if (deviceCount != gpuCount)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DEVICE_COUNT_MISMATCH, d);
         AddError(d);
         SetResult(NVVS_RESULT_WARN);
@@ -209,7 +212,7 @@ bool Software::checkLibraries(libraryCheck_t checkLib)
         default:
         {
             // should never get here
-            DcgmError d;
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BAD_PARAMETER, d, __func__);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -221,7 +224,7 @@ bool Software::checkLibraries(libraryCheck_t checkLib)
         std::string error;
         if (!findLib(*it, error))
         {
-            DcgmError d;
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_OPEN_LIB, d, it->c_str(), error.c_str());
             AddError(d);
             if (checkLib != CHECK_CUDATK)
@@ -348,7 +351,7 @@ int Software::checkDriverPathBlacklist(std::string driverPath, std::vector<std::
         {
             if (strcmp(item.c_str(), basename(symlinkTarget)) == 0)
             {
-                DcgmError d;
+                DcgmError d { DcgmError::GpuIdTag::Unknown };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BLACKLISTED_DRIVER, d, item.c_str());
                 AddError(d);
                 return 1;
@@ -388,7 +391,7 @@ int Software::checkForGraphicsProcesses()
 
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "graphics_pids", gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -408,7 +411,7 @@ int Software::checkForGraphicsProcesses()
         else if (graphicsPidsVal.value.blob[0] != '\0')
         {
             // If there's any information here, it means a process is running
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GRAPHICS_PROCESSES, d);
             AddError(d);
             SetResult(NVVS_RESULT_WARN);
@@ -436,7 +439,7 @@ int Software::checkPersistenceMode()
 
             if (m_gpuInfo.gpus[sindex].attributes.settings.persistenceModeEnabled == false)
             {
-                DcgmError d;
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PERSISTENCE_MODE, d, gpuId);
                 AddError(d);
                 SetResult(NVVS_RESULT_FAIL);
@@ -476,7 +479,7 @@ int Software::checkPageRetirement()
             gpuId, DCGM_FI_DEV_RETIRED_PENDING, pendingRetirementsFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_pending", gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -496,14 +499,14 @@ int Software::checkPageRetirement()
             ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, volDbeVal, flags);
             if (ret == DCGM_ST_OK && (volDbeVal.value.i64 > 0 && !DCGM_INT64_IS_BLANK(volDbeVal.value.i64)))
             {
-                DcgmError d;
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS, d, gpuId);
                 AddError(d);
                 SetResult(NVVS_RESULT_FAIL);
             }
             else
             {
-                DcgmError d;
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_PAGE_RETIREMENTS, d, gpuId);
                 AddError(d);
                 SetResult(NVVS_RESULT_FAIL);
@@ -518,7 +521,7 @@ int Software::checkPageRetirement()
         ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_RETIRED_DBE, dbeFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_dbe", gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -539,7 +542,7 @@ int Software::checkPageRetirement()
         ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_RETIRED_SBE, sbeFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_sbe", gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -558,11 +561,103 @@ int Software::checkPageRetirement()
 
         if (retiredPagesTotal >= DCGM_LIMIT_MAX_RETIRED_PAGES)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_RETIRED_PAGES_LIMIT, d, DCGM_LIMIT_MAX_RETIRED_PAGES, gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
             continue;
+        }
+    }
+
+    return 0;
+}
+
+int Software::checkRowRemapping()
+{
+    unsigned int gpuId;
+    std::vector<unsigned int>::const_iterator gpuIt;
+    dcgmFieldValue_v2 pendingRowRemap;
+    dcgmFieldValue_v2 rowRemapFailure;
+    dcgmReturn_t ret;
+
+    /* Flags to pass to dcgmRecorder.GetCurrentFieldValue. Get live data since we're not watching the fields ahead of
+     * time */
+    unsigned int flags = DCGM_FV_FLAG_LIVE_DATA;
+
+    if (UsingFakeGpus())
+    {
+        /* fake gpus don't support live data */
+        flags = 0;
+    }
+
+    for (gpuIt = m_gpuList.begin(); gpuIt != m_gpuList.end(); gpuIt++)
+    {
+        gpuId = *gpuIt;
+
+        memset(&rowRemapFailure, 0, sizeof(rowRemapFailure));
+
+        // Row remap failure
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ROW_REMAP_FAILURE, rowRemapFailure, flags);
+        if (ret != DCGM_ST_OK)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "row_remap_failure", gpuId);
+            AddError(d);
+            SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            continue;
+        }
+
+        if (rowRemapFailure.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(rowRemapFailure.value.i64))
+        {
+            DCGM_LOG_INFO << "gpuId " << gpuId << " returned status " << rowRemapFailure.status << ", value "
+                          << rowRemapFailure.value.i64 << "for DCGM_FI_DEV_ROW_REMAP_FAILURE. Skipping this check.";
+        }
+        else if (rowRemapFailure.value.i64 > 0)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d, gpuId);
+            AddError(d);
+            SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+
+            continue;
+        }
+
+        memset(&pendingRowRemap, 0, sizeof(pendingRowRemap));
+
+        // Check for pending row remappings
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ROW_REMAP_PENDING, pendingRowRemap, flags);
+        if (ret != DCGM_ST_OK)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "row_remap_pending", gpuId);
+            AddError(d);
+            SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            continue;
+        }
+
+        if (pendingRowRemap.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(pendingRowRemap.value.i64))
+        {
+            DCGM_LOG_INFO << "gpuId " << gpuId << " returned status " << pendingRowRemap.status << ", value "
+                          << pendingRowRemap.value.i64 << "for DCGM_FI_DEV_ROW_REMAP_PENDING. Skipping this check.";
+        }
+        else if (pendingRowRemap.value.i64 > 0)
+        {
+            dcgmFieldValue_v2 uncRemap = {};
+            ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS, uncRemap, flags);
+            if (ret == DCGM_ST_OK && (uncRemap.value.i64 > 0 && !DCGM_INT64_IS_BLANK(uncRemap.value.i64)))
+            {
+                DcgmError d { gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCORRECTABLE_ROW_REMAP, d, gpuId);
+                AddError(d);
+                SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            }
+            else
+            {
+                DcgmError d { gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_ROW_REMAP, d, gpuId);
+                AddError(d);
+                SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            }
         }
     }
 
@@ -584,21 +679,23 @@ int Software::checkInforom()
 
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "inforom_config_valid", gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
             continue;
         }
 
-        if (inforomValidVal.status != DCGM_ST_NOT_SUPPORTED
+        if ((inforomValidVal.status == DCGM_ST_NOT_SUPPORTED)
             || (inforomValidVal.status == DCGM_ST_OK && DCGM_INT64_IS_BLANK(inforomValidVal.value.i64)))
         {
             std::stringstream buf;
-            buf << "Checking Inoforom validity not supported for GPU " << gpuId;
+            buf << "DCGM returned status " << inforomValidVal.status << " for GPU " << gpuId
+                << " when checking the validity of the inforom. Skipping this check.";
             std::string info(buf.str());
             DCGM_LOG_WARNING << info;
             AddInfo(info);
+            SetResult(NVVS_RESULT_SKIP);
             continue;
         }
         else if (inforomValidVal.status != DCGM_ST_OK)
@@ -614,7 +711,7 @@ int Software::checkInforom()
         else if (inforomValidVal.value.i64 == 0)
         {
             // Inforom is not valid
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CORRUPT_INFOROM, d, gpuId);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
@@ -655,7 +752,7 @@ int Software::checkForBadEnvVaribles()
         }
 
         /* Variable found. Warn */
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BAD_CUDA_ENV, d, checkKey.c_str());
         AddError(d);
         SetResult(NVVS_RESULT_WARN);

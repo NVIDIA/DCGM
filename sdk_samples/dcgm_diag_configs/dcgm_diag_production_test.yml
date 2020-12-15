@@ -6,20 +6,20 @@ globals:
 
 custom:
 - custom:
-    targeted performance:
+    targeted_stress:
       test_duration: 300
-    sm performance:
+    sm_stress:
       test_duration: 300
-    targeted power: 
+    targeted_power: 
       test_duration: 300
     memory: 
       is_allowed: true
-    memory bandwidth: 
+    memory_bandwidth: 
       minimum_bandwidth: 100
     diagnostic: 
-      is_allowed: false
+      is_allowed: true
     pcie:
-      test_unpinned: true
+      test_pinned: true
       test_unpinned: true
       test_p2p_on: true
       test_p2p_off: true

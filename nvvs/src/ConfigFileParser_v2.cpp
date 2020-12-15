@@ -523,7 +523,7 @@ void ConfigFileParser_v2::ParseTestOverrides(std::string testName, TestParameter
     auto const pName = m_yamltoplevelnode[testName];
     if (pName.IsDefined()) // found something at the top level, leave it to the helper to dig down
     {
-        handleTestDefaults(pName, tp, false);
+        handleTestDefaults(testName, pName, tp, false);
     }
 
     /* getting here can mean one of several things
@@ -576,7 +576,7 @@ void ConfigFileParser_v2::CheckTokens_testDefaults(const YAML::Node &node,
             {
                 try
                 {
-                    handleTestDefaults(it->second, tp, false);
+                    handleTestDefaults(testName, it->second, tp, false);
                 }
                 catch (std::exception const &e)
                 {
@@ -603,7 +603,10 @@ void ConfigFileParser_v2::CheckTokens_testDefaults(const YAML::Node &node,
 /*****************************************************************************/
 /* handle actually putting the specified parameters in to the TestParms obj
  */
-void ConfigFileParser_v2::handleTestDefaults(const YAML::Node &node, TestParameters &tp, bool subTest)
+void ConfigFileParser_v2::handleTestDefaults(const std::string &testName,
+                                             const YAML::Node &node,
+                                             TestParameters &tp,
+                                             bool subTest)
 {
     PRINT_DEBUG("%d", "Entering handleTestDefaults subTest=%d", (int)subTest);
 
@@ -622,7 +625,7 @@ void ConfigFileParser_v2::handleTestDefaults(const YAML::Node &node, TestParamet
             {
                 if (key == "subtests")
                 {
-                    handleTestDefaults(it->second, tp, true);
+                    handleTestDefaults(testName, it->second, tp, true);
                 }
                 else
                 {
@@ -630,7 +633,7 @@ void ConfigFileParser_v2::handleTestDefaults(const YAML::Node &node, TestParamet
                     {
                         subTestName = key;
                     }
-                    handleTestDefaults(it->second, tp, subTest);
+                    handleTestDefaults(testName, it->second, tp, subTest);
                 }
             }
             else if (it->second.Type() == YAML::NodeType::Scalar)
@@ -649,14 +652,34 @@ void ConfigFileParser_v2::handleTestDefaults(const YAML::Node &node, TestParamet
                 if (result != 0)
                 {
                     std::stringstream ss;
+                    bool added = false;
                     switch (result)
                     {
                         case TP_ST_BADPARAM:
                             ss << "The parameter given for \"" << key << "\" caused an internal error .";
                             break;
                         case TP_ST_NOTFOUND:
-                            ss << "The key \"" << key << "\" was not found.";
+                        {
+                            if (!subTest)
+                            {
+                                if (m_pv.IsValidParameter(testName, key))
+                                {
+                                    tp.AddString(key, value);
+                                    added = true;
+                                }
+                            }
+                            else if (m_pv.IsValidSubtestParameter(testName, subTestName, key))
+                            {
+                                added = true;
+                                tp.AddSubTestString(subTestName, key, value);
+                            }
+
+                            if (!added)
+                            {
+                                ss << "The key \"" << key << "\" was not found.";
+                            }
                             break;
+                        }
                         case TP_ST_ALREADYEXISTS:
                             // should never happen since we are using set not add
                             ss << "The key \"" << key << "\" was added but already exists.";
@@ -672,7 +695,10 @@ void ConfigFileParser_v2::handleTestDefaults(const YAML::Node &node, TestParamet
                             ss << "Received an unknown value from the test parameter system.";
                             break;
                     }
-                    throw std::runtime_error(ss.str());
+                    if (!added)
+                    {
+                        throw std::runtime_error(ss.str());
+                    }
                 }
             }
             else
@@ -799,4 +825,9 @@ void ConfigFileParser_v2::legacyGlobalStructHelper()
         nvvsCommon.parse = fwcfg.scriptable;
     }
     nvvsCommon.requirePersistenceMode = fwcfg.requirePersistence;
+}
+
+void ConfigFileParser_v2::SetParameterValidator(ParameterValidator &pv)
+{
+    m_pv = pv;
 }

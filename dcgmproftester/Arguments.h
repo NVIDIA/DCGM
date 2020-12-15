@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "DcgmLogging.h"
 #include "dcgm_structs.h"
 
 #include <functional>
@@ -42,13 +43,18 @@ public:
         bool m_percentTolerance; // if tolerance is a percentage (or absolute)
         double m_tolerance;      // tolerance (if m_valueValid is false)
 
-        uint8_t m_waitToCheck;    // [0-100] 0 10      wait a percentage of the tests before comparing
-        double m_duration;        // <value> 30.0 2.00 duration of the test in seconds
-        double m_reportInterval;  // <value> 1.00 0.01 rate of report gathering in seconds
-        unsigned int m_syncCount; // maximum activity synchronization count
-        bool m_targetMaxValue;    // bool    false false   target maximum value
-        bool m_noDcgmValidation;  // bool    false false   if set, we will NOT self-validate DCGM metrics.
-        bool m_dvsOutput;         // bool    false false   if set, we will append DVS tags to our stdout.
+        uint8_t m_waitToCheck;       // [0-100] 0 10      wait a percentage of the tests before comparing
+        uint8_t m_maxGpusInParallel; // [0-255] 4 all  max GPU proc. in parallel
+        double m_duration;           // <value> 30.0 2.00 duration of the test in seconds
+        double m_reportInterval;     // <value> 1.00 0.01 rate of report gathering in seconds
+        unsigned int m_syncCount;    // maximum activity synchronization count
+        bool m_targetMaxValue;       // bool    false false   target maximum value
+        bool m_noDcgmValidation;     // bool    false false   if set, we will NOT self-validate DCGM metrics.
+        bool m_dvsOutput;            // bool    false false   if set, we will append DVS tags to our stdout.
+
+        // Log Control
+        std::string m_logFile;            // string  dcgmproftester.log --- log file
+        DcgmLoggingSeverity_t m_logLevel; // enum    warning warning log severity
 
         // Operational flags.
 
@@ -57,7 +63,7 @@ public:
         bool m_validate { false }; // whether to validate
         bool m_fast { false };     // whether to finish as soon as possible
 
-        unsigned int m_fieldId; // <value> --- ---l      profiling FieldId
+        unsigned int m_fieldId; // <value> --- ---  profiling FieldId
     } m_parameters;
 
     std::vector<unsigned int> m_gpuIds; // GPU ids for this run
@@ -275,6 +281,7 @@ private:
     TCLAP::CmdLine m_cmd;
 
     Argument_t<double> m_waitToCheck;
+    Argument_t<double> m_maxGpusInParallel;
     Argument_t<double> m_percentTolerance;
     Argument_t<double> m_absoluteTolerance;
     Argument_t<double> m_minValue;
@@ -290,6 +297,8 @@ private:
     Argument_t<bool> m_reset;
     Argument_t<std::string> m_modeString;
     Argument_t<unsigned int> m_syncCount;
+    Argument_t<std::string> m_logFileString;
+    Argument_t<std::string> m_logLevelString;
     Argument_t<std::string> m_configFile;
 
     std::vector<std::shared_ptr<Arguments_t>> m_arguments;
@@ -327,9 +336,22 @@ public:
               [](decltype(m_waitToCheck) &arg, const decltype(m_waitToCheck)::ArgType &value) { return value < 100; })
         ,
 
+        m_maxGpusInParallel(m_cmd,
+                            4.0,
+                            false,
+                            std::string(""),
+                            std::string("max-processes"),
+                            std::string("maximum simultaneous GPUs tested (0=all)"),
+                            std::string("maximum simultaneous GPUs tested"),
+                            std::string("max-processes should be between 0 and 255"),
+
+                            [](decltype(m_maxGpusInParallel) &arg,
+                               const decltype(m_maxGpusInParallel)::ArgType &value) { return value <= 255; })
+        ,
+
         m_percentTolerance(
             m_cmd,
-            5.0,
+            10.0,
             false,
             std::string(""),
             std::string("percent-tolerance"),
@@ -535,15 +557,16 @@ public:
                 })
         ,
 
-        m_modeString(m_cmd,
-                     std::string("generateload,report,novalidate,nofast"),
-                     false,
-                     std::string(""),
-                     std::string("mode"),
-                     std::string("operational mode"),
-                     std::string("operational mode: generate load, report, validate"),
-                     std::string("operational mode must be one of [no]generateload, [no]report, [no]validate"),
-                     [](decltype(m_modeString) &arg, const decltype(m_modeString)::ArgType &value) { return true; })
+        m_modeString(
+            m_cmd,
+            std::string("generateload,report,novalidate,nofast"),
+            false,
+            std::string(""),
+            std::string("mode"),
+            std::string("operational mode"),
+            std::string("operational mode: fast, generate load, report, validate"),
+            std::string("operational mode must be one of [no]fast, [no]generateload, [no]report, [no]validate"),
+            [](decltype(m_modeString) &arg, const decltype(m_modeString)::ArgType &value) { return true; })
         ,
 
         m_syncCount(m_cmd,
@@ -556,6 +579,32 @@ public:
                     std::string("Sync count should not be more than 10"),
 
                     [](decltype(m_syncCount) &arg, const decltype(m_syncCount)::ArgType &value) { return value <= 10; })
+        ,
+
+        m_logFileString(
+            m_cmd,
+            std::string("dcgmproftester.log"),
+            false,
+            std::string(""),
+            std::string("log-file"),
+            std::string("log file"),
+            std::string("Log file name"),
+            std::string("Log file must name a writable file"),
+
+            [](decltype(m_logFileString) &arg, const decltype(m_logFileString)::ArgType &value) { return true; })
+        ,
+
+        m_logLevelString(
+            m_cmd,
+            std::string("info"),
+            false,
+            std::string(""),
+            std::string("log-level"),
+            std::string("log level"),
+            std::string("Log severity level"),
+            std::string("Log severity level must be one of" DCGM_LOGGING_SEVERITY_OPTIONS),
+
+            [](decltype(m_logLevelString) &arg, const decltype(m_logLevelString)::ArgType &value) { return true; })
         ,
 
         m_configFile(m_cmd,

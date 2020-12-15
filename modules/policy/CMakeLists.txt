@@ -15,19 +15,19 @@ add_library(policy_interface INTERFACE)
 target_include_directories(policy_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(policy_interface INTERFACE dcgm_interface modules_interface)
 
-add_library(policy_objects OBJECT)
-target_link_libraries(policy_objects PUBLIC policy_interface)
-target_compile_options(policy_objects PRIVATE -fPIC)
-target_sources(policy_objects PRIVATE
-    dcgm_policy_structs.h
-    DcgmModulePolicy.h
-    DcgmPolicyManager.cpp
-    DcgmPolicyManager.h
-    DcgmModulePolicy.cpp
-    )
-
 add_library(dcgmmodulepolicy SHARED)
-dcgm_macro_modules_link_options(dcgmmodulepolicy)
-target_compile_options(dcgmmodulepolicy PRIVATE -fPIC)
-target_link_libraries(dcgmmodulepolicy PRIVATE policy_objects modules_objects sdk_nvml_essentials_objects dcgm)
+define_dcgm_module(dcgmmodulepolicy)
+target_link_libraries(dcgmmodulepolicy
+    PRIVATE
+        policy_interface
+        sdk_nvml_essentials_objects
+)
+target_sources(dcgmmodulepolicy
+    PRIVATE
+        dcgm_policy_structs.h
+        DcgmModulePolicy.h
+        DcgmPolicyManager.cpp
+        DcgmPolicyManager.h
+        DcgmModulePolicy.cpp
+)
 update_lib_ver(dcgmmodulepolicy)

@@ -19,13 +19,67 @@
 #include "MigIdParser.hpp"
 #include "dcgm_structs.h"
 
+#include <DcgmLogging.h>
+
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+
 /*****************************************************************************/
 /* Defines */
 #define _DCGMI_FORMAL_NAME "NVIDIA Datacenter GPU Management Interface"
+
+namespace DcgmNs::Dcgmi::Logging
+{
+/**
+ * Helper type to put error messages to both std::cerr and log file.
+ * @see SHOW_AND_LOG_ERROR
+ */
+struct ConsoleErrorLogger
+{
+    ConsoleErrorLogger(char const *func, size_t line, char const *file)
+        : record(plog::Record(plog::error, func, line, file, 0))
+    {}
+
+    template <class T>
+    ConsoleErrorLogger &operator<<(T const &msg)
+    {
+        IF_LOG_(BASE_LOGGER, plog::error)
+        {
+            record << msg;
+        }
+
+        std::cerr << msg;
+        return *this;
+    }
+
+    ~ConsoleErrorLogger()
+    {
+        IF_LOG_(BASE_LOGGER, plog::debug)(*plog::get<BASE_LOGGER>()) += record;
+        std::cerr << std::endl;
+    }
+
+private:
+    plog::Record record;
+};
+} // namespace DcgmNs::Dcgmi::Logging
+
+#define __SHOW_AND_LOG_ERROR(FUNC, LINE, FILE) \
+    if (true)                                  \
+    DcgmNs::Dcgmi::Logging::ConsoleErrorLogger((FUNC), (LINE), (FILE))
+
+/**
+ * This macro should be used instead of DCGM_LOG_ERROR if the error message should also be shown to
+ * a user in the terminal via std::cerr.
+ *
+ * @code{.cpp}
+ *  if (dcgmReturn != DCGM_ST_OK) {
+ *      SHOW_AND_LOG_ERROR << "This message will be shown to the user: " << errorString(dcgmReturn);
+ *  }
+ * @endcode
+ */
+#define SHOW_AND_LOG_ERROR __SHOW_AND_LOG_ERROR(PLOG_GET_FUNC(), __LINE__, PLOG_GET_FILE())
 
 /*****************************************************************************/
 /* Unique key for an entityGroupId:entityId combo */

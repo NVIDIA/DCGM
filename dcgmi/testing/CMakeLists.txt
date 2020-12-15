@@ -35,22 +35,24 @@ if (BUILD_TESTING)
     #       for any libdcgm function that is needed.    
     target_link_libraries(dcgmitests
         PRIVATE
-            dcgmi_interface
             dcgmi_objects
             nvvs_interface
             diag_interface
-            common_objects
+            dcgmmodulediag_common
             buildinfo_objects
             sdk_nvml_essentials_objects
             sdk_nvml_interface
             Catch2::Catch2
             dcgm
-            dcgmmodulediag
+            dcgm_common
+            dcgm_logging
+            dcgm_mutex
+            ${CMAKE_THREAD_LIBS_INIT}
+            ${JSONCPP_STATIC_LIBS}
+            rt
+            dl
     )
-    target_include_directories(dcgmitests PRIVATE ${JSONCPP_INCLUDE_DIR})
-    target_link_libraries(dcgmitests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-    target_link_options(dcgmitests PRIVATE -rdynamic)
-    target_link_libraries(dcgmitests PRIVATE ${JSONCPP_STATIC_LIBS})
+    #target_include_directories(dcgmitests PRIVATE ${JSONCPP_INCLUDE_DIR})
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
         catch_discover_tests(dcgmitests EXTRA_ARGS --use-colour yes)

@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+def _python_version_check():
+    import sys
+    python_version = sys.version.split(None, 1)[0]
+    if python_version >= '3':
+        print('[ERROR] Detected Python version {}. These bindings are for Python 2. Please load the Python 3 bindings found at /usr/local/dcgm/bindings/python3'.format(python_version))
+        sys.exit(1)
+_python_version_check()
+
 #Bring classes into this namespace
 from DcgmHandle import *
 from DcgmGroup import *

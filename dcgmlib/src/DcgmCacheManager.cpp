@@ -648,6 +648,27 @@ private:
 };
 } // namespace
 
+dcgmReturn_t DcgmCacheManager::GetComputeInstanceNames(dcgmcm_gpu_info_t &gpuInfo,
+                                                       std::unordered_map<unsigned int, std::string> &ciNames)
+{
+    for (unsigned int i = 0; i < gpuInfo.maxGpcs; i++)
+    {
+        std::string ciName;
+        unsigned int ciId;
+        dcgmReturn_t ret = GetCIDeviceNameAndId(gpuInfo.nvmlDevice, i, ciName, ciId);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Cannot retrieve the name of compute instance index " << i << " for GPU "
+                           << gpuInfo.gpuId;
+            return ret;
+        }
+
+        ciNames[ciId] = ciName;
+    }
+
+    return DCGM_ST_OK;
+}
+
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo)
 {
@@ -712,7 +733,14 @@ dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo
         gpuInfo.maxGpcs = maxGpcs;
     }
 
+    std::unordered_map<unsigned int, std::string> ciNames;
     unsigned int maxGpcsInProfiles = 0;
+    dcgmReturn_t ret               = GetComputeInstanceNames(gpuInfo, ciNames);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Could not retrieve the names of the compute instances for GPU " << gpuInfo.gpuId << ": '"
+                       << errorString(ret) << "'";
+    }
 
     try
     {
@@ -732,6 +760,7 @@ dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo
                                     profileInfo,
                                     profileIndex);
 
+                bool first = true;
                 for (auto const &[cpIndex, ciProfileInfo] : ComputeInstanceProfiles(gpuInstance))
                 {
                     for (auto const &[computeInstance, computeInstanceInfo] :
@@ -746,6 +775,14 @@ dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo
                         ci.parentInstance        = gpuInstance;
                         ci.profileId             = computeInstanceInfo.profileId;
                         ci.profile               = ciProfileInfo;
+                        ci.profileName           = ciNames[computeInstanceInfo.id];
+
+                        // Only set the GPU instance profile name once
+                        if (first == true)
+                        {
+                            dgi.SetProfileName(DcgmGpuInstance::DeriveGpuInstanceName(ciNames[computeInstanceInfo.id]));
+                        }
+                        first = false;
 
                         ci.dcgmComputeInstanceId
                             = DcgmNs::Mig::ComputeInstanceId { gpuInfo.gpuId * maxGpcs + gpuInfo.ciCount };
@@ -1623,6 +1660,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeInstance(dcgm_field_eid_t parentId)
     DcgmGpuInstance dgi(
         gpuInstanceId, nvmlInstanceId, DcgmNs::Mig::GpuInstanceProfileId { 0 }, instance, placement, profileInfo, 0);
 
+    dgi.SetProfileName("1fg.4gb"); // Make a fake GPU instance profile name
     m_gpus[parentId].instances.push_back(dgi);
     m_migManager.RecordGpuInstance(parentId, gpuInstanceId);
 
@@ -1667,6 +1705,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeComputeInstance(dcgm_field_eid_t paren
                 ci.nvmlComputeInstanceId = DcgmNs::Mig::Nvml::ComputeInstanceId {};
                 ci.parentGpuId           = m_gpus[gpuIndex].gpuId;
                 ci.profile.sliceCount    = 1;
+                ci.profileName           = "1fc.1g.4gb"; // Make a fake compute instance profile name
                 gpuInstance.AddComputeInstance(ci);
                 entityId = ci.dcgmComputeInstanceId.id;
                 m_migManager.RecordGpuComputeInstance(gpuIndex, gpuInstance.GetInstanceId(), ci.dcgmComputeInstanceId);
@@ -4160,7 +4199,7 @@ dcgmReturn_t DcgmCacheManager::GetSamples(dcgm_field_entity_group_t entityGroupI
 
     if (fieldMeta->scope == DCGM_FS_GLOBAL && watchEntityGroupId != DCGM_FE_NONE)
     {
-        PRINT_WARNING("", "Fixing entityGroupId for global field");
+        DCGM_LOG_DEBUG << "Fixing entityGroupId for global field";
         watchEntityGroupId = DCGM_FE_NONE;
     }
 
@@ -4312,7 +4351,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
 
     if (fieldMeta->scope == DCGM_FS_GLOBAL && watchEntityGroupId != DCGM_FE_NONE)
     {
-        PRINT_WARNING("", "Fixing entityGroupId for global field");
+        DCGM_LOG_DEBUG << "Fixing entityGroupId for global field";
         watchEntityGroupId = DCGM_FE_NONE;
     }
 
@@ -6824,9 +6863,6 @@ dcgmReturn_t DcgmCacheManager::CacheTopologyAffinity(dcgmcm_update_thread_t *thr
 dcgmReturn_t DcgmCacheManager::HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNVML(
     std::vector<unsigned int> &gpuCounts)
 {
-#ifdef NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT
-#error Please replace literal with the NVML constant
-#endif
     nvmlFieldValue_t value = {};
     for (unsigned int i = 0; i < m_numGpus; i++)
     {
@@ -6839,7 +6875,7 @@ dcgmReturn_t DcgmCacheManager::HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsin
 
         // Check for NVSwitch connectivity.
         // We assume all-to-all connectivity in presence of NVSwitch.
-        value.fieldId           = 147; // TODO(aalsudani) replace with NVML constant
+        value.fieldId           = NVML_FI_DEV_NVSWITCH_CONNECTED_LINK_COUNT;
         nvmlReturn_t nvmlReturn = nvmlDeviceGetFieldValues(m_gpus[i].nvmlDevice, 1, &value);
         if (nvmlReturn != NVML_SUCCESS || value.nvmlReturn == NVML_ERROR_INVALID_ARGUMENT)
         {
@@ -7607,6 +7643,36 @@ void DcgmCacheManager::GenerateCudaVisibleDevicesValue(unsigned int gpuId,
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::GetCIDeviceNameAndId(nvmlDevice_t nvmlDevice,
+                                                    unsigned int ciIndex,
+                                                    std::string &ciName,
+                                                    unsigned int &ciId)
+{
+    nvmlDevice_t migDevice;
+    char ciNameBuf[NVML_DEVICE_NAME_V2_BUFFER_SIZE] = { 0 };
+    nvmlReturn_t nvmlReturn = nvmlDeviceGetMigDeviceHandleByIndex(nvmlDevice, ciIndex, &migDevice);
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        // It's not an error if no device exists or can be accessed.
+        return DCGM_ST_OK;
+    }
+
+    nvmlReturn = nvmlDeviceGetComputeInstanceId(migDevice, &ciId);
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        return NvmlReturnToDcgmReturn(nvmlReturn);
+    }
+
+    nvmlReturn = nvmlDeviceGetName(migDevice, ciNameBuf, sizeof(ciNameBuf));
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        return NvmlReturnToDcgmReturn(nvmlReturn);
+    }
+
+    return DcgmGpuInstance::TruncateCIDeviceName(ciNameBuf, ciName);
+}
+
+/*****************************************************************************/
 /* vGPU Index key space for gpuId */
 #define DCGMCM_START_VGPU_IDX_FOR_GPU(gpuId) ((gpuId)*DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
 #define DCGMCM_END_VGPU_IDX_FOR_GPU(gpuId)   (((gpuId) + 1) * DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
@@ -7744,16 +7810,78 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_NAME:
         {
             char buf[NVML_DEVICE_NAME_BUFFER_SIZE] = { 0 };
-            nvmlReturn                             = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                 : nvmlDeviceGetName(nvmlDevice, buf, sizeof(buf));
-            if (watchInfo)
-                watchInfo->lastStatus = nvmlReturn;
-            if (nvmlReturn != NVML_SUCCESS)
+
+            switch (entityGroupId)
             {
-                AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
-                return NvmlReturnToDcgmReturn(nvmlReturn);
+                case DCGM_FE_GPU:
+                    nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                         : nvmlDeviceGetName(nvmlDevice, buf, sizeof(buf));
+                    if (watchInfo)
+                    {
+                        watchInfo->lastStatus = nvmlReturn;
+                    }
+
+                    if (nvmlReturn != NVML_SUCCESS)
+                    {
+                        AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
+                        return NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+                    AppendEntityString(threadCtx, buf, now, expireTime);
+                    break;
+
+                case DCGM_FE_GPU_I:
+                {
+                    unsigned int localGIIndex      = entityId % m_gpus[gpuId].maxGpcs;
+                    std::string const &profileName = m_gpus[gpuId].instances[localGIIndex].GetProfileName();
+                    if (profileName.empty())
+                    {
+                        snprintf(buf, sizeof(buf), "%s", DCGM_STR_BLANK);
+                    }
+                    else
+                    {
+                        snprintf(buf, sizeof(buf), "%s", profileName.c_str());
+                    }
+                    AppendEntityString(threadCtx, buf, now, expireTime);
+
+                    break;
+                }
+
+                case DCGM_FE_GPU_CI:
+                {
+                    DcgmNs::Mig::GpuInstanceId gpuInstanceId {};
+                    ret = m_migManager.GetInstanceIdFromComputeInstanceId(DcgmNs::Mig::ComputeInstanceId { entityId },
+                                                                          gpuInstanceId);
+                    if (ret != DCGM_ST_OK)
+                    {
+                        snprintf(buf, sizeof(buf), "%s", DCGM_STR_BLANK);
+                    }
+                    else
+                    {
+                        unsigned int localGIIndex = gpuInstanceId.id % m_gpus[gpuId].maxGpcs;
+                        dcgmcm_gpu_compute_instance_t ci {};
+                        ret = m_gpus[gpuId].instances[localGIIndex].GetComputeInstanceById(
+                            DcgmNs::Mig::ComputeInstanceId { entityId }, ci);
+                        if (ret != DCGM_ST_OK || ci.profileName.empty())
+                        {
+                            snprintf(buf, sizeof(buf), "%s", DCGM_STR_BLANK);
+                        }
+                        else
+                        {
+                            snprintf(buf, sizeof(buf), "%s", ci.profileName.c_str());
+                        }
+                    }
+
+                    AppendEntityString(threadCtx, buf, now, expireTime);
+                    break;
+                }
+
+                default:
+                {
+                    snprintf(buf, sizeof(buf), "Unsupported entity group");
+                    AppendEntityString(threadCtx, buf, now, expireTime);
+                    break;
+                }
             }
-            AppendEntityString(threadCtx, buf, now, expireTime);
             break;
         }
 
@@ -9209,8 +9337,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_COMPUTE_PIDS:
         {
             int i;
-            unsigned int infoCount   = 0;
-            nvmlProcessInfo_t *infos = 0;
+            unsigned int infoCount      = 0;
+            nvmlProcessInfo_v1_t *infos = 0;
 
             /* First, get the capacity we need */
             nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
@@ -9232,14 +9360,18 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
 
             /* Alloc space for PIDs */
-            infos = (nvmlProcessInfo_t *)malloc(sizeof(*infos) * infoCount);
+            infos = (nvmlProcessInfo_v1_t *)malloc(sizeof(*infos) * infoCount);
             if (!infos)
             {
                 PRINT_ERROR("%d", "malloc of %d bytes failed", (int)(sizeof(*infos) * infoCount));
                 return DCGM_ST_MEMORY;
             }
 
-            nvmlReturn = nvmlDeviceGetComputeRunningProcesses(nvmlDevice, &infoCount, infos);
+            /* Note: casting nvmlProcessInfo_v1_t as nvmlProcessInfo_t since nvmlDeviceGetComputeRunningProcesses()
+                     actually uses nvmlProcessInfo_v1_t internally in r460 and newer drivers. nvmlProcessInfo_v1_t
+                     is how the structure has always been but r460 added new fields to nvmlProcessInfo_t, making it
+                     incompatible */
+            nvmlReturn = nvmlDeviceGetComputeRunningProcesses(nvmlDevice, &infoCount, (nvmlProcessInfo_t *)infos);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (nvmlReturn != NVML_SUCCESS)
@@ -9396,7 +9528,13 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 watchInfo->lastStatus = nvmlReturn;
             }
 
-            if (nvmlReturn != NVML_ERROR_INSUFFICIENT_SIZE)
+            if (nvmlReturn == NVML_ERROR_NOT_FOUND) /* verbose errors. Don't spam logs */
+            {
+                DCGM_LOG_DEBUG << "nvmlDeviceGetProcessUtilization returned " << (int)nvmlReturn << " for gpuId "
+                               << gpuId << ". Expected: NVML_ERROR_INSUFFICIENT_SIZE";
+                return NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+            else if (nvmlReturn != NVML_ERROR_INSUFFICIENT_SIZE)
             {
                 DCGM_LOG_ERROR << "nvmlDeviceGetProcessUtilization returned " << (int)nvmlReturn << " for gpuId "
                                << gpuId << ". Expected: NVML_ERROR_INSUFFICIENT_SIZE";
@@ -9447,7 +9585,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                         return DCGM_ST_GENERIC_ERROR;
                     }
                 }
-
+                else if (nvmlReturn == NVML_ERROR_NOT_FOUND) /* verbose errors. Don't spam logs */
+                {
+                    DCGM_LOG_DEBUG << "nvmlDeviceGetProcessUtilization returned " << (int)nvmlReturn << " for gpuId "
+                                   << gpuId;
+                    return NvmlReturnToDcgmReturn(nvmlReturn);
+                }
                 else if (nvmlReturn != NVML_ERROR_INSUFFICIENT_SIZE)
                 {
                     DCGM_LOG_ERROR << "nvmlDeviceGetProcessUtilization returned " << (int)nvmlReturn << " for gpuId "

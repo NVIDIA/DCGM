@@ -20,7 +20,7 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#include <Command.h>
+#include "Command.h"
 
 
 /*****************************************************************************

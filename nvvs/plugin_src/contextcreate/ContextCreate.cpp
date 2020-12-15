@@ -100,7 +100,7 @@ std::string ContextCreate::Init(const dcgmDiagPluginGpuList_t &gpuList)
                 delete ccd;
             }
 
-            DcgmError d;
+            DcgmError d { gpuList.gpus[i].gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
             return d.GetMessage();
         }
@@ -158,7 +158,7 @@ int ContextCreate::CanCreateContext()
         {
             const char *errStr;
             cuGetErrorString(cuSt, &errStr);
-            DcgmError d;
+            DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, m_device[i]->gpuId, errStr);
             m_plugin->AddErrorForGpu(m_device[i]->gpuId, d);
             PRINT_DEBUG("%s", "%s", error.c_str());

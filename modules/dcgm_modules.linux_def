@@ -1,0 +1,11 @@
+{
+    global:
+        dcgm_alloc_module_instance;
+        dcgm_free_module_instance;
+        dcgm_module_process_message;
+    local:
+        *;
+        extern "C++" {
+            *;
+        };
+};

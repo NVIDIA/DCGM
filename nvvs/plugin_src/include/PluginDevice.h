@@ -55,7 +55,7 @@ public:
         cuSt = cudaDeviceGetByPCIBusId(&this->cudaDeviceIdx, pciBusId);
         if (cuSt != cudaSuccess)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaDeviceGetByPCIBusId");
             snprintf(
                 buf, sizeof(buf) - 1, "'%s' for GPU %u, bus ID = %s", cudaGetErrorString(cuSt), this->gpuId, pciBusId);

@@ -1232,7 +1232,7 @@ void Whitelist::FillMap()
     tp = new TestParameters();
     tp->AddString(TP_STR_IS_ALLOWED, "True");
     tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 550.0, 1.0, 2048.0);
-    tp->AddDouble(TP_STR_TARGET_POWER, 120.0, 100.0, 250.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 249.0, 100.0, 250.0);
     tp->AddString(TP_STR_USE_DGEMM, "True");
     m_featureDb[id][TP_PLUGIN_NAME] = tp;
     tp                              = new TestParameters();
@@ -1629,9 +1629,9 @@ void Whitelist::FillMap()
     tp                                    = new TestParameters();
     tp->AddString(PCIE_STR_IS_ALLOWED, "True");
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 8.0, 1.0, 16.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 8.0, 1.0, 16.0);
     m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
     tp                                = new TestParameters();
     tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
@@ -2090,6 +2090,320 @@ void Whitelist::FillMap()
     // Add device id to m_globalChanges since this device requires a throttle mask
     m_globalChanges.insert(id);
     tp = 0;
+
+    // A10c/noc - PG133 SKU215
+    id = "2236";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 149.0, 100.0, 150.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 90.0, 40.0, 98.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 6075.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // proftester -t 1007 measures at ~8100, multiply by .75 to get 6075
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 6075.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 90.0, 40.0, 98.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 8192.0, 1024.0, 8192.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // proftester -t 1005 shows ~640700 GiB/sec. Multiply by .75 to get 480525
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 480525.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    // Add device id to m_globalChanges since this device requires a throttle mask
+    m_globalChanges.insert(id);
+    tp = 0;
+
+    // A10g - PG133 SKU210
+    id = "2237";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 299.0, 100.0, 300.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 95.0, 40.0, 98.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 12750.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // proftester -t 1007 measures at ~17000, multiply by .75 to get 12750
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 12750.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 95.0, 40.0, 98.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 8192.0, 1024.0, 8192.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // proftester -t 1005 shows ~483600 GiB/sec. Multiply by .75 to get 362700
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 362700.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    // Add device id to m_globalChanges since this device requires a throttle mask
+    m_globalChanges.insert(id);
+    tp = 0;
+
+    // T4G
+    id = "1eb4";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 69.0, 30.0, 70.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 85.0, 40.0, 93.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    // Copied from sm perf target
+    tp->AddDouble(TS_STR_TARGET_PERF, 2850.0, 30.0, 10000.0);
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // proftester -t 1007 measures at ~3800, multiply by .75 to get 2850
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 2850.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 85.0, 40.0, 93.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 8.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 8.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 4096.0, 1024.0, 4096.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // proftester -t 1005 shows ~243500 GiB/sec. Multiply by .75 to get ~182600
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 182600.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    // Add device id to m_globalChanges since this device requires a throttle mask
+    m_globalChanges.insert(id);
+    tp = 0;
+
+    // A30
+    id = "20b7";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 194.0, 100.0, 195.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 92.0, 40.0, 95.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 7050.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1007 =~ 9400. 9400 * 0.75 = 7050
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 7050.5, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 92.0, 40.0, 95.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 8192.0, 1024.0, 8192.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1005 shows ~780000 MiB/sec. Multiply by .75 to get 585000
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 585000.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    tp                                 = 0;
+
+    // Nvidia Turing Auto Module
+    id = "1eba";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 188.0, 50.0, 189.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 105.0, 40.0, 105.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 5625.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1007 =~ 7500. 7500 * 0.75 = 5625
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 5625.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 105.0, 40.0, 105.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 4096.0, 1024.0, 4096.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1005 shows ~298900 MiB/sec. Multiply by .75 to get 224000
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 224000.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    tp                                 = 0;
+
+    // A6000 PCIe
+    id = "2230";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 299.0, 50.0, 300.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 93.0, 40.0, 95.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 11475.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1007 =~ 15300. 15300 * 0.75 = 11475
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 11475.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 93.0, 40.0, 95.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 4096.0, 1024.0, 4096.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1005 shows ~674500 MiB/sec. Multiply by .75 to get ~506000
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 506000.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    tp                                 = 0;
+
+    // PG506-230
+    id = "20b6";
+    tp = new TestParameters();
+    tp->AddString(TP_STR_IS_ALLOWED, "True");
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1024.0, 1.0, 2048.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 194.0, 100.0, 195.0);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, 82.0, 40.0, 85.0);
+    tp->AddString(TP_STR_USE_DGEMM, "False");
+    m_featureDb[id][TP_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(TS_STR_IS_ALLOWED, "True");
+    tp->AddString(TS_STR_USE_DGEMM, "False");
+    tp->AddDouble(TS_STR_TARGET_PERF, 15750.0, 30.0, 10000.0); // Copied from sm perf target
+    m_featureDb[id][TS_PLUGIN_NAME] = tp;
+    tp                              = new TestParameters();
+    tp->AddString(SMSTRESS_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1007 =~ 21000. 21000 * 0.75 = 15750
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 15750.0, 30.0, 50000.0);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 1024.0, 1024.0, 9182.0);
+    tp->AddString(SMSTRESS_STR_USE_DGEMM, "False");
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 82.0, 40.0, 85.0);
+    m_featureDb[id][SMSTRESS_PLUGIN_NAME] = tp;
+    tp                                    = new TestParameters();
+    tp->AddString(PCIE_STR_IS_ALLOWED, "True");
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 3.0, 0.0, 3.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 16.0, 1.0, 16.0);
+    m_featureDb[id][PCIE_PLUGIN_NAME] = tp;
+    tp                                = new TestParameters();
+    tp->AddString(MEMORY_STR_IS_ALLOWED, "True");
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 192.0, 0.0, 192.0);
+    m_featureDb[id][MEMORY_PLUGIN_NAME] = tp;
+    tp                                  = new TestParameters();
+    tp->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "True");
+    tp->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 8192.0, 1024.0, 8192.0);
+    m_featureDb[id][DIAGNOSTIC_PLUGIN_NAME] = tp;
+    tp                                      = new TestParameters();
+    tp->AddString(MEMBW_STR_IS_ALLOWED, "True");
+    // dcgmproftester -t 1005 shows ~1829800 MiB/sec. Multiply by .75 to get 1372350
+    tp->AddDouble(MEMBW_STR_MINIMUM_BANDWIDTH, 1372350.0, 1.0, 4000000.0);
+    m_featureDb[id][MEMBW_PLUGIN_NAME] = tp;
+    tp                                 = 0;
 }
 
 void Whitelist::UpdateGlobalsForDeviceId(const std::string &deviceId)

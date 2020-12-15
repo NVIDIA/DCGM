@@ -582,6 +582,15 @@ private:
      */
     int RunSleepKernel(unsigned int numSms, unsigned int threadsPerSm, unsigned int runForUsec);
 
+    /**
+     * \brief Helper to return whether ECC adds overhead to dram bandwidth for this SKU.
+     *
+     * Uses m_attributes
+     *
+     * @return true if ECC affects bandwidth. false if not.
+     */
+    bool EccAffectsDramBandwidth(void);
+
     /**@}*/
 
     /** @name Field value retrieval.

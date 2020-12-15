@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 cmake_minimum_required(VERSION 3.14.0)
-project(dcgm VERSION 2.1.4)
+project(dcgm VERSION 2.2.6)
 
 set(DCGM_PKG "datacenter-gpu-manager" CACHE STRING "DCGM package names base")
 
@@ -24,6 +24,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
 set(DCGM_CXX_FLAGS "-Werror -Wpedantic -Wno-sign-compare -Wno-cast-function-type -Wno-unused-parameter -Wall -Wextra")
 
@@ -62,7 +65,8 @@ add_compile_definitions(DCGM_BUILD_VGPU_MODULE)
 if(${CMAKE_POSITION_INDEPENDENT_CODE})
     add_compile_options(-fPIC)
 endif()
-add_link_options(-static-libstdc++)
+add_link_options(-static-libstdc++ -Wl,--exclude-libs,libstdc++ -Wl,--exclude-libs,libprotobuf)
+#add_compile_definitions(DCGM_API_EXPORT=1)
 
 include(GNUInstallDirs)
 
@@ -106,6 +110,7 @@ endif()
 message(DEBUG "DCGM_TESTS_ARCH=${DCGM_TESTS_ARCH}")
 
 set(DCGM_TESTS_APP_DIR "${DCGM_TESTS_INSTALL_DIR}/apps/${DCGM_TESTS_ARCH}")
+set(PYTHON_VER python3)
 
 
 find_package(Git QUIET REQUIRED)
@@ -244,7 +249,7 @@ add_subdirectory(testing)
 add_subdirectory(dcgmproftester)
 add_subdirectory(dcgm_stub)
 
-add_subdirectory(testing/python/apps/cuda_ctx_create)
+add_subdirectory(testing/python3/apps/cuda_ctx_create)
 add_subdirectory(sdk_samples)
 
 add_subdirectory(config-files)

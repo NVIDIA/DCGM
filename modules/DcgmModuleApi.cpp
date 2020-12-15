@@ -31,11 +31,11 @@ dcgmReturn_t processModuleCommandAtHostEngine(dcgmHandle_t pDcgmHandle,
                                               unsigned int timeout                 = 60000);
 
 /*****************************************************************************/
-dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDcgmHandle,
-                                                dcgm_module_command_header_t *moduleCommand,
-                                                size_t maxResponseSize,
-                                                std::unique_ptr<DcgmRequest> request,
-                                                unsigned int timeout)
+DCGM_PUBLIC_API dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDcgmHandle,
+                                                                dcgm_module_command_header_t *moduleCommand,
+                                                                size_t maxResponseSize,
+                                                                std::unique_ptr<DcgmRequest> request,
+                                                                unsigned int timeout)
 {
     if (!moduleCommand)
         return DCGM_ST_BADPARAM;

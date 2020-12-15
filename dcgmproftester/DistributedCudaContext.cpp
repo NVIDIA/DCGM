@@ -143,7 +143,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
     if (m_isInitialized)
     {
-        m_message << "DCGM Cuda Context already initialized." << '\n' << std::endl;
+        m_message << "DCGM Cuda Context already initialized.\n\n";
         return DCGM_ST_OK;
     }
 
@@ -564,7 +564,7 @@ void DistributedCudaContext::SetParts(unsigned int part, unsigned int parts)
     m_part      = part;
     m_parts     = parts;
     m_tick      = false;
-    m_firstTick = false;
+    m_firstTick = true;
 }
 
 // Get part of parts.
@@ -1716,6 +1716,26 @@ CLEANUP:
 }
 
 /*****************************************************************************/
+bool DistributedCudaContext::EccAffectsDramBandwidth(void)
+{
+    /* Assert that m_attributes has been populated */
+    assert(m_attributes.m_computeCapabilityMajor != 0);
+
+    /* A10x */
+    if ((m_attributes.m_computeCapabilityMajor == 8) && (m_attributes.m_computeCapabilityMinor >= 3))
+    {
+        return true;
+    }
+    /* TU10x */
+    else if ((m_attributes.m_computeCapabilityMajor == 7) && (m_attributes.m_computeCapabilityMinor >= 5))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+/*****************************************************************************/
 int DistributedCudaContext::RunSubtestDramUtil(void)
 {
     CUresult cuSt;
@@ -1790,13 +1810,16 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
         double utilRate      = perSecond / m_attributes.m_maxMemBandwidth;
         perSecond            = perSecond / (1000.0 * 1000.0 * 1000.0);
 
-        bool eccSupport = ((m_attributes.m_computeCapabilityMajor >= 8) && (m_attributes.m_computeCapabilityMinor >= 3)
-                           && (m_attributes.m_eccSupport > 0));
+        bool eccAffectsBandwidth = EccAffectsDramBandwidth() && (m_attributes.m_eccSupport > 0);
 
         if (now > tick)
         {
-            Respond(
-                "T %0.3f %0.3f %0.3f %0.3f %1u\n", howFarIn, prevDramAct, utilRate, prevPerSecond, eccSupport ? 1 : 0);
+            Respond("T %0.3f %0.3f %0.3f %0.3f %1u\n",
+                    howFarIn,
+                    prevDramAct,
+                    utilRate,
+                    prevPerSecond,
+                    eccAffectsBandwidth ? 1 : 0);
             tick = now + m_reportInterval;
         }
 

@@ -133,14 +133,14 @@ DcgmiProfileList::DcgmiProfileList(std::string hostname,
     , mGroupIdStr(std::move(groupIdStr))
     , mGroupId(0)
 {
-    mHostName = std::move(hostname);
-    mJson     = outputAsJson;
+    m_hostName = std::move(hostname);
+    m_json     = outputAsJson;
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmiProfileList::CreateEntityGroupFromEntityList()
 {
-    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(mNvcmHandle, mGpuIdsStr);
+    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, mGpuIdsStr);
 
     // Fallback to old logic for rejected IDs
 
@@ -156,7 +156,7 @@ dcgmReturn_t DcgmiProfileList::CreateEntityGroupFromEntityList()
     std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
 
     /* Create a group based on this list of entities */
-    dcgmReturn = dcgmi_create_entity_group(mNvcmHandle, DCGM_GROUP_EMPTY, &mGroupId, entityList);
+    dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &mGroupId, entityList);
     return dcgmReturn;
 }
 
@@ -179,7 +179,7 @@ dcgmReturn_t DcgmiProfileList::ValidateOrCreateEntityGroup(void)
     if (mGroupIdStr == "-1")
     {
         std::vector<dcgmGroupEntityPair_t> entityList; /* Empty List */
-        dcgmReturn = dcgmi_create_entity_group(mNvcmHandle, DCGM_GROUP_DEFAULT, &mGroupId, entityList);
+        dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &mGroupId, entityList);
         return dcgmReturn;
     }
 
@@ -203,7 +203,7 @@ dcgmReturn_t DcgmiProfileList::ValidateOrCreateEntityGroup(void)
     dcgmGroupInfo_t stNvcmGroupInfo;
     stNvcmGroupInfo.version = dcgmGroupInfo_version;
 
-    dcgmReturn = dcgmGroupGetInfo(mNvcmHandle, mGroupId, &stNvcmGroupInfo);
+    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, mGroupId, &stNvcmGroupInfo);
     if (DCGM_ST_OK != dcgmReturn)
     {
         std::string error = (dcgmReturn == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(dcgmReturn);
@@ -224,20 +224,20 @@ dcgmReturn_t DcgmiProfileList::DoExecuteConnected()
     if (dcgmReturn != DCGM_ST_OK)
         return dcgmReturn;
 
-    return mProfileObj.RunProfileList(mNvcmHandle, mGroupId, mJson);
+    return mProfileObj.RunProfileList(m_dcgmHandle, mGroupId, m_json);
 }
 
 /*****************************************************************************/
 DcgmiProfileSetPause::DcgmiProfileSetPause(std::string hostname, bool pause)
     : m_pause(pause)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmiProfileSetPause::DoExecuteConnected()
 {
-    return mProfileObj.RunProfileSetPause(mNvcmHandle, m_pause);
+    return mProfileObj.RunProfileSetPause(m_dcgmHandle, m_pause);
 }
 
 /*****************************************************************************/

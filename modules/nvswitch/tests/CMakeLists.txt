@@ -14,6 +14,7 @@
 set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Catch2 REQUIRED)
+find_package(Threads REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -29,14 +30,25 @@ if (BUILD_TESTING)
         
     target_link_libraries(nvswitchtests
         PRIVATE
-            dcgmmodulenvswitch
+            nvswitch_interface
+            sdk_nvml_interface
+            sdk_nscq_interface
+
+            nvswitch_objects
+            sdk_nscq_loader
             common_watch_objects
             module_common_objects
-            nvswitch_interface
+            modules_objects
+            dcgm_common
+            dcgm_logging
+            dcgm_mutex
+            dcgm
             sdk_nvml_essentials_objects
-            sdk_nvml_interface
             sdk_nvml_loader
             Catch2::Catch2
+            ${CMAKE_THREAD_LIBS_INIT}
+            rt
+            dl
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

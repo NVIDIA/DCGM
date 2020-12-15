@@ -27,8 +27,7 @@ DcgmMessage::DcgmMessage(dcgm_message_header_t *header)
     memcpy(&m_messageHdr, header, sizeof(m_messageHdr));
 }
 
-DcgmMessage::~DcgmMessage()
-{}
+DcgmMessage::~DcgmMessage() = default;
 
 void DcgmMessage::UpdateMsgHdr(int msgType, dcgm_request_id_t requestId, int status, int length)
 {
@@ -37,7 +36,6 @@ void DcgmMessage::UpdateMsgHdr(int msgType, dcgm_request_id_t requestId, int sta
     m_messageHdr.msgType   = msgType;
     m_messageHdr.status    = status;
     m_messageHdr.length    = length;
-    return;
 }
 
 dcgm_message_header_t *DcgmMessage::GetMessageHdr()

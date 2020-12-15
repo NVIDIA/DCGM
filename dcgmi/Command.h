@@ -21,9 +21,9 @@
 #define COMMAND_H
 
 #include "dcgm_structs.h"
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
+
+#include <string>
+
 
 class Command
 {
@@ -59,14 +59,14 @@ protected:
 
     virtual dcgmReturn_t DoExecuteConnectionFailure(dcgmReturn_t connectionStatus);
 
-    std::string mHostName;
-    dcgmHandle_t mNvcmHandle;
-    bool mJson;
-    bool mSilent;
-    unsigned int mTimeout;
-    unsigned int mPersistAfterDisconnect; /* Should the host engine persist the watches created
-                                             by this connection after the connection goes away?
-                                             1=yes. 0=no (default). */
+    std::string m_hostName;
+    dcgmHandle_t m_dcgmHandle {};
+    unsigned int m_timeout {};
+    unsigned int m_persistAfterDisconnect {}; /*!< Should the host engine persist the watches created
+                                                   by this connection after the connection goes away?
+                                                   1=yes. 0=no (default). */
+    bool m_json {};
+    bool m_silent {};
 };
 
 

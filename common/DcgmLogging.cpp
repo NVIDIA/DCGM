@@ -21,6 +21,8 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#include <cstdio>
+
 
 plog::ConsoleAppender<DcgmLogFormatter<PlogSeverityMapper>> consoleAppender;
 SyslogAppender<DcgmLogFormatter<SyslogSeverityMapper>> syslogAppender;
@@ -54,17 +56,40 @@ const char *SyslogSeverityMapper::severityToString(plog::Severity severity)
     }
 }
 
-HostengineAppender::HostengineAppender()
-{}
+HostengineAppender::HostengineAppender() = default;
 
 void HostengineAppender::write(const plog::Record &record)
 {
-    m_callback(&record);
+    using DcgmNs::Logging::Record;
+    std::string message;
+    char const *messageBuf = record.getMessage();
+    if (!m_componentName.empty())
+    {
+        std::size_t const additionalPadding = 6; // length of '[[' + ']] ' + \0
+        message.reserve(m_componentName.length() + strlen(messageBuf) + additionalPadding);
+        message.append("[[").append(m_componentName).append("]] ").append(messageBuf);
+        messageBuf = message.c_str();
+    }
+
+    Record cbRecord = { messageBuf,
+                        record.getFunc(),
+                        record.getFile(),
+                        record.getObject(),
+                        record.getLine(),
+                        record.getTid(),
+                        static_cast<DcgmLoggingSeverity_t>(record.getSeverity()),
+                        { record.getTime().time, record.getTime().millitm, {} } };
+    m_callback(&cbRecord);
 }
 
-void HostengineAppender::setCallback(void (*callback)(const plog::Record *))
+void HostengineAppender::setCallback(hostEngineAppenderCallbackFp_t callback)
 {
     m_callback = callback;
+}
+
+void HostengineAppender::setComponentName(std::string componentName)
+{
+    m_componentName = std::move(componentName);
 }
 
 std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,
@@ -76,20 +101,18 @@ std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,
     {
         return arg;
     }
-    else
+
+    const size_t maxLen      = FILENAME_MAX;
+    const std::string envKey = envPrefix + "_" + envSuffix;
+    const char *envValue     = std::getenv(envKey.c_str());
+
+    if (envValue != nullptr)
     {
-        const size_t maxLen      = 256;
-        const std::string envKey = envPrefix + "_" + envSuffix;
-        const char *envValue     = std::getenv(envKey.c_str());
+        size_t len = strnlen(envValue, maxLen);
 
-        if (envValue != nullptr)
+        if (len > 0 && len < maxLen)
         {
-            size_t len = strnlen(envValue, 256);
-
-            if (len > 0 && len < maxLen)
-            {
-                return envValue;
-            }
+            return envValue;
         }
     }
 

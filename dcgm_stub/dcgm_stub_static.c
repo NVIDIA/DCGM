@@ -127,7 +127,7 @@ dcgmReturn_t dcgmInit(void)
     }
 }
 
-dcgmReturn_t dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmHandle_t *pDcgmHandle)
+dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmHandle_t *pDcgmHandle)
 {
     dcgmReturn_t (*fn)(dcgmOperationMode_t, dcgmHandle_t *);
     lib_handle = dlopen("libdcgm.so.2", RTLD_LAZY);
@@ -144,7 +144,7 @@ dcgmReturn_t dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmHandle_t *pDcgmHa
     }
 }
 
-dcgmReturn_t dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
+dcgmReturn_t DCGM_PUBLIC_API dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
 {
     dcgmReturn_t (*fn)(dcgmHandle_t);
     lib_handle = dlopen("libdcgm.so.2", RTLD_LAZY);
@@ -161,7 +161,7 @@ dcgmReturn_t dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
     }
 }
 
-dcgmReturn_t dcgmShutdown(void)
+dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown(void)
 {
     dcgmReturn_t dcgmResult;
     dcgmReturn_t (*fn)(void);

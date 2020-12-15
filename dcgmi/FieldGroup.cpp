@@ -267,7 +267,7 @@ void FieldGroup::SetFieldIdsString(std::string fieldIdsString)
 /*****************************************************************************/
 FieldGroupCreate::FieldGroupCreate(std::string hostname, FieldGroup &obj)
 {
-    mHostName     = std::move(hostname);
+    m_hostName    = std::move(hostname);
     fieldGroupObj = obj;
 
     /* We want group actions to persist once this DCGMI instance exits */
@@ -277,7 +277,7 @@ FieldGroupCreate::FieldGroupCreate(std::string hostname, FieldGroup &obj)
 /*****************************************************************************/
 dcgmReturn_t FieldGroupCreate::DoExecuteConnected()
 {
-    return fieldGroupObj.RunGroupCreate(mNvcmHandle);
+    return fieldGroupObj.RunGroupCreate(m_dcgmHandle);
 }
 
 
@@ -290,7 +290,7 @@ dcgmReturn_t FieldGroupCreate::DoExecuteConnected()
 /*****************************************************************************/
 FieldGroupDestroy::FieldGroupDestroy(std::string hostname, FieldGroup &obj)
 {
-    mHostName     = std::move(hostname);
+    m_hostName    = std::move(hostname);
     fieldGroupObj = obj;
 
     /* We want group actions to persist once this DCGMI instance exits */
@@ -300,7 +300,7 @@ FieldGroupDestroy::FieldGroupDestroy(std::string hostname, FieldGroup &obj)
 /*****************************************************************************/
 dcgmReturn_t FieldGroupDestroy::DoExecuteConnected()
 {
-    return fieldGroupObj.RunGroupDestroy(mNvcmHandle);
+    return fieldGroupObj.RunGroupDestroy(m_dcgmHandle);
 }
 
 /*****************************************************************************
@@ -312,14 +312,14 @@ dcgmReturn_t FieldGroupDestroy::DoExecuteConnected()
 /*****************************************************************************/
 FieldGroupListAll::FieldGroupListAll(std::string hostname, bool json)
 {
-    mHostName = hostname;
-    mJson     = json;
+    m_hostName = hostname;
+    m_json     = json;
 }
 
 /*****************************************************************************/
 dcgmReturn_t FieldGroupListAll::DoExecuteConnected()
 {
-    return fieldGroupObj.RunGroupListAll(mNvcmHandle, mJson);
+    return fieldGroupObj.RunGroupListAll(m_dcgmHandle, m_json);
 }
 
 
@@ -332,9 +332,9 @@ dcgmReturn_t FieldGroupListAll::DoExecuteConnected()
 /*****************************************************************************/
 FieldGroupInfo::FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json)
 {
-    mHostName     = hostname;
+    m_hostName    = hostname;
     fieldGroupObj = obj;
-    mJson         = json;
+    m_json        = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -343,5 +343,5 @@ FieldGroupInfo::FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json)
 /*****************************************************************************/
 dcgmReturn_t FieldGroupInfo::DoExecuteConnected()
 {
-    return fieldGroupObj.RunGroupInfo(mNvcmHandle, mJson);
+    return fieldGroupObj.RunGroupInfo(m_dcgmHandle, m_json);
 }

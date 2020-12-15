@@ -15,27 +15,22 @@ add_library(config_interface INTERFACE)
 target_include_directories(config_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(config_interface INTERFACE common_interface dcgm_interface modules_interface module_common_interface)
 
-add_library(config_objects OBJECT)
-target_link_libraries(config_objects PUBLIC config_interface)
+add_library(dcgmmoduleconfig SHARED)
+define_dcgm_module(dcgmmoduleconfig)
+target_link_libraries(
+    dcgmmoduleconfig
+    PRIVATE
+        config_interface
+        sdk_nvml_essentials_objects
+        module_common_objects
+)
 target_sources(
-    config_objects
+    dcgmmoduleconfig
     PRIVATE
     DcgmModuleConfig.cpp
     dcgm_config_structs.h
     DcgmConfigManager.h
     DcgmModuleConfig.h
     DcgmConfigManager.cpp
-)
-
-add_library(dcgmmoduleconfig SHARED)
-dcgm_macro_modules_link_options(dcgmmoduleconfig)
-target_link_libraries(
-    dcgmmoduleconfig
-    PRIVATE
-        config_objects
-        modules_objects
-        sdk_nvml_essentials_objects
-        dcgm
-        module_common_objects
 )
 update_lib_ver(dcgmmoduleconfig)

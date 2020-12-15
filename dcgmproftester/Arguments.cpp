@@ -15,6 +15,7 @@
  */
 #include "Arguments.h"
 
+#include "DcgmLogging.h"
 #include "dcgm_fields_internal.h"
 
 #include <map>
@@ -59,7 +60,7 @@ dcgmReturn_t ArgumentSet_t::ProcessIntegerList(std::string argList,
         }
         else
         {
-            std::cerr << "Error: bad numeric argument character '" << c << "'" << std::endl;
+            DCGM_LOG_ERROR << "Arguments -- bad numeric character '" << c << "'";
 
             return DCGM_ST_BADPARAM;
         }
@@ -118,13 +119,14 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
 {
     auto arguments = std::make_shared<Arguments_t>();
 
-    arguments->m_parameters.m_waitToCheck      = m_waitToCheck.Value();
-    arguments->m_parameters.m_duration         = m_duration.Value();
-    arguments->m_parameters.m_reportInterval   = m_reportInterval.Value();
-    arguments->m_parameters.m_syncCount        = m_syncCount.Value();
-    arguments->m_parameters.m_targetMaxValue   = m_targetMaxValue.Value();
-    arguments->m_parameters.m_noDcgmValidation = m_noDcgmValidation.Value();
-    arguments->m_parameters.m_dvsOutput        = m_dvsOutput.Value();
+    arguments->m_parameters.m_waitToCheck       = m_waitToCheck.Value();
+    arguments->m_parameters.m_maxGpusInParallel = m_maxGpusInParallel.Value();
+    arguments->m_parameters.m_duration          = m_duration.Value();
+    arguments->m_parameters.m_reportInterval    = m_reportInterval.Value();
+    arguments->m_parameters.m_syncCount         = m_syncCount.Value();
+    arguments->m_parameters.m_targetMaxValue    = m_targetMaxValue.Value();
+    arguments->m_parameters.m_noDcgmValidation  = m_noDcgmValidation.Value();
+    arguments->m_parameters.m_dvsOutput         = m_dvsOutput.Value();
 
     double minValue;
     double maxValue;
@@ -249,13 +251,18 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                           }
                           else
                           {
-                              std::cerr << "Error: bad mode " << mode << std::endl;
+                              DCGM_LOG_ERROR << "Arguments -- bad mode " << mode;
 
                               return DCGM_ST_BADPARAM;
                           }
 
                           return DCGM_ST_OK;
                       });
+
+    arguments->m_parameters.m_logFile = m_logFileString.Value();
+
+    arguments->m_parameters.m_logLevel
+        = DcgmLogging::dcgmSeverityFromString(m_logLevelString.Value().c_str(), DcgmLoggingSeverityInfo);
 
     bool limitedFields { false };
     unsigned int firstFieldId { DCGM_FI_PROF_FIRST_ID };
@@ -348,7 +355,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                                      unsigned int fieldId) mutable -> dcgmReturn_t {
                                       if ((fieldId < DCGM_FI_PROF_FIRST_ID) || (fieldId > DCGM_FI_PROF_LAST_ID))
                                       {
-                                          std::cerr << "Error: bad fieldId " << fieldId << std::endl;
+                                          DCGM_LOG_ERROR << "Arguments -- bad fieldId " << fieldId;
 
                                           return DCGM_ST_BADPARAM;
                                       }
@@ -448,9 +455,19 @@ dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
             /**
              * We need to reset these so that additional parser calls work
              * for arguments already parsed.
+             *
+             * Currently, the log file can only be set once, so subsequent
+             * changes are ignored (and this includes not being able to set it
+             * after the first set of field IDs are specified, as the first
+             * set will have a default of dcgnproftester.log if not explicitly
+             * set -- so you have to set any non-default value BEFORE the first
+             * set of field IDs is specified). However, this will only cause
+             * a DEBUG log to be made. Eventually, changing the log file between
+             * field ID sets may be supported.
              */
 
             m_waitToCheck.ArgReset();
+            m_maxGpusInParallel.ArgReset();
             m_percentTolerance.ArgReset();
             m_absoluteTolerance.ArgReset();
             m_minValue.ArgReset();
@@ -465,13 +482,15 @@ dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
             m_gpuIdString.ArgReset();
             m_modeString.ArgReset();
             m_reset.ArgReset();
+            m_logFileString.ArgReset();
+            m_logLevelString.ArgReset();
             m_configFile.ArgReset();
         }
         catch (TCLAP::ArgException const &ex)
         {
             argv[argPos] = argPtr;
 
-            std::cerr << "Error: " << ex.argId() << " " << ex.error() << std::endl;
+            DCGM_LOG_ERROR << "Arguments -- " << ex.argId() << " " << ex.error();
 
             return DCGM_ST_BADPARAM;
         }

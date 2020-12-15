@@ -228,6 +228,26 @@ private:
 
     /*************************************************************************/
     /*
+     * Method to check if the current GPU's compute capabilities are
+     * unoptimized. This is generally a compute capability issue.
+     *
+     * @param field Id.
+     * @returns true if unoptimized, false otherwise.
+     */
+    bool IsComputeUnoptimized(unsigned int fieldId);
+
+    /*************************************************************************/
+    /*
+     * Method to check if the current GPU's hardware capabilities are
+     * not determinable.
+     *
+     * @param field Id.
+     * @returns true if limited, false otherwise.
+     */
+    bool IsHardwareNonDeterministic(unsigned int fieldId);
+
+    /*************************************************************************/
+    /*
      * Set Tick Handler.
      *
      * Since the tick handler varies for each subtest, we allow for the
@@ -294,6 +314,9 @@ private:
     dcgmHandle_t m_dcgmHandle { (uintptr_t) nullptr }; /* Host Engine handle */
     dcgmDeviceAttributes_t m_dcgmDeviceAttr {};        /* DCGM device attributes for this GPU */
     dcgmFieldGrp_t m_fieldGroupId { 0 };               /* Fields we are watching for m_groupId */
+
+    uint64_t m_majorComputeCapability { 0 }; /* Compute capability */
+    uint64_t m_minorComputeCapability { 0 }; /* Compute capability */
 
     /* Cache of values that have been fetched so far. */
     std::map<Entity, std::vector<dcgmFieldValue_v1>> m_dcgmValues;

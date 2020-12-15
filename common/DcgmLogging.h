@@ -16,6 +16,8 @@
 #pragma once
 
 // This tells plog to store file information in log records
+#include "dcgm_errors.h"
+#include <plog/Record.h>
 #define PLOG_CAPTURE_FILE
 
 // plog 1.1.4 contains macros that conflict with syslog, so we must include it
@@ -247,6 +249,21 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
         }                                                                                \
     }
 
+/**
+ * @brief Helper function to handle command line arguments and environment variables
+ *
+ * @param arg[in]           If not empty, arg's value will be returned from the function.
+ * @param defaultValue[in]  If neiher arg nor env variable value is set, this value will
+ *                          be retured from the function.
+ * @param envPrefix[in]     Env variable prefix
+ * @param envSuffix[in]     Env variable suffix
+ * @return
+ *      - arg if arg is not empty
+ *      - defaultValue if env variable is not set or empty
+ *      - value of the env variable with name envPrefix_envSuffix
+ * @note Env variable value is limited by max filename path length. If the value exeedes
+ *       this limit, the defaultValue will be returned.
+ */
 std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,
                                              const std::string &defaultValue,
                                              const std::string &envPrefix,
@@ -261,7 +278,7 @@ public:
         std::string str = Formatter::format(record);
         int severity    = LOG_WARNING;
 
-        switch (record.getSeverity())
+        switch (static_cast<DcgmLoggingSeverity_t>(record.getSeverity()))
         {
             // Treating CRITICAL/FATAL as synonyms
             case DcgmLoggingSeverityFatal:
@@ -296,16 +313,40 @@ public:
     }
 };
 
-using hostEngineAppenderCallbackFp_t = void (*)(const plog::Record *);
+namespace DcgmNs::Logging
+{
+struct RecordTime
+{
+    time_t time;
+    std::uint16_t millitm;
+    const char _pad[6]; //!< just padding. not used.
+};
+
+struct Record
+{
+    const char *message;            //!< Logging message
+    const char *func;               //!< Function name
+    const char *file;               //!< File name
+    const void *object;             //!< Associated object
+    std::size_t line;               //!< File line
+    std::uint32_t tid;              //!< ThreadId
+    DcgmLoggingSeverity_t severity; //!< Record severity
+    RecordTime time;                //!< Record time
+};
+} // namespace DcgmNs::Logging
+
+using hostEngineAppenderCallbackFp_t = void (*)(const DcgmNs::Logging::Record *);
 class HostengineAppender : public plog::IAppender
 {
 private:
     hostEngineAppenderCallbackFp_t m_callback = nullptr;
+    std::string m_componentName;
 
 public:
     HostengineAppender();
     void setCallback(hostEngineAppenderCallbackFp_t callback);
     void write(const plog::Record &record) override;
+    void setComponentName(std::string componentName);
 };
 
 class DcgmLogging
@@ -337,6 +378,11 @@ public:
     static void setHostEngineCallback(hostEngineAppenderCallbackFp_t callback)
     {
         hostengineAppender.setCallback(callback);
+    }
+
+    static void setHostEngineComponentName(std::string componentName)
+    {
+        hostengineAppender.setComponentName(std::move(componentName));
     }
 
     static DcgmLogging &getInstance()
@@ -419,6 +465,11 @@ public:
         return defaultSeverity;
     }
 
+    static DcgmLoggingSeverity_t dcgmSeverityFromString(const char *severityStr, DcgmLoggingSeverity_t defaultSeverity)
+    {
+        return (DcgmLoggingSeverity_t)severityFromString(severityStr, defaultSeverity);
+    }
+
     static bool isValidSeverity(const char *severityStr)
     {
         for (int severity = plog::none; severity <= plog::verbose; severity++)
@@ -482,9 +533,42 @@ public:
     }
 
     template <loggerCategory_t logger = BASE_LOGGER>
-    static void appendRecordToLogger(const plog::Record *record)
+    static void appendRecordToLogger(const DcgmNs::Logging::Record *record)
     {
-        plog::get<logger>()->write(*record);
+        class ForwardedPlogRecord : public plog::Record
+        {
+        private:
+            DcgmNs::Logging::Record const *m_record;
+
+            plog::util::Time m_time;
+            const unsigned int m_tid;
+
+        public:
+            ForwardedPlogRecord(DcgmNs::Logging::Record const *record)
+                : plog::Record((plog::Severity)record->severity,
+                               record->func,
+                               record->line,
+                               record->file,
+                               record->object)
+                , m_record(record)
+                , m_time({ record->time.time, record->time.millitm })
+                , m_tid(record->tid)
+            {}
+            plog::util::Time const &getTime() const override
+            {
+                return m_time;
+            }
+            unsigned int getTid() const override
+            {
+                return m_tid;
+            }
+            plog::util::nchar const *getMessage() const override
+            {
+                return m_record->message;
+            }
+        };
+        ForwardedPlogRecord plogRecord(record);
+        plog::get<logger>()->write(plogRecord);
     }
 
     static std::string getLogFilenameFromArgAndEnv(const std::string &arg,
@@ -554,7 +638,7 @@ inline int DcgmLogging::appendLogToSyslog<SYSLOG_LOGGER>()
     return 1;
 }
 
-template void DcgmLogging::appendRecordToLogger<BASE_LOGGER>(const plog::Record *record);
+template void DcgmLogging::appendRecordToLogger<BASE_LOGGER>(const DcgmNs::Logging::Record *record);
 
 class PlogSeverityMapper
 {

@@ -27,10 +27,10 @@ DcgmiSettingsSetLoggingSeverity::DcgmiSettingsSetLoggingSeverity(const std::stri
                                                                  const std::string &targetSeverity,
                                                                  const bool outputAsJson)
 {
-    mHostName       = hostname;
+    m_hostName      = hostname;
     mTargetLogger   = targetLogger;
     mTargetSeverity = targetSeverity;
-    mJson           = outputAsJson;
+    m_json          = outputAsJson;
 }
 
 /*****************************************************************************/
@@ -54,5 +54,5 @@ dcgmReturn_t DcgmiSettingsSetLoggingSeverity::DoExecuteConnected()
     logging.targetSeverity
         = (DcgmLoggingSeverity_t)DcgmLogging::severityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);
 
-    return dcgmHostengineSetLoggingSeverity(mNvcmHandle, &logging);
+    return dcgmHostengineSetLoggingSeverity(m_dcgmHandle, &logging);
 }

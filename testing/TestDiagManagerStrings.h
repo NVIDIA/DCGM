@@ -62,7 +62,7 @@ extern const std::string NVVS_1_3_JSON = R""(
                         ]
                     },
                     {
-                        "name": "Page Retirement",
+                        "name": "Page Retirement/Row Remap",
                         "results": [
                             { "gpu_ids": "0,1,2,3", "status": "PASS" }
                         ]
@@ -250,7 +250,7 @@ extern const std::string PER_GPU_JSON = R""(
                         ]
                     },
                     {
-                        "name": "Page Retirement",
+                        "name": "Page Retirement/Row Remap",
                         "results": [
                             { "gpu_ids": "0,1,2,3", "status": "PASS" }
                         ]

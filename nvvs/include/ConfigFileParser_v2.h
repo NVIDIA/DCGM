@@ -17,6 +17,7 @@
 #define _NVVS_NVVS_ConfigFileParser2_H_
 
 #include "GpuSet.h"
+#include "ParameterValidator.h"
 #include "TestParameters.h"
 #include <fstream>
 #include <memory>
@@ -168,7 +169,10 @@ public:
     {
         return gpuSets;
     }
+
     void legacyGlobalStructHelper();
+
+    void SetParameterValidator(ParameterValidator &pv);
 
 private:
     FrameworkConfig m_fwcfg;
@@ -178,6 +182,8 @@ private:
 
     std::vector<std::unique_ptr<GpuSet>> gpuSets;
 
+    ParameterValidator m_pv;
+
     /* private functions to recursively go through the gpu and globals stanzas looking for known tokens */
     void CheckTokens_globals(const YAML::Node &node);
     void CheckTokens_gpus(const YAML::Node &node);
@@ -185,7 +191,7 @@ private:
     void handleGpuSetBlock(const YAML::Node &node);
     void handleGpuSetParameters(const YAML::Node &node);
     void handleGpuSetTests(const YAML::Node &node);
-    void handleTestDefaults(const YAML::Node &node, TestParameters &tp, bool subTest);
+    void handleTestDefaults(const std::string &testName, const YAML::Node &node, TestParameters &tp, bool subTest);
 };
 
 class CFPv2Exception : public std::runtime_error

@@ -27,67 +27,61 @@
 #include <string.h>
 
 /*****************************************************************************/
-Command::Command()
-    : mHostName()
-    , mNvcmHandle(0)
-    , mJson(false)
-    , mSilent(false)
-    , mTimeout(0)
-    , mPersistAfterDisconnect(0)
-{}
+Command::Command() = default;
 
 /*****************************************************************************/
 Command::~Command()
 {
-    dcgmReturn_t result;
-
-    if (mNvcmHandle)
+    if (m_dcgmHandle)
     {
         // Disconnect
-        result = dcgmDisconnect(mNvcmHandle);
+        dcgmReturn_t result = dcgmDisconnect(m_dcgmHandle);
         if (DCGM_ST_OK != result)
         {
-            std::cout << "Error: unable to close connection to specified host: " << mHostName << std::endl;
+            std::cout << "Error: unable to close connection to specified host: " << m_hostName << std::endl;
         }
-        mNvcmHandle = 0;
+        m_dcgmHandle = 0;
     }
 }
 
 /*****************************************************************************/
 dcgmReturn_t Command::Connect(void)
 {
-    dcgmReturn_t result;
     dcgmConnectV2Params_t connectParams;
-    const char *hostNameStr  = mHostName.c_str();
+    const char *hostNameStr  = m_hostName.c_str();
     bool isUnixSocketAddress = false;
 
     /* For now, do a global init of DCGM on the start of a command. We can change this later to
      * only connect to the remote host engine from within the command object
      */
 
-    result = dcgmInit();
+    dcgmReturn_t result = dcgmInit();
     if (DCGM_ST_OK != result)
     {
-        if (mSilent == false)
+        if (m_silent == false)
             std::cout << "Error: unable to initialize DCGM" << std::endl;
         return result;
     }
 
-    hostNameStr = dcgmi_parse_hostname_string(hostNameStr, &isUnixSocketAddress, !mSilent);
+    hostNameStr = dcgmi_parse_hostname_string(hostNameStr, &isUnixSocketAddress, !m_silent);
     if (!hostNameStr)
+    {
         return DCGM_ST_BADPARAM; /* Don't need to print here. The function above already did */
+    }
 
     memset(&connectParams, 0, sizeof(connectParams));
     connectParams.version                = dcgmConnectV2Params_version;
-    connectParams.persistAfterDisconnect = mPersistAfterDisconnect;
+    connectParams.persistAfterDisconnect = m_persistAfterDisconnect;
     connectParams.addressIsUnixSocket    = isUnixSocketAddress ? 1 : 0;
-    connectParams.timeoutMs              = mTimeout;
+    connectParams.timeoutMs              = m_timeout;
 
-    result = dcgmConnect_v2((char *)hostNameStr, &connectParams, &mNvcmHandle);
+    result = dcgmConnect_v2(hostNameStr, &connectParams, &m_dcgmHandle);
     if (DCGM_ST_OK != result)
     {
-        if (mSilent == false)
-            std::cout << "Error: unable to establish a connection to the specified host: " << mHostName << std::endl;
+        if (m_silent == false)
+        {
+            std::cout << "Error: unable to establish a connection to the specified host: " << m_hostName << std::endl;
+        }
         return result;
     }
 
@@ -97,9 +91,7 @@ dcgmReturn_t Command::Connect(void)
 /*****************************************************************************/
 dcgmReturn_t Command::Execute()
 {
-    dcgmReturn_t result;
-
-    result = Connect();
+    dcgmReturn_t const result = Connect();
     if (DCGM_ST_OK != result)
     {
         return DoExecuteConnectionFailure(DCGM_ST_CONNECTION_NOT_VALID);
@@ -111,11 +103,11 @@ dcgmReturn_t Command::Execute()
 /*****************************************************************************/
 void Command::SetPersistAfterDisconnect(unsigned int persistAfterDisconnect)
 {
-    mPersistAfterDisconnect = persistAfterDisconnect;
+    m_persistAfterDisconnect = persistAfterDisconnect;
 }
 dcgmReturn_t Command::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
 {
-    if (!mSilent)
+    if (!m_silent)
     {
         std::cout << "Error: Unable to connect to host engine. " << errorString(connectionStatus) << "." << std::endl;
     }

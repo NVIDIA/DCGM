@@ -23,7 +23,7 @@ target_link_libraries(cuda_loader_interface INTERFACE sdk_nvml_interface)
 target_include_directories(cuda_loader_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(cuda_loader_interface INTERFACE ${CUDA${CUDA_VERSION}_INCLUDE_DIR})
 
-add_library(cuda_loader_objects OBJECT)
+add_library(cuda_loader_objects STATIC)
 target_link_libraries(cuda_loader_objects PUBLIC cuda_loader_interface dl)
 target_compile_definitions(cuda_loader_objects PRIVATE __CUDA_API_VERSION_INTERNAL)
 target_sources(

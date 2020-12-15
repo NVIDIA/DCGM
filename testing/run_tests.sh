@@ -16,5 +16,7 @@
 
 set -o errexit -o pipefail -o nounset
 
-PYTHON=${PYTHON:-python2}
-${PYTHON} main.py --eris --no-lint --dvssc-testing
+PYTHON3=${PYTHON3:-python3}
+echo "\$PYTHON3=${PYTHON3}. Querying Python version"
+${PYTHON3} --version
+${PYTHON3} main.py --eris --no-lint --dvssc-testing

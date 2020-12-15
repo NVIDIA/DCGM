@@ -1,0 +1,19 @@
+{
+    global:
+        GetPluginInfo;
+        InitializePlugin;
+        RunTest;
+        RetrieveCustomStats;
+        RetrieveResults;
+
+        extern "C++" {
+            _ZTI*;
+            _ZTS*;
+        };
+
+    local:
+        *;
+        extern "C++" {
+            *;
+        };
+};

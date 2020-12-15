@@ -114,6 +114,11 @@ std::string DcgmDiagManager::GetNvvsBinPath()
             std::cout << "The new NVVS binary path is: " << cmd << std::endl;
             return cmd;
         }
+        else
+        {
+            DCGM_LOG_WARNING << "Ignoring specified NVVS binary path " << value
+                             << " because the file cannot be accessed.";
+        }
     }
     return cmd;
 }
@@ -553,7 +558,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
     if (statSt)
     {
         PRINT_ERROR("%s %d", "stat of %s failed. errno %d", filename.c_str(), statSt);
-        return DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_NVVS_BINARY_NOT_FOUND;
     }
 
     // Check for previous run of nvvs and launch new one if previous one is no longer running
@@ -820,7 +825,8 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
 
             // There's no need to continue if we couldn't launch nvvs, the nvvs path is not found,
             // or if nvvs is already running
-            if (ret == DCGM_ST_DIAG_BAD_LAUNCH || ret == DCGM_ST_NOT_SUPPORTED || ret == DCGM_ST_DIAG_ALREADY_RUNNING)
+            if (ret == DCGM_ST_DIAG_BAD_LAUNCH || ret == DCGM_ST_NOT_SUPPORTED || ret == DCGM_ST_DIAG_ALREADY_RUNNING
+                || ret == DCGM_ST_NVVS_BINARY_NOT_FOUND)
             {
                 return ret;
             }

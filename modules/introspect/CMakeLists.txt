@@ -15,10 +15,15 @@ add_library(introspect_interface INTERFACE)
 target_include_directories(introspect_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(introspect_interface INTERFACE common_interface modules_interface)
 
-add_library(introspect_objects OBJECT)
-target_link_libraries(introspect_objects PUBLIC introspect_interface)
-target_sources(
-    introspect_objects
+add_library(dcgmmoduleintrospect SHARED)
+define_dcgm_module(dcgmmoduleintrospect)
+target_link_libraries(dcgmmoduleintrospect
+    PRIVATE
+        introspect_interface
+        sdk_nvml_essentials_objects
+        sdk_nvml_interface
+)
+target_sources(dcgmmoduleintrospect
     PRIVATE
     DcgmModuleIntrospect.cpp
     DcgmMetadataMgr.cpp
@@ -26,16 +31,4 @@ target_sources(
     dcgm_introspect_structs.h
     DcgmMetadataMgr.h
 )
-
-add_library(dcgmmoduleintrospect SHARED)
-dcgm_macro_modules_link_options(dcgmmoduleintrospect)
-target_link_libraries(
-    dcgmmoduleintrospect
-    PRIVATE
-        introspect_objects
-        modules_objects
-        sdk_nvml_essentials_objects
-        dcgm
-)
-target_link_libraries(dcgmmoduleintrospect PRIVATE sdk_nvml_interface)
 update_lib_ver(dcgmmoduleintrospect)

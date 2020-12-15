@@ -17,7 +17,7 @@ add_subdirectory(tests)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DcgmBuildInfo.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/DcgmBuildInfo.cpp @ONLY)
 
-add_library(buildinfo_objects OBJECT)
+add_library(buildinfo_objects STATIC)
 target_include_directories(buildinfo_objects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_sources(buildinfo_objects PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/DcgmBuildInfo.cpp)
@@ -26,18 +26,26 @@ add_library(common_interface INTERFACE)
 target_include_directories(common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(common_interface INTERFACE sdk_nvml_interface common_protobuf_interface dcgm_interface)
 
-add_library(common_objects OBJECT)
-target_sources(common_objects PRIVATE
-    dcgm_errors.c
-    dcgm_fields.cpp
+add_library(dcgm_logging STATIC)
+target_sources(dcgm_logging PRIVATE 
+    DcgmLogging.cpp
+    DcgmLogging.h
+)
+target_link_libraries(dcgm_logging PUBLIC common_interface)
+
+add_library(dcgm_mutex STATIC)
+target_sources(dcgm_mutex PRIVATE
+    DcgmMutex.cpp
+    DcgmMutex.h
+)
+target_link_libraries(dcgm_mutex PUBLIC common_interface)
+
+add_library(dcgm_common STATIC)
+target_sources(dcgm_common PRIVATE
     DcgmError.h
     DcgmFvBuffer.cpp
     DcgmFvBuffer.h
     DcgmGPUHardwareLimits.h
-    DcgmLogging.cpp
-    DcgmLogging.h
-    DcgmMutex.cpp
-    DcgmMutex.h
     DcgmPolicyRequest.cpp
     DcgmPolicyRequest.h
     DcgmRequest.cpp
@@ -67,14 +75,16 @@ target_sources(common_objects PRIVATE
     ThreadSafeQueue.hpp
 )
 
-target_link_libraries(common_objects PUBLIC common_interface)
-target_link_libraries(common_objects PUBLIC transport_objects buildinfo_objects)
+target_link_libraries(dcgm_common PUBLIC
+    common_interface
+    transport_objects
+    buildinfo_objects
+    sdk_nvml_essentials_objects
+    common_protobuf_objects
+)
 
-
-add_library(common_watch_objects OBJECT)
+add_library(common_watch_objects STATIC)
 target_sources(common_watch_objects PRIVATE
-    dcgm_errors.c
-    dcgm_fields.cpp
     DcgmError.h
     DcgmWatcher.cpp
     DcgmWatcher.h

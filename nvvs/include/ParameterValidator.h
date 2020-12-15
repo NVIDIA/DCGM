@@ -33,8 +33,6 @@ public:
     void Clear();
     void AddParameter(const std::string &parameter);
     void SetName(const std::string &testname);
-    void AddSubtest(const std::string &subtest);
-    void AddSubtestParameter(const std::string &subtest, const std::string &parameter);
 
     bool HasParameter(const std::string &parameter) const;
     bool HasSubtest(const std::string &subtest) const;
@@ -47,6 +45,7 @@ class ParameterValidator
 {
 public:
     ParameterValidator(const std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> &parms);
+    ParameterValidator();
 
     /*
      * IsValidTestName()
@@ -82,6 +81,19 @@ public:
     bool IsValidSubtestParameter(const std::string &testname,
                                  const std::string &subtest,
                                  const std::string &parameter) const;
+
+    /*
+     * Performs the work of initializing the parameter validator from parms
+     *
+     */
+    void Initialize(const std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> &parms);
+
+    /*
+     * Makes sure the test name is always lower case and never has spaces
+     *
+     * Return a lower-case version of testname with all spaces transformed to underscores
+     */
+    static std::string TransformTestName(const std::string &testname);
 
 private:
     std::map<std::string, TestInfo> m_possiblePlugins;

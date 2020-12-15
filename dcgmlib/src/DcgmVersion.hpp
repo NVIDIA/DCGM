@@ -20,6 +20,6 @@
 
 #include "dcgm_agent.h"
 
-dcgmReturn_t DECLDIR GetVersionInfo(dcgmVersionInfo_t *pVersionInfo);
+dcgmReturn_t DCGM_PUBLIC_API GetVersionInfo(dcgmVersionInfo_t *pVersionInfo);
 
 #endif

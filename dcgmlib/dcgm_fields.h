@@ -21,6 +21,8 @@
 extern "C" {
 #endif
 
+#include "dcgm_api_export.h"
+
 /***************************************************************************************************/
 /** @defgroup dcgmFieldTypes Field Types
  *  Field Types are a single byte.
@@ -855,6 +857,11 @@ typedef unsigned int dcgm_field_eid_t;
  * Whether remapping of rows has failed
  */
 #define DCGM_FI_DEV_ROW_REMAP_FAILURE 395
+
+/**
+ * Whether remapping of rows is pending
+ */
+#define DCGM_FI_DEV_ROW_REMAP_PENDING 396
 
 /*
  * NV Link flow control CRC  Error Counter for Lane 0
@@ -2193,7 +2200,7 @@ typedef struct
  *       >0     Pointer to field metadata structure if found.
  *
  */
-dcgm_field_meta_p DcgmFieldGetById(unsigned short fieldId);
+dcgm_field_meta_p DCGM_PUBLIC_API DcgmFieldGetById(unsigned short fieldId);
 
 /**
  * Get a pointer to the metadata for a field by its field tag.
@@ -2205,7 +2212,7 @@ dcgm_field_meta_p DcgmFieldGetById(unsigned short fieldId);
  *       >0     Pointer to field metadata structure if found
  *
  */
-dcgm_field_meta_p DcgmFieldGetByTag(char *tag);
+dcgm_field_meta_p DCGM_PUBLIC_API DcgmFieldGetByTag(char *tag);
 
 /**
  * Initialize the DcgmFields module. Call this once from inside
@@ -2216,7 +2223,7 @@ dcgm_field_meta_p DcgmFieldGetByTag(char *tag);
  *       <0     On error
  *
  */
-int DcgmFieldsInit(void);
+int DCGM_PUBLIC_API DcgmFieldsInit(void);
 
 /**
  * Terminates the DcgmFields module. Call this once from inside your program
@@ -2226,7 +2233,7 @@ int DcgmFieldsInit(void);
  *       <0     On error
  *
  */
-int DcgmFieldsTerm(void);
+int DCGM_PUBLIC_API DcgmFieldsTerm(void);
 
 /**
  * Get the string version of a entityGroupId
@@ -2236,7 +2243,7 @@ int DcgmFieldsTerm(void);
  *         - Null on error
  *
  */
-const char *DcgmFieldsGetEntityGroupString(dcgm_field_entity_group_t entityGroupId);
+DCGM_PUBLIC_API const char *DcgmFieldsGetEntityGroupString(dcgm_field_entity_group_t entityGroupId);
 
 /** @} */
 

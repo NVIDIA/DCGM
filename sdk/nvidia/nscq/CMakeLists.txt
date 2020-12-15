@@ -19,26 +19,4 @@ add_library(sdk_nscq_interface INTERFACE)
 target_link_libraries(sdk_nscq_interface INTERFACE sdk_nvidia sdk_nscq_loader)
 target_include_directories(sdk_nscq_interface INTERFACE ${NSCQ_INCLUDE_DIRS})
 
-if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-  install(
-    FILES
-      lib/x64/libnvidia-nscq-dcgm.so.450.51.06
-      lib/x64/libnvidia-nscq-dcgm.so.1.0
-      lib/x64/libnvidia-nscq-dcgm.so.1
-      lib/x64/libnvidia-nscq-dcgm.so
-    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-    DESTINATION ${DCGM_LIB_INSTALL_PREFIX}
-    COMPONENT DCGM)
-
-  install(
-    FILES
-      lib/x64/libnvidia-nscq-dcgm.so.450.51.06
-      lib/x64/libnvidia-nscq-dcgm.so.1.0
-      lib/x64/libnvidia-nscq-dcgm.so.1
-      lib/x64/libnvidia-nscq-dcgm.so
-    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-    DESTINATION ${DCGM_TESTS_APP_DIR}
-    COMPONENT Tests)
-endif()
-
  add_subdirectory(dlwrap)

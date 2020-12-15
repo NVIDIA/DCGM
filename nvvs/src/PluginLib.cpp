@@ -249,6 +249,10 @@ dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, std::vector<dcgmDi
         return DCGM_ST_BADPARAM;
     }
 
+    m_errors.clear();
+    m_info.clear();
+    m_results.clear();
+
     m_gpuInfo = gpuInfoVec;
 
     for (unsigned int i = 0; i < gpuInfo.numGpus; i++)
@@ -405,7 +409,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         dcgmDiagEvent_t error;
         error.errorCode = 1;
         error.gpuId     = -1;
-        snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to execute the test");
+        snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve custom stats.");
         m_errors.push_back(error);
         return;
     }
@@ -447,7 +451,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         dcgmDiagEvent_t error;
         error.errorCode = 1;
         error.gpuId     = -1;
-        snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to execute the test");
+        snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve the results.");
         m_errors.push_back(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to retrieve the results";

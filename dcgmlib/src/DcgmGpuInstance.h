@@ -37,6 +37,7 @@ struct dcgmcm_gpu_compute_instance_t
     nvmlComputeInstance_t computeInstance {};                   //!< NVML handle for this compute instance
     nvmlComputeInstanceProfileInfo_t profile {};                //!< Profile information for this compute instance
     dcgmMigProfile_t sliceProfile {};                           //!< The slice profile for this compute instance
+    std::string profileName;                                    //!< The name of the compute instance profile
 };
 using dcgmcm_gpu_compute_instance_p = dcgmcm_gpu_compute_instance_t *;
 
@@ -60,6 +61,34 @@ public:
 
     /*****************************************************************************/
     void AddComputeInstance(dcgmcm_gpu_compute_instance_t const &instance);
+
+    /*****************************************************************************/
+    void SetProfileName(std::string const &gpuInstanceProfileName);
+
+    /*****************************************************************************/
+    /*
+     * Derives the GPU instance name from the ciName. This expects a string in the format:
+     * [Xc.]Yg.Zgb. If 'Xc.' is omitted, then a copy of the string is returned.
+     * If present, then just a copy of the portion after 'Xc.' is returned.
+     *
+     * @param ciName[in] - the canonical name of the compute instance profile
+     * @return the canonical name of the GPU instance profile
+     */
+    static std::string DeriveGpuInstanceName(std::string const &ciName);
+
+    /*************************************************************************/
+    /**
+     * Truncates the device name for a compute instance. This expects a string in the format: <gpu name> MIG [Xc.]Yg.Zb
+     * X = compute instance slice count. This may be ommitted if X == Y
+     * Y = GPU instance slice count
+     * Z = memory size in gigabytes, rounded up.
+     * @param ciNameToEdit[in]  - a string containing the full name of the compute instance
+     * @param ciNameEdited[out] - the string where we'll store the edited compute instance name (without <gpu name>MIG)
+     *
+     * @return DCGM_ST_BADPARAM if ciNameBuf is nullptr or doesn't contain MIG
+     *         DCGM_ST_OK on success
+     */
+    static dcgmReturn_t TruncateCIDeviceName(std::string const &ciNameToEdit, std::string &ciNameEdited);
 
     /*****************************************************************************/
     DcgmNs::Mig::GpuInstanceId const &GetInstanceId() const;
@@ -102,25 +131,35 @@ public:
     /*****************************************************************************/
     dcgmMigProfile_t GetMigProfileType() const;
 
+    /*****************************************************************************/
     size_t &MaxGpcs()
     {
         return m_maxGpcs;
     };
 
+    /*****************************************************************************/
     size_t const &MaxGpcs() const
     {
         return m_maxGpcs;
     };
 
+    /*****************************************************************************/
     size_t &UsedGpcs()
     {
         return m_usedGpcs;
     };
 
+    /*****************************************************************************/
     size_t const &UsedGpcs() const
     {
         return m_usedGpcs;
     };
+
+    /*****************************************************************************/
+    std::string const &GetProfileName() const
+    {
+        return m_gpuInstanceProfileName;
+    }
 
 private:
     DcgmNs::Mig::GpuInstanceId m_dcgmInstanceId;
@@ -133,6 +172,7 @@ private:
     std::vector<dcgmcm_gpu_compute_instance_t> m_computeInstances;
     size_t m_maxGpcs  = 0;
     size_t m_usedGpcs = 0;
+    std::string m_gpuInstanceProfileName;
 };
 
 #endif

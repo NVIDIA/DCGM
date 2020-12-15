@@ -24,7 +24,12 @@ macro(define_dcgmproftester cuda_version)
         PRIVATE
             dcgm
             dcgm_interface
+            dcgm_logging
+            dcgm_mutex
             common_interface
+            transport_objects
+            sdk_nvml_essentials_objects
+            ${COMMON_DEPS}
     )
     target_include_directories(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
     target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)
@@ -44,6 +49,9 @@ macro(define_dcgmproftester cuda_version)
         PhysicalGpu.h
         Arguments.cpp
         Arguments.h
+        Reporter.cpp
+        Reporter.h
+        ${COMMON_SRCS}
     )
 
     if (${cuda_version} GREATER 10)
@@ -52,6 +60,7 @@ macro(define_dcgmproftester cuda_version)
 
     find_package(Threads REQUIRED)
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+    target_link_options(${dcgmproftester_exec} PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/proftester.linux_def)
 endmacro()
 
 if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")

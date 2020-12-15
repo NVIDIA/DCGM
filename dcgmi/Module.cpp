@@ -224,8 +224,8 @@ dcgmReturn_t Module::RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out)
 BlacklistModule::BlacklistModule(const std::string &hostname, const std::string &moduleName, bool json)
     : mModuleName(moduleName)
 {
-    mHostName = hostname;
-    mJson     = json;
+    m_hostName = hostname;
+    m_json     = json;
 }
 
 
@@ -236,7 +236,7 @@ dcgmReturn_t BlacklistModule::DoExecuteConnected()
     std::istringstream ss(mModuleName);
     DcgmiOutputTree outTree(30, 50);
     DcgmiOutputJson outJson;
-    DcgmiOutput &out = mJson ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
+    DcgmiOutput &out = m_json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
 
     ss >> moduleId;
 
@@ -279,18 +279,18 @@ dcgmReturn_t BlacklistModule::DoExecuteConnected()
         }
         else
         {
-            throw(TCLAP::CmdLineParseException(usage()));
+            throw TCLAP::CmdLineParseException(usage());
         }
     }
 
     if (moduleId >= DcgmModuleIdCount)
     {
-        throw(TCLAP::CmdLineParseException(usage()));
+        throw TCLAP::CmdLineParseException(usage());
     }
 
     out.addHeader(BLACKLIST_MODULE);
 
-    auto const st = mModuleObj.RunBlacklistModule(mNvcmHandle, (dcgmModuleId_t)moduleId, out);
+    auto const st = mModuleObj.RunBlacklistModule(m_dcgmHandle, (dcgmModuleId_t)moduleId, out);
     std::cout << out.str();
     return st;
 }
@@ -299,7 +299,7 @@ dcgmReturn_t BlacklistModule::DoExecuteConnectionFailure(dcgmReturn_t connection
 {
     DcgmiOutputTree outTree(30, 50);
     DcgmiOutputJson outJson;
-    DcgmiOutput &out = mJson ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
+    DcgmiOutput &out = m_json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
 
     out.addHeader(BLACKLIST_MODULE);
 
@@ -313,8 +313,8 @@ dcgmReturn_t BlacklistModule::DoExecuteConnectionFailure(dcgmReturn_t connection
 /*****************************************************************************/
 ListModule::ListModule(const std::string &hostname, bool json)
 {
-    mHostName = hostname;
-    mJson     = json;
+    m_hostName = hostname;
+    m_json     = json;
 }
 
 /*****************************************************************************/
@@ -322,7 +322,7 @@ dcgmReturn_t ListModule::DoExecuteConnected()
 {
     DcgmiOutputColumns outColumns;
     DcgmiOutputJson outJson;
-    DcgmiOutput &out                            = mJson ? (DcgmiOutput &)outJson : (DcgmiOutput &)outColumns;
+    DcgmiOutput &out                            = m_json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outColumns;
     DcgmiOutputFieldSelector moduleIdSelector   = DcgmiOutputFieldSelector().child(MODULE_ID);
     DcgmiOutputFieldSelector moduleNameSelector = DcgmiOutputFieldSelector().child(NAME);
     DcgmiOutputFieldSelector stateSelector      = DcgmiOutputFieldSelector().child(STATE);
@@ -333,7 +333,7 @@ dcgmReturn_t ListModule::DoExecuteConnected()
 
     out.addHeader(LIST_MODULES);
 
-    auto const st = mModuleObj.RunListModule(mNvcmHandle, out);
+    auto const st = mModuleObj.RunListModule(m_dcgmHandle, out);
     std::cout << out.str();
     return st;
 }
@@ -342,7 +342,7 @@ dcgmReturn_t ListModule::DoExecuteConnectionFailure(dcgmReturn_t connectionStatu
 {
     DcgmiOutputColumns outColumns;
     DcgmiOutputJson outJson;
-    DcgmiOutput &out = mJson ? (DcgmiOutput &)outJson : (DcgmiOutput &)outColumns;
+    DcgmiOutput &out = m_json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outColumns;
 
     out.addHeader(LIST_MODULES);
 

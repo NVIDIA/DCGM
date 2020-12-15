@@ -19,6 +19,7 @@
 #include "DcgmProtocol.h"
 #include "DcgmRequest.h"
 #include "dcgm_module_structs.h"
+#include <dcgm_api_export.h>
 
 /*****************************************************************************/
 /*
@@ -35,11 +36,11 @@
  *
  * Note: Timeout is currently only used for remote requests.
  */
-dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDcgmHandle,
-                                                dcgm_module_command_header_t *moduleCommand,
-                                                size_t maxResponseSize,
-                                                std::unique_ptr<DcgmRequest> request = nullptr,
-                                                unsigned int timeout                 = 60000);
+DCGM_PUBLIC_API dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDcgmHandle,
+                                                                dcgm_module_command_header_t *moduleCommand,
+                                                                size_t maxResponseSize,
+                                                                std::unique_ptr<DcgmRequest> request = nullptr,
+                                                                unsigned int timeout                 = 60000);
 
 /*****************************************************************************/
 

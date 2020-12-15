@@ -82,7 +82,7 @@ const std::string DISPLAY_CUDA_TOOLKIT("CUDA Toolkit Library");
 const std::string DISPLAY_PERMISSIONS("Permissions and OS Blocks");
 const std::string DISPLAY_PERSISTENCE("Persistence Mode");
 const std::string DISPLAY_ENVIRONMENT("Environment Variables");
-const std::string DISPLAY_PAGE_RETIREMENT("Page Retirement");
+const std::string DISPLAY_PAGE_RETIREMENT("Page Retirement/Row Remap");
 const std::string DISPLAY_GRAPHICS("Graphics Processes");
 const std::string DISPLAY_INFOROM("Inforom");
 
@@ -393,15 +393,15 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
     else if (result != DCGM_ST_OK)
     {
         std::stringstream errMsg;
-        errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)mDrd.groupId
-               << ". Return: (" << result << ") " << errorString(result);
-
         if (diagResult.systemError.msg[0] != '\0')
         {
-            errMsg << " :\n'" << diagResult.systemError.msg << "'";
+            errMsg << diagResult.systemError.msg;
         }
-
-        errMsg << ".";
+        else
+        {
+            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)mDrd.groupId
+                   << ". Return: (" << result << ") " << errorString(result) << ".";
+        }
 
         if (result == DCGM_ST_TIMEOUT)
         {
@@ -1164,7 +1164,7 @@ StartDiag::StartDiag(const std::string &hostname,
 {
     std::string configFileContents;
     drd.version = dcgmRunDiag_version;
-    mHostName   = hostname;
+    m_hostName  = hostname;
 
     // Parms is in the format: test_name.attr_name=attr_value[;...]
     // Parse it
@@ -1181,7 +1181,7 @@ StartDiag::StartDiag(const std::string &hostname,
                 std::string err_text("Improperly formatted parameters argument: '");
                 err_text += parms + "'. Argument must follow the format: test_name.attr_name=attr_value[;...]";
 
-                throw(TCLAP::CmdLineParseException(err_text));
+                throw TCLAP::CmdLineParseException(err_text);
             }
         }
     }
@@ -1195,7 +1195,7 @@ StartDiag::StartDiag(const std::string &hostname,
             std::string err_text;
             ss << "Config file too large. Its size (" << filesize(configPath) << ") exceeds "
                << DCGM_MAX_CONFIG_FILE_LEN;
-            throw(TCLAP::CmdLineParseException(ss.str()));
+            throw TCLAP::CmdLineParseException(ss.str());
         }
 
         configFile.open(configPath.c_str());
@@ -1204,7 +1204,7 @@ StartDiag::StartDiag(const std::string &hostname,
         {
             std::string err_text("Could not open configuration file: '");
             err_text += configPath + "'";
-            throw(TCLAP::CmdLineParseException(err_text));
+            throw TCLAP::CmdLineParseException(err_text);
         }
 
         ss.clear();
@@ -1217,7 +1217,7 @@ StartDiag::StartDiag(const std::string &hostname,
     {
         std::string err_text("Gpu list '");
         err_text += gpuList + "' must be a comma-separated list of numbers";
-        throw(TCLAP::CmdLineParseException(err_text));
+        throw TCLAP::CmdLineParseException(err_text);
     }
 
     this->mDiagObj.setDcgmRunDiag(&drd);
@@ -1270,12 +1270,12 @@ dcgmReturn_t StartDiag::StartListenerServer()
 /*****************************************************************************/
 dcgmReturn_t StartDiag::DoExecuteConnected()
 {
-    mSilent = true;
+    m_silent = true;
 
     // Set global hostname so that the signal handler can terminate a launched diagnostic if necessary
-    diag_hostname = mHostName;
+    diag_hostname = m_hostName;
 
-    dcgmReturn_t ret = mDiagObj.RunStartDiag(mNvcmHandle);
+    dcgmReturn_t ret = mDiagObj.RunStartDiag(m_dcgmHandle);
 
     // reset global hostname
     diag_hostname = "";
@@ -1285,10 +1285,10 @@ dcgmReturn_t StartDiag::DoExecuteConnected()
 
 dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
 {
-    mSilent = true;
+    m_silent = true;
 
     // Set global hostname so that the signal handler can terminate a launched diagnostic if necessary
-    diag_hostname = mHostName;
+    diag_hostname = m_hostName;
 
     // Attempt to start an embedded host engine
     dcgmHandle_t embeddedHandle;
@@ -1321,11 +1321,11 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
 /*****************************************************************************/
 AbortDiag::AbortDiag(std::string hostname)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t AbortDiag::DoExecuteConnected()
 {
-    return dcgmStopDiagnostic(mNvcmHandle);
+    return dcgmStopDiagnostic(m_dcgmHandle);
 }

@@ -377,8 +377,8 @@ GetHealth::GetHealth(std::string hostname, unsigned int groupId, bool json)
     : Command()
     , groupId(groupId)
 {
-    mHostName = std::move(hostname);
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -387,7 +387,7 @@ GetHealth::GetHealth(std::string hostname, unsigned int groupId, bool json)
 /*****************************************************************************/
 dcgmReturn_t GetHealth::DoExecuteConnected()
 {
-    return healthObj.GetWatches(mNvcmHandle, groupId, mJson);
+    return healthObj.GetWatches(m_dcgmHandle, groupId, m_json);
 }
 
 /*****************************************************************************
@@ -408,7 +408,7 @@ SetHealth::SetHealth(std::string hostname,
     , mUpdateInterval(updateInterval)
     , mMaxKeepAge(maxKeepAge)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -417,7 +417,7 @@ SetHealth::SetHealth(std::string hostname,
 /*****************************************************************************/
 dcgmReturn_t SetHealth::DoExecuteConnected()
 {
-    return healthObj.SetWatches(mNvcmHandle, mGroupId, mSystems, mUpdateInterval, mMaxKeepAge);
+    return healthObj.SetWatches(m_dcgmHandle, mGroupId, mSystems, mUpdateInterval, mMaxKeepAge);
 }
 
 /*****************************************************************************
@@ -431,8 +431,8 @@ CheckHealth::CheckHealth(std::string hostname, unsigned int groupId, bool json)
     : Command()
     , groupId(groupId)
 {
-    mHostName = std::move(hostname);
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -441,5 +441,5 @@ CheckHealth::CheckHealth(std::string hostname, unsigned int groupId, bool json)
 /*****************************************************************************/
 dcgmReturn_t CheckHealth::DoExecuteConnected()
 {
-    return healthObj.CheckWatches(mNvcmHandle, groupId, mJson);
+    return healthObj.CheckWatches(m_dcgmHandle, groupId, m_json);
 }

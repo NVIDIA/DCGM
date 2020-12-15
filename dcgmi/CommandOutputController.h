@@ -23,8 +23,8 @@
 #ifndef COMMANDOUTPUTCONTROLLER_H_
 #define COMMANDOUTPUTCONTROLLER_H_
 
-#include "DcgmLogging.h"
-#include "dcgm_structs.h"
+#include <DcgmLogging.h>
+#include <dcgm_structs.h>
 #include <iostream>
 #include <vector>
 

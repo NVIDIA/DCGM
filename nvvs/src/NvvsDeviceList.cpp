@@ -73,7 +73,7 @@ int NvvsDevice::SaveState(nvvs_device_state_t *savedState)
 
     if (ret != DCGM_ST_OK)
     {
-        DcgmError d;
+        DcgmError d { m_gpuId };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmEntitiesGetLatestValues");
         RecordWarning(d, 0);
     }
@@ -133,7 +133,7 @@ int NvvsDevice::RestoreState(void)
 
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { m_gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmConfigSet");
             RecordWarning(d, 0);
         }
@@ -243,7 +243,7 @@ int NvvsDeviceList::Init(std::vector<unsigned int> gpuIds)
         int st     = nvvsDevice->Init(gpuId);
         if (st)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             snprintf(buf, sizeof(buf), "Got error %d while initializing NvvsDevice index %u", st, gpuId);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, buf);
             RecordWarning(d, 1);
@@ -310,7 +310,7 @@ int NvvsDeviceList::RestoreState(int failOnRestore)
     if (changedIndexes.size() > 0 && failOnRestore)
     {
         std::stringstream ss;
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
 
         for (i = 0; i < (int)changedIndexes.size(); i++)
         {

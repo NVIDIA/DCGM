@@ -65,7 +65,7 @@ SmPerfPlugin::SmPerfPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
 
     if (Init(gpuInfo) == false)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Couldn't initialize the plugin, please check the log file.");
         AddError(d);
     }
@@ -325,7 +325,7 @@ void SmPerfPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
 
     if (!m_testParameters->GetBoolFromString(SMSTRESS_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, SMSTRESS_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -342,7 +342,7 @@ void SmPerfPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
     result = RunTest();
     if (main_should_stop)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
         AddError(d);
         SetResult(NVVS_RESULT_SKIP);
@@ -365,7 +365,7 @@ bool SmPerfPlugin::CheckGpuPerf(SmPerfDevice *smDevice,
     data = GetCustomGpuStat(smDevice->gpuId, PERF_STAT_NAME);
     if (data.size() == 0)
     {
-        DcgmError d;
+        DcgmError d { smDevice->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_GET_STAT, d, PERF_STAT_NAME, smDevice->gpuId);
         errorList.push_back(d);
         return false;
@@ -389,7 +389,7 @@ bool SmPerfPlugin::CheckGpuPerf(SmPerfDevice *smDevice,
     double minRatio = m_testParameters->GetDouble(SMSTRESS_STR_TARGET_PERF_MIN_RATIO);
     if (maxVal < minRatio * m_targetPerf)
     {
-        DcgmError d;
+        DcgmError d { smDevice->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_STRESS_LEVEL, d, maxVal, m_targetPerf, smDevice->gpuId);
         std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(smDevice->gpuId, startTime, endTime);
         if (utilNote.empty() == false)
@@ -560,7 +560,7 @@ bool SmPerfPlugin::RunTest()
     }
     catch (const std::exception &e)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         PRINT_ERROR("%s", "Caught exception %s", e.what());
         AddError(d);

@@ -17,12 +17,14 @@ protobuf_generate_cpp(COMMON_SRCS COMMON_HDRS
     dcgm.proto
     )
 
+add_library(common_protobuf_gen_interface INTERFACE)
+target_include_directories(common_protobuf_gen_interface INTERFACE ${Protobuf_INCLUDE_DIRS} )
+
 add_library(common_protobuf_gen STATIC)
+target_link_libraries(common_protobuf_gen PUBLIC common_protobuf_gen_interface)
 target_sources(common_protobuf_gen PRIVATE ${COMMON_SRCS})
-target_sources(common_protobuf_gen PRIVATE ${COMMON_HDRS})
-target_include_directories(common_protobuf_gen PUBLIC ${Protobuf_INCLUDE_DIRS})
-target_include_directories(common_protobuf_gen PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(common_protobuf_gen PUBLIC ${Protobuf_LIBRARIES})
+target_link_libraries(common_protobuf_gen PRIVATE ${Protobuf_LIBRARIES})
+target_compile_options(common_protobuf_gen PRIVATE -Wno-array-bounds)
 
 add_library(common_protobuf_interface INTERFACE)
 target_include_directories(common_protobuf_interface INTERFACE
@@ -30,9 +32,19 @@ target_include_directories(common_protobuf_interface INTERFACE
     ${CMAKE_CURRENT_BINARY_DIR}
     )
 #add_dependencies(common_protobuf_interface common_protobuf_gen)
-target_link_libraries(common_protobuf_interface INTERFACE common_protobuf_gen)
+target_link_libraries(common_protobuf_interface INTERFACE common_protobuf_gen_interface)
+foreach(PB_LIB ${Protobuf_LIBRARIES})
+    target_link_options(common_protobuf_interface INTERFACE "-Wl,--exclude-libs,${PB_LIB}")
+endforeach()
 
-add_library(common_protobuf_objects OBJECT)
-target_link_libraries(common_protobuf_objects PUBLIC common_protobuf_gen transport_objects common_protobuf_interface)
-target_sources(common_protobuf_objects PRIVATE DcgmProtobuf.cpp)
-target_sources(common_protobuf_objects PUBLIC DcgmProtobuf.h)
+add_library(common_protobuf_objects STATIC)
+target_link_libraries(common_protobuf_objects
+    PUBLIC
+        transport_objects
+        common_protobuf_interface
+        common_protobuf_gen
+)
+target_sources(common_protobuf_objects
+    PRIVATE
+        DcgmProtobuf.cpp
+)

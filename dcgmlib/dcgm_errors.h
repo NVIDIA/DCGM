@@ -16,6 +16,9 @@
 #ifndef DCGM_ERRORS_H
 #define DCGM_ERRORS_H
 
+#include "dcgm_api_export.h"
+#include "dcgm_structs.h"
+
 /*
  * Error codes for passive and active health checks.
  * New error codes must be added to end of enum to maintain backwards compatibility.
@@ -106,7 +109,9 @@ typedef enum dcgmError_enum
     DCGM_FR_UNCONTAINED_ERROR            = 81, //!< Uncontained error - XID 95
     DCGM_FR_EMPTY_GPU_LIST               = 82, //!< No GPU information given to plugin
     DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS = 83, //!< Pending page retirements due to a DBE
-    DCGM_FR_ERROR_SENTINEL               = 84, //!< MUST BE THE LAST ERROR CODE
+    DCGM_FR_UNCORRECTABLE_ROW_REMAP      = 84, //!< Uncorrectable row remapping
+    DCGM_FR_PENDING_ROW_REMAP            = 85, //!< Row remapping is pending
+    DCGM_FR_ERROR_SENTINEL               = 86, //!< MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -329,10 +334,12 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_HAD_TO_RESTORE_STATE_MSG         "Had to restore GPU state on NVML GPU(s): %s"
 #define DCGM_FR_L1TAG_UNSUPPORTED_MSG            "This card does not support the L1 cache test. Skipping test."
 #define DCGM_FR_L1TAG_MISCOMPARE_MSG             "Detected a miscompare failure in the L1 cache."
-#define DCGM_FR_ROW_REMAP_FAILURE_MSG            "Row remapping failed."
+#define DCGM_FR_ROW_REMAP_FAILURE_MSG            "GPU %u had uncorrectable memory errors and row remapping failed."
 #define DCGM_FR_UNCONTAINED_ERROR_MSG            "GPU had an uncontained error (XID 95)"
 #define DCGM_FR_EMPTY_GPU_LIST_MSG               "No valid GPUs passed to plugin"
 #define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG "Pending page retirements together with a DBE were detected on GPU %u."
+#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG      "GPU %u had uncorrectable memory errors and %u rows were remapped"
+#define DCGM_FR_PENDING_ROW_REMAP_MSG            "GPU %u has uncorrectable memory errors and row remappings are pending"
 
 /*
  * Suggestions for next steps for the corresponding error message
@@ -456,19 +463,25 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_HAD_TO_RESTORE_STATE_NEXT         ""
 #define DCGM_FR_L1TAG_UNSUPPORTED_NEXT            ""
 #define DCGM_FR_L1TAG_MISCOMPARE_NEXT             TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_ROW_REMAP_FAILURE_NEXT            DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
+#define DCGM_FR_ROW_REMAP_FAILURE_NEXT            "Reset the GPU as soon as possible to restore operation."
 #define DCGM_FR_UNCONTAINED_ERROR_NEXT            DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
 #define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT "Drain the GPU and reset it or reboot the node to resolve this issue."
 #define DCGM_FR_EMPTY_GPU_LIST_NEXT               ""
+#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT      ""
+#define DCGM_FR_PENDING_ROW_REMAP_NEXT            ""
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code);
-const char *dcgmErrorGetFormatMsgByCode(unsigned int code);
+
+DCGM_PUBLIC_API dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code);
+DCGM_PUBLIC_API const char *dcgmErrorGetFormatMsgByCode(unsigned int code);
+
+DCGM_PUBLIC_API const dcgm_error_meta_t *dcgmGetErrorMeta(dcgmError_t error);
+DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result);
 
 #ifdef __cplusplus
-}
+} // extern "C"
 #endif
 
 #endif // DCGM_ERRORS_H

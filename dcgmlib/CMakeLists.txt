@@ -25,6 +25,7 @@ install(FILES
         dcgm_structs.h
         dcgm_fields.h
         dcgm_errors.h
+        dcgm_api_export.h
     DESTINATION
         ${DCGM_INCLUDE_INSTALL_PREFIX}
     COMPONENT DCGM

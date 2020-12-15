@@ -338,8 +338,8 @@ std::string Group::getGroupInfo()
 GroupList::GroupList(std::string hostname, bool json)
     : Command()
 {
-    mHostName = std::move(hostname);
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -348,7 +348,7 @@ GroupList::GroupList(std::string hostname, bool json)
 /*****************************************************************************/
 dcgmReturn_t GroupList::DoExecuteConnected()
 {
-    return groupObj.RunGroupList(mNvcmHandle, mJson);
+    return groupObj.RunGroupList(m_dcgmHandle, m_json);
 }
 
 /*****************************************************************************
@@ -363,7 +363,7 @@ GroupCreate::GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t group
     , groupObj(obj)
     , groupType(groupType)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -372,7 +372,7 @@ GroupCreate::GroupCreate(std::string hostname, Group &obj, dcgmGroupType_t group
 /*****************************************************************************/
 dcgmReturn_t GroupCreate::DoExecuteConnected()
 {
-    return groupObj.RunGroupCreate(mNvcmHandle, groupType);
+    return groupObj.RunGroupCreate(m_dcgmHandle, groupType);
 }
 
 
@@ -387,7 +387,7 @@ GroupDestroy::GroupDestroy(std::string hostname, Group &obj)
     : Command()
     , groupObj(obj)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -396,7 +396,7 @@ GroupDestroy::GroupDestroy(std::string hostname, Group &obj)
 /*****************************************************************************/
 dcgmReturn_t GroupDestroy::DoExecuteConnected()
 {
-    return groupObj.RunGroupDestroy(mNvcmHandle);
+    return groupObj.RunGroupDestroy(m_dcgmHandle);
 }
 
 /*****************************************************************************
@@ -410,8 +410,8 @@ GroupInfo::GroupInfo(std::string hostname, Group &obj, bool json)
     : Command()
     , groupObj(obj)
 {
-    mHostName = std::move(hostname);
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -421,7 +421,7 @@ GroupInfo::GroupInfo(std::string hostname, Group &obj, bool json)
 /*****************************************************************************/
 dcgmReturn_t GroupInfo::DoExecuteConnected()
 {
-    return groupObj.RunGroupInfo(mNvcmHandle, mJson);
+    return groupObj.RunGroupInfo(m_dcgmHandle, m_json);
 }
 
 /*****************************************************************************
@@ -435,7 +435,7 @@ GroupAddTo::GroupAddTo(std::string hostname, Group &obj)
     : Command()
     , groupObj(obj)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -444,7 +444,7 @@ GroupAddTo::GroupAddTo(std::string hostname, Group &obj)
 /*****************************************************************************/
 dcgmReturn_t GroupAddTo::DoExecuteConnected()
 {
-    return groupObj.RunGroupManageDevice(mNvcmHandle, true);
+    return groupObj.RunGroupManageDevice(m_dcgmHandle, true);
 }
 
 /*****************************************************************************
@@ -458,7 +458,7 @@ GroupDeleteFrom::GroupDeleteFrom(std::string hostname, Group &obj)
     : Command()
     , groupObj(obj)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -467,5 +467,5 @@ GroupDeleteFrom::GroupDeleteFrom(std::string hostname, Group &obj)
 /*****************************************************************************/
 dcgmReturn_t GroupDeleteFrom::DoExecuteConnected()
 {
-    return groupObj.RunGroupManageDevice(mNvcmHandle, false);
+    return groupObj.RunGroupManageDevice(m_dcgmHandle, false);
 }

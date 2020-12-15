@@ -20,11 +20,11 @@
 #include "DcgmProfTester.h"
 #include "DcgmSettings.h"
 #include "Entity.h"
+#include "Reporter.h"
 #include "dcgm_fields.h"
 #include "dcgm_fields_internal.h"
 #include "timelib.h"
 #include "vector_types.h"
-#include <DcgmLogging.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 #include <dcgm_agent.h>
@@ -56,12 +56,16 @@ namespace DcgmNs::ProfTester
 {
 static const std::streamsize MaxStreamLength { std::numeric_limits<std::streamsize>::max() };
 
+static Reporter<plog::info> info_reporter;
+static Reporter<plog::warning> warn_reporter;
+static Reporter<plog::error> error_reporter;
+
 // Dump field Values returned.
 static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu::ValueType type, double divisor)
 {
     if (values.size() > 1)
     {
-        std::cout << "{ ";
+        info_reporter << "{ ";
     }
 
     bool first { true };
@@ -72,7 +76,7 @@ static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu:
         {
             if (!first)
             {
-                std::cout << ", ";
+                info_reporter << ", ";
             }
             else
             {
@@ -83,27 +87,27 @@ static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu:
             {
                 default:
                 case DCGM_FE_NONE:
-                    std::cout << "?: ";
+                    info_reporter << "?: ";
                     break;
 
                 case DCGM_FE_GPU:
-                    std::cout << "GPU: ";
+                    info_reporter << "GPU: ";
                     break;
 
                 case DCGM_FE_VGPU:
-                    std::cout << "VGPU: ";
+                    info_reporter << "VGPU: ";
                     break;
 
                 case DCGM_FE_SWITCH:
-                    std::cout << "SW: ";
+                    info_reporter << "SW: ";
                     break;
 
                 case DCGM_FE_GPU_I:
-                    std::cout << "GI: ";
+                    info_reporter << "GI: ";
                     break;
 
                 case DCGM_FE_GPU_CI:
-                    std::cout << "CI: ";
+                    info_reporter << "CI: ";
                     break;
             }
         }
@@ -115,29 +119,29 @@ static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu:
             case PhysicalGpu::ValueType::Int64:
                 value = fieldValue.value.i64;
                 value /= divisor;
-                std::cout << value;
+                info_reporter << value;
 
                 break;
 
             case PhysicalGpu::ValueType::Double:
                 value = fieldValue.value.dbl;
                 value /= divisor;
-                std::cout << value;
+                info_reporter << value;
 
                 break;
 
             case PhysicalGpu::ValueType::String:
-                std::cout << "<string>";
+                info_reporter << "<string>";
 
                 break;
 
             case PhysicalGpu::ValueType::Blob:
-                std::cout << "<blob>";
+                info_reporter << "<blob>";
 
                 break;
 
             default:
-                std::cout << "<unknown>";
+                info_reporter << "<unknown>";
 
                 break;
         }
@@ -145,7 +149,7 @@ static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu:
 
     if (values.size() > 1)
     {
-        std::cout << " }";
+        info_reporter << " }";
     }
 }
 
@@ -191,17 +195,19 @@ dcgmReturn_t PhysicalGpu::CheckVirtualizationMode(void)
         = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
     if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
     {
-        printf(
-            "Skipping GPU virtualization mode check due to nonzero dcgmReturn %d or valueStatus %d. Perfworks may still return an error if the vGPU mode is not supported.",
-            (int)dcgmReturn,
-            value.status);
+        warn_reporter << "Skipping GPU virtualization mode check due to nonzero dcgmReturn " << dcgmReturn
+                      << " or valueStatus " << value.status
+                      << ". Perfworks may still return an error if the vGPU mode is not supported."
+                      << warn_reporter.new_line;
+
         return DCGM_ST_OK;
     }
 
     if (value.value.i64 != DCGM_GPU_VIRTUALIZATION_MODE_NONE
         && value.value.i64 != DCGM_GPU_VIRTUALIZATION_MODE_PASSTHROUGH)
     {
-        fprintf(stderr, "Virtualization mode %ld is unsupported.", value.value.i64);
+        error_reporter << "Virtualization mode " << value.value.i64 << " is unsupported." << error_reporter.new_line;
+
         return DCGM_ST_PROFILING_NOT_SUPPORTED;
     }
 
@@ -219,7 +225,8 @@ dcgmReturn_t PhysicalGpu::Init(dcgmHandle_t dcgmHandle)
     dcgmReturn               = dcgmGetDeviceAttributes(m_dcgmHandle, m_gpuId, &m_dcgmDeviceAttr);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmGetDeviceAttributes() returned %d\n", dcgmReturn);
+        error_reporter << "dcgmGetDeviceAttributes() returned " << dcgmReturn << "." << error_reporter.new_line;
+
         return dcgmReturn;
     }
 
@@ -263,6 +270,36 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
     if (foundCudaContext == nullptr)
     {
         foundCudaContext = std::make_shared<DistributedCudaContext>(shared_from_this(), entities, entity, deviceId);
+
+        /**
+         * When we  get the first worker, we get the compute capabilities of
+         * its GPU as it will be the same for all MIG slices, and the only
+         * workers for a GPU will be its own MIG slices.
+         */
+        if (m_workers == 0)
+        {
+            dcgmGroupEntityPair_t entity;
+            unsigned short fieldId { DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY };
+            dcgmFieldValue_v2 value {};
+
+            entity.entityGroupId = DCGM_FE_GPU;
+            entity.entityId      = (*entities)[DCGM_FE_GPU];
+
+            dcgmReturn_t dcgmReturn
+                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                /**
+                 * foundCudaContext will be smart pointer garbage collected.
+                 */
+
+                return nullptr; // Failure
+            }
+
+            m_majorComputeCapability = DCGM_CUDA_COMPUTE_CAPABILITY_MAJOR(value.value.i64) >> 16;
+            m_minorComputeCapability = DCGM_CUDA_COMPUTE_CAPABILITY_MINOR(value.value.i64);
+        }
 
         /**
          * We count the worker slices separately from the worker vector size
@@ -446,9 +483,9 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         {
             if (!m_parameters.m_fast)
             {
-                std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
-                          << m_parameters.m_maxValue << std::endl;
+                warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                              << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
+                              << m_parameters.m_maxValue << "." << warn_reporter.new_line;
             }
 
             return false;
@@ -458,9 +495,9 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         {
             if (!m_parameters.m_fast)
             {
-                std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
-                          << m_parameters.m_maxValue << std::endl;
+                warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                              << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
+                              << m_parameters.m_maxValue << "." << warn_reporter.new_line;
             }
 
             return false;
@@ -478,9 +515,10 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         {
             if (!m_parameters.m_fast)
             {
-                std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0) << " !< "
-                          << measured << " < " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0) << std::endl;
+                warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                              << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
+                              << " !< " << measured << " < " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0)
+                              << "." << warn_reporter.new_line;
             }
 
             return false;
@@ -490,9 +528,10 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         {
             if (!m_parameters.m_fast)
             {
-                std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0) << " < "
-                          << measured << " !< " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0) << std::endl;
+                warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                              << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
+                              << " < " << measured << " !< " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0)
+                              << "." << warn_reporter.new_line;
             }
 
             return false;
@@ -505,9 +544,9 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
     {
         if (!m_parameters.m_fast)
         {
-            std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                      << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "!< " << measured << " < "
-                      << highExpected + m_parameters.m_tolerance << std::endl;
+            warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                          << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "!< " << measured
+                          << " < " << highExpected + m_parameters.m_tolerance << "." << warn_reporter.new_line;
         }
 
         return false;
@@ -517,9 +556,9 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
     {
         if (!m_parameters.m_fast)
         {
-            std::cout << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                      << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "< " << measured << " !< "
-                      << highExpected + m_parameters.m_tolerance << std::endl;
+            warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                          << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "< " << measured
+                          << " !< " << highExpected + m_parameters.m_tolerance << "." << warn_reporter.new_line;
         }
 
         return false;
@@ -574,7 +613,8 @@ dcgmReturn_t PhysicalGpu::StartTests(void)
                     AbortChildren(workers);
                 }
 
-                DCGM_LOG_ERROR << "Failed to start CUDA test on " << worker->Device();
+                error_reporter << "Failed to start CUDA test on " << worker->Device() << error_reporter.new_line;
+
                 return DCGM_ST_GENERIC_ERROR;
             }
 
@@ -653,10 +693,16 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
             break;
 
         default:
-            DCGM_LOG_WARNING << "A test for fieldId " << m_parameters.m_fieldId << " has not been implemented yet.";
+            warn_reporter << "A test for fieldId " << m_parameters.m_fieldId << " has not been implemented yet."
+                          << warn_reporter.new_line;
 
             rtSt = DCGM_ST_GENERIC_ERROR;
             break;
+    }
+
+    if (rtSt != DCGM_ST_OK)
+    {
+        DestroyDcgmGroups();
     }
 
     return rtSt;
@@ -684,7 +730,7 @@ dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCud
 
     if ((retval = worker->ReadLn()) < 0)
     {
-        DCGM_LOG_ERROR << "ProcessStartingResponse failed to read from a worker.";
+        error_reporter << "ProcessStartingResponse failed to read from a worker." << error_reporter.new_line;
         // Something went wrong.
         // NukeChildren(true);
 
@@ -737,7 +783,8 @@ dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCud
                 worker->Input().ignore(MaxStreamLength, '\n');
             }
 
-            DCGM_LOG_WARNING << "Received unexpected worker status: " << c;
+            warn_reporter << "Received unexpected worker status: " << c << warn_reporter.new_line;
+
             break;
 
             /* Unexpected: we consume the line, and hope for the best. */
@@ -751,7 +798,8 @@ dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCud
             // Unknown: we consume the line, and hope for the best.
         default:
             worker->Input().ignore(MaxStreamLength, '\n');
-            DCGM_LOG_WARNING << "Received unexpected worker status: " << c;
+            warn_reporter << "Received unexpected worker status: " << c << warn_reporter.new_line;
+
             break;
     }
 
@@ -762,7 +810,15 @@ dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCud
     }
     else if (AllStarted())
     {
-        rtSt = RunTests();
+        /**
+         * We no longer start running tests here, since the ProcessResponse()
+         * dispatcher (that ultimately called us) wants to limit how many
+         * GPUs are tested in parallel. By it calling AllStarted() before
+         * and after ProcessResponse() it can determine if all (if any) MIG
+         * slices have started and thus if RunTests() can be called.
+         */
+        // rtSt = RunTests();
+        rtSt = DCGM_ST_OK;
     }
 
     if (rtSt == DCGM_ST_NOT_SUPPORTED)
@@ -786,7 +842,7 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
 
     if (m_finishedWorkers >= m_workers)
     {
-        DCGM_LOG_ERROR << "ProcessRunningResponse called when all workers finished";
+        error_reporter << "ProcessRunningResponse called when all workers finished." << error_reporter.new_line;
 
         return DCGM_ST_GENERIC_ERROR;
     }
@@ -795,7 +851,7 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
 
     if ((retval = worker->ReadLn()) < 0)
     {
-        DCGM_LOG_ERROR << "ProcessRunningResponse failed to read from a worker.";
+        error_reporter << "ProcessRunningResponse failed to read from a worker." << error_reporter.new_line;
         // Something went wrong.
         // NukeChildren(true);
 
@@ -1033,7 +1089,7 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
         default:
             // Unknown: we consume the line, and hope for the best.
             worker->Input().ignore(MaxStreamLength, '\n');
-            DCGM_LOG_WARNING << "Received unexpected worker status: " << c;
+            warn_reporter << "Received unexpected worker status: " << c << warn_reporter.new_line;
 
             break;
     }
@@ -1057,14 +1113,14 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 {
     if (m_finishedWorkers < m_workers)
     {
-        DCGM_LOG_ERROR << "ProcessFinishedResponse called before all workers finished";
+        error_reporter << "ProcessFinishedResponse called before all workers finished." << error_reporter.new_line;
 
         return DCGM_ST_GENERIC_ERROR;
     }
 
     if (m_reportedWorkers >= m_workers)
     {
-        DCGM_LOG_ERROR << "ProcessFinishedResponse called after all workers reported";
+        error_reporter << "ProcessFinishedResponse called after all workers reported." << error_reporter.new_line;
 
         return DCGM_ST_GENERIC_ERROR;
     }
@@ -1085,12 +1141,11 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
      * and asked for errors after messages, because that is where we count the
      * interaction done.
      */
-    // rtSt = CommandAll("M\nE\n");
 
     if ((retval = worker->ReadLn()) < 0)
     {
-        DCGM_LOG_ERROR << "ProcessFinishedResponse failed to read from a "
-                       << "worker.";
+        error_reporter << "ProcessFinishedResponse failed to read from a "
+                       << "worker." << error_reporter.new_line;
         // Something wen't wrong.
         // NukeChildren(true);
 
@@ -1152,8 +1207,28 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 
                 if (m_parameters.m_report)
                 {
-                    std::cout << "Worker " << m_gpuId << ":" << workerIdx << "[" << m_parameters.m_fieldId
-                              << "]: " << label << ": " << worker->Input().rdbuf() << std::endl;
+                    info_reporter << "Worker " << m_gpuId << ":" << workerIdx << "[" << m_parameters.m_fieldId
+                                  << "]: " << label << ": ";
+
+                    /**
+                     * Apparently we can't send big streambufs to the logger,
+                     * so we have to break things up.
+                     */
+                    auto sbuf = worker->Input().rdbuf();
+
+                    do
+                    {
+                        char ch = sbuf->sgetc();
+
+                        if (ch == '\n')
+                        {
+                            info_reporter << info_reporter.new_line;
+                        }
+                        else
+                        {
+                            info_reporter << ch;
+                        }
+                    } while (sbuf->snextc() != EOF);
                 }
                 else
                 {
@@ -1186,7 +1261,8 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
             // Unknown: we consume the line, and hope for the best.
         default:
             worker->Input().ignore(MaxStreamLength, '\n');
-            DCGM_LOG_WARNING << "Received unexpected worker status: " << c;
+            warn_reporter << "Received unexpected worker status: " << c << warn_reporter.new_line;
+
             break;
     }
 
@@ -1315,7 +1391,10 @@ dcgmReturn_t PhysicalGpu::EndSubtest(void)
     if (!testResultsFp)
     {
         int cachedErrno = errno;
-        fprintf(stderr, "Unable to open %s (errno %d). Can't write test results file.\n", filename, cachedErrno);
+
+        error_reporter << "Unable to open " << filename << " (errno " << cachedErrno
+                       << "). Can't write test results file." << error_reporter.new_line;
+
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -1328,11 +1407,11 @@ dcgmReturn_t PhysicalGpu::EndSubtest(void)
         fprintf(testResultsFp, "%.3f, %.3f\n", m_subtestGenValues[i], m_subtestDcgmValues[i]);
     }
 
-    fprintf(testResultsFp, "# TestResult: PASSED\n"); /* Todo: check and actually change this to WARNING or FAILED */
+    fprintf(testResultsFp, "# TestResult: %s\n", m_valid ? "PASSED" : "FAILED");
     fprintf(testResultsFp, "# TestResultReason: \n"); /* Todo: Populate with optional text */
 
     if (m_parameters.m_dvsOutput)
-        printf("&&&& PASSED %s\n", m_subtestTag.c_str());
+        printf("&&&& %s %s\n", m_valid ? "PASSED" : "FAILED", m_subtestTag.c_str());
 
     fclose(testResultsFp);
     return DCGM_ST_OK;
@@ -1365,7 +1444,8 @@ dcgmReturn_t PhysicalGpu::CreateDcgmGroups(void)
 
     if (m_parameters.m_noDcgmValidation)
     {
-        printf("Skipping CreateDcgmGroups() since DCGM validation is disabled\n");
+        DCGM_LOG_INFO << "Skipping CreateDcgmGroups() since DCGM validation is disabled.";
+
         return DCGM_ST_OK;
     }
 
@@ -1378,7 +1458,8 @@ dcgmReturn_t PhysicalGpu::CreateDcgmGroups(void)
 
     if (dcgmReturn != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmFieldGroupCreate() returned %d\n", dcgmReturn);
+        error_reporter << "dcgmFieldGroupCreate() returned " << dcgmReturn << "." << error_reporter.new_line;
+
         return dcgmReturn;
     }
 
@@ -1398,7 +1479,8 @@ dcgmReturn_t PhysicalGpu::DestroyDcgmGroups(void)
     dcgmReturn = dcgmFieldGroupDestroy(m_dcgmHandle, m_fieldGroupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmFieldGroupDestroy() returned %d\n", dcgmReturn);
+        error_reporter << "dcgmFieldGroupDestroy() returned " << dcgmReturn << "." << error_reporter.new_line;
+
         return dcgmReturn;
     }
 
@@ -1449,13 +1531,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed;
-                    std::cout << "GPU " << m_gpuId << ": "
-                              << "Testing Maximum "
-                              << "SmOccupancy/SmActivity/GrActivity "
-                              << "for " << std::setprecision(3) << m_parameters.m_duration << " seconds." << std::endl;
+                    info_reporter << std::fixed;
+                    info_reporter << "GPU " << m_gpuId << ": "
+                                  << "Testing Maximum "
+                                  << "SmOccupancy/SmActivity/GrActivity "
+                                  << "for " << std::setprecision(3) << m_parameters.m_duration << " seconds."
+                                  << info_reporter.new_line;
 
-                    std::cout << "-------------------------------------------------------------" << std::endl;
+                    info_reporter << "-------------------------------------------------------------"
+                                  << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -1481,16 +1565,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed;
+                info_reporter << std::fixed;
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: SmOccupancy generated 1.0, dcgm " << std::setprecision(3);
+                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                              << "]: SmOccupancy generated 1.0, dcgm " << std::setprecision(3);
 
                 ValuesDump(values, ValueType::Double, 1.0);
                 //<< value.value.dbl
 
-                std::cout << " at " << std::setprecision(3) << timeOffset << " seconds. threadsPerSm " << threadsPerSm
-                          << std::endl;
+                info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds. threadsPerSm "
+                              << threadsPerSm << "." << info_reporter.new_line;
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -1557,14 +1641,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                         auto ss    = std::cout.precision();
                         auto flags = std::cout.flags();
 
-                        std::cout << std::fixed;
+                        info_reporter << std::fixed;
 
-                        std::cout << "GPU " << m_gpuId << ": "
-                                  << "Testing SmOccupancy scaling by "
-                                  << "num threads for " << std::setprecision(3) << m_parameters.m_duration / 3.0
-                                  << " seconds." << std::endl;
+                        info_reporter << "GPU " << m_gpuId << ": "
+                                      << "Testing SmOccupancy scaling by "
+                                      << "num threads for " << std::setprecision(3) << m_parameters.m_duration / 3.0
+                                      << " seconds." << info_reporter.new_line;
 
-                        std::cout << "-------------------------------------------------------------" << std::endl;
+                        info_reporter << "-------------------------------------------------------------"
+                                      << info_reporter.new_line;
 
                         std::cout.precision(ss);
                         std::cout.flags(flags);
@@ -1594,17 +1679,18 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed;
+                    info_reporter << std::fixed;
 
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: SmOccupancy generated " << std::setprecision(3) << prevOccupancy << "/"
-                              << curOccupancy << ", dcgm ";
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: SmOccupancy generated " << std::setprecision(3) << prevOccupancy << "/"
+                                  << curOccupancy << ", dcgm ";
 
                     ValuesDump(values, ValueType::Double, 1.0);
                     //<< value.value.dbl
 
-                    std::cout << " at " << std::setprecision(3) << timeOffset << " seconds. threadsPerSm "
-                              << threadsPerSm << " / " << maxThreadsPerMultiProcessor << std::endl;
+                    info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds. threadsPerSm "
+                                  << threadsPerSm << " / " << maxThreadsPerMultiProcessor << "."
+                                  << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -1622,12 +1708,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
         {
             if (firstPartTick)
             {
-                if (m_parameters.m_report)
-                {
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: Slept to let previous test fall off." << std::endl;
-                }
-
                 if (nextPart == 1)
                 {
                     nextPart  = 2;
@@ -1639,6 +1719,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                     firstTick = true;
 
                     EndSubtest();
+
+                    if (m_parameters.m_report)
+                    {
+                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
+                    }
 
                     BeginSubtest("SM Occupancy - SM Count", "sm_occupancy_sm_count", true);
                 }
@@ -1658,14 +1744,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                         auto ss    = std::cout.precision();
                         auto flags = std::cout.flags();
 
-                        std::cout << std::fixed;
+                        info_reporter << std::fixed;
 
-                        std::cout << "GPU " << m_gpuId << ": "
-                                  << "Testing SmOccupancy scaling "
-                                  << "by SM count for " << std::setprecision(3) << m_parameters.m_duration / 3.0
-                                  << " seconds." << std::endl;
+                        info_reporter << "GPU " << m_gpuId << ": "
+                                      << "Testing SmOccupancy scaling "
+                                      << "by SM count for " << std::setprecision(3) << m_parameters.m_duration / 3.0
+                                      << " seconds." << info_reporter.new_line;
 
-                        std::cout << "----------------------------------------------------------" << std::endl;
+                        info_reporter << "----------------------------------------------------------"
+                                      << info_reporter.new_line;
 
                         std::cout.precision(ss);
                         std::cout.flags(flags);
@@ -1695,16 +1782,17 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed << std::setprecision(3);
+                    info_reporter << std::fixed << std::setprecision(3);
 
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: SmOccupancy generated " << prevOccupancy << "/" << curOccupancy << ", dcgm ";
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: SmOccupancy generated " << prevOccupancy << "/" << curOccupancy << ", dcgm ";
 
                     ValuesDump(values, ValueType::Double, 1.0);
                     //<< value.value.dbl
 
-                    std::cout << " at " << std::setprecision(3) << timeOffset << " seconds."
-                              << " numSms " << numSms << " / " << multiProcessorCount << std::endl;
+                    info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds."
+                                  << " numSms " << numSms << " / " << multiProcessorCount << "."
+                                  << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -1722,12 +1810,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
         {
             if (firstPartTick)
             {
-                if (m_parameters.m_report)
-                {
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: Slept to let previous test fall off." << std::endl;
-                }
-
                 if (nextPart == 2)
                 {
                     nextPart  = 3;
@@ -1739,6 +1821,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                     firstTick = true;
 
                     EndSubtest();
+
+                    if (m_parameters.m_report)
+                    {
+                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
+                    }
 
                     BeginSubtest("SM Occupancy - CPU Sleeps", "sm_occupancy_cpu_sleeps", true);
                 }
@@ -1758,14 +1846,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                         auto ss    = std::cout.precision();
                         auto flags = std::cout.flags();
 
-                        std::cout << std::fixed;
+                        info_reporter << std::fixed;
 
-                        std::cout << "GPU " << m_gpuId << ": "
-                                  << "Testing SmOccupancy scaling "
-                                  << "by CPU sleeps  for " << std::setprecision(3) << m_parameters.m_duration / 3.0
-                                  << " seconds." << std::endl;
+                        info_reporter << "GPU " << m_gpuId << ": "
+                                      << "Testing SmOccupancy scaling "
+                                      << "by CPU sleeps  for " << std::setprecision(3) << m_parameters.m_duration / 3.0
+                                      << " seconds." << info_reporter.new_line;
 
-                        std::cout << "----------------------------------------------------------" << std::endl;
+                        info_reporter << "----------------------------------------------------------"
+                                      << info_reporter.new_line;
 
                         std::cout.precision(ss);
                         std::cout.flags(flags);
@@ -1791,15 +1880,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed << std::setprecision(3);
+                    info_reporter << std::fixed << std::setprecision(3);
 
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: SmOccupancy generated " << prevOccupancy << "/" << curOccupancy << ", dcgm ";
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: SmOccupancy generated " << prevOccupancy << "/" << curOccupancy << ", dcgm ";
 
                     ValuesDump(values, ValueType::Double, 1.0);
                     //<< value.value.dbl
 
-                    std::cout << " at " << std::setprecision(3) << timeOffset << " seconds." << std::endl;
+                    info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds."
+                                  << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -1865,14 +1955,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                         auto ss    = std::cout.precision();
                         auto flags = std::cout.flags();
 
-                        std::cout << std::fixed;
+                        info_reporter << std::fixed;
 
-                        std::cout << "GPU " << m_gpuId << ": "
-                                  << "Testing SmActivity scaling by SM count "
-                                  << "for " << std::setprecision(3) << m_parameters.m_duration / 2.0 << " seconds."
-                                  << std::endl;
+                        info_reporter << "GPU " << m_gpuId << ": "
+                                      << "Testing SmActivity scaling by SM count "
+                                      << "for " << std::setprecision(3) << m_parameters.m_duration / 2.0 << " seconds."
+                                      << info_reporter.new_line;
 
-                        std::cout << "---------------------------------------------------------" << std::endl;
+                        info_reporter << "---------------------------------------------------------"
+                                      << info_reporter.new_line;
 
                         std::cout.precision(ss);
                         std::cout.flags(flags);
@@ -1902,16 +1993,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed << std::setprecision(3);
+                    info_reporter << std::fixed << std::setprecision(3);
 
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: SmActivity generated " << prevSmActivity << "/" << curSmActivity << ", dcgm ";
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: SmActivity generated " << prevSmActivity << "/" << curSmActivity << ", dcgm ";
 
                     ValuesDump(values, ValueType::Double, 1.0);
                     //<< value.value.dbl
 
-                    std::cout << " at " << std::setprecision(3) << timeOffset << " seconds. numSms " << numSms << " / "
-                              << multiProcessorCount << std::endl;
+                    info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds. numSms " << numSms
+                                  << " / " << multiProcessorCount << "." << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -1929,12 +2020,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
         {
             if (firstPartTick)
             {
-                if (m_parameters.m_report)
-                {
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: Slept to let previous test fall off." << std::endl;
-                }
-
                 if (nextPart == 1)
                 {
                     nextPart  = 2;
@@ -1946,6 +2031,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                     firstTick = true;
 
                     EndSubtest();
+
+                    if (m_parameters.m_report)
+                    {
+                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
+                    }
 
                     BeginSubtest("SM Activity - CPU Sleeps", "sm_activity_cpu_sleeps", true);
                 }
@@ -1965,12 +2056,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                         auto ss    = std::cout.precision();
                         auto flags = std::cout.flags();
 
-                        std::cout << std::fixed;
+                        info_reporter << std::fixed;
 
-                        std::cout << "GPU " << m_gpuId << ": "
-                                  << "Testing SmActivity scaling by CPU sleeps"
-                                  << " for " << std::setprecision(3) << m_parameters.m_duration / 2.0 << " seconds."
-                                  << std::endl;
+                        info_reporter << "GPU " << m_gpuId << ": "
+                                      << "Testing SmActivity scaling by CPU sleeps"
+                                      << " for " << std::setprecision(3) << m_parameters.m_duration / 2.0 << " seconds."
+                                      << info_reporter.new_line;
 
                         std::cout.precision(ss);
                         std::cout.flags(flags);
@@ -1996,15 +2087,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                     auto ss    = std::cout.precision();
                     auto flags = std::cout.flags();
 
-                    std::cout << std::fixed << std::setprecision(3);
+                    info_reporter << std::fixed << std::setprecision(3);
 
-                    std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: SmActivity: generated " << prevSmActivity << "/" << curSmActivity << ", dcgm ";
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: SmActivity: generated " << prevSmActivity << "/" << curSmActivity << ", dcgm ";
 
                     ValuesDump(values, ValueType::Double, 1.0);
                     //<< value.value.dbl
 
-                    std::cout << " at " << std::setprecision(3) << timeOffset << " seconds." << std::endl;
+                    info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds."
+                                  << info_reporter.new_line;
 
                     std::cout.precision(ss);
                     std::cout.flags(flags);
@@ -2050,7 +2142,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
 
         if (firstPartTick)
         {
-            if (firstTick) // First per-test per-GPU code here.
+            if (!firstTick) // First per-test per-GPU code here.
             {
                 firstTick = true;
 
@@ -2081,14 +2173,14 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(3);
+                info_reporter << std::fixed << std::setprecision(3);
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: GrActivity: generated " << prevHowFarIn << "/" << curHowFarIn << ", dcgm ";
+                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                              << "]: GrActivity: generated " << prevHowFarIn << "/" << curHowFarIn << ", dcgm ";
 
                 ValuesDump(values, ValueType::Double, 1.0); //<< value.value.dbl
 
-                std::cout << " at " << std::setprecision(3) << timeOffset << " seconds." << std::endl;
+                info_reporter << " at " << std::setprecision(3) << timeOffset << " seconds." << info_reporter.new_line;
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2181,10 +2273,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
             if (dcgmReturn != DCGM_ST_OK)
             {
-                fprintf(stderr,
-                        "dcgmEntitiesGetLatestValues failed with %d for gpuId %u PCIE test.\n",
-                        dcgmReturn,
-                        m_gpuId);
+                error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId " << m_gpuId
+                               << " PCIE test." << error_reporter.new_line;
 
                 return DCGM_ST_NOT_SUPPORTED;
             }
@@ -2198,10 +2288,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
             if (dcgmReturn != DCGM_ST_OK)
             {
-                fprintf(stderr,
-                        "dcgmEntitiesGetLatestValues failed with %d for gpuId %u PCIE test.\n",
-                        dcgmReturn,
-                        m_gpuId);
+                error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId " << m_gpuId
+                               << " PCIE test." << error_reporter.new_line;
 
                 return DCGM_ST_NOT_SUPPORTED;
             }
@@ -2231,16 +2319,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(0);
+                info_reporter << std::fixed << std::setprecision(0);
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: " << fieldHeading << " generated " << prevPerSecond << "/" << curPerSecond
-                          << ", dcgm ";
+                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                              << "]: " << fieldHeading << " generated " << prevPerSecond << "/" << curPerSecond
+                              << ", dcgm ";
 
                 ValuesDump(values, ValueType::Int64, 1000.0 * 1000.0);
                 //<< dcgmValue RSH - i64 / 10^6
 
-                std::cout << " MiB/sec (";
+                info_reporter << " MiB/sec (";
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2248,8 +2336,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
             double value;
 
+            /*
+             * Restore validation to driven vs. measured instead of against
+             * speed of light maximum.
+             */
             validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU, ValueType::Int64, 1000.0 * 1000.0, value)
-                         && Validate(80.0, 90.0, 100.0 * value / expectedRate, howFarIn);
+                         && Validate(prevPerSecond, curPerSecond, value, howFarIn);
 
             AppendSubtestRecord(prevPerSecond, value);
 
@@ -2258,9 +2350,11 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(0);
+                info_reporter << std::fixed << std::setprecision(0);
 
-                std::cout << 100.0 * value / expectedRate << "% speed-of-light)" << std::endl;
+                info_reporter << 100.0 * value / expectedRate << "% speed-of-light)"
+                              << ", PCIE version/lanes: " << pcieVersion << "/" << pcieLanes << "."
+                              << info_reporter.new_line;
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2292,7 +2386,8 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmGetDeviceTopology failed with %d for gpuId %u.\n", dcgmReturn, m_gpuId);
+        DCGM_LOG_WARNING << "dcgmGetDeviceTopology failed with " << dcgmReturn << " for gpuId " << m_gpuId << "."
+                         << Reporter<plog::none>::Flags::new_line;
 
         return DCGM_ST_NOT_SUPPORTED;
     }
@@ -2320,9 +2415,10 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
         maxNumLinks = numNvLinks;
     }
 
-    if (!maxNumLinks)
+    if (maxNumLinks == 0)
     {
-        fprintf(stderr, "gpuId %u has no NvLink peers. Skipping test.\n", m_gpuId);
+        warn_reporter << "gpuId " << m_gpuId << " has no NvLink peers. Skipping test." << warn_reporter.new_line;
+
         return DCGM_ST_NOT_SUPPORTED;
     }
 
@@ -2332,14 +2428,16 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     dcgmReturn             = dcgmGetDeviceAttributes(m_dcgmHandle, bestGpuId, &peerDeviceAttr);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmGetDeviceAttributes failed with %d for gpuId %u.\n", dcgmReturn, bestGpuId);
+        error_reporter << "dcgmGetDeviceAttributes failed with " << dcgmReturn << " for gpuId " << bestGpuId << "."
+                       << error_reporter.new_line;
+
         return dcgmReturn;
     }
 
     peerPciBusId = std::string(peerDeviceAttr.identifiers.pciBusId);
     nvLinks      = maxNumLinks;
 
-    fprintf(stdout, "The best peer of gpuId %u is gpuId %u, numLinks %u.\n", m_gpuId, bestGpuId, nvLinks);
+    DCGM_LOG_INFO << "The best peer of gpuId %u is gpuId " << bestGpuId << ", numLinks " << nvLinks << ".";
 
     return DCGM_ST_OK;
 }
@@ -2351,8 +2449,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
 
     if (m_dcgmDeviceAttr.settings.migModeEnabled != 0) // MIG: can not do this.
     {
-        std::cerr << "GPU " << m_gpuId << ": "
-                  << "Can not run NvLink tests in MIG mode." << std::endl;
+        warn_reporter << "GPU " << m_gpuId << ": Can not run NvLink tests in MIG mode." << warn_reporter.new_line;
 
         return DCGM_ST_GENERIC_ERROR;
     }
@@ -2395,6 +2492,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
             if (!firstTick) // First per-test per-GPU code here.
             {
                 firstTick = true;
+
                 BeginSubtest(fieldHeading, subtestTag, false);
             }
 
@@ -2404,29 +2502,9 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
             }
         }
 
-        dcgmGroupEntityPair_t entity;
-        unsigned short fieldId { DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY };
-        dcgmFieldValue_v2 value2 {};
-
-        entity.entityGroupId = DCGM_FE_GPU;
-        entity.entityId      = worker.Entities()[DCGM_FE_GPU];
-
-        dcgmReturn_t dcgmReturn
-            = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
-
-        if (dcgmReturn != DCGM_ST_OK)
-        {
-            fprintf(
-                stderr, "dcgmEntitiesGetLatestValues failed with %d for gpuId %u NvLink test.\n", dcgmReturn, m_gpuId);
-
-            return DCGM_ST_NOT_SUPPORTED;
-        }
-
-        unsigned int majorVersion = (value2.value.i64 & 0xffff0000) >> 16;
-
         unsigned int nvLinkMbPerSec { 0 };
 
-        switch (majorVersion)
+        switch (m_majorComputeCapability)
         {
             case 0:
             case 1:
@@ -2470,16 +2548,16 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(0);
+                info_reporter << std::fixed << std::setprecision(0);
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: " << fieldHeading << " generated " << prevPerSecond << "/" << curPerSecond
-                          << ", dcgm ";
+                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                              << "]: " << fieldHeading << " generated " << prevPerSecond << "/" << curPerSecond
+                              << ", dcgm ";
 
                 ValuesDump(values, ValueType::Int64, 1000.0 * 1000.0);
                 // << value.value.i64 / 1000 / 1000
 
-                std::cout << " MiB/sec (";
+                info_reporter << " MiB/sec (";
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2497,9 +2575,9 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(0);
+                info_reporter << std::fixed << std::setprecision(0);
 
-                std::cout << 100.0 * value / nvLinkMbPerSec << "% speed-of-light)" << std::endl;
+                info_reporter << 100.0 * value / nvLinkMbPerSec << "% speed-of-light)." << info_reporter.new_line;
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2556,14 +2634,20 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
         double prevDramAct;
         double curDramAct;
         double prevPerSecond;
-        unsigned int eccSupport;
+        unsigned int eccAffectsBandwidth;
 
         worker.Input() >> howFarIn;
         worker.Input() >> prevDramAct;
         worker.Input() >> curDramAct;
         worker.Input() >> prevPerSecond;
-        worker.Input() >> eccSupport;
+        worker.Input() >> eccAffectsBandwidth;
         worker.Input().ignore(MaxStreamLength, '\n');
+
+        double bandwidthDivisor = 1.0;
+        if (eccAffectsBandwidth != 0)
+        {
+            bandwidthDivisor = 9.0 / 8.0; /* 1 parity bit per 8 bits = 9/8ths expected bandwidth */
+        }
 
         if (valid)
         {
@@ -2572,15 +2656,17 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
                 auto ss    = std::cout.precision();
                 auto flags = std::cout.flags();
 
-                std::cout << std::fixed << std::setprecision(3);
+                info_reporter << std::fixed << std::setprecision(3);
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: DramUtil generated " << prevDramAct << "/" << curDramAct << ", dcgm ";
+                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                              << "]: DramUtil generated " << prevDramAct << "/" << curDramAct << ", dcgm ";
 
 
-                ValuesDump(values, ValueType::Double, (eccSupport != 0) ? 9.0 / 8.0 : 1.0); //<< value.value.dbl
+                ValuesDump(values, ValueType::Double, bandwidthDivisor); //<< value.value.dbl
 
-                std::cout << " (" << std::setprecision(1) << prevPerSecond << " GiB/sec)" << std::endl;
+                info_reporter << " (" << std::setprecision(1) << prevPerSecond << " GiB/sec)"
+                              << ", bandwidthDivisor " << std::setprecision(3) << bandwidthDivisor << "."
+                              << info_reporter.new_line;
 
                 std::cout.precision(ss);
                 std::cout.flags(flags);
@@ -2588,12 +2674,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
 
             double value;
 
-            validated &= ValueGet(values,
-                                  worker.Entities(),
-                                  DCGM_FE_GPU_I,
-                                  ValueType::Double,
-                                  (eccSupport != 0) ? 9.0 / 8.0 : 1.0,
-                                  value)
+            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_I, ValueType::Double, bandwidthDivisor, value)
                          && Validate(prevDramAct, curDramAct, value, howFarIn);
 
             AppendSubtestRecord(prevDramAct, value);
@@ -2612,6 +2693,47 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
     return rtSt;
 }
 
+/*****************************************************************************/
+/**
+ * CUDA version 11 on A10x (x other than 0) is currently unoptimized for
+ * FP32 and TENSOR operations. We check for this and adjust our activity
+ * expectations.
+ */
+bool PhysicalGpu::IsComputeUnoptimized(unsigned int fieldId)
+{
+#if (CUDA_VERSION_USED >= 11)
+    switch (fieldId)
+    {
+        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            return (((m_majorComputeCapability == 8) && (m_minorComputeCapability >= 6))
+                    || (m_majorComputeCapability > 8));
+
+        default:
+            return false;
+    }
+#else
+    return false;
+#endif
+}
+
+/*****************************************************************************/
+/**
+ * On A10x or TU104, some GPUs have non-deterministic hardware capabilities.
+ * This checks for that for the field in question.
+ */
+bool PhysicalGpu::IsHardwareNonDeterministic(unsigned int fieldId)
+{
+    switch (fieldId)
+    {
+        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            return ((m_majorComputeCapability == 8) && (m_minorComputeCapability == 6))
+                   || ((m_majorComputeCapability == 7) && (m_minorComputeCapability == 5));
+
+        default:
+            return false;
+    }
+}
 
 /*****************************************************************************/
 dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
@@ -2641,79 +2763,83 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
             testTag    = "tensor_active";
             break;
         default:
-            fprintf(stderr, "fieldId %u is unhandled.\n", m_parameters.m_fieldId);
+            error_reporter << "fieldId " << m_parameters.m_fieldId << " is unhandled." << error_reporter.new_line;
 
             return DCGM_ST_GENERIC_ERROR;
     }
 
-    SetTickHandler([this, firstTick = false, testHeader, testTag /*, prevValue*/](
-                       size_t index,
-                       bool valid,
-                       std::map<Entity, dcgmFieldValue_v1> &values,
-                       DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
-        unsigned int part;
-        unsigned int parts;
-        bool firstPartTick = worker.IsFirstTick();
+    double limit = IsComputeUnoptimized(m_parameters.m_fieldId) ? 0.4 : 0.5;
 
-        worker.GetParts(part, parts);
+    limit = IsHardwareNonDeterministic(m_parameters.m_fieldId) ? 0.2 : limit;
 
-        if (firstPartTick)
-        {
-            if (!firstTick) // First per-test per-GPU code here.
+    SetTickHandler(
+        [this, firstTick = false, testHeader, testTag, limit](size_t index,
+                                                              bool valid,
+                                                              std::map<Entity, dcgmFieldValue_v1> &values,
+                                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
+            bool validated { true };
+            unsigned int part;
+            unsigned int parts;
+            bool firstPartTick = worker.IsFirstTick();
+
+            worker.GetParts(part, parts);
+
+            if (firstPartTick)
             {
-                firstTick = true;
+                if (!firstTick) // First per-test per-GPU code here.
+                {
+                    firstTick = true;
 
-                BeginSubtest(testHeader, testTag, false);
+                    BeginSubtest(testHeader, testTag, false);
+                }
+
+                if (!m_tester->IsFirstTick()) // Add first per test code here.
+                {
+                    m_tester->SetFirstTick();
+                }
             }
 
-            if (!m_tester->IsFirstTick()) // Add first per test code here.
+            double howFarIn;
+            double gflops;
+            double gflops2;
+
+            worker.Input() >> howFarIn;
+            worker.Input() >> gflops;
+            worker.Input() >> gflops2;
+            worker.Input().ignore(MaxStreamLength, '\n');
+
+            if (valid)
             {
-                m_tester->SetFirstTick();
-            }
-        }
+                if (m_parameters.m_report)
+                {
+                    auto ss    = std::cout.precision();
+                    auto flags = std::cout.flags();
 
-        double howFarIn;
-        double gflops;
-        double gflops2;
+                    info_reporter << std::fixed << std::setprecision(3);
 
-        worker.Input() >> howFarIn;
-        worker.Input() >> gflops;
-        worker.Input() >> gflops2;
-        worker.Input().ignore(MaxStreamLength, '\n');
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: " << testHeader << ": generated ???, dcgm ";
 
-        if (valid)
-        {
-            if (m_parameters.m_report)
-            {
-                auto ss    = std::cout.precision();
-                auto flags = std::cout.flags();
+                    ValuesDump(values, ValueType::Double, 1.0); //<< value.value.dbl
 
-                std::cout << std::fixed << std::setprecision(3);
+                    info_reporter << " (" << std::setprecision(1) << gflops << " gflops)." << info_reporter.new_line;
 
-                std::cout << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                          << "]: " << testHeader << ": generated ???, dcgm ";
+                    std::cout.precision(ss);
+                    std::cout.flags(flags);
+                }
 
-                ValuesDump(values, ValueType::Double, 1.0); //<< value.value.dbl
+                double value;
 
-                std::cout << " (" << std::setprecision(1) << gflops << " gflops)" << std::endl;
+                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                             && Validate(limit, 0.9, value, howFarIn);
 
-                std::cout.precision(ss);
-                std::cout.flags(flags);
+                ////prevValue = value;
+
+                AppendSubtestRecord(0.0, value);
             }
 
-            double value;
-
-            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                         && Validate(0.90, 0.90, value, howFarIn);
-
-            ////prevValue = value;
-
-            AppendSubtestRecord(0.0, value);
-        }
-
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
-    });
+            return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        });
 
     rtSt = CommandAll(false,
                       "R %u %.3f %.3f %s\n",

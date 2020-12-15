@@ -15,13 +15,13 @@
  */
 #pragma once
 
-#include "DcgmFvBuffer.h"
-#include "DcgmProtobuf.h"
 #include "dcgm_core_communication.h"
 #include "dcgm_core_structs.h"
 #include "dcgm_module_structs.h"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
+#include <DcgmFvBuffer.h>
+#include <DcgmProtobuf.h>
 #include <stdexcept>
 #include <string>
 
@@ -93,6 +93,11 @@ public:
     {
         DcgmLogging::initLogToHostengine(m_coreProxy.GetLoggerSeverity(0));
         DcgmLogging::setHostEngineCallback((hostEngineAppenderCallbackFp_t)m_coreCallbacks.loggerfunc);
+        char const *moduleName;
+        if (DCGM_ST_OK == dcgmModuleIdToName(static_cast<dcgmModuleId_t>(moduleId), &moduleName))
+        {
+            DcgmLogging::setHostEngineComponentName(moduleName);
+        }
         DCGM_LOG_DEBUG << "Initialized logging for module " << moduleId;
         DCGM_LOG_DEBUG << "Logger address " << DcgmLogging::getLoggerAddress();
     }
@@ -105,7 +110,7 @@ public:
             return;
         }
 
-        DcgmLoggingSeverity_t severity = m_coreProxy.GetLoggerSeverity(0, BASE_LOGGER);
+        DcgmLoggingSeverity_t severity = m_coreProxy.GetLoggerSeverity(0, static_cast<loggerCategory_t>(BASE_LOGGER));
         if (severity == DcgmLoggingSeverityUnspecified)
         {
             DCGM_LOG_ERROR << "Encountered error while fetching severity for BASE_LOGGER";

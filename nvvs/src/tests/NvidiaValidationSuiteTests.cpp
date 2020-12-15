@@ -45,8 +45,9 @@
         argc++;                             \
     } while (0)
 
-bool incompatibleGpus = false;
-bool migEnabled       = false;
+bool incompatibleGpus       = false;
+bool migEnabled             = false;
+unsigned int hierarchyCount = 4;
 
 class WrapperNvidiaValidationSuite : protected NvidiaValidationSuite
 {
@@ -82,12 +83,15 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v
     }
     else if (migEnabled && hierarchy != nullptr)
     {
-        hierarchy->count                                = 1;
-        hierarchy->entityList[0].parent.entityId        = 0;
-        hierarchy->entityList[0].parent.entityGroupId   = DCGM_FE_GPU;
-        hierarchy->entityList[0].entity.entityId        = 0;
-        hierarchy->entityList[0].entity.entityGroupId   = DCGM_FE_GPU_I;
-        hierarchy->entityList[0].info.nvmlProfileSlices = DCGM_MAX_INSTANCES_PER_GPU;
+        hierarchy->count = hierarchyCount;
+        for (int i = 0; i < hierarchy->count; i++)
+        {
+            hierarchy->entityList[i].parent.entityId        = i;
+            hierarchy->entityList[i].parent.entityGroupId   = DCGM_FE_GPU;
+            hierarchy->entityList[i].entity.entityId        = i * DCGM_MAX_INSTANCES_PER_GPU;
+            hierarchy->entityList[i].entity.entityGroupId   = DCGM_FE_GPU_I;
+            hierarchy->entityList[i].info.nvmlProfileSlices = DCGM_MAX_INSTANCES_PER_GPU;
+        }
     }
 
     return DCGM_ST_OK;
@@ -136,6 +140,16 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list")
     nvvsCommon.m_gpus[0] = nullptr;
     nvvsCommon.m_gpus[1] = nullptr;
 
+    // Make sure we pass with 1 MIG GPU
+    migEnabled = true;
+    gpuIndices.clear();
+    gpuIndices.push_back(0);
+    incompatibleGpus = false;
+    errorString      = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
+    REQUIRE(errorString.empty());
+    REQUIRE(nvvsCommon.m_gpus[0] == visibleGpus[0]);
+    nvvsCommon.m_gpus[0] = nullptr;
+
     // Make sure we fail if the slice configuration is wrong with 1 GPU
     incompatibleGpus = true;
     gpuIndices.clear();
@@ -154,6 +168,28 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list")
     errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
     REQUIRE(!errorString.empty());
     REQUIRE(errorString.find("Cannot run diagnostic: CUDA does not support enumerating GPUs") == 0);
+
+    // Make sure we fail if we have a GPU in MIG mode are we are running on more than 1 GPU even if it isn't in the list
+    migEnabled       = true;
+    incompatibleGpus = false;
+    gpuIndices.clear();
+    gpuIndices.push_back(1);
+    gpuIndices.push_back(2);
+    errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
+    REQUIRE(!errorString.empty());
+    REQUIRE(errorString.find("Cannot run diagnostic: CUDA does not support enumerating GPUs") == 0);
+
+    // Make sure we fail if there are GPUs on the system that aren't MIG enabled with GPUs that are MIG enabled
+    migEnabled       = true;
+    incompatibleGpus = false;
+    hierarchyCount   = 2; // this makes 2 GPUs that are MIG enabled and two that aren't
+    gpuIndices.clear();
+    gpuIndices.push_back(0);
+    errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
+    REQUIRE(!errorString.empty());
+    REQUIRE(
+        errorString
+        == "Cannot run diagnostic: CUDA does not support enumerating GPUs when one more GPUs has MIG mode enabled and one or more GPUs has MIG mode disabled.");
 }
 
 SCENARIO("NVVS correctly processes command line arguments")
@@ -278,7 +314,7 @@ SCENARIO("findTestName finds the test if it exists")
     CHECK(skip == nonexistent);
 }
 
-SCENARIO("overrideParameters overrides the correct parameters")
+SCENARIO("overrideparameters overrides the correct parameters")
 {
     SETUP();
     std::string paramString = "sm stress.test_duration=5";
@@ -324,7 +360,7 @@ void WrapperNvidiaValidationSuite::WrapperInitializeParameters(const std::string
 void WrapperNvidiaValidationSuite::WrapperEnumerateAllVisibleTests()
 {
     std::unique_ptr<GpuSet> gpuSet = std::make_unique<GpuSet>();
-    tf                             = new TestFramework(false, gpuSet.get());
+    m_tf                           = new TestFramework(false, gpuSet.get());
     enumerateAllVisibleTests();
 }
 

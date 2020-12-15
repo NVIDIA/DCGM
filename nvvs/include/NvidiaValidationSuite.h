@@ -40,7 +40,6 @@
 #include <string>
 #include <vector>
 
-#define NVVS_VERSION      "1.7"
 #define MIN_MAJOR_VERSION 346
 #define MAX_MAJOR_VERSION 500
 
@@ -108,7 +107,7 @@ protected:
 
     // classes
     ConfigFileParser_v2 *parser;
-    TestFramework *tf;
+    TestFramework *m_tf;
 
     // parsing variables
     std::string configFile;
@@ -122,6 +121,7 @@ protected:
     struct sigaction restoreSigAction;
     unsigned int initWaitTime;
     NvvsSystemChecker m_sysCheck;
+    ParameterValidator m_pv;
 
     /***************************PROTECTED********************************/
 protected:

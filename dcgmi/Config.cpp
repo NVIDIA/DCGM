@@ -710,7 +710,7 @@ SetConfig::SetConfig(std::string hostname, Config obj)
     : Command()
     , configObj(std::move(obj))
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -719,7 +719,7 @@ SetConfig::SetConfig(std::string hostname, Config obj)
 /*****************************************************************************/
 dcgmReturn_t SetConfig::DoExecuteConnected()
 {
-    return configObj.RunSetConfig(mNvcmHandle);
+    return configObj.RunSetConfig(m_dcgmHandle);
 }
 
 /*****************************************************************************
@@ -734,8 +734,8 @@ GetConfig::GetConfig(std::string hostname, Config obj, bool verbose, bool json)
     , configObj(std::move(obj))
     , verbose(verbose)
 {
-    mHostName = std::move(hostname);
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    m_json     = json;
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -744,7 +744,7 @@ GetConfig::GetConfig(std::string hostname, Config obj, bool verbose, bool json)
 /*****************************************************************************/
 dcgmReturn_t GetConfig::DoExecuteConnected()
 {
-    return configObj.RunGetConfig(mNvcmHandle, verbose, mJson);
+    return configObj.RunGetConfig(m_dcgmHandle, verbose, m_json);
 }
 
 /*****************************************************************************
@@ -757,7 +757,7 @@ EnforceConfig::EnforceConfig(std::string hostname, Config obj)
     : Command()
     , configObj(std::move(obj))
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -765,5 +765,5 @@ EnforceConfig::EnforceConfig(std::string hostname, Config obj)
 
 dcgmReturn_t EnforceConfig::DoExecuteConnected()
 {
-    return configObj.RunEnforceConfig(mNvcmHandle);
+    return configObj.RunEnforceConfig(m_dcgmHandle);
 }

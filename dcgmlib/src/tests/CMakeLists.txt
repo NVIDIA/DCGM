@@ -14,6 +14,7 @@
 set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Catch2 REQUIRED)
+find_package(Threads REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -27,15 +28,34 @@ if (BUILD_TESTING)
             CacheTests.cpp
             MigManagerTests.cpp
             ApiTests.cpp
+            GpuInstanceTests.cpp
+    )
+
+    target_link_libraries(dcgmlibtests PRIVATE
+            dcgmtest_interface
+            common_protobuf_interface
+            common_interface
+            dcgm_interface
     )
     
     target_link_libraries(dcgmlibtests
         PRIVATE
-            dcgm 
-            dcgmtest_interface
-            dcgm_interface
-            common_objects
+            -Wl,--whole-archive
+                modules_objects
+                dcgm_common
+                dcgm_logging
+                dcgm_mutex
+                dcgm_static_private
+                transport_objects
+                sdk_nvml_essentials_objects
+                sdk_nvml_loader
+            -Wl,--no-whole-archive
+            common_protobuf_objects
+            dcgm
             Catch2::Catch2
+            ${CMAKE_THREAD_LIBS_INIT}
+            rt
+            dl
     )
     
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

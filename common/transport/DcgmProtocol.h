@@ -142,10 +142,10 @@ public:
     unsigned int GetRequestId();
 
 private:
-    dcgm_message_header_t m_messageHdr; /* Sender populates the message to be sent */
-    std::vector<char> m_msgBytes;       /* The bytes of the message that come after m_messageHdr on the
-                                           socket stream. The .size() member of this is the size of
-                                           the message. This should match m_messageHdr.length */
+    dcgm_message_header_t m_messageHdr {}; /*!< Sender populates the message to be sent */
+    std::vector<char> m_msgBytes;          /*!< The bytes of the message that come after m_messageHdr on the
+                                               socket stream. The .size() member of this is the size of
+                                               the message. This should match m_messageHdr.length */
 };
 
 #endif /* DCGM_PROTOCOL_H */

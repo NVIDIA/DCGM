@@ -232,17 +232,27 @@ public:
             return AsyncWaitResult::Destroyed;
         }
 
-        auto res = sem_trywait(&m_systemSemaphore);
-        if (res == 0)
+        for (;;)
         {
-            return m_markForDestroy ? AsyncWaitResult::Destroyed : AsyncWaitResult::Ok;
-        }
+            auto res = sem_trywait(&m_systemSemaphore);
+            if (res == 0)
+            {
+                return m_markForDestroy ? AsyncWaitResult::Destroyed : AsyncWaitResult::Ok;
+            }
 
-        auto err = errno;
-        if (err != EAGAIN)
-        {
-            DCGM_LOG_ERROR << "Unable to trywait a semaphore. Errno: " << err;
-            throw std::system_error(std::error_code(err, std::generic_category()));
+            auto err = errno;
+            if (err == EINTR)
+            {
+                DCGM_LOG_DEBUG << "Semaphore was interrupted by a signal";
+                continue;
+            }
+            if (err != EAGAIN)
+            {
+                DCGM_LOG_ERROR << "Unable to trywait a semaphore. Errno: " << err;
+                throw std::system_error(std::error_code(err, std::generic_category()));
+            }
+
+            break;
         }
 
         return AsyncWaitResult::LockNeeded;
@@ -282,17 +292,27 @@ public:
         auto nsecs = time_point_cast<nanoseconds>(waitUntil) - time_point_cast<nanoseconds>(secs);
         timespec ts { secs.time_since_epoch().count(), nsecs.count() };
 
-        int res = sem_timedwait(&m_systemSemaphore, &ts);
-        if (res == 0)
+        for (;;)
         {
-            return m_markForDestroy ? TimedWaitResult::Destroyed : TimedWaitResult::Ok;
-        }
+            int res = sem_timedwait(&m_systemSemaphore, &ts);
+            if (res == 0)
+            {
+                return m_markForDestroy ? TimedWaitResult::Destroyed : TimedWaitResult::Ok;
+            }
 
-        auto err = errno;
-        if (err != ETIMEDOUT)
-        {
-            DCGM_LOG_ERROR << "Unable to timedwait for a semaphore. Errno: " << err;
-            throw std::system_error(std::error_code(err, std::generic_category()));
+            auto err = errno;
+            if (err == EINTR)
+            {
+                DCGM_LOG_DEBUG << "Semaphore was interrupted by a signal";
+                continue;
+            }
+            if (err != ETIMEDOUT)
+            {
+                DCGM_LOG_ERROR << "Unable to timedwait for a semaphore. Errno: " << err;
+                throw std::system_error(std::error_code(err, std::generic_category()));
+            }
+
+            break;
         }
 
         if (m_markForDestroy)

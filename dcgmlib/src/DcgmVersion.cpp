@@ -19,7 +19,7 @@
 #include <DcgmStringHelpers.h>
 
 
-dcgmReturn_t DECLDIR GetVersionInfo(dcgmVersionInfo_t *pVersionInfo)
+dcgmReturn_t GetVersionInfo(dcgmVersionInfo_t *pVersionInfo)
 {
     if (nullptr == pVersionInfo)
     {

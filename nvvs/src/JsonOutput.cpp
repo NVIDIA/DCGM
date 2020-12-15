@@ -17,6 +17,7 @@
 #include "JsonOutput.h"
 #include "NvidiaValidationSuite.h"
 #include "NvvsCommon.h"
+#include <DcgmBuildInfo.hpp>
 
 /* This class fills in a json object in the format:
  * {
@@ -67,7 +68,7 @@ void JsonOutput::header(const std::string &headerString)
     }
     else
     {
-        jv[NVVS_VERSION_STR] = NVVS_VERSION;
+        jv[NVVS_VERSION_STR] = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
     }
     jv[NVVS_HEADERS][headerIndex][NVVS_HEADER] = headerString;
 }
@@ -76,8 +77,8 @@ bool isSoftwareTest(const std::string &testName)
 {
     if (testName == "Blacklist" || testName == "NVML Library" || testName == "CUDA Main Library"
         || testName == "CUDA Toolkit Libraries" || testName == "Permissions and OS-related Blocks"
-        || testName == "Persistence Mode" || testName == "Environmental Variables" || testName == "Page Retirement"
-        || testName == "Graphics Processes" || testName == "Inforom")
+        || testName == "Persistence Mode" || testName == "Environmental Variables"
+        || testName == "Page Retirement/Row Remap" || testName == "Graphics Processes" || testName == "Inforom")
     {
         return true;
     }
@@ -292,7 +293,7 @@ void JsonOutput::AddTrainingResult(const std::string &trainingOut)
 {
     if (jv[NVVS_VERSION_STR].empty())
     {
-        jv[NVVS_VERSION_STR] = NVVS_VERSION;
+        jv[NVVS_VERSION_STR] = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
     }
 
     jv[NVVS_TRAINING_MSG] = trainingOut;

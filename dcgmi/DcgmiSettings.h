@@ -29,7 +29,7 @@ public:
     DcgmiSettingsSetLoggingSeverity(const std::string &hostname,
                                     const std::string &targetLogger,
                                     const std::string &targetSeverity,
-                                    const bool outputAsJson);
+                                    bool outputAsJson);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

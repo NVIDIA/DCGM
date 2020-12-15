@@ -13,22 +13,43 @@
 # limitations under the License.
 add_library(modules_interface INTERFACE)
 
-macro(dcgm_macro_modules_link_options module)
-  target_link_options(
-    ${module}
-    PRIVATE
-    -Xlinker
-    --version-script=${CMAKE_SOURCE_DIR}/modules/modules.linux_def
-    )
-endmacro()
+target_link_libraries(modules_interface
+  INTERFACE
+    dcgm_interface
+    common_protobuf_interface
+    module_common_interface
+    module_common_interface
+)
+target_include_directories(modules_interface
+  INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
-target_link_libraries(modules_interface INTERFACE dcgm_interface common_protobuf_objects module_common_interface module_common_interface)
-target_include_directories(modules_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_library(modules_objects OBJECT)
-target_link_libraries(modules_objects PUBLIC modules_interface common_protobuf_objects module_common_objects)
-target_sources(modules_objects PRIVATE
+add_library(modules_objects STATIC)
+target_link_libraries(modules_objects
+  PUBLIC
+    modules_interface
+    module_common_objects
+)
+target_sources(modules_objects
+  PRIVATE
     DcgmModuleApi.cpp
     DcgmModule.cpp
     core/DcgmModuleCore.cpp
-    )
+)
+
+set(LOCAL_CURRENT_LIST_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "")
+
+function(define_dcgm_module lib_name)
+  target_link_libraries(${lib_name}
+    PRIVATE
+      modules_objects
+      dcgm_common
+      dcgm_logging
+      dcgm_mutex
+      dcgm
+  )
+  target_compile_definitions(${lib_name} PRIVATE DCGM_API_EXPORT=1)
+  target_link_options(${lib_name} PRIVATE -Wl,--version-script,${LOCAL_CURRENT_LIST_DIR}/dcgm_modules.linux_def
+  )
+endfunction()

@@ -50,7 +50,7 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , tpVect()
     , whitelist(0)
     , fwcfg()
-    , tf(0)
+    , m_tf(nullptr)
     , configFile()
     , debugFile(NVVS_LOGGING_DEFAULT_NVVS_LOGFILE)
     , debugLogLevel("")
@@ -61,6 +61,7 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , restoreSigAction {}
     , initWaitTime(120)
     , m_sysCheck()
+    , m_pv()
 {
     parser = new ConfigFileParser_v2("/etc/nvidia-validation-suite/nvvs.conf", fwcfg);
 
@@ -80,7 +81,7 @@ NvidiaValidationSuite::~NvidiaValidationSuite()
     {
         delete (*it);
     }
-    delete tf;
+    delete m_tf;
     delete whitelist;
     delete parser;
 
@@ -218,6 +219,7 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
 {
     std::string errorStr;
     bool isMigModeEnabled   = false;
+    bool anyMigModeDisabled = false;
     unsigned int numGpus    = gpuIndices.size();
     unsigned int mgpusIndex = 0;
     std::vector<unsigned int> originalList(gpuIndices);
@@ -228,20 +230,6 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
 
     for (size_t i = 0; i < visibleGpus.size(); i++)
     {
-        if (IsGpuIncluded(visibleGpus[i]->GetGpuId(), originalList) == false)
-        {
-            continue;
-        }
-
-        nvvsCommon.m_gpus[mgpusIndex] = visibleGpus[i];
-        mgpusIndex++;
-
-        if (originalList.empty())
-        {
-            // If our originally specified list was empty, record the GPUs being used
-            gpuIndices.push_back(visibleGpus[i]->getDeviceIndex());
-        }
-
         dcgmMigValidity_t mv = visibleGpus[i]->IsMigModeDiagCompatible();
         if (mv.migInvalidConfiguration == true)
         {
@@ -252,6 +240,8 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
             errorStr = buf.str();
             return errorStr;
         }
+
+        anyMigModeDisabled = !mv.migEnabled || anyMigModeDisabled;
 
         isMigModeEnabled = isMigModeEnabled || mv.migEnabled;
         if (isMigModeEnabled && numGpus > 1)
@@ -265,6 +255,30 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
             errorStr = buf.str();
             return errorStr;
         }
+
+        if (IsGpuIncluded(visibleGpus[i]->GetGpuId(), originalList) == false)
+        {
+            continue;
+        }
+
+        nvvsCommon.m_gpus[mgpusIndex] = visibleGpus[i];
+        mgpusIndex++;
+
+        if (originalList.empty())
+        {
+            // If our originally specified list was empty, record the GPUs being used
+            gpuIndices.push_back(visibleGpus[i]->getDeviceIndex());
+        }
+    }
+
+    if (anyMigModeDisabled && isMigModeEnabled)
+    {
+        std::stringstream buf;
+        buf << "Cannot run diagnostic: CUDA does not support enumerating GPUs when one more GPUs has MIG mode enabled "
+            << "and one or more GPUs has MIG mode disabled.";
+        errorStr = buf.str();
+        DCGM_LOG_ERROR << errorStr;
+        return errorStr;
     }
 
     if (isMigModeEnabled && !gpuIndices.empty())
@@ -305,6 +319,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     DCGM_LOG_INFO << "Initialized NVVS logger";
     logInit = true;
 
+    /*
     startTimer();
 
     // Mark this as the point to return too if DCGM's init takes too long
@@ -320,6 +335,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
         return buf.str();
     }
+    */
 
     dcgmReturn_t ret = dcgmHandle.ConnectToDcgm(nvvsCommon.dcgmHostname);
     if (ret != DCGM_ST_OK)
@@ -329,7 +345,9 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return buf.str();
     }
 
+    /*
     stopTimer();
+    */
 
     CheckDriverVersion();
 
@@ -409,11 +427,11 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     // construct the test framework now that we have the GPU and test objects
     // Only pass gpuSets[0] because there is always only 1 group of GPUs. This will
     // be refactored in a separate check-in.
-    tf = new TestFramework(nvvsCommon.jsonOutput, gpuSets[0].get());
-    tf->loadPlugins();
+    m_tf = new TestFramework(nvvsCommon.jsonOutput, gpuSets[0].get());
+    m_tf->loadPlugins();
     if (info.size() > 0)
     {
-        tf->addInfoStatement(info);
+        m_tf->addInfoStatement(info);
     }
 
     ValidateSubtestParameters();
@@ -447,7 +465,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
                 fillTestVectors(NVVS_SUITE_LONG, Test::NVVS_CLASS_PERFORMANCE, gpuSets[setIndex].get());
             }
 
-            tf->go(gpuSets);
+            m_tf->go(gpuSets);
 
             float pcnt = static_cast<float>(i + 1) / static_cast<float>(iterations);
             if (nvvsCommon.jsonOutput == false)
@@ -457,7 +475,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
             }
         }
 
-        tf->CalculateAndSaveGoldenValues();
+        m_tf->CalculateAndSaveGoldenValues();
     }
     else
     {
@@ -465,7 +483,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
         // Execute the tests... let the TF catch all exceptions and decide
         // whether to throw them higher.
-        tf->go(gpuSets);
+        m_tf->go(gpuSets);
     }
 
     return "";
@@ -483,11 +501,11 @@ void NvidiaValidationSuite::banner()
 /*****************************************************************************/
 void NvidiaValidationSuite::ValidateSubtestParameters()
 {
-    auto parms = tf->GetSubtestParameters();
+    auto parms = m_tf->GetSubtestParameters();
 
-    ParameterValidator pv(parms);
+    m_pv.Initialize(parms);
 
-    InitializeParameters(nvvsCommon.parmsString, pv);
+    InitializeParameters(nvvsCommon.parmsString, m_pv);
 }
 
 /*****************************************************************************/
@@ -496,7 +514,7 @@ void NvidiaValidationSuite::enumerateAllVisibleTests()
     // for now just use the testVec stored in the Framework
     // but eventually obfuscate this some
 
-    testVect = tf->getTests();
+    testVect = m_tf->getTests();
 }
 
 bool NvidiaValidationSuite::HasGenericSupport(const std::string &gpuBrand, uint64_t gpuArch)
@@ -685,6 +703,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
     //    then all available GPU objects are included in the set
     // b) the "tests" vector is also exclusionary. If tests.size() == 0 then all available test
     //    objects are included in the set
+    parser->SetParameterValidator(m_pv);
 
     for (unsigned int i = 0; i < gpuSets.size(); i++)
     {
@@ -734,7 +753,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                     fillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, gpuSets[i].get());
                     first_pass = false;
                 }
-                std::map<std::string, std::vector<Test *>> groups       = tf->getTestGroups();
+                std::map<std::string, std::vector<Test *>> groups       = m_tf->getTestGroups();
                 std::map<std::string, std::vector<Test *>>::iterator it = groups.find(requestedTestName);
 
                 if (it != groups.end())
@@ -754,7 +773,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                         std::transform(
                             compareTestName.begin(), compareTestName.end(), compareTestName.begin(), ::tolower);
                         std::string compareRequestedName
-                            = tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, requestedTestName);
+                            = m_tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, requestedTestName);
 
                         if (compareTestName == compareRequestedName)
                         {
@@ -767,14 +786,16 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             whitelist->getDefaultsByDeviceId(
                                 compareRequestedName, gpuSets[i]->gpuObjs[0]->getDevicePciDeviceId(), tp);
 
+                            if (!nvvsCommon.configless)
+                            {
+                                parser->ParseTestOverrides(compareRequestedName, *tp);
+                            }
+
                             if (nvvsCommon.parms.size() > 0)
                             {
                                 overrideParameters(tp, compareRequestedName);
                             }
-                            else if (!nvvsCommon.configless)
-                            {
-                                parser->ParseTestOverrides(compareRequestedName, *tp);
-                            }
+
                             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetTestName());
                             tp->AddDouble(PS_LOGFILE_TYPE,
                                           (double)nvvsCommon.logFileType,
@@ -792,8 +813,8 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
             if (!found)
             {
                 std::stringstream ss;
-                ss << "Warning: requested test \"" << requestedTestName
-                   << "\" was not found among possible test choices." << std::endl;
+                ss << "Error: requested test \"" << requestedTestName << "\" was not found among possible test choices."
+                   << std::endl;
                 PRINT_ERROR("%s", "%s", ss.str().c_str());
                 throw std::runtime_error(ss.str());
             }
@@ -822,7 +843,7 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             testNames.push_back("Permissions and OS-related Blocks");
             testNames.push_back("Persistence Mode");
             testNames.push_back("Environmental Variables");
-            testNames.push_back("Page Retirement");
+            testNames.push_back("Page Retirement/Row Remap");
             testNames.push_back("Graphics Processes");
             testNames.push_back("Inforom");
             type = SOFTWARE_TEST_OBJS;
@@ -927,7 +948,7 @@ std::vector<Test *>::iterator NvidiaValidationSuite::FindTestName(Test::testClas
                                                                   std::string testName)
 {
     std::vector<Test *>::iterator it;
-    std::string compareName = tf->GetCompareName(testClass, testName);
+    std::string compareName = m_tf->GetCompareName(testClass, testName);
 
     for (it = testVect.begin(); it != testVect.end(); it++)
     {
@@ -1082,7 +1103,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                     throw std::runtime_error(buf.str());
                 }
 
-                std::string requestedName                 = tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, testName);
+                std::string requestedName                 = m_tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, testName);
                 nvvsCommon.parms[requestedName][parmName] = parmValue;
             }
             else

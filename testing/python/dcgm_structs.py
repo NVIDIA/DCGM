@@ -1047,7 +1047,7 @@ class c_dcgmUpdateAllFields_v1(_PrintableStructure):
 
 dcgmUpdateAllFields_version1 = make_dcgm_version(c_dcgmUpdateAllFields_v1, 1)
 
-dcgmGetMultipleValuesForField_version1 = 1
+dcgmGetMultipleValuesForFieldResponse_version1 = 1
 
 # policy enums
 DCGM_POLICY_COND_DBE = 0x1

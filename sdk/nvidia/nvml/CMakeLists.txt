@@ -35,7 +35,7 @@ target_include_directories(sdk_nvml_interface INTERFACE ${NVML_INCLUDE_DIRS})
 # target_include_directories(sdk_nvml_interface INTERFACE /usr/local/cuda100/include)
 # target_include_directories(sdk_nvml_interface INTERFACE /usr/local/cuda100/kernel/common/inc)
 
-add_library(sdk_nvml_essentials_objects OBJECT)
+add_library(sdk_nvml_essentials_objects STATIC)
 target_link_libraries(sdk_nvml_essentials_objects PUBLIC sdk_nvml_interface)
 target_sources(
     sdk_nvml_essentials_objects

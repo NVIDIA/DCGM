@@ -422,15 +422,15 @@ std::string Topo::HelperGetNvLinkPath(dcgmGpuTopologyLevel_t &path, unsigned int
 /*****************************************************************************/
 GetGPUTopo::GetGPUTopo(std::string hostname, unsigned int gpu, bool json)
 {
-    mHostName = std::move(hostname);
-    mGpuId    = gpu;
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    mGpuId     = gpu;
+    m_json     = json;
 }
 
 /*****************************************************************************/
 dcgmReturn_t GetGPUTopo::DoExecuteConnected()
 {
-    return topoObj.DisplayGPUTopology(mNvcmHandle, mGpuId, mJson);
+    return topoObj.DisplayGPUTopology(m_dcgmHandle, mGpuId, m_json);
 }
 
 
@@ -443,13 +443,13 @@ dcgmReturn_t GetGPUTopo::DoExecuteConnected()
 /*****************************************************************************/
 GetGroupTopo::GetGroupTopo(std::string hostname, unsigned int groupId, bool json)
 {
-    mHostName = std::move(hostname);
-    mGroupId  = (dcgmGpuGrp_t)(long long)groupId;
-    mJson     = json;
+    m_hostName = std::move(hostname);
+    mGroupId   = (dcgmGpuGrp_t)(long long)groupId;
+    m_json     = json;
 }
 
 /*****************************************************************************/
 dcgmReturn_t GetGroupTopo::DoExecuteConnected()
 {
-    return topoObj.DisplayGroupTopology(mNvcmHandle, mGroupId, mJson);
+    return topoObj.DisplayGroupTopology(m_dcgmHandle, mGroupId, m_json);
 }

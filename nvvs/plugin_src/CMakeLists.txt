@@ -11,6 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+set(CMAKE_CXX_VISIBILITY_PRESET default)
+set(CMAKE_C_VISIBILITY_PRESET default)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
+
 find_package(Cuda REQUIRED)
 
 add_library(nvvs_plugins INTERFACE)
@@ -23,13 +28,15 @@ macro(declare_nvvs_plugin plugin_name)
     target_include_directories(nvvs_plugins_${plugin_name}_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(nvvs_plugins_${plugin_name}_interface INTERFACE nvvs_interface nvvs_plugins_interface)
     set(AUX_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+    get_property(LINKER_SCRIPT GLOBAL PROPERTY NVVS_PLUGINS_LINKER_SCRIPT)
 
     function (nvvs_plugin_srcs lib_name)
         aux_source_directory(${AUX_SRC_DIR} LOCAL_SRCS)
         target_sources(${lib_name} PRIVATE ${LOCAL_SRCS})
         target_link_libraries(${lib_name} PRIVATE nvvs_plugins_${plugin_name}_interface)
-        target_link_libraries(${lib_name} PRIVATE ${ARGN})
+        target_link_libraries(${lib_name} PRIVATE ${ARGN} dcgm_mutex)
     endfunction()
+
 endmacro()
 
 macro(define_plugin PLUGIN_NAME CUDA_VER)
@@ -38,6 +45,7 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     target_include_directories(${PLUGIN_NAME}_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_INCLUDE_DIR})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE dcgm_cublas_proxy${CUDA_VER})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
+    target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE sdk_nvml_essentials_objects)
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PUBLIC ${CUDA${CUDA_VER}_LIBS})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PUBLIC pluginCommon_${CUDA_VER})
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES LIBRARY_OUTPUT_NAME "${PLUGIN_NAME}")

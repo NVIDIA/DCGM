@@ -320,14 +320,14 @@ IntrospectCache::IntrospectCache(std::string hostname, unsigned int groupId, std
     , mFieldId(std::move(fieldId))
     , mIDisGroup(isGroup)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 
 /*****************************************************************************/
 dcgmReturn_t IntrospectCache::DoExecuteConnected()
 {
-    return adminObj.IntrospectCache(mNvcmHandle, mGpuId, mFieldId, mIDisGroup);
+    return adminObj.IntrospectCache(m_dcgmHandle, mGpuId, mFieldId, mIDisGroup);
 }
 
 /*****************************************************************************
@@ -348,11 +348,11 @@ InjectCache::InjectCache(std::string hostname,
     , mTime(pTime)
     , mInjectValue(std::move(injectValue))
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t InjectCache::DoExecuteConnected()
 {
-    return adminObj.InjectCache(mNvcmHandle, mGId, mFieldId, mTime, mInjectValue);
+    return adminObj.InjectCache(m_dcgmHandle, mGId, mFieldId, mTime, mInjectValue);
 }

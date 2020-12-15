@@ -19,79 +19,61 @@ add_library(dcgmi_interface INTERFACE)
 target_include_directories(dcgmi_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(dcgmi_interface INTERFACE dcgm_interface)
 
-add_library(dcgmi_objects OBJECT)
-target_link_libraries(
-    dcgmi_objects
+add_library(dcgmi_objects STATIC)
+target_link_libraries(dcgmi_objects
     PUBLIC
         dcgmi_interface
-        nvvs_interface
+        common_interface
         diag_interface
-        common_objects
-        buildinfo_objects
 )
-target_sources(
-    dcgmi_objects
+target_sources(dcgmi_objects
     PRIVATE
         Command.cpp
-        Command.h
         CommandLineParser.cpp
-        CommandLineParser.h
         CommandOutputController.cpp
-        CommandOutputController.h
         Config.cpp
-        Config.h
         dcgmi_common.cpp
-        dcgmi_common.h
         DcgmiOutput.cpp
-        DcgmiOutput.h
         DcgmiProfile.cpp
-        DcgmiProfile.h
         DcgmiSettings.cpp
-        DcgmiSettings.h
         DcgmiTest.cpp
-        DcgmiTest.h
         DeviceMonitor.cpp
-        DeviceMonitor.h
         Diag.cpp
-        Diag.h
         FieldGroup.cpp
-        FieldGroup.h
         Group.cpp
-        Group.h
         Health.cpp
-        Health.h
         Introspect.cpp
-        Introspect.h
+        main_dcgmi.cpp
         MigIdParser.cpp
         Module.cpp
-        Module.h
-        NvcmTCLAP.h
         Nvlink.cpp
-        Nvlink.h
         Policy.cpp
-        Policy.h
         ProcessStats.cpp
-        ProcessStats.h
         Query.cpp
-        Query.h
         Topo.cpp
-        Topo.h
         Version.cpp
-        Version.h
 )
 
 add_executable(dcgmi)
-target_link_libraries(
-    dcgmi
+target_link_libraries(dcgmi
     PRIVATE
-        dcgmi_interface
+        dcgm_interface
+        common_interface
+        diag_interface
+
+        dcgmi_objects
+
+        dcgmmodulediag_common
+        buildinfo_objects
+        dcgm
+        dcgm_logging
+        dcgm_mutex
+        dcgm_common
         nvvs_interface
         diag_interface
-        dcgmi_objects
-        dcgm
-        dcgmmodulediag
         ${JSONCPP_STATIC_LIBS}
 )
-target_sources(dcgmi PRIVATE main_dcgmi.cpp)
+
+target_link_options(dcgmi PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/dcgmi.linux_def)
 
 add_subdirectory(tests)

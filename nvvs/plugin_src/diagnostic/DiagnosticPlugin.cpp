@@ -99,7 +99,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
 
     if (gpuInfo == nullptr)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Cannot initialize the plugin without GPU information.");
         AddError(d);
         return;
@@ -210,7 +210,7 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
 
     if (!m_testParameters->GetBoolFromString(DIAGNOSTIC_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, DIAGNOSTIC_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -241,7 +241,7 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     }
     if (main_should_stop)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
         AddError(d);
         SetResult(NVVS_RESULT_SKIP);
@@ -261,7 +261,7 @@ bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount)
     {
         if (errorCount[i])
         {
-            DcgmError d;
+            DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, errorCount[i], m_device[i]->gpuId);
             AddErrorForGpu(m_device[i]->gpuId, d);
             SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_FAIL);
@@ -442,7 +442,7 @@ bool GpuBurnPlugin::RunTest()
 
     if (Init(m_gpuInfo) == false)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Failed to initialize the plugin.");
         AddError(d);
         return false;
@@ -511,7 +511,7 @@ bool GpuBurnPlugin::RunTest()
     catch (const std::runtime_error &e)
     {
         PRINT_ERROR("%s", "Caught exception %s", e.what());
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
         SetResult(NVVS_RESULT_FAIL);
@@ -698,7 +698,7 @@ int GpuBurnWorker<T>::bind()
 
     if (!m_device->cuContext)
     {
-        DcgmError d;
+        DcgmError d { m_device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_UNBOUND, d, m_device->cuDevice);
         PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
         m_plugin.AddErrorForGpu(m_device->gpuId, d);

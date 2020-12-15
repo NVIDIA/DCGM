@@ -81,7 +81,7 @@ void Plugin::InitializeForGpuList(const dcgmDiagPluginGpuList_t &gpuInfo)
 void Plugin::AddError(const DcgmError &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    PRINT_WARNING("%s %s", "plugin %s: %s", GetDisplayName(), error.GetMessage().c_str());
+    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
     m_errors.push_back(error);
 }
 
@@ -89,7 +89,7 @@ void Plugin::AddError(const DcgmError &error)
 void Plugin::AddInfo(const std::string &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    PRINT_INFO("%s %s", "plugin %s: %s", GetDisplayName(), info.c_str());
+    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info;
 }
 
 /*************************************************************************/
@@ -97,14 +97,14 @@ void Plugin::AddInfoVerbose(const std::string &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
     m_verboseInfo.push_back(info);
-    PRINT_INFO("%s %s", "plugin %s: %s", GetDisplayName(), info.c_str());
+    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info;
 }
 
 /*************************************************************************/
 void Plugin::AddErrorForGpu(unsigned int gpuId, const DcgmError &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    PRINT_WARNING("%s %s %u", "plugin %s: %s (GPU %u)", GetDisplayName(), error.GetMessage().c_str(), gpuId);
+    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage() << " (GPU " << gpuId << ")";
     m_errorsPerGPU[gpuId].push_back(error);
 }
 
@@ -112,7 +112,7 @@ void Plugin::AddErrorForGpu(unsigned int gpuId, const DcgmError &error)
 void Plugin::AddInfoVerboseForGpu(unsigned int gpuId, const std::string &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    PRINT_INFO("%s %s %d", "plugin %s: %s (GPU %d)", GetDisplayName(), info.c_str(), gpuId);
+    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info << " (GPU " << gpuId << ")";
     m_verboseInfoPerGPU[gpuId].push_back(info);
 }
 

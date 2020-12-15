@@ -553,7 +553,7 @@ void Query::HelperDisplayClocks(dcgmDeviceSupportedClockSets_t &clocks)
     CommandOutputController cmdView = CommandOutputController();
     cmdView.setDisplayStencil(QUERY_ATTRIBUTE_DATA);
     cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Supported Clocks (MHz)");
-    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, "Memory Clock, SM Application Clock");
+    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, "Memory Clock, SM Clock");
     cmdView.display();
 
     if (clocks.count == 0)
@@ -733,7 +733,7 @@ void Query::HelperDisplayIdentifiers(dcgmDeviceIdentifiers_t &identifiers, unsig
 /********************************************************************************/
 dcgmReturn_t Query::DisplayHierarchyInfo(dcgmHandle_t handle)
 {
-    dcgmMigHierarchy_v2 hierarchy;
+    dcgmMigHierarchy_v2 hierarchy {};
     hierarchy.version = dcgmMigHierarchy_version2;
 
     dcgmReturn_t ret = dcgmGetGpuInstanceHierarchy(handle, &hierarchy);
@@ -851,13 +851,13 @@ QueryDeviceInfo::QueryDeviceInfo(std::string hostname, unsigned int device, std:
     : deviceNum(device)
     , attributes(std::move(attributes))
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t QueryDeviceInfo::DoExecuteConnected()
 {
-    return queryObj.DisplayDeviceInfo(mNvcmHandle, deviceNum, attributes);
+    return queryObj.DisplayDeviceInfo(m_dcgmHandle, deviceNum, attributes);
 }
 
 /*****************************************************************************
@@ -872,13 +872,13 @@ QueryGroupInfo::QueryGroupInfo(std::string hostname, unsigned int group, std::st
     , attributes(std::move(attributes))
     , verbose(verbose)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t QueryGroupInfo::DoExecuteConnected()
 {
-    return queryObj.DisplayGroupInfo(mNvcmHandle, groupNum, attributes, verbose);
+    return queryObj.DisplayGroupInfo(m_dcgmHandle, groupNum, attributes, verbose);
 }
 
 
@@ -891,13 +891,13 @@ dcgmReturn_t QueryGroupInfo::DoExecuteConnected()
 /*****************************************************************************/
 QueryDeviceList::QueryDeviceList(std::string hostname)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t QueryDeviceList::DoExecuteConnected()
 {
-    return queryObj.DisplayDiscoveredDevices(mNvcmHandle);
+    return queryObj.DisplayDiscoveredDevices(m_dcgmHandle);
 }
 
 /*****************************************************************************
@@ -909,13 +909,13 @@ dcgmReturn_t QueryDeviceList::DoExecuteConnected()
 /*****************************************************************************/
 QueryHierarchyInfo::QueryHierarchyInfo(std::string hostname)
 {
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 }
 
 /*****************************************************************************/
 dcgmReturn_t QueryHierarchyInfo::DoExecuteConnected()
 {
-    return m_queryObj.DisplayHierarchyInfo(mNvcmHandle);
+    return m_queryObj.DisplayHierarchyInfo(m_dcgmHandle);
 }
 
 void TopologicalSort(dcgmMigHierarchy_v2 &hierarchy)

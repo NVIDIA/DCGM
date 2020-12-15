@@ -356,23 +356,23 @@ dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle)
 
 GetGpuNvlinkErrorCounts::GetGpuNvlinkErrorCounts(std::string hostname, unsigned int gpuId, bool json)
 {
-    mHostName = hostname;
-    mGpuId    = gpuId;
-    mJson     = json;
+    m_hostName = hostname;
+    mGpuId     = gpuId;
+    m_json     = json;
 }
 
 dcgmReturn_t GetGpuNvlinkErrorCounts::DoExecuteConnected()
 {
-    return mNvlinkObj.DisplayNvLinkErrorCountsForGpu(mNvcmHandle, mGpuId, mJson);
+    return mNvlinkObj.DisplayNvLinkErrorCountsForGpu(m_dcgmHandle, mGpuId, m_json);
 }
 
 
 GetNvLinkLinkStatuses::GetNvLinkLinkStatuses(std::string hostname)
 {
-    mHostName = hostname;
+    m_hostName = hostname;
 }
 
 dcgmReturn_t GetNvLinkLinkStatuses::DoExecuteConnected()
 {
-    return mNvlinkObj.DisplayNvLinkLinkStatus(mNvcmHandle);
+    return mNvlinkObj.DisplayNvLinkLinkStatus(m_dcgmHandle);
 }

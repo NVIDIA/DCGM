@@ -20,6 +20,7 @@
 #ifndef DCGM_AGENT_INTERNAL_H
 #define DCGM_AGENT_INTERNAL_H
 
+#include "dcgm_api_export.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include <stdint.h>
@@ -47,7 +48,9 @@ extern "C" {
  *                            For isConnectionTCP == 0, this is the path to the domain socket to use
  * @param isConnectionTCP IN: Whether to listen on a TCP/IP socket (1) or a unix domain socket (0)
  */
-dcgmReturn_t dcgmEngineRun(unsigned short portNumber, char const *socketPath, unsigned int isConnectionTCP);
+dcgmReturn_t DCGM_PUBLIC_API dcgmEngineRun(unsigned short portNumber,
+                                           char const *socketPath,
+                                           unsigned int isConnectionTCP);
 
 /**
  * This method is used to get values corresponding to the fields.
@@ -58,11 +61,11 @@ dcgmReturn_t dcgmEngineRun(unsigned short portNumber, char const *socketPath, un
  *                              populated only when status in each field is DCGM_ST_SUCCESS
  *      - DCGM_ST_?             In case of error
  */
-dcgmReturn_t dcgmGetLatestValuesForFields(dcgmHandle_t pDcgmHandle,
-                                          int gpuId,
-                                          unsigned short fieldIds[],
-                                          unsigned int count,
-                                          dcgmFieldValue_v1 values[]);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetLatestValuesForFields(dcgmHandle_t pDcgmHandle,
+                                                          int gpuId,
+                                                          unsigned short fieldIds[],
+                                                          unsigned int count,
+                                                          dcgmFieldValue_v1 values[]);
 
 /**
  * This method is used to get multiple values for a single field
@@ -72,14 +75,14 @@ dcgmReturn_t dcgmGetLatestValuesForFields(dcgmHandle_t pDcgmHandle,
  *      - DCGM_ST_?                 error code on failure
  *
  */
-dcgmReturn_t dcgmGetMultipleValuesForField(dcgmHandle_t pDcgmHandle,
-                                           int gpuId,
-                                           unsigned short fieldId,
-                                           int *count,
-                                           long long startTs,
-                                           long long endTs,
-                                           dcgmOrder_t order,
-                                           dcgmFieldValue_v1 values[]);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetMultipleValuesForField(dcgmHandle_t pDcgmHandle,
+                                                           int gpuId,
+                                                           unsigned short fieldId,
+                                                           int *count,
+                                                           long long startTs,
+                                                           long long endTs,
+                                                           dcgmOrder_t order,
+                                                           dcgmFieldValue_v1 values[]);
 
 /**
  * Request updates for all field values that have updated since a given timestamp
@@ -96,14 +99,14 @@ dcgmReturn_t dcgmGetMultipleValuesForField(dcgmHandle_t pDcgmHandle,
  *                                multiple updates can be returned in each invocation
  * @param userData            IN: User data pointer to pass to the userData field of enumCB.
  */
-dcgmReturn_t dcgmGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
-                                     dcgmGpuGrp_t groupId,
-                                     long long sinceTimestamp,
-                                     unsigned short *fieldIds,
-                                     int numFieldIds,
-                                     long long *nextSinceTimestamp,
-                                     dcgmFieldValueEnumeration_f enumCB,
-                                     void *userData);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
+                                                     dcgmGpuGrp_t groupId,
+                                                     long long sinceTimestamp,
+                                                     unsigned short *fieldIds,
+                                                     int numFieldIds,
+                                                     long long *nextSinceTimestamp,
+                                                     dcgmFieldValueEnumeration_f enumCB,
+                                                     void *userData);
 
 /**
  * This method is used to tell the cache manager to watch a field value
@@ -119,12 +122,12 @@ dcgmReturn_t dcgmGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_BADPARAM             if \a gpuId, \a fieldId, \a updateFreq, \a maxKeepAge,
  *                                            or \a maxKeepSamples are invalid
  */
-dcgmReturn_t dcgmWatchFieldValue(dcgmHandle_t pDcgmHandle,
-                                 int gpuId,
-                                 unsigned short fieldId,
-                                 long long updateFreq,
-                                 double maxKeepAge,
-                                 int maxKeepSamples);
+dcgmReturn_t DCGM_PUBLIC_API dcgmWatchFieldValue(dcgmHandle_t pDcgmHandle,
+                                                 int gpuId,
+                                                 unsigned short fieldId,
+                                                 long long updateFreq,
+                                                 double maxKeepAge,
+                                                 int maxKeepSamples);
 
 /**
  * This method is used to tell the cache manager to unwatch a field value
@@ -137,7 +140,10 @@ dcgmReturn_t dcgmWatchFieldValue(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_OK                   if the call was successful
  *        - \ref DCGM_ST_BADPARAM             if \a gpuId, \a fieldId, or \a clearCache is invalid
  */
-dcgmReturn_t dcgmUnwatchFieldValue(dcgmHandle_t pDcgmHandle, int gpuId, unsigned short fieldId, int clearCache);
+dcgmReturn_t DCGM_PUBLIC_API dcgmUnwatchFieldValue(dcgmHandle_t pDcgmHandle,
+                                                   int gpuId,
+                                                   unsigned short fieldId,
+                                                   int clearCache);
 
 /**
  * Get the current amount of memory used to store the given field.
@@ -152,10 +158,10 @@ dcgmReturn_t dcgmUnwatchFieldValue(dcgmHandle_t pDcgmHandle, int gpuId, unsigned
  *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \ref DCGM_METADATA_STATE_DISABLED
  *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
  */
-dcgmReturn_t dcgmIntrospectGetFieldMemoryUsage(dcgmHandle_t pDcgmHandle,
-                                               unsigned short fieldId,
-                                               dcgmIntrospectFullMemory_t *memoryInfo,
-                                               int waitIfNoData);
+dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldMemoryUsage(dcgmHandle_t pDcgmHandle,
+                                                               unsigned short fieldId,
+                                                               dcgmIntrospectFullMemory_t *memoryInfo,
+                                                               int waitIfNoData);
 
 /*************************************************************************/
 /**
@@ -165,7 +171,7 @@ dcgmReturn_t dcgmIntrospectGetFieldMemoryUsage(dcgmHandle_t pDcgmHandle,
  * @param pDcgmHandle             IN: DCGM Handle
  * @param runIntervalMs          OUT: interval duration to set
  */
-dcgmReturn_t dcgmMetadataStateSetRunInterval(dcgmHandle_t pDcgmHandle, unsigned int runIntervalMs);
+dcgmReturn_t DCGM_PUBLIC_API dcgmMetadataStateSetRunInterval(dcgmHandle_t pDcgmHandle, unsigned int runIntervalMs);
 
 /*************************************************************************/
 /**
@@ -181,10 +187,10 @@ dcgmReturn_t dcgmMetadataStateSetRunInterval(dcgmHandle_t pDcgmHandle, unsigned 
  *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \ref DCGM_METADATA_STATE_DISABLED
  *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
  */
-dcgmReturn_t dcgmIntrospectGetFieldExecTime(dcgmHandle_t pDcgmHandle,
-                                            unsigned short fieldId,
-                                            dcgmIntrospectFullFieldsExecTime_t *execTime,
-                                            int waitIfNoData);
+dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldExecTime(dcgmHandle_t pDcgmHandle,
+                                                            unsigned short fieldId,
+                                                            dcgmIntrospectFullFieldsExecTime_t *execTime,
+                                                            int waitIfNoData);
 
 /*************************************************************************/
 /**
@@ -222,10 +228,10 @@ dcgmReturn_t dcgmIntrospectGetFieldExecTime(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_VER_MISMATCH         if \a pDeviceConfig has the incorrect version.
  *        - \ref DCGM_ST_GENERIC_ERROR        if an unknown error has occurred.
  */
-dcgmReturn_t dcgmVgpuConfigSet(dcgmHandle_t pDcgmHandle,
-                               dcgmGpuGrp_t groupId,
-                               dcgmVgpuConfig_t *pDeviceConfig,
-                               dcgmStatus_t statusHandle);
+dcgmReturn_t DCGM_PUBLIC_API dcgmVgpuConfigSet(dcgmHandle_t pDcgmHandle,
+                                               dcgmGpuGrp_t groupId,
+                                               dcgmVgpuConfig_t *pDeviceConfig,
+                                               dcgmStatus_t statusHandle);
 
 /*************************************************************************/
 /**
@@ -276,12 +282,12 @@ dcgmReturn_t dcgmVgpuConfigSet(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_VER_MISMATCH         if \a deviceConfigList has the incorrect version.
  *        - \ref DCGM_ST_GENERIC_ERROR        if an unknown error has occurred.
  */
-dcgmReturn_t dcgmVgpuConfigGet(dcgmHandle_t pDcgmHandle,
-                               dcgmGpuGrp_t groupId,
-                               dcgmConfigType_t type,
-                               int count,
-                               dcgmVgpuConfig_t deviceConfigList[],
-                               dcgmStatus_t statusHandle);
+dcgmReturn_t DCGM_PUBLIC_API dcgmVgpuConfigGet(dcgmHandle_t pDcgmHandle,
+                                               dcgmGpuGrp_t groupId,
+                                               dcgmConfigType_t type,
+                                               int count,
+                                               dcgmVgpuConfig_t deviceConfigList[],
+                                               dcgmStatus_t statusHandle);
 
 /*************************************************************************/
 /**
@@ -312,7 +318,9 @@ dcgmReturn_t dcgmVgpuConfigGet(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_NOT_CONFIGURED       if the target configuration is not already set.
  *        - \ref DCGM_ST_GENERIC_ERROR        if an unknown error has occurred.
  */
-dcgmReturn_t dcgmVgpuConfigEnforce(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmStatus_t statusHandle);
+dcgmReturn_t DCGM_PUBLIC_API dcgmVgpuConfigEnforce(dcgmHandle_t pDcgmHandle,
+                                                   dcgmGpuGrp_t groupId,
+                                                   dcgmStatus_t statusHandle);
 
 /*************************************************************************/
 /**
@@ -330,9 +338,9 @@ dcgmReturn_t dcgmVgpuConfigEnforce(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupI
  *        - \ref DCGM_ST_OK            if the call was successful.
  *        - \ref DCGM_ST_VER_MISMATCH  if version is not set or is invalid.
  */
-dcgmReturn_t dcgmGetVgpuDeviceAttributes(dcgmHandle_t pDcgmHandle,
-                                         unsigned int gpuId,
-                                         dcgmVgpuDeviceAttributes_t *pDcgmVgpuAttr);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetVgpuDeviceAttributes(dcgmHandle_t pDcgmHandle,
+                                                         unsigned int gpuId,
+                                                         dcgmVgpuDeviceAttributes_t *pDcgmVgpuAttr);
 
 /*************************************************************************/
 /**
@@ -349,9 +357,9 @@ dcgmReturn_t dcgmGetVgpuDeviceAttributes(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_OK            if the call was successful.
  *        - \ref DCGM_ST_VER_MISMATCH  if .version is not set or is invalid.
  */
-dcgmReturn_t dcgmGetVgpuInstanceAttributes(dcgmHandle_t pDcgmHandle,
-                                           unsigned int vgpuId,
-                                           dcgmVgpuInstanceAttributes_t *pDcgmVgpuInstanceAttr);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetVgpuInstanceAttributes(dcgmHandle_t pDcgmHandle,
+                                                           unsigned int vgpuId,
+                                                           dcgmVgpuInstanceAttributes_t *pDcgmVgpuInstanceAttr);
 
 /**
  * Stop a diagnostic if there is one currently running.
@@ -362,7 +370,7 @@ dcgmReturn_t dcgmGetVgpuInstanceAttributes(dcgmHandle_t pDcgmHandle,
  *        - \ref DCGM_ST_OK                   if the call was successful
  *        - \ref DCGM_ST_BADPARAM             if a provided parameter is invalid or missing
  */
-dcgmReturn_t dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
+dcgmReturn_t DCGM_PUBLIC_API dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
 
 /**
  * This method injects a sample into the cache manager
@@ -370,9 +378,9 @@ dcgmReturn_t dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
  * @param gpuId
  * @param dcgmInjectFieldValue
  */
-dcgmReturn_t dcgmInjectFieldValue(dcgmHandle_t pDcgmHandle,
-                                  unsigned int gpuId,
-                                  dcgmInjectFieldValue_t *dcgmInjectFieldValue);
+dcgmReturn_t DCGM_PUBLIC_API dcgmInjectFieldValue(dcgmHandle_t pDcgmHandle,
+                                                  unsigned int gpuId,
+                                                  dcgmInjectFieldValue_t *dcgmInjectFieldValue);
 
 /**
  * This method retries the state of a field within the cache manager
@@ -381,7 +389,8 @@ dcgmReturn_t dcgmInjectFieldValue(dcgmHandle_t pDcgmHandle,
  *                  be populated on calling for this call to work
  *
  */
-dcgmReturn_t dcgmGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmCacheManagerFieldInfo_t *fieldInfo);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle,
+                                                          dcgmCacheManagerFieldInfo_t *fieldInfo);
 
 /**
  * This method returns the status of the gpu
@@ -390,7 +399,7 @@ dcgmReturn_t dcgmGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmCacheMan
  * @param DcgmEntityStatus_t
  *
  */
-dcgmReturn_t dcgmGetGpuStatus(dcgmHandle_t pDcgmHandle, unsigned int gpuId, DcgmEntityStatus_t *status);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuStatus(dcgmHandle_t pDcgmHandle, unsigned int gpuId, DcgmEntityStatus_t *status);
 
 /**
  * Create fake entities for injection testing
@@ -398,7 +407,8 @@ dcgmReturn_t dcgmGetGpuStatus(dcgmHandle_t pDcgmHandle, unsigned int gpuId, Dcgm
  * @param createFakeEntities Details about the number and type of entities to create
  *
  */
-dcgmReturn_t dcgmCreateFakeEntities(dcgmHandle_t pDcgmHandle, dcgmCreateFakeEntities_t *createFakeEntities);
+dcgmReturn_t DCGM_PUBLIC_API dcgmCreateFakeEntities(dcgmHandle_t pDcgmHandle,
+                                                    dcgmCreateFakeEntities_t *createFakeEntities);
 
 /**
  * This method injects a sample into the cache manager
@@ -407,10 +417,10 @@ dcgmReturn_t dcgmCreateFakeEntities(dcgmHandle_t pDcgmHandle, dcgmCreateFakeEnti
  * @param entityId
  * @param dcgmInjectFieldValue
  */
-dcgmReturn_t dcgmEntityInjectFieldValue(dcgmHandle_t pDcgmHandle,
-                                        dcgm_field_entity_group_t entityGroupId,
-                                        dcgm_field_eid_t entityId,
-                                        dcgmInjectFieldValue_t *dcgmInjectFieldValue);
+dcgmReturn_t DCGM_PUBLIC_API dcgmEntityInjectFieldValue(dcgmHandle_t pDcgmHandle,
+                                                        dcgm_field_entity_group_t entityGroupId,
+                                                        dcgm_field_eid_t entityId,
+                                                        dcgmInjectFieldValue_t *dcgmInjectFieldValue);
 
 /**
  * This method sets the link state of an entity's NvLink
@@ -418,7 +428,8 @@ dcgmReturn_t dcgmEntityInjectFieldValue(dcgmHandle_t pDcgmHandle,
  * dcgmHandle_t dcgmHandle
  * linkState    contains details about the link state to set
  */
-dcgmReturn_t dcgmSetEntityNvLinkLinkState(dcgmHandle_t dcgmHandle, dcgmSetNvLinkLinkState_v1 *linkState);
+dcgmReturn_t DCGM_PUBLIC_API dcgmSetEntityNvLinkLinkState(dcgmHandle_t dcgmHandle,
+                                                          dcgmSetNvLinkLinkState_v1 *linkState);
 
 /**
  * Creates a MIG entity with according to the specifications in the struct
@@ -431,7 +442,7 @@ dcgmReturn_t dcgmSetEntityNvLinkLinkState(dcgmHandle_t dcgmHandle, dcgmSetNvLink
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  *        - \ref DCGM_ST_REQUIRES_ROOT     if the hostengine is not running as root
  */
-dcgmReturn_t DECLDIR dcgmCreateMigEntity(dcgmHandle_t dcgmHandle, dcgmCreateMigEntity_t *cme);
+dcgmReturn_t DCGM_PUBLIC_API dcgmCreateMigEntity(dcgmHandle_t dcgmHandle, dcgmCreateMigEntity_t *cme);
 
 /**
  * Delete the specified MIG entity
@@ -443,7 +454,7 @@ dcgmReturn_t DECLDIR dcgmCreateMigEntity(dcgmHandle_t dcgmHandle, dcgmCreateMigE
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  *        - \ref DCGM_ST_REQUIRES_ROOT     if the hostengine is not running as root
  */
-dcgmReturn_t DECLDIR dcgmDeleteMigEntity(dcgmHandle_t dcgmHandle, dcgmDeleteMigEntity_t *dme);
+dcgmReturn_t DCGM_PUBLIC_API dcgmDeleteMigEntity(dcgmHandle_t dcgmHandle, dcgmDeleteMigEntity_t *dme);
 
 #ifdef __cplusplus
 }

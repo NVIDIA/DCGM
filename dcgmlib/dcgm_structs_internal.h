@@ -119,6 +119,18 @@ typedef dcgmCacheManagerLoad_v1_t dcgmCacheManagerLoad_t;
 #define dcgmCacheManagerLoad_version1 MAKE_DCGM_VERSION(dcgmCacheManagerLoad_v1_t, 1)
 #define dcgmCacheManagerLoad_version  dcgmCacheManagerLoad_version1
 
+#define dcgmWatchFieldValue_version1 1
+#define dcgmWatchFieldValue_version  dcgmWatchFieldValue_version1
+
+#define dcgmUpdateAllFields_version1 1
+#define dcgmUpdateAllFields_version  dcgmUpdateAllFields_version1
+
+#define dcgmGetMultipleValuesForField_version1 1
+#define dcgmGetMultipleValuesForField_version  dcgmGetMultipleValuesForField_version1
+
+#define dcgmUnwatchFieldValue_version1 1
+#define dcgmUnwatchFieldValue_version  dcgmUnwatchFieldValue_version1
+
 /**
  * This structure is used to represent a field value to be injected into
  * the cache manager
@@ -128,17 +140,8 @@ typedef dcgmInjectFieldValue_v1 dcgmInjectFieldValue_t;
 #define dcgmInjectFieldValue_version1 MAKE_DCGM_VERSION(dcgmInjectFieldValue_v1, 1)
 #define dcgmInjectFieldValue_version  dcgmInjectFieldValue_version1
 
-#define dcgmWatchFieldValue_version1 1
-#define dcgmWatchFieldValue_version  dcgmWatchFieldValue_version1
-
-#define dcgmUnwatchFieldValue_version1 1
-#define dcgmUnwatchFieldValue_version  dcgmUnwatchFieldValue_version1
-
-#define dcgmUpdateAllFields_version1 1
-#define dcgmUpdateAllFields_version  dcgmUpdateAllFields_version1
-
-#define dcgmGetMultipleValuesForField_version1 1
-#define dcgmGetMultipleValuesForField_version  dcgmGetMultipleValuesForField_version1
+#define dcgmGetMultipleValuesForFieldResponse_version1 1
+#define dcgmGetMultipleValuesForFieldResponse_version  dcgmGetMultipleValuesForFieldResponse_version1
 
 /* Underlying structure for the GET_MULTIPLE_LATEST_VALUES request */
 typedef struct
@@ -234,9 +237,6 @@ typedef struct dcgmCacheManagerFieldInfo_v3_t
 typedef dcgmCacheManagerFieldInfo_v3_t dcgmCacheManagerFieldInfo_t;
 #define dcgmCacheManagerFieldInfo_version3 MAKE_DCGM_VERSION(dcgmCacheManagerFieldInfo_v3_t, 3)
 #define dcgmCacheManagerFieldInfo_version  dcgmCacheManagerFieldInfo_version3
-
-#define dcgmWatchFields_version1 1
-#define dcgmWatchFields_version  dcgmWatchFields_version1
 
 /**
  * The maximum number of topology elements possible given DCGM_MAX_NUM_DEVICES
@@ -394,7 +394,17 @@ typedef enum dcgmGpuBrandType_enum
     DCGM_GPU_BRAND_GRID    = 4,
     DCGM_GPU_BRAND_GEFORCE = 5,
     DCGM_GPU_BRAND_TITAN   = 6,
-
+    /* The following are new as of r460 TRD2's nvml.h */
+    DCGM_BRAND_NVIDIA_VAPPS   = 7,  // NVIDIA Virtual Applications
+    DCGM_BRAND_NVIDIA_VPC     = 8,  // NVIDIA Virtual PC
+    DCGM_BRAND_NVIDIA_VCS     = 9,  // NVIDIA Virtual Compute Server
+    DCGM_BRAND_NVIDIA_VWS     = 10, // NVIDIA RTX Virtual Workstation
+    DCGM_BRAND_NVIDIA_VGAMING = 11, // NVIDIA vGaming
+    DCGM_BRAND_QUADRO_RTX     = 12,
+    DCGM_BRAND_NVIDIA_RTX     = 13,
+    DCGM_BRAND_NVIDIA         = 14,
+    DCGM_BRAND_GEFORCE_RTX    = 15,
+    DCGM_BRAND_TITAN_RTX      = 16,
     // Keep this last
     DCGM_GPU_BRAND_COUNT
 } dcgmGpuBrandType_t;
@@ -439,25 +449,17 @@ typedef struct
     dcgmReturn_t cmdRet;       //!< Error code generated when creating new group
 } dcgmCreateGroup_v1;
 
-#define dcgmCreateGroup_version1 MAKE_DCGM_VERSION(dcgmCreateGroup_v1, 1)
-#define dcgmCreateGroup_version  dcgmCreateGroup_version1
-typedef dcgmCreateGroup_v1 dcgmCreateGroup_t;
-
 /**
  * Version 1 of dcgmRemoveEntity_t
  */
 
 typedef struct
 {
-    unsigned int groupId;
-    unsigned int entityGroupId;
-    unsigned int entityId;
-    unsigned int cmdRet;
-} dcgmRemoveEntity_v1;
-
-#define dcgmRemoveEntity_version1 MAKE_DCGM_VERSION(dcgmRemoveEntity_v1, 1)
-#define dcgmRemoveEntity_version  dcgmRemoveEntity_version1
-typedef dcgmRemoveEntity_v1 dcgmRemoveEntity_t;
+    unsigned int groupId;       //!< IN: Group id from which entity should be removed
+    unsigned int entityGroupId; //!< IN: Entity group that entity belongs to
+    unsigned int entityId;      //!< IN: Entity id to remove
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmAddRemoveEntity_v1;
 
 /**
  * Version 1 of dcgmGroupDestroy_t
@@ -465,13 +467,9 @@ typedef dcgmRemoveEntity_v1 dcgmRemoveEntity_t;
 
 typedef struct
 {
-    unsigned int groupId;
-    unsigned int cmdRet;
+    unsigned int groupId; //!< IN: Group to remove
+    unsigned int cmdRet;  //!< OUT: Error code generated
 } dcgmGroupDestroy_v1;
-
-#define dcgmGroupDestroy_version1 MAKE_DCGM_VERSION(dcgmGroupDestroy_v1, 1)
-#define dcgmGroupDestroy_version  dcgmGroupDestroy_version1
-typedef dcgmGroupDestroy_v1 dcgmGroupDestroy_t;
 
 /**
  * Version 1 of dcgmGetEntityGroupEntities_t
@@ -479,16 +477,16 @@ typedef dcgmGroupDestroy_v1 dcgmGroupDestroy_t;
 
 typedef struct
 {
-    unsigned int entityGroup;
-    unsigned int entities[DCGM_GROUP_MAX_ENTITIES];
-    unsigned int numEntities;
-    unsigned int flags;
-    unsigned int cmdRet;
+    unsigned int entityGroup;                       //!< IN: Entity of group to list entities
+    unsigned int entities[DCGM_GROUP_MAX_ENTITIES]; //!< OUT: Array of entities for entityGroup
+    unsigned int numEntities;                       //!< IN/OUT: Upon calling, this should be the number of
+                                                    //           entities that entityList[] can hold. Upon
+                                                    //           return, this will contain the number of
+                                                    //           entities actually saved to entityList.
+    unsigned int flags;                             //!< IN: Flags to modify the behavior of this request.
+                                                    //       See DCGM_GEGE_FLAG_*
+    unsigned int cmdRet;                            //!< OUT: Error code generated
 } dcgmGetEntityGroupEntities_v1;
-
-#define dcgmGetEntityGroupEntities_version1 MAKE_DCGM_VERSION(dcgmGetEntityGroupEntities_v1, 1)
-#define dcgmGetEntityGroupEntities_version  dcgmGetEntityGroupEntities_version1
-typedef dcgmGetEntityGroupEntities_v1 dcgmGetEntityGroupEntities_t;
 
 /**
  * Version 1 of dcgmGroupGetAllIds_t
@@ -496,14 +494,10 @@ typedef dcgmGetEntityGroupEntities_v1 dcgmGetEntityGroupEntities_t;
 
 typedef struct
 {
-    unsigned int groupIds[DCGM_MAX_NUM_GROUPS];
-    unsigned int numGroups;
-    unsigned int cmdRet;
+    unsigned int groupIds[DCGM_MAX_NUM_GROUPS]; //!< OUT: List of group ids
+    unsigned int numGroups;                     //!< OUT: Number of group ids in the list
+    unsigned int cmdRet;                        //!< OUT: Error code generated
 } dcgmGroupGetAllIds_v1;
-
-#define dcgmGroupGetAllIds_version1 MAKE_DCGM_VERSION(dcgmGroupGetAllIds_v1, 1)
-#define dcgmGroupGetAllIds_version  dcgmGroupGetAllIds_version1
-typedef dcgmGroupGetAllIds_v1 dcgmGroupGetAllIds_t;
 
 /**
  * Version 1 of dcgmGroupGetInfo_t
@@ -511,15 +505,269 @@ typedef dcgmGroupGetAllIds_v1 dcgmGroupGetAllIds_t;
 
 typedef struct
 {
-    unsigned int groupId;
-    dcgmGroupInfo_t groupInfo;
-    long long timestamp;
-    unsigned int cmdRet;
+    unsigned int groupId;      //!< IN: Group ID for which information to be fetched
+    dcgmGroupInfo_t groupInfo; //!< OUT: Group Information
+    long long timestamp;       //!< OUT: Timestamp of information
+    unsigned int cmdRet;       //!< OUT: Error code generated
 } dcgmGroupGetInfo_v1;
 
-#define dcgmGroupGetInfo_version1 MAKE_DCGM_VERSION(dcgmGroupGetInfo_v1, 1)
-#define dcgmGroupGetInfo_version  dcgmGroupGetInfo_version1
-typedef dcgmGroupGetInfo_v1 dcgmGroupGetInfo_t;
+#define SAMPLES_BUFFER_SIZE 16384
+
+/**
+ * Version 1 of dcgmEntitiesGetLatestValues_t
+ */
+typedef struct
+{
+    unsigned int groupId;                                    //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                              //!< IN: Number of entries in entities[]
+    unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
+                               //!<     This is ignored if fieldIdList[] is provided
+    unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
+    unsigned int fieldIdCount;                                      //!< IN: Number of field IDs in fieldIdList[] array.
+    unsigned int flags;               //!< IN: Optional flags that affect how this request is processed.
+    unsigned int cmdRet;              //!< OUT: Error code generated
+    unsigned int bufferSize;          //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE]; //!< OUT: this field is last, and can be truncated for speed */
+} dcgmEntitiesGetLatestValues_v1;
+
+/**
+ * Version 1 of dcgmGetMultipleValuesForField_t
+ */
+typedef struct
+{
+    unsigned int entityGroupId;       //!< IN: Optional group id for information to be fetched
+    unsigned int entityId;            //!< IN: Optional entity id for information to be fetched
+    unsigned int fieldId;             //!< IN: Field id to fetch
+    long long startTs;                //!< IN: Starting timestamp
+    long long endTs;                  //!< IN: End timestamp
+    unsigned int order;               //!< IN: Order for output data, see dcgmOrder_t
+    unsigned int count;               //!< IN: Number of values to retrieve (may be limited by size of buffer)
+    unsigned int cmdRet;              //!< OUT: Error code generated
+    unsigned int bufferSize;          //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE]; //!< OUT:: this field is last, and can be truncated for speed */
+} dcgmGetMultipleValuesForField_v1;
+
+/**
+ * Version 1 of dcgmJobCmd_t
+ */
+
+typedef struct
+{
+    unsigned int groupId; //!< IN: optional group id
+    char jobId[64];       //!< IN: job id
+    unsigned int cmdRet;  //!< OUT: Error code generated
+} dcgmJobCmd_v1;
+
+/**
+ * Version 1 of dcgmJobGetStats_t
+ */
+
+typedef struct
+{
+    char jobId[64];         //!< IN: job id
+    dcgmJobInfo_t jobStats; //!< OUT: job stats
+    unsigned int cmdRet;    //!< OUT: Error code generated
+} dcgmJobGetStats_v1;
+
+/**
+ * Version 1 of dcgmWatchFieldValue_t
+ */
+typedef struct
+{
+    int gpuId;                  //!< IN: GPU ID to watch field on
+    unsigned int entityGroupId; //!< IN: Optional entity group id
+    unsigned short fieldId;     //!< IN: Field ID to watch
+    long long updateFreq;       //!< IN: How often to update this field in usec
+    double maxKeepAge;          //!< IN: How long to keep data for this field in seconds
+    int maxKeepSamples;         //!< IN: Maximum number of samples to keep. 0=no limit
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmWatchFieldValue_v1;
+
+/**
+ * Version 1 of dcgmUpdateAllFields_v1
+ */
+typedef struct
+{
+    int waitForUpdate;   //!< IN: Whether or not to wait for the update loop to complete before returning to the
+                         //       caller 1=wait. 0=do not wait.
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmUpdateAllFields_v1;
+
+/**
+ * Version 1 of dcgmUnwatchFieldValue_t
+ */
+typedef struct
+{
+    int gpuId;                  //!< IN: GPU ID to watch field on
+    unsigned int entityGroupId; //!< IN: Optional entity group id
+    unsigned short fieldId;     //!< IN: Field id to unwatch
+    int clearCache;             //!< IN: Whether or not to clear all cached data for
+                                //       the field after the watch is removed
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmUnwatchFieldValue_v1;
+
+/**
+ * Version 1 of dcgmInjectFieldValue_t
+ */
+typedef struct
+{
+    unsigned int entityGroupId;   //!< IN: entity group id
+    unsigned int entityId;        //!< IN: entity id
+    dcgmFieldValue_v1 fieldValue; //!< IN: field value to insert
+    unsigned int cmdRet;          //!< OUT: Error code generated
+} dcgmInjectFieldValueMsg_v1;
+
+#define dcgmInjectFieldValueMsg_version1 MAKE_DCGM_VERSION(dcgmInjectFieldValueMsg_v1, 1)
+#define dcgmInjectFieldValueMsg_version  dcgmInjectFieldValueMsg_version1
+typedef dcgmInjectFieldValueMsg_v1 dcgmInjectFieldValueMsg_t;
+
+/**
+ * Version 1 of dcgmGetCacheManagerFieldInfo_t
+ */
+typedef struct
+{
+    dcgmCacheManagerFieldInfo_t
+        fieldInfo;       //!< IN/OUT: Structure to populate. fieldInfo->gpuId and fieldInfo->fieldId must
+                         //           be populated on calling for this call to work
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmGetCacheManagerFieldInfo_v1;
+
+typedef struct
+{
+    unsigned int groupId;      //!< IN: Group ID representing collection of one or more entities
+    unsigned int fieldGroupId; //!< IN: Fields to watch.
+    long long updateFreq;      //!< IN: How often to update this field in usec
+    double maxKeepAge;         //!< IN: How long to keep data for this field in seconds
+    int maxKeepSamples;        //!< IN: Maximum number of samples to keep. 0=no limit
+    unsigned int cmdRet;       //!< OUT: Error code generated
+} dcgmWatchFields_v1;
+
+#define dcgmWatchFields_version1 1
+#define dcgmWatchFields_version  dcgmWatchFields_version1
+
+typedef struct
+{
+    unsigned int groupId;    //!< IN: Group ID representing collection of one or more entities
+    dcgmTopology_t topology; //!< OUT: populated struct
+    unsigned int cmdRet;     //!< OUT: Error code generated
+} dcgmGetTopologyMsg_v1;
+
+typedef struct
+{
+    unsigned int groupId;    //!< IN: Group ID representing collection of one or more entities
+    dcgmAffinity_t affinity; //!< OUT: populated struct
+    unsigned int cmdRet;     //!< OUT: Error code generated
+} dcgmGetTopologyAffinityMsg_v1;
+
+typedef struct
+{
+    uint64_t inputGpus;  //!< IN: bitmask of available gpus
+    uint32_t numGpus;    //!< IN: number of gpus needed
+    uint64_t flags;      //!< IN: Hints to ignore certain factors for the scheduling hint
+    uint64_t outputGpus; //!< OUT: bitmask of selected gpus
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmSelectGpusByTopologyMsg_v1;
+
+typedef struct
+{
+    int supported;                              //!< IN: boolean to ONLY include Ids of supported GPUs
+    unsigned int devices[DCGM_MAX_NUM_DEVICES]; //!< OUT: GPU Ids present on the system.
+    int count;                                  //!< OUT: Number of devices returned in "devices"
+    unsigned int cmdRet;                        //!< OUT: Error code generated
+} dcgmGetAllDevicesMsg_v1;
+
+typedef struct
+{
+    int persistAfterDisconnect; //!< IN: boolean whether to persist groups, etc after client is disconnected
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmClientLogin_v1;
+
+typedef struct
+{
+    dcgmFieldGroupInfo_t fg; //!< IN/OUT: field group info populated on success
+    unsigned int cmdRet;     //!< OUT: Error code generated
+} dcgmFieldGroupOp_v1;
+
+typedef struct
+{
+    unsigned int groupId;  //!< IN: group id for query
+    dcgmPidInfo_t pidInfo; //!< IN/OUT: pid info populated on success
+    unsigned int cmdRet;   //!< OUT: Error code generated
+} dcgmPidGetInfo_v1;
+
+typedef struct
+{
+    dcgmFieldSummaryRequest_t fsr; //!< IN/OUT: field summary populated on success
+    unsigned int cmdRet;           //!< OUT: Error code generated
+} dcgmGetFieldSummary_v1;
+
+typedef struct
+{
+    dcgmNvLinkStatus_v2 ls; //!< IN/OUT: nvlink status populated on success
+    unsigned int cmdRet;    //!< OUT: Error code generated
+} dcgmGetNvLinkStatus_v1;
+
+typedef struct
+{
+    dcgmCreateFakeEntities_v2 fe; //!< IN/OUT: fake entity info, populated on success
+    unsigned int cmdRet;          //!< OUT: Error code generated
+} dcgmMsgCreateFakeEntities_v1;
+
+typedef struct
+{
+    dcgmWatchPredefined_t wpf; //!< IN: watch info
+    unsigned int cmdRet;       //!< OUT: Error code generated
+} dcgmWatchPredefinedFields_v1;
+
+typedef struct
+{
+    unsigned int moduleId; //!< IN: Module to blacklist
+    unsigned int cmdRet;   //!< OUT: Error code generated
+} dcgmMsgModuleBlacklist_v1;
+
+typedef struct
+{
+    dcgmModuleGetStatuses_t st; //!< IN/OUT: module status
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmMsgModuleStatus_v1;
+
+typedef struct
+{
+    unsigned int overallHealth; //!< IN/OUT: hostengine health
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmMsgHostEngineHealth_v1;
+
+typedef struct
+{
+    dcgmAllFieldGroup_t fg; //!< IN/OUT: hostengine health
+    unsigned int cmdRet;    //!< OUT: Error code generated
+} dcgmGetAllFieldGroup_v1;
+
+typedef struct
+{
+    union
+    {
+        dcgmMigHierarchy_v1 v1; //!< OUT: populated on success
+        dcgmMigHierarchy_v2 v2; //!< OUT: populated on success
+    } mh;
+
+    unsigned int v2;     //!< IN: boolean to specify version
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmMsgGetGpuInstanceHierarchy_v1;
+
+/**
+ * Older version of nvmlProcessInfo_t. This is here because NVML changed the size of nvmlProcessInfo_t
+ * without changing the version used by nvmlDeviceGetComputeRunningProcesses(). This can be removed
+ * once nvml.h has this structure.
+ */
+typedef struct nvmlProcessInfo_v1_st
+{
+    unsigned int pid;                 //!< Process ID
+    unsigned long long usedGpuMemory; //!< Amount of used GPU memory in bytes.
+                                      //! Under WDDM, \ref NVML_VALUE_NOT_AVAILABLE is always reported
+                                      //! because Windows KMD manages all the memory and not the NVIDIA driver
+} nvmlProcessInfo_v1_t;
 
 /**
  * Verify that DCGM definitions that are copies of NVML ones match up with their NVML counterparts
@@ -573,18 +821,8 @@ DCGM_CASSERT(dcgmModuleBlacklist_version1 == (long)0x01000008, 1);
 DCGM_CASSERT(dcgmSettingsSetLoggingSeverity_version1 == (long)0x01000008, 1);
 DCGM_CASSERT(dcgmVersionInfo_version == (long)0x2000204, 1);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version1 == (long)0x01000048, 1);
-DCGM_CASSERT(dcgmCreateGroup_version1 == (long)0x1000418, 1);
-DCGM_CASSERT(dcgmCreateGroup_version == (long)0x1000418, 1);
-DCGM_CASSERT(dcgmRemoveEntity_version1 == (long)0x1000010, 1);
-DCGM_CASSERT(dcgmRemoveEntity_version == (long)0x1000010, 1);
-DCGM_CASSERT(dcgmGroupDestroy_version1 == (long)0x1000008, 1);
-DCGM_CASSERT(dcgmGroupDestroy_version == (long)0x1000008, 1);
-DCGM_CASSERT(dcgmGetEntityGroupEntities_version1 == (long)0x1000110, 1);
-DCGM_CASSERT(dcgmGetEntityGroupEntities_version == (long)0x1000110, 1);
-DCGM_CASSERT(dcgmGroupGetAllIds_version1 == (long)0x1000108, 1);
-DCGM_CASSERT(dcgmGroupGetAllIds_version == (long)0x1000108, 1);
-DCGM_CASSERT(dcgmGroupGetInfo_version1 == (long)0x1000320, 1);
-DCGM_CASSERT(dcgmGroupGetInfo_version == (long)0x1000320, 1);
+DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
+DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
 
 /* Min and Max macros */
 #ifndef DCGM_MIN

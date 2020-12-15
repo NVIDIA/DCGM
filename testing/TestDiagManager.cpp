@@ -714,7 +714,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
     rawJsonOutput
         += "{ \"name\" : \"Environmental Variables\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
     rawJsonOutput
-        += "{ \"name\" : \"Page Retirement\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
+        += "{ \"name\" : \"Page Retirement/Row Remap\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
     rawJsonOutput
         += "{ \"name\" : \"Graphics Processes\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
     rawJsonOutput
@@ -954,8 +954,8 @@ int TestDiagManager::TestFillResponseStructure()
     }
 
     const char *testNames[]
-        = { "Blacklist",        "NVML Library", "CUDA Main Library", "CUDA SDK Library",   "Permissions",
-            "Persistence Mode", "Environment",  "Page Retirement",   "Graphics Processes", "Inforom" };
+        = { "Blacklist",        "NVML Library", "CUDA Main Library",         "CUDA SDK Library",   "Permissions",
+            "Persistence Mode", "Environment",  "Page Retirement/Row Remap", "Graphics Processes", "Inforom" };
 
     for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
     {

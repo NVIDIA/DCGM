@@ -55,9 +55,18 @@ static struct {
     int cycle;
 } nscq_dl = {PTHREAD_RWLOCK_INITIALIZER, NULL, 0};
 
-// Helper for nscq_dl_load()
-int nscq_dl_load_helper(char *dlname) {
+// Loads the requested major version of the library using dlopen().
+int nscq_dl_load() {
+    char dlname[32];
     int ret;
+
+    ret = snprintf(dlname, sizeof(dlname), "libnvidia-nscq.so.%u",
+                   NSCQ_API_VERSION_CODE_MAJOR(NSCQ_API_VERSION_CODE));
+    if (ret < 0) {
+        return ret;
+    } else if (((size_t)ret) >= sizeof(dlname)) {
+        return -ENAMETOOLONG;
+    }
 
     ret = pthread_rwlock_wrlock(&nscq_dl.rwlock);
     if (ret != 0) {
@@ -74,20 +83,6 @@ int nscq_dl_load_helper(char *dlname) {
     }
 
     pthread_rwlock_unlock(&nscq_dl.rwlock);
-
-    return ret;
-}
-
-// Loads the requested major version of the library using dlopen() or the
-// DCGM-provided library if standalone is not found on the system.
-int nscq_dl_load() {
-    int ret;
-
-    ret = nscq_dl_load_helper("libnvidia-nscq.so");
-
-    if (ret == -ELIBACC) {
-        ret = nscq_dl_load_helper("libnvidia-nscq-dcgm.so");
-    }
 
     return ret;
 }
@@ -112,7 +107,6 @@ void nscq_dl_unload(void) {
 int nscq_dl_get(void) {
     if (pthread_rwlock_rdlock(&nscq_dl.rwlock) == 0) {
         if (nscq_dl.handle != NULL) {
-            // coverity[missing_unlock] - We are intentionally leaving nscq_dl.rwlock locked
             return nscq_dl.cycle;
         }
 

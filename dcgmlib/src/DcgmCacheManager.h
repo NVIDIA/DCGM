@@ -2434,4 +2434,32 @@ private:
      * Helper for GetActiveNvSwitchNvLinkCountsForAllGpus
      */
     dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNSCQ(std::vector<unsigned int> &gpuCounts);
+
+    /*************************************************************************/
+    /**
+     * Gets the device name for a compute instance and stores it in ciName
+     *
+     * @param nvmlDevice[in] - the handle to the GPU whose compute instance's name we're getting
+     * @param ciIndex[in]    - the index of the compute instance whose name we're getting
+     * @param ciName[out]    - the string where we'll store the name
+     * @param ciId[out]      - store the compute instance ID here
+     *
+     * @return DCGM_ST_OK on success, DCGM_ST_* on a failure
+     */
+    dcgmReturn_t GetCIDeviceNameAndId(nvmlDevice_t nvmlDevice,
+                                      unsigned int ciIndex,
+                                      std::string &ciName,
+                                      unsigned int &ciId);
+
+    /*************************************************************************/
+    /**
+     * Populates the map with the name of each compute instance's profile mapped to its NVML id
+     *
+     * @param gpuInfo[in]  - The information about the GPU whose compute instances we're working on
+     * @param ciNames[out] - The map we're populating of nvml compute instance ids -> profile names
+     *
+     * @return DCGM_ST_OK on success, DCGM_ST_* on a failure
+     */
+    dcgmReturn_t GetComputeInstanceNames(dcgmcm_gpu_info_t &gpuInfo,
+                                         std::unordered_map<unsigned int, std::string> &ciNames);
 };

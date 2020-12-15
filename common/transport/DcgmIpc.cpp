@@ -165,6 +165,8 @@ DcgmIpc::~DcgmIpc()
         event_base_free(m_eventBase);
         m_eventBase = nullptr;
     }
+
+    libevent_global_shutdown();
 }
 
 /*****************************************************************************/

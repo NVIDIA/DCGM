@@ -45,7 +45,7 @@ Memory::Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
 
     if (gpuInfo == nullptr)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
         AddError(d);
     }
@@ -67,7 +67,7 @@ void Memory::Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &gpu)
 
     if (!testParameters->GetBoolFromString(MEMORY_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { gpu.gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -92,7 +92,7 @@ void Memory::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t 
 
     if (testParameters.GetBoolFromString(MEMORY_STR_IS_ALLOWED) == false)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);

@@ -18,8 +18,6 @@
 
 #include "CommandLineParser.h"
 #include "Config.h"
-#include "DcgmDiagCommon.h"
-#include "DcgmStringConversions.h"
 #include "DcgmiProfile.h"
 #include "DcgmiSettings.h"
 #include "DeviceMonitor.h"
@@ -35,21 +33,25 @@
 #include "ProcessStats.h"
 #include "Query.h"
 #include "Topo.h"
-#include "dcgm_agent.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
-#include "tclap/ArgException.h"
-#include "timelib.h"
+#include "Version.h"
+
 #include <DcgmBuildInfo.hpp>
+#include <DcgmDiagCommon.h>
+#include <DcgmStringConversions.h>
 #include <DcgmStringHelpers.h>
-#include <Version.h>
-#include <algorithm>
-#include <ctype.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <tclap/ArgException.h>
+#include <timelib.h>
+
+#include <algorithm>
+#include <cctype>
+#include <csignal>
 #include <iostream>
-#include <signal.h>
 #include <sstream>
 #include <stdexcept>
+
 
 #ifdef DEBUG
 #include "DcgmiTest.h"
@@ -57,7 +59,7 @@
 
 #define CHECK_TCLAP_ARG_NEGATIVE_VALUE(arg, name) \
     if (arg.getValue() < 0)                       \
-    throw(TCLAP::CmdLineParseException("Positive value expected, negative value found", name))
+    throw TCLAP::CmdLineParseException("Positive value expected, negative value found", name)
 
 static const string g_hostnameHelpText
     = "Connects to specified IP or fully-qualified domain name. To connect to a host engine that was started with -d (unix socket), prefix the unix socket filename with 'unix://'. [default = localhost]";
@@ -72,33 +74,34 @@ static const std::string HW_POWER_BRAKE("hw_power_brake");
  * display help if needed using the TCLAP library.
  */
 
-CommandLineParser::CommandLineParser()
+
+CommandLineParser::StaticConstructor::StaticConstructor()
 {
     // fill in the available subsystems and their appropriate pointers
-    mFunctionMap.insert(std::make_pair("discovery", &CommandLineParser::processQueryCommandLine));
-    mFunctionMap.insert(std::make_pair("policy", &CommandLineParser::processPolicyCommandLine));
-    mFunctionMap.insert(std::make_pair("group", &CommandLineParser::processGroupCommandLine));
-    mFunctionMap.insert(std::make_pair("fieldgroup", &CommandLineParser::processFieldGroupCommandLine));
-    mFunctionMap.insert(std::make_pair("config", &CommandLineParser::processConfigCommandLine));
-    mFunctionMap.insert(std::make_pair("health", &CommandLineParser::processHealthCommandLine));
-    mFunctionMap.insert(std::make_pair("diag", &CommandLineParser::processDiagCommandLine));
-    mFunctionMap.insert(std::make_pair("stats", &CommandLineParser::processStatsCommandLine));
-    mFunctionMap.insert(std::make_pair("topo", &CommandLineParser::processTopoCommandLine));
-    mFunctionMap.insert(std::make_pair("introspect", &CommandLineParser::processIntrospectCommandLine));
-    mFunctionMap.insert(std::make_pair("nvlink", &CommandLineParser::processNvlinkCommandLine));
-    mFunctionMap.insert(std::make_pair("dmon", &CommandLineParser::processDmonCommandLine));
-    mFunctionMap.insert(std::make_pair("modules", &CommandLineParser::processModuleCommandLine));
-    mFunctionMap.insert(std::make_pair("profile", &CommandLineParser::processProfileCommandLine));
-    mFunctionMap.insert(std::make_pair("set", &CommandLineParser::processSettingsCommandLine));
+    m_functionMap.insert(std::make_pair("discovery", &CommandLineParser::ProcessQueryCommandLine));
+    m_functionMap.insert(std::make_pair("policy", &CommandLineParser::ProcessPolicyCommandLine));
+    m_functionMap.insert(std::make_pair("group", &CommandLineParser::ProcessGroupCommandLine));
+    m_functionMap.insert(std::make_pair("fieldgroup", &CommandLineParser::ProcessFieldGroupCommandLine));
+    m_functionMap.insert(std::make_pair("config", &CommandLineParser::ProcessConfigCommandLine));
+    m_functionMap.insert(std::make_pair("health", &CommandLineParser::ProcessHealthCommandLine));
+    m_functionMap.insert(std::make_pair("diag", &CommandLineParser::ProcessDiagCommandLine));
+    m_functionMap.insert(std::make_pair("stats", &CommandLineParser::ProcessStatsCommandLine));
+    m_functionMap.insert(std::make_pair("topo", &CommandLineParser::ProcessTopoCommandLine));
+    m_functionMap.insert(std::make_pair("introspect", &CommandLineParser::ProcessIntrospectCommandLine));
+    m_functionMap.insert(std::make_pair("nvlink", &CommandLineParser::ProcessNvlinkCommandLine));
+    m_functionMap.insert(std::make_pair("dmon", &CommandLineParser::ProcessDmonCommandLine));
+    m_functionMap.insert(std::make_pair("modules", &CommandLineParser::ProcessModuleCommandLine));
+    m_functionMap.insert(std::make_pair("profile", &CommandLineParser::ProcessProfileCommandLine));
+    m_functionMap.insert(std::make_pair("set", &CommandLineParser::ProcessSettingsCommandLine));
 
 #ifdef DEBUG
-    mFunctionMap.insert(std::make_pair("test", &CommandLineParser::processAdminCommandLine));
+    m_functionMap.insert(std::make_pair("test", &CommandLineParser::ProcessAdminCommandLine));
 #endif
 }
 
 /* Entry method into this class for a given command line provided by main()
  */
-int CommandLineParser::processCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     try
@@ -123,8 +126,8 @@ int CommandLineParser::processCommandLine(int argc, char *argv[])
 
         cmd.xorAdd(versionArg, subsystemArg);
 #ifdef DEBUG
-        TCLAP::ValueArg<std::string> adminArg(
-            "", "test", "Tests and Cache Manager [dcgmi admin –h for more info]", false, "", "", cmd);
+        TCLAP::ValueArg<std::string> testArg(
+            "", "test", "Tests and Cache Manager [dcgmi test –h for more info]", false, "", "", cmd);
 #endif
         TCLAP::ValueArg<std::string> topoArg(
             "", "topo", "GPU Topology [dcgmi topo -h for more info]", false, "", "", cmd);
@@ -167,30 +170,34 @@ int CommandLineParser::processCommandLine(int argc, char *argv[])
         nvout.addFooter("Please email dcgm-support@nvidia.com with any questions, bug reports, etc.\n");
         // normally we would pass all of argc and argv.  But for this, we want just the first two
         if (argc < 2)
+        {
             cmd.parse(argc, argv);
+        }
 
         std::vector<std::string> args;
         for (int i = 0; i < 2; i++)
+        {
             args.emplace_back(argv[i]);
+        }
         cmd.parse(args);
 
         if (versionArg.getValue())
         {
-            processVersionInfoCommandLine(argc, argv);
-            return 0;
+            ProcessVersionInfoCommandLine(argc, argv);
+            return DCGM_ST_OK;
         }
 
         // call the correct subsystem
-        auto it = mFunctionMap.find(subsystemArg.getValue());
-        if (it != mFunctionMap.end())
+        auto it = m_functionMap.find(subsystemArg.getValue());
+        if (it != m_functionMap.end())
         {
-            result = (dcgmReturn_t)(this->*mFunctionMap[subsystemArg.getValue()])(argc, argv);
+            result = std::invoke(m_functionMap[subsystemArg.getValue()], argc, argv);
         }
         else
         {
             std::cout << "ERROR: Invalid subsystem." << std::endl << std::endl;
             nvout.usage(cmd);
-            return -1;
+            return DCGM_ST_BADPARAM;
         }
     }
     catch (TCLAP::ArgException &e)
@@ -211,7 +218,7 @@ int CommandLineParser::processCommandLine(int argc, char *argv[])
 // the below subsystem processing commands assume two things
 // 1) that the calling structure is already in a try block
 // 2) that the argc and argv commands have not been modified
-int CommandLineParser::processQueryCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "discovery";
@@ -263,7 +270,7 @@ int CommandLineParser::processQueryCommandLine(int argc, char *argv[])
 
     if (groupId.isSet() && gpuId.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both GPU and Group specified at command line"));
+        throw TCLAP::CmdLineParseException("Both GPU and Group specified at command line");
     }
 
     if (computeInstances.isSet() && (groupId.isSet() || gpuId.isSet()))
@@ -271,40 +278,33 @@ int CommandLineParser::processQueryCommandLine(int argc, char *argv[])
         throw TCLAP::CmdLineParseException("For now, hierarchy must be used by itself");
     }
 
-    Command *cmdq = NULL;
     if (getList.isSet())
     {
-        cmdq = new QueryDeviceList(hostAddress.getValue());
+        result = QueryDeviceList(hostAddress.getValue()).Execute();
     }
     else if (computeInstances.isSet())
     {
-        cmdq = new QueryHierarchyInfo(hostAddress.getValue());
+        result = QueryHierarchyInfo(hostAddress.getValue()).Execute();
     }
     else if (gpuId.isSet())
     {
-        cmdq = new QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue());
+        result = QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue()).Execute();
     }
     else if (groupId.isSet())
     {
-        cmdq = new QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet());
+        result
+            = QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet()).Execute();
     }
     else if (getInfo.isSet())
     {
-        cmdq = new QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet());
+        result = QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet())
+                     .Execute();
     }
-
-    if (cmdq)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdq->Execute();
-    }
-
-    delete (cmdq);
 
     return result;
 }
 
-int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "policy";
@@ -323,7 +323,7 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
         "reg",
         "Register this process for policy updates.  This process will sit in an infinite loop waiting for updates from the policy manager.",
         false);
-    TCLAP::ValueArg<std::string> setPolicy(
+    TCLAP::ValueArg<std::string> setPolicyArg(
         "",
         "set",
         "Set the current violation policy. Use csv action,validation (ie. 1,2)"
@@ -369,7 +369,7 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
     std::vector<TCLAP::Arg *> xors;
     xors.push_back(&getPolicy);
     xors.push_back(&regPolicy);
-    xors.push_back(&setPolicy);
+    xors.push_back(&setPolicyArg);
     xors.push_back(&clearPolicy);
     cmd.xorAdd(xors);
     cmd.add(&hostAddress);
@@ -387,7 +387,7 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
 
     helpOutput.addToGroup("3", &hostAddress);
     helpOutput.addToGroup("3", &groupId);
-    helpOutput.addToGroup("3", &setPolicy);
+    helpOutput.addToGroup("3", &setPolicyArg);
     helpOutput.addToGroup("3", &maxpages);
     helpOutput.addToGroup("3", &thermal);
     helpOutput.addToGroup("3", &power);
@@ -404,52 +404,52 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(power, "maxpower");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
 
-    std::unique_ptr<Command> cmdp;
-
-    if (setPolicy.isSet()
+    if (setPolicyArg.isSet()
         && !(maxpages.isSet() || thermal.isSet() || power.isSet() || eccdbe.isSet() || pciError.isSet()
              || nvlinkError.isSet() || xidError.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("No conditions specified", "set"));
+        throw TCLAP::CmdLineParseException("No conditions specified", "set");
     }
 
-    if (setPolicy.isSet())
+    if (setPolicyArg.isSet())
     {
         // Verify that the given value is in the correct action,validation format and has length 3
-        if (setPolicy.getValue().find(',') == std::string::npos || setPolicy.getValue().size() != 3)
+        if (setPolicyArg.getValue().find(',') == std::string::npos || setPolicyArg.getValue().size() != 3)
         {
-            throw(TCLAP::CmdLineParseException("Must use action,validation (csv) format", "set"));
+            throw TCLAP::CmdLineParseException("Must use action,validation (csv) format", "set");
         }
+
         // Verify the action is a valid integer between 0 and 1
-        else if (!isdigit(setPolicy.getValue().at(0)) || (setPolicy.getValue().at(0) - '0') > 1
-                 || (setPolicy.getValue().at(0) - '0') < 0)
+        if (!isdigit(setPolicyArg.getValue().at(0)) || (setPolicyArg.getValue().at(0) - '0') > 1
+            || (setPolicyArg.getValue().at(0) - '0') < 0)
         {
-            throw(TCLAP::CmdLineParseException("The action must be 0 or 1", "set"));
+            throw TCLAP::CmdLineParseException("The action must be 0 or 1", "set");
         }
+
         // Verify validation is a valid integer between 0 and 3
-        else if (!isdigit(setPolicy.getValue().at(2)) || (setPolicy.getValue().at(2) - '0') > 3
-                 || (setPolicy.getValue().at(2) - '0') < 0)
+        if (!isdigit(setPolicyArg.getValue().at(2)) || (setPolicyArg.getValue().at(2) - '0') > 3
+            || (setPolicyArg.getValue().at(2) - '0') < 0)
         {
-            throw(TCLAP::CmdLineParseException("The validation must be between 0 and 3 (inclusive)", "set"));
+            throw TCLAP::CmdLineParseException("The validation must be between 0 and 3 (inclusive)", "set");
         }
     }
 
     if (verbose.isSet() && !getPolicy.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Verbose option only available with the get policy arg (--get)"));
+        throw TCLAP::CmdLineParseException("Verbose option only available with the get policy arg (--get)");
     }
 
     if (getPolicy.getValue())
     {
-        cmdp
-            = std::make_unique<GetPolicy>(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue());
+        result = GetPolicy(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue()).Execute();
     }
 
     int buffer = 0;
 
     if (clearPolicy.isSet())
     {
-        dcgmPolicy_t setPolicy;
+        dcgmPolicy_t setPolicy = {};
+
         setPolicy.version    = dcgmPolicy_version;
         setPolicy.condition  = (dcgmPolicyCondition_t)0;
         setPolicy.mode       = DCGM_POLICY_MODE_MANUAL;    // ignored for now
@@ -457,9 +457,10 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
         setPolicy.action     = DCGM_POLICY_ACTION_NONE;
         setPolicy.validation = DCGM_POLICY_VALID_NONE;
         setPolicy.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
-        cmdp                 = std::make_unique<SetPolicy>(hostAddress.getValue(), setPolicy, groupId.getValue());
+
+        result = SetPolicy(hostAddress.getValue(), setPolicy, groupId.getValue()).Execute();
     }
-    else if (setPolicy.isSet())
+    else if (setPolicyArg.isSet())
     {
         dcgmPolicy_t setPol;
         setPol.version = dcgmPolicy_version;
@@ -511,11 +512,11 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
 
         setPol.mode       = DCGM_POLICY_MODE_MANUAL;    // ignored for now
         setPol.isolation  = DCGM_POLICY_ISOLATION_NONE; // ignored for now
-        setPol.action     = (dcgmPolicyAction_t)(setPolicy.getValue().at(0) - '0');
-        setPol.validation = (dcgmPolicyValidation_t)(setPolicy.getValue().at(2) - '0');
+        setPol.action     = (dcgmPolicyAction_t)(setPolicyArg.getValue().at(0) - '0');
+        setPol.validation = (dcgmPolicyValidation_t)(setPolicyArg.getValue().at(2) - '0');
         setPol.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
 
-        cmdp = std::make_unique<SetPolicy>(hostAddress.getValue(), setPol, groupId.getValue());
+        result = SetPolicy(hostAddress.getValue(), setPol, groupId.getValue()).Execute();
     }
     else if (regPolicy.isSet())
     {
@@ -547,18 +548,13 @@ int CommandLineParser::processPolicyCommandLine(int argc, char *argv[])
         {
             buffer += DCGM_POLICY_COND_XID;
         }
-        cmdp = std::make_unique<RegPolicy>(hostAddress.getValue(), groupId.getValue(), buffer);
-    }
-
-    if (cmdp)
-    {
-        result = cmdp->Execute();
+        result = RegPolicy(hostAddress.getValue(), groupId.getValue(), buffer).Execute();
     }
 
     return result;
 }
 
-int CommandLineParser::processGroupCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "group";
@@ -647,37 +643,35 @@ int CommandLineParser::processGroupCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(deleteGroup, "delete");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
 
-    Command *cmdg = NULL;
-
     if (groupId.isSet() && !(infoGroup.isSet() || addDevice.isSet() || removeDevice.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("No action has been specified for the group"));
+        throw TCLAP::CmdLineParseException("No action has been specified for the group");
     }
     if (addDevice.isSet() && (deleteGroup.isSet() || infoGroup.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("Add device(s) cannot be used with the delete group (--delete) "
-                                           "or group info (--info) options"));
+        throw TCLAP::CmdLineParseException("Add device(s) cannot be used with the delete group (--delete) "
+                                           "or group info (--info) options");
     }
     if (removeDevice.isSet() && (deleteGroup.isSet() || infoGroup.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("Remove device(s) cannot be used with the delete group (--delete) "
-                                           "or group info (--info) options"));
+        throw TCLAP::CmdLineParseException("Remove device(s) cannot be used with the delete group (--delete) "
+                                           "or group info (--info) options");
     }
     if (removeDevice.isSet() && addDevice.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both add and remove device are set. Please use one at a time"));
+        throw TCLAP::CmdLineParseException("Both add and remove device are set. Please use one at a time");
     }
 
     if (createGroup.isSet()
         && (!createGroup.getValue().compare("--default") || !createGroup.getValue().compare("--defaultnvswitches")
             || !createGroup.getValue().compare("-a") || !createGroup.getValue().compare("--add")))
     {
-        throw(TCLAP::CmdLineParseException("No group name given", "create"));
+        throw TCLAP::CmdLineParseException("No group name given", "create");
     }
 
     if (listGroup.isSet())
     {
-        cmdg = new GroupList(hostAddress.getValue(), json.getValue());
+        result = GroupList(hostAddress.getValue(), json.getValue()).Execute();
     }
     else if (createGroup.isSet())
     {
@@ -687,8 +681,8 @@ int CommandLineParser::processGroupCommandLine(int argc, char *argv[])
 
         if (defaultGroup.isSet() && defaultNvSwitchGroup.isSet())
         {
-            throw(TCLAP::CmdLineParseException("Both --default and --defaultnvswitches are set. "
-                                               "Please use one at a time"));
+            throw TCLAP::CmdLineParseException("Both --default and --defaultnvswitches are set. "
+                                               "Please use one at a time");
         }
 
         if (defaultGroup.isSet())
@@ -699,12 +693,12 @@ int CommandLineParser::processGroupCommandLine(int argc, char *argv[])
         {
             groupType = DCGM_GROUP_DEFAULT_NVSWITCHES;
         }
-        cmdg = new GroupCreate(hostAddress.getValue(), groupObj, groupType);
+        result = GroupCreate(hostAddress.getValue(), groupObj, groupType).Execute();
     }
     else if (deleteGroup.isSet())
     {
         groupObj.SetGroupId(deleteGroup.getValue());
-        cmdg = new GroupDestroy(hostAddress.getValue(), groupObj);
+        result = GroupDestroy(hostAddress.getValue(), groupObj).Execute();
     }
     else if (groupId.isSet())
     {
@@ -712,32 +706,24 @@ int CommandLineParser::processGroupCommandLine(int argc, char *argv[])
 
         if (infoGroup.isSet())
         {
-            cmdg = new GroupInfo(hostAddress.getValue(), groupObj, json.getValue());
+            result = GroupInfo(hostAddress.getValue(), groupObj, json.getValue()).Execute();
         }
         else if (addDevice.isSet())
         {
             groupObj.SetGroupInfo(addDevice.getValue());
-            cmdg = new GroupAddTo(hostAddress.getValue(), groupObj);
+            result = GroupAddTo(hostAddress.getValue(), groupObj).Execute();
         }
         else if (removeDevice.isSet())
         {
             groupObj.SetGroupInfo(removeDevice.getValue());
-            cmdg = new GroupDeleteFrom(hostAddress.getValue(), groupObj);
+            result = GroupDeleteFrom(hostAddress.getValue(), groupObj).Execute();
         }
     }
-
-    if (cmdg)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdg->Execute();
-    }
-
-    delete (cmdg);
 
     return result;
 }
 
-int CommandLineParser::processFieldGroupCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "fieldgroup";
@@ -798,8 +784,6 @@ int CommandLineParser::processFieldGroupCommandLine(int argc, char *argv[])
 
     cmd.parse(argc, argv);
 
-    std::unique_ptr<Command> cmdg;
-
     /* Populate arguments that are used by multiple commands */
     if (fieldGroupId.isSet())
     {
@@ -818,50 +802,45 @@ int CommandLineParser::processFieldGroupCommandLine(int argc, char *argv[])
     /* Decide on which command to run and do argument validation */
     if (listGroup.isSet())
     {
-        cmdg = std::make_unique<FieldGroupListAll>(hostAddress.getValue(), json.getValue());
+        result = FieldGroupListAll(hostAddress.getValue(), json.getValue()).Execute();
     }
     else if (infoGroup.isSet())
     {
         if (!fieldGroupId.isSet())
         {
-            throw(TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "info"));
+            throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "info");
         }
 
-        cmdg = std::make_unique<FieldGroupInfo>(hostAddress.getValue(), fieldGroupObj, json.getValue());
+        result = FieldGroupInfo(hostAddress.getValue(), fieldGroupObj, json.getValue()).Execute();
     }
     else if (createFieldGroup.isSet())
     {
         if (!fieldIds.isSet())
         {
-            throw(TCLAP::CmdLineParseException("No field IDs given (specify with --fieldids)", "create"));
+            throw TCLAP::CmdLineParseException("No field IDs given (specify with --fieldids)", "create");
         }
 
-        cmdg = std::make_unique<FieldGroupCreate>(hostAddress.getValue(), fieldGroupObj);
+        result = FieldGroupCreate(hostAddress.getValue(), fieldGroupObj).Execute();
     }
     else if (deleteFieldGroup.isSet())
     {
         if (!fieldGroupId.isSet())
         {
-            throw(TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "delete"));
+            throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "delete");
         }
 
-        cmdg = std::make_unique<FieldGroupDestroy>(hostAddress.getValue(), fieldGroupObj);
+        result = FieldGroupDestroy(hostAddress.getValue(), fieldGroupObj).Execute();
     }
     else
     {
-        throw(TCLAP::CmdLineParseException("No command has been specified. Run dcgmi fieldgroup --help for "
-                                           "supported options"));
-    }
-
-    if (cmdg)
-    {
-        result = cmdg->Execute();
+        throw TCLAP::CmdLineParseException("No command has been specified. Run dcgmi fieldgroup --help for "
+                                           "supported options");
     }
 
     return result;
 }
 
-int CommandLineParser::processConfigCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "config";
@@ -968,7 +947,7 @@ int CommandLineParser::processConfigCommandLine(int argc, char *argv[])
     if (setConfig.isSet()
         && !(eccMode.isSet() || syncBoost.isSet() || appClocks.isSet() || powerLimit.isSet() || computeMode.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("No configuration options given", "set"));
+        throw TCLAP::CmdLineParseException("No configuration options given", "set");
     }
 
     // Process Set Command
@@ -1003,7 +982,7 @@ int CommandLineParser::processConfigCommandLine(int argc, char *argv[])
 
             if (sscanf(clocks.c_str(), "%u,%u%c", &memClk, &smClk, &tmp) != 2)
             {
-                throw(TCLAP::CmdLineParseException("Failed to parse application clocks"));
+                throw TCLAP::CmdLineParseException("Failed to parse application clocks");
             }
 
             mDeviceConfig.perfState.targetClocks.memClock = memClk;
@@ -1024,50 +1003,45 @@ int CommandLineParser::processConfigCommandLine(int argc, char *argv[])
 
         configObj.SetArgs(groupId.getValue(), &mDeviceConfig);
 
-        SetConfig cmd(hostAddress.getValue(), configObj);
-        result = cmd.Execute();
+        result = SetConfig(hostAddress.getValue(), configObj).Execute();
     }
     else if (getConfig.isSet())
     {
-        configObj.SetArgs(groupId.getValue(), 0);
-        GetConfig cmd(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet());
-
         if (eccMode.isSet() || (appClocks.isSet()) || (powerLimit.isSet()) || (computeMode.isSet()))
         {
-            throw(TCLAP::CmdLineParseException("Additional parameters specified at command line", "get"));
+            throw TCLAP::CmdLineParseException("Additional parameters specified at command line", "get");
         }
 
-        result = cmd.Execute();
+        configObj.SetArgs(groupId.getValue(), 0);
+        result = GetConfig(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet()).Execute();
     }
     else if (enforceConfig.isSet())
     {
         if (eccMode.isSet() || (appClocks.isSet()) || (powerLimit.isSet()) || (computeMode.isSet()))
         {
-            throw(TCLAP::CmdLineParseException("Additional parameters specified at command line", "enforce"));
+            throw TCLAP::CmdLineParseException("Additional parameters specified at command line", "enforce");
         }
 
         configObj.SetArgs(groupId.getValue(), 0); // Set the required Args (groupId in this case)
-        EnforceConfig cmd(hostAddress.getValue(), configObj);
-
-        result = cmd.Execute();
+        result = EnforceConfig { hostAddress.getValue(), configObj }.Execute();
     }
 
     return result;
 }
 
 // Helper for checking duplicate flags given to the set watches argument for processHealthCommandLine
-void checkDuplicateFlagsForSetWatches(unsigned int i, const std::string &setWatches)
+void CheckDuplicateFlagsForSetWatches(unsigned int i, const std::string &setWatches)
 {
     for (unsigned int j = i + 1; j < setWatches.length(); j++)
     {
         if (setWatches.at(i) == setWatches.at(j))
         {
-            throw(TCLAP::CmdLineParseException("Duplicate flags detected", "set"));
+            throw TCLAP::CmdLineParseException("Duplicate flags detected", "set");
         }
     }
 }
 
-unsigned int CommandLineParser::CheckGroupIdArgument(const std::string &groupIdStr) const
+unsigned int CommandLineParser::CheckGroupIdArgument(const std::string &groupIdStr)
 {
     static const char *groupErr = "The only allowed non-digit strings are g (gpus), s (switches), i (instances),"
                                   " c (compute instances), or a (all entities)";
@@ -1077,29 +1051,26 @@ unsigned int CommandLineParser::CheckGroupIdArgument(const std::string &groupIdS
         {
             return DCGM_GROUP_ALL_GPUS;
         }
-        else if (groupIdStr == "s")
+        if (groupIdStr == "s")
         {
             return DCGM_GROUP_ALL_NVSWITCHES;
         }
-        else if (groupIdStr == "i")
+        if (groupIdStr == "i")
         {
             return DCGM_GROUP_ALL_INSTANCES;
         }
-        else if (groupIdStr == "c")
+        if (groupIdStr == "c")
         {
             return DCGM_GROUP_ALL_COMPUTE_INSTANCES;
         }
-        else if (groupIdStr == "a")
+        if (groupIdStr == "a")
         {
             return DCGM_GROUP_ALL_ENTITIES;
         }
-        else
-        {
-            throw TCLAP::CmdLineParseException(groupErr);
-        }
+        throw TCLAP::CmdLineParseException(groupErr);
     }
 
-    long groupId = std::strtol(groupIdStr.c_str(), nullptr, 10);
+    long const groupId = std::strtol(groupIdStr.c_str(), nullptr, 10);
     if (groupId < 0)
     {
         throw TCLAP::CmdLineParseException("The value for the group ID cannot be negative.");
@@ -1108,7 +1079,7 @@ unsigned int CommandLineParser::CheckGroupIdArgument(const std::string &groupIdS
     return groupId;
 }
 
-int CommandLineParser::processHealthCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "health";
@@ -1183,16 +1154,15 @@ int CommandLineParser::processHealthCommandLine(int argc, char *argv[])
     // Check for (invalid) inputs
     unsigned int groupId = CheckGroupIdArgument(groupIdArg.getValue());
 
-    Command *cmdh = NULL;
-
     // Process Get Command
     if (getWatches.isSet())
     {
-        cmdh = new GetHealth(hostAddress.getValue(), groupId, json.getValue());
+        result = GetHealth(hostAddress.getValue(), groupId, json.getValue()).Execute();
     }
     else if (clearWatches.isSet())
     {
-        cmdh = new SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue());
+        result
+            = SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue()).Execute();
     }
     else if (setWatches.isSet())
     {
@@ -1208,20 +1178,20 @@ int CommandLineParser::processHealthCommandLine(int argc, char *argv[])
                     // bitwiseWatches|= DCGM_HEALTH_WATCH_NVLINK;
 
                     // Check for duplicates
-                    checkDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
                 case 'm':
                     bitwiseWatches |= DCGM_HEALTH_WATCH_MEM;
                     // bitwiseWatches|= DCGM_HEALTH_WATCH_SM;
 
                     // Check for duplicates
-                    checkDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
                 case 'i':
                     bitwiseWatches |= DCGM_HEALTH_WATCH_INFOROM;
 
                     // Check for duplicates
-                    checkDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
                     /*
                 case 'u':
@@ -1237,13 +1207,13 @@ int CommandLineParser::processHealthCommandLine(int argc, char *argv[])
                     bitwiseWatches |= DCGM_HEALTH_WATCH_POWER;
 
                     // Check for duplicates
-                    checkDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
                 case 'n':
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVLINK;
 
                     // Check for duplicates
-                    checkDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
                 case 'a':
                     // bitwiseWatches = DCGM_HEALTH_WATCH_ALL;
@@ -1255,36 +1225,29 @@ int CommandLineParser::processHealthCommandLine(int argc, char *argv[])
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVLINK;
                     if (setWatches.getValue().length() > 1)
                     {
-                        throw(TCLAP::CmdLineParseException("Invalid flags detected", "set"));
+                        throw TCLAP::CmdLineParseException("Invalid flags detected", "set");
                     }
 
                     break;
 
                 default:
-                    throw(TCLAP::CmdLineParseException("Invalid flags detected", "set"));
+                    throw TCLAP::CmdLineParseException("Invalid flags detected", "set");
             }
         }
 
         if (bitwiseWatches == 0)
         {
-            throw(TCLAP::CmdLineParseException("No flags detected", "set"));
+            throw TCLAP::CmdLineParseException("No flags detected", "set");
         }
 
-        cmdh = new SetHealth(
-            hostAddress.getValue(), groupId, bitwiseWatches, updateInterval.getValue(), maxKeepAge.getValue());
+        result = SetHealth(
+                     hostAddress.getValue(), groupId, bitwiseWatches, updateInterval.getValue(), maxKeepAge.getValue())
+                     .Execute();
     }
     else if (checkWatches.isSet())
     {
-        cmdh = new CheckHealth(hostAddress.getValue(), groupId, json.getValue());
+        result = CheckHealth(hostAddress.getValue(), groupId, json.getValue()).Execute();
     }
-
-    if (cmdh)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdh->Execute();
-    }
-
-    delete (cmdh);
 
     return result;
 }
@@ -1295,7 +1258,7 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
 
     if (throttleMask.size() > DCGM_THROTTLE_MASK_LEN - 1)
     {
-        throw(TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters"));
+        throw TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters");
     }
 
     int isdigitRet = std::isdigit(throttleMask[0]);
@@ -1306,7 +1269,7 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
         {
             buf << "throttle-mask cannot mix numbers and letters, but we detected a mix of letters and numbers '"
                 << throttleMask << "'.";
-            throw(TCLAP::CmdLineParseException(buf.str()));
+            throw TCLAP::CmdLineParseException(buf.str());
         }
     }
 
@@ -1325,7 +1288,7 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
         {
             buf << "Detected invalid bits set in the throttle-mask. Valid values for throttle-mask are 0, 8, 32, "
                 << "64 and 128, and their additive permutations.";
-            throw(TCLAP::CmdLineParseException(buf.str()));
+            throw TCLAP::CmdLineParseException(buf.str());
         }
     }
     else
@@ -1341,18 +1304,17 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
             {
                 buf << "Found '" << reasons[i] << "' in throttle-mask. Valid throttle reasons are limited to "
                     << HW_SLOWDOWN << ", " << SW_THERMAL << ", " << HW_THERMAL << ", and " << HW_POWER_BRAKE << ".";
-                throw(TCLAP::CmdLineParseException(buf.str()));
+                throw TCLAP::CmdLineParseException(buf.str());
             }
         }
     }
 }
 
-int CommandLineParser::processDiagCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv)
 {
     // Check for stop diag request
-    const char *value = NULL;
-    value             = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
-    if (value != NULL)
+    const char *value = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
+    if (value != nullptr)
     {
         AbortDiag abortDiag = AbortDiag(std::string(value));
         return abortDiag.Execute();
@@ -1564,12 +1526,12 @@ int CommandLineParser::processDiagCommandLine(int argc, char *argv[])
 
     if (training.isSet() && startDiag.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Specifying training and a run option (-r) are mutually exclusive."));
+        throw TCLAP::CmdLineParseException("Specifying training and a run option (-r) are mutually exclusive.");
     }
-    else if (!training.isSet() && !startDiag.isSet())
+
+    if (!training.isSet() && !startDiag.isSet())
     {
-        throw(
-            TCLAP::CmdLineParseException("The run option (-r) must always be set unless training mode is being run."));
+        throw TCLAP::CmdLineParseException("The run option (-r) must always be set unless training mode is being run.");
     }
 
     // Check for negative (invalid) inputs
@@ -1577,41 +1539,41 @@ int CommandLineParser::processDiagCommandLine(int argc, char *argv[])
     // Checking string value so macro CHECK_TCLAP_ARG_NEGATIVE_VALUE is not used
     if (strtol(startDiag.getValue().c_str(), NULL, 10) < 0)
     {
-        throw(TCLAP::CmdLineParseException("Positive value expected, negative value found", "run"));
+        throw TCLAP::CmdLineParseException("Positive value expected, negative value found", "run");
     }
 
     if (fakeGpuList.isSet())
     {
         if (gpuList.isSet() || groupId.isSet())
         {
-            throw(TCLAP::CmdLineParseException(
-                "Specifying a group id or gpu list with a fake gpu list is not supported"));
+            throw TCLAP::CmdLineParseException(
+                "Specifying a group id or gpu list with a fake gpu list is not supported");
         }
     }
 
     if (gpuList.isSet() && groupId.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Specifying a group id and a gpu list are mutually exclusive"));
+        throw TCLAP::CmdLineParseException("Specifying a group id and a gpu list are mutually exclusive");
     }
 
     if (debugLogFile.getValue().size() > DCGM_FILE_LEN - 1)
     {
-        throw(TCLAP::CmdLineParseException("debugLogFile has to be under 30 characters"));
+        throw TCLAP::CmdLineParseException("debugLogFile has to be under 30 characters");
     }
 
     if (statsPath.getValue().size() > DCGM_PATH_LEN - 1)
     {
-        throw(TCLAP::CmdLineParseException("statspath has to be under 128 characters"));
+        throw TCLAP::CmdLineParseException("statspath has to be under 128 characters");
     }
 
     if ((!debugLevel.getValue().empty()) && (!DcgmLogging::isValidSeverity(debugLevel.getValue().c_str())))
     {
-        throw(TCLAP::CmdLineParseException("debugLevel must be one of " DCGM_LOGGING_SEVERITY_OPTIONS));
+        throw TCLAP::CmdLineParseException("debugLevel must be one of " DCGM_LOGGING_SEVERITY_OPTIONS);
     }
 
     if (throttleMask.getValue().size() > DCGM_THROTTLE_MASK_LEN - 1)
     {
-        throw(TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters"));
+        throw TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters");
     }
 
     // This will throw an exception if an error occurs
@@ -1621,38 +1583,38 @@ int CommandLineParser::processDiagCommandLine(int argc, char *argv[])
     {
         if (forceTrain.isSet())
         {
-            throw(TCLAP::CmdLineParseException("--force is only valid with --train"));
+            throw TCLAP::CmdLineParseException("--force is only valid with --train");
         }
 
         if (trainingIterations.isSet())
         {
-            throw(TCLAP::CmdLineParseException("training-iterations is only valid with --train"));
+            throw TCLAP::CmdLineParseException("training-iterations is only valid with --train");
         }
 
         if (trainingVariance.isSet())
         {
-            throw(TCLAP::CmdLineParseException("training-variance is only valid with --train"));
+            throw TCLAP::CmdLineParseException("training-variance is only valid with --train");
         }
 
         if (trainingTolerance.isSet())
         {
-            throw(TCLAP::CmdLineParseException("training-tolerance is only valid with --train"));
+            throw TCLAP::CmdLineParseException("training-tolerance is only valid with --train");
         }
 
         if (goldenValuesFile.isSet())
         {
-            throw(TCLAP::CmdLineParseException("golden-values-filename is only valid with --train"));
+            throw TCLAP::CmdLineParseException("golden-values-filename is only valid with --train");
         }
     }
 
     if (failCheckInterval.isSet() && !failEarly.isSet())
     {
-        throw(TCLAP::CmdLineParseException("The --fail-early option must be enabled", "check-interval"));
+        throw TCLAP::CmdLineParseException("The --fail-early option must be enabled", "check-interval");
     }
 
     if (failCheckInterval.isSet() && (failCheckInterval.getValue() == 0 || failCheckInterval.getValue() > 300))
     {
-        throw(TCLAP::CmdLineParseException("Interval value must be between 1 and 300", "check-interval"));
+        throw TCLAP::CmdLineParseException("Interval value must be between 1 and 300", "check-interval");
     }
 
     bool trainVal      = training.getValue();
@@ -1704,18 +1666,14 @@ int CommandLineParser::processDiagCommandLine(int argc, char *argv[])
 
     if (result == DCGM_ST_BADPARAM)
     {
-        throw(TCLAP::CmdLineParseException(error));
+        throw TCLAP::CmdLineParseException(error);
     }
 
-    std::unique_ptr<Command> cmdd { new StartDiag(
-        hostAddress.getValue(), parms.getValue(), config.getValue(), json.getValue(), drd, argv[0]) };
-
-    result = cmdd->Execute();
-
-    return result;
+    return StartDiag { hostAddress.getValue(), parms.getValue(), config.getValue(), json.getValue(), drd, argv[0] }
+        .Execute();
 }
 
-int CommandLineParser::processStatsCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "stats";
@@ -1850,54 +1808,46 @@ int CommandLineParser::processStatsCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(pid, "pid");
 
-    Command *cmds = NULL;
-
     if (enableWatches.isSet())
     {
-        cmds = new EnableWatches(
-            hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue());
+        result = EnableWatches(
+                     hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue())
+                     .Execute();
     }
     else if (disableWatches.isSet())
     {
-        cmds = new DisableWatches(hostAddress.getValue(), groupId.getValue());
+        result = DisableWatches(hostAddress.getValue(), groupId.getValue()).Execute();
     }
     else if (pid.isSet())
     {
-        cmds = new ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue());
+        result = ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue())
+                     .Execute();
     }
     else if (jobStart.isSet())
     {
-        cmds = new StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue());
+        result = StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue()).Execute();
     }
     else if (jobStop.isSet())
     {
-        cmds = new StopJob(hostAddress.getValue(), jobStop.getValue());
+        result = StopJob(hostAddress.getValue(), jobStop.getValue()).Execute();
     }
     else if (jobStats.isSet())
     {
-        cmds = new ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue());
+        result = ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue()).Execute();
     }
     else if (jobRemove.isSet())
     {
-        cmds = new RemoveJob(hostAddress.getValue(), jobRemove.getValue());
+        result = RemoveJob(hostAddress.getValue(), jobRemove.getValue()).Execute();
     }
     else if (jobRemoveAll.isSet())
     {
-        cmds = new RemoveAllJobs(hostAddress.getValue());
+        result = RemoveAllJobs(hostAddress.getValue()).Execute();
     }
-
-    if (cmds)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmds->Execute();
-    }
-
-    delete (cmds);
 
     return result;
 }
 
-int CommandLineParser::processTopoCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "topo";
@@ -1929,31 +1879,24 @@ int CommandLineParser::processTopoCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(gpuId, "gpuid");
 
-    std::unique_ptr<Command> cmdt;
-
     if (gpuId.isSet() && groupId.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both GPU and group ID are given"));
+        throw TCLAP::CmdLineParseException("Both GPU and group ID are given");
     }
 
     if (gpuId.isSet())
     {
-        cmdt = std::make_unique<GetGPUTopo>(hostAddress.getValue(), gpuId.getValue(), json.getValue());
+        result = GetGPUTopo(hostAddress.getValue(), gpuId.getValue(), json.getValue()).Execute();
     }
     else
     {
-        cmdt = std::make_unique<GetGroupTopo>(hostAddress.getValue(), groupId.getValue(), json.getValue());
-    }
-
-    if (cmdt)
-    {
-        result = cmdt->Execute();
+        result = GetGroupTopo(hostAddress.getValue(), groupId.getValue(), json.getValue()).Execute();
     }
 
     return result;
 }
 
-int CommandLineParser::processIntrospectCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "introspect";
@@ -2021,72 +1964,71 @@ int CommandLineParser::processIntrospectCommandLine(int argc, char *argv[])
 
     cmd.parse(argc, argv);
 
-    Command *cmdt = NULL;
-
-
     if (enable.isSet())
     {
-        cmdt = new ToggleIntrospect(hostAddress.getValue(), true);
+        result = ToggleIntrospect(hostAddress.getValue(), true).Execute();
     }
     else if (disable.isSet())
     {
-        cmdt = new ToggleIntrospect(hostAddress.getValue(), false);
+        result = ToggleIntrospect(hostAddress.getValue(), false).Execute();
     }
     else if (show.isSet())
     {
         if (!hostengineTarget.isSet() && !allFieldsTarget.isSet() && !fieldGroupTarget.isSet()
             && !allFieldGroupsTarget.isSet())
         {
-            throw(TCLAP::CmdLineParseException("No target specified to show introspection stats for. "
-                                               "See \"dcgmi introspect --help\""));
+            throw TCLAP::CmdLineParseException("No target specified to show introspection stats for. "
+                                               "See \"dcgmi introspect --help\"");
         }
 
-        std::vector<string> fgIds = fieldGroupTarget.getValue();
+        auto const &fgIds = fieldGroupTarget.getValue();
         std::vector<dcgmFieldGrp_t> fgTargets;
         bool showAllFieldGroups = allFieldGroupsTarget.getValue();
 
         // validate field group arguments
-        if (fieldGroupTarget.isSet() && fgIds.size() > 0)
+        if (fieldGroupTarget.isSet() && !fgIds.empty())
         {
             if (std::find(fgIds.begin(), fgIds.end(), "all") != fgIds.end() && fgIds.size() > 1)
             {
-                throw(TCLAP::CmdLineParseException("Cannot specify other field groups when \"all\" field groups are "
-                                                   "specified"));
+                throw TCLAP::CmdLineParseException("Cannot specify other field groups when \"all\" field groups are "
+                                                   "specified");
             }
-            else if (fgIds.at(0).compare("all") == 0)
+
+            if (fgIds[0] == "all")
             {
                 showAllFieldGroups = true;
             }
             else
             {
                 // parse the given field collections
-                for (size_t i = 0; i < fgIds.size(); ++i)
+                for (auto const &fgId : fgIds)
                 {
-                    bool success            = false;
-                    unsigned long long fgId = strTo<unsigned long long>(fgIds.at(i), &success);
-                    fgTargets.push_back((dcgmFieldGrp_t)fgId);
+                    bool success          = false;
+                    auto const parsedFgId = strTo<unsigned long long>(fgId, &success);
+                    if (!success)
+                    {
+                        std::stringstream ss;
+                        ss << "Unable to parse provided Field Group Id: " << fgId;
+                        throw TCLAP::CmdLineParseException(ss.str());
+                    }
+
+                    fgTargets.push_back(static_cast<dcgmFieldGrp_t>(parsedFgId));
                 }
             }
         }
 
-        cmdt = new DisplayIntrospectSummary(hostAddress.getValue(),
-                                            hostengineTarget.getValue(),
-                                            allFieldsTarget.getValue(),
-                                            showAllFieldGroups,
-                                            fgTargets);
-    }
-
-    if (cmdt)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdt->Execute();
-        delete (cmdt);
+        result = DisplayIntrospectSummary(hostAddress.getValue(),
+                                          hostengineTarget.getValue(),
+                                          allFieldsTarget.getValue(),
+                                          showAllFieldGroups,
+                                          fgTargets)
+                     .Execute();
     }
 
     return result;
 }
 
-int CommandLineParser::processNvlinkCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_NOT_CONFIGURED;
     std::string myName  = "nvlink";
@@ -2130,41 +2072,31 @@ int CommandLineParser::processNvlinkCommandLine(int argc, char *argv[])
 
     if (gpuId.isSet() && gpuId.getValue() < 0)
     {
-        throw(TCLAP::CmdLineParseException("Positive value expected, negative value found", "gpuid"));
+        throw TCLAP::CmdLineParseException("Positive value expected, negative value found", "gpuid");
     }
-
-    Command *cmdn = NULL;
 
     if (printNvLinkErrors.isSet())
     {
         if (!gpuId.isSet())
         {
-            throw(TCLAP::CmdLineParseException("GPU ID is required (--gpuid)", "errors"));
+            throw TCLAP::CmdLineParseException("GPU ID is required (--gpuid)", "errors");
         }
 
-        cmdn = new GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue());
+        result = GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue()).Execute();
     }
     else if (printLinkStatus.isSet())
     {
-        cmdn = new GetNvLinkLinkStatuses(hostAddress.getValue());
+        result = GetNvLinkLinkStatuses(hostAddress.getValue()).Execute();
     }
 
-    if (cmdn)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdn->Execute();
-    }
-
-    delete (cmdn);
     return result;
 }
 
-int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *const *argv)
 {
-    dcgmReturn_t result = DCGM_ST_OK;
-    std::string myName  = "dmon";
+    std::string myName = "dmon";
     DCGMOutput helpOutput;
-    std::string gpu_id_str;
+    std::string gpuIdStr;
     std::unique_ptr<Command> cmdn;
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
@@ -2174,7 +2106,7 @@ int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
 
     TCLAP::ValueArg<std::string> gpuId("i",
                                        "gpu-id",
-                                       " The comma seperated list of GPU/GPU-I/GPU-CI IDs to run the dmon on. "
+                                       " The comma separated list of GPU/GPU-I/GPU-CI IDs to run the dmon on. "
                                        "Default is -1 which runs for all supported GPU. Run dcgmi discovery -c to "
                                        "check list of available GPU entities",
                                        false,
@@ -2190,7 +2122,7 @@ int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
     TCLAP::ValueArg<int> delay(
         "d",
         "delay",
-        " In milli seconds. Integer representing how often to query results from DCGM and print them for all of the entities. [default = 1000 msec,  Minimum value = 1 msec.]",
+        " In milliseconds. Integer representing how often to query results from DCGM and print them for all of the entities. [default = 1000 msec,  Minimum value = 1 msec.]",
         false,
         1000,
         "delay");
@@ -2213,11 +2145,11 @@ int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
     helpOutput.addToGroup("1", &count);
     helpOutput.addToGroup("1", &list);
 
-    std::vector<TCLAP::Arg *> xors_fields;
-    xors_fields.push_back(&fieldGroupId);
-    xors_fields.push_back(&fieldId);
-    xors_fields.push_back(&list);
-    cmd.xorAdd(xors_fields);
+    std::vector<TCLAP::Arg *> xorsFields;
+    xorsFields.push_back(&fieldGroupId);
+    xorsFields.push_back(&fieldId);
+    xorsFields.push_back(&list);
+    cmd.xorAdd(xorsFields);
     cmd.add(&delay);
     cmd.add(&count);
 
@@ -2225,36 +2157,34 @@ int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
 
     if (groupId.isSet() && gpuId.isSet())
     {
-        throw(TCLAP::CmdLineParseException(
-            "Both gpu-id and group-id are given. Only one of the options must be present"));
+        throw TCLAP::CmdLineParseException(
+            "Both gpu-id and group-id are given. Only one of the options must be present");
     }
 
     if (fieldId.isSet() && fieldGroupId.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both field-id and field-group-id specified at command line. "
-                                           "Only one of the options must be present"));
+        throw TCLAP::CmdLineParseException("Both field-id and field-group-id specified at command line. "
+                                           "Only one of the options must be present");
     }
 
     if (list.isSet()
         && (groupId.isSet() || gpuId.isSet() || fieldId.isSet() || fieldGroupId.isSet() || delay.isSet()
             || count.isSet()))
     {
-        throw(TCLAP::CmdLineParseException("Invalid parameters with list arg. Usage : dmon -l"));
+        throw TCLAP::CmdLineParseException("Invalid parameters with list arg. Usage : dmon -l");
     }
 
     if (list.isSet())
     {
-        cmdn = std::make_unique<DeviceInfo>(hostAddress.getValue(),
-                                            gpuId.getValue(),
-                                            groupId.getValue(),
-                                            fieldId.getValue(),
-                                            fieldGroupId.getValue(),
-                                            delay.getValue(),
-                                            count.getValue(),
-                                            true);
-
-        result = cmdn->Execute();
-        return result;
+        return DeviceInfo(hostAddress.getValue(),
+                          gpuId.getValue(),
+                          groupId.getValue(),
+                          fieldId.getValue(),
+                          fieldGroupId.getValue(),
+                          delay.getValue(),
+                          count.getValue(),
+                          true)
+            .Execute();
     }
 
     // Check for negative + invalid inputs
@@ -2262,32 +2192,29 @@ int CommandLineParser::processDmonCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(fieldGroupId, "field-group-id");
     if (delay.getValue() < 1)
     {
-        throw(TCLAP::CmdLineParseException("Invalid value", "delay"));
+        throw TCLAP::CmdLineParseException("Invalid value", "delay");
     }
-    if (fieldId.isSet() && (!fieldId.getValue().size() || !isdigit(fieldId.getValue().at(0))))
+    if (fieldId.isSet() && (fieldId.getValue().empty() || !isdigit(fieldId.getValue().at(0))))
     {
-        throw(TCLAP::CmdLineParseException("Invalid value", "field-id"));
+        throw TCLAP::CmdLineParseException("Invalid value", "field-id");
     }
 
-    cmdn = std::make_unique<DeviceInfo>(hostAddress.getValue(),
-                                        gpuId.getValue(),
-                                        groupId.getValue(),
-                                        fieldId.getValue(),
-                                        fieldGroupId.getValue(),
-                                        delay.getValue(),
-                                        count.getValue(),
-                                        false);
-
-    result = cmdn->Execute();
-    return result;
+    return DeviceInfo(hostAddress.getValue(),
+                      gpuId.getValue(),
+                      groupId.getValue(),
+                      fieldId.getValue(),
+                      fieldGroupId.getValue(),
+                      delay.getValue(),
+                      count.getValue(),
+                      false)
+        .Execute();
 }
 
-int CommandLineParser::processProfileCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *const *argv)
 {
     const std::string myName = "profile";
     dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
-    std::unique_ptr<Command> cmdn;
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
@@ -2328,42 +2255,39 @@ int CommandLineParser::processProfileCommandLine(int argc, char *argv[])
 
     if (groupId.isSet() && gpuIds.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both GPU and group ID specified. Please use only one at a time"));
+        throw TCLAP::CmdLineParseException("Both GPU and group ID specified. Please use only one at a time");
     }
 
     if (pauseArg.isSet() && resumeArg.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both --pause and --resume were specified. Please use only one at a time"));
+        throw TCLAP::CmdLineParseException("Both --pause and --resume were specified. Please use only one at a time");
     }
 
     if (pauseArg.isSet())
     {
-        cmdn = std::make_unique<DcgmiProfileSetPause>(hostAddress.getValue(), true);
+        result = DcgmiProfileSetPause(hostAddress.getValue(), true).Execute();
     }
     else if (resumeArg.isSet())
     {
-        cmdn = std::make_unique<DcgmiProfileSetPause>(hostAddress.getValue(), false);
+        result = DcgmiProfileSetPause(hostAddress.getValue(), false).Execute();
     }
     else if (list.isSet())
     {
-        cmdn = std::make_unique<DcgmiProfileList>(
-            hostAddress.getValue(), gpuIds.getValue(), groupId.getValue(), json.getValue());
+        result = DcgmiProfileList(hostAddress.getValue(), gpuIds.getValue(), groupId.getValue(), json.getValue())
+                     .Execute();
     }
     else
     {
-        throw(TCLAP::CmdLineParseException("No argument provided for the profile subsystem"));
+        throw TCLAP::CmdLineParseException("No argument provided for the profile subsystem");
     }
 
-    result = cmdn->Execute();
     return result;
 }
 
-int CommandLineParser::processVersionInfoCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc, char const *const *argv)
 {
     const std::string myName = "version";
-    dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
-    std::unique_ptr<Command> cmdn(nullptr);
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
@@ -2372,22 +2296,13 @@ int CommandLineParser::processVersionInfoCommandLine(int argc, char *argv[])
 
     cmd.parse(argc, argv);
 
-    cmdn = std::unique_ptr<Command>(new VersionInfo(hostAddress.getValue()));
-
-    if (cmdn)
-    {
-        result = cmdn->Execute();
-    }
-
-    return result;
+    return VersionInfo(hostAddress.getValue()).Execute();
 }
 
-int CommandLineParser::processSettingsCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const *const *argv)
 {
     const std::string myName = "set";
-    dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
-    std::unique_ptr<Command> cmdn(nullptr);
     const char *loggerHelpMsg
         = "Target logger (default = BASE). DCGM ships with multiple loggers for different "
           "subsystems. BASE logger is used for most logging messages and is likely what you want to modify. "
@@ -2409,30 +2324,21 @@ int CommandLineParser::processSettingsCommandLine(int argc, char *argv[])
 
     cmd.parse(argc, argv);
 
-    if (targetSeverity.isSet())
-    {
-        cmdn = std::unique_ptr<Command>(new DcgmiSettingsSetLoggingSeverity(
-            hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue()));
-    }
-    else
+    if (!targetSeverity.isSet())
     {
         throw TCLAP::CmdLineParseException("No argument provided for configuring hostengine (dcgmi set)");
     }
 
-    if (cmdn)
-    {
-        result = cmdn->Execute();
-    }
-
-    return result;
+    return DcgmiSettingsSetLoggingSeverity(
+               hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue())
+        .Execute();
 }
 
-int CommandLineParser::processModuleCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *const *argv)
 {
     const std::string myName = "modules";
     dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
-    Command *cmdn = NULL;
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
@@ -2453,26 +2359,19 @@ int CommandLineParser::processModuleCommandLine(int argc, char *argv[])
 
     if (list.isSet())
     {
-        cmdn = new ListModule(hostAddress.getValue(), json.getValue());
+        result = ListModule { hostAddress.getValue(), json.getValue() }.Execute();
     }
     else if (blacklist.isSet())
     {
-        cmdn = new BlacklistModule(hostAddress.getValue(), blacklist.getValue(), json.getValue());
+        result = BlacklistModule { hostAddress.getValue(), blacklist.getValue(), json.getValue() }.Execute();
     }
     // No else clause since xors ensures one of list or blacklist is always set
-
-    if (NULL != cmdn)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdn->Execute();
-        delete (cmdn);
-    }
 
     return result;
 }
 
 #ifdef DEBUG
-int CommandLineParser::processAdminCommandLine(int argc, char *argv[])
+dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     std::string myName  = "test";
@@ -2517,36 +2416,30 @@ int CommandLineParser::processAdminCommandLine(int argc, char *argv[])
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(gpuId, "gpuid");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(timeVal, "in");
 
-    Command *cmdd = NULL;
-
     if (gpuId.isSet() && groupId.isSet())
     {
-        throw(TCLAP::CmdLineParseException("Both group and GPU ID set. Please use only one at a time"));
+        throw TCLAP::CmdLineParseException("Both group and GPU ID set. Please use only one at a time");
     }
 
     if (introspect.isSet())
     {
         unsigned int gId = groupId.isSet() ? groupId.getValue() : gpuId.getValue();
-        cmdd             = new IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet());
+        result           = IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet()).Execute();
     }
     else if (inject.isSet())
     {
         if (groupId.isSet())
         {
-            throw(TCLAP::CmdLineParseException("Injection can only be specified for a single GPU"));
+            throw TCLAP::CmdLineParseException("Injection can only be specified for a single GPU");
         }
 
-        cmdd = new InjectCache(
-            hostAddress.getValue(), gpuId.getValue(), fieldId.getValue(), timeVal.getValue(), injectValue.getValue());
+        result = InjectCache(hostAddress.getValue(),
+                             gpuId.getValue(),
+                             fieldId.getValue(),
+                             timeVal.getValue(),
+                             injectValue.getValue())
+                     .Execute();
     }
-
-    if (cmdd)
-    {
-        // coverity[leaked_storage] if this throws an exception
-        result = cmdd->Execute();
-    }
-
-    delete (cmdd);
 
     return result;
 }

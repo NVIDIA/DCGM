@@ -75,7 +75,7 @@ int L1TagCuda::AllocDeviceMem(int size, CUdeviceptr *ptr)
 {
     if (CUDA_SUCCESS != cuMemAlloc(ptr, size))
     {
-        DcgmError d;
+        DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, size, m_gpuIndex);
         m_plugin->AddErrorForGpu(m_gpuIndex, d);
         PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
@@ -102,7 +102,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
         = m_dcgmRecorder->GetCurrentFieldValue(m_gpuIndex, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, cudaComputeVal, flags);
     if (ret != DCGM_ST_OK)
     {
-        DcgmError d;
+        DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, d, "dcgmEntitiesGetLatestValues");
         d.AddDcgmError(ret);
         DCGM_LOG_ERROR << "Error reading CUDA compute capability for GPU " << m_gpuIndex << ": " << errorString(ret);
@@ -121,7 +121,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
         /* Only supported for Volta. See https://en.wikipedia.org/wiki/CUDA for Arch->CC mappings */
         if (majorCC != 7 || minorCC >= 5)
         {
-            DcgmError d;
+            DcgmError d { m_gpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
             m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
             return NVVS_RESULT_SKIP;
@@ -141,7 +141,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
 
 nvvsPluginResult_t L1TagCuda::LogCudaFail(const char *msg, const char *cudaFuncS, CUresult cuRes)
 {
-    DcgmError d;
+    DcgmError d { m_gpuIndex };
     std::string error = AppendCudaDriverError(msg, cuRes);
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, cudaFuncS);
     d.AddDetail(error);
@@ -174,7 +174,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 
     if (l1PerSMBytes > (256 << 10))
     {
-        DcgmError d;
+        DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
         m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
         return NVVS_RESULT_SKIP;
@@ -206,7 +206,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 
     if (cuMajor < 7)
     {
-        DcgmError d;
+        DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
         m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
         return NVVS_RESULT_SKIP;
@@ -404,7 +404,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                 return LogCudaFail("Failed to copy error log to host", "cuMemcpyDtoH", cuRes);
             }
 
-            DcgmError d;
+            DcgmError d { m_gpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_MISCOMPARE, d);
             m_plugin->AddErrorForGpu(m_gpuIndex, d);
 

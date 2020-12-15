@@ -44,7 +44,7 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuL
     }
     else
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
         AddError(d);
     }
@@ -58,7 +58,7 @@ void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTes
 
     if (!testParameters.GetBoolFromString(CTXCREATE_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, CTXCREATE_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -76,7 +76,7 @@ void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTes
         }
         else if (main_should_stop)
         {
-            DcgmError d;
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
             AddError(d);
             SetResult(NVVS_RESULT_SKIP);
@@ -93,7 +93,7 @@ void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTes
     else
     {
         SetResult(NVVS_RESULT_FAIL);
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EMPTY_GPU_LIST, d);
         AddError(d);
     }

@@ -15,11 +15,21 @@ add_library(diag_interface INTERFACE)
 target_include_directories(diag_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(diag_interface INTERFACE dcgm_interface modules_interface nvvs_interface config_interface)
 
-add_library(diag_objects OBJECT)
-target_link_libraries(diag_objects PUBLIC diag_interface dcgmmoduleconfig config_interface)
-target_sources(
-    diag_objects
+find_package(Jsoncpp REQUIRED)
+
+add_library(dcgmmodulediag_common STATIC)
+target_sources(dcgmmodulediag_common
     PRIVATE
+        DcgmDiagCommon.cpp
+        DcgmDiagCommon.h
+)
+target_link_libraries(dcgmmodulediag_common
+    PRIVATE
+        diag_interface
+        dcgm_common
+)
+
+set(SRCS 
     DcgmDiagCommon.cpp
     DcgmDiagCommon.h
     DcgmDiagManager.cpp
@@ -31,18 +41,34 @@ target_sources(
     DcgmModuleDiag.h
 )
 
-find_package(Jsoncpp REQUIRED)
+add_library(dcgmmodulediag_private_static STATIC)
+target_link_libraries(dcgmmodulediag_private_static
+    PRIVATE
+        diag_interface
+        transport_interface
+        dcgm_common
+)
+target_sources(dcgmmodulediag_private_static
+    PRIVATE
+        ${SRCS}
+)
 
 add_library(dcgmmodulediag SHARED)
-dcgm_macro_modules_link_options(dcgmmodulediag)
-target_link_libraries(dcgmmodulediag PUBLIC dcgmmoduleconfig)
-target_link_libraries(
-    dcgmmodulediag
+define_dcgm_module(dcgmmodulediag)
+target_link_libraries(dcgmmodulediag
     PRIVATE
-        diag_objects
-        modules_objects
+        dcgmmoduleconfig
+        diag_interface
+        config_interface
         sdk_nvml_essentials_objects
         dcgm
+        dcgm_common
+        dcgm_logging
+        dcgm_mutex
+        ${JSONCPP_STATIC_LIBS}
 )
-target_link_libraries(dcgmmodulediag PRIVATE ${JSONCPP_STATIC_LIBS})
+target_sources(dcgmmodulediag
+    PRIVATE
+        ${SRCS}
+)
 update_lib_ver(dcgmmodulediag)

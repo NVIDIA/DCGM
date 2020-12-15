@@ -261,6 +261,15 @@ public:
 
     void NotifyLoggingSeverityChange();
 
+    /* Helpers to access m_persistAfterDisconnect. These all need to lock m_lock to
+       maintain thread safety */
+    void SetPersistAfterDisconnect(dcgm_connection_id_t connectionId)
+    {
+        std::scoped_lock lock(m_lock);
+
+        m_persistAfterDisconnect.insert(connectionId);
+    }
+
     bool GetPersistAfterDisconnect(dcgm_connection_id_t connectionId)
     {
         std::scoped_lock lock(m_lock);
@@ -268,6 +277,57 @@ public:
         auto it = m_persistAfterDisconnect.find(connectionId);
         return it != m_persistAfterDisconnect.end();
     }
+
+    /*****************************************************************************/
+    dcgmReturn_t JobStartStats(std::string const &jobId, unsigned int groupId);
+
+    /*****************************************************************************/
+    dcgmReturn_t JobStopStats(std::string const &jobId);
+
+    /*****************************************************************************/
+    dcgmReturn_t JobGetStats(const std::string &jobId, dcgmJobInfo_t *pJobInfo);
+
+    /*****************************************************************************/
+    dcgmReturn_t JobRemove(std::string const &jobId);
+
+    /*****************************************************************************/
+    dcgmReturn_t JobRemoveAll(void);
+
+    /*****************************************************************************
+     * Add a watch on a field group
+     *
+     * This helper is used both internally and externally
+     *
+     ****************************************************************************/
+    dcgmReturn_t WatchFieldGroup(unsigned int groupId,
+                                 dcgmFieldGrp_t fieldGroupId,
+                                 timelib64_t monitorFrequencyUsec,
+                                 double maxSampleAge,
+                                 int maxKeepSamples,
+                                 DcgmWatcher const &watcher);
+
+    /*****************************************************************************
+     * Remove a watch on a field group
+     *
+     * This helper is used both internally and externally
+     *
+     ****************************************************************************/
+    dcgmReturn_t UnwatchFieldGroup(unsigned int groupId, dcgmFieldGrp_t fieldGroupId, DcgmWatcher const &watcher);
+
+    dcgmReturn_t HelperGetTopologyIO(unsigned int groupid, dcgmTopology_t &gpuTopology);
+    dcgmReturn_t HelperGetTopologyAffinity(unsigned int groupid, dcgmAffinity_t &gpuAffinity);
+    dcgmReturn_t HelperSelectGpusByTopology(uint32_t numGpus, uint64_t inputGpus, uint64_t hints, uint64_t &outputGpus);
+    dcgmReturn_t HelperGetFieldSummary(dcgmFieldSummaryRequest_t &fieldSummary);
+    dcgmReturn_t HelperCreateFakeEntities(dcgmCreateFakeEntities_t *fakeEntities);
+    dcgmReturn_t HelperWatchPredefined(dcgmWatchPredefined_t *watchPredef, DcgmWatcher &dcgmWatcher);
+    dcgmReturn_t HelperModuleBlacklist(dcgmModuleId_t moduleId);
+    dcgmReturn_t HelperModuleStatus(dcgmModuleGetStatuses_v1 &msg);
+    unsigned int GetHostEngineHealth() const;
+
+    /*****************************************************************************
+     * Process a GET_PROCESS_INFO message
+     *****************************************************************************/
+    dcgmReturn_t GetProcessInfo(unsigned int groupId, dcgmPidInfo_t *pidInfo);
 
 private:
     std::mutex m_lock; /* Lock used for accessing table of job stats and the objects within them */
@@ -357,26 +417,6 @@ private:
                                         dcgm::FieldMultiValues *pFieldMultiValues);
 
     /*****************************************************************************
-     * Process a GET_PROCESS_INFO message
-     *****************************************************************************/
-    dcgmReturn_t GetProcessInfo(unsigned int groupId, dcgmPidInfo_t *pidInfo);
-
-    /*****************************************************************************/
-    dcgmReturn_t JobStartStats(std::string const &jobId, unsigned int groupId);
-
-    /*****************************************************************************/
-    dcgmReturn_t JobStopStats(std::string const &jobId);
-
-    /*****************************************************************************/
-    dcgmReturn_t JobGetStats(const std::string &jobId, dcgmJobInfo_t *pJobInfo);
-
-    /*****************************************************************************/
-    dcgmReturn_t JobRemove(std::string const &jobId);
-
-    /*****************************************************************************/
-    dcgmReturn_t JobRemoveAll(void);
-
-    /*****************************************************************************
      * This method is used to try to load a module of DCGM
      *
      * Returns DCGM_ST_OK on success or if the module is already loaded
@@ -401,26 +441,6 @@ private:
                                            long long startTime,
                                            long long endTime);
 
-    /*****************************************************************************
-     * Add a watch on a field group
-     *
-     * This helper is used both internally and externally
-     *
-     ****************************************************************************/
-    dcgmReturn_t WatchFieldGroup(unsigned int groupId,
-                                 dcgmFieldGrp_t fieldGroupId,
-                                 timelib64_t monitorFrequencyUsec,
-                                 double maxSampleAge,
-                                 int maxKeepSamples,
-                                 DcgmWatcher const &watcher);
-
-    /*****************************************************************************
-     * Remove a watch on a field group
-     *
-     * This helper is used both internally and externally
-     *
-     ****************************************************************************/
-    dcgmReturn_t UnwatchFieldGroup(unsigned int groupId, dcgmFieldGrp_t fieldGroupId, DcgmWatcher const &watcher);
 
     /*****************************************************************************
      * Add a watch on a field group for all GPUs
@@ -494,7 +514,7 @@ private:
     dcgmReturn_t ProcessFieldGroupDestroy(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
     dcgmReturn_t ProcessFieldGroupGetOne(dcgm::Command *pCmd, bool *pIsComplete);
     dcgmReturn_t ProcessFieldGroupGetAll(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessWatchRedefined(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
+    dcgmReturn_t ProcessWatchPredefined(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
     dcgmReturn_t ProcessJobStartStats(dcgm::Command *pCmd, bool *pIsComplete);
     dcgmReturn_t ProcessJobStopStats(dcgm::Command *pCmd, bool *pIsComplete);
     dcgmReturn_t ProcessJobRemove(dcgm::Command *pCmd, bool *pIsComplete);
@@ -525,15 +545,6 @@ private:
     /* Set of connectionId as to if this connection's watches should persist after disconnect.
        If this is unset for a connectionId, we should assume false. Being present = true */
     std::unordered_set<dcgm_connection_id_t> m_persistAfterDisconnect;
-
-    /* Helpers to access m_persistAfterDisconnect. These all need to lock m_lock to
-       maintain thread safety */
-    void SetPersistAfterDisconnect(dcgm_connection_id_t connectionId)
-    {
-        std::scoped_lock lock(m_lock);
-
-        m_persistAfterDisconnect.insert(connectionId);
-    }
 
     void ClearPersistAfterDisconnect(dcgm_connection_id_t connectionId)
     {

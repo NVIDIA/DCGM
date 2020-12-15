@@ -74,7 +74,7 @@ ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
 
     if (Init(gpuInfo) == false)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
         AddError(d);
     }
@@ -190,7 +190,7 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
             }
             else
             {
-                DcgmError d;
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmGetDeviceAttributes");
                 AddErrorForGpu(gpuId, d);
                 PRINT_ERROR("%s", "Can't get the enforced power limit: %s", d.GetMessage().c_str());
@@ -204,7 +204,7 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
         }
         catch (const std::runtime_error &re)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
             AddErrorForGpu(gpuId, d);
 
@@ -253,7 +253,7 @@ int ConstantPower::CudaInit()
     if (!m_hostA || !m_hostB || !m_hostC)
     {
         PRINT_ERROR("%d", "Error allocating %d bytes x 3 on the host (malloc)", (int)arrayByteSize);
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC_HOST, d, arrayByteSize);
         AddError(d);
         return -1;
@@ -312,7 +312,7 @@ int ConstantPower::CudaInit()
             cuSt = cudaStreamCreate(&device->cudaStream[i]);
             if (cuSt != cudaSuccess)
             {
-                DcgmError d;
+                DcgmError d { device->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaStreamCreate");
                 std::stringstream ss;
                 ss << "'" << cudaGetErrorString(cuSt) << "' for GPU " << device->gpuId;
@@ -412,7 +412,7 @@ void ConstantPower::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
 
     if (!m_testParameters->GetBoolFromString(TP_STR_IS_ALLOWED))
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TP_PLUGIN_NAME);
         AddInfo(d.GetMessage());
         SetResult(NVVS_RESULT_SKIP);
@@ -428,7 +428,7 @@ void ConstantPower::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     result = RunTest();
     if (main_should_stop)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
         AddError(d);
         SetResult(NVVS_RESULT_SKIP);
@@ -462,7 +462,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
 
     if (ret != DCGM_ST_OK)
     {
-        DcgmError d;
+        DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_GET_STAT, d, "power usage", device->gpuId);
         errorList.push_back(d);
         return false;
@@ -489,7 +489,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
         }
         else
         {
-            DcgmError d;
+            DcgmError d { device->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_TARGET_POWER, d, maxVal, TP_STR_TARGET_POWER_MIN_RATIO, minRatioTarget, device->gpuId);
 
@@ -583,7 +583,7 @@ bool ConstantPower::EnforcedPowerLimitTooLow()
         if (minRatioTarget >= m_device[i]->maxPowerTarget)
         {
             // Enforced power limit is too low. Skip the test.
-            DcgmError d;
+            DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ENFORCED_POWER_LIMIT, d, m_device[i]->gpuId, m_device[i]->maxPowerTarget);
             AddErrorForGpu(m_device[i]->gpuId, d);
             SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_SKIP);
@@ -738,7 +738,7 @@ bool ConstantPower::RunTest()
     catch (const std::runtime_error &e)
     {
         PRINT_ERROR("%s", "Caught runtime_error %s", e.what());
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
         SetResult(NVVS_RESULT_FAIL);

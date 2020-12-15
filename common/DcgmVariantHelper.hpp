@@ -29,6 +29,9 @@ namespace DcgmNs
 template <class... Ts>
 struct overloaded : Ts...
 {
+    constexpr explicit overloaded(Ts &&... ts)
+        : Ts(std::forward<Ts>(ts))...
+    {}
     using Ts::operator()...;
 };
 

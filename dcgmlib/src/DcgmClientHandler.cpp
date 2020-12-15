@@ -188,7 +188,7 @@ dcgmReturn_t DcgmClientHandler::TryConnectingToHostEngine(char identifier[],
 /*****************************************************************************
  * Get Connection to the host engine corresponding to the IP address or FQDN
  *****************************************************************************/
-dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(char *identifier,
+dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifier,
                                                            dcgmHandle_t *pDcgmHandle,
                                                            unsigned int timeoutMs,
                                                            bool addressIsUnixSocket)

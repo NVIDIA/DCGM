@@ -50,7 +50,7 @@ public:
 
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmGetDeviceAttributes");
             snprintf(buf, sizeof(buf), "for GPU %u", this->gpuId);
             d.AddDetail(buf);
@@ -61,7 +61,7 @@ public:
 
         if (cuSt)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
@@ -80,7 +80,7 @@ public:
         cuSt = cuDeviceGetByPCIBusId(&cuDevice, attr.identifiers.pciBusId);
         if (cuSt)
         {
-            DcgmError d;
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDeviceGetByPCIBusId");
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)

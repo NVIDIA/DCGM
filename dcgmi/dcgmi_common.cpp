@@ -24,6 +24,7 @@
 #include "dcgm_fields.h"
 #include "dcgmi_common.h"
 
+
 /*******************************************************************************/
 dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vector<dcgmGroupEntityPair_t> &entityList)
 {
@@ -46,7 +47,7 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
         entityIdStr = tokens[i];
         if (entityIdStr.empty())
         {
-            std::cout << "Error: Comma without a value detected at token " << i + 1 << " of " << input << std::endl;
+            SHOW_AND_LOG_ERROR << "Error: Comma without a value detected at token " << i + 1 << " of " << input;
             return DCGM_ST_BADPARAM;
         }
 
@@ -80,8 +81,8 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
                     insertElem.entityGroupId = DCGM_FE_GPU_CI;
                     break;
                 default:
-                    std::cout << "Error: invalid entity type: '" << entityIdStr << "'. Expected gpu/ci/i/vgpu/nvswitch."
-                              << std::endl;
+                    SHOW_AND_LOG_ERROR << "Error: invalid entity type: '" << entityIdStr
+                                       << "'. Expected gpu/ci/i/vgpu/nvswitch.";
                     return DCGM_ST_BADPARAM;
             }
 
@@ -91,7 +92,7 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
 
         if (entityIdStr.empty())
         {
-            std::cout << "Error: empty entityId detected in " << entityIdStr << std::endl;
+            SHOW_AND_LOG_ERROR << "Error: empty entityId detected in " << entityIdStr;
             return DCGM_ST_BADPARAM;
         }
 
@@ -103,7 +104,7 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
         }
         else
         {
-            std::cout << "Error: Expected numerical entityId instead of " << entityIdStr << std::endl;
+            SHOW_AND_LOG_ERROR << "Error: Expected numerical entityId instead of " << entityIdStr;
             return DCGM_ST_BADPARAM;
         }
     }
@@ -128,7 +129,7 @@ dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
     dcgmReturn = dcgmGroupCreate(dcgmHandle, groupType, groupName, groupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "Got error while creating a GPU group: " << errorString(dcgmReturn) << std::endl;
+        SHOW_AND_LOG_ERROR << "Got error while creating a GPU group: " << dcgmReturn << " " << errorString(dcgmReturn);
         return dcgmReturn;
     }
 
@@ -137,9 +138,9 @@ dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
         dcgmReturn = dcgmGroupAddEntity(dcgmHandle, *groupId, entityList[i].entityGroupId, entityList[i].entityId);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            std::cout << "Error: Got error " << errorString(dcgmReturn) << " while "
-                      << "adding " << DcgmFieldsGetEntityGroupString(entityList[i].entityGroupId) << " "
-                      << entityList[i].entityId << " to our entity group." << std::endl;
+            SHOW_AND_LOG_ERROR << "Error: Got error " << dcgmReturn << " " << errorString(dcgmReturn) << " while "
+                               << "adding " << DcgmFieldsGetEntityGroupString(entityList[i].entityGroupId) << " "
+                               << entityList[i].entityId << " to our entity group.";
             return dcgmReturn;
         }
     }
@@ -187,7 +188,7 @@ dcgmReturn_t dcgmi_parse_field_id_list_string(std::string input, std::vector<uns
         fieldId = atoi(tokens[i].c_str());
         if (!fieldId && (!tokens[i].size() || tokens[i].at(0) != '0'))
         {
-            std::cout << "Error: Expected numerical fieldId. Got '" << tokens[i] << "' instead." << std::endl;
+            SHOW_AND_LOG_ERROR << "Error: Expected numerical fieldId. Got '" << tokens[i] << "' instead.";
             return DCGM_ST_BADPARAM;
         }
 
@@ -196,8 +197,8 @@ dcgmReturn_t dcgmi_parse_field_id_list_string(std::string input, std::vector<uns
             fieldMeta = DcgmFieldGetById(fieldId);
             if (!fieldMeta)
             {
-                std::cout << "Error: Got invalid field ID. '" << fieldId
-                          << "'. See dcgm_fields.h for a list of valid field IDs." << std::endl;
+                SHOW_AND_LOG_ERROR << "Error: Got invalid field ID. '" << fieldId
+                                   << "'. See dcgm_fields.h for a list of valid field IDs.";
                 return DCGM_ST_BADPARAM;
             }
         }
@@ -223,7 +224,7 @@ dcgmReturn_t dcgmi_create_field_group(dcgmHandle_t dcgmHandle,
     dcgmReturn = dcgmFieldGroupCreate(dcgmHandle, fieldIds.size(), &fieldIds[0], groupName, groupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "Got error while creating a Field Group: " << errorString(dcgmReturn) << std::endl;
+        SHOW_AND_LOG_ERROR << "Got error while creating a Field Group: " << errorString(dcgmReturn);
     }
 
     return dcgmReturn;
@@ -239,7 +240,9 @@ const char *dcgmi_parse_hostname_string(const char *hostName, bool *isUnixSocket
         if (strlen(hostName) < 8)
         {
             if (logOnError)
-                std::cout << "Missing hostname after \"unix://\"." << std::endl;
+            {
+                SHOW_AND_LOG_ERROR << "Missing hostname after \"unix://\".";
+            }
 
             return nullptr;
         }
@@ -282,8 +285,9 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
     auto ret = dcgmGetGpuInstanceHierarchy(dcgmHandle, &migHierarchy);
     if (ret != DCGM_ST_OK)
     {
-        std::cout << "Failed to collect MIG hierarchy information. "
-                     "EntityIds associated with MIG devices will not be possible to specify\n";
+        DCGM_LOG_DEBUG << "Failed to collect MIG hierarchy information. "
+                          "EntityIds associated with MIG devices will not be possible to specify. "
+                       << "Result: " << ret << " " << errorString(ret);
     }
     else
     {
@@ -310,8 +314,8 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
                     break;
 
                 default:
-                    std::cout << "Unexpected entity group in the MIG hierarchy results. GroupId: "
-                              << instance.entity.entityGroupId << "\n";
+                    SHOW_AND_LOG_ERROR << "Unexpected entity group in the MIG hierarchy results. GroupId: "
+                                       << instance.entity.entityGroupId;
                     break;
             }
         }
@@ -325,8 +329,9 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
     ret = dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities, &numItems, 0);
     if (ret != DCGM_ST_OK)
     {
-        std::cout << "Unable to collect GPU entities. "
-                     "EntityIds associated with GPUs may not be possible to specify\n";
+        SHOW_AND_LOG_ERROR << "Unable to collect GPU entities. "
+                              "EntityIds associated with GPUs may not be possible to specify. "
+                           << "Result: " << ret << " " << errorString(ret);
     }
     else
     {
@@ -341,8 +346,9 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
             ret = dcgmGetDeviceAttributes(dcgmHandle, entities[idx], &deviceAttributes);
             if (ret != DCGM_ST_OK)
             {
-                std::cout << "Unable to collect GPU attributes for GpuId " << entities[idx]
-                          << ". It may be impossible to specify GPU UUID as entity id\n";
+                SHOW_AND_LOG_ERROR << "Unable to collect GPU attributes for GpuId " << entities[idx]
+                                   << ". It may be impossible to specify GPU UUID as entity id. "
+                                   << "Result: " << ret << " " << errorString(ret);
                 continue;
             }
 
@@ -379,8 +385,8 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
             auto it = entities.find(parsedResult);
             if (it == entities.end())
             {
-                std::cout << "Specified entity ID is valid but unknown: " << token << ". ParsedResult: " << parsedResult
-                          << "\n";
+                DCGM_LOG_DEBUG << "Specified entity ID is valid but unknown: " << token
+                               << ". ParsedResult: " << parsedResult;
                 rejectedTokens.push_back(token);
                 continue;
             }

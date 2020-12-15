@@ -422,7 +422,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                       cmdLine,
                                       /*default*/ false);
 
-        auto blacklistConatraint = BlacklistModulesConstraint {};
+        auto blacklistConstraint = BlacklistModulesConstraint {};
 
         auto blacklistArg
             = ValueArg<std::string>("",
@@ -432,7 +432,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                     "\nModule IDs are available in dcgm_structs.h as DcgmModuleId constants.",
                                     /*req*/ false,
                                     /*default*/ "",
-                                    &blacklistConatraint,
+                                    &blacklistConstraint,
                                     cmdLine);
 
         cmdLine.parse(argc, argv);

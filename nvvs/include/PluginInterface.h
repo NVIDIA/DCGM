@@ -17,12 +17,15 @@
 
 #include "NvvsCommon.h"
 
+#include <dcgm_api_export.h>
 #include <dcgm_structs.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 #define FAIL_EARLY          "fail_early"
 #define FAIL_CHECK_INTERVAL "fail_check_interval"
@@ -114,7 +117,8 @@ typedef struct
     dcgmDiagValue_t values[DCGM_DIAG_MAX_VALUES]; //!< The timestamp and value
 } dcgmDiagCustomStat_t;
 
-#define DCGM_DIAG_MAX_CUSTOM_STATS 512
+// Use a large size to avoid having too many vector entries on large GPU systems
+#define DCGM_DIAG_MAX_CUSTOM_STATS 2048
 
 typedef struct
 {
@@ -165,7 +169,7 @@ typedef struct
  *         <0                        - if there is a DCGM_ST_* error that has made this plugin unable to run
  *         >0                        - if there is some other reason the plugin cannot run.
  */
-dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info);
+DCGM_PUBLIC_API dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info);
 
 typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info);
 
@@ -186,10 +190,10 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  *                                     runnable. a positive value if for some other reason the plugin should not be run.
  *                                     (error details can be provided to the diagnostic through RetrieveResults.)
  **/
-dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                              dcgmDiagPluginGpuList_t *gpuInfo,
-                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                              void **userData);
+DCGM_PUBLIC_API dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
+                                              dcgmDiagPluginGpuList_t *gpuInfo,
+                                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
+                                              void **userData);
 
 typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    dcgmDiagPluginGpuList_t *gpuInfo,
@@ -204,10 +208,10 @@ typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
  * @param testParameters[in]  - an array of parameters to control different functions for the
  * @param userData[in]        - the user data set in InitializePlugin()
  */
-void RunTest(unsigned int timeout,
-             unsigned int numParameters,
-             const dcgmDiagPluginTestParameter_t *testParameters,
-             void *userData);
+DCGM_PUBLIC_API void RunTest(unsigned int timeout,
+                             unsigned int numParameters,
+                             const dcgmDiagPluginTestParameter_t *testParameters,
+                             void *userData);
 typedef void (*dcgmDiagRunTest_f)(unsigned int timeout,
                                   unsigned int numParameters,
                                   const dcgmDiagPluginTestParameter_t *testParameters,
@@ -219,7 +223,7 @@ typedef void (*dcgmDiagRunTest_f)(unsigned int timeout,
  * @param customStats[out]  - the plugin should write any custom stats to be added to the stats file here
  * @param userData[in]      - the user data set in InitializePlugin()
  */
-void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData);
+DCGM_PUBLIC_API void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData);
 typedef void (*dcgmDiagRetrieveCustomStats_f)(dcgmDiagCustomStats_t *customStats, void *userData);
 
 /**
@@ -229,7 +233,9 @@ typedef void (*dcgmDiagRetrieveCustomStats_f)(dcgmDiagCustomStats_t *customStats
  * @param results[out] - detailed results for the plugin
  * @param userData[in] - the user data set in InitializePlugin()
  */
-void RetrieveResults(dcgmDiagResults_t *results, void *userData);
+DCGM_PUBLIC_API void RetrieveResults(dcgmDiagResults_t *results, void *userData);
 typedef void (*dcgmDiagRetrieveResults_f)(dcgmDiagResults_t *results, void *userData);
 
+#ifdef __cplusplus
 } // END extern "C"
+#endif

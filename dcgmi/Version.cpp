@@ -16,24 +16,27 @@
 /*
  * File:   Version.cpp
  */
+#include "Version.h"
 
-#include <Command.h>
+#include "dcgmi_common.h"
+
 #include <DcgmBuildInfo.hpp>
-#include <Version.h>
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
-#include <dcgmi_common.h>
+
+#include <iostream>
+
 
 VersionInfo::VersionInfo(std::string hostname)
 {
-    DcgmNs::DcgmBuildInfo buildInfo;
+    static DcgmNs::DcgmBuildInfo buildInfo;
     std::cout << buildInfo;
 
-    mHostName = std::move(hostname);
+    m_hostName = std::move(hostname);
 
-    /* supress connection errors */
-    mSilent  = true;
-    mTimeout = 100;
+    /* suppress connection errors */
+    m_silent  = true;
+    m_timeout = 100;
 }
 
 dcgmReturn_t VersionInfo::DoExecuteConnected()
@@ -41,7 +44,7 @@ dcgmReturn_t VersionInfo::DoExecuteConnected()
     dcgmVersionInfo_t versionInfo = {};
 
     versionInfo.version = dcgmVersionInfo_version;
-    dcgmReturn_t ret    = dcgmHostengineVersionInfo(mNvcmHandle, &versionInfo);
+    dcgmReturn_t ret    = dcgmHostengineVersionInfo(m_dcgmHandle, &versionInfo);
 
     if (DCGM_ST_OK != ret)
     {

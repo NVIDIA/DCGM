@@ -451,7 +451,7 @@ void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
                                           const char *fieldName,
                                           std::vector<DcgmError> &errorList)
 {
-    DcgmError d(gpuId);
+    DcgmError d { gpuId };
     bool loggedError = false;
 
     // Thermal violation errors are logged in a special way
@@ -469,7 +469,7 @@ void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
         if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
         {
             double timeDiff = (dfv.ts - startTime) / 1000000.0;
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS_TS, d, value, timeDiff, gpuId);
             errorList.push_back(d);
             loggedError = true;
@@ -507,7 +507,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
         dcgm_field_meta_p fm = DcgmFieldGetById(fieldIds[i]);
         if (fm == 0)
         {
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_GET_FIELD_TAG, d, fieldIds[i]);
             errorList.push_back(d);
             return DR_COMM_ERROR;
@@ -525,7 +525,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
 
         if (ret != DCGM_ST_OK)
         {
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, fm->tag, gpuId);
             errorList.push_back(d);
             return DR_COMM_ERROR;
@@ -546,7 +546,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
             else if (failureThresholds != 0 && fsr.response.values[valueIndex].i64 > (*failureThresholds)[i].val.i64
                      && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
-                DcgmError d(gpuId);
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD,
                                           d,
                                           fsr.response.values[valueIndex].i64,
@@ -569,7 +569,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
             else if (failureThresholds != 0 && fsr.response.values[valueIndex].fp64 > (*failureThresholds)[i].val.fp64
                      && DCGM_FP64_IS_BLANK(fsr.response.values[valueIndex].fp64) == 0)
             {
-                DcgmError d(gpuId);
+                DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL,
                                           d,
                                           fsr.response.values[valueIndex].fp64,
@@ -582,7 +582,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
         }
         else
         {
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNSUPPORTED_FIELD_TYPE, d, fm->tag);
             errorList.push_back(d);
             st = DR_VIOLATION;
@@ -630,7 +630,7 @@ dcgmReturn_t DcgmRecorder::CheckPerSecondErrorConditions(const std::vector<unsig
 
         if (st != DCGM_ST_OK)
         {
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, st, tag.c_str(), gpuId);
             errorList.push_back(d);
             return st;
@@ -699,13 +699,13 @@ int DcgmRecorder::CheckThermalViolations(unsigned int gpuId,
         if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
         {
             double timeDiff = (dfv.ts - startTime) / 1000000.0;
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS_TS, d, fsr.response.values[0].i64, timeDiff, gpuId);
             errorList.push_back(d);
         }
         else
         {
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS, d, fsr.response.values[0].i64, gpuId);
             errorList.push_back(d);
         }
@@ -740,7 +740,7 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
 
     if (ret != DCGM_ST_OK)
     {
-        DcgmError d(gpuId);
+        DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "gpu temperature", gpuId);
         errorList.push_back(d);
         highTemp = 0;
@@ -755,7 +755,7 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
 
     if (highTemp > maxTemp)
     {
-        DcgmError d(gpuId);
+        DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, highTemp, gpuId, maxTemp);
         errorList.push_back(d);
         st = DR_VIOLATION;
@@ -799,7 +799,7 @@ int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, 
 
     if (st != DCGM_ST_OK)
     {
-        DcgmError d(gpuId);
+        DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, st, "clock throttling", gpuId);
         errorList.push_back(d);
         return DR_COMM_ERROR;
@@ -837,7 +837,7 @@ int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, 
         if (detail != NULL)
         {
             rc = DR_VIOLATION;
-            DcgmError d(gpuId);
+            DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THROTTLING_VIOLATION, d, gpuId, timeDiff, detail);
             errorList.push_back(d);
         }
@@ -862,7 +862,7 @@ int DcgmRecorder::GetLatestValuesForWatchedFields(unsigned int flags, std::vecto
 
     if (ret != DCGM_ST_OK)
     {
-        DcgmError d;
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "all watched fields", m_gpuIds[0]);
         errorList.push_back(d);
         return DR_COMM_ERROR;
