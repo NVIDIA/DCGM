@@ -1,7 +1,5 @@
 # NVIDIA Data Center GPU Manager
 
-[![GitHub license](https://img.shields.io/github/license/NVIDIA/dcgm?style=flat-square)](https://raw.githubusercontent.com/NVIDIA/datacenter-gpu-manager/master/LICENSE)
-
 ![dcgm](https://developer.nvidia.com/sites/default/files/akamai/datacenter/dcgm-icon.png)
 
 ## Introduction
