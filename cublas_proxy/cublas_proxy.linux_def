@@ -1,0 +1,8 @@
+{
+    global:
+        extern "C++" {
+           Dcgm::CublasProxy::*; 
+        };
+    local:
+        *;
+};

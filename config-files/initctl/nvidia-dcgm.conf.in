@@ -1,0 +1,15 @@
+# NVIDIA Data Center GPU Manager
+
+description	"NVIDIA DCGM Daemon"
+
+#start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+respawn limit 10 5
+
+expect daemon
+
+console none
+
+exec @DCGM_HOSTENGINE_LOCATION@/nv-hostengine

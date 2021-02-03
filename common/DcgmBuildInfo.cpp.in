@@ -1,0 +1,180 @@
+#include <DcgmBuildInfo.hpp>
+
+#include <algorithm>
+#include <memory>
+#include <sstream>
+#include <unordered_map>
+#include <vector>
+
+char const c_dcgmBuildInfo[] = "@DCGM_BUILD_INFO@";
+
+/*
+ * If this assertion fails and you need to increase the size of the build info string,
+ * make sure that dcgmVersionInfo_v2::rawBuildInfoString size is handled properly as well.
+ */
+static_assert(sizeof(c_dcgmBuildInfo) < BUILDINFO_MAXSIZE);
+
+namespace DcgmNs
+{
+/**
+ * Splits string into multiple parts based on the given delimiters
+ * \param[in] str       String to split. This must not be a temporary object. See notes.
+ * \param[in] delims    List of delimiters. Every symbol in the string is an individual delimiter
+ * \return Vector of string views.
+ * \note The result vector does not own the strings inside. Its items are just references into the original \ref str
+ *       argument. It will be UB if you pass a temporary object as a \ref str argument.
+ */
+static std::vector<std::string_view> SplitString(std::string_view str, std::string_view delims = " ")
+{
+    std::vector<std::string_view> output;
+    output.reserve(str.size() / 2);
+
+    for (auto first = str.data(), second = str.data(), last = first + str.size(); second != last && first != last;
+         first = second + 1)
+    {
+        second = std::find_first_of(first, last, std::cbegin(delims), std::cend(delims));
+
+        if (first != second)
+            output.emplace_back(first, second - first);
+    }
+
+    return output;
+}
+
+/**
+ * Builds key-value map for the given raw info string
+ * \param[in] rawInfo   A string with key-value pairs separated by semicolons
+ * \return A shared pointer to the generated kv-map
+ * \note The format of the incoming rawInfo argument is : 'key:value;key:value;key:value;'. Neither keys nor values can
+ *       contain a semicolon (;) char.
+ *       Key-value pair is split at the first colon (:) char, so values can have colons (:), but keys cannot.
+ */
+static std::shared_ptr<DcgmBuildInfo::BuildInfoMap> MakeBuildInfoMap(const char *const rawInfo)
+{
+    DcgmBuildInfo::BuildInfoMap result;
+    auto kvPairs = SplitString(rawInfo, ";");
+    for (auto &&kv : kvPairs)
+    {
+        auto delim = std::find(begin(kv), end(kv), ':');
+        if (delim != kv.end())
+        {
+            result[kv.substr(0, delim - kv.data())] = kv.substr(delim - kv.data() + 1);
+        }
+    }
+    return std::make_shared<DcgmBuildInfo::BuildInfoMap>(std::move(result));
+}
+
+static std::shared_ptr<DcgmBuildInfo::BuildInfoMap> g_kvBuildInfo = MakeBuildInfoMap(c_dcgmBuildInfo);
+
+/**
+ * Tries to find a value of the given key in the build info kv-map
+ * \param[in] key   Requested key
+ * \param[in] map   BuildInfo kv-map where the lookup should be performed.
+ * \return Value if it was found; Empty string_view otherwise.
+ * \note The returned value does not own the string itself.
+ */
+static std::string_view FindOrDefault(std::string_view key, DcgmBuildInfo::BuildInfoMap const &map = *g_kvBuildInfo)
+{
+    auto it = map.find(key);
+    if (it != map.end())
+    {
+        return it->second;
+    }
+
+    return {};
+}
+
+std::string_view DcgmBuildInfo::GetCRC() const
+{
+    return FindOrDefault("crc", *m_map);
+}
+
+std::string_view DcgmBuildInfo::GetVersion() const
+{
+    return FindOrDefault("version", *m_map);
+}
+
+std::string_view DcgmBuildInfo::GetGitCommit() const
+{
+    return FindOrDefault("commit", *m_map);
+}
+
+std::string_view DcgmBuildInfo::GetArchitecture() const
+{
+    return FindOrDefault("arch", *m_map);
+}
+
+std::string_view DcgmBuildInfo::GetBuildDate() const
+{
+    return FindOrDefault("builddate", *m_map);
+}
+
+std::string_view DcgmBuildInfo::GetBuildId() const
+{
+    return FindOrDefault("buildid", *m_map);
+}
+std::string_view DcgmBuildInfo::GetBuildPlatform() const
+{
+    return FindOrDefault("buildplatform", *m_map);
+}
+DcgmBuildInfo::DcgmBuildInfo(const char *rawBuildInfo) noexcept
+{
+    /*
+     * If rawBuildInfo is not provided (a default argument is used) then we just grab ready-made g_kvBuildInfo
+     * that contains Build Info about this binary build.
+     * Otherwise (e.g. value may come from dcgmVersionInfo_v2) we need to build and store a new kv-map.
+     */
+    if (rawBuildInfo == c_dcgmBuildInfo)
+    {
+        m_map = g_kvBuildInfo;
+    }
+    else
+    {
+        m_map = MakeBuildInfoMap(rawBuildInfo);
+    }
+}
+
+std::string DcgmBuildInfo::GetBuildInfoStr() const
+{
+    return std::string(c_dcgmBuildInfo);
+}
+std::string_view DcgmBuildInfo::GetBranchName() const
+{
+    return FindOrDefault("branch", *m_map);
+}
+std::string_view DcgmBuildInfo::GetBuildType() const
+{
+    return FindOrDefault("buildtype", *m_map);
+}
+
+} // namespace DcgmNs
+
+static inline std::ostream &Print(std::ostream &os, std::string_view name, std::string_view value)
+{
+    if (!value.empty())
+    {
+        os << name << " : " << value << "\n";
+    }
+    return os;
+}
+
+std::ostream &operator<<(std::ostream &os, DcgmNs::DcgmBuildInfo const &info)
+{
+    Print(os, "Version", info.GetVersion());
+    Print(os, "Build ID", info.GetBuildId());
+    Print(os, "Build Date", info.GetBuildDate());
+    Print(os, "Build Type", info.GetBuildType());
+    Print(os, "Commit ID", info.GetGitCommit());
+    Print(os, "Branch Name", info.GetBranchName());
+    Print(os, "CPU Arch", info.GetArchitecture());
+    Print(os, "Build Platform", info.GetBuildPlatform());
+    Print(os, "CRC", info.GetCRC());
+
+    return os;
+}
+std::string GetBuildInfo()
+{
+    std::stringstream ss;
+    ss << DcgmNs::DcgmBuildInfo {};
+    return ss.str();
+}

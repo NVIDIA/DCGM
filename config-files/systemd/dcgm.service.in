@@ -1,0 +1,14 @@
+[Unit]
+Description=DEPRECATED. Please use nvidia-dcgm.service
+Conflicts=nvidia-dcgm.service
+
+[Service]
+User=root
+PrivateTmp=false
+
+ExecStart=@DCGM_HOSTENGINE_LOCATION@/nv-hostengine -n
+
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

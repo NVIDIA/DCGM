@@ -1,0 +1,3 @@
+For examples on how to use the library go to project website:
+  http://pypi.python.org/pypi/colorama
+  http://code.google.com/p/colorama/

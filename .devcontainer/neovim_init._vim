@@ -1,0 +1,161 @@
+
+let no_flake8_maps=1
+
+call plug#begin('~/.local/share/nvim/plugged')
+Plug 'scrooloose/nerdtree', { 'on':  'NERDTreeFind' }
+Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
+Plug 'morhetz/gruvbox'
+Plug 'tpope/vim-fugitive'
+Plug 'vim-airline/vim-airline'
+Plug 'altercation/vim-colors-solarized'
+Plug 'pboettch/vim-cmake-syntax'
+Plug 'terryma/vim-multiple-cursors'
+"Plug 'rhysd/vim-clang-format'
+Plug 'scrooloose/nerdcommenter'
+Plug 'troydm/easybuffer.vim'
+Plug 'majutsushi/tagbar'
+Plug 'Valloric/YouCompleteMe', { 'do': 'python3 ./install.py --clang-completer --clangd-completer' }
+Plug 'chrisbra/Colorizer'
+Plug 'vim-syntastic/syntastic'
+Plug 'nvie/vim-flake8'
+Plug 'google/yapf', { 'rtp': 'plugins/vim', 'for': 'python' }
+Plug 'kien/ctrlp.vim'
+"Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh', }
+
+" (Optional) Multi-entry selection UI.
+Plug 'junegunn/fzf'
+Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
+Plug 'aserebryakov/vim-todo-lists'
+
+call plug#end()
+
+let mapleader = ","
+let maplocalleader = ","
+
+let g:syntastic_python_checkers=['flake8']
+let g:syntastic_cpp_checkers=['gcc']
+let g:pep8_map=''
+let g:PyFlakeCheckers='pep8,mccabe,pyflakes'
+let g:PyFlakeDefaultComplexity=7
+nnoremap <F7> :SyntasticCheck<CR>
+let g:ycm_confirm_extra_conf = 0
+let g:ycm_autoclose_preview_window_after_completion=1
+let g:ycm_autoclose_preview_window_after_insertion=1
+let g:ycm_clangd_binary_path = '/usr/bin/clangd'
+let g:ycm_use_clangd = 1
+let g:ycm_clangd_args = ['--all-scopes-completion', '-j=10', '--background-index', '--completion-style=detailed', '--log=verbose', '--pretty']
+let g:ycm_clangd_uses_ycmd_caching = 0
+let g:airline_powerline_fonts=1
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#formatter = 'unique_tail'
+set background=dark
+let g:gruvbox_contrast_light="hard"
+let g:gruvbox_italic=0
+let g:gruvbox_invert_signs=0
+let g:gruvbox_improved_strings=0
+let g:gruvbox_improved_warnings=1
+let g:gruvbox_undercurl=1
+let g:gruvbox_contrast_dark="hard"
+let g:gruvbox_termcolors=256
+let g:gruvbox_italicize_comments=0
+silent! colorscheme gruvbox
+let NERDTreeChDirMode=2
+let NERDTreeQuitOnOpen=1
+nmap <Tab> :NERDTreeFind<CR>
+" Disable the scrollbars (NERDTree)
+set guioptions-=r
+set guioptions-=L
+set guioptions-=T
+nmap <leader>be :EasyBufferToggle<cr>
+nmap <leader>t :TagbarToggle<CR>
+set clipboard+=unnamedplus "Enable copy/paste direcly to windows clipboard
+set clipboard+=unnamed "Enable copy/paste direcly to windows clipboard
+set enc=utf-8
+filetype plugin indent on
+syntax on
+set fileformats=unix
+set scrolloff=0
+set switchbuf=useopen
+inoremap jk <Esc>
+set autoread
+set backspace=indent,eol,start
+set binary
+set cinoptions=:0,l1,g0,(0,W1s,m1
+set completeopt=menuone,preview
+set hidden
+set history=1000
+set incsearch
+set laststatus=2
+set listchars=tab:>-,trail:@
+set list
+set modelines=0
+set noeol
+set nu
+set numberwidth=5
+set ruler
+set showcmd
+set autoindent
+set tabstop=4
+set softtabstop=4
+set shiftwidth=4
+set expandtab
+set formatoptions=qrn1
+set ignorecase
+set smartcase
+set showmatch
+set gdefault
+set hlsearch
+set mouse=a
+set nowrap
+nnoremap * *<c-o>
+nnoremap n nzzzv
+nnoremap N Nzzzv
+noremap H ^
+noremap L g_
+nnoremap j gj
+nnoremap k gk
+vnoremap j gj
+vnoremap k gk
+noremap <leader>bp :bprevious<cr>
+noremap <leader>bn :bnext<cr>
+nnoremap <leader>v <C-w>v<C-w>l
+nnoremap <leader>h <C-w>s<C-w>j
+nnoremap <leader>/ :nohl<cr>
+nnoremap <leader>jd :YcmCompleter GoTo<cr>
+nnoremap <leader>jr :YcmCompleter GoToReferences<cr>
+set fixendofline
+set cursorline
+nmap ]l :lnext<CR>
+nmap [l :lprev<CR>
+if !&diff
+    nmap ]c :cnext<CR>
+    nmap [c :cprev<CR>
+endif
+"autocmd BufWritePre * :%s/\s\+$//e
+vnoremap <C-t> :s/\s\+$//e<cr>
+autocmd BufEnter * if expand("%:p:h") !~ '^/tmp' | silent! lcd %:p:h | endif
+autocmd FileType cpp,c noremap <buffer> <leader><C-k> :call FormatFile()<cr>
+autocmd FileType cpp,c noremap <buffer> <C-k> :pyf /usr/share/clang/clang-format.py<cr>
+autocmd FileType cpp,c inoremap <buffer> <C-k> <C-o>:pyf /usr/share/clang/clang-format.py<cr>i
+autocmd FileType python noremap <buffer> <C-k> :YAPF<cr>
+autocmd FileType python inoremap <buffer> <C-k> <C-o>:YAPF<cr>i
+
+function! FormatFile()
+   let l:lines="all"
+   pyf /usr/share/clang/clang-format.py
+endfunction
+
+
+if $TERM =~ '^screen-256color'
+    map <Esc>OH <Home>
+    map! <Esc>OH <Home>
+    map <Esc>OF <End>
+    map! <Esc>OF <End>
+endif
+
+
+if !exists('g:airline_symbols')
+  let g:airline_symbols = {}
+endif
+
+set guicursor=a:block

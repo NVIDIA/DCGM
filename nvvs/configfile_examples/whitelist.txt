@@ -1,0 +1,16 @@
+Tesla K8, 1194
+Tesla K80, 102d
+Tesla K40d, 102e
+Tesla K40m, 1023
+Tesla K40c, 1024
+Tesla K40t, 102a
+Tesla K40s, 1029
+Tesla K20X, 101e or 1020
+Tesla K20Xm, 1021
+Tesla K20c, 1022
+Tesla K20m, 1028
+Tesla K10, 118f
+Tesla M60, 13f2
+Tesla M6, 13f3
+Tesla M40, 17fd
+Tesla M4, 1431

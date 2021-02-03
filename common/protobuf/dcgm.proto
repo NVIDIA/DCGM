@@ -1,0 +1,320 @@
+syntax="proto2";
+package dcgm;
+
+/*****************************************************************************
+ NOTE: Structures defined in this file must be updated as we change public
+ structures in dcgm_structs.h
+ As we update this file, we need to update encoding/decoding of the modified
+ structures in common/protobuf/Dcgmprb.cpp
+*****************************************************************************/
+
+/* Represents type of the command. Update this enum for each command to be 
+   exchanged between client and host engine. These IDs must not be changed
+   or current clients will not be able to communicate with newer host engines and
+   vice versa. */
+enum CmdType 
+{
+    /* Device query and management APIs */
+    DISCOVER_DEVICES                               = 1;
+    CREATE_FAKE_ENTITIES                           = 2;
+    CLIENT_LOGIN                                   = 3;
+    GET_ENTITY_LIST                                = 4;
+    GET_NVLINK_LINK_STATUS                         = 5;
+    SET_NVLINK_LINK_STATUS                         = 6;
+    GET_GPU_INSTANCE_HIERARCHY                     = 7;
+    IS_HOSTENGINE_HEALTHY                          = 8;
+    
+    /* Group APIs */
+    GROUP_CREATE                                   = 10;
+    GROUP_DESTROY                                  = 12;
+    GROUP_ADD_DEVICE                               = 13;
+    GROUP_REMOVE_DEVICE                            = 14;
+    GROUP_GETALL_IDS                               = 15;
+    GROUP_INFO                                     = 16;
+    
+    /* Config APIs */
+    /* 20-22 are Deprecated. Are now module APIs. Don't reuse these */
+    
+    /* Policy Management APIs */
+    /* 30-35 are Deprecated. Are now module APIs. Don't reuse these */
+    
+    /* Field-value APIs */
+    GET_FIELD_LATEST_VALUE                         = 40; /* Deprecated. Retire next release after 1.5. Use GET_MULTIPLE_LATEST_VALUES */
+    GET_FIELD_MULTIPLE_VALUES                      = 41;
+    INJECT_FIELD_VALUE                             = 42;
+    WATCH_FIELD_VALUE                              = 43;
+    UNWATCH_FIELD_VALUE                            = 44;
+    UPDATE_ALL_FIELDS                              = 45;
+    CACHE_MANAGER_FIELD_INFO                       = 46;
+    WATCH_FIELDS                                   = 47;
+    GET_TOPOLOGY_INFO_IO                           = 48;
+    GET_TOPOLOGY_INFO_AFFINITY                     = 49;
+    /* 50-52 are Deprecated. Are now module APIs. Don't reuse these */
+    WATCH_PREDEFINED                               = 53;
+    UNWATCH_FIELDS                                 = 54;
+    SELECT_GPUS_BY_TOPOLOGY                        = 55;
+    GET_MULTIPLE_LATEST_VALUES                     = 56;
+    GET_FIELD_SUMMARY                              = 57;
+    
+    /* Cache management APIs */
+    /* 60 - 61 were SAVE/LOAD cached stats */
+    
+    /* Job and process APIs */
+    GET_PID_INFORMATION                            = 70;
+    JOB_START_STATS                                = 71;
+    JOB_STOP_STATS                                 = 72;
+    JOB_GET_INFO                                   = 73;
+    JOB_REMOVE                                     = 74;
+    JOB_REMOVE_ALL                                 = 75;
+    
+    /* Module APIs */
+    /* 80 is deprecated. Module commands are now sent as raw messages */
+    MODULE_BLACKLIST                               = 81;
+    MODULE_GET_STATUSES                            = 82;
+    
+    /* Field Group APIs */
+    FIELD_GROUP_CREATE                             = 100;
+    FIELD_GROUP_DESTROY                            = 101;
+    FIELD_GROUP_GET_ONE                            = 102;
+    FIELD_GROUP_GET_ALL                            = 103;
+    
+    /* Allocate these IDs in groups of 10. 
+       Highest range allocated so far: 100-109 */
+};
+
+/* CLIENT_LOGIN message */
+message ClientLogin 
+{
+    optional int32 persistAfterDisconnect = 1; /* See dcgmConnectV2Params_t.persistAfterDisconnect */
+} 
+
+message EntityIdPair
+{
+    required uint32 entityGroupId = 1;
+    required uint32 entityId      = 2;
+};
+
+/* Message to represent a request and response for a list of entities */
+message EntityList
+{
+    optional uint32 entityGroupId = 1; /* Which entity group's entities are being requested */
+    optional int32 onlySupported  = 2; /* When requesting an entityList, 1=only supported entities. 0=all entities */
+    repeated EntityIdPair entity  = 3; /* Array of entity IDs */
+};
+
+/* Message to represent group information */
+message GroupInfo
+{
+    optional int32  groupType = 1;
+    optional string groupName = 2;
+    optional int32  groupId   = 3;
+    /* repeated int32  gpuId     = 4; //Deprecated in favor of entities[] */
+    repeated EntityIdPair entity = 5;
+};
+
+/* Represents a file type that the cache manager can be serialized to/deserialized from */
+enum CacheManagerFileType
+{
+    JSON = 0;
+};
+
+/* Structure to instruct the cache manager to save to or load from a JSON file */
+message CacheManagerSave
+{
+    required int32 version                 = 1; /* Version number of the API */
+    optional CacheManagerFileType fileType = 2;
+    optional string filename               = 3;
+};
+
+message CacheManagerLoad
+{
+    required int32 version                 = 1; /* Version number of the API */
+    optional CacheManagerFileType fileType = 2;
+    optional string filename               = 3;
+};
+
+/* Value for FieldValue message */
+message Value 
+{
+    optional int64 i64       = 1;    /* Value of type int64 */
+    optional double dbl      = 2;    /* Value of type double */
+    optional string str      = 3;    /* Value of type string */
+    optional int64 timestamp = 4;    /* Timestamp of this Value. This is currently only used by the
+                                        FieldMultiValues message as other requests have this as part of
+                                        a FieldValue message that already has a timestamp */
+    optional bytes blob      = 5;    /* Value of a binary blob of data containing a predefined structure */
+}
+
+/* Type of value exchanges in FieldValue */
+enum Type {                     
+    INT64 = 1;
+    DBL   = 2;
+    STR   = 3;
+}
+
+/* Order of values for MultiValues fields. */
+enum MultiValuesOrder
+{
+    ASCENDING = 1;   /* oldest values starting from startTime */
+    DESCENDING = 2;  /* most recent values starting from endTime */
+    
+    /* NOTE: These must match up with DCGM_ORDER_? enums in dcgm_structs.h */
+}
+
+message FieldMultiValues
+{
+    optional int32 version              = 1;    /* Version number of the API */
+    optional int32 fieldId              = 2;    /* Represent Field ID (One of DCGM_FI_?) */
+    optional int32 fieldType            = 3;    /* Represents Type dcgm::INT64 or */
+    optional int64 startTs              = 4;    /* Start Timestamp in usec since 1970 */
+    optional int64 endTs                = 5;    /* End Timestamp in usec since 1970 */
+    optional int32 maxCount             = 6;    /* Max number of values to be exchanged */
+    optional MultiValuesOrder orderFlag = 7;    /* Fetch most recent values starting from endTime OR Fetch the oldest values starting from startTime */
+    optional int32 status               = 8;    /* Status returned for the field */
+    repeated Value vals                 = 9;   /* Represents one or more of int32, int64, double or string */
+}
+
+/* Message to fetch Field Value of any type */
+message FieldValue
+{
+    required int32 version      = 1 [default=0];  /* Version number of the API */
+    required int32 fieldId      = 2 [default=0];  /* Represent Field ID (One of DCGM_FI_?) */
+    optional int32 fieldType    = 3 [default=1];  /* Represents Type dcgm::INT64 (1) or other dcgm::Type */
+    optional int64 ts           = 4 [default=0];  /* Timestamp in usec since 1970 */
+    optional int32 status       = 5 [default=0];  /* Status returned for the field */
+    optional Value val          = 6;              /* Represents one of int32, int64, double or string */
+    optional uint32 entityGroupId = 7;            /* Entity group this FieldValue's entity is in */
+    optional uint32 entityId    = 8;              /* Entity this FieldValue belongs to */
+}
+
+/* Message to Inject a field value into the cache manager */
+message InjectFieldValue
+{
+    required int32 version         = 1; /* Version number of the API */
+    optional FieldValue fieldValue = 2; /* Field value to inject */
+    optional uint32 entityGroupId  = 3; /* Entity group this entity belongs to */
+    optional uint32 entityId       = 4; /* ID of the entity to inject this FV for */
+}
+
+/* Message to watch a field in the cache manager */
+message WatchFieldValue
+{
+    required int32 version     = 1;  /* Version number of the API */
+    optional int32 fieldId     = 2;  /* Field ID to watch (One of DCGM_FI_?) */
+    optional int64 updateFreq  = 3;  /* How update to update this field in usec */
+    optional double maxKeepAge = 4;  /* Maximum age of samples to keep in seconds. Samples
+                                        older than this can be deleted */
+    optional int32 maxKeepSamples = 5; /* Maximum number of samples to keep. 0=no limit */
+}
+
+/* Message to unwatch a field in the cache manager */
+message UnwatchFieldValue
+{
+    required int32 version     = 1;  /* Version number of the API */
+    optional int32 fieldId     = 2;  /* Field ID to watch (One of DCGM_FI_?) */
+    optional int32 clearCache  = 3;  /* Should we (1) or shouldn't we (0) delete all data
+                                        that is cached for this element */
+}
+
+/* Message to update all fields that are currently watched by the cache manager */
+message UpdateAllFields
+{
+    required int32 version = 1;       /* Version number of the API */
+    required int32 waitForUpdate = 2; /* Should we wait for the update loop to finish
+                                         running before we consider the request satisfied
+                                         1 = yes. 0 = no */ 
+}    
+
+/* Message to watch a field collection in the cache manager */
+message WatchFields
+{
+    required int32 version           = 1; /* Version number of the API */
+    optional int64 fieldGroupId      = 2; /* Field group ID to watch */
+    optional int64 updateFreq        = 3; /* How update to update this field in usec */
+    optional double maxKeepAge       = 4; /* Maximum age of samples to keep in seconds. Samples
+                                             older than this can be deleted */
+    optional int32 maxKeepSamples    = 5; /* Maximum number of samples to keep. 0=no limit */
+}
+
+/* Message to unwatch a field collection in the cache manager */
+message UnwatchFields
+{
+    required int64 fieldGroupId      = 1; /* Field group ID to unwatch */
+}
+
+/* Message to encode/decode one of the public data structures */
+message CmdArg
+{
+    optional int32      i32            = 1;
+    optional int64      i64            = 2;
+    optional double     dbl            = 3;
+    optional string     str            = 4;
+    optional GroupInfo  grpInfo        = 5;
+    /* optional ConfigInfo configInfo     = 6; - Deprecated */
+    optional FieldValue fieldValue     = 7;
+    optional FieldMultiValues fieldMultiValues  = 8;
+    /* optional PolicyUpdate policyUpdate = 9; - Deprecated */
+    /* optional PolicyViolation policyViolation = 10; - Deprecated */
+    optional CacheManagerSave cacheManagerSave = 11;
+    optional CacheManagerLoad cacheManagerLoad = 12;
+    optional InjectFieldValue injectFieldValue = 13;
+    optional WatchFieldValue watchFieldValue   = 14;
+    optional UnwatchFieldValue unwatchFieldValue = 15;
+    optional UpdateAllFields updateAllFields     = 16;
+    /* optional Policy policyInfo = 17;  - Deprecated */
+    optional bytes cacheManagerFieldInfo = 18;
+    optional WatchFields watchFields = 19;
+    /* optional HealthResponse healthResponse = 20; - Deprecated */
+    optional bytes blob = 21; /* Value of a binary blob of data containing a predefined structure */
+    /* optional ModuleCommand moduleCommand = 22; - Deprecated */
+    /* optional PerformPolicyAction performPolicyAction = 23; - Deprecated */
+    optional ClientLogin clientLogin = 24;
+    optional UnwatchFields unwatchFields = 25;
+    optional EntityList entityList = 26;
+    optional SchedulerHintRequest schedulerhintrequest = 27;
+}
+
+message ErrorInfo
+{
+    required int32 gpuid = 1;
+    required int32 errorCode = 2;
+    optional int32 fieldId  = 3;
+}
+
+enum CmdOperationMode
+{
+    OPERATION_SINGLE_ENTITY     =   1;
+    OPERATION_GROUP_ENTITIES    =   2;
+    OPERATION_SYSTEM            =   3;
+}
+
+/* Represents command which is encoded/decoded */
+message Command
+{
+    required CmdType cmdType   = 1;  /* Type of Command (One of enum CmdType) */
+    required CmdOperationMode opMode =   2; /* Operation Mode. Group Processing or Individual device processing */
+    optional int32 id          = 3;  /* Represents entityId (GPU ID) or Group ID for which the command should be executed */
+    optional uint32 version    = 4;  /* Version field to represent version of all the args present in case of group command */
+    optional int32 status      = 5;  /* Status of the single/group command */
+    optional string errString  = 6;  /* Error string for the command. Made optional as set only in case of errors */
+    repeated ErrorInfo errList = 7;  /* One or more errors for the operation */
+    repeated CmdArg arg        = 8;  /* Zero or more arguments to be passed with the command. */
+    optional int64 timestamp   = 9;  /* Timestamp of the sender */
+    optional int32 entityGroupId = 10; /* Entity group ID to be acted on. See dcgm_field_entity_group_t in dcgm_fields.h */
+}
+
+/* Used for request-response type scenarios */
+message Msg
+{
+    repeated Command cmd = 1;           /* One or more commands */
+}
+
+/* Structure to ask DCGM for GPU scheduling hints */
+message SchedulerHintRequest
+{
+    required int32 version                 = 1; /* Version number of the API */
+    required int64 inputGpuIds             = 2; /* Bitmask of GPUs to choose from */
+    required int32 numGpus                 = 3; /* Number of GPUs desired */
+    optional int64 hintFlags               = 4; /* Hints to ignore different factors in choosing GPUs */
+}
+

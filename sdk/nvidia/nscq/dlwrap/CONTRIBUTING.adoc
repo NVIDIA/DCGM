@@ -1,0 +1,5 @@
+= Contributing to NSCQ `dlwrap`
+
+Thank you for considering contributing to NSCQ `dlwrap`.
+In order to accept third-party contributions to this code, we require a signed
+link:CLA.adoc[Contributor License Agreement (CLA)] to be provided with the contributions.

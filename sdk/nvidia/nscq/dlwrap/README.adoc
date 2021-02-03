@@ -1,0 +1,49 @@
+//
+// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
+
+= NSCQ Dynamic Library Wrapper (dlwrap)
+
+`dlwrap` is a source code library that uses OS APIs for locating, loading, and mapping symbols from
+a the NSCQ shared library. For the most part, this library simply passes calls through thread-safe
+wrappers to the library APIs; they have the same names and argument lists. However, there are two
+additional APIs provided to manage the lifetime of loaded library: `nscq_dlwrap_attach` and
+`nscq_dlwrap_detach`.
+
+== `nscq_dlwrap_attach`
+
+This thread-safe function uses an OS-specific API like `dlopen()` to locate and map the NSCQ shared
+library into the calling process's address space. This function will return 0 upon success, or a
+negative integer (an OS-specific error code) upon failure.
+
+If this function returns success, the caller should at some point call `nscq_dlwrap_detach()` to
+unload the library and free any resources allocated by the `dlwrap` layer.
+
+== `nscq_dlwrap_detach`
+
+This thread-safe function uses an OS-specific API like `dlclose()` to unmap the NSCQ shared library
+from the calling process's address space. This function and `nscq_dlwrap_attach()` do not do any
+reference counting, so this function only needs to be called once to unload the library and free
+any resources allocated by the `dlwrap` layer.
+
+= License
+
+`dlwrap` is licensed under the https://opensource.org/licenses/MIT[MIT license].

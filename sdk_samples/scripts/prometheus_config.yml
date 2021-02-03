@@ -1,0 +1,21 @@
+# Sample config file for integrating DCGM and prometheus
+# my global config
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+# A scrape configuration instructing prometheus to scrape the output of dcgm_prometheus.py, which in
+# this example is running on host 'node01'
+# To add this to an existing Prometheus config file, just add portion from job_name on to the existing
+# scrape_configs
+scrape_configs:
+  - job_name: 'dcgm_node01'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+      # hostname:port. dcgm_prometheus.py will publish to port 8000 by default. If you use -p to change this
+      # when invoking the script, be sure to update it here
+      - targets: ['node01:8000']

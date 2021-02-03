@@ -1,0 +1,59 @@
+%YAML 1.2
+---
+      
+globals:
+  logfile: dcgm_diag.log
+
+custom:
+- custom:
+    targeted performance:
+      test_duration: 300
+    sm performance:
+      test_duration: 300
+    targeted power: 
+      test_duration: 300
+    memory: 
+      is_allowed: true
+    memory bandwidth: 
+      minimum_bandwidth: 100
+    diagnostic: 
+      is_allowed: false
+    pcie:
+      test_unpinned: true
+      test_unpinned: true
+      test_p2p_on: true
+      test_p2p_off: true
+      subtests:
+        h2d_d2h_single_pinned:
+          iterations: 1000
+          min_pci_generation: 3.0
+          min_pci_width: 16
+          min_bandwidth: 10.3
+        h2d_d2h_single_unpinned:
+          iterations: 1000
+          min_pci_generation: 3.0
+          min_pci_width: 16.0
+        h2d_d2h_concurrent_pinned:
+          iterations: 1000
+        h2d_d2h_concurrent_unpinned:
+          iterations: 1000
+        h2d_d2h_latency_pinned:
+          iterations: 1000
+        h2d_d2h_latency_unpinned:
+          iterations: 1000
+        p2p_bw_p2p_enabled:
+          iterations: 1000
+        p2p_bw_p2p_disabled:
+          iterations: 1000
+        p2p_bw_concurrent_p2p_enabled:
+          iterations: 1000
+        p2p_bw_concurrent_p2p_disabled:
+          iterations: 1000
+        1d_exch_bw_p2p_enabled:
+          iterations: 1000
+        1d_exch_bw_p2p_disabled:
+          iterations: 1000
+        p2p_latency_p2p_enabled:
+          iterations: 1000
+        p2p_latency_p2p_disabled:
+          iterations: 1000

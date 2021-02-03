@@ -1,0 +1,10 @@
+_out/
+.vscode/ipch/
+.clangd/
+.vs/
+**/.idea/
+**/*.nvmk
+**/compile_commands.json
+.vscode/vscode-kanban.json
+tags
+cscope.out
