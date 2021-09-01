@@ -1,11 +1,13 @@
-FROM ubuntu:18.04 AS builder
+FROM ubuntu:20.04 AS builder
 
-RUN export DEBIAN_FRONTEND=noninteractive; \
-    set -ex; \
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN set -ex; \
     apt-get update; \
     apt-get full-upgrade -yq
 
-RUN apt-get install -qy \
+RUN set -ex; \
+    apt-get install -qy \
     autoconf \
     automake \
     bison \
@@ -31,9 +33,9 @@ RUN apt-get install -qy \
 WORKDIR /root
 COPY checksums /root/
 RUN set -ex; mkdir -p crosstool-ng; \
-    wget https://github.com/crosstool-ng/crosstool-ng/archive/crosstool-ng-1.24.0.tar.gz; \
+    wget https://github.com/crosstool-ng/crosstool-ng/archive/5ab29fbf3e4e4dbd71ea9d01d15f6a575bd71562.tar.gz -O crosstool-ng.tar.gz; \
     sha512sum -c checksums; \
-    tar xf crosstool-ng-1.24.0.tar.gz -C crosstool-ng --strip-components=1; \
+    tar xf crosstool-ng.tar.gz -C crosstool-ng --strip-components=1; \
     cd crosstool-ng; \
     ./bootstrap; \
     ./configure --prefix=/opt/crosstool-ng; \
@@ -49,7 +51,8 @@ WORKDIR /home/builder
 RUN mkdir -p src
 
 ENV PATH="/opt/crosstool-ng/bin:${PATH}"
-COPY patches /home/builder/patches/
+# no patches at this moment
+# COPY patches /home/builder/patches/
 
 COPY --chown=builder:builder x86_64.config /home/builder/x86_64/.config
 WORKDIR /home/builder/x86_64
@@ -69,14 +72,15 @@ RUN rm /opt/cross/build.log* || true
 ################
 ## Actual image
 ################
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
-RUN export DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
+
 RUN set -ex; apt-get update -q && apt-get full-upgrade -qy
 RUN set -ex; apt-get update -q && apt-get install -qy curl wget vim make bzip2 automake autoconf gettext graphviz \
-        libedit-dev libtool xz-utils patch python python-dev python-pip \
-        build-essential xz-utils pkg-config graphviz software-properties-common \
-        flex bison rpm
+    libedit-dev libtool xz-utils patch python3 python3-dev python3-pip pylint3 \
+    build-essential xz-utils pkg-config graphviz software-properties-common \
+    flex bison rpm
 
 RUN add-apt-repository ppa:git-core/ppa
 RUN apt-get update -q && apt-get install -qy git

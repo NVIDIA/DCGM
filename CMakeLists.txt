@@ -28,7 +28,13 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
-set(DCGM_CXX_FLAGS "-Werror -Wpedantic -Wno-sign-compare -Wno-cast-function-type -Wno-unused-parameter -Wall -Wextra")
+set(DCGM_CXX_FLAGS "-Werror -Wpedantic -Wno-sign-compare -Wno-unused-parameter -Wall -Wextra")
+
+include(CheckCCompilerFlag)
+check_c_compiler_flag("-Wno-cast-function-type" CC_HAS_WNO_CAST_FUNCTION_TYPE)
+if (CC_HAS_WNO_CAST_FUNCTION_TYPE)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -Wno-cast-function-type")
+endif()
 
 option(ENABLE_LTO "Enable LTO during the build" OFF)
 if (ENABLE_LTO)
@@ -66,7 +72,6 @@ if(${CMAKE_POSITION_INDEPENDENT_CODE})
     add_compile_options(-fPIC)
 endif()
 add_link_options(-static-libstdc++ -Wl,--exclude-libs,libstdc++ -Wl,--exclude-libs,libprotobuf)
-#add_compile_definitions(DCGM_API_EXPORT=1)
 
 include(GNUInstallDirs)
 
@@ -132,7 +137,7 @@ execute_process(COMMAND "${GIT_EXECUTABLE}" branch -a --no-abbrev --contains ${C
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
                 OUTPUT_VARIABLE BUILD_BRANCHES
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(REGEX REPLACE "[^\n]*(HEAD\ detached\ at\[^\n]+\)" "" BUILD_BRANCHES_NO_DETACH "${BUILD_BRANCHES}")
+string(REGEX REPLACE "[^\n]*(HEAD\ detached\ at[^\n]+\)" "" BUILD_BRANCHES_NO_DETACH "${BUILD_BRANCHES}")
 string(REGEX REPLACE "\n" ";" BUILD_BRANCHES "${BUILD_BRANCHES_NO_DETACH}")
 foreach(BRANCH ${BUILD_BRANCHES})
     string(STRIP "${BRANCH}" STRIPPED_BRANCH)
