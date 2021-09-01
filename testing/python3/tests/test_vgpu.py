@@ -502,7 +502,7 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
         test_utils.skip_test("Can only run if at least one GPU with ECC is present")
 
     ret = dcgm_agent.dcgmGroupAddDevice(handle, groupId, validDevice)
-    assert (ret == dcgm_structs.DCGM_ST_OK),"Failed to add a device to the group %d. Return %d" %(groupId, ret)
+    assert (ret == dcgm_structs.DCGM_ST_OK),"Failed to add a device to the group %d. Return %d" % (groupId.value, ret)
 
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
 

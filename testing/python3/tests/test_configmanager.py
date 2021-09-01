@@ -401,7 +401,7 @@ def test_dcgm_default_status_handler(handle, gpuIds):
     config_values = groupObj.config.Get(dcgm_structs.DCGM_CONFIG_CURRENT_STATE)
     assert len(config_values) > 0, "Failed to work with NULL status handle"
 
-    config_values = groupObj.config.Enforce()
+    groupObj.config.Enforce()
     
     #No need to test policy set/get with default status here. this is covered by test_policy.py that passes None as the status handler
     
@@ -424,7 +424,7 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
         test_utils.skip_test("Can only run if at least one GPU with ECC is present")
 
     ret = dcgm_agent.dcgmGroupAddDevice(handle, groupId, validDevice)
-    assert (ret == dcgm_structs.DCGM_ST_OK),"Failed to add a device to the group %d. Return %d" %(groupId, ret)
+    assert (ret == dcgm_structs.DCGM_ST_OK),"Failed to add a device to the group %d. Return %d" % (groupId.value, ret)
 
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
 

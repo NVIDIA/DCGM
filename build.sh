@@ -159,7 +159,7 @@ function run_cmake() {
 
     if [[ ${runtests} -eq 1 ]]; then
         echo "Linting Python code"
-        (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint3 --rcfile pylintrc $(find . -type f -a -iname '*.py'))
+        (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint --rcfile pylintrc $(find . -type f -a -iname '*.py'))
         ctest --output-on-failure
     fi
 

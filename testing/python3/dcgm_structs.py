@@ -321,6 +321,7 @@ def _extractDCGMErrorsAsClasses():
         err_val = getattr(this_module, err_name)
         def gen_new(val):
             def new(typ):
+                # pylint: disable=E1121
                 obj = DCGMError.__new__(typ, val)
                 return obj
             return new
