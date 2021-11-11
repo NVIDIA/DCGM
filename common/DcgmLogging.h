@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <memory>
 #include <mutex>
 #include <plog/Appenders/ConsoleAppender.h>
 #include <syslog.h>
