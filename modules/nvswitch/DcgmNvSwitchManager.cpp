@@ -30,7 +30,7 @@ struct NscqDataCollector
 /*************************************************************************/
 DcgmNvSwitchManager::DcgmNvSwitchManager(dcgmCoreCallbacks_t *dcc)
     : m_numNvSwitches(0)
-    , m_nvSwitches({})
+    , m_nvSwitches {}
     , m_nvSwitchNscqDevices {}
     , m_nvSwitchUuids {}
     , m_coreProxy(*dcc)
