@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+if (NOT ${CUDA10_ENABLED})
     set(CUDA_VERSION 11)
 else()
     set(CUDA_VERSION 10)

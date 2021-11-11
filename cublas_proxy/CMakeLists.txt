@@ -39,11 +39,11 @@ endmacro()
 
 set(LOCAL_CUBLAS_PROXY "")
 
-add_subdirectory(Cuda11)
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    add_subdirectory(Cuda9)
-    add_subdirectory(Cuda10)
-endif()
+foreach(cuda_ver 9 10 11)
+    if (${CUDA${cuda_ver}_ENABLED})
+        add_subdirectory(Cuda${cuda_ver})
+    endif()
+endforeach()
 
 set(DCGM_CUBLAS_PROXY ${LOCAL_CUBLAS_PROXY} PARENT_SCOPE)
 
