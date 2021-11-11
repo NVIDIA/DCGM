@@ -1,5 +1,5 @@
 find_package(jsoncpp REQUIRED CONFIG)
-set(JSONCPP_STATIC_LIBS jsoncpp_lib_static)
+set(JSONCPP_STATIC_LIBS jsoncpp)
 set(JSONCPP_INCLUDE_PATH $<TARGET_PROPERTY:jsoncpp_lib_static,INTERFACE_INCLUDE_DIRECTORIES>)
 # set(Jsoncpp_PATH_PREFIXES /usr/local "${Jsoncpp_ROOT}" "$ENV{HOME}")
 # foreach(prefix ${Jsoncpp_PATH_PREFIXES})
