@@ -147,12 +147,18 @@ void TestDiagManager::CreateDummyScript()
     dummyScript << "#!/bin/bash" << std::endl;
     dummyScript << "echo \"Dummy script successfully executed with args $1 $2 $3\"" << std::endl;
     dummyScript.close();
-    system("chmod 755 dummy_script");
+    if (system("chmod 755 dummy_script"))
+    {
+        fprintf(stderr, "Could not chmod dummy script\n");
+    }
 }
 
 void TestDiagManager::RemoveDummyScript()
 {
-    system("rm -f dummy_script");
+    if (system("rm -f dummy_script"))
+    {
+        fprintf(stderr, "Could not remove dummy script\n");
+    }
 }
 
 int TestDiagManager::TestPositiveDummyExecutable()
@@ -1190,7 +1196,10 @@ void TestDiagManager::CreateDummyFailScript()
     dummyScript << "#!/bin/bash" << std::endl;
     dummyScript << "kaladin_dalinar_roshar_adolin_renarin_shallan_jasnah" << std::endl;
     dummyScript.close();
-    system("chmod 755 dummy_script");
+    if (system("chmod 755 dummy_script"))
+    {
+        fprintf(stderr, "Could not chmod dummy fail script\n");
+    }
 }
 
 int TestDiagManager::TestPerformExternalCommand()

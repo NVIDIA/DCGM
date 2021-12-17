@@ -85,6 +85,5 @@ int NvvsTests::createTmpDir()
 int NvvsTests::deleteTmpDir()
 {
     std::string cmd = std::string("rm -rf ") + ourTempDir;
-    system(cmd.c_str());
-    return 0;
+    return system(cmd.c_str());
 }

@@ -408,7 +408,10 @@ void TestFramework::loadPlugins()
 
     closedir(dir);
 
-    chdir(oldPath);
+    if (chdir(oldPath))
+    {
+        PRINT_ERROR("%s", "%s", "Cannot chdir to original directory");
+    }
 
     for (size_t i = 0; i < m_plugins.size(); i++)
     {
