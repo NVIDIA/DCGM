@@ -464,17 +464,6 @@ unsigned int mcollect_size(mcollect_p mcollect)
     return mcollect->hashTable.size;
 }
 
-static int mcollect_timeseries_size_cb(char *key, mcollect_value_p value, void *userData)
-{
-    long long *bytesUsed = (long long *)userData;
-
-    if (value && mcollect_type_is_timeseries(value->type))
-    {
-        *bytesUsed += timeseries_bytes_used(value->val.tseries);
-    }
-
-    return 0;
-}
 
 /*****************************************************************************/
 long long mcollect_key_bytes_used(mcollect_p mcollect, char *key)
