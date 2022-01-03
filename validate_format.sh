@@ -36,6 +36,11 @@ function GetCppFiles(){
             local sub_files=$(git submodule foreach --quiet --recursive "git diff-tree --name-only --diff-filter=d -r -m --no-commit-id HEAD | grep -E \"\.(cpp|h|hpp|c)$\" | xargs -r -n1 realpath --relative-to=${git_top_dir}")
             echo "${top_files}"$'\n'"${sub_files}"
             ;;
+        committed)
+            local top_files=$(git diff --name-only --diff-filter=d HEAD^ | grep -E "\.(cpp|h|hpp|c)$")
+            local sub_files=$(git submodule foreach --quiet --recursive "git diff --name-only --diff-filter=d HEAD^ | grep -E \"\.(cpp|h|hpp|c)$\" | xargs -r -n1 realpath --relative-to=${git_top_dir}")
+            echo "${top_files}"$'\n'"${sub_files}"
+            ;;
         *)
             ;;
     esac
@@ -57,8 +62,8 @@ Usage: ${0} [options]
     Without --merged argument this script will validate changed AND staged C/CPP/H/HPP files."
 }
 
-LONG_OPTS=merged,diff,help
-SHORT_OPTS=m,d,h
+LONG_OPTS=merged,diff,help,committed
+SHORT_OPTS=m,d,h,c
 
 ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -77,6 +82,10 @@ while true; do
             ;;
         -m|--merged)
             files_from=merged
+            shift
+            ;;
+        -c|--committed)
+            files_from=committed
             shift
             ;;
         -d|--diff)
