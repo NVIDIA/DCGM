@@ -50,7 +50,7 @@ function usage() {
     echo "Formatting validation script for DCGM project
 Usage: ${0} [options]
     Where options are:
-        -d --diff       : Show diff for files which does not complay
+        -d --diff       : Show diff for files which does not comply
         -m --merged     : Check merged files instead of staged files (for Jenkins)
         -h --help       : This information
 
