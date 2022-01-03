@@ -43,10 +43,8 @@ int (*shut)(void);
 int main(void)
 {
     dcgmHandle_t dcgmHandle;
-    dcgmOperationMode_t opMode;
     unsigned int devices = DCGM_MAX_NUM_DEVICES;
     int count;
-    char IP[] = "127.0.0.1";
     int ret;
 
     // Calling APIs, if no shared library is present, use symbol from stub library

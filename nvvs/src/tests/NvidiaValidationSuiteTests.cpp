@@ -223,11 +223,11 @@ SCENARIO("NVVS correctly processes command line arguments")
         CLEANUP();
     }
 
-    GIVEN("Non-default paramters")
+    GIVEN("Non-default parameters")
     {
         SETUP();
         char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
-        mkdtemp(statsDir);
+        REQUIRE(mkdtemp(statsDir));
 
         WrapperNvidiaValidationSuite nvvs;
 
@@ -298,7 +298,7 @@ SCENARIO("NVVS correctly processes command line arguments")
         CHECK(nvvsCommon.goldenValuesFile == "goldenvalues");
         CHECK(nvvsCommon.m_statsPath == statsDir);
 
-        rmdir(statsDir);
+        CHECK(rmdir(statsDir) == 0);
         CLEANUP();
     }
 }

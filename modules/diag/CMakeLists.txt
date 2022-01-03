@@ -65,7 +65,7 @@ target_link_libraries(dcgmmodulediag
         dcgm_common
         dcgm_logging
         dcgm_mutex
-        ${JSONCPP_STATIC_LIBS}
+        ${JSONCPP_LIBS}
 )
 target_sources(dcgmmodulediag
     PRIVATE

@@ -17,6 +17,8 @@
 
 // This tells plog to store file information in log records
 #include "dcgm_errors.h"
+#include <plog/Appenders/RollingFileAppender.h>
+#include <plog/Init.h>
 #include <plog/Record.h>
 #define PLOG_CAPTURE_FILE
 
@@ -28,6 +30,8 @@
 #include <cstdio>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <iomanip>
+#include <memory>
 #include <mutex>
 #include <plog/Appenders/ConsoleAppender.h>
 #include <syslog.h>
@@ -93,7 +97,7 @@ extern HostengineAppender hostengineAppender;
 namespace
 {
 template <class... Args>
-void SyslogAdapter(int priority, char const *format, Args &&... args)
+void SyslogAdapter(int priority, char const *format, Args &&...args)
 {
     syslog(priority, format, std::forward<Args>(args)...);
 }
@@ -105,23 +109,23 @@ void SyslogAdapter(int priority, char const *format, Args &&... args)
  */
 #define SYSLOG_CRITICAL(...)              \
     PRINT_CRITICAL(nullptr, __VA_ARGS__); \
-    SyslogAdapter(LOG_CRIT, __VA_ARGS__);
+    SyslogAdapter(PLOG_CRIT, __VA_ARGS__);
 
 #define SYSLOG_ERROR(...)              \
     PRINT_ERROR(nullptr, __VA_ARGS__); \
-    SyslogAdapter(LOG_ERR, __VA_ARGS__);
+    SyslogAdapter(PLOG_ERR, __VA_ARGS__);
 
 #define SYSLOG_WARNING(...)              \
     PRINT_WARNING(nullptr, __VA_ARGS__); \
-    SyslogAdapter(LOG_WARNING, __VA_ARGS__);
+    SyslogAdapter(PLOG_WARNING, __VA_ARGS__);
 
 #define SYSLOG_NOTICE(...)            \
     PRINT_INFO(nullptr, __VA_ARGS__); \
-    SyslogAdapter(LOG_NOTICE, __VA_ARGS__);
+    SyslogAdapter(PLOG_NOTICE, __VA_ARGS__);
 
 #define SYSLOG_INFO(...)              \
     PRINT_INFO(nullptr, __VA_ARGS__); \
-    SyslogAdapter(LOG_INFO, __VA_ARGS__);
+    SyslogAdapter(PLOG_INFO, __VA_ARGS__);
 
 #define DCGM_MAX_LOG_ROTATE 5
 
@@ -142,45 +146,45 @@ DCGM_CASSERT(DcgmLoggingSeverityInfo == (DcgmLoggingSeverity_t)plog::info, 1);
 DCGM_CASSERT(DcgmLoggingSeverityDebug == (DcgmLoggingSeverity_t)plog::debug, 1);
 DCGM_CASSERT(DcgmLoggingSeverityVerbose == (DcgmLoggingSeverity_t)plog::verbose, 1);
 
-#define DCGM_LOG_VERBOSE_TO(logger) LOG_(logger, plog::verbose)
-#define DCGM_LOG_DEBUG_TO(logger)   LOG_(logger, plog::debug)
-#define DCGM_LOG_INFO_TO(logger)    LOG_(logger, plog::info)
-#define DCGM_LOG_WARNING_TO(logger) LOG_(logger, plog::warning)
-#define DCGM_LOG_ERROR_TO(logger)   LOG_(logger, plog::error)
-#define DCGM_LOG_FATAL_TO(logger)   LOG_(logger, plog::fatal)
+#define DCGM_LOG_VERBOSE_TO(logger) PLOG_(logger, plog::verbose)
+#define DCGM_LOG_DEBUG_TO(logger)   PLOG_(logger, plog::debug)
+#define DCGM_LOG_INFO_TO(logger)    PLOG_(logger, plog::info)
+#define DCGM_LOG_WARNING_TO(logger) PLOG_(logger, plog::warning)
+#define DCGM_LOG_ERROR_TO(logger)   PLOG_(logger, plog::error)
+#define DCGM_LOG_FATAL_TO(logger)   PLOG_(logger, plog::fatal)
 
-#define DCGM_LOG_VERBOSE LOG_(BASE_LOGGER, plog::verbose)
-#define DCGM_LOG_DEBUG   LOG_(BASE_LOGGER, plog::debug)
-#define DCGM_LOG_INFO    LOG_(BASE_LOGGER, plog::info)
-#define DCGM_LOG_WARNING LOG_(BASE_LOGGER, plog::warning)
-#define DCGM_LOG_ERROR   LOG_(BASE_LOGGER, plog::error)
-#define DCGM_LOG_FATAL   LOG_(BASE_LOGGER, plog::fatal)
+#define DCGM_LOG_VERBOSE PLOG_(BASE_LOGGER, plog::verbose)
+#define DCGM_LOG_DEBUG   PLOG_(BASE_LOGGER, plog::debug)
+#define DCGM_LOG_INFO    PLOG_(BASE_LOGGER, plog::info)
+#define DCGM_LOG_WARNING PLOG_(BASE_LOGGER, plog::warning)
+#define DCGM_LOG_ERROR   PLOG_(BASE_LOGGER, plog::error)
+#define DCGM_LOG_FATAL   PLOG_(BASE_LOGGER, plog::fatal)
 
-#define IF_DCGM_LOG_VERBOSE IF_LOG_(BASE_LOGGER, plog::verbose)
-#define IF_DCGM_LOG_DEBUG   IF_LOG_(BASE_LOGGER, plog::debug)
-#define IF_DCGM_LOG_INFO    IF_LOG_(BASE_LOGGER, plog::info)
-#define IF_DCGM_LOG_WARNING IF_LOG_(BASE_LOGGER, plog::warning)
-#define IF_DCGM_LOG_ERROR   IF_LOG_(BASE_LOGGER, plog::error)
-#define IF_DCGM_LOG_FATAL   IF_LOG_(BASE_LOGGER, plog::fatal)
+#define IF_DCGM_LOG_VERBOSE IF_PLOG_(BASE_LOGGER, plog::verbose)
+#define IF_DCGM_LOG_DEBUG   IF_PLOG_(BASE_LOGGER, plog::debug)
+#define IF_DCGM_LOG_INFO    IF_PLOG_(BASE_LOGGER, plog::info)
+#define IF_DCGM_LOG_WARNING IF_PLOG_(BASE_LOGGER, plog::warning)
+#define IF_DCGM_LOG_ERROR   IF_PLOG_(BASE_LOGGER, plog::error)
+#define IF_DCGM_LOG_FATAL   IF_PLOG_(BASE_LOGGER, plog::fatal)
 
-#define DCGM_LOG_SYSLOG_DEBUG    LOG_(SYSLOG_LOGGER, plog::verbose)
-#define DCGM_LOG_SYSLOG_INFO     LOG_(SYSLOG_LOGGER, plog::debug)
-#define DCGM_LOG_SYSLOG_NOTICE   LOG_(SYSLOG_LOGGER, plog::info)
-#define DCGM_LOG_SYSLOG_WARNING  LOG_(SYSLOG_LOGGER, plog::warning)
-#define DCGM_LOG_SYSLOG_ERROR    LOG_(SYSLOG_LOGGER, plog::error)
-#define DCGM_LOG_SYSLOG_CRITICAL LOG_(SYSLOG_LOGGER, plog::fatal)
+#define DCGM_LOG_SYSLOG_DEBUG    PLOG_(SYSLOG_LOGGER, plog::verbose)
+#define DCGM_LOG_SYSLOG_INFO     PLOG_(SYSLOG_LOGGER, plog::debug)
+#define DCGM_LOG_SYSLOG_NOTICE   PLOG_(SYSLOG_LOGGER, plog::info)
+#define DCGM_LOG_SYSLOG_WARNING  PLOG_(SYSLOG_LOGGER, plog::warning)
+#define DCGM_LOG_SYSLOG_ERROR    PLOG_(SYSLOG_LOGGER, plog::error)
+#define DCGM_LOG_SYSLOG_CRITICAL PLOG_(SYSLOG_LOGGER, plog::fatal)
 
-#define IF_DCGM_LOG_SYSLOG_DEBUG    IF_LOG_(SYSLOG_LOGGER, plog::verbose)
-#define IF_DCGM_LOG_SYSLOG_INFO     IF_LOG_(SYSLOG_LOGGER, plog::debug)
-#define IF_DCGM_LOG_SYSLOG_NOTICE   IF_LOG_(SYSLOG_LOGGER, plog::info)
-#define IF_DCGM_LOG_SYSLOG_WARNING  IF_LOG_(SYSLOG_LOGGER, plog::warning)
-#define IF_DCGM_LOG_SYSLOG_ERROR    IF_LOG_(SYSLOG_LOGGER, plog::error)
-#define IF_DCGM_LOG_SYSLOG_CRITICAL IF_LOG_(SYSLOG_LOGGER, plog::fatal)
+#define IF_DCGM_LOG_SYSLOG_DEBUG    IF_PLOG_(SYSLOG_LOGGER, plog::verbose)
+#define IF_DCGM_LOG_SYSLOG_INFO     IF_PLOG_(SYSLOG_LOGGER, plog::debug)
+#define IF_DCGM_LOG_SYSLOG_NOTICE   IF_PLOG_(SYSLOG_LOGGER, plog::info)
+#define IF_DCGM_LOG_SYSLOG_WARNING  IF_PLOG_(SYSLOG_LOGGER, plog::warning)
+#define IF_DCGM_LOG_SYSLOG_ERROR    IF_PLOG_(SYSLOG_LOGGER, plog::error)
+#define IF_DCGM_LOG_SYSLOG_CRITICAL IF_PLOG_(SYSLOG_LOGGER, plog::fatal)
 
 namespace
 {
 template <class... Args>
-void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, char const *format, Args &&... args)
+void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, char const *format, Args &&...args)
 {
     snprintf(outBuffer, bufSize, format, std::forward<Args>(args)...);
 }
@@ -194,7 +198,7 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
 #undef PRINT_CRITICAL
 #define PRINT_CRITICAL(...)                                                              \
     {                                                                                    \
-        IF_LOG_(BASE_LOGGER, plog::fatal)                                                \
+        IF_PLOG_(BASE_LOGGER, plog::fatal)                                               \
         {                                                                                \
             char _dcgm_logging_buf[4096];                                                \
             OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
@@ -205,7 +209,7 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
 #undef PRINT_ERROR
 #define PRINT_ERROR(...)                                                                 \
     {                                                                                    \
-        IF_LOG_(BASE_LOGGER, plog::error)                                                \
+        IF_PLOG_(BASE_LOGGER, plog::error)                                               \
         {                                                                                \
             char _dcgm_logging_buf[4096];                                                \
             OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
@@ -216,7 +220,7 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
 #undef PRINT_WARNING
 #define PRINT_WARNING(...)                                                               \
     {                                                                                    \
-        IF_LOG_(BASE_LOGGER, plog::warning)                                              \
+        IF_PLOG_(BASE_LOGGER, plog::warning)                                             \
         {                                                                                \
             char _dcgm_logging_buf[4096];                                                \
             OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
@@ -227,7 +231,7 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
 #undef PRINT_INFO
 #define PRINT_INFO(...)                                                                  \
     {                                                                                    \
-        IF_LOG_(BASE_LOGGER, plog::info)                                                 \
+        IF_PLOG_(BASE_LOGGER, plog::info)                                                \
         {                                                                                \
             char _dcgm_logging_buf[4096];                                                \
             OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
@@ -241,7 +245,7 @@ void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, 
 #undef PRINT_DEBUG
 #define PRINT_DEBUG(...)                                                                 \
     {                                                                                    \
-        IF_LOG_(BASE_LOGGER, plog::debug)                                                \
+        IF_PLOG_(BASE_LOGGER, plog::debug)                                               \
         {                                                                                \
             char _dcgm_logging_buf[1024];                                                \
             OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
@@ -549,7 +553,8 @@ public:
                                record->func,
                                record->line,
                                record->file,
-                               record->object)
+                               record->object,
+                               PLOG_DEFAULT_INSTANCE_ID)
                 , m_record(record)
                 , m_time({ record->time.time, record->time.millitm })
                 , m_tid(record->tid)

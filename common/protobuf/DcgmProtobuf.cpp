@@ -50,7 +50,7 @@ DcgmProtobuf::~DcgmProtobuf()
  *****************************************************************************/
 dcgmReturn_t DcgmProtobuf::GetEncodedMessage(std::vector<char> &encodedMessage)
 {
-    encodedMessage.resize(mpProtoMsg->ByteSize());
+    encodedMessage.resize(mpProtoMsg->ByteSizeLong());
     mpProtoMsg->SerializeToArray(encodedMessage.data(), encodedMessage.size());
     return DCGM_ST_OK;
 }

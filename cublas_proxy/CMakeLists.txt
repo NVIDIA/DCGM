@@ -20,6 +20,7 @@ macro(define_proxy_lib CUDA_VER)
 
     target_compile_definitions(${lib_name} PRIVATE CUDA_VERSION_USED=${CUDA_VER})
     target_compile_options(${lib_name} PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
+    target_link_options(${lib_name} PRIVATE -Wl,--no-undefined)
     target_link_options(${lib_name} PRIVATE -Wl,--exclude-libs,ALL)
     target_link_options(${lib_name} PRIVATE -Xlinker --version-script=${CMAKE_CURRENT_SOURCE_DIR}/../cublas_proxy.linux_def)
 
@@ -28,6 +29,7 @@ macro(define_proxy_lib CUDA_VER)
     get_absolute_path(${cublas_proxy_include_dir} cublas_proxy_include_dir)
     target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${cublas_proxy_include_dir}>)
     target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${CUDA${CUDA_VER}_INCLUDE_DIR}>)
+    target_link_libraries(${lib_name} PRIVATE dl rt)
     target_link_libraries(${lib_name} PRIVATE dcgm_common dcgm_logging dcgm_mutex)
     target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_CUBLAS_LIBS})
     target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
@@ -39,11 +41,11 @@ endmacro()
 
 set(LOCAL_CUBLAS_PROXY "")
 
-add_subdirectory(Cuda11)
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    add_subdirectory(Cuda9)
-    add_subdirectory(Cuda10)
-endif()
+foreach(cuda_ver 9 10 11)
+    if (${CUDA${cuda_ver}_ENABLED})
+        add_subdirectory(Cuda${cuda_ver})
+    endif()
+endforeach()
 
 set(DCGM_CUBLAS_PROXY ${LOCAL_CUBLAS_PROXY} PARENT_SCOPE)
 

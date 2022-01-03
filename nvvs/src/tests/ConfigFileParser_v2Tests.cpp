@@ -219,7 +219,7 @@ SCENARIO("void ConfigFileParser_v2::handleGpuSetBlock(const YAML::Node &node)")
 {
     const FrameworkConfig fc;
     NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
+    std::string filename = nv.createTmpFile("yaml");
 
     std::ofstream out(filename);
     out << CONFIG_FILE_CONTENTS;
@@ -231,7 +231,7 @@ SCENARIO("void ConfigFileParser_v2::CheckTokens_globals(const YAML::Node &node)"
 {
     FrameworkConfig fc;
     NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
+    std::string filename = nv.createTmpFile("yaml");
 
     std::ofstream out(filename);
     out << CONFIG_FILE_CONTENTS;
@@ -256,7 +256,7 @@ SCENARIO("void ConfigFileParser_v2::CheckTokens_gpus(const YAML::Node &node)")
 {
     FrameworkConfig fc;
     NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
+    std::string filename = nv.createTmpFile("yaml");
 
     std::ofstream out(filename);
     out << CONFIG_FILE_CONTENTS;

@@ -39,13 +39,13 @@ namespace DcgmNs::Dcgmi::Logging
 struct ConsoleErrorLogger
 {
     ConsoleErrorLogger(char const *func, size_t line, char const *file)
-        : record(plog::Record(plog::error, func, line, file, 0))
+        : record(plog::Record(plog::error, func, line, file, 0, PLOG_DEFAULT_INSTANCE_ID))
     {}
 
     template <class T>
     ConsoleErrorLogger &operator<<(T const &msg)
     {
-        IF_LOG_(BASE_LOGGER, plog::error)
+        IF_PLOG_(BASE_LOGGER, plog::error)
         {
             record << msg;
         }
@@ -56,7 +56,7 @@ struct ConsoleErrorLogger
 
     ~ConsoleErrorLogger()
     {
-        IF_LOG_(BASE_LOGGER, plog::debug)(*plog::get<BASE_LOGGER>()) += record;
+        IF_PLOG_(BASE_LOGGER, plog::debug)(*plog::get<BASE_LOGGER>()) += record;
         std::cerr << std::endl;
     }
 

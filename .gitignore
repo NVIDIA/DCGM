@@ -8,3 +8,45 @@ _out/
 .vscode/vscode-kanban.json
 tags
 cscope.out
+
+# CMake generated
+CMakeFiles/
+CMakeCache.txt
+Makefile
+CPackConfig.cmake
+CPackSourceConfig.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+Testing/
+cmake_install.cmake
+
+# generated
+*tests_include-*.cmake
+*_tests-*.cmake
+dcgmi/dcgmi
+dcgmi/testing/dcgmitests
+dcgmi/tests/dcgmi_tests
+dcgmlib/src/tests/dcgmlibtests
+dcgmproftester/dcgmproftester11
+hostengine/nv-hostengine
+modules/nvswitch/tests/nvswitchtests
+nvvs/plugin_src/software/tests/softwaretests
+nvvs/src/nvvs
+nvvs/src/nvvs.log
+nvvs/src/tests/nvvscoretests
+common/DcgmBuildInfo.cpp
+common/protobuf/dcgm.pb.cc
+common/protobuf/dcgm.pb.h
+common/tests/commontests
+/rt.props
+sdk_samples/*_sample
+testing/stub/stub_library_test
+testing/testdcgmunittests
+testing/version.py
+
+# compiled
+*.a
+*.so
+lib*.so.*
+
+dcgm_decode_db.txt

@@ -153,9 +153,10 @@ SCENARIO("int DcgmRecorder::WriteToFile(const std::string &filename, int logFile
 {
     DcgmRecorder dr;
     Json::Value json;
+    NvvsTests nv;
 
-    std::string jsonFileName = createTmpFile("json");
-    std::string txtFileName  = createTmpFile("txt");
+    std::string jsonFileName = nv.createTmpFile("json");
+    std::string txtFileName  = nv.createTmpFile("txt");
 
     fillGpuStats(dr);
     fillGroupStats(dr);

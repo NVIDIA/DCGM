@@ -17,8 +17,6 @@
 
 #include <string>
 
-std::string createTmpFile(const char *suffix);
-
 // Used to manage lifetime of test resources
 class NvvsTests
 {
@@ -27,7 +25,11 @@ public:
 
     ~NvvsTests();
 
+    std::string createTmpFile(const char *suffix);
+
 private:
     int createTmpDir();
     int deleteTmpDir();
+    char ourTempDir[256];
+
 };
