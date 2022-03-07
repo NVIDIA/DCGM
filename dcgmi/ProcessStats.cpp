@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,10 +208,9 @@ dcgmReturn_t ProcessStats::StartJob(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t group
 
     if (result != DCGM_ST_OK)
     {
-        std::string error = (result == DCGM_ST_NOT_CONFIGURED)
-                                ? "The Group is not found"
-                                : (result == DCGM_ST_DUPLICATE_KEY) ? "This Job Id is in use. Please use another job Id"
-                                                                    : errorString(result);
+        std::string error = (result == DCGM_ST_NOT_CONFIGURED)  ? "The Group is not found"
+                            : (result == DCGM_ST_DUPLICATE_KEY) ? "This Job Id is in use. Please use another job Id"
+                                                                : errorString(result);
         std::cout << "Error: Unable to start job for group. Return: " << error << "." << std::endl;
         PRINT_ERROR("%u %d",
                     "Error starting job watches for group with ID: %u. Return: %d",

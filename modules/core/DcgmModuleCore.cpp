@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <DcgmHostEngineHandler.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmVersion.hpp>
+#include <fmt/format.h>
 #include <sstream>
 
 extern "C" dcgmReturn_t dcgm_core_process_message(DcgmModule *module, dcgm_module_command_header_t *moduleCommand)
@@ -277,7 +278,7 @@ dcgmReturn_t DcgmModuleCore::ProcessAddRemoveEntity(dcgm_core_msg_add_remove_ent
     if (msg.header.subCommand == DCGM_CORE_SR_GROUP_ADD_ENTITY)
     {
         ret = m_groupManager->AddEntityToGroup(
-            connectionId, msg.re.groupId, (dcgm_field_entity_group_t)msg.re.entityGroupId, msg.re.entityId);
+            msg.re.groupId, (dcgm_field_entity_group_t)msg.re.entityGroupId, msg.re.entityId);
     }
     else
     {
@@ -451,26 +452,33 @@ dcgmReturn_t DcgmModuleCore::ProcessGroupGetInfo(dcgm_core_msg_group_get_info_t 
     std::string groupName = m_groupManager->GetGroupName(connectionId, groupId);
     SafeCopyTo(msg.gi.groupInfo.groupName, groupName.c_str());
 
-    ret = m_groupManager->GetGroupEntities(connectionId, groupId, entities);
+    ret = m_groupManager->GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "Error: Bad group id parameter";
         msg.gi.cmdRet = ret;
+        return DCGM_ST_OK;
     }
-    else
-    {
-        int count = 0;
-        for (auto &entitie : entities)
-        {
-            msg.gi.groupInfo.entityList[count].entityGroupId = entitie.entityGroupId;
-            msg.gi.groupInfo.entityList[count].entityId      = entitie.entityId;
-            count++;
-        }
 
-        msg.gi.groupInfo.count = count;
-        msg.gi.cmdRet          = DCGM_ST_OK;
-        msg.gi.timestamp       = timelib_usecSince1970();
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    {
+        DCGM_LOG_ERROR << fmt::format(
+            "Number of entities in the group {} exceeds DCGM_GROUP_MAX_ENTITIES={}.", groupId, DCGM_GROUP_MAX_ENTITIES);
+        msg.gi.cmdRet = DCGM_ST_MAX_LIMIT;
+        return DCGM_ST_OK;
     }
+
+    int count = 0;
+    for (auto const &entity : entities)
+    {
+        msg.gi.groupInfo.entityList[count].entityGroupId = entity.entityGroupId;
+        msg.gi.groupInfo.entityList[count].entityId      = entity.entityId;
+        ++count;
+    }
+
+    msg.gi.groupInfo.count = count;
+    msg.gi.cmdRet          = DCGM_ST_OK;
+    msg.gi.timestamp       = timelib_usecSince1970();
 
     return DCGM_ST_OK;
 }
@@ -609,7 +617,7 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValues(dcgm_core_msg_entiti
             return DCGM_ST_OK;
         }
 
-        ret = m_groupManager->GetGroupEntities(0, groupId, entities);
+        ret = m_groupManager->GetGroupEntities(groupId, entities);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
@@ -641,6 +649,13 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValues(dcgm_core_msg_entiti
             msg.ev.cmdRet = ret;
             return DCGM_ST_OK;
         }
+    }
+    else if (msg.ev.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        DCGM_LOG_ERROR << "Invalid fieldId count: " << msg.ev.fieldIdCount
+                       << " > MAX:" << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
     }
     else
     {
@@ -740,6 +755,13 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
     {
         DCGM_LOG_WARNING << "Fixing entityGroupId to be NONE";
         entityGroupId = DCGM_FE_NONE;
+    }
+
+    size_t maxReasonableFvCount = sizeof(msg.fv.buffer) / DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE;
+    if (msg.fv.count > maxReasonableFvCount)
+    {
+        DCGM_LOG_WARNING << "msg.fv.count " << msg.fv.count << " > " << maxReasonableFvCount << ". Clamping value.";
+        msg.fv.count = maxReasonableFvCount;
     }
 
     if (msg.fv.startTs != 0)
@@ -1315,6 +1337,14 @@ dcgmReturn_t DcgmModuleCore::ProcessFieldgroupOp(dcgm_core_msg_fieldgroup_op_t &
 
     if (msg.header.subCommand == DCGM_CORE_SR_FIELDGROUP_CREATE)
     {
+        if (msg.info.fg.numFieldIds > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+        {
+            DCGM_LOG_ERROR << "Got bad msg.info.fg.numFieldIds " << msg.info.fg.numFieldIds
+                           << " > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP";
+            msg.info.cmdRet = DCGM_ST_BADPARAM;
+            return DCGM_ST_OK;
+        }
+
         std::vector<unsigned short> fieldIds(msg.info.fg.fieldIds, msg.info.fg.fieldIds + msg.info.fg.numFieldIds);
 
         /* This call will set msg.info.fg.fieldGroupId */
@@ -1523,7 +1553,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gp
             return DCGM_ST_OK;
         }
 
-        ret = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v1);
+        msg.info.cmdRet = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v1);
 
         return DCGM_ST_OK;
     }
@@ -1536,7 +1566,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gp
             return DCGM_ST_OK;
         }
 
-        ret = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v2);
+        msg.info.cmdRet = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v2);
 
         return DCGM_ST_OK;
     }

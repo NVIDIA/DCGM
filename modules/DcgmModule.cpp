@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,10 @@
 #include "DcgmModule.h"
 
 /*****************************************************************************/
-DcgmModule::~DcgmModule()
-{}
+DcgmModule::~DcgmModule() = default;
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModule::CheckVersion(dcgm_module_command_header_t *moduleCommand, unsigned int compareVersion)
+dcgmReturn_t DcgmModule::CheckVersion(dcgm_module_command_header_t const *moduleCommand, unsigned int compareVersion)
 {
     if (moduleCommand == nullptr)
     {
@@ -46,6 +45,13 @@ dcgmReturn_t PassMessageToModule(DcgmModule *module, dcgm_module_command_header_
 {
     if (nullptr == module)
     {
+        DCGM_LOG_ERROR << "Module is null";
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (moduleCommand == nullptr)
+    {
+        DCGM_LOG_ERROR << "Module command is null";
         return DCGM_ST_BADPARAM;
     }
 
@@ -57,17 +63,17 @@ dcgmReturn_t PassMessageToModule(DcgmModule *module, dcgm_module_command_header_
     }
     catch (std::runtime_error const &ex)
     {
-        DCGM_LOG_ERROR << "An exception occured in DcgmModule::ProcessMessage. Ex: " << ex.what();
+        DCGM_LOG_ERROR << "An exception occurred in DcgmModule::ProcessMessage. Ex: " << ex.what();
         ret = DCGM_ST_BADPARAM;
     }
     catch (std::exception const &ex)
     {
-        DCGM_LOG_ERROR << "A generic exception occured in DcgmModule::ProcessMessage.";
+        DCGM_LOG_ERROR << "A generic exception occurred in DcgmModule::ProcessMessage. Ex: " << ex.what();
         ret = DCGM_ST_BADPARAM;
     }
     catch (...)
     {
-        DCGM_LOG_ERROR << "An unknown exception occured in DcgmModule::ProcessMessage";
+        DCGM_LOG_ERROR << "An unknown exception occurred in DcgmModule::ProcessMessage";
         ret = DCGM_ST_BADPARAM;
     }
 

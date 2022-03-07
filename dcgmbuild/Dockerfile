@@ -28,12 +28,14 @@ RUN set -ex; \
     unzip \
     wget \
     python \
-    python-dev
+    python-dev \
+    python3 \
+    python3-dev
 
 WORKDIR /root
 COPY checksums /root/
 RUN set -ex; mkdir -p crosstool-ng; \
-    wget https://github.com/crosstool-ng/crosstool-ng/archive/5ab29fbf3e4e4dbd71ea9d01d15f6a575bd71562.tar.gz -O crosstool-ng.tar.gz; \
+    wget https://github.com/crosstool-ng/crosstool-ng/archive/1e47ca1e70497a38641b9025998a6333265fe84e.tar.gz -O crosstool-ng.tar.gz; \
     sha512sum -c checksums; \
     tar xf crosstool-ng.tar.gz -C crosstool-ng --strip-components=1; \
     cd crosstool-ng; \
@@ -80,7 +82,7 @@ RUN set -ex; apt-get update -q && apt-get full-upgrade -qy
 RUN set -ex; apt-get update -q && apt-get install -qy curl wget vim make bzip2 automake autoconf gettext graphviz \
     libedit-dev libtool xz-utils patch python3 python3-dev python3-pip pylint3 \
     build-essential xz-utils pkg-config graphviz software-properties-common \
-    flex bison rpm
+    flex bison rpm unzip cpio
 
 RUN add-apt-repository ppa:git-core/ppa
 RUN apt-get update -q && apt-get install -qy git

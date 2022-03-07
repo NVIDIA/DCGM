@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -284,29 +284,26 @@ def test_dcgm_prof_watch_fields_multi_user(handle, gpuIds):
     fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
     assert fieldIds is not None
 
-    #Take ownership of the profiling watches
+    # Take ownership of the profiling watches
     dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
 
-    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmGroup2.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
-    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmGroup2.profiling.UnwatchFields()
-    
-    #Release the watches
-    dcgmGroup.profiling.UnwatchFields()
-
-    #Now dcgmHandle2 owns the watches
     dcgmGroup2.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
 
-    #connection 1 should fail to acquire the watches
-    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
-    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmGroup.profiling.UnwatchFields()
+    # Release the watches
+    dcgmGroup2.profiling.UnwatchFields()
+    dcgmGroup.profiling.UnwatchFields()
+
+    # Now dcgmHandle2 owns the watches
+    dcgmGroup2.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+
+    # connection 1 should not fail to acquire the watches
+    dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+
+    dcgmGroup2.profiling.UnwatchFields()
+    dcgmGroup.profiling.UnwatchFields()
 
     dcgmHandle.Shutdown()
     dcgmHandle2.Shutdown()
-
 
 
 @test_utils.run_with_standalone_host_engine(20)
@@ -488,7 +485,51 @@ def helper_test_dpt_field_id(handle, gpuIds, fieldId):
     #Just test the first GPU of our SKU. Other tests will cover multiple SKUs
     useGpuIds = [gpuIds[0], ]
 
-    args = ["--mode", "validate", "-d", "3.0", "-r", "0.10", "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate", "-d", "3.0", "-r", "0.10", "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
+    app.wait()
+
+def helper_test_dpt_h(handle, gpuIds):
+    '''
+    Test that -h command line argument works.
+    '''
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    helper_check_profiling_environment(dcgmGroup)
+
+    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+
+    supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
+
+    #Just test the first GPU of our SKU. Other tests will cover multiple SKUs
+    useGpuIds = [gpuIds[0], ]
+
+    args = ["-h"]
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
+    app.wait()
+
+def helper_test_dpt_help(handle, gpuIds):
+    '''
+    Test that command line --help argument works.
+    '''
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    helper_check_profiling_environment(dcgmGroup)
+
+    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+
+    supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
+
+    #Just test the first GPU of our SKU. Other tests will cover multiple SKUs
+    useGpuIds = [gpuIds[0], ]
+
+    args = ["--help"]
     app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
@@ -499,6 +540,20 @@ def helper_test_dpt_field_id(handle, gpuIds, fieldId):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_gr_active(handle, gpuIds):
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgmproftester_h(handle, gpuIds):
+    helper_test_dpt_h(handle, gpuIds)
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgmproftester_help(handle, gpuIds):
+    helper_test_dpt_help(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()

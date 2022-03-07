@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -357,7 +357,6 @@ int TestDiagManager::TestPopulateRunDiag()
 
     drd.version = dcgmRunDiag_version7;
 
-    static const std::string pluginPath("/home/dalinar/unityPlugins");
     static const std::string goldenFilename("/tmp/custom.yml");
     std::string error;
 
@@ -374,7 +373,6 @@ int TestDiagManager::TestPopulateRunDiag()
                                        "",
                                        0,
                                        "",
-                                       pluginPath,
                                        true,
                                        true,
                                        10,
@@ -421,9 +419,9 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (pluginPath != drd.pluginPath)
+    if (drd.pluginPath[0] != 0)
     {
-        fprintf(stderr, "Plugin path should be '%s', but found '%s'.\n", pluginPath.c_str(), drd.pluginPath);
+        fprintf(stderr, "Plugin path should be empty, but found '%s'.\n", drd.pluginPath);
         return -1;
     }
 
@@ -516,7 +514,6 @@ int TestDiagManager::TestPopulateRunDiag()
         statsPath,
         3,
         throttleMask,
-        "",
         false,
         false,
         0,
@@ -668,7 +665,6 @@ int TestDiagManager::TestPopulateRunDiag()
                                        debugFileName,
                                        statsPath,
                                        3,
-                                       "",
                                        "",
                                        false,
                                        false,

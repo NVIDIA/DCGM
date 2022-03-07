@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,6 +222,39 @@ dcgmReturn_t DcgmNvSwitchManager::UnwatchField(DcgmWatcherType_t watcherType, dc
 }
 
 /*************************************************************************/
+dcgmReturn_t DcgmNvSwitchManager::UpdateFatalErrorsAllSwitches()
+{
+    DcgmFvBuffer buf;
+    timelib64_t now  = timelib_usecSince1970();
+    bool haveErrors  = false;
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    for (short i = 0; i < m_numNvSwitches; i++)
+    {
+        if (m_fatalErrors[i].error != 0)
+        {
+            haveErrors = true;
+            buf.AddInt64Value(DCGM_FE_SWITCH,
+                              m_nvSwitches[i].physicalId,
+                              DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
+                              m_fatalErrors[i].error,
+                              now,
+                              DCGM_ST_OK);
+        }
+    }
+
+    // Only append if we have samples
+    if (haveErrors)
+    {
+        ret = m_coreProxy.AppendSamples(&buf);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Failed to append NvSwitch Samples to the cache: " << errorString(ret);
+        }
+    }
+    return ret;
+}
+/*************************************************************************/
 dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
 {
     std::vector<dcgm_field_update_info_t> toUpdate;
@@ -243,12 +276,6 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
 
     for (size_t i = 0; i < toUpdate.size(); i++)
     {
-        /* aalsudani: here's where we can read other fields. We probably need a map
-           of DCGM_FI_DEV_? to NSCQ_DEF_PATH define. Then you can change the blank values
-           below to the appropriate real value */
-
-        // nscq.GetFieldInfo(toUpdate[i].entityGroupId, toUpdate[i].entityId, toUpdate[i].fieldMeta->fieldId);
-        // For now, add a blank value and force things to sleep for a long time
         switch (toUpdate[i].fieldMeta->fieldType)
         {
             case DCGM_FT_INT64:
@@ -648,7 +675,20 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchStatusAllSwitches()
     }
 
     // Now update link states for all switches
-    return ReadLinkStatesAllSwitches();
+    dcgmReturn_t dcgmReturn = ReadLinkStatesAllSwitches();
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_WARNING << "ReadLinkStatesAllSwitches() returned " << errorString(dcgmReturn);
+    }
+
+    dcgmReturn = ReadNvSwitchFatalErrorsAllSwitches();
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_WARNING << "ReadNvSwitchFatalErrorsAllSwitches() returned " << errorString(dcgmReturn);
+    }
+
+    UpdateFatalErrorsAllSwitches();
+    return dcgmReturn;
 }
 
 dcgmReturn_t DcgmNvSwitchManager::ReadLinkStatesAllSwitches()
@@ -751,7 +791,6 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateLinkState(unsigned int index, link_id_t 
     {
         dcgmNvLinkLinkState_t dcgmState;
 
-        // TODO(aalsudani): confirm this mapping is correct
         switch (state)
         {
             case NSCQ_NVLINK_STATE_OFF:
@@ -771,6 +810,77 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateLinkState(unsigned int index, link_id_t 
         }
 
         m_nvSwitches[index].nvLinkLinkState[linkId] = dcgmState;
+    }
+    return DCGM_ST_OK;
+}
+
+/*************************************************************************/
+dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchFatalErrorsAllSwitches()
+{
+    DCGM_LOG_DEBUG << "Reading fatal errors for all switches";
+
+    if (!m_attachedToNscq)
+    {
+        DCGM_LOG_DEBUG << "Not attached to NvSwitches. Aborting";
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    struct DeviceFatalError
+    {
+        uuid_p device;
+        nscq_error_t error;
+        unsigned int port;
+    };
+
+    using collector_t = NscqDataCollector<std::vector<DeviceFatalError>>;
+    collector_t collector;
+
+    auto cb = [](const uuid_p device, uint64_t port, nscq_rc_t rc, const nscq_error_t error, collector_t *dest) {
+        if (dest == nullptr)
+        {
+            DCGM_LOG_ERROR << "NSCQ passed dest = nullptr";
+            return;
+        }
+        dest->callCounter++;
+
+        if (NSCQ_ERROR(rc))
+        {
+            DCGM_LOG_ERROR << "NSCQ passed error " << rc << " for device " << device << " port " << port;
+            return;
+        }
+        DCGM_LOG_DEBUG << "Received device " << device << " port " << port << " fatal error " << error.error_value;
+
+        DeviceFatalError item;
+        item.device = device;
+        item.error  = error;
+        item.port   = port;
+
+        dest->data.push_back(item);
+    };
+
+    nscq_rc_t ret
+        = nscq_session_path_observe(m_nscqSession, NSCQ_PATH(nvswitch_port_error_fatal), NSCQ_FN(*cb), &collector, 0);
+
+    DCGM_LOG_DEBUG << "Callback called " << collector.callCounter << " times";
+
+    if (NSCQ_ERROR(ret))
+    {
+        DCGM_LOG_ERROR << "Could not read Switch fatal errors. NSCQ ret: " << ret;
+        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
+    }
+
+    for (const auto &datum : collector.data)
+    {
+        auto index = FindSwitchByDevice(datum.device);
+        if (index == -1)
+        {
+            DCGM_LOG_ERROR << "Could not find device " << datum.device << ". Skipping";
+            continue;
+        }
+        m_fatalErrors[index].error     = datum.error.error_value;
+        m_fatalErrors[index].timestamp = datum.error.time;
+        m_fatalErrors[index].port      = datum.port;
+        DCGM_LOG_DEBUG << "Loaded fatal error for switch at index " << index;
     }
     return DCGM_ST_OK;
 }

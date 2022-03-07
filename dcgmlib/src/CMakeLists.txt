@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,9 @@
 # limitations under the License.
 add_subdirectory(tests)
 
-set(SRCS 
+find_package(fmt REQUIRED)
+
+set(SRCS
     DcgmCacheManager.cpp
     DcgmFieldGroup.cpp
     DcgmVersion.cpp
@@ -49,6 +51,7 @@ set(DEPS
     sdk_nvml_interface
     sdk_nvml_loader
     transport_interface
+    fmt::fmt
 )
 
 add_library(dcgm_mig_types STATIC)

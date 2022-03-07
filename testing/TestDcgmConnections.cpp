@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@
 #include "dcgm_agent.h"
 #include "dcgm_test_apis.h"
 #include "timelib.h"
+#include <DcgmIpc.h>
 #include <array>
 #include <cassert>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <sys/socket.h>
 #include <unistd.h>
 
 /*****************************************************************************/
@@ -69,6 +71,162 @@ void TestDcgmConnections::CompleteTest(std::string testName, int testReturn, int
     {
         std::cout << "TestDcgmConnections::" << testName << " PASSED" << std::endl;
     }
+}
+
+/*****************************************************************************/
+struct TestIpcSocketPairConnection_t
+{
+    dcgm_connection_id_t connectionId       = DCGM_CONNECTION_ID_NONE;
+    int fd                                  = -1;
+    std::atomic_uint32_t numPacketsReceived = 0;
+    std::atomic_bool gotDisconnect          = false;
+};
+
+typedef struct
+{
+    bool testFailed = false;
+    std::array<TestIpcSocketPairConnection_t, 2> connections;
+} TestIpcSocketPair_t;
+
+static TestIpcSocketPairConnection_t *TispGetConnection(TestIpcSocketPair_t *socketPair,
+                                                        dcgm_connection_id_t connectionId)
+{
+    for (int i = 0; i < 2; i++)
+    {
+        if (socketPair->connections[i].connectionId == connectionId)
+        {
+            return &socketPair->connections[i];
+        }
+    }
+
+    std::cerr << "Unknown connectionId: " << connectionId;
+    return nullptr;
+}
+
+static void TispProcessMessage(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message, void *userData)
+{
+    TestIpcSocketPair_t *tisp                 = (TestIpcSocketPair_t *)userData;
+    TestIpcSocketPairConnection_t *connection = TispGetConnection(tisp, connectionId);
+    if (!connection)
+    {
+        return; /* Already logged an error */
+    }
+
+    connection->numPacketsReceived++;
+}
+
+static void TispProcessDisconnect(dcgm_connection_id_t connectionId, void *userData)
+{
+    TestIpcSocketPair_t *tisp                 = (TestIpcSocketPair_t *)userData;
+    TestIpcSocketPairConnection_t *connection = TispGetConnection(tisp, connectionId);
+    if (!connection)
+    {
+        return; /* Already logged an error */
+    }
+
+    connection->gotDisconnect = true;
+}
+
+int TestDcgmConnections::TestIpcSocketPair(void)
+{
+    dcgmReturn_t dcgmReturn;
+
+    DcgmIpc dcgmIpc { 1 };
+
+    TestIpcSocketPair_t tisp;
+
+    dcgmReturn = dcgmIpc.Init(std::nullopt, std::nullopt, TispProcessMessage, &tisp, TispProcessDisconnect, &tisp);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        std::cerr << "Got " << dcgmReturn << " from dcgmIpc.Init()\n";
+        return 100;
+    }
+
+    int sockets[2];
+    int st         = socketpair(AF_UNIX, SOCK_STREAM, 0, sockets);
+    int errnoCache = errno;
+    if (st != 0)
+    {
+        std::cerr << "socketpair() returned errno " << errno << " (" << strerror(errnoCache) << ")\n";
+        return 200;
+    }
+
+    tisp.connections[0].fd = sockets[0];
+    tisp.connections[1].fd = sockets[1];
+
+    /* Start monitoring the sockets */
+    for (int i = 0; i < 2; i++)
+    {
+        TestIpcSocketPairConnection_t *connection = &tisp.connections[i];
+
+        dcgmReturn = dcgmIpc.MonitorSocketFd(connection->fd, connection->connectionId);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from MonitorSocketFd";
+            return 300;
+        }
+    }
+
+    /* Sanity check */
+    if (tisp.connections[0].numPacketsReceived > 0 || tisp.connections[1].numPacketsReceived > 0
+        || tisp.connections[0].gotDisconnect || tisp.connections[1].gotDisconnect)
+    {
+        std::cerr << "Unexpected state before sending packets. Set breakpoint.";
+        return 400;
+    }
+
+    /* Send a packet and verify it is received */
+    for (int i = 0; i < 2; i++)
+    {
+        auto message = std::make_unique<DcgmMessage>();
+        message->UpdateMsgHdr(0, 0, 0, 1);
+        message->GetMsgBytesPtr()->push_back('H'); /* Send one character */
+
+        /* We swap sending and receiving connections each time through the loop */
+        TestIpcSocketPairConnection_t *connection      = &tisp.connections[i];
+        TestIpcSocketPairConnection_t *otherConnection = &tisp.connections[(i + 1) & 1];
+
+        dcgmReturn = dcgmIpc.SendMessage(connection->connectionId, std::move(message), true);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from SendMessage\n";
+            return 500;
+        }
+
+        for (int j = 0; j < 100 && otherConnection->numPacketsReceived < 1; j++)
+        {
+            usleep(10000); /* Allow for async stuff to happen */
+        }
+
+        if (otherConnection->numPacketsReceived < 1)
+        {
+            std::cerr << "Sent packet to fd " << connection->fd << " but didn't get a callback from the other side fd "
+                      << otherConnection->fd << "\n";
+            return 600;
+        }
+    }
+
+    /* Close one side and verify that the other gets a disconnect notifications */
+    dcgmReturn = dcgmIpc.CloseConnection(tisp.connections[1].connectionId);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from CloseConnection\n";
+        return 700;
+    }
+
+    for (int j = 0; j < 100 && (!tisp.connections[0].gotDisconnect); j++)
+    {
+        usleep(10000); /* Allow for async close to happen */
+    }
+
+    if (!tisp.connections[0].gotDisconnect)
+    {
+        std::cerr << "Missed expected event on socket 0, connId " << tisp.connections[0].connectionId << ", fd "
+                  << tisp.connections[0].fd << "\n";
+        return 800;
+    }
+
+    return 0;
 }
 
 /*****************************************************************************/
@@ -356,6 +514,7 @@ int TestDcgmConnections::Run()
 
     try
     {
+        CompleteTest("TestIpcSocketPair", TestIpcSocketPair(), Nfailed);
         CompleteTest("TestThrash", TestThrash(), Nfailed);
         CompleteTest("TestDeadlockSingle", TestDeadlockSingle(), Nfailed);
         CompleteTest("TestDeadlockMultiThread", TestDeadlockMulti(), Nfailed);

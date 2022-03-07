@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ public:
     cudaDeviceProp cudaDevProp;
     NvvsDevice *nvvsDevice;
     std::string warning;
+    std::string m_pciBusId;
 
     PluginDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
         : cudaDeviceIdx(0)
@@ -52,7 +53,16 @@ public:
         }
 
         /* Resolve cuda device index from PCI bus id */
-        cuSt = cudaDeviceGetByPCIBusId(&this->cudaDeviceIdx, pciBusId);
+        if (pciBusId == nullptr)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BAD_PARAMETER, d, "cudaDeviceGetByPCIBusId");
+            warning = d.GetMessage();
+            throw(d);
+        }
+
+        m_pciBusId = pciBusId;
+        cuSt       = cudaDeviceGetByPCIBusId(&this->cudaDeviceIdx, pciBusId);
         if (cuSt != cudaSuccess)
         {
             DcgmError d { gpuId };

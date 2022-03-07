@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@ struct Entity
 
     Entity(const dcgmGroupEntityPair_t &);
     Entity(dcgm_field_entity_group_t, dcgm_field_eid_t);
-
-    dcgmGroupEntityPair_t operator*(void)const;
 
     bool operator<(const Entity &other) const;
 };

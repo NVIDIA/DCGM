@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,14 +25,6 @@ import json
 import dcgmvalue
 import platform
 from inspect import isclass
-try:
-    from distro import linux_distribution
-except ImportError:
-    try:
-        from platform import linux_distribution
-    except ImportError:
-        print("Please install the distro package")
-        raise
 
 DCGM_MAX_STR_LENGTH                   =   256
 DCGM_MAX_NUM_DEVICES                  =   32 # DCGM 2.0 and newer = 32. DCGM 1.8 and older = 16
@@ -289,7 +281,10 @@ class DCGMError(Exception):
 
     def __eq__(self, other):
         return self.value == other.value
-    
+
+    def __hash__(self):
+        return hash(self.value)
+
     def SetAdditionalInfo(self, msg):
         """
         Sets msg as additional information returned by the string representation of DCGMError and subclasses.
@@ -562,15 +557,16 @@ def _LoadDcgmLibrary(libDcgmPath=None):
                         # load nvml.dll from %ProgramFiles%/NVIDIA Corporation/NVSMI/nvml.dll
                         dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
                     else:
-                        if not libDcgmPath:
-                            dist_name, dist_version, dist_id = linux_distribution(full_distribution_name=0)
-                            dist_name = dist_name.lower()
-                            if dist_name in {'ubuntu', 'debian'}:
-                                libDcgmPath = '/usr/lib/{}-linux-gnu'.format(platform.machine())
-                            elif dist_name in {'fedora', 'redhat', 'centos', 'suse'}:
-                                libDcgmPath = '/usr/lib64'
+                        if libDcgmPath:
+                            lib_file = os.path.join(libDcgmPath, "libdcgm.so.2")
+                        else:
+                            # Try Debian-based distros
+                            lib_file = '/usr/lib/{}-linux-gnu/libdcgm.so.2'.format(platform.machine())
+                            if not os.path.isfile(lib_file):
+                                # Presume Redhat-based distros
+                                lib_file = '/usr/lib64/libdcgm.so.2'
 
-                        dcgmLib = CDLL(os.path.join(libDcgmPath, "libdcgm.so.2"))
+                    dcgmLib = CDLL(lib_file)
                         
                 except OSError as ose:
                     _dcgmCheckReturn(DCGM_ST_LIBRARY_NOT_FOUND)

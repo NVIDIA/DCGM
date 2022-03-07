@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <DcgmError.h>
 #include <ParsingUtility.h>
 #include <PluginStrings.h>
-#include <Whitelist.h>
 #include <catch2/catch.hpp>
 #include <fstream>
 
+#define private public // Hack to directly manipulate private members
+#include <Whitelist.h>
+
 #define VALID_ID   "1194"
 #define INVALID_ID "1190"
+
+using namespace DcgmNs::Nvvs;
 
 class TestWhitelist : protected Whitelist
 {
 public:
     void WrapperUpdateGlobalsForDeviceId(const std::string &deviceId);
+    TestWhitelist(const ConfigFileParser_v2 &parser)
+        : Whitelist(parser)
+    {}
 };
 
+static FrameworkConfig fwcfg;
+static ConfigFileParser_v2 parser("", fwcfg);
+
 // bool Whitelist::isWhitelisted(std::string deviceId)
-SCENARIO("Whitelist is initialized when constructed", "[Whitelist]")
+SCENARIO("Whitelist is initialized when constructed", "[.]")
 {
-    Whitelist wl;
+    Whitelist wl(parser);
     WHEN("Whitelist is initialized")
     {
         THEN("Whitelist correctly returns status of device IDs")
@@ -42,9 +53,9 @@ SCENARIO("Whitelist is initialized when constructed", "[Whitelist]")
     }
 }
 
-SCENARIO("All valid GPUs are in whitelist")
+SCENARIO("All valid GPUs are in whitelist", "[.]")
 {
-    Whitelist wl;
+    Whitelist wl(parser);
     // Tesla K8
     CHECK(wl.isWhitelisted("1194"));
     // Tesla K80 ("Stella Duo" Gemini)
@@ -137,11 +148,15 @@ SCENARIO("All valid GPUs are in whitelist")
     CHECK(wl.isWhitelisted("1eb8"));
     // Tesla T40 - TU102-895
     CHECK(wl.isWhitelisted("1e38"));
+    // PRIS TS1
+    CHECK(wl.isWhitelisted("2236", "149d"));
+    // A10c/noc
+    CHECK(wl.isWhitelisted("2236", "1482"));
 }
 
-SCENARIO("Whitelist provides default values for device")
+SCENARIO("Whitelist provides default values for device", "[.]")
 {
-    Whitelist wl;
+    Whitelist wl(parser);
     TestParameters tp;
     GIVEN("valid id, valid test")
     {
@@ -152,9 +167,9 @@ SCENARIO("Whitelist provides default values for device")
         // For some amazing reason, when we are getting the test parameters, we
         // free the memory too... so without setting them first, we get a segfault
         tp.AddString(SMSTRESS_STR_IS_ALLOWED, "False");
-        tp.AddDouble(SMSTRESS_STR_TARGET_PERF, 0.0, 0.0, 0.0);
+        tp.AddDouble(SMSTRESS_STR_TARGET_PERF, 0.0);
         tp.AddString(SMSTRESS_STR_USE_DGEMM, "True");
-        tp.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 0.0, 0.0, 0.0);
+        tp.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 0.0);
 
         wl.getDefaultsByDeviceId(testName, id, &tp);
 
@@ -165,9 +180,9 @@ SCENARIO("Whitelist provides default values for device")
     }
 }
 
-SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags")
+SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
 {
-    TestWhitelist wl;
+    TestWhitelist wl(parser);
 
     GIVEN("An ID that requires global change")
     {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -441,7 +441,7 @@ dcgmReturn_t DcgmIpc::InitUnixListenerSocket()
 dcgmReturn_t DcgmIpc::AddConnection(struct bufferevent *bev,
                                     dcgm_connection_id_t connectionId,
                                     DcgmIpcConnectionState_t initialConnState,
-                                    std::promise<dcgmReturn_t> &&connectPromise)
+                                    std::promise<dcgmReturn_t> connectPromise)
 {
     ASSERT_IS_IPC_THREAD;
 
@@ -620,6 +620,8 @@ dcgmReturn_t DcgmIpc::WaitForConnectHelper(dcgm_connection_id_t connectionId,
                                            std::future<dcgmReturn_t> &fut,
                                            unsigned int timeoutMs)
 {
+    try
+    {
     auto futStatus = fut.wait_for(std::chrono::milliseconds(timeoutMs));
     if (futStatus != std::future_status::ready)
     {
@@ -632,6 +634,12 @@ dcgmReturn_t DcgmIpc::WaitForConnectHelper(dcgm_connection_id_t connectionId,
     }
 
     return fut.get();
+}
+    catch (const std::future_error &e)
+    {
+        DCGM_LOG_ERROR << "Caught future error for connectionId " << connectionId << ", what: " << e.what();
+        return DCGM_ST_GENERIC_ERROR;
+    }
 }
 
 /*****************************************************************************/
@@ -657,7 +665,7 @@ void DcgmIpc::ConnectDomainAsyncImpl(DcgmIpcConnectDomain &domainConnect)
     {
         DCGM_LOG_ERROR << "Failed to AddConnection";
         bufferevent_free(bev);
-        domainConnect.m_promise.set_value(DCGM_ST_GENERIC_ERROR);
+        /* Not setting promise here since it's owned by AddConnection or was destructed there */
         return;
     }
 
@@ -710,6 +718,96 @@ dcgmReturn_t DcgmIpc::ConnectDomain(std::string path, dcgm_connection_id_t &conn
     }
 
     return WaitForConnectHelper(connectionId, connectReturn, timeoutMs);
+}
+
+/*****************************************************************************/
+void DcgmIpc::MonitorSocketFdAsyncImpl(DcgmIpcMonitorSocketFd &monitorSocketFd)
+{
+    ASSERT_IS_IPC_THREAD;
+
+    /* Domain socket */
+    DCGM_LOG_DEBUG << "Client trying to monitor socket fd " << monitorSocketFd.m_fd;
+
+    struct bufferevent *bev = bufferevent_socket_new(m_eventBase, monitorSocketFd.m_fd, BEV_OPT_CLOSE_ON_FREE);
+    if (bev == nullptr)
+    {
+        DCGM_LOG_ERROR << "Failed to create bufferevent for fd " << monitorSocketFd.m_fd;
+        monitorSocketFd.m_promise.set_value(DCGM_ST_GENERIC_ERROR);
+        return;
+    }
+
+    /* Track our event before callbacks could be invoked */
+    bufferevent_setcb(bev, DcgmIpc::StaticReadCB, NULL, DcgmIpc::StaticEventCB, this);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+    /* Add a tracked connection and remove our pending status */
+    dcgmReturn_t dcgmReturn
+        = AddConnection(bev, monitorSocketFd.m_connectionId, DCGM_IPC_CS_PENDING, std::move(monitorSocketFd.m_promise));
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Failed to AddConnection";
+        bufferevent_free(bev);
+        monitorSocketFd.m_promise.set_value(DCGM_ST_GENERIC_ERROR);
+        return;
+    }
+
+    /* Setting this to active will set the future */
+    SetConnectionState(monitorSocketFd.m_connectionId, DCGM_IPC_CS_ACTIVE);
+
+    DCGM_LOG_DEBUG << "connectionId " << monitorSocketFd.m_connectionId << " connection to fd " << monitorSocketFd.m_fd
+                   << " is now actively monitored.";
+    return;
+}
+
+/*****************************************************************************/
+void DcgmIpc::MonitorSocketFdAsyncImplCB(evutil_socket_t, short, void *data)
+{
+    std::unique_ptr<DcgmIpcMonitorSocketFd> monitorSocketFd((DcgmIpcMonitorSocketFd *)data);
+
+    monitorSocketFd->m_ipc->MonitorSocketFdAsyncImpl(*monitorSocketFd);
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmIpc::MonitorSocketFd(int fd, dcgm_connection_id_t &connectionId)
+{
+    if (fd < 0)
+    {
+        DCGM_LOG_ERROR << "Invalid fd: " << fd;
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (SetNonBlocking(fd))
+    {
+        DCGM_LOG_ERROR << "failed to set client socket to non-blocking";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    connectionId = GetNextConnectionId();
+
+    /* Using new here because we're transferring it through a C callback. The callback will
+       assign this to a unique_ptr and then free it automatically */
+    auto monitorSocketFd = std::make_unique<DcgmIpcMonitorSocketFd>(this, fd, connectionId);
+
+    std::future<dcgmReturn_t> connectReturn = monitorSocketFd->m_promise.get_future();
+
+    int st
+        = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::MonitorSocketFdAsyncImplCB, monitorSocketFd.get(), 0);
+    if (st)
+    {
+        DCGM_LOG_ERROR << "Got error " << st << " from event_base_once. Closing fd " << fd;
+        close(fd);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    else
+    {
+        /* No longer owned by us on success */
+        monitorSocketFd.release();
+    }
+
+    /* Passing 30 seconds to wait here just to give a reasonable value that isn't infinity but gives
+       us enough time to continue our debugger. We aren't actually connecting so we're giving the
+       IPC thread enough time to wake up and set our future. */
+    return WaitForConnectHelper(connectionId, connectReturn, 30000);
 }
 
 /*****************************************************************************/

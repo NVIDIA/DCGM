@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,7 +73,8 @@ def is_nvswitch_detected():
     try:
         lsPciOutput = check_output("lspci | grep -i nvidia", shell=True)
     except CalledProcessError as e:
-        logger.error(e.message)
+        logger.info("lspci did not successfully execute. Ignoring {_e}".format(_e=str(e)))
+        return True
 
     # pylint: disable=unsupported-membership-test
     if "Bridge: NVIDIA Corporation Device" in lsPciOutput:

@@ -4,7 +4,7 @@ set -ex -o pipefail -o nounset
 
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
-VERSION=1.1.1k
+VERSION=1.1.1l
 
 mkdir -p ${HOME}/.build/${TARGET}
 pushd ${HOME}/.build/${TARGET}
@@ -27,7 +27,7 @@ esac
 
 download_url "https://www.openssl.org/source/openssl-${VERSION}.tar.gz" openssl.tar.gz
 
-echo "73cd042d4056585e5a9dd7ab68e7c7310a3a4c783eafa07ab0b560e7462b924e4376436a6d38a155c687f6942a881cfc0c1b9394afcde1d8c46bf396e7d51121 openssl.tar.gz" | sha512sum -c -
+echo "d9611f393e37577cca05004531388d3e0ebbf714894cab9f95f4903909cd4f45c214faab664c0cbc3ad3cca309d500b9e6d0ecbf9a0a0588d1677dc6b047f9e0 openssl.tar.gz" | sha512sum -c -
 mkdir openssl_src
 tar xf openssl.tar.gz -C openssl_src --strip-components=1
 mkdir openssl_build

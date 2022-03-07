@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1189,15 +1189,6 @@ public:
                                            dcgm_field_eid_t entityId,
                                            dcgmNvLinkLinkState_t *linkStates);
 
-/*************************************************************************/
-/*
- * Convert an NVML GPU NVLink error type to corresponding DCGM error type
- *
- */
-#if 0 /* TODO: DCGM-1419 */
-    int NvmlGpuNVLinkErrorToDcgmError(long eventType);
-#endif
-
     /*************************************************************************/
     /*
      * Map GPU ID to nvml index
@@ -1781,6 +1772,22 @@ public:
                                                  size_t *usedGpcs);
     std::optional<unsigned int> GetGpuIdForEntity(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
+    /**
+     * For the given entityId and entityGroupId looks for corresponding GpuInstance and/or ComputeInstance
+     * @param[in]  entityPair           EntityId and EntityGroupId for the lookup
+     * @param[out] gpuId                GpuId of the found MIG instance
+     * @param[out] instanceId           MIG GpuInstance of the found MIG Instance
+     * @param[out] computeInstanceId    MIG ComputeInstance of the found MIG Instance
+     * @return
+     *       \c\b DCGM_ST_OK        The MIG Instance with the given entityId/entityGroupId was successfully found<br>
+     *       \c\b DCGM_ST_BADPARAM  Some of the \b out parameters, necessary for the given entity were nullptr<br>
+     *       \c\b DCGM_ST_NO_DATA   A MIG entity with the given entityId/entityGroupId was not found<br>
+     */
+    dcgmReturn_t GetMigIndicesForEntity(dcgmGroupEntityPair_t const &entityPair,
+                                        unsigned int *gpuId,
+                                        DcgmNs::Mig::GpuInstanceId *instanceId,
+                                        DcgmNs::Mig::ComputeInstanceId *computeInstanceId) const;
+
 private:
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
                                     frequency of the most frequent stat being tracked (0) */
@@ -1850,6 +1857,8 @@ private:
                                  // Tracks the timestamp of a user request that we delay mig reconfig processing
     timelib64_t m_delayedMigReconfigProcessingTimestamp;
 
+    DcgmMutex *m_nvmlTopoMutex; /* NVML topology APIs aren't thread safe. Make sure only one thread is using them */
+
     /*************************************************************************/
     /*
      * Look at watchInfo's watchers and see if any have live subscriptions
@@ -1864,16 +1873,6 @@ private:
      *
      */
     dcgmReturn_t UpdateFvSubscribers(dcgmcm_update_thread_t *updateCtx);
-
-    /*************************************************************************/
-    /*
-     * Calculate the max age in usec from the watch parameters
-     *
-     * The minimum (most restrictive) quota is used
-     *
-     * RETURNS: The value that should be used for maxAgeUsec
-     */
-    timelib64_t GetMaxAgeUsec(timelib64_t monitorFrequencyUsec, double maxAgeSeconds, int maxKeepSamples);
 
     /*************************************************************************/
     /*
@@ -2436,30 +2435,50 @@ private:
     dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNSCQ(std::vector<unsigned int> &gpuCounts);
 
     /*************************************************************************/
-    /**
-     * Gets the device name for a compute instance and stores it in ciName
-     *
-     * @param nvmlDevice[in] - the handle to the GPU whose compute instance's name we're getting
-     * @param ciIndex[in]    - the index of the compute instance whose name we're getting
-     * @param ciName[out]    - the string where we'll store the name
-     * @param ciId[out]      - store the compute instance ID here
-     *
-     * @return DCGM_ST_OK on success, DCGM_ST_* on a failure
-     */
-    dcgmReturn_t GetCIDeviceNameAndId(nvmlDevice_t nvmlDevice,
-                                      unsigned int ciIndex,
-                                      std::string &ciName,
-                                      unsigned int &ciId);
+    dcgmReturn_t SetPracticalEntityInfo(dcgmcm_watch_info_t &watchInfo) const;
 
     /*************************************************************************/
-    /**
-     * Populates the map with the name of each compute instance's profile mapped to its NVML id
+    /*
+     * Retrieves an NVML device handle for a compute instance associated with the specified entity
      *
-     * @param gpuInfo[in]  - The information about the GPU whose compute instances we're working on
-     * @param ciNames[out] - The map we're populating of nvml compute instance ids -> profile names
+     * @param gpuId         - the ID for the GPU
+     * @param entityId      - the entity ID for the
+     * @param entityGroupId - the type of entity
      *
-     * @return DCGM_ST_OK on success, DCGM_ST_* on a failure
+     * @return nullptr if no GPU instance is found, the handle otherwise
      */
-    dcgmReturn_t GetComputeInstanceNames(dcgmcm_gpu_info_t &gpuInfo,
-                                         std::unordered_map<unsigned int, std::string> &ciNames);
+    nvmlDevice_t GetComputeInstanceNvmlDevice(unsigned int gpuId,
+                                              dcgm_field_entity_group_t entityGroupId,
+                                              unsigned int entityId);
+
+    /*************************************************************************/
+    /*
+     * Iterates over the compute instances for this GPU and stores the NVML handles for them
+     *
+     * @param gpuInfo - the GPU we are working on
+     */
+    dcgmReturn_t FindAndStoreMigDeviceHandles(dcgmcm_gpu_info_t &gpuInfo);
+
+    /*************************************************************************/
+    /*
+     * Finds the MIG device with the specified index for this GPU and stores it
+     *
+     * @param gpuInfo - the GPU we are working on
+     * @param ciIndex - the index of the compute instance we're working on
+     */
+    dcgmReturn_t FindAndStoreDeviceHandle(dcgmcm_gpu_info_t &gpuInfo, unsigned int ciIndex);
+
+    /*************************************************************************/
+    /*
+     * Stores the NVML mig device handle for the specified device if it can be found
+     *
+     * @param gpuInfo               - the GPU we're working on
+     * @param migDevice             - the NVML mig device handle
+     * @param nvmlGpuInstanceId     - the NVML id for the GPU instance
+     * @param nvmlComputeInstanceId - the NVML id for the compute instance
+     */
+    void StoreDeviceHandle(dcgmcm_gpu_info_t &gpuInfo,
+                           nvmlDevice_t migDevice,
+                           unsigned int nvmlGpuInstanceId,
+                           unsigned int nvmlComputeInstanceId);
 };

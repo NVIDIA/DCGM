@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "DcgmHostEngineHandler.h"
 #include "DcgmLogging.h"
 #include "DcgmSettings.h"
+#include <fmt/format.h>
 #include <stdexcept>
 
 /*****************************************************************************
@@ -369,24 +370,24 @@ dcgmReturn_t DcgmGroupManager::RemoveAllGroupsForConnection(dcgm_connection_id_t
 }
 
 /*****************************************************************************/
-DcgmGroupInfo *DcgmGroupManager::GetGroupById(dcgm_connection_id_t connectionId, unsigned int groupId)
+DcgmGroupInfo *DcgmGroupManager::GetGroupById(unsigned int groupId)
 {
-    DcgmGroupInfo *pDcgmGrp;
+    DcgmGroupInfo *pDcgmGrp = nullptr;
     GroupIdMap::iterator itGroup;
 
     itGroup = mGroupIdMap.find(groupId);
     if (itGroup == mGroupIdMap.end())
     {
         PRINT_ERROR("%d", "Get Group: Not able to find entry corresponding to the group ID %d", groupId);
-        return NULL;
+        return nullptr;
     }
     else
     {
         pDcgmGrp = itGroup->second;
-        if (NULL == pDcgmGrp)
+        if (nullptr == pDcgmGrp)
         {
             PRINT_ERROR("%d", "Get Group: Invalid entry corresponding to the group ID %d", groupId);
-            return NULL;
+            return nullptr;
         }
     }
 
@@ -394,9 +395,7 @@ DcgmGroupInfo *DcgmGroupManager::GetGroupById(dcgm_connection_id_t connectionId,
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::GetGroupEntities(dcgm_connection_id_t connectionId,
-                                                unsigned int groupId,
-                                                std::vector<dcgmGroupEntityPair_t> &entities)
+dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities)
 {
     dcgmReturn_t ret;
 
@@ -426,11 +425,11 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(dcgm_connection_id_t connectionI
     }
 
     /* This is a regular group. Just return its list */
-    DcgmGroupInfo *groupObj = GetGroupById(connectionId, groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(groupId);
     if (!groupObj)
     {
         Unlock();
-        PRINT_DEBUG("%u %u", "Group %u connectionId %u not found", groupId, connectionId);
+        DCGM_LOG_DEBUG << "Group " << groupId << " not found";
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -446,7 +445,7 @@ dcgmReturn_t DcgmGroupManager::GetGroupGpuIds(dcgm_connection_id_t connectionId,
 {
     std::vector<dcgmGroupEntityPair_t>::iterator entityIter;
     std::vector<dcgmGroupEntityPair_t> entities;
-    dcgmReturn_t ret = GetGroupEntities(connectionId, groupId, entities);
+    dcgmReturn_t ret = GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
         return ret;
 
@@ -467,7 +466,7 @@ std::string DcgmGroupManager::GetGroupName(dcgm_connection_id_t connectionId, un
     std::string ret;
 
     Lock();
-    DcgmGroupInfo *groupObj = GetGroupById(connectionId, groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(groupId);
     if (!groupObj)
     {
         Unlock();
@@ -481,32 +480,25 @@ std::string DcgmGroupManager::GetGroupName(dcgm_connection_id_t connectionId, un
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::AddEntityToGroup(dcgm_connection_id_t connectionId,
-                                                unsigned int groupId,
+dcgmReturn_t DcgmGroupManager::AddEntityToGroup(unsigned int groupId,
                                                 dcgm_field_entity_group_t entityGroupId,
                                                 dcgm_field_eid_t entityId)
 {
     dcgmReturn_t ret;
 
     Lock();
-    DcgmGroupInfo *groupObj = GetGroupById(connectionId, groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(groupId);
     if (!groupObj)
     {
         Unlock();
-        PRINT_DEBUG("%u %u", "Group %u connectionId %u not found", groupId, connectionId);
+        DCGM_LOG_DEBUG << "Group " << groupId << " not found";
         return DCGM_ST_NOT_CONFIGURED;
     }
 
     ret = groupObj->AddEntityToGroup(entityGroupId, entityId);
     Unlock();
 
-    PRINT_DEBUG("%u %u %u %u %d",
-                "conn %u, groupId %u added eg %u, eid %u. ret %d",
-                connectionId,
-                groupId,
-                entityGroupId,
-                entityId,
-                (int)ret);
+    DCGM_LOG_DEBUG << "groupId " << groupId << " added eg " << entityGroupId << ", eid " << entityId << ". ret " << ret;
     return ret;
 }
 
@@ -519,7 +511,7 @@ dcgmReturn_t DcgmGroupManager::RemoveEntityFromGroup(dcgm_connection_id_t connec
     dcgmReturn_t ret;
 
     Lock();
-    DcgmGroupInfo *groupObj = GetGroupById(connectionId, groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(groupId);
     if (!groupObj)
     {
         Unlock();
@@ -549,7 +541,7 @@ dcgmReturn_t DcgmGroupManager::AreAllTheSameSku(dcgm_connection_id_t connectionI
         return DCGM_ST_BADPARAM;
 
     Lock();
-    DcgmGroupInfo *groupObj = GetGroupById(connectionId, groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(groupId);
     if (!groupObj)
     {
         Unlock();
@@ -578,7 +570,7 @@ dcgmReturn_t DcgmGroupManager::verifyAndUpdateGroupId(unsigned int *groupId)
     dcgmReturn_t ret = DCGM_ST_OK;
 
     Lock();
-    DcgmGroupInfo *groupObj = GetGroupById(0, *groupId);
+    DcgmGroupInfo *groupObj = GetGroupById(*groupId);
     if (!groupObj)
     {
         PRINT_DEBUG("%u", "Group %u not found", *groupId);
@@ -696,6 +688,15 @@ dcgmReturn_t DcgmGroupInfo::AddEntityToGroup(dcgm_field_entity_group_t entityGro
         }
     }
 
+    if (mEntityList.size() >= DCGM_GROUP_MAX_ENTITIES)
+    {
+        /*
+         * This is a safeguard for public API that has hardcoded array of DCGM_GROUP_MAX_ENTITIES elements in a group.
+         */
+        DCGM_LOG_DEBUG << fmt::format("Too many items in the groupId {}", mGroupId);
+        return DCGM_ST_MAX_LIMIT;
+    }
+
     mEntityList.push_back(insertEntity);
     return DCGM_ST_OK;
 }
@@ -746,22 +747,41 @@ dcgmReturn_t DcgmGroupInfo::GetEntities(std::vector<dcgmGroupEntityPair_t> &enti
 }
 
 /*****************************************************************************/
-int DcgmGroupInfo::AreAllTheSameSku(void)
+bool DcgmGroupInfo::AreAllTheSameSku()
 {
-    unsigned int i;
-    std::vector<unsigned int> gpuIds;
+    std::unordered_set<unsigned int> uniqueGpuIds;
 
     /* Make a copy of the gpuIds. We're passing by ref to AreAllGpuIdsSameSku() */
-    for (i = 0; i < mEntityList.size(); i++)
+    for (auto const &entity : mEntityList)
     {
-        if (mEntityList[i].entityGroupId != DCGM_FE_GPU)
-            continue;
-
-        gpuIds.push_back(mEntityList[i].entityId);
+        switch (entity.entityGroupId)
+        {
+            default:
+                continue;
+            case DCGM_FE_GPU:
+                uniqueGpuIds.insert(entity.entityId);
+                break;
+            case DCGM_FE_GPU_I:
+            case DCGM_FE_GPU_CI:
+            {
+                unsigned int gpuId = -1;
+                if (auto const ret = mpCacheManager->GetMigIndicesForEntity(entity, &gpuId, nullptr, nullptr);
+                    ret != DCGM_ST_OK)
+                {
+                    DCGM_LOG_ERROR << "Unable to get GPU ID for a MIG "
+                                   << (entity.entityGroupId == DCGM_FE_GPU_CI ? "Compute " : "") << "Instance "
+                                   << entity.entityId << " in the Group ID " << GetGroupId() << ". Error " << ret << " "
+                                   << errorString(ret);
+                    continue;
+                }
+                uniqueGpuIds.insert(gpuId);
+                break;
+            }
+        }
     }
 
-    int allTheSame = mpCacheManager->AreAllGpuIdsSameSku(gpuIds);
-    return allTheSame;
+    auto gpuIds = std::vector<unsigned int>(begin(uniqueGpuIds), end(uniqueGpuIds));
+    return mpCacheManager->AreAllGpuIdsSameSku(gpuIds);
 }
 
 /*****************************************************************************/

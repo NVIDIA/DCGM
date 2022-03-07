@@ -32,7 +32,7 @@ function normalize_deb_name() {
     # - replaces the version (e.g. 2.2.0) with the string "VERSION"
     # - prefixes the filename with this script's directory
     # - adds the extension ".txt" at the end
-    basename "$1" | sed "s/\(datacenter-gpu-manager\)_\([^_]*\)/\1_VERSION/;s~^~$DIR/~;s/\$/.txt/"
+    basename "$1" | sed -E "s/(datacenter-gpu-manager(-config)?)_([^_]*)/\1_VERSION/;s~^~$DIR/~;s/\$/.txt/"
 }
 
 function list_deb_contents() {
@@ -44,7 +44,7 @@ function normalize_rpm_name() {
     # - replaces the version (e.g. 2.2.0) with the string "VERSION"
     # - prefixes the filename with this script's directory
     # - adds the extension ".txt" at the end
-    basename "$1" | sed "s/\(datacenter-gpu-manager\)-\([^-]*\)/\1_VERSION/;s~^~$DIR/~;s/\$/.txt/"
+    basename "$1" | sed -E "s/(datacenter-gpu-manager(-config)?)-([^-]*)/\1_VERSION/;s~^~$DIR/~;s/\$/.txt/"
 }
 
 function list_rpm_contents() {

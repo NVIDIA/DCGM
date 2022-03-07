@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -369,13 +369,6 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     timelib64_t untilNextLinkStatusUsec;                 /* How long until our next switch status rescan */
     timelib64_t linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
 
-    m_switchMgr.UpdateFields(nextUpdateTimeUsec);
-
-    if (nextUpdateTimeUsec == 0)
-    {
-        nextUpdateTimeUsec = linkStatusRescanIntervalUsec;
-    }
-
     /* Update link statuses every 30 seconds */
     timelib64_t now         = timelib_usecSince1970();
     untilNextLinkStatusUsec = -((now - m_lastLinkStatusUpdateUsec) - linkStatusRescanIntervalUsec);
@@ -385,18 +378,24 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
         dcgmReturn = m_switchMgr.ReadNvSwitchStatusAllSwitches();
         if (dcgmReturn != DCGM_ST_OK)
         {
-            DCGM_LOG_ERROR << "ReadNvSwitchStatusAllSwitches() returned " << errorString(dcgmReturn);
+            DCGM_LOG_WARNING << "ReadNvSwitchStatusAllSwitches() returned " << errorString(dcgmReturn);
         }
 
         m_lastLinkStatusUpdateUsec = now;
         untilNextLinkStatusUsec    = linkStatusRescanIntervalUsec;
     }
 
+    m_switchMgr.UpdateFields(nextUpdateTimeUsec);
+    if (nextUpdateTimeUsec == 0)
+    {
+        nextUpdateTimeUsec = linkStatusRescanIntervalUsec;
+    }
+
     /* Adjust our nextUpdateTimeUsec for whichever is sooner between when watches will
       update again or when we need to rescan links */
     if (untilNextLinkStatusUsec > 0)
     {
-        nextUpdateTimeUsec = DCGM_MIN(nextUpdateTimeUsec, untilNextLinkStatusUsec);
+        nextUpdateTimeUsec = std::min(nextUpdateTimeUsec, untilNextLinkStatusUsec);
     }
 
     DCGM_LOG_VERBOSE << "Next update " << nextUpdateTimeUsec;

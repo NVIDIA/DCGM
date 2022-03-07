@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1154,7 +1154,7 @@ def helper_health_set_version2(handle, gpuIds):
     groupObj = systemObj.GetGroupWithGpuIds("test1", gpuIds)
     watchInterval = 999999
     maxKeepAge = 1234.5
-    maxKeepAgeUsec = int(maxKeepAge * 1000000)
+    maxKeepAgeUsec = int(maxKeepAge) * 1000000
 
     fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_PCIE

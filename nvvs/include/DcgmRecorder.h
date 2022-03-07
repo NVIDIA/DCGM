@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,8 +168,7 @@ public:
                          unsigned int gpuId,
                          long long maxTemp,
                          std::vector<DcgmError> &errorList,
-                         timelib64_t startTime,
-                         timelib64_t &endTime);
+                         timelib64_t startTime);
 
     /*
      * Iterates through the stored values to check if there is ever a jump that is greater than or equal to
@@ -210,10 +209,7 @@ public:
      * DR_COMM_ERROR  : if we couldn't get the information from DCGM
      * DR_VIOLATION   : if a there was a thermal violation
      */
-    int CheckThermalViolations(unsigned int gpuId,
-                               std::vector<DcgmError> &errorList,
-                               timelib64_t startTime,
-                               timelib64_t endTime);
+    int CheckThermalViolations(unsigned int gpuId, std::vector<DcgmError> &errorList, timelib64_t startTime);
 
     /*
      * Checks if the GPU temperature was about the maxTemp at any point in the specified time period, and adds
@@ -232,7 +228,6 @@ public:
                             long long maxTemp,
                             std::string &infoMsg,
                             timelib64_t startTime,
-                            timelib64_t endTime,
                             long long &highTemp);
 
     dcgmHandle_t GetHandle();
@@ -278,7 +273,7 @@ public:
      * If gpu utilization is below 75% for this GPU, then return a note prompting the user to investigate.
      * Otherwise return an empty string
      */
-    std::string GetGpuUtilizationNote(unsigned int gpuId, timelib64_t startTime, timelib64_t endTime);
+    std::string GetGpuUtilizationNote(unsigned int gpuId, timelib64_t startTime);
 
     /*
      * Get the attributes for the specified device
@@ -320,7 +315,8 @@ private:
     void AddFieldViolationError(unsigned short fieldId,
                                 unsigned int gpuId,
                                 timelib64_t startTime,
-                                double value,
+                                int64_t intValue,
+                                double dblValue,
                                 const char *fieldName,
                                 std::vector<DcgmError> &errorList);
 

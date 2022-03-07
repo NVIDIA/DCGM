@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-cmake_minimum_required(VERSION 3.14.0)
-project(dcgm VERSION 2.2.6)
+cmake_minimum_required(VERSION 3.21.0)
+project(dcgm VERSION 2.3.4)
+set(DCGM_CONFIG_REVISION 0)
+set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
 set(DCGM_PKG "datacenter-gpu-manager" CACHE STRING "DCGM package names base")
 
@@ -39,6 +41,42 @@ endif()
 option(ENABLE_LTO "Enable LTO during the build" OFF)
 if (ENABLE_LTO)
     set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -flto")
+endif()
+
+option(ADDRESS_SANITIZER "Enable AddressSanitizer" OFF)
+if (ADDRESS_SANITIZER)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=address")
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize-address-use-after-scope")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize=address")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize-address-use-after-scope")
+    set(ANY_SANITIZER TRUE)
+endif()
+
+option(THREAD_SANITIZER "Enable ThreadSanitizer" OFF)
+if (THREAD_SANITIZER)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=thread")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize=thread")
+    set(ANY_SANITIZER TRUE)
+endif()
+
+option(UB_SANITIZER "Enable UndefinedSanitizer" OFF)
+if (UB_SANITIZER)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=undefined")
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize-undefined-trap-on-error")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize=undefined")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize-undefined-trap-on-error")
+    set(ANY_SANITIZER TRUE)
+endif()
+
+option(LEAK_SANITIZER "Enable LeakSanitizer" OFF)
+if (LEAK_SANITIZER)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=leak")
+    set(DCGM_C_FLAGS "${DCGM_C_FLAGS} -fsanitize=leak")
+    set(ANY_SANITIZER TRUE)
+endif()
+
+if (ANY_SANITIZER)
+    add_compile_definitions(SANITIZERS=1)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -71,7 +109,12 @@ add_compile_definitions(DCGM_BUILD_VGPU_MODULE)
 if(${CMAKE_POSITION_INDEPENDENT_CODE})
     add_compile_options(-fPIC)
 endif()
-add_link_options(-static-libstdc++ -Wl,--exclude-libs,libstdc++ -Wl,--exclude-libs,libprotobuf)
+
+if (NOT ANY_SANITIZER)
+    add_link_options(-static-libstdc++)
+endif()
+
+add_link_options(-Wl,--exclude-libs,libstdc++ -Wl,--exclude-libs,libprotobuf)
 
 include(GNUInstallDirs)
 
@@ -100,7 +143,6 @@ set(DCGM_BINDINGS_INSTALL_DIR "local/dcgm/bindings")
 set(DCGM_DOCS_INSTALL_DIR "local/dcgm")
 set(DCGM_SAMPLES_INSTALL_DIR "local/dcgm/sdk_samples")
 
-
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
     set(DCGM_TESTS_ARCH "amd64")
 elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "ppc64le")
@@ -117,7 +159,6 @@ message(DEBUG "DCGM_TESTS_ARCH=${DCGM_TESTS_ARCH}")
 set(DCGM_TESTS_APP_DIR "${DCGM_TESTS_INSTALL_DIR}/apps/${DCGM_TESTS_ARCH}")
 set(PYTHON_VER python3)
 
-
 find_package(Git QUIET REQUIRED)
 
 # Let CMake rebuild cache every time git commit is changed
@@ -130,33 +171,16 @@ execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Git branch -> ${BUILD_BRANCH}
-# Jenkins does some weird checkouts so it ends up in a detached HEAD state
-# So we grab all refs that are related to the current commit, filter out detached HEAD
-# and use the first not empty branch name.
-execute_process(COMMAND "${GIT_EXECUTABLE}" branch -a --no-abbrev --contains ${COMMIT_ID}
+# Jenkins does some weird checkouts so it ends up in a detached HEAD state.
+# The command below will
+# - grab all refs that are related to the current commit
+# - filter out detached HEAD
+# - use rel_dcgm_* if found
+# - use main or master if found
+# - use the first branch we find otherwise
+execute_process(COMMAND "./scripts/get_build_branch.py" ${COMMIT_ID}
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-                OUTPUT_VARIABLE BUILD_BRANCHES
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(REGEX REPLACE "[^\n]*(HEAD\ detached\ at[^\n]+\)" "" BUILD_BRANCHES_NO_DETACH "${BUILD_BRANCHES}")
-string(REGEX REPLACE "\n" ";" BUILD_BRANCHES "${BUILD_BRANCHES_NO_DETACH}")
-foreach(BRANCH ${BUILD_BRANCHES})
-    string(STRIP "${BRANCH}" STRIPPED_BRANCH)
-    if (STRIPPED_BRANCH)
-        string(REGEX REPLACE "^\\*[ \t\r\n]+" "" BRANCH "${STRIPPED_BRANCH}")
-        string(REGEX REPLACE "^remotes/" "" BRANCH "${BRANCH}")
-        string(REGEX REPLACE "^origin/" "" BRANCH "${BRANCH}")
-        string(REGEX REPLACE "^merge-requests/.*" "" BRANCH "${BRANCH}")
-        string(REGEX REPLACE "^merge_requests/.*" "" BRANCH "${BRANCH}")
-        string(STRIP "${BRANCH}" STRIPPED_BRANCH)
-        if (STRIPPED_BRANCH)
-            set(BUILD_BRANCH "${STRIPPED_BRANCH}")
-            break()
-        endif()
-    endif()
-endforeach()
-unset(BUILD_BRANCHES)
-unset(BUILD_BRANCHES_NO_DETACH)
-unset(STRIPPED_BRANCH)
+                OUTPUT_VARIABLE BUILD_BRANCH)
 # Git has uncommitted changes -> ${HAS_UNCOMMITTED_CHANGES}
 execute_process(COMMAND "${GIT_EXECUTABLE}" diff-index --quiet HEAD --
                 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -202,7 +226,8 @@ execute_process(COMMAND bash -c "echo '${DCGM_BUILD_INFO}' | md5sum - | awk '{pr
 list(APPEND DCGM_BUILD_INFO "crc:${BUILD_INFO_CRC}")
 
 include(artifactory)
-prepare_rt_props()
+prepare_rt_props("dcgm")
+prepare_rt_props("config" REVISION "${DCGM_CONFIG_REVISION}")
 
 message("${DCGM_BUILD_INFO}")
 
@@ -285,16 +310,36 @@ install(
         dcgmmodulepolicy
         ${DCGM_CUBLAS_PROXY}
         ${DCGMPROFTESTER}
-    EXPORT dcgm-export
-    ARCHIVE DESTINATION ${DCGM_LIB_INSTALL_PREFIX} COMPONENT DCGM
-    LIBRARY DESTINATION ${DCGM_LIB_INSTALL_PREFIX}
+    ARCHIVE DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests
+    LIBRARY DESTINATION ${DCGM_TESTS_APP_DIR}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT DCGM
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT Tests
+    RUNTIME DESTINATION ${DCGM_TESTS_APP_DIR}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT DCGM
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT DCGM
+        COMPONENT Tests
 )
+
+include(sanitizers)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt DESTINATION ${DCGM_TESTS_INSTALL_DIR}/data COMPONENT Tests)
+
+foreach(plugin ${NVVS_PLUGINS})
+    get_target_property(INSTALL_TO_DIR ${plugin} INSTALL_TO_DIR)
+    string(
+        REPLACE
+            "${DCGM_NVVS_PLUGINS_INSTALL_DIR}"
+            "${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins"
+            INSTALL_TO
+            ${INSTALL_TO_DIR}
+)
+    install(TARGETS ${plugin}
+        LIBRARY DESTINATION ${INSTALL_TO}
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        COMPONENT Tests)
+endforeach()
+
+set_target_properties(nvvs PROPERTIES INSTALL_RPATH "${DCGM_RPATH}:$ORIGIN/../../lib:$ORIGIN/../${DCGM_TESTS_ARCH}")
+install(TARGETS nvvs RUNTIME DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/ COMPONENT Tests)
 
 install(
     TARGETS
@@ -309,17 +354,16 @@ install(
         dcgmmodulepolicy
         ${DCGM_CUBLAS_PROXY}
         ${DCGMPROFTESTER}
-    ARCHIVE DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests
-    LIBRARY DESTINATION ${DCGM_TESTS_APP_DIR}
+    EXPORT dcgm-export
+    ARCHIVE DESTINATION ${DCGM_LIB_INSTALL_PREFIX} COMPONENT DCGM
+    LIBRARY DESTINATION ${DCGM_LIB_INSTALL_PREFIX}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT Tests
-    RUNTIME DESTINATION ${DCGM_TESTS_APP_DIR}
+        COMPONENT DCGM
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT Tests
+        COMPONENT DCGM
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT DCGM
 )
-
-
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt DESTINATION ${DCGM_TESTS_INSTALL_DIR}/data COMPONENT Tests)
 
 install(
     EXPORT dcgm-export
@@ -330,24 +374,7 @@ install(
     COMPONENT DCGM
 )
 
-foreach(plugin ${NVVS_PLUGINS})
-    get_target_property(INSTALL_TO_DIR ${plugin} INSTALL_TO_DIR)
-    string(
-        REPLACE
-            "${DCGM_NVVS_PLUGINS_INSTALL_DIR}"
-            "${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins"
-            INSTALL_TO
-            ${INSTALL_TO_DIR}
-    )
-    install(TARGETS ${plugin}
-        LIBRARY DESTINATION ${INSTALL_TO}
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT Tests)
-endforeach()
-
-set_target_properties(nvvs PROPERTIES INSTALL_RPATH "${DCGM_RPATH}:$ORIGIN/../../lib:$ORIGIN/../${DCGM_TESTS_ARCH}")
 install(TARGETS nvvs RUNTIME DESTINATION ${DCGM_NVVS_INSTALL_DIR} COMPONENT DCGM)
-install(TARGETS nvvs RUNTIME DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/ COMPONENT Tests)
 
 install(
     FILES
@@ -356,7 +383,11 @@ install(
     COMPONENT DCGM
 )
 
+if (ANY_SANITIZER)
+    set(CPACK_COMPONENTS_ALL Tests)
+else()
 set(CPACK_COMPONENTS_ALL DCGM Tests)
+endif()
 
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
 
@@ -388,5 +419,11 @@ endif()
 
 set(CPACK_GENERATOR "DEB;RPM;TGZ")
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/packaging.cmake")
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/dcgm_config/CMakeLists.txt.in
+    ${CMAKE_CURRENT_BINARY_DIR}/dcgm_config/CMakeLists.txt
+    ESCAPE_QUOTES
+    @ONLY)
 
 include(CPack)

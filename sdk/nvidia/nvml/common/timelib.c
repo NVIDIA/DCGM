@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 /* See timelib.h for license details */
 
 #ifndef NV_UNIX
@@ -152,136 +167,8 @@ double timelib_dsecSince1970(void)
 
 /*****************************************************************************/
 #if 1
-int timelib_secs_to_tm(long long t, struct tm *tm)
-{
-    long long days, secs;
-    int remdays, remsecs, remyears;
-    int qc_cycles, c_cycles, q_cycles;
-    int years, months;
-    int wday, yday, leap;
-    static const char days_in_month[] = { 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29 };
-
-    /* Reject time_t values whose year would overflow int */
-    if (t < INT_MIN * 31622400LL || t > INT_MAX * 31622400LL)
-        return -1;
-
-    secs    = t - LEAPOCH;
-    days    = secs / 86400;
-    remsecs = (int)secs % 86400;
-    if (remsecs < 0)
-    {
-        remsecs += 86400;
-        days--;
-    }
-
-    wday = (int)((3 + days) % 7);
-    if (wday < 0)
-        wday += 7;
-
-    qc_cycles = (int)(days / DAYS_PER_400Y);
-    remdays   = (int)(days % DAYS_PER_400Y);
-    if (remdays < 0)
-    {
-        remdays += DAYS_PER_400Y;
-        qc_cycles--;
-    }
-
-    c_cycles = remdays / DAYS_PER_100Y;
-    if (c_cycles == 4)
-        c_cycles--;
-    remdays -= c_cycles * DAYS_PER_100Y;
-
-    q_cycles = remdays / DAYS_PER_4Y;
-    if (q_cycles == 25)
-        q_cycles--;
-    remdays -= q_cycles * DAYS_PER_4Y;
-
-    remyears = remdays / 365;
-    if (remyears == 4)
-        remyears--;
-    remdays -= remyears * 365;
-
-    leap = !remyears && (q_cycles || !c_cycles);
-    yday = remdays + 31 + 28 + leap;
-    if (yday >= 365 + leap)
-        yday -= 365 + leap;
-
-    years = remyears + 4 * q_cycles + 100 * c_cycles + 400 * qc_cycles;
-
-    for (months = 0; days_in_month[months] <= remdays; months++)
-        remdays -= days_in_month[months];
-
-    if (INT_MAX - 100 < years || INT_MIN + 100 > years)
-        return -1;
-
-    tm->tm_year = years + 100;
-    tm->tm_mon  = months + 2;
-    if (tm->tm_mon >= 12)
-    {
-        tm->tm_mon -= 12;
-        tm->tm_year++;
-    }
-
-    tm->tm_mday = remdays + 1;
-    tm->tm_wday = wday;
-    tm->tm_yday = yday;
-
-    tm->tm_hour = remsecs / 3600;
-    tm->tm_min  = remsecs / 60 % 60;
-    tm->tm_sec  = remsecs % 60;
-
-    return 0;
-}
 #endif
 
-int timelib_ts_to_date(const struct tm *pTimeTm, char *dateString, unsigned int length)
-{
-    size_t ret;
-
-    ret = strftime(dateString, length, "%Y%m%d", pTimeTm);
-    if (0 == ret)
-    {
-        return -1;
-    }
-
-    return 0;
-}
-/*****************************************************************************/
-
-int timelib_ts_to_readable_time(const struct tm *pTimeTm, char *timeString, unsigned int length)
-{
-    size_t ret;
-
-#ifndef NV_UNIX
-    // For Windows
-    ret = strftime(timeString, length, "%X", pTimeTm);
-#else
-    ret = strftime(timeString, length, "%T", pTimeTm);
-#endif
-
-    if (0 == ret)
-    {
-        return -1;
-    }
-
-    return 0;
-}
-
-
-/*****************************************************************************/
-int timelib_tm_to_ts(struct tm tm, timelib32_t *timestamp)
-{
-    time_t epoch;
-
-    epoch = mktime(&tm);
-    if (-1 == epoch)
-    {
-        return 1;
-    }
-
-    *timestamp = (timelib32_t)epoch;
-    return 0;
-}
 
 /*****************************************************************************/
 #ifndef NV_UNIX //Windows

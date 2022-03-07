@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,9 @@ typedef enum dcgmError_enum
     DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS = 83, //!< Pending page retirements due to a DBE
     DCGM_FR_UNCORRECTABLE_ROW_REMAP      = 84, //!< Uncorrectable row remapping
     DCGM_FR_PENDING_ROW_REMAP            = 85, //!< Row remapping is pending
-    DCGM_FR_ERROR_SENTINEL               = 86, //!< MUST BE THE LAST ERROR CODE
+    DCGM_FR_BROKEN_P2P_MEMORY_DEVICE     = 86, //!< P2P copy test detected an error writing to this GPU
+    DCGM_FR_BROKEN_P2P_WRITER_DEVICE     = 87, //!< P2P copy test detected an error writing from this GPU
+    DCGM_FR_ERROR_SENTINEL               = 88, //!< MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -137,6 +139,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DEBUG_COOLING_MSG                                                         \
     "Verify that the cooling on this machine is functional, including external, " \
     "thermal material interface, fans, and any other components."
+#define BUG_REPORT_MSG "Please capture an nvidia-bug-report and send it to NVIDIA."
 
 /*
  * Messages for the error codes. All messages must be defined in the ERROR_CODE_MSG <msg> format
@@ -239,10 +242,10 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
     "%s met or exceeded the threshold of %.1f per second: %.1f at " \
     "%.1f seconds into the test."
 // total seconds of violation, gpu id
-#define DCGM_FR_THERMAL_VIOLATIONS_MSG "There were thermal violations totaling %lu seconds for GPU %u"
+#define DCGM_FR_THERMAL_VIOLATIONS_MSG "There were thermal violations totaling %.1f seconds for GPU %u"
 // total seconds of violations, first instance, gpu id
-#define DCGM_FR_THERMAL_VIOLATIONS_TS_MSG                              \
-    "Thermal violations totaling %lu samples started at %.1f seconds " \
+#define DCGM_FR_THERMAL_VIOLATIONS_TS_MSG                               \
+    "Thermal violations totaling %.1f seconds started at %.1f seconds " \
     "into the test for GPU %u"
 // observed temperature, gpu id, max allowed temperature
 #define DCGM_FR_TEMP_VIOLATION_MSG                                \
@@ -340,6 +343,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG "Pending page retirements together with a DBE were detected on GPU %u."
 #define DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG      "GPU %u had uncorrectable memory errors and %u rows were remapped"
 #define DCGM_FR_PENDING_ROW_REMAP_MSG            "GPU %u has uncorrectable memory errors and row remappings are pending"
+#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG     "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
+#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG     "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
 
 /*
  * Suggestions for next steps for the corresponding error message
@@ -469,6 +474,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_EMPTY_GPU_LIST_NEXT               ""
 #define DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT      ""
 #define DCGM_FR_PENDING_ROW_REMAP_NEXT            ""
+#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT     BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT     BUG_REPORT_MSG
 
 #ifdef __cplusplus
 extern "C" {

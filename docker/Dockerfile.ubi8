@@ -1,0 +1,28 @@
+FROM nvcr.io/nvidia/cuda:11.4.1-base-ubi8
+
+LABEL io.k8s.display-name="NVIDIA DCGM"
+LABEL name="NVIDIA DCGM"
+LABEL vendor="NVIDIA"
+LABEL version="${VERSION}"
+LABEL release="N/A"
+LABEL summary="Manage NVIDIA GPUs"
+LABEL description="See summary"
+
+ARG DCGM_VERSION
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo &&  \
+    dnf clean expire-cache
+RUN dnf install -y datacenter-gpu-manager-${DCGM_VERSION}
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+# disable all constraints on the configurations required by NVIDIA container toolkit
+ENV NVIDIA_DISABLE_REQUIRE="true"
+# Required for full GPU access
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,compat32
+
+ARG VERSION
+
+ENV NO_SETCAP=
+# open port 5555 to other containers ie, dcgm-exporter
+EXPOSE 5555
+ENTRYPOINT ["/usr/bin/nv-hostengine"]
+CMD ["-n", "-b", "0.0.0.0", "--log-level", "NONE", "-f", "-"]

@@ -1,5 +1,5 @@
 //
-// Copyright 2020 NVIDIA Corporation.  All rights reserved.
+// Copyright 2021 NVIDIA Corporation.  All rights reserved.
 //
 // NOTICE TO USER:
 //
@@ -51,8 +51,8 @@ extern "C" {
 #define NSCQ_API_VERSION_CODE_PATCH(code) (((code) >> 0u) & 0xFFFu)
 
 #define NSCQ_API_VERSION_CODE \
-    NSCQ_API_VERSION(1, 0, 0)
-#define NSCQ_API_VERSION_DEVEL "gc97a1f5"
+    NSCQ_API_VERSION(1, 2, 0)
+#define NSCQ_API_VERSION_DEVEL "g1747f35"
 
 extern const uint32_t nscq_api_version;
 extern const char nscq_api_version_devel[];
@@ -161,6 +161,23 @@ typedef struct {
 typedef struct {
     char data[64];
 } nscq_label_t;
+
+typedef struct {
+    uint8_t protocol_version;
+    uint8_t link_width;
+    uint32_t bandwidth; // Mibps
+} nscq_link_caps_t;
+
+typedef struct {
+    uint64_t rx; // Mibits
+    uint64_t tx; // Mibits
+} nscq_link_throughput_t;
+
+typedef struct
+{
+    uint32_t error_value;
+    uint64_t time;
+} nscq_error_t;
 
 _NSCQ_RESULT_TYPE(nscq_session_t, session);
 _NSCQ_RESULT_TYPE(nscq_observer_t, observer);

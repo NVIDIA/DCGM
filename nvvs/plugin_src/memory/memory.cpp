@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,6 @@ typedef enum testResult
 
 static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice cuDevice, CUcontext /*ctx*/)
 {
-    int attr;
     unsigned int error_h;
     size_t total, free;
     size_t size;
@@ -83,22 +82,21 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
     CUfunction memsetval, memcheckval;
     CUresult cuRes;
     void *ptr;
-    static char testVals[5]             = { (char)0x00, (char)0xAA, (char)0x55, (char)0xFF, (char)0x00 };
-    static const float minMemoryTest    = 0.75;
-    unsigned int memoryMismatchOccurred = 0;
+    static char testVals[5]     = { (char)0x00, (char)0xAA, (char)0x55, (char)0xFF, (char)0x00 };
+    float minAllocationPcnt     = memGlobals->testParameters->GetDouble(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE) / 100.0;
+    bool memoryMismatchOccurred = false;
 
-    cuRes = cuDeviceGetAttribute(&attr, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, cuDevice);
-    if (CUDA_SUCCESS != cuRes)
-        goto error_no_cleanup;
-
-    if (!attr)
+    if (minAllocationPcnt < 0.0 || minAllocationPcnt > 1.0)
     {
-        DcgmError d { memGlobals->dcgmGpuIndex };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_DISABLED, d, "Memory", memGlobals->dcgmGpuIndex);
-        PRINT_INFO("%s", "%s", d.GetMessage().c_str());
-        memGlobals->memory->AddInfo(d.GetMessage());
-        return NVVS_RESULT_SKIP;
+        static const float DEFAULT_MIN_ALLOCATION = 0.75;
+        std::stringstream buf;
+        buf << "Invalid minimum allocation percentage of GPU memory '" << minAllocationPcnt * 100.0
+            << "'. Defaulting to 75%";
+        DCGM_LOG_WARNING << buf.str();
+        memGlobals->memory->AddInfoVerboseForGpu(memGlobals->dcgmGpuIndex, buf.str());
+        minAllocationPcnt = DEFAULT_MIN_ALLOCATION;
     }
+
     cuRes = cuModuleLoadData(&mod, memtest_kernel);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
@@ -124,10 +122,10 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
     do
     {
         size = (size / 100) * 99;
-        if (size < (total * minMemoryTest))
+        if (size < (total * minAllocationPcnt))
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minMemoryTest * 100, memGlobals->dcgmGpuIndex);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
             memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
             PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
             goto error_no_cleanup;
@@ -206,7 +204,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
                 // - CUDA error containment failed to contain the DBE
                 // - >2 bits were flipped, ECC didn't catch the error
                 //
-                memoryMismatchOccurred = 1;
+                memoryMismatchOccurred = true;
                 goto cleanup;
             }
         }

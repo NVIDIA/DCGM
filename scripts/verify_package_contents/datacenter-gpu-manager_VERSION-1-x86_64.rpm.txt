@@ -92,6 +92,7 @@
 /usr/local/dcgm/bindings/python3/dcgm_errors.py
 /usr/local/dcgm/bindings/python3/dcgm_field_helpers.py
 /usr/local/dcgm/bindings/python3/dcgm_fields.py
+/usr/local/dcgm/bindings/python3/dcgm_fields_collectd.py
 /usr/local/dcgm/bindings/python3/dcgm_fluentd.py
 /usr/local/dcgm/bindings/python3/dcgm_prometheus.py
 /usr/local/dcgm/bindings/python3/dcgm_structs.py
@@ -129,6 +130,10 @@
 /usr/local/dcgm/sdk_samples/scripts/prometheus_config.yml
 /usr/local/dcgm/sdk_samples/scripts/readme.txt
 /usr/local/dcgm/third-party-notices.txt
+/usr/share/dcgm
+/usr/share/dcgm/collectd
+/usr/share/dcgm/collectd/dcgm-collectd-example.conf
+/usr/share/dcgm/collectd/types.db
 /usr/share/licenses/datacenter-gpu-manager-${VERSION}
 /usr/share/licenses/datacenter-gpu-manager-${VERSION}/LICENSE
 /usr/share/nvidia-validation-suite

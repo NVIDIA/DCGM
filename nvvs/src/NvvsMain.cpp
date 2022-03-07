@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ const size_t ERROR_IN_COMMAND_LINE     = 1;
 const size_t ERROR_UNHANDLED_EXCEPTION = 2;
 } // namespace
 
+using namespace DcgmNs::Nvvs;
 
 /*****************************************************************************/
 static void main_sig_handler(int signo)

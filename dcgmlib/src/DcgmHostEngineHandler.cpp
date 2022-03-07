@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
     msg.startTime        = 0;
     msg.endTime          = 0;
     msg.response.version = dcgmHealthResponse_version4;
-    msg.numGpuIds        = DCGM_MIN(gpuIds.size(), DCGM_MAX_NUM_DEVICES);
+    msg.numGpuIds        = std::min(gpuIds.size(), (size_t)DCGM_MAX_NUM_DEVICES);
 
 
     for (size_t i = 0; i < msg.numGpuIds; i++)
@@ -336,8 +336,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessAddRemoveGroup(dcgm::Command *pCmd,
         if (pCmd->cmdtype() == dcgm::GROUP_ADD_DEVICE)
         {
             dcgmRet
-                = mpGroupManager->AddEntityToGroup(connectionId,
-                                                   groupId,
+                = mpGroupManager->AddEntityToGroup(groupId,
                                                    (dcgm_field_entity_group_t)pDcgmGrpInfo->entity(i).entitygroupid(),
                                                    (dcgm_field_eid_t)pDcgmGrpInfo->entity(i).entityid());
             if (DCGM_ST_OK != dcgmRet)
@@ -445,6 +444,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGroupInfo(dcgm::Command *pCmd,
         PRINT_ERROR("", "Group Get Info info argument is not set");
         pCmd->set_status(DCGM_ST_BADPARAM);
         *pIsComplete = true;
+        return DCGM_ST_OK;
     }
 
     dcgm::GroupInfo *pDcgmGrpInfo = pCmd->mutable_arg(0)->mutable_grpinfo();
@@ -473,7 +473,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGroupInfo(dcgm::Command *pCmd,
 
     pDcgmGrpInfo->set_groupname(mpGroupManager->GetGroupName(connectionId, groupId));
 
-    ret = mpGroupManager->GetGroupEntities(connectionId, groupId, entities);
+    ret = mpGroupManager->GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
         PRINT_ERROR("", "Error: Bad group id parameter");
@@ -643,11 +643,12 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetEntityList(dcgm::Command *pCmd, bo
     std::vector<dcgmGroupEntityPair_t>::iterator entityIter;
 
     /* Did the client provide arguments? */
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_entitylist())
+    if ((pCmd->arg_size() < 1) || !pCmd->arg(0).has_entitylist())
     {
         PRINT_ERROR("", "GET_ENTITY_LIST was malformed.");
         pCmd->set_status(DCGM_ST_GENERIC_ERROR);
         *pIsComplete = true;
+        return DCGM_ST_OK;
     }
 
     entityList = pCmd->mutable_arg(0)->mutable_entitylist();
@@ -1125,6 +1126,15 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessFieldGroupCreate(dcgm::Command *pCmd,
         return DCGM_ST_OK;
     }
 
+    if (fieldGrpInfo->numFieldIds > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        DCGM_LOG_ERROR << "Invalid numFieldIds " << fieldGrpInfo->numFieldIds << " > "
+                       << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
+        pCmd->set_status(DCGM_ST_BADPARAM);
+        *pIsComplete = true;
+        return DCGM_ST_OK;
+    }
+
     std::vector<unsigned short> fieldIds(fieldGrpInfo->fieldIds, fieldGrpInfo->fieldIds + fieldGrpInfo->numFieldIds);
     /* This call will set fieldGrpInfo->fieldGroupId */
     ret = mpFieldGroupManager->AddFieldGroup(
@@ -1473,7 +1483,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
         return dcgmReturn;
     }
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -1604,7 +1614,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
         return dcgmReturn;
     }
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -2164,13 +2174,32 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetMultipleLatestValues(dcgm::Command
 
     if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
     {
-        PRINT_ERROR("", "Payload missing from from GET_MULTIPLE_LATEST_VALUES");
+        DCGM_LOG_ERROR << "Payload missing from from GET_MULTIPLE_LATEST_VALUES";
         pCmd->set_status(DCGM_ST_GENERIC_ERROR);
         *pIsComplete = true;
+        return DCGM_ST_OK;
+    }
+
+    if (pCmd->arg(0).blob().size() != sizeof(msg))
+    {
+        DCGM_LOG_ERROR << "Protobuf had an invalid dcgmGetMultipleLatestValues_t size of " << pCmd->arg(0).blob().size()
+                       << " != " << sizeof(msg) << ".";
+        pCmd->set_status(DCGM_ST_BADPARAM);
+        *pIsComplete = true;
+        return DCGM_ST_OK;
     }
 
     /* Make a copy of the message since we're going to modify it */
     memcpy(&msg, pCmd->arg(0).blob().c_str(), pCmd->arg(0).blob().size());
+    if (msg.version != dcgmGetMultipleLatestValues_version || msg.entitiesCount > DCGM_GROUP_MAX_ENTITIES
+        || msg.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        DCGM_LOG_ERROR << "dcgmGetMultipleLatestValues_t had a bad parameter. version " << msg.version
+                       << ", entitiesCount " << msg.entitiesCount << ", fieldIdCount " << msg.fieldIdCount;
+        pCmd->set_status(DCGM_ST_BADPARAM);
+        *pIsComplete = true;
+        return DCGM_ST_OK;
+    }
 
     /* Convert the entity group to a list of entities */
     if (msg.entitiesCount == 0)
@@ -2186,7 +2215,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetMultipleLatestValues(dcgm::Command
             return ret;
         }
 
-        ret = mpGroupManager->GetGroupEntities(0, groupId, entities);
+        ret = mpGroupManager->GetGroupEntities(groupId, entities);
         if (ret != DCGM_ST_OK)
         {
             PRINT_ERROR("%d %p", "Got st %d from GetGroupEntities. groupId %p", ret, (void *)msg.groupId);
@@ -3645,6 +3674,7 @@ DcgmHostEngineHandler *DcgmHostEngineHandler::Init(dcgmStartEmbeddedV2Params_v1 
         }
         catch (const std::runtime_error &e)
         {
+            DCGM_LOG_ERROR << "Cannot initialize the hostengine: " << e.what();
             fprintf(stderr, "%s\n", e.what());
             /* Don't delete here. It wasn't allocated if we got an exception */
             mpHostEngineHandlerInstance = nullptr;
@@ -4388,7 +4418,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     }
 
     /* Resolve the groupId -> entities[] -> gpuIds[] */
-    dcgmReturn = mpGroupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -5028,7 +5058,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     }
 
     /* Resolve the groupId -> entities[] -> gpuIds[] */
-    dcgmReturn = mpGroupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -5716,7 +5746,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
     std::vector<unsigned short> profFieldIds;
     dcgmReturn_t retSt = DCGM_ST_OK;
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(watcher.connectionId, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -5823,7 +5853,7 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     std::vector<unsigned short> fieldIds;
     std::vector<unsigned short> profFieldIds;
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(watcher.connectionId, groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);

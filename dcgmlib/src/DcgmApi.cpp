@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2544,7 +2544,7 @@ dcgmReturn_t helperConfigGet(dcgmHandle_t dcgmHandle,
     /* Copy the configs back to the caller's array */
     if (msg.numConfigs > 0)
     {
-        unsigned int numToCopy = DCGM_MIN(msg.numConfigs, (unsigned int)count);
+        unsigned int numToCopy = std::min(msg.numConfigs, (unsigned int)count);
         memcpy(pDeviceConfigList, msg.configs, numToCopy * sizeof(msg.configs[0]));
     }
 
@@ -3380,7 +3380,7 @@ dcgmReturn_t helperPolicyGet(dcgmHandle_t dcgmHandle,
         if (msg.numPolicies > count)
             dcgmReturn = DCGM_ST_INSUFFICIENT_SIZE; /* Tell the user we only copied "count" entries */
 
-        msg.numPolicies = DCGM_MIN(count, msg.numPolicies);
+        msg.numPolicies = std::min(count, msg.numPolicies);
 
         memcpy(dcgmPolicy, msg.policies, msg.numPolicies * sizeof(msg.policies[0]));
     }
@@ -6792,17 +6792,17 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded_v2(dcgmStartEmbeddedV2Params_v1 *
 
     // If logging severity is unspecified, pass empty string as the arg to the
     // helper. Empty arg => no arg => look at env
-    const std::string loggingSeverityArg = params->severity == DcgmLoggingSeverityUnspecified
-                                               ? ""
-                                               : DcgmLogging::severityToString(params->severity, "WARNING");
+    const std::string loggingSeverityArg
+        = params->severity == DcgmLoggingSeverityUnspecified
+              ? ""
+              : DcgmLogging::severityToString(params->severity, DCGM_LOGGING_SEVERITY_STRING_ERROR);
 
     const std::string logSeverity = DcgmLogging::getLogSeverityFromArgAndEnv(
         loggingSeverityArg, DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY, DCGM_ENV_LOG_PREFIX);
 
-    DcgmLogging::init(logFile.c_str(),
-                      DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityWarning));
+    DcgmLogging::init(logFile.c_str(), DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityError));
     DcgmLogging &logging = DcgmLogging::getInstance();
-    logging.appendLogToBaseLogger<SYSLOG_LOGGER>();
+    logging.routeLogToBaseLogger<SYSLOG_LOGGER>();
     DCGM_LOG_DEBUG << "Initialized base logger";
     DCGM_LOG_SYSLOG_DEBUG << "Initialized syslog logger";
 

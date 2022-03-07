@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -169,16 +169,24 @@ class DcgmReader(object):
     maxKeepAge      : Max time to keep data from NVML, in seconds. Default is 3600.0 (1 hour)
     ignoreList      : List of the field ids we want to query but not publish.
     gpuIds          : List of GPU IDs to monitor. If not provided, DcgmReader will monitor all GPUs on the system
+    fieldIntervalMap: Map of intervals to list of field numbers to monitor. Takes precedence over fieldIds and updateFrequency if not None.
     '''
     def __init__(self, hostname='localhost', fieldIds=None, updateFrequency=10000000,
                  maxKeepAge=3600.0, ignoreList=None, fieldGroupName='dcgm_fieldgroupData', gpuIds=None,
-                 entities=None):
+                 entities=None, fieldIntervalMap=None):
         fieldIds = fieldIds or defaultFieldIds
         ignoreList = ignoreList or []
         self.m_dcgmHostName = hostname
-        self.m_publishFieldIds = fieldIds
-        self.m_updateFreq = updateFrequency
+        self.m_updateFreq = updateFrequency # default / redundant
+
         self.m_fieldGroupName = fieldGroupName
+        self.m_publishFields = {}
+
+        if fieldIntervalMap is not None:
+            self.m_publishFields = fieldIntervalMap
+        else:
+            self.m_publishFields[self.m_updateFreq] = fieldIds
+
         self.m_requestedGpuIds = gpuIds
         self.m_requestedEntities = entities
 
@@ -194,6 +202,19 @@ class DcgmReader(object):
         self.m_fieldIdToInfo = {} #FieldId => dcgm_fields.dcgm_field_meta_t
         self.m_lock = threading.Lock() #DCGM connection start-up/shutdown is not thread safe. Just lock pessimistically
         self.m_debug = False
+
+        # For GetAllSinceLastCall* calls. We cache the value for these objects
+        # after first retrieval, so initializing them to None lets us know if
+        # we've made a first retrieval. The first retrieval is based on a
+        # "since" timestamp of 0, so it gets data in which we are not
+        # interested in. The second retrieval gets data since the first one, in
+        # which we ARE interested. The practical upshot of this is that actual
+        # reporting of data is delayed one collectd sampling interval -- as if
+        # the sampling was actually started one collectd sampling interval
+        # later. We expect this is not an issue.
+        self.fvs = None
+        self.dfvc = None
+        self.dfvec = None
 
     ###########################################################################
     '''
@@ -213,8 +234,8 @@ class DcgmReader(object):
 
     ###########################################################################
     '''
-    This function intializes the dcgm from the specified directory
-    and connects to host engine.
+    This function intializes DCGM from the specified directory and connects to
+    the host engine.
     '''
     def InitWrapped(self, path=None):
         dcgm_structs._dcgmInit(libDcgmPath=path)
@@ -235,7 +256,8 @@ class DcgmReader(object):
 
     ###########################################################################
     '''
-    Delete the dcgm group, dcgm system and dcgm handle and clear the attributes on shutdown.
+    Delete the DCGM group, DCGM system and DCGM handle and clear the attributes
+    on shutdown.
     '''
     def SetDisconnected(self):
         #Force destructors since DCGM currently doesn't support more than one client connection per process
@@ -251,8 +273,8 @@ class DcgmReader(object):
 
     ##########################################################################
     '''
-    This function calls the SetDisconnected function which disconnect from dcgm and clears
-    dcgm handle and dcgm group.
+    This function calls the SetDisconnected function which disconnects from
+    DCGM and clears DCGM handle and DCGM group.
     '''
     def Shutdown(self):
         with self.m_lock:
@@ -302,8 +324,9 @@ class DcgmReader(object):
     ############################################################################
     '''
     Reconnect function checks if connection handle is present. If the handle is
-    none, it creates the handle and gets the default dcgm group. It then maps gpuIds to
-    BusID, set the meta data of the field ids and adds watches to the field Ids mentioned in the idToWatch list.
+    none, it creates the handle and gets the default DCGM group. It then maps
+    gpuIds to BusID, set the meta data of the field ids and adds watches to the
+    field Ids mentioned in the idToWatch list.
     '''
     def Reconnect(self):
         if self.m_dcgmHandle is not None:
@@ -333,13 +356,17 @@ class DcgmReader(object):
 
     ###########################################################################
     '''
-    Add watches to the fields which are passed in init function in idToWatch list.
-    It also updates the field values for the first time.
+    Add watches to the fields which are passed in init function in idToWatch
+    list. It also updates the field values for the first time.
     '''
     def AddFieldWatches(self):
         maxKeepSamples = 0 #No limit. Handled by m_maxKeepAge
-        self.m_dcgmGroup.samples.WatchFields(self.m_fieldGroup, self.m_updateFreq, self.m_maxKeepAge, maxKeepSamples)
+        for interval, fieldGroup in self.m_fieldGroups.items():
+            self.LogInfo("AddWatchFields: interval = " + str(interval) + "\n")
+            self.m_dcgmGroup.samples.WatchFields(fieldGroup, interval, self.m_maxKeepAge, maxKeepSamples)
         self.m_dcgmSystem.UpdateAllFields(1)
+        self.LogInfo("AddWatchFields exit\n")
+
 
     ###########################################################################
     '''
@@ -348,38 +375,78 @@ class DcgmReader(object):
     '''
     def GetFieldMetadata(self):
         self.m_fieldIdToInfo = {}
+        self.m_fieldGroups = {}
+        self.m_fieldGroup = None;
+        allFieldIds = []
 
-        findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(self.m_fieldGroupName)
+        # Initialize groups for all field intervals.
+        self.LogInfo("GetFieldMetaData:\n")
 
-        #Remove our field group if it exists already
+        intervalIndex = 0
+        for interval, fieldIds in self.m_publishFields.items():
+            self.LogInfo("sampling interval = " + str(interval) + ":\n")
+            for fieldId in fieldIds:
+                self.LogInfo("   fieldId: " + str(fieldId) + "\n")
+
+            intervalIndex += 1
+            fieldGroupName = self.m_fieldGroupName + "_" + str(intervalIndex)
+            findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(fieldGroupName)
+            self.LogInfo("fieldGroupName: " + fieldGroupName + "\n")
+
+            # Remove our field group if it exists already
+            if findByNameId is not None:
+                self.LogInfo("fieldGroupId: " + findByNameId  + "\n")
+                delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
+                delFieldGroup.Delete()
+                del(delFieldGroup)
+
+            self.m_fieldGroups[interval] = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, fieldIds)
+
+            for fieldId in fieldIds:
+                if fieldId not in allFieldIds:
+                    allFieldIds += [fieldId]
+
+                self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(fieldId)
+                if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] == None:
+                    self.LogError("Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
+                    raise dcgm_structs.DCGMError(dcgm_structs.DCGM_ST_UNKNOWN_FIELD)
+        # Initialize a field group of ALL fields.
+        fieldGroupName = self.m_fieldGroupName
+        findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(fieldGroupName)
+
+        # Remove our field group if it exists already
         if findByNameId is not None:
             delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
             delFieldGroup.Delete()
             del(delFieldGroup)
 
-        self.m_fieldGroup = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, self.m_fieldGroupName, self.m_publishFieldIds)
+        self.m_fieldGroup = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, allFieldIds)
 
-        for fieldId in self.m_fieldGroup.fieldIds:
-            self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(fieldId)
-            if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] == None:
-                self.LogError("Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
-                raise dcgm_structs.DCGMError(dcgm_structs.DCGM_ST_UNKNOWN_FIELD)
 
     ###########################################################################
     '''
-    This function attempts to connect to dcgm and calls the implemented CustomDataHandler in the child class with field values.
+    This function attempts to connect to DCGM and calls the implemented
+    CustomDataHandler in the child class with field values.
     @params:
-    self.m_dcgmGroup.samples.GetLatest(self.m_fieldGroup).values : The field values for each field. This dictionary contains fieldInfo
-                                                                   for each field id requested to be watches.
+    self.m_dcgmGroup.samples.GetLatest(self.m_fieldGroup).values : The field
+    values for each field. This dictionary contains fieldInfo for each field id
+    requested to be watched.
     '''
     def Process(self):
         with self.m_lock:
             try:
                 self.Reconnect()
+
+                # The first call just clears the collection set.
+
                 if not self.m_requestedEntities:
-                    return self.CustomDataHandler(self.m_dcgmGroup.samples.GetLatest(self.m_fieldGroup).values)
+                    self.dfvc = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.dfvc, self.m_fieldGroup)
+                    self.CustomDataHandler(self.dfvc.values)
+                    self.dfvc.EmptyValues()
                 else:
-                    return self.CustomDataHandler_v2(self.m_dcgmGroup.samples.GetLatest_v2(self.m_fieldGroup).values)
+                    self.dfvec = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(self.dfvec, self.m_fieldGroup)
+                    self.CustomDataHandler_v2(self.dfvec.values)
+                    self.dfvec.EmptyValues()
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
                 self.LogError("Can't connect to nv-hostengine. Is it down?")
                 self.SetDisconnected()
@@ -433,9 +500,63 @@ class DcgmReader(object):
         return systemDictionary
 
     ###########################################################################
+    '''
+    This function gets value as a dictionary of dictionaries of lists. The
+    dictionary returned is each gpu id mapped to a dictionary of it's field
+    value lists. Each field value dictionary is the field name mapped to the
+    list of values or the field id mapped to list of values depending on the
+    parameter mapById. The list of values are the values for each field since
+    the last retrieval.
+    '''
+    def GetAllGpuValuesAsDictSinceLastCall(self, mapById):
+        systemDictionary = {}
+
+        with self.m_lock:
+            try:
+                self.Reconnect()
+                report = self.fvs is not None
+                self.fvs = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.fvs, self.m_fieldGroup).values
+                if report:
+                    for gpuId in list(self.fvs.keys()):
+                        systemDictionary[gpuId] = {} # initialize the gpu's dictionary
+                        gpuFv = self.fvs[gpuId]
+
+                        for fieldId in list(gpuFv.keys()):
+                            for val in gpuFv[fieldId]:
+                                if val.isBlank:
+                                    continue
+
+                                if mapById == False:
+                                    fieldTag = self.m_fieldIdToInfo[fieldId].tag
+                                    if systemDictionary[gpuId][fieldTag] is None:
+                                        systemDictionary[gpuId][fieldTag] = []
+
+                                    systemDictionary[gpuId][fieldTag].append(val)
+                                else:
+                                    if systemDictionary[gpuId][fieldId] is None:
+                                        systemDictionary[gpuId][fieldId] = []
+                                    systemDictionary[gpuId][fieldId].append(val)
+            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.SetDisconnected()
+
+        if self.fvs is not None:
+            self.fvs.EmptyValues()
+
+        return systemDictionary
+
+    ###########################################################################
     def GetLatestGpuValuesAsFieldIdDict(self):
         return self.GetLatestGpuValuesAsDict(True)
 
     ###########################################################################
     def GetLatestGpuValuesAsFieldNameDict(self):
         return self.GetLatestGpuValuesAsDict(False)
+
+    ###########################################################################
+    def GetAllGpuValuesAsFieldIdDictSinceLastCall(self):
+        return self.GetAllGpuValuesAsDictSinceLastCall(True)
+
+    ###########################################################################
+    def GetAllGpuValuesAsFieldNameDictSinceLastCall(self):
+        return self.GetAllGpuValuesAsDictSinceLastCall(False)

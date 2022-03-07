@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,7 +160,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
     DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, connectionId);
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    ret = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
@@ -272,7 +272,7 @@ dcgmReturn_t DcgmHealthWatch::GetWatches(unsigned int groupId, dcgmHealthSystems
     groupWatchTable_t::iterator groupWatchIter;
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    ret = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
@@ -375,7 +375,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     if (DCGM_INT64_IS_BLANK(endTime))
         endTime = 0;
 
-    ret = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
@@ -504,7 +504,7 @@ dcgmReturn_t DcgmHealthWatch::SetMem(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
 
     // the sampling of 1 second is fine for the above, these however should have a longer sampling rate
-    updateInterval = DCGM_MAX(30000000, updateInterval);
+    updateInterval = std::max(30000000ll, updateInterval);
 
     // single and double bit retired pages
 
@@ -583,8 +583,8 @@ dcgmReturn_t DcgmHealthWatch::SetInforom(dcgm_field_entity_group_t entityGroupId
     if (!enable) // ignore
         return ret;
 
-    updateInterval = DCGM_MAX(3600000000, updateInterval);
-    maxKeepAge     = DCGM_MAX(7200.0, maxKeepAge); /* Keep at least 2 hours of data so we can get a sample */
+    updateInterval = std::max(3600000000ll, updateInterval);
+    maxKeepAge     = std::max(7200.0, maxKeepAge); /* Keep at least 2 hours of data so we can get a sample */
 
     ret = mpCoreProxy.AddFieldWatch(
         entityGroupId, entityId, DCGM_FI_DEV_INFOROM_CONFIG_VALID, updateInterval, maxKeepAge, 0, watcher, false);
@@ -617,7 +617,7 @@ dcgmReturn_t DcgmHealthWatch::SetThermal(dcgm_field_entity_group_t entityGroupId
         return ret;
 
     /* Enforce a minimum sample rate of every 30 seconds */
-    updateInterval = DCGM_MAX(30000000, updateInterval);
+    updateInterval = std::max(30000000ll, updateInterval);
 
     ret = mpCoreProxy.AddFieldWatch(
         entityGroupId, entityId, DCGM_FI_DEV_THERMAL_VIOLATION, updateInterval, maxKeepAge, 0, watcher, false);
@@ -649,7 +649,7 @@ dcgmReturn_t DcgmHealthWatch::SetPower(dcgm_field_entity_group_t entityGroupId,
         return ret;
 
     /* Enforce a minimum sample rate of every 30 seconds */
-    updateInterval = DCGM_MAX(30000000, updateInterval);
+    updateInterval = std::max(30000000ll, updateInterval);
 
     ret = mpCoreProxy.AddFieldWatch(
         entityGroupId, entityId, DCGM_FI_DEV_POWER_VIOLATION, updateInterval, maxKeepAge, 0, watcher, false);

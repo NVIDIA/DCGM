@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,6 @@ TEST_CASE("DcgmBuildInfo: checking output")
 
     found = vInfo.find("Commit ID :", 0);
     REQUIRE(found != std::string::npos);
-
-//    found = vInfo.find("Branch Name :", 0);
-//    REQUIRE(found != std::string::npos);
 
     found = vInfo.find("CPU Arch :", 0);
     REQUIRE(found != std::string::npos);

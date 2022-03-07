@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import os
 import signal
 import utils
 import json
+import tempfile
+import shutil
 
 from ctypes import *
 from apps.app_runner import AppRunner
@@ -79,21 +81,6 @@ def diag_result_assert_pass(response, gpuIndex, testIndex, msg):
     if response.version == dcgm_structs.dcgmDiagResponse_version6:
         codeMsg = "Passing test somehow has a non-zero error code!"
         assert response.perGpuResponses[gpuIndex].results[testIndex].error.code == 0, codeMsg
-
-def helper_test_dcgm_diag_dbe_insertion(handle, gpuIds):
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=8')
-    dd.UseFakeGpus()
-    ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuIds[0],
-                        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 1, 5)
-    assert ret == dcgm_structs.DCGM_ST_OK, "Could not insert an error to test forced failure"
-    ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuIds[0],
-                        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 1, 15)
-    assert ret == dcgm_structs.DCGM_ST_OK, "Could not insert an error to test forced failure"
-    response = test_utils.diag_execute_wrapper(dd, handle)
-    errorStr = "Expected results for %d GPUs, but found %d" % (len(gpuIds), response.gpuCount)
-    assert response.gpuCount == len(gpuIds), errorStr
-    diag_result_assert_fail(response, gpuIds[0], dcgm_structs.DCGM_DIAGNOSTIC_INDEX,
-                        "Expected the diagnostic test to fail because we injected a DBE", dcgm_errors.DCGM_FR_FIELD_VIOLATION)
 
 def helper_check_diag_empty_group(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -238,7 +225,37 @@ def find_throttle_failure(response, gpuId, pluginIndex):
 
     return False, ""
 
-    
+def helper_test_thermal_violations_in_seconds(handle, gpuIds):
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=10')
+    dd.UseFakeGpus()
+    fieldId = dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION
+    injected_value = 2344122048
+    inject_value(handle, gpuIds[0], fieldId, injected_value, 10, True)
+
+    # Verify that the inserted values are visible in DCGM before starting the diag
+    assert dcgm_internal_helpers.verify_field_value(gpuIds[0], fieldId, injected_value, maxWait=5, numMatches=1), \
+        "Expected inserted values to be visible in DCGM"
+
+    # Start the diag
+    response = dd.Execute(handle)
+
+    testIndex = dcgm_structs.DCGM_DIAGNOSTIC_INDEX
+    errmsg = response.perGpuResponses[gpuIds[0]].results[testIndex].error.msg
+    # Check for hermal instead of thermal because sometimes it's capitalized
+    if errmsg.find("hermal violations") != -1:
+        foundError = True
+        assert errmsg.find("totaling 2.3 seconds") != -1, \
+            "Expected 2.3 seconds of thermal violations but found %s" % errmsg
+    else:
+        # Didn't find an error
+        assert False, "Thermal violations were injected but not found in error message: '%s'." % errmsg
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(2)
+def test_thermal_violations_in_seconds_standalone(handle, gpuIds):
+    helper_test_thermal_violations_in_seconds(handle, gpuIds)
+
 #####
 # Helper method for inserting errors and performing the diag
 def perform_diag_with_throttle_mask_and_verify(dd, handle, gpuId, inserted_error, throttle_mask, shouldPass, failureMsg):
@@ -655,7 +672,7 @@ def test_dcgm_diag_handle_concurrency_standalone(handle, gpuIds):
     numShouldHaveCompleted = int((diagDuration / sleepDuration) / 2.0)
     assert numConcurrentCompleted >= numShouldHaveCompleted, "Expected at least %d concurrent tests completed. Got %d" % (numShouldHaveCompleted, numConcurrentCompleted)
 
-def helper_per_gpu_responses_api(handle, gpuIds):
+def helper_per_gpu_responses_api(handle, gpuIds, testDir):
     """
     Verify that pass/fail status for diagnostic tests are reported on a per GPU basis via dcgmActionValidate API call
     """
@@ -667,6 +684,8 @@ def helper_per_gpu_responses_api(handle, gpuIds):
     dd.SetThrottleMask(0) # We explicitly want to fail for throttle reasons since this test inserts throttling errors 
                           # for verification
     dd.UseFakeGpus()
+    dd.SetStatsPath(testDir)
+    dd.SetStatsOnFail(1)
 
     # Setup injection app    
     fieldId = dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS
@@ -821,7 +840,18 @@ def test_dcgm_diag_per_gpu_responses_standalone_api(handle, gpuIds):
         test_utils.skip_test("Skipping because this SKU ignores the throttling we inject for this test")
 
     logger.info("Starting test for per gpu responses (API call)")
-    helper_per_gpu_responses_api(handle, gpuIds)
+    outputFile = "stats_sm_stress.json"
+    try:
+        testDirectory = tempfile.mkdtemp()
+    except OSError:
+        test_utils.skip_test("Unable to create the test directory")
+    else:
+        try:
+            helper_per_gpu_responses_api(handle, gpuIds, testDirectory)
+            assert os.path.isfile(os.path.join(testDirectory, outputFile)), "Expected stats file {} was not created".format(os.path.join(testDirectory, outputFile))
+        finally:
+             shutil.rmtree(testDirectory, ignore_errors=True)
+
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
@@ -852,3 +882,22 @@ def helper_test_diagnostic_config_usage(handle, gpuIds):
 @test_utils.run_with_injection_gpus(2)
 def test_diagnostic_config_usage_standalone(handle, gpuIds):
     helper_test_diagnostic_config_usage(handle, gpuIds)
+
+def helper_test_dcgm_short_diagnostic_run(handle, gpuIds):
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="diagnostic", paramsStr="diagnostic.test_duration=15")
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    for gpuId in gpuIds:
+        if response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_DIAGNOSTIC_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP:
+            logger.info("Got status DCGM_DIAG_RESULT_SKIP for gpuId %d. This is expected if this GPU does not support the Diagnostic test." % gpuId)
+            continue
+
+        assert response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_DIAGNOSTIC_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, \
+                    "Should have passed the 15 second diagnostic for all GPUs"
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_short_diagnostic_run(handle, gpuIds):
+    helper_test_dcgm_short_diagnostic_run(handle, gpuIds)

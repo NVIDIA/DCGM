@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,4 +24,18 @@ install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/nvvs.conf
         DESTINATION ${DCGM_NVVS_CONFIG_DIR}
         PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
         COMPONENT DCGM
+        )
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/diag-skus.yaml.in ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml @ONLY)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml
+        DESTINATION ${DCGM_NVVS_INSTALL_DIR}
+        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+        COMPONENT Config
+        )
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml
+        DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/
+        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+        COMPONENT Tests
         )

@@ -5,11 +5,11 @@ set -ex
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
 PKGNAME=fmt
-PKGVER=8.0.0
+PKGVER=8.0.1
 PKG="${PKGNAME}-${PKGVER}"
 PKGDIR="${HOME}/.build/${TARGET}/${PKG}"
 SOURCE="https://github.com/fmtlib/fmt/archive/refs/tags/${PKGVER}.tar.gz"
-SHA512SUM="61768bf8b64c430f11536800985509ce436bbbe05cbe1dfb6045cfaf2f859af98eae1019ef602af8fec6946ae25e4d8adb589f0f738666b20beb3afe65ee760c"
+SHA512SUM="643e68d5b2e0e9c83231ab2b0036596a6297b1d9ed6bd7b1172bee4ff134c8af8f09174c06c94225132c1b635b0977ea4ce783748d7bd76a9a0b5ad597456c84"
 
 mkdir -p ${PKGDIR}_{build,src}
 mkdir -p ${PKGDIR}_build_{Release,Debug,RelWithDebInfo}
@@ -32,6 +32,7 @@ function build_libfmt(){
 
 pushd ${PKGDIR}_build
 download_url "${SOURCE}" "${PKG}.tar.gz"
+echo "${SHA512SUM}  ${PKG}.tar.gz" | sha512sum -c -
 tar xf "${PKG}.tar.gz" -C "${PKGDIR}_src" --strip-components=1
 
 build_libfmt Debug

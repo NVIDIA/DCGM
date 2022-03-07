@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -280,7 +280,10 @@ class DCGMError(Exception):
 
     def __eq__(self, other):
         return self.value == other.value
-    
+
+    def __hash__(self):
+        return hash(self.value)
+
     def SetAdditionalInfo(self, msg):
         """
         Sets msg as additional information returned by the string representation of DCGMError and subclasses.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,21 +47,21 @@ public:
      * This method is used to remove groups on the host-engine represented
      * by the DCGM handle
      *****************************************************************************/
-    dcgmReturn_t RunGroupDestroy(dcgmHandle_t pDcgmHandle);
+    dcgmReturn_t RunGroupDestroy(dcgmHandle_t mDcgmHandle);
 
     /*****************************************************************************
      * This method is used to get the info for a group on the host-engine represented
      * by the DCGM handle
      * It is overloaded in order to allow reuse in RunGroupList
      *****************************************************************************/
-    dcgmReturn_t RunGroupInfo(dcgmHandle_t pDcgmHandle, bool json);
-    dcgmReturn_t RunGroupInfo(dcgmHandle_t mDcgmHandle, DcgmiOutputBoxer &outGroup);
+    dcgmReturn_t RunGroupInfo(dcgmHandle_t dcgmHandle, bool outputJson);
+    dcgmReturn_t RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outGroup);
 
     /*****************************************************************************
      * This method is used to add to or remove from a group on the host-engine represented
      * by the DCGM handle
      *****************************************************************************/
-    dcgmReturn_t RunGroupManageDevice(dcgmHandle_t pDcgmHandle, bool add);
+    dcgmReturn_t RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add);
 
     /******************************************************************************
      * Getters and setters

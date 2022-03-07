@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,8 @@
         CHECK(config.field == value);               \
     }
 
+using namespace DcgmNs::Nvvs;
+
 SCENARIO("FrameworkConfig::FrameworkConfig()")
 {
     FrameworkConfig fc;
@@ -99,7 +101,6 @@ SCENARIO("FrameworkConfig::FrameworkConfig()")
 
     CHECK(config.dataFile == "stats");
     CHECK(config.dataFileType == NVVS_LOGFILE_TYPE_JSON);
-    CHECK(config.overrideMinMax == false);
     CHECK(config.overrideSerial == false);
     CHECK(config.scriptable == false);
     CHECK(config.requirePersistence == true);
@@ -118,7 +119,6 @@ SCENARIO("FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const 
 
     // Valid inputs
     res = fc.SetFrameworkConfigValue<>(NVVS_FWCFG_GLOBAL_OVERRIDEMINMAX, true);
-    CHECK_CONFIG_FIELD_VALUE(fc, overrideMinMax, true);
     CHECK(res == true);
 
     res = fc.SetFrameworkConfigValue<>(NVVS_FWCFG_GLOBAL_OVERRIDESERIAL, true);
@@ -214,69 +214,3 @@ SCENARIO("FrameworkConfig::SetFrameworkConfigValue (nvvs_fwcfg_enum field, const
     CHECK_CONFIG_FIELD_VALUE(fc, scriptable, false);
     CHECK(res == false);
 }
-
-SCENARIO("void ConfigFileParser_v2::handleGpuSetBlock(const YAML::Node &node)")
-{
-    const FrameworkConfig fc;
-    NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
-
-    std::ofstream out(filename);
-    out << CONFIG_FILE_CONTENTS;
-
-    ConfigFileParser_v2 parser(filename, fc);
-}
-
-SCENARIO("void ConfigFileParser_v2::CheckTokens_globals(const YAML::Node &node)")
-{
-    FrameworkConfig fc;
-    NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
-
-    std::ofstream out(filename);
-    out << CONFIG_FILE_CONTENTS;
-
-    ConfigFileParser_v2 parser(filename, fc);
-
-    parser.Init();
-    // We call ParseGlobalsAndGpu because CheckTokens_globals is private
-    parser.ParseGlobalsAndGpu();
-    fc = parser._test_getConfig();
-
-    CHECK_CONFIG_FIELD_VALUE(fc, dataFile, "caseSensitiveLogFile.txt");
-    CHECK_CONFIG_FIELD_VALUE(fc, dataFileType, NVVS_LOGFILE_TYPE_BINARY);
-    CHECK_CONFIG_FIELD_VALUE(fc, overrideMinMax, true);
-    CHECK_CONFIG_FIELD_VALUE(fc, overrideSerial, true);
-    CHECK_CONFIG_FIELD_VALUE(fc, scriptable, true);
-    CHECK_CONFIG_FIELD_VALUE(fc, requirePersistence, false);
-    CHECK(nvvsCommon.throttleIgnoreMask == 40);
-}
-
-SCENARIO("void ConfigFileParser_v2::CheckTokens_gpus(const YAML::Node &node)")
-{
-    FrameworkConfig fc;
-    NvvsTests nv;
-    std::string filename = createTmpFile("yaml");
-
-    std::ofstream out(filename);
-    out << CONFIG_FILE_CONTENTS;
-
-    ConfigFileParser_v2 parser(filename, fc);
-
-    parser.Init();
-    // We call ParseGlobalsAndGpu because CheckTokens_globals is private
-    parser.ParseGlobalsAndGpu();
-    fc = parser._test_getConfig();
-
-    CHECK_CONFIG_FIELD_VALUE(fc, gpuSetIdentifier, "gpusetStr")
-    CHECK_CONFIG_FIELD_VALUE(fc, name, "gpuname");
-    CHECK_CONFIG_FIELD_VALUE(fc, brand, "gpubrand");
-    CHECK_CONFIG_FIELD_VALUE(fc, uuid, "gpuuuid");
-    CHECK_CONFIG_FIELD_VALUE(fc, index, std::vector<unsigned int>({ 1, 3, 5 }));
-    CHECK_CONFIG_FIELD_VALUE(fc, requirePersistence, false);
-    CHECK(nvvsCommon.throttleIgnoreMask == 40);
-}
-
-// This should be a test case, but the test parser is awful and needs to be completely rewritten.
-// SCENARIO("void ConfigFileParser_v2::CheckTokens_testDefaults(const YAML::Node& node, TestParameters& tp, bool
-// subTest)")

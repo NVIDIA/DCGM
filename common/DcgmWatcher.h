@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,22 +25,27 @@ class DcgmWatcher
 {
 public:
     /* Constructor */
-    DcgmWatcher(DcgmWatcherType_t watcherType, dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE)
+    explicit DcgmWatcher(DcgmWatcherType_t watcherType, dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE)
         : watcherType(watcherType)
-        , connectionId(connectionId) {};
+        , connectionId(connectionId)
+    {}
+
     DcgmWatcher()
-        : watcherType(DcgmWatcherTypeClient)
-        , connectionId(DCGM_CONNECTION_ID_NONE) {};
+        : DcgmWatcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE)
+    {}
 
-    /* Destructor */
-    ~DcgmWatcher() {};
+    DcgmWatcher(DcgmWatcher const &) = default;
+    DcgmWatcher(DcgmWatcher &&)      = default;
 
-    DcgmWatcherType_t watcherType;     /* Watcher type */
-    dcgm_connection_id_t connectionId; /* Connection associated with this watcher */
+    DcgmWatcher &operator=(DcgmWatcher const &) = default;
+    DcgmWatcher &operator=(DcgmWatcher &&) = default;
+
+    DcgmWatcherType_t watcherType;     /*!< Watcher type */
+    dcgm_connection_id_t connectionId; /*!< Connection associated with this watcher */
 
     /* Operators */
-    bool operator==(const DcgmWatcher &other);
-    bool operator!=(const DcgmWatcher &other);
+    bool operator==(const DcgmWatcher &other) const;
+    bool operator!=(const DcgmWatcher &other) const;
 };
 
 

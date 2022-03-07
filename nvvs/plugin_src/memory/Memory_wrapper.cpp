@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,15 +32,16 @@ Memory::Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     TestParameters *tp = new TestParameters();
     tp->AddString(PS_RUN_IF_GOM_ENABLED, "True");
     tp->AddString(MEMORY_STR_IS_ALLOWED, "False");
+    tp->AddString(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE, "75.0");
     tp->AddString(MEMORY_L1TAG_STR_IS_ALLOWED, "False");
-    tp->AddDouble(MEMORY_L1TAG_STR_TEST_DURATION, 1.0, 0.0, 10800.0);
-    tp->AddDouble(MEMORY_L1TAG_STR_TEST_LOOPS, 0, 0, 1000000);
-    tp->AddDouble(MEMORY_L1TAG_STR_INNER_ITERATIONS, 1024, 1024, 16384);
-    tp->AddDouble(MEMORY_L1TAG_STR_ERROR_LOG_LEN, 8192, 8192, 32768);
+    tp->AddDouble(MEMORY_L1TAG_STR_TEST_DURATION, 1.0);
+    tp->AddDouble(MEMORY_L1TAG_STR_TEST_LOOPS, 0);
+    tp->AddDouble(MEMORY_L1TAG_STR_INNER_ITERATIONS, 1024);
+    tp->AddDouble(MEMORY_L1TAG_STR_ERROR_LOG_LEN, 8192);
     tp->AddString(MEMORY_L1TAG_STR_DUMP_MISCOMPARES, "True");
-    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 0.0, 0.0, 1024.0);
+    tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 0.0);
     tp->AddString(PS_LOGFILE, "stats_memory.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
 
     if (gpuInfo == nullptr)

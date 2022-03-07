@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 # limitations under the License.
 find_package(Cuda REQUIRED)
 find_package(Threads REQUIRED)
+find_package(fmt REQUIRED)
 
 macro(define_dcgmproftester cuda_version)
     set(dcgmproftester_exec dcgmproftester${cuda_version})
@@ -29,7 +30,7 @@ macro(define_dcgmproftester cuda_version)
             common_interface
             transport_objects
             sdk_nvml_essentials_objects
-            ${COMMON_DEPS}
+            fmt::fmt
     )
     target_include_directories(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
     target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)

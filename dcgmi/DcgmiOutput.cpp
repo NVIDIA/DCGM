@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -477,7 +477,7 @@ std::string DcgmiOutputColumns::overflowStr(DcgmiOutputBoxer &boxer) const
     {
         pboxer = &columncur->getSelector().run(boxer);
         subboxes.push_back(pboxer);
-        maxsize = DCGM_MAX(maxsize, pboxer->getOverflow().size());
+        maxsize = std::max(maxsize, pboxer->getOverflow().size());
     }
 
     for (size_t overflowLine = 0; overflowLine < maxsize; overflowLine++)

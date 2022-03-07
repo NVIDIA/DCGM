@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,12 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1;
@@ -112,6 +118,12 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL; // Previously unchecked
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL; // Previously unchecked
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL;

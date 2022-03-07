@@ -1,10 +1,13 @@
 # NVIDIA Data Center GPU Manager
 
-![dcgm](https://developer.nvidia.com/sites/default/files/akamai/datacenter/dcgm-icon.png)
+[![GitHub license](https://img.shields.io/github/license/NVIDIA/dcgm?style=flat-square)](https://raw.githubusercontent.com/NVIDIA/dcgm/master/LICENSE)
+=======================
 
 Data Center GPU Manager (DCGM) is a daemon that allows users to monitor NVIDIA
 data-center GPUs. You can find out more about DCGM by visiting [DCGM's official
 page](https://developer.nvidia.com/dcgm)
+
+![dcgm](https://developer.nvidia.com/sites/default/files/akamai/datacenter/dcgm-icon.png)
 
 ## Introduction
 

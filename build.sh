@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ fi
 if [[ -t 0 ]]; then
     DOCKER_ARGS=-it
 fi
-NO_PULL=${NO_PULL:-}
 
 ABSPATH=`realpath ${0}`
 DIR=$(dirname ${ABSPATH})
@@ -33,6 +32,8 @@ NPROC=${NPROC:-$(echo $([ -n "$(command -v nproc)" ] && echo $(nproc) || echo 4)
 
 STATIC_ANALYSIS_MODE_OFF=0
 STATIC_ANALYSIS_MODE_ON=1
+
+DCGM_SKIP_PYTHON_LINTING=${DCGM_SKIP_PYTHON_LINTING:-0}
 
 function die() {
     echo "$@" >&2
@@ -54,6 +55,10 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
         -n --no-tests       : Do not run build-time tests
            --no-install     : Do not perform local installation to the _out directory
            --sa-mode <mode> : Run static analysis on build. <mode> := 0|1
+           --address-san    : Turn on AddressSanitizer
+           --thread-san     : Turn on ThreadSanitizer
+           --ub-san         : Turn on UndefinedSanitizer
+           --leak-san       : Turn on LeakSanitizer
         -h --help           : This information
 
     Default options are: --release --arch amd64
@@ -65,11 +70,14 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
 
     The following ENV VARIABLES may be defined:
     DCGM_DOCKER_IMAGE   : Overrides docker image that will be used for build
-    NO_PULL             : Does not run 'docker pull' if NO_PULL=1
     NPROC               : Specifies number of parallel builds allowed. Equals to -jNPROC
+    DCGM_SKIP_PYTHON_LINTING : Set to 1 if you do not want running pylint after each build
 
-    Example: DCGM_DOCKER_IMAGE=dcgmbuild NO_PULL=1 $0 --debug
-        That will run debug build using local docker image 'dcgmbuild_amd64:latest'"
+    Note: Sanitizers (--*-san) will turn off static linking with libstdc++ and non-test packages
+          will be disabled as well. Testing packages will contain shared libstdc++ and corresponding
+          sanitizer libraries next to the DCGM executables in /usr/share/dcgm_tests/apps/amd64.
+          Please also reference https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html for
+          sanitizers compatibility."
 }
 
 function setup_build_env() {
@@ -107,6 +115,10 @@ function run_cmake() {
     local static_analysis=${1:-${STATIC_ANALYSIS_MODE_OFF}}; shift || true
     local makedeb=${1:-0}; shift || true
     local makerpm=${1:-0}; shift || true
+    local address_san=${1:-0}; shift || true
+    local thread_san=${1:-0}; shift || true
+    local ub_san=${1:-0}; shift || true
+    local leak_san=${1:-0}; shift || true
 
     if [[ ${static_analysis} -ge ${STATIC_ANALYSIS_MODE_ON} ]] && [[ ! -f /coverity/bin/cov-build ]]; then
         echo "[WARNING] Could not find Coverity. Disabling static analysis" >&2
@@ -128,7 +140,21 @@ function run_cmake() {
     if [[ ${runtests} -eq 0 ]]; then
         BUILD_TESTING="-DBUILD_TESTING=OFF"
     fi
-    local CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=${DIR}/cmake/${TARGET}-toolchain.cmake ${BUILD_TESTING} ${cmake_install_prefix:-} ${DIR} $@"
+    local CMAKE_COMMON_ARGS=""
+    if [[ ${address_san} -eq 1 ]]; then
+        CMAKE_COMMON_ARGS+="-DADDRESS_SANITIZER=ON "
+    fi
+    if [[ ${thread_san} -eq 1 ]]; then
+        CMAKE_COMMON_ARGS+="-DTHREAD_SANITIZER=ON "
+    fi
+    if [[ ${ub_san} -eq 1 ]]; then
+        CMAKE_COMMON_ARGS+="-DUB_SANITIZER=ON "
+    fi
+    if [[ ${leak_san} -eq 1 ]]; then
+        CMAKE_COMMON_ARGS+="-DLEAK_SANITIZER=ON "
+    fi
+    CMAKE_COMMON_ARGS+="-DCMAKE_TOOLCHAIN_FILE=${DIR}/cmake/${TARGET}-toolchain.cmake ${BUILD_TESTING} ${cmake_install_prefix:-}"
+    CMAKE_ARGS="${CMAKE_COMMON_ARGS} ${DIR} $@"
 
     local cov_emit_dir="$(pwd)/cov_emit_dir"
     local cov_config_args="--config ${cov_emit_dir}/config/coverity-config.xml"
@@ -158,8 +184,10 @@ function run_cmake() {
     cp compile_commands.json ${DIR}/
 
     if [[ ${runtests} -eq 1 ]]; then
+        if [[ ${DCGM_SKIP_PYTHON_LINTING:-0} == 0 ]]; then
         echo "Linting Python code"
         (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint --rcfile pylintrc $(find . -type f -a -iname '*.py'))
+        fi
         ctest --output-on-failure
     fi
 
@@ -169,18 +197,38 @@ function run_cmake() {
 
     if [[ ${packs} -eq 1 ]]; then
         cpack -G TGZ
+
+        pushd dcgm_config
+        cmake ${CMAKE_COMMON_ARGS} . "$@"
+        cpack -G TGZ
+        mv *.tar.gz ${output_dir}
+        popd
     fi
 
     if [[ ${makedeb} -eq 1 ]]; then
         cmake -DDCGM_PACKAGING=TRUE -DDCGM_PACKAGING_ENGINE=DEB -DDCGM_LIB_INSTALL_PREFIX=lib/${TARGET} ${CMAKE_ARGS}
         cmake --build . -j${NPROC}
         cpack -G DEB
+
+        pushd dcgm_config
+        cmake ${CMAKE_COMMON_ARGS} . "$@"
+        cmake --build . -j${NPROC}
+        cpack -G DEB
+        mv *.deb ${output_dir}
+        popd
     fi
 
     if [[ ${makerpm} -eq 1 ]]; then
         cmake -DDCGM_PACKAGING=TRUE -DDCGM_PACKAGING_ENGINE=RPM -DDCGM_LIB_INSTALL_PREFIX=lib64 ${CMAKE_ARGS}
         cmake --build . -j${NPROC}
         cpack -G RPM
+
+        pushd dcgm_config
+        cmake ${CMAKE_COMMON_ARGS} . "$@"
+        cmake --build . -j${NPROC}
+        cpack -G RPM
+        mv *.rpm ${output_dir}
+        popd
     fi
 
     popd
@@ -192,6 +240,7 @@ function install_lfs() {
         echo 'Installing git-lfs locally'
         git-lfs install --local
     fi
+    git lfs pull
 }
 
 function dcgm_build_within_docker() {
@@ -206,6 +255,10 @@ function dcgm_build_within_docker() {
     local noinstall=${1}; shift
     local makedeb=${1}; shift
     local makerpm=${1}; shift
+    local address_san=${1}; shift
+    local thread_san=${1}; shift
+    local ub_san=${1}; shift
+    local leak_san=${1}; shift
 
     case $( echo "${arch}" | awk '{print tolower($0)}' ) in
         amd64|x64|x86_64)
@@ -251,12 +304,13 @@ function dcgm_build_within_docker() {
         if [[ ${noinstall} -eq 0 ]]; then
             install_prefix=${cwd}/_out/${debug_suffix}
         fi
-        run_cmake ${outdir_debug} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} ${cmake_args} -DCMAKE_BUILD_TYPE=Debug "$@"
+        run_cmake ${outdir_debug} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} \
+            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${cmake_args} -DCMAKE_BUILD_TYPE=Debug "$@"
 
         find ${outdir_debug} -maxdepth 1 -iname '*.tar.gz' -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
         find ${outdir_debug} -maxdepth 1 -iname '*.deb'    -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
         find ${outdir_debug} -maxdepth 1 -iname '*.rpm'    -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
-        [ -f ${outdir_debug}/rt.props ] && cp -fv ${outdir_debug}/rt.props ${cwd}/_out/${debug_suffix}/
+        find ${outdir_debug} -maxdepth 1 -iname '*rt.props' -exec cp -fv {} ${cwd}/_out/${debug_suffix}/ \;
     fi
 
     if [[ ${release} -eq 1 ]]; then
@@ -264,12 +318,13 @@ function dcgm_build_within_docker() {
         if [[ ${noinstall} -eq 0 ]]; then
             install_prefix=${cwd}/_out/${release_suffix}
         fi
-        run_cmake ${outdir_release} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} ${cmake_args} -DCMAKE_BUILD_TYPE=Release "$@"
+        run_cmake ${outdir_release} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} \
+            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${cmake_args} -DCMAKE_BUILD_TYPE=Release "$@"
 
         find ${outdir_release} -maxdepth 1 -iname '*.tar.gz' -exec mv {} ${cwd}/_out/${release_suffix}/ \;
         find ${outdir_release} -maxdepth 1 -iname '*.deb'    -exec mv {} ${cwd}/_out/${release_suffix}/ \;
         find ${outdir_release} -maxdepth 1 -iname '*.rpm'    -exec mv {} ${cwd}/_out/${release_suffix}/ \;
-        [ -f ${outdir_release}/rt.props ] && cp -fv ${outdir_release}/rt.props ${cwd}/_out/${release_suffix}/
+        find ${outdir_release} -maxdepth 1 -iname '*rt.props' -exec cp -fv {} ${cwd}/_out/${release_suffix}/ \;
     fi
 }
 
@@ -285,6 +340,10 @@ function dcgm_build_using_docker() {
     local noinstall=${1}; shift
     local makedeb=${1}; shift
     local makerpm=${1}; shift
+    local address_san=${1}; shift
+    local thread_san=${1}; shift
+    local ub_san=${1}; shift
+    local leak_san=${1}; shift
 
     local static_analysis_mount=""
     if [[ ${static_analysis} -ge ${STATIC_ANALYSIS_MODE_ON} ]]; then
@@ -321,6 +380,18 @@ function dcgm_build_using_docker() {
     if [[ ${noinstall} -eq 1 ]]; then
         remote_args="${remote_args} --no-install"
     fi
+    if [[ ${address_san} -eq 1 ]]; then
+        remote_args="${remote_args} --address-san"
+    fi
+    if [[ ${thread_san} -eq 1 ]]; then
+        remote_args="${remote_args} --thread-san"
+    fi
+    if [[ ${ub_san} -eq 1 ]]; then
+        remote_args="${remote_args} --ub-san"
+    fi
+    if [[ ${leak_san} -eq 1 ]]; then
+        remote_args="${remote_args} --leak-san"
+    fi
 
     docker run --rm -u "$(id -u)":"$(id -g)" \
         ${DOCKER_ARGS:-} \
@@ -333,6 +404,7 @@ function dcgm_build_using_docker() {
         -e "NPROC=${NPROC}" \
         -e "BUILD_NUMBER=${BUILD_NUMBER:-}" \
         -e "PRINT_UNCOMMITTED_CHANGES=${PRINT_UNCOMMITTED_CHANGES:-}" \
+        -e "DCGM_SKIP_PYTHON_LINTING=${DCGM_SKIP_PYTHON_LINTING:-}" \
         ${dcgm_docker_image} \
         bash -c "set -ex; ./build.sh ${remote_args} -- $@"
 }
@@ -348,8 +420,12 @@ STATIC_ANALYSIS=${STATIC_ANALYSIS_MODE_OFF}
 MAKE_DEB=0
 MAKE_RPM=0
 NO_INSTALL=0
+ADDRESS_SANITIZER=0
+THREAD_SANITIZER=0
+UB_SANITIZER=0
+LEAK_SANITIZER=0
 
-LONGOPTS=debug,release,coverage,arch:,packages,clean,help,no-tests,sa-mode:,deb,rpm,no-install
+LONGOPTS=debug,release,coverage,arch:,packages,clean,help,no-tests,sa-mode:,deb,rpm,no-install,address-san,thread-san,ub-san,leak-san
 SHORTOPTS=dra:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -421,6 +497,26 @@ while true; do
             NO_INSTALL=1
             shift
             ;;
+        --address-san)
+            ADDRESS_SANITIZER=1
+            #CLEAN_BUILD=1
+            shift
+            ;;
+        --thread-san)
+            THREAD_SANITIZER=1
+            #CLEAN_BUILD=1
+            shift
+            ;;
+        --ub-san)
+            UB_SANITIZER=1
+            CLEAN_BUILD=1
+            shift
+            ;;
+        --leak-san)
+            LEAK_SANITIZER=1
+            CLEAN_BUILD=1
+            shift
+            ;;
         --)
             shift
             break
@@ -443,10 +539,12 @@ fi
 for arch in "${TARGET_ARCH[@]}"; do
     if [[ ${DCGM_BUILD_INSIDE_DOCKER:-} -eq 1 ]]; then
         dcgm_build_within_docker ${DEBUG_BUILD} ${RELEASE_BUILD} ${COVERAGE_BUILD} "${arch}" \
-            ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} "$@"
+            ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} \
+            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} "$@"
     else
         dcgm_build_using_docker ${DEBUG_BUILD} ${RELEASE_BUILD} ${COVERAGE_BUILD} "${arch}" \
-            ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} "$@"
+            ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} \
+            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} "$@"
     fi
 done
 

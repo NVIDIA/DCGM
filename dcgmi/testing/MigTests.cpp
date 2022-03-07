@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include "MigTestsHelper.hpp"
 
+#include <DcgmVariantHelper.hpp>
 #include <MigIdParser.hpp>
 #include <Query.h>
 
@@ -25,18 +26,6 @@
 #include <cstring>
 #include <random>
 
-namespace
-{
-template <class... Ts>
-struct overloaded : Ts...
-{
-    using Ts::operator()...;
-};
-
-template <class... Ts>
-overloaded(Ts...)->overloaded<Ts...>;
-
-} // namespace
 
 TEST_CASE("Parse CUDA Format MIG")
 {
@@ -44,6 +33,7 @@ TEST_CASE("Parse CUDA Format MIG")
      * Parse MIG-GPU-<GPU_0_UUID>/GI/CI
      */
 
+    using DcgmNs::overloaded;
     using DcgmNs::ParsedGpu;
     using DcgmNs::ParsedGpuCi;
     using DcgmNs::ParsedGpuI;
@@ -51,106 +41,88 @@ TEST_CASE("Parse CUDA Format MIG")
     using DcgmNs::ParseInstanceId;
 
     auto value = ParseInstanceId("MIG-GPU-aeab3757-56a6-7e30-3f7c-1f322454bde2/0/0");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &val) {
-                       REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                       REQUIRE(val.instanceId == 0);
-                       REQUIRE(val.computeInstanceId == 0);
-                   },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
+                              REQUIRE(val.instanceId == 0);
+                              REQUIRE(val.computeInstanceId == 0);
+                          }),
                value);
 
     value = ParseInstanceId("GPU-aeab3757-56a6-7e30-3f7c-1f322454bde2/1/0");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &val) {
-                       REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                       REQUIRE(val.instanceId == 1);
-                       REQUIRE(val.computeInstanceId == 0);
-                   },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
+                              REQUIRE(val.instanceId == 1);
+                              REQUIRE(val.computeInstanceId == 0);
+                          }),
                value);
 
     value = ParseInstanceId("MIG-aeab3757-56a6-7e30-3f7c-1f322454bde2/2/3");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &val) {
-                       REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                       REQUIRE(val.instanceId == 2);
-                       REQUIRE(val.computeInstanceId == 3);
-                   },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
+                              REQUIRE(val.instanceId == 2);
+                              REQUIRE(val.computeInstanceId == 3);
+                          }),
                value);
 
     value = ParseInstanceId("MIG-GPU-aeab3757-56a6-7e30-3f7c-1f322454bde2/4");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &val) {
-                       REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                       REQUIRE(val.instanceId == 4);
-                   },
-                   [](ParsedGpuCi const &) { REQUIRE(false); },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &val) {
+                              REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
+                              REQUIRE(val.instanceId == 4);
+                          },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 
     value = ParseInstanceId("MIG-GPU-aeab3757-56a6-7e30-3f7c-1f322454bde2");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2"); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &) { REQUIRE(false); },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2"); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 
     value = ParseInstanceId("MIG-aeab3757-56a6-7e30-3f7c-1f322454bde2/-1/3");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(true); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &) { REQUIRE(false); },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(true); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 
     value = ParseInstanceId("0/1/0");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &val) {
-                       REQUIRE(val.gpuUuid == "0");
-                       REQUIRE(val.instanceId == 1);
-                       REQUIRE(val.computeInstanceId == 0);
-                   },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == "0");
+                              REQUIRE(val.instanceId == 1);
+                              REQUIRE(val.computeInstanceId == 0);
+                          }),
                value);
 
     value = ParseInstanceId("0/1");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &) { REQUIRE(false); },
-                   [](ParsedGpuI const &val) {
-                       REQUIRE(val.gpuUuid == "0");
-                       REQUIRE(val.instanceId == 1);
-                   },
-                   [](ParsedGpuCi const &) { REQUIRE(false); },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &val) {
+                              REQUIRE(val.gpuUuid == "0");
+                              REQUIRE(val.instanceId == 1);
+                          },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 
     value = ParseInstanceId("0");
-    std::visit(overloaded {
-                   [](ParsedUnknown const &) { REQUIRE(false); },
-                   [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == "0"); },
-                   [](ParsedGpuI const &) { REQUIRE(false); },
-                   [](ParsedGpuCi const &) { REQUIRE(false); },
-               },
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == "0"); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 }
 

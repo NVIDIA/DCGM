@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ set(CTEST_USE_LAUNCHERS 1)
 find_package(Catch2 REQUIRED)
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -50,6 +51,7 @@ if (BUILD_TESTING)
         PRIVATE
             nvvs_without_main_objects
             Catch2::Catch2
+            fmt::fmt
     )
     target_link_libraries(nvvscoretests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
     target_link_libraries(nvvscoretests PRIVATE ${CMAKE_THREAD_LIBS_INIT})

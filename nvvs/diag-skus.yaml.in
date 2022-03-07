@@ -1,0 +1,2473 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# DO NOT MODIFY
+# =============
+#
+# This file is part of the DCGM tools package. If you would like modify the DCGM
+# Diagnostic configuration, use `dcgmi diag -c <config_file>` to override the
+# contents of this file
+
+version: "@CMAKE_PROJECT_VERSION@"
+spec: dcgm-diag-v1
+skus:
+  # Tesla K8
+  - name: Tesla K8
+    id: 1194
+    targeted_power:
+      is_allowed: true
+      target_power: 75.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 330.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 330.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K80 ("Stella Duo" Gemini)
+  - name: Tesla K80
+    id: 102d
+    targeted_power:
+      is_allowed: true
+      target_power: 148.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 950.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 950.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # DGX Station
+  - name: DGX Station
+    id: 15fa
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # GP100 SKU 200 - (based on
+  - name: GP100 SKU 200
+    id: 15fb
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # GP100 SKU 201 - (based on
+  - name: GP100 SKU 201
+    id: 15fc
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 700.0
+      target_power: 299.0
+      ops_per_requeue: 16.0
+      # tp->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 8.0, 1.0, 48.0); //Can't achieve target without higher concurrency
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # COPIED from -- GP100 SKU 203 - DB2 HBM2
+  # Tesla P100-PCIE-16GB
+  # Serial Number : PH400-C01-P0203
+  - name: P100-PCIE-16GB
+    id: 15f8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 400.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P100-PCIE-12GB
+  # Serial Number : PH400 SKU 202
+  - name: Tesla P100-PCIE-12GB
+    id: 15f7
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 400.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # GP100 SKU 15ff
+  - name: GP100 SKU 15ff
+    id: 15ff
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P100-SXM2-16GB
+  - name: Tesla P100-SXM2-16GB
+    id: 15f9
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla SKU 102f
+  - name: Tesla SKU 102f
+    id: 102f
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 1000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K40d
+  - name: Tesla K40d
+    id: 102e
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 200.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 200.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K40m
+  - name: Tesla K40m
+    id: 1023
+    targeted_power:
+      is_allowed: true
+      target_power: 200.0
+      use_dgemm: true
+      ops_per_requeue: 4.0
+      # Change max if TP_MAX_DIMENSION changes in TargetedPower
+      starting_matrix_dim: 600.0
+      max_graphics_clock: 811.0
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 1300.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 200.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K40c
+  - name: Tesla K40c
+    id: 1024
+    targeted_power:
+      is_allowed: true
+      target_power: 134.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 1300.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 1300
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K40t SKU 102A
+  - name: Tesla K40t SKU 102A
+    id: 102a
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K40s - values copied from Tesla K40c
+  - name: Tesla K40s
+    id: 1029
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 550.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 550.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K20X - values copied from Tesla K20xm
+  - name: Tesla K20X
+    id: 101e
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K20Xm
+  - name: Tesla K20Xm
+    id: 1021
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K20c - values copied from Tesla K20xm (except power)
+  - name: Tesla K20c
+    id: 1022
+    targeted_power:
+      is_allowed: true
+      target_power: 224.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K20m - values copied from Tesla K20xm
+  - name: Tesla K20m
+    id: 1028
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K20X
+  - name: Tesla K20X
+    id: 1020
+    targeted_power:
+      is_allowed: true
+      target_power: 234.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 900.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 900.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla K10
+  - name: Tesla K10
+    id: 118f
+    targeted_power:
+      is_allowed: true
+      target_power: 116.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 700.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 700.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Quadro M6000 //Not supported officially for NVVS
+  - name: Quadro M6000
+    id: 17f0
+    targeted_power:
+      is_allowed: true
+      target_power: 249.0
+      starting_matrix_dim: 550.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 1000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 4000.0
+      use_dgemm: false
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 200000.0
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+  # Quadro M5000
+  - name: Quadro M5000
+    id: 13f0
+    targeted_power:
+      is_allowed: true
+      target_power: 149.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 1000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 4000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # GeForce GTX TITAN X
+  - name: GeForce GTX TITAN X
+    id: 17c2
+    targeted_power:
+      is_allowed: true
+      target_power: 249.0
+      use_dgemm: false
+      # Can't achieve target without higher concurrency
+      cuda_streams_per_gpu: 8.0
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 1000.0
+      max_memory_clock: 3301.0
+      max_graphics_clock: 0.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2000.0
+      use_dgemm: false
+      max_memory_clock: 3301.0
+      max_graphics_clock: 0.0
+    pcie:
+      max_memory_clock: 3301.0
+      max_graphics_clock: 0.0
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla M60
+  - name: Tesla M60
+    id: 13f2
+    targeted_power:
+      is_allowed: true
+      target_power: 161.0
+      ops_per_requeue: 4.0
+      readjust_interval: 3.0
+      target_movavg_min_ratio: 0.9
+      target_movavg_max_ratio: 1.1
+      use_dgemm: false
+      # tp->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 8.0, 1.0, 48.0); //Can't achieve target without higher concurrency
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 2500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla M6 (Copied from Tesla M60)
+  - name: Tesla M6
+    id: 13f3
+    targeted_power:
+      is_allowed: true
+      target_power: 161.0
+      max_graphics_clock: 1130.0
+      ops_per_requeue: 4.0
+      readjust_interval: 3.0
+      target_movavg_min_ratio: 0.9
+      target_movavg_max_ratio: 1.1
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 2500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla M40
+  - name: Tesla M40
+    id: 17fd
+    targeted_power:
+      is_allowed: true
+      target_power: 249.0
+      max_graphics_clock: 1113.0
+      ops_per_requeue: 4.0
+      readjust_interval: 3.0
+      target_movavg_min_ratio: 0.9
+      target_movavg_max_ratio: 1.1
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 2500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla M4
+  - name: Tesla M4
+    id: 1431
+    targeted_power:
+      is_allowed: true
+      target_power: 74.0
+      max_graphics_clock: 1113.0
+      ops_per_requeue: 4.0
+      readjust_interval: 3.0
+      target_movavg_min_ratio: 0.9
+      target_movavg_max_ratio: 1.1
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 2500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla M10
+  # Mostly copied from Tesla M40
+  - name: Tesla M10
+    id: 13bd
+    targeted_power:
+      is_allowed: true
+      target_power: 53.0
+      max_graphics_clock: 1032.0
+      ops_per_requeue: 4.0
+      readjust_interval: 3.0
+      target_movavg_min_ratio: 0.9
+      target_movavg_max_ratio: 1.1
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 2500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 2500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla GV100 DGX1-V
+  # Serial Number: PG503-A00-P0447
+  - name: Tesla GV100 DGX1-V
+    id: 1dbd
+    targeted_power:
+      is_allowed: true
+      max_graphics_clock: 1140.0
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla GV100 DGX Station - Part number 692-2G500-0201-300
+  - name: Tesla GV100 DGX Station
+    id: 1db2
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3350.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3000.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla GV100 SXM2-32GB SKU 895
+  - name: Tesla GV100 SXM2-32GB SKU 895
+    id: 1db1
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3350.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3500.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla GV100 SXM2-16GB SKU 890
+  - name: Tesla GV100 SXM2-16GB SKU 890
+    id: 1db0
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3500.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla GV100 PCIE-16GB SKU 893
+  - name: Tesla GV100 PCIE-16GB SKU 893
+    id: 1db4
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3500.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla V100 PCI-E-32GB (Passive) - PG500 SKU 202
+  - name: Tesla V100 PCI-E-32GB (Passive)
+    id: 1db6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3000.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3500.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P40
+  - name: Tesla P40
+    id: 1b38
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 249.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 3500.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 6000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P10
+  # "Same as Tesla P40 (PG610 SKU200 GP102-895) but with a lower power target (150W vs 250W))"
+  - name: Tesla P10
+    id: 1b39
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 149.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # P40 perf 3500 adjusted for 250->150 TDP
+      target_stress: 2100.0
+    sm_stress:
+      is_allowed: true
+      # P40 perf 6000 adjusted for 250->150 TDP
+      target_stress: 3600.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P6
+  - name: Tesla P6
+    id: 1bb4
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 3250.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3750.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 114263.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla P4
+  - name: Tesla P4
+    id: 1bb3
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 50.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 3250.0
+    sm_stress:
+      is_allowed: true
+      target_stress: 3750.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory_bandwidth:
+      is_allowed: true
+      # 1273750 = .75 * 165000. Was higher previously, see http://nvbugs/200480825 for details.
+      # Lowered to 123750 as part of standardizing at 75%
+      minimum_bandwidth: 123750.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla V100-HS
+  - name: Tesla V100-HS
+    id: 1db3
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 149.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 2250.0
+    sm_stress:
+      is_allowed: true
+      # V100 has a DGEMM performance of 7000 and max power level of 250, so
+      # we'll set this to 7000 * .75 (to back off) * 3/5 (relative power ratio)
+      target_stress: 3150.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+  # Tesla V100 32GB
+  - name: Tesla V100 32GB
+    id: 1db5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 4250.0
+    sm_stress:
+      is_allowed: true
+      # V100 has a DGEMM performance of 7000 and max power level of 250, close enough
+      # to 300 given Max Q, so we'll set this to 5250 = 7000 * .75 to backs off to 75%.
+      target_stress: 5250.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+  # Tesla V100 DGX-Station 32GB
+  - name: Tesla V100 DGX-Station 32GB
+    id: 1db7
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 299.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 4250.0
+    sm_stress:
+      is_allowed: true
+      # V100 has a DGEMM performance of 7000 and max power level of 250, close enough
+      # to 300 given Max Q, so we'll set this to 5250 = 7000 * .75 to backs off to 75%.
+      target_stress: 5250.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      minimum_bandwidth: 607500.0
+    diagnostic:
+      is_allowed: true
+  # Tesla V100 DGX-Station 32GB
+  - name: Tesla V100 DGX-Station 32GB
+    id: 1db8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 349.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 4250.0
+    sm_stress:
+      is_allowed: true
+      # V100 has a DGEMM performance of 7000 and max power level of 250, close enough
+      # to 350 given Max Q, so we'll set this to 5250 = 7000 * .75 to backs off to 75%.
+      target_stress: 5250.0
+      use_dgemm: true
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1_is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Datasheet states 900 as the max. 900 * 0.75 = 675
+      minimum_bandwidth: 675000.0
+    diagnostic:
+      is_allowed: true
+  # Tesla T4 - TU104_PG183_SKU200
+  - name: Tesla T4 - TU104_PG183_SKU200
+    id: 1eb8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 550.0
+      target_power: 65.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 3150.0
+    sm_stress:
+      is_allowed: true
+      # T4 has an SGEMM performance of 5500 * .75 backs it off to 4125
+      target_stress: 4125.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Spec sheet says 672000, but experimentally we get about 244000 MB/s so we'll go with .75 of that
+      # Update value when bug 200480825 is fully root caused and resolved
+      minimum_bandwidth: 183000.0
+  # Tesla T40 - TU102-895
+  - name: Tesla T40 - TU102-895
+    id: 1e38
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 249.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 5250.0
+    sm_stress:
+      is_allowed: true
+      # T40 has an SGEMM performance of 14746; multiply by .85 to get 12534
+      target_stress: 12534.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Spec sheet says 448000, multiply by .75 to 336000
+      minimum_bandwidth: 336000.0
+  # Tesla T10 - PG150 SKU 220
+  - name: Tesla T10
+    id: 1e37
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 149.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from SMSTRESS_STR_TARGET_PERF
+      target_stress: 7295.0
+    sm_stress:
+      is_allowed: true
+      # T10 has an SGEMM performance of 8583 in dcgmproftester -t 1007; multiply by .85 to get 7295
+      target_stress: 7295.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Got 304500 GB/s with dcgmproftester -t 1005, multiply by .75 to 228375
+      minimum_bandwidth: 228375.0
+  # V100S
+  - name: V100S
+    id: 1df6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 249.0
+      temperature_max: 87.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 3250.0
+    sm_stress:
+      is_allowed: true
+      # V100S has a DGEMM performance of 7000; multiply by .75 to get 5250
+      target_stress: 5250.0
+      use_dgemm: true
+      temperature_max: 87.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Spec sheet says 900000, multiply by .75 to 675000
+      minimum_bandwidth: 675000
+  # RTX 8000 and 6000 (Quadro)
+  # This whitelist covers both because they use the same PCI Device Id, so the settings are the
+  # lowest value between the two
+  - name: RTX 8000 and 6000 (Quadro)
+    id: 1e30
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 259.0
+      temperature_max: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      target_stress: 3250.0
+    sm_stress:
+      is_allowed: true
+      # RTX 6000 and 8000 had a SGEMM performance of 13000 in dcgmproftester -t 1007; multiply by .75 to get 9750
+      target_stress: 9750.0
+      use_dgemm: false
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 for the 8000 says 553700, multiply by .75 to 415275 (6000 was 672100, but we take
+      # the lower value)
+      minimum_bandwidth: 415275.0
+  # GA100 SKU 20b8
+  - name: GA100 SKU 20b8
+    id: 20b8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 299.0
+      temperature_max: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      use_dgemm: false
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Measured ~1566600. Multiple by .75 to get 1174950
+      minimum_bandwidth: 1174950.0
+  # GA100 SKU 20bf
+  - name: GA100 SKU 20bf
+    id: 20bf
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 199.0
+      temperature_max: 89.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 5000.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester measured -t 1006 at 10900; multiply by .75 to get 8175
+      target_stress: 8175.0
+      use_dgemm: true
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # Measured ~1495000. Multiple by .75 to get 1121250
+      minimum_bandwidth: 1121250.0
+  # GA100 20b0
+  - name: GA100 20b0
+    id: 20b0
+    targeted_power:
+      # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 399.0
+      temperature_max: 89.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      target_stress: 5000.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1006 measures at 18300, multiply by .75 to get 13725
+      target_stress: 13725.0
+      use_dgemm: true
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~1830000. Multiply by .75 to get 1372500
+      minimum_bandwidth: 137500.0
+  # RTX 6000/8000 passive SKUs
+  - name: RTX 6000/8000 passive SKUs
+    id: 1e78
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 249.0
+      temperature_max: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 9450.0
+    sm_stress:
+      is_allowed: true
+      # RTX 6000 and 8000 passive had a SGEMM performance of 12600 in dcgmproftester -t 1007; multiply by .75 to get 9450
+      target_stress: 9450.0
+      use_dgemm: false
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 for the 8000 says 480300, multiply by .75 to 360225
+      minimum_bandwidth: 360225.0
+  # A100 PCIe
+  - name: A100 PCIe
+    id: 20f1
+    targeted_power:
+      # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      temperature_max: 92.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      # Copied from sm perf target
+      target_stress: 5963.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1006 measures at 7950, multiply by .75 to get 5963
+      target_stress: 5963.0
+      use_dgemm: true
+      temperature_max: 92.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~1293000. Multiply by .75 to get 969750
+      minimum_bandwidth: 969750.0
+  # A100-SXM4-80GB
+  - name: A100-SXM4-80GB
+    id: 20b2
+    targeted_power:
+      # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 399.0
+      temperature_max: 85.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      # Copied from sm perf target
+      target_stress: 6975.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1006 measures at ~9300, multiply by .75 to get 6975
+      target_stress: 6975.0
+      use_dgemm: true
+      temperature_max: 92.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~1564000 GiB/sec. Multiply by .75 to get 1173000
+      minimum_bandwidth: 1173000.0
+  # A40
+  - name: A40
+    id: 2235
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      temperature_max: 88.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 14250.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1007 measures at ~19000, multiply by .75 to get 14250
+      target_stress: 14250.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 88.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~564900 GiB/sec. Multiply by .75 to get 423675
+      minimum_bandwidth: 423675.0
+  # A16 - PG171 SKU200
+  - name: A16 - PG171 SKU200
+    id: 25b6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 62.0
+      temperature_max: 95.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 1687.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1007 measures at ~2250, multiply by .75 to get 1687
+      target_stress: 1687.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 95.0
+    pcie:
+      is_allowed: true
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~180000 GiB/sec. Multiply by .75 to get 135000
+      minimum_bandwidth: 135000.0
+  # A10c/noc - PG133 SKU215
+  - name: A10c/noc - PG133 SKU215
+    id: 22361482
+    targeted_power:
+      # avoid collision with PRIS TS1 by appending ssid
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 149.0
+      temperature_max: 90.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 6075.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1007 measures at ~8100, multiply by .75 to get 6075
+      target_stress: 6075.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 90.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~640700 GiB/sec. Multiply by .75 to get 480525
+      minimum_bandwidth: 480525.0
+  # A10g - PG133 SKU210
+  - name: A10g - PG133 SKU210
+    id: 2237
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      temperature_max: 95.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 12750.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1007 measures at ~17000, multiply by .75 to get 12750
+      target_stress: 12750.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 95.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~483600 GiB/sec. Multiply by .75 to get 362700
+      minimum_bandwidth: 362700.0
+  # T4G
+  - name: T4G
+    id: 1eb4
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 69.0
+      temperature_max: 85.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 2850.0
+    sm_stress:
+      is_allowed: true
+      # proftester -t 1007 measures at ~3800, multiply by .75 to get 2850
+      target_stress: 2850.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 85.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 4096.0
+    memory_bandwidth:
+      is_allowed: true
+      # proftester -t 1005 shows ~243500 GiB/sec. Multiply by .75 to get ~182600
+      minimum_bandwidth: 182600.0
+  # A30
+  - name: A30
+    id: 20b7
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 194.0
+      temperature_max: 92.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 7050.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 9400. 9400 * 0.75 = 7050
+      target_stress: 7050.5
+      matrix_dim: 1024.
+      use_dgemm: false
+      temperature_max: 92.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~780000 MiB/sec. Multiply by .75 to get 585000
+      minimum_bandwidth: 585000.0
+  # Nvidia Turing Auto Module
+  - name: Nvidia Turing Auto Module
+    id: 1eba
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 188.0
+      temperature_max: 105.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 5625.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 7500. 7500 * 0.75 = 5625
+      target_stress: 5625.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 105.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 4096.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~298900 MiB/sec. Multiply by .75 to get 224000
+      minimum_bandwidth: 224000.0
+  # A6000 PCIe
+  - name: A6000 PCIe
+    id: 2230
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      temperature_max: 93.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 11475.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 15300. 15300 * 0.75 = 11475
+      target_stress: 11475.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 93.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 4096.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~674500 MiB/sec. Multiply by .75 to get ~506000
+      minimum_bandwidth: 506000.0
+  # PG506-230
+  - id: 20b6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 194.0
+      temperature_max: 82.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 15750.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 21000. 21000 * 0.75 = 15750
+      target_stress: 15750.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 82.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1829800 MiB/sec. Multiply by .75 to get 1372350
+      minimum_bandwidth: 1372350.0
+  # EGX BF-2 A100
+  - name: EGX BF-2 A100
+    id: 2236149d
+    targeted_power:
+      # Avoid collision with a10c by appending ssid
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 224.0
+      temperature_max: 91.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 8100.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 10800. 10800 * 0.75 = 8100
+      target_stress: 8100.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 91.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~485000 MiB/sec. Multiply by .75 to get 363750
+      minimum_bandwidth: 363750.0
+  # A100-20F0
+  - name: A100-20F0
+    id: 20f0
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 400.0
+      temperature_max: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 13200.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 17600. 17600 * 0.75 = 13200
+      target_stress: 13200.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1187000 MiB/sec. Multiply by .75 to get 890250
+      minimum_bandwidth: 890250.0
+  # A100-20F2 80GB
+  - name: A100-20F2 80GB
+    id: 20f2
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 400.0
+      temperature_max: 89.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 13200.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 17600. 17600 * 0.75 = 13200
+      target_stress: 13200.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 89.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~ 1400000 MiB/sec. Multiply by .75 to get 1050000
+      minimum_bandwidth: 1050000.0
+  # NVIDIA Ampere Auto Module
+  - name: NVIDIA Ampere Auto Module
+    id: 20bb
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 374.0
+      temperature_max: 108.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 9975.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 =~ 13300. 13300 * 0.75 = 9975
+      target_stress: 9975.0
+      matrix_dim: 1024.0
+      use_dgemm: false
+      temperature_max: 108.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 4.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 4.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      use_doubles: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 1171400 MiB/sec. Multiply by .75 to get ~875000
+      minimum_bandwidth: 875000.0
+  # A100-20b5
+  - name: A100-20b5
+    id: 20b5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      temperature_max: 89.0
+      use_dgemm: true
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: true
+      # Copied from sm stress target
+      target_stress: 13425.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at 17950, multiply by .75 to get 13425
+      target_stress: 13425.0
+      use_dgemm: true
+      temperature_max: 92.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1495000. Multiply by .75 to get 1121250
+      minimum_bandwidth: 1121250.0
+  # A5000
+  - name: A5000
+    id: 2231
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 229.0
+      temperature_max: 90.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 9825.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~13100, multiply by .75 to get 9825
+      target_stress: 9825.0
+      use_dgemm: false
+      temperature_max: 90.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~676600. Multiply by .75 to get ~507500
+      minimum_bandwidth: 507500.0
+  # A4000
+  - name: A4000
+    id: 24b0
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 139.0
+      temperature_max: 98.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 7500.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~10100, multiply by .75 to get ~7500
+      target_stress: 7500.0
+      use_dgemm: false
+      temperature_max: 98.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~387700. Multiply by .75 to get ~290750
+      minimum_bandwidth: 290750.0
+  # PG50x-216
+  - id: 1df2
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 300.0
+      temperature_max: 88.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 8250.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~11000, multiply by .75 to get ~8250
+      target_stress: 8250.0
+      use_dgemm: false
+      temperature_max: 88.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~951000. Multiply by .75 to get ~713250
+      minimum_bandwidth: 713250.0
+  # P1004
+  - id: 20b9
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 230.0
+      temperature_max: 85.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 7090.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~9450, multiply by .75 to get ~7090
+      target_stress: 7090.0
+      use_dgemm: false
+      temperature_max: 85.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~931000. Multiply by .75 to get ~698250
+      minimum_bandwidth: 698250.0
+  # Nvidia A2
+  - name: Nvidia A2
+    id: 25b6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 70.0
+      temperature_max: 88.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 1826.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~2435, multiply by .75 to get ~1826
+      target_stress: 1826.0
+      use_dgemm: false
+      temperature_max: 88.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~164300. Multiply by .75 to get ~123225
+      minimum_bandwidth: 123225
+  - name: PG506-242
+    id: 20b314a7
+    targeted_power:
+      starting_matrix_dim: 1024.0
+      target_power: 499.0
+      temperature_max: 85.0
+      use_dgemm: true
+    targeted_stress:
+      use_dgemm: true
+      # Copied from sm stress target
+      target_stress: 7875.0
+    sm_stress:
+      # dcgmproftester -t 1007 measures at ~10500, multiply by .75 to get ~7875
+      target_stress: 7875.0
+      use_dgemm: true
+      temperature_max: 85.0
+    pcie:
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+    memory:
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      # dcgmproftester -t 1005 shows ~1315000. Multiply by .75 to get ~986250
+      minimum_bandwidth: 986250
+  - name: PG506-243
+    id: 20b314a8
+    targeted_power:
+      starting_matrix_dim: 1024.0
+      target_power: 549.0
+      temperature_max: 85.0
+      use_dgemm: true
+    targeted_stress:
+      use_dgemm: true
+      # Copied from sm stress target
+      target_stress: 7875.0
+    sm_stress:
+      # dcgmproftester -t 1007 measures at ~10500, multiply by .75 to get ~7875
+      target_stress: 7875.0
+      use_dgemm: true
+      temperature_max: 85.0
+    pcie:
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+    memory:
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      # dcgmproftester -t 1005 shows ~1315000. Multiply by .75 to get ~986250
+      minimum_bandwidth: 986250
+  # Nvidia A2000_12GB
+  - name: Nvidia A2000_12GB
+    id: 2571
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 70.0
+      temperature_max: 100.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 2775.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~3700, multiply by .75 to get ~2775
+      target_stress: 2775.0
+      use_dgemm: false
+      temperature_max: 100.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~256000. Multiply by .75 to get ~192000
+      minimum_bandwidth: 192000
+  # Nvidia A2000_6GB
+  - name: Nvidia A2000_6GB
+    id: 2531
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 70.0
+      temperature_max: 100.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 2933.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~3911, multiply by .75 to get ~2775
+      target_stress: 2933.0
+      use_dgemm: false
+      temperature_max: 100.0
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~257000. Multiply by .75 to get ~192000
+      minimum_bandwidth: 192750
+  # Nvidia A10M
+  - name: Nvidia A10M
+    id: 2238
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 150.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 6825
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~9100, multiply by .75 to get ~6825
+      target_stress: 6825.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~415000. Multiply by .75 to get ~311250
+      minimum_bandwidth: 311250

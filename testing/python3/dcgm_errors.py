@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,10 +100,15 @@ DCGM_FR_EMPTY_GPU_LIST                      = 82 # No GPU information given to p
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS        = 83 # Pending page retirements due to a DBE
 DCGM_FR_UNCORRECTABLE_ROW_REMAP             = 84 # Uncorrectable row remapping
 DCGM_FR_PENDING_ROW_REMAP                   = 85 # Row remapping is pending
-DCGM_FR_ERROR_SENTINEL                      = 86 # MUST BE THE LAST ERROR CODE
+DCGM_FR_BROKEN_P2P_MEMORY_DEVICE            = 86 # P2P copy test detected an error writing to this GPU
+DCGM_FR_BROKEN_P2P_WRITER_DEVICE            = 87 # P2P copy test detected an error writing from this GPU
+DCGM_FR_ERROR_SENTINEL                      = 88 # MUST BE THE LAST ERROR CODE
 
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
+DEBUG_COOLING_MSG = "Verify that the cooling on this machine is functional, including external, thermal "\
+                    "material interface, fans, and any other components."
+BUG_REPORT_MSG = "Please capture an nvidia-bug-report and send it to NVIDIA."
 
 # Define DCGM error priorities
 DCGM_ERROR_MONITOR     = 0 # Can perform workload, but needs to be monitored.
@@ -250,6 +255,8 @@ DCGM_FR_EMPTY_GPU_LIST_MSG             = "No valid GPUs passed to plugin"
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG  = "Pending page retirements together with a DBE were detected on GPU %u."
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG   = "GPU %u has uncorrectable row remappings"
 DCGM_FR_PENDING_ROW_REMAP_MSG         = "GPU %u has pending row remappings"
+DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -266,7 +273,7 @@ DCGM_FR_PENDING_PAGE_RETIREMENTS_NEXT = "If volatile double bit errors exist, dr
 DCGM_FR_RETIRED_PAGES_LIMIT_NEXT      = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_RETIRED_PAGES_DBE_LIMIT_NEXT  = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_CORRUPT_INFOROM_NEXT          = "Flash the InfoROM to clear this corruption."
-DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   = "Check the cooling on this machine."
+DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   = DEBUG_COOLING_MSG
 DCGM_FR_POWER_UNREADABLE_NEXT         = ""
 DCGM_FR_CLOCK_THROTTLE_POWER_NEXT     = "Monitor the power conditions. This GPU can still perform workload."
 DCGM_FR_NVLINK_ERROR_THRESHOLD_NEXT   = TRIAGE_RUN_FIELD_DIAG_MSG
@@ -304,10 +311,10 @@ DCGM_FR_FIELD_THRESHOLD_DBL_NEXT      = ""
 DCGM_FR_UNSUPPORTED_FIELD_TYPE_NEXT   = ""
 DCGM_FR_FIELD_THRESHOLD_TS_NEXT       = ""
 DCGM_FR_FIELD_THRESHOLD_TS_DBL_NEXT   = ""
-DCGM_FR_THERMAL_VIOLATIONS_NEXT       = ""
-DCGM_FR_THERMAL_VIOLATIONS_TS_NEXT    = ""
+DCGM_FR_THERMAL_VIOLATIONS_NEXT       = DEBUG_COOLING_MSG
+DCGM_FR_THERMAL_VIOLATIONS_TS_NEXT    = DEBUG_COOLING_MSG
 DCGM_FR_TEMP_VIOLATION_NEXT           = "Verify that the user-specified temperature maximum is set "\
-                                                "correctly. If it is, check the cooling for this GPU and node."
+                                                "correctly. If it is, %s" % DEBUG_COOLING_MSG
 DCGM_FR_THROTTLING_VIOLATION_NEXT     = ""
 DCGM_FR_INTERNAL_NEXT                 = ""
 DCGM_FR_PCIE_GENERATION_NEXT          = ""
@@ -357,6 +364,8 @@ DCGM_FR_EMPTY_GPU_LIST_NEXT           = ""
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT  = "Drain the GPU and reset it or reboot the node to resolve this issue."
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT  = ""
 DCGM_FR_PENDING_ROW_REMAP_NEXT        = ""
+DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT = BUG_REPORT_MSG
+DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

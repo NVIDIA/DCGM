@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -823,15 +823,6 @@ DCGM_CASSERT(dcgmVersionInfo_version == (long)0x2000204, 1);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version1 == (long)0x01000048, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
-
-/* Min and Max macros */
-#ifndef DCGM_MIN
-#define DCGM_MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef DCGM_MAX
-#define DCGM_MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

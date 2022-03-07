@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ std::string AddCublasError(Plugin *p,
     return AddAPIError(p, callName, cublasGetErrorString(cubSt), gpuId, bytes, isGpuSpecific);
 }
 
-inline const char *GetAdditionalCuInitDetail(CUresult cuSt)
+const char *GetAdditionalCuInitDetail(CUresult cuSt)
 {
     if (cuSt == CUDA_ERROR_NOT_INITIALIZED)
     {

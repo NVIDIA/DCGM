@@ -102,6 +102,7 @@
 ./usr/local/dcgm/bindings/python3/dcgm_errors.py
 ./usr/local/dcgm/bindings/python3/dcgm_field_helpers.py
 ./usr/local/dcgm/bindings/python3/dcgm_fields.py
+./usr/local/dcgm/bindings/python3/dcgm_fields_collectd.py
 ./usr/local/dcgm/bindings/python3/dcgm_fluentd.py
 ./usr/local/dcgm/bindings/python3/dcgm_prometheus.py
 ./usr/local/dcgm/bindings/python3/dcgm_structs.py
@@ -140,6 +141,10 @@
 ./usr/local/dcgm/sdk_samples/scripts/readme.txt
 ./usr/local/dcgm/third-party-notices.txt
 ./usr/share/
+./usr/share/dcgm/
+./usr/share/dcgm/collectd/
+./usr/share/dcgm/collectd/dcgm-collectd-example.conf
+./usr/share/dcgm/collectd/types.db
 ./usr/share/doc/
 ./usr/share/doc/datacenter-gpu-manager/
 ./usr/share/doc/datacenter-gpu-manager/copyright

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef _NVVS_NVVS_Whitelist_H
-#define _NVVS_NVVS_Whitelist_H
+#pragma once
 
+#include "ConfigFileParser_v2.h"
 #include "Gpu.h"
 #include "NvvsCommon.h"
 #include "TestParameters.h"
@@ -25,15 +25,17 @@
 #include <string>
 #include <vector>
 
+namespace DcgmNs::Nvvs
+{
 class Whitelist
 {
     /***************************PUBLIC***********************************/
 public:
-    Whitelist();
+    Whitelist(const ConfigFileParser_v2 &configFileParser);
     ~Whitelist();
 
     // getters
-    bool isWhitelisted(std::string deviceId);
+    bool isWhitelisted(const std::string deviceId, const std::string ssid = "");
     void getDefaultsByDeviceId(const std::string &testName, const std::string &deviceId, TestParameters *tp);
 
     /****************************************************************/
@@ -56,6 +58,10 @@ protected:
 private:
     void FillMap();
 
+    /* YAML config parser
+     */
+    const ConfigFileParser_v2 &m_configFileParser;
+
     /* Per-hardware whitelist parameters database keyed by deviceId and
      * then plugin name */
     std::map<std::string, std::map<std::string, TestParameters *>> m_featureDb;
@@ -64,5 +70,4 @@ private:
     std::set<std::string> m_globalChanges;
 };
 
-
-#endif // _NVVS_NVVS_Whitelist_H
+} // namespace DcgmNs::Nvvs

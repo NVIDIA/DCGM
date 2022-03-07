@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@
 bool incompatibleGpus       = false;
 bool migEnabled             = false;
 unsigned int hierarchyCount = 4;
+
+using namespace DcgmNs::Nvvs;
 
 class WrapperNvidiaValidationSuite : protected NvidiaValidationSuite
 {
@@ -98,7 +100,7 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v
 }
 
 
-TEST_CASE("NvidiaValidationSuite: build common gpu list")
+TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
 {
     NvidiaValidationSuite nvs;
     std::vector<unsigned int> gpuIndices;
@@ -303,7 +305,7 @@ SCENARIO("NVVS correctly processes command line arguments")
     }
 }
 
-SCENARIO("findTestName finds the test if it exists")
+SCENARIO("findTestName finds the test if it exists", "[.]")
 {
     WrapperNvidiaValidationSuite nvvs;
     nvvs.WrapperEnumerateAllVisibleTests();
@@ -314,7 +316,7 @@ SCENARIO("findTestName finds the test if it exists")
     CHECK(skip == nonexistent);
 }
 
-SCENARIO("overrideparameters overrides the correct parameters")
+SCENARIO("overrideparameters overrides the correct parameters", "[.]")
 {
     SETUP();
     std::string paramString = "sm stress.test_duration=5";

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -21,16 +22,24 @@
 #include <unordered_set>
 #include <vector>
 
+// for dirname and readlink
+#include <libgen.h>
+#include <unistd.h>
+
 #include "ConfigFileParser_v2.h"
+#include "FallbackDiagConfig.h"
 #include "ParsingUtility.h"
 
+using namespace DcgmNs::Nvvs;
+
+const static char c_configFileName[] = "diag-skus.yaml";
 
 #define SET_FWCFG(X, Y)                                                         \
     while (1)                                                                   \
     {                                                                           \
         if (!m_fwcfg.SetFrameworkConfigValue(X, Y))                             \
         {                                                                       \
-            PRINT_DEBUG("%d", "Unable to set value %d in FWCFG", X);            \
+            DCGM_LOG_ERROR << "Unable to set value " << X << " in FWCFG";       \
             throw std::runtime_error("Unable to set value in FrameworkConfig"); \
         }                                                                       \
         break;                                                                  \
@@ -43,7 +52,6 @@ FrameworkConfig::FrameworkConfig()
     // set the default config
     m_config.dataFile           = "stats";
     m_config.dataFileType       = NVVS_LOGFILE_TYPE_JSON;
-    m_config.overrideMinMax     = false;
     m_config.overrideSerial     = false;
     m_config.scriptable         = false;
     m_config.requirePersistence = true;
@@ -85,9 +93,6 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const bool 
     // there is no checking here for the type of T on purpose
     switch (field)
     {
-        case NVVS_FWCFG_GLOBAL_OVERRIDEMINMAX:
-            m_config.overrideMinMax = value;
-            break;
         case NVVS_FWCFG_GLOBAL_OVERRIDESERIAL:
             m_config.overrideSerial = value;
             break;
@@ -98,8 +103,11 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const bool 
             m_config.requirePersistence = value;
             break;
         default:
+            DCGM_LOG_WARNING << "Unhandled field: " << field;
             return false;
     }
+
+    DCGM_LOG_DEBUG << "Set field " << field << " to " << value;
     return true;
 }
 
@@ -113,8 +121,11 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const logFi
             m_config.dataFileType = value;
             break;
         default:
+            DCGM_LOG_ERROR << "Unexpected field " << field;
             return false;
     }
+
+    DCGM_LOG_DEBUG << "Set field " << field << " to " << value;
     return true;
 }
 
@@ -128,8 +139,11 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const std::
             m_config.index = value;
             break;
         default:
+            DCGM_LOG_ERROR << "Unexpected field " << field;
             return false;
     }
+
+    DCGM_LOG_DEBUG << "Set field " << field << " to " << value.size() << " values.";
     return true;
 }
 
@@ -162,10 +176,12 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const std::
             m_config.gpuSetIdentifier = value;
             break;
         default:
+            DCGM_LOG_ERROR << "Unexpected field " << field;
             return false;
     }
+
+    DCGM_LOG_DEBUG << "Set field " << field << " to " << value;
     return true;
-    ;
 }
 
 /*****************************************************************************/
@@ -174,18 +190,51 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const std::
  */
 ConfigFileParser_v2::ConfigFileParser_v2(const std::string &configFile, const FrameworkConfig &fwcfg)
 {
-    PRINT_DEBUG("%s", "ConfigFileParser_v2 ctor with configFile %s", configFile.c_str());
+    DCGM_LOG_DEBUG << "ConfigFileParser_v2 ctor with configFile" << configFile;
 
     // save the pertinent info and object pointer
     m_configFile = configFile; // initial configuration file
     m_fwcfg      = fwcfg;      // initial frameworkconfig object
-}
 
-/*****************************************************************************/
-ConfigFileParser_v2::~ConfigFileParser_v2()
-{
-    if (m_inputstream.is_open())
-        m_inputstream.close();
+    // Read config from dcgm-config package
+
+    try
+    {
+        char execLocation[DCGM_PATH_LEN];
+        ssize_t ret = readlink("/proc/self/exe", execLocation, sizeof(execLocation));
+        // Ensure it's null-terminated
+        execLocation[DCGM_PATH_LEN - 1] = '\0';
+
+        if (ret < 0)
+        {
+            throw std::runtime_error("Could not find nvvs executable's directory");
+        }
+        const auto packageYamlLocation = std::filesystem::path(dirname(execLocation)) / c_configFileName;
+
+        DCGM_LOG_DEBUG << "Loading package YAML from " << packageYamlLocation.string();
+        m_fallbackYaml = YAML::LoadFile(packageYamlLocation);
+        DCGM_LOG_DEBUG << "Loaded package YAML";
+    }
+    catch (const std::exception &e)
+    {
+        DCGM_LOG_ERROR
+            << "Could not read package diag config. Please ensure the datacanter-gpu-manager-config package is installed";
+        DCGM_LOG_ERROR << "Exception: " << e.what();
+        m_fallbackYaml = YAML::Load(c_fallbackBakedDiagYaml);
+    }
+
+    // To aid debugging, the spec and version must be present in the fallback YAML
+    try
+    {
+        auto spec    = m_fallbackYaml["spec"].as<std::string>();
+        auto version = m_fallbackYaml["version"].as<std::string>();
+        DCGM_LOG_INFO << "Loaded packaged YAML with version: " << version << ", spec: " << spec;
+    }
+    catch (const YAML::Exception &e)
+    {
+        // Rethrow with a useful message
+        throw std::runtime_error("Packaged YAML did not contain version and/or spec");
+    }
 }
 
 /*****************************************************************************/
@@ -194,534 +243,135 @@ ConfigFileParser_v2::~ConfigFileParser_v2()
  */
 bool ConfigFileParser_v2::Init()
 {
-    if (m_inputstream.is_open())
-        m_inputstream.close();
-
-    m_inputstream.open(m_configFile.c_str());
-    if (!m_inputstream.good())
+    if (!m_configFile.empty())
     {
-        return false;
+        m_userYaml = YAML::LoadFile(m_configFile);
     }
-    m_yamltoplevelnode = YAML::Load(m_inputstream);
 
-
+    ParseYaml();
     return true;
 }
 
+/*****************************************************************************/
+static void parseSubTests(YAML::Node &dstTest, const YAML::Node srcTest)
+{
+    for (auto srcIt = srcTest.begin(); srcIt != srcTest.end(); ++srcIt)
+    {
+        std::string key = srcIt->first.Scalar();
+        auto srcChild   = srcIt->second;
+        auto dstChild   = dstTest[key];
+        // TODO Check we have a valid key and valid value type
+        if (!srcChild.IsScalar())
+        {
+            throw std::runtime_error("Subtest child must be a scalar. Key: " + key);
+        }
+        dstChild = srcChild;
+    }
+}
 
 /*****************************************************************************/
-/* Look for the gpuset, properties, and tests tags and ship those nodes to
- * the appropriate handler functions
- */
-void ConfigFileParser_v2::handleGpuSetBlock(const YAML::Node &node)
+static void parseTests(YAML::Node &dstSku, const YAML::Node srcSku)
 {
-    PRINT_DEBUG("", "Entering handleGpuSetBlock");
-
+    for (auto srcTestIt = srcSku.begin(); srcTestIt != srcSku.end(); ++srcTestIt)
     {
-        auto const gpuSetNode = node["gpuset"];
-        if (gpuSetNode.IsDefined())
+        std::string testKey = srcTestIt->first.Scalar();
+        auto srcTest        = srcTestIt->second;
+        auto dstTest        = dstSku[testKey];
+
+        DCGM_LOG_VERBOSE << "Checking key: " << testKey;
+        // "name" and "id" are allowed to be scalars
+        if ((testKey == "name" || testKey == "id"))
         {
-            if (gpuSetNode.Type() == YAML::NodeType::Scalar)
+            if (!srcTest.IsScalar())
             {
-                std::string const &name = gpuSetNode.Scalar();
-                SET_FWCFG(NVVS_FWCFG_GPUSET_NAME, name);
+                throw std::runtime_error("Key must be scalar: " + testKey);
+            }
+        }
+        // TODO Check that we have a valid test name here
+        else if (!srcTest.IsMap())
+        {
+            throw std::runtime_error("A SKU's child that is not in {name, id} must be a map. Key: " + testKey);
+        }
+
+        // Valid types. Descend into level 2 and start copying to dst
+        for (auto paramIt = srcTest.begin(); paramIt != srcTest.end(); paramIt++)
+        {
+            std::string paramKey   = paramIt->first.Scalar();
+            auto srcSubtestOrParam = paramIt->second;
+            auto dstSubtestOrParam = dstTest[paramKey];
+            if (srcSubtestOrParam.IsMap())
+            {
+                parseSubTests(dstSubtestOrParam, srcSubtestOrParam);
+            }
+            else if (srcSubtestOrParam.IsScalar())
+            {
+                // TODO check that we have a valid param
+                dstSubtestOrParam = srcSubtestOrParam;
             }
             else
             {
-                throw std::runtime_error("gpuset tag in config file is not a single value");
+                throw std::runtime_error("A test's child node must be a param (scalar) or a subtest(map). Key"
+                                         + paramKey);
             }
         }
     }
-
-    {
-        auto const propsNode = node["properties"];
-        if (propsNode.IsDefined())
-        {
-            handleGpuSetParameters(propsNode);
-        }
-    }
-
-    {
-        auto const testsNode = node["tests"];
-        if (testsNode.IsDefined())
-        {
-            handleGpuSetTests(testsNode);
-        }
-    }
-
-    PRINT_DEBUG("", "Leaving handleGpuSetBlock");
 }
 
 /*****************************************************************************/
-/* look for a name tag.  Only support one name tag for now
- */
-void ConfigFileParser_v2::handleGpuSetTests(const YAML::Node &node)
+void ConfigFileParser_v2::ParseYaml()
 {
-    PRINT_DEBUG("", "Entering handleGpuSetTests");
-
-    std::string tempVal;
-
-    if (node.Type() == YAML::NodeType::Sequence)
+    for (auto srcConfig : { m_fallbackYaml, m_userYaml })
     {
-        if (node.size() > 1)
+        DCGM_LOG_DEBUG << "Parsing SKUs";
+
+        auto srcSkus = srcConfig["skus"];
+        if (!srcSkus.IsSequence())
         {
-            throw std::runtime_error("Only one test name is supported in the gpu stanza at this time");
+            auto mark = srcSkus.Mark();
+            DCGM_LOG_ERROR << "skus is not a sequence; ignoring. Position: " << mark.line << "," << mark.column;
+            continue;
         }
-        else
+
+        DCGM_LOG_DEBUG << "Going through SKUs";
+        for (auto srcSku : srcSkus)
         {
-            handleGpuSetTests(node[0]);
+            std::string id;
+            DCGM_LOG_VERBOSE << "Checking SKU is a map";
+            if (!srcSku.IsMap())
+            {
+                auto mark = srcSku.Mark();
+                // TODO Convert this to an exception
+                DCGM_LOG_ERROR << "sku is not a map; ignoring. Position: " << mark.line << "," << mark.column;
+                continue;
+            }
+
+            try
+            {
+                id = srcSku["id"].as<std::string>();
+                DCGM_LOG_VERBOSE << "Found SKU with ID " << id;
+            }
+            catch (const YAML::Exception &e)
+            {
+                DCGM_LOG_ERROR << "SKU ID could not be read. Ignoring";
+                continue;
+            }
+
+            YAML::Node &dstSku = GetOrAddSku(id);
+
+            DCGM_LOG_VERBOSE << "Descending to SKU's children";
+            parseTests(dstSku, srcSku);
         }
     }
-    else if (node.Type() == YAML::NodeType::Map)
-    {
-        auto const pName = node["name"];
-        if (pName.IsDefined())
-        {
-            tempVal = pName.Scalar();
-            SET_FWCFG(NVVS_FWCFG_TEST_NAME, tempVal);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Parsing error in tests section of config file.");
-    }
-
-    PRINT_DEBUG("", "Leaving handleGpuSetTests");
 }
 
 /*****************************************************************************/
-/* look for the name, brand, busid, uuid, and index tags
- */
-void ConfigFileParser_v2::handleGpuSetParameters(const YAML::Node &node)
+const std::unordered_map<std::string, YAML::Node> &ConfigFileParser_v2::GetSkus() const
 {
-    PRINT_DEBUG("", "Entering handleGpuSetParameters");
-
-    std::string tempVal;
-
-    if (node.Type() != YAML::NodeType::Map)
-    {
-        throw std::runtime_error("There is an error in the gpus section of the config file.");
-    }
-
-    {
-        auto const pName = node["name"];
-        if (pName.IsDefined())
-        {
-            tempVal = pName.Scalar();
-            SET_FWCFG(NVVS_FWCFG_GPU_NAME, tempVal);
-        }
-    }
-
-    {
-        auto const pName = node["brand"];
-        if (pName.IsDefined())
-        {
-            tempVal = pName.Scalar();
-            SET_FWCFG(NVVS_FWCFG_GPU_BRAND, tempVal);
-        }
-    }
-
-    {
-        auto const pName = node["busid"];
-        if (pName.IsDefined())
-        {
-            tempVal = pName.Scalar();
-            SET_FWCFG(NVVS_FWCFG_GPU_BUSID, tempVal);
-        }
-    }
-
-    {
-        auto const pName = node["uuid"];
-        if (pName.IsDefined())
-        {
-            tempVal = pName.Scalar();
-            SET_FWCFG(NVVS_FWCFG_GPU_UUID, tempVal);
-        }
-    }
-
-    {
-        auto const pName = node["index"];
-        if (pName.IsDefined())
-        {
-            std::vector<unsigned int> indexVector;
-            // potentially a csv
-            std::string const &tempString = pName.Scalar();
-            std::stringstream ss(tempString);
-            int i;
-
-            while (ss >> i)
-            {
-                indexVector.push_back(i);
-                if (ss.peek() == ',')
-                {
-                    ss.ignore();
-                }
-            }
-            SET_FWCFG(NVVS_FWCFG_GPU_INDEX, indexVector);
-        }
-    }
-
-    PRINT_DEBUG("", "Leaving handleGpuSetParameters");
+    return m_skus;
 }
 
 /*****************************************************************************/
-/* Go through the gpus stanza and find the first map
- */
-void ConfigFileParser_v2::CheckTokens_gpus(const YAML::Node &node)
-{
-    PRINT_DEBUG("", "Entering CheckTokens_gpu");
-
-    /* Dig down until we find a map.
-     * This map should be the only one and contain the optional tags: gpuset, properties, and tests
-     */
-
-    if (node.Type() == YAML::NodeType::Sequence)
-    {
-        if (node.size() > 1)
-        {
-            throw std::runtime_error("NVVS does not currently support more than one gpuset.");
-        }
-        CheckTokens_gpus(node[0]);
-    }
-    else if (node.Type() == YAML::NodeType::Map)
-    {
-        handleGpuSetBlock(node);
-    }
-    else
-    {
-        throw std::runtime_error("Could not parse the gpus stanza of the config file.");
-    }
-
-    PRINT_DEBUG("", "Leaving CheckTokens_gpu");
-}
-
-/*****************************************************************************/
-/* go through the "globals" stanza looking for specific keywords and save them
- * to m_fwcfg
- */
-void ConfigFileParser_v2::CheckTokens_globals(const YAML::Node &node)
-{
-    PRINT_DEBUG("", "Entering CheckTokens_global");
-
-    if (node.Type() == YAML::NodeType::Map)
-    {
-        for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
-        {
-            std::string key;
-            std::string value;
-            std::string lowerValue;
-            key   = it->first.Scalar();
-            value = it->second.Scalar();
-
-            PRINT_DEBUG("%s %s", "CheckTokens_global key %s, value %s", key.c_str(), value.c_str());
-
-            /* Get a lowercase version of value for case-insensitive operations */
-            lowerValue = value;
-            std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
-
-            if (key == "logfile")
-            {
-                SET_FWCFG(NVVS_FWCFG_GLOBAL_DATAFILE, value);
-            }
-            if (key == "logfile_type")
-            {
-                if (lowerValue == "json")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_DATAFILETYPE, NVVS_LOGFILE_TYPE_JSON);
-                }
-                else if (lowerValue == "text")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_DATAFILETYPE, NVVS_LOGFILE_TYPE_TEXT);
-                }
-                else if (lowerValue == "binary")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_DATAFILETYPE, NVVS_LOGFILE_TYPE_BINARY);
-                }
-                else
-                {
-                    std::stringstream ss;
-                    ss << "Unknown logfile_type \"" << value << "\". Allowed: json, text, or binary";
-                    throw std::runtime_error(ss.str());
-                }
-            }
-            if (key == "overrideMinMax")
-            {
-                // default is false
-                if (lowerValue == "yes" || lowerValue == "true")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_OVERRIDEMINMAX, true);
-                }
-            }
-            if (key == "scriptable")
-            {
-                // default is false
-                if (lowerValue == "yes" || lowerValue == "true")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_SCRIPTABLE, true);
-                }
-            }
-            if (key == "serial_override")
-            {
-                // default is false
-                if (lowerValue == "yes" || lowerValue == "true")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_OVERRIDESERIAL, true);
-                }
-            }
-            if (key == "require_persistence_mode")
-            {
-                // default is true
-                if (lowerValue == "no" || lowerValue == "false")
-                {
-                    SET_FWCFG(NVVS_FWCFG_GLOBAL_PERSISTENCE, false);
-                }
-            }
-            if (key == "throttle-mask" && !lowerValue.empty())
-            {
-                /* Note: The mask is directly set in nvvsCommon for convenience as otherwise we need to add a field
-                to NvvsFrameworkConfig, and update the legacyGlobalStructHelper to copy from NvvsFramworkConfig to
-                nvvsCommon */
-                nvvsCommon.throttleIgnoreMask = GetThrottleIgnoreReasonMaskFromString(lowerValue);
-            }
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Unable to parse the globals section of the config file.");
-    }
-
-    PRINT_DEBUG("", "Leaving CheckTokens_global");
-}
-
-/*****************************************************************************/
-void ConfigFileParser_v2::ParseGlobalsAndGpu()
-{
-    // because we now have a sense of what is "default" then neither of
-    // these not being found is an error
-
-    if (YAML::Node pName = m_yamltoplevelnode["globals"])
-    {
-        CheckTokens_globals(pName);
-    }
-    if (YAML::Node pName = m_yamltoplevelnode["gpus"])
-    {
-        CheckTokens_gpus(pName);
-    }
-
-    /* TO BE DELETED */
-    legacyGlobalStructHelper();
-}
-
-/*****************************************************************************/
-/* We are looking for the test name (which can be an individual test, suite, or class
- * and then looking for the "custom" tag.  Wherever that node is, if it exists, drill
- * down from there.
- */
-void ConfigFileParser_v2::ParseTestOverrides(std::string testName, TestParameters &tp)
-{
-    // first look for the test name
-    auto const pName = m_yamltoplevelnode[testName];
-    if (pName.IsDefined()) // found something at the top level, leave it to the helper to dig down
-    {
-        handleTestDefaults(testName, pName, tp, false);
-    }
-
-    /* getting here can mean one of several things
-     * 1) the test name and the override section label differ in case
-     * 2) it is a legacy config with a "custom" or suite tag
-     */
-
-    std::transform(testName.begin(), testName.end(), testName.begin(), ::tolower);
-
-    for (YAML::const_iterator it = m_yamltoplevelnode.begin(); it != m_yamltoplevelnode.end(); it++)
-    {
-        std::string key;
-        std::string value;
-        key = it->first.Scalar();
-        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-        if (key == testName || key == "custom" || key == "long" || key == "medium"
-            || key == "quick") // start the drill down if we find a known legacy tag
-        {
-            CheckTokens_testDefaults(it->second, testName, tp);
-        }
-    }
-}
-
-/*****************************************************************************/
-/* Initial search function for the test name... for newer config files this
- * will fall straight to handleTestDefaults as the node will be a single
- * entry map with the key == testName.  For legacy configs, we have to
- * drill past "custom" a bit.
- */
-void ConfigFileParser_v2::CheckTokens_testDefaults(const YAML::Node &node,
-                                                   std::string const &testName,
-                                                   TestParameters &tp)
-{
-    // no care for anything but maps and maps of maps, ignore everything else
-    if (node.Type() == YAML::NodeType::Sequence)
-    {
-        for (auto const &n : node)
-        {
-            CheckTokens_testDefaults(n, testName, tp);
-        }
-    }
-    else if (node.Type() == YAML::NodeType::Map)
-    {
-        for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
-        {
-            std::string key;
-            key = it->first.Scalar();
-            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-            if (key == testName)
-            {
-                try
-                {
-                    handleTestDefaults(testName, it->second, tp, false);
-                }
-                catch (std::exception const &e)
-                {
-                    std::stringstream ss;
-                    ss << "Test " << key << " parsing failed with: \n\t" << e.what();
-                    PRINT_ERROR("%s", "%s", ss.str().c_str());
-                    throw std::runtime_error(ss.str());
-                }
-            }
-            if (it->second.Type() == YAML::NodeType::Map)
-            {
-                CheckTokens_testDefaults(it->second, testName, tp);
-            }
-        }
-    }
-    else
-    {
-        std::stringstream ss;
-        ss << "There is an error in the \"" << testName << "\" section of the config file.";
-        throw std::runtime_error(ss.str());
-    }
-}
-
-/*****************************************************************************/
-/* handle actually putting the specified parameters in to the TestParms obj
- */
-void ConfigFileParser_v2::handleTestDefaults(const std::string &testName,
-                                             const YAML::Node &node,
-                                             TestParameters &tp,
-                                             bool subTest)
-{
-    PRINT_DEBUG("%d", "Entering handleTestDefaults subTest=%d", (int)subTest);
-
-    unsigned int result;
-    static std::string subTestName;
-
-    if (node.Type() == YAML::NodeType::Map)
-    {
-        for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
-        {
-            std::string key;
-            std::string value;
-            key = it->first.Scalar();
-
-            if (it->second.Type() == YAML::NodeType::Map)
-            {
-                if (key == "subtests")
-                {
-                    handleTestDefaults(testName, it->second, tp, true);
-                }
-                else
-                {
-                    if (subTest)
-                    {
-                        subTestName = key;
-                    }
-                    handleTestDefaults(testName, it->second, tp, subTest);
-                }
-            }
-            else if (it->second.Type() == YAML::NodeType::Scalar)
-            {
-                value = it->second.Scalar();
-
-                if (subTest)
-                {
-                    result = tp.SetSubTestString(subTestName, key, value);
-                }
-                else
-                {
-                    result = tp.SetString(key, value);
-                }
-
-                if (result != 0)
-                {
-                    std::stringstream ss;
-                    bool added = false;
-                    switch (result)
-                    {
-                        case TP_ST_BADPARAM:
-                            ss << "The parameter given for \"" << key << "\" caused an internal error .";
-                            break;
-                        case TP_ST_NOTFOUND:
-                        {
-                            if (!subTest)
-                            {
-                                if (m_pv.IsValidParameter(testName, key))
-                                {
-                                    tp.AddString(key, value);
-                                    added = true;
-                                }
-                            }
-                            else if (m_pv.IsValidSubtestParameter(testName, subTestName, key))
-                            {
-                                added = true;
-                                tp.AddSubTestString(subTestName, key, value);
-                            }
-
-                            if (!added)
-                            {
-                                ss << "The key \"" << key << "\" was not found.";
-                            }
-                            break;
-                        }
-                        case TP_ST_ALREADYEXISTS:
-                            // should never happen since we are using set not add
-                            ss << "The key \"" << key << "\" was added but already exists.";
-                            break;
-                        case TP_ST_CANTCOERCE:
-                            ss << "The parameter given for \"" << key << "\" cannot be coerced to the type needed.";
-                            break;
-                        case TP_ST_OUTOFRANGE:
-                            ss << "The parameter given for \"" << key
-                               << "\" is out of the reasonable range for that key.";
-                            break;
-                        default:
-                            ss << "Received an unknown value from the test parameter system.";
-                            break;
-                    }
-                    if (!added)
-                    {
-                        throw std::runtime_error(ss.str());
-                    }
-                }
-            }
-            else
-            {
-                /* We would be here for a Sequence or Null (whatever Null means) */
-                std::stringstream ss;
-                ss << "Error in parameters section for  " << key;
-                throw CFPv2Exception(node.Mark(), ss.str());
-            }
-        }
-    }
-    else
-    {
-        /* We would be here for a Sequence or Null (whatever Null means) */
-        std::stringstream ss;
-        ss << "error in \"key: value\" pairs";
-        throw CFPv2Exception(node.Mark(), ss.str());
-    }
-}
-
-/*****************************************************************************/
-/* THE BELOW FUNCTIONS ARE ONLY FOR COMPATITBILITY UNTIL HIGHER LAYERS
- * ARE REWRITTEN!
+/* Miscellaneous Initialization Code
  */
 void ConfigFileParser_v2::legacyGlobalStructHelper()
 {
@@ -816,10 +466,9 @@ void ConfigFileParser_v2::legacyGlobalStructHelper()
     gpuSets.push_back(std::move(gpuSet));
 
     /* globals */
-    nvvsCommon.logFile        = fwcfg.dataFile;
-    nvvsCommon.logFileType    = fwcfg.dataFileType;
-    nvvsCommon.overrideMinMax = fwcfg.overrideMinMax;
-    nvvsCommon.serialize      = fwcfg.overrideSerial;
+    nvvsCommon.logFile     = fwcfg.dataFile;
+    nvvsCommon.logFileType = fwcfg.dataFileType;
+    nvvsCommon.serialize   = fwcfg.overrideSerial;
     if (nvvsCommon.parse == false) // if it was turned on in the command line, don't overwrite it
     {
         nvvsCommon.parse = fwcfg.scriptable;
@@ -827,7 +476,13 @@ void ConfigFileParser_v2::legacyGlobalStructHelper()
     nvvsCommon.requirePersistenceMode = fwcfg.requirePersistence;
 }
 
-void ConfigFileParser_v2::SetParameterValidator(ParameterValidator &pv)
+/*****************************************************************************/
+/* Returns reference to m_skus[id]. Adds the SKU if it does not exist */
+YAML::Node &ConfigFileParser_v2::GetOrAddSku(const std::string &id)
 {
-    m_pv = pv;
+    if (m_skus.find(id) == m_skus.end())
+    {
+        m_skus[id] = YAML::Node();
+    }
+    return m_skus[id];
 }

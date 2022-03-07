@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -240,8 +240,12 @@ class NvHostEngineApp(app_runner.AppRunner):
             logger.debug("Pid file %s not found" % self._pidFilename)
             return None
 
-        fp = open(self._pidFilename)
-        pidStr = fp.readlines()[0].strip()
+        with open(self._pidFilename) as fp:
+            lines = fp.readlines()
+            if len(lines) == 0:
+                return self._getpid_old()
+
+            pidStr = lines[0].strip()
         #logger.error("pidStr %s" % pidStr)
 
         procPath = "/proc/" + pidStr + "/"

@@ -3,13 +3,14 @@ set -ex -o pipefail
 
 source $(dirname $(realpath $0))/common_for_host.sh
 
-VERSION=3.20.4
+VERSION=3.21.3
+CHKSUM=2b6d7a4f966a7b1c4b4a8dd11ffbdb073169522e424aae118e7c947edb186026bb078a7c926c3fb96cb27131a496f4be6fdc64d28abf3631469f5bc7c0ee9d30
 
 mkdir -p ${HOME}/.build/cmake
 pushd ${HOME}/.build/cmake
 
 download_url "https://github.com/Kitware/CMake/releases/download/v${VERSION}/cmake-${VERSION}-Linux-x86_64.sh" cmake.sh
-echo "7b71845d99f07c3bce5922befaa7f32f979e36a517f813cbf79b8b442aec457f44826fd1f9beb9a939ef183880e69027e3aa71ee0b6ac223f824237048202e75  cmake.sh" | sha512sum -c -
+echo "${CHKSUM} cmake.sh" | sha512sum -c -
 
 chmod +x cmake.sh
 ./cmake.sh --prefix=/usr --skip-license

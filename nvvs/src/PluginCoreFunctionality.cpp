@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,8 +233,8 @@ nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp
     for (auto &&gpuInfo : m_gpuInfos)
     {
         long long maxTemp = DetermineMaxTemp(gpuInfo, tp);
-        int ret           = m_dcgmRecorder.CheckErrorFields(
-            fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, m_errors, m_startTime, endTime);
+        int ret
+            = m_dcgmRecorder.CheckErrorFields(fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, m_errors, m_startTime);
 
         if (ret == DR_COMM_ERROR)
         {

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -135,6 +135,59 @@ class DcgmGroupSamples:
     def GetLatest_v2(self, fieldGroup):
         dfvec = dcgm_field_helpers.DcgmFieldValueEntityCollection(self._dcgmHandle.handle, self._groupId)
         dfvec.GetLatestValues(fieldGroup)
+        return dfvec
+
+    '''
+    Get the new values for each field in a field collection since the last
+    collection.
+
+    dfvc:       DcgmFieldValueCollection() instance. Will return a
+                DcgmFieldValueCollection with values since the one passed in.
+                Pass None for the first call to get one for subsequent calls.
+                On subsequent calls, pass what was returned.
+    fieldGroup: DcgmFieldGroup() instance tracking the fields we want to watch.
+
+    Returns DcgmFieldValueCollection object. Use its .values[gpuId][fieldId][*].value to access values
+    '''
+    def GetAllSinceLastCall(self, dfvc, fieldGroup):
+        if dfvc == None:
+            dfvc = dcgm_field_helpers.DcgmFieldValueCollection(self._dcgmHandle.handle, self._groupId)
+            dfvc.GetLatestValues(fieldGroup)
+        else:
+            dfvc.GetAllSinceLastCall(fieldGroup)
+            # We used to expect at least one value (GetLatestValues), so this
+            # ensures we provide one at the risk of repetition. This should not
+            # happen if we call this function infrequently enough (slower than
+            # the sampling rate).
+            if dfvc.values.len() == 0:
+                dfvc.GetLatestValues(fieldGroup)
+        return dfvc
+
+    '''
+    Gets more values for each field in a field entity collection
+
+    dfvec:      DcgmFieldValueEntityCollection() instance. Will return a
+                DcgmFieldValueEntityCollection with values since the one passed
+                in. Pass None for the first call to get one for subsequent
+                calls. On subsequent calls, pass what was returned.
+
+    fieldGroup: DcgmFieldGroup() instance tracking the fields we want to watch.
+
+    Returns DcgmFieldValueEntityCollection object. Use its .values[entityGroupId][entityId][fieldId][*].value to access values
+    '''
+    def GetAllSinceLastCall_v2(self, dvfec, fieldGroup):
+        if dfvec == None:
+            dfvec = dcgm_field_helpers.DcgmFieldValueEntityCollection(self._dcgmHandle.handle, self._groupId)
+            dfvec.GetLastestValues_v2(fieldGroup)
+        else:
+            dfvec.GetAllSinceLastCall_v2(fieldGroup)
+            # We used to expect at least one value (GetLatestValues), so this
+            # ensures we provide one at the risk of repetition. This should not
+            # happen if we call this function infrequently enough (slower than
+            # the sampling rate).
+            if dfvec.values.len() == 0:
+                dfvec.GetLatestValues_v2(fieldGroup)
+
         return dfvec
 
     '''

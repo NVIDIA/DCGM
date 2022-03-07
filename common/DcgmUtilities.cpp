@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,4 +182,24 @@ pid_t DcgmUtilForkAndExecCommand(std::vector<std::string> &args, int *infp, int 
     }
 
     return pid;
+}
+
+std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds monitorFrequency,
+                                                   std::chrono::milliseconds maxAge,
+                                                   int maxKeepSamples)
+{
+    using namespace std::chrono_literals;
+    auto const samplesDuration    = maxKeepSamples * monitorFrequency;
+    auto const normalizedMaxAge   = std::max(maxAge, 1000ms);
+    auto const normalizedDuration = std::max(samplesDuration, 1000ms);
+    if (samplesDuration.count() == 0)
+    {
+        return normalizedMaxAge;
+    }
+    if (maxAge.count() == 0)
+    {
+        return normalizedDuration;
+    }
+
+    return std::min(normalizedMaxAge, normalizedDuration);
 }

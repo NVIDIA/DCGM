@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1424,16 +1424,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "",
         cmd);
 
-    TCLAP::ValueArg<std::string> pluginPath("",
-                                            "plugin-path",
-                                            "Specify the full path to the DCGM GPU diagnostic \
-                                            plugins. For example, to retrive the plugins from a custom dir: \
-                                            --plugin-path /home/test/test_plugins_dir/",
-                                            false,
-                                            "",
-                                            "/full/path/to/plugin/dir",
-                                            cmd);
-
     TCLAP::ValueArg<unsigned int> trainingIterations("",
                                                      "training-iterations",
                                                      "The number of iterations to use "
@@ -1514,7 +1504,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &training);
     helpOutput.addToGroup("1", &forceTrain);
     helpOutput.addToGroup("1", &throttleMask);
-    helpOutput.addToGroup("1", &pluginPath);
     helpOutput.addToGroup("1", &trainingIterations);
     helpOutput.addToGroup("1", &trainingVariance);
     helpOutput.addToGroup("1", &trainingTolerance);
@@ -1556,9 +1545,9 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("Specifying a group id and a gpu list are mutually exclusive");
     }
 
-    if (debugLogFile.getValue().size() > DCGM_FILE_LEN - 1)
+    if (debugLogFile.getValue().size() > DCGM_PATH_LEN - 1)
     {
-        throw TCLAP::CmdLineParseException("debugLogFile has to be under 30 characters");
+        throw TCLAP::CmdLineParseException("debugLogFile has to be under 128 characters");
     }
 
     if (statsPath.getValue().size() > DCGM_PATH_LEN - 1)
@@ -1652,7 +1641,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 statsPath.getValue(),
                                                 severityInt,
                                                 throttleMask.getValue(),
-                                                pluginPath.getValue(),
                                                 trainVal,
                                                 forceTrainVal,
                                                 trainingIterations.getValue(),
@@ -2094,10 +2082,9 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
 
 dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *const *argv)
 {
-    std::string myName = "dmon";
+    static const std::string myName = "dmon";
     DCGMOutput helpOutput;
     std::string gpuIdStr;
-    std::unique_ptr<Command> cmdn;
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);

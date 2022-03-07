@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #endif
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -398,6 +399,7 @@ void DistributedCudaContext::Reset(bool keepDcgmGroups)
     m_wait      = false;
     m_buffered  = false;
     m_finished  = false;
+    m_validated = true;
 }
 
 
@@ -621,7 +623,7 @@ bool DistributedCudaContext::Failed(void) const
     return m_failed;
 }
 
-// Set this workers tries. Intended to be called from parent.
+// Set this worker's tries. Intended to be called from parent.
 void DistributedCudaContext::SetTries(unsigned int tries)
 {
     m_tries = tries;
@@ -631,6 +633,18 @@ void DistributedCudaContext::SetTries(unsigned int tries)
 unsigned int DistributedCudaContext::GetTries(void) const
 {
     return m_tries;
+}
+
+// Set this worker's validation status.
+void DistributedCudaContext::SetValidated(bool validated)
+{
+    m_validated = validated;
+}
+
+// Return this worker's validation status.
+bool DistributedCudaContext::GetValidated(void) const
+{
+    return m_validated;
 }
 
 // Send back a response.
@@ -648,9 +662,11 @@ void DistributedCudaContext::Respond(const char *format, ...)
 
     va_end(args);
 
+    RespondException ex(err);
+
     if (err < 0)
     {
-        throw RespondException(err);
+        throw ex;
     }
 }
 
@@ -697,6 +713,7 @@ void DistributedCudaContext::MoveFrom(DistributedCudaContext &&other)
     m_wait             = other.m_wait;
     m_buffered         = other.m_buffered;
     m_finished         = other.m_finished;
+    m_validated        = other.m_validated;
 
     other.Reset();
 }
@@ -1489,34 +1506,51 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
 
-    for (unsigned int activity = 0; activity < activities; activity++)
+    for (unsigned int activity = 0; activity <= activities; activity++)
     {
         double howFarIn                 = 1.0 * activity / activities;
         size_t bytesTransferred         = 0;
         double startLoop                = now;
         unsigned int copiesPerIteration = 10000; /* Set high. We are going to drop out every second anyway */
 
-        for (i = 0; i < copiesPerIteration && now - startLoop < m_reportInterval; i++)
+        if (activity < activities)
         {
-            if (m_testFieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
+            for (i = 0; i < copiesPerIteration && now - startLoop < m_reportInterval; i++)
             {
-                cuSt = cuMemcpyHtoD(deviceMem, hostMem, bufferSize);
-            }
-            else /* DCGM_FI_PROF_PCIE_TX_BYTES */
-            {
-                cuSt = cuMemcpyDtoH(hostMem, deviceMem, bufferSize);
-            }
+                if (m_testFieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
+                {
+                    cuSt = cuMemcpyHtoD(deviceMem, hostMem, bufferSize);
+                }
+                else /* DCGM_FI_PROF_PCIE_TX_BYTES */
+                {
+                    cuSt = cuMemcpyDtoH(hostMem, deviceMem, bufferSize);
+                }
 
-            bytesTransferred += bufferSize;
+                bytesTransferred += bufferSize;
 
-            if (cuSt)
-            {
-                m_error << "cuMemcpy returned " << cuSt << '\n';
-                retSt = -1;
-                goto CLEANUP;
+                if (cuSt)
+                {
+                    m_error << "cuMemcpy returned " << cuSt << '\n';
+                    retSt = -1;
+                    goto CLEANUP;
+                }
+
+                now = timelib_dsecSince1970();
             }
-
+        }
+        else
+        {
+            /*
+             * We need to report that we are no longer driving any PCIE
+             * bandwidth. We need to wait for the activity level to be captured.
+             * So, we stop driving and delay for the report interval.
+             */
             now = timelib_dsecSince1970();
+
+            if (m_reportInterval > now - startLoop)
+            {
+                usleep(1000000 * (m_reportInterval - (now - startLoop)));
+            }
         }
 
         double afterLoopDsec = timelib_dsecSince1970();
@@ -2287,6 +2321,8 @@ bool DistributedCudaContext::IsRunning(void) const
 // Run a test in a sub-process.
 int DistributedCudaContext::Run(void)
 {
+    extern std::atomic_bool g_signalCaught;
+
     int retSt = 0;
     int toChildPipe[2];  // parent writes to this, child reads from this
     int toParentPipe[2]; // parent reads from this, child writes to this
@@ -2384,7 +2420,7 @@ int DistributedCudaContext::Run(void)
         {
             retSt = ReadLn();
 
-            if (retSt < 0) // FD reading error
+            if ((retSt < 0) || g_signalCaught) // FD reading error or signal interrupt
             {
                 /* Parent will see write pipe closed and get SIGCHLD. No point
                  * to setting m_failed, or an error, as process is gone. This
@@ -2392,7 +2428,7 @@ int DistributedCudaContext::Run(void)
                  * the write end of the pipe, and that causes us to die.
                  */
 
-                return -((int)DCGM_ST_GENERIC_ERROR);
+                exit((int)DCGM_ST_GENERIC_ERROR);
             }
             else if (retSt == 0)
             {
@@ -2463,7 +2499,7 @@ int DistributedCudaContext::Run(void)
     catch (...)
     {
         // catastrophic error
-        return -((int)DCGM_ST_GENERIC_ERROR);
+        exit((int)DCGM_ST_GENERIC_ERROR);
     }
 
     Reset();

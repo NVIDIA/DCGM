@@ -32,7 +32,9 @@
 #define EPSILON 0.001f
 #define EPSILOND 0.0000001
 
-extern "C" __global__ void compareFP64(float *C, int *faultyElems, size_t iters) {
+#include <cuda_fp16.h>
+
+extern "C" __global__ void compareFP32(float *C, int *faultyElems, size_t iters) {
 	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
 	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
 		gridDim.x*blockDim.x + // W
@@ -46,7 +48,7 @@ extern "C" __global__ void compareFP64(float *C, int *faultyElems, size_t iters)
 	atomicAdd(faultyElems, myFaulty);
 }
 
-extern "C" __global__ void compareDP64(double *C, int *faultyElems, size_t iters) {
+extern "C" __global__ void compareFP64(double *C, int *faultyElems, size_t iters) {
 	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
 	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
 		gridDim.x*blockDim.x + // W
@@ -59,3 +61,18 @@ extern "C" __global__ void compareDP64(double *C, int *faultyElems, size_t iters
 
 	atomicAdd(faultyElems, myFaulty);
 }
+
+extern "C" __global__ void compareFP16(__half *C, int *faultyElems, size_t iters) {
+	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
+		gridDim.x*blockDim.x + // W
+		blockIdx.x*blockDim.x + threadIdx.x; // X
+
+	int myFaulty = 0;
+	for (size_t i = 1; i < iters; ++i)
+		if (__half2float(fabsf(C[myIndex]) - __half2float(C[myIndex + i*iterStep])) > EPSILON)
+			myFaulty++;
+
+	atomicAdd(faultyElems, myFaulty);
+}
+

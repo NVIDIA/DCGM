@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,7 +136,6 @@ public:
     /*****************************************************************************
      * This method is used to add an entity to a group
      *
-     * @param connectionId  IN: Connection ID
      * @param groupId       IN: Group to add a GPU to
      * @param entityGroupId IN: Entity group of the entity to add to this group
      * @param entityId      IN: Entity id of the entity to add to this group
@@ -145,8 +144,7 @@ public:
      * DCGM_ST_OK       :   On Success
      * DCGM_ST_?        :   On Error
      *****************************************************************************/
-    dcgmReturn_t AddEntityToGroup(dcgm_connection_id_t connectionId,
-                                  unsigned int groupId,
+    dcgmReturn_t AddEntityToGroup(unsigned int groupId,
                                   dcgm_field_entity_group_t entityGroupId,
                                   dcgm_field_eid_t entityId);
 
@@ -194,7 +192,6 @@ public:
      * This saves locking and unlocking the DcgmGroupInfo over and over again for
      * each entity index
      *
-     * @param connectionId IN: Connection ID
      * @param groupId      IN  Group to get gpuIds of
      * @param entities    OUT: Vector of entities to populate (passed by reference)
      *
@@ -202,9 +199,7 @@ public:
      * DCGM_ST_OK       :   On Success
      * DCGM_ST_?        :   On Error
      */
-    dcgmReturn_t GetGroupEntities(dcgm_connection_id_t connectionId,
-                                  unsigned int groupId,
-                                  std::vector<dcgmGroupEntityPair_t> &entities);
+    dcgmReturn_t GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities);
 
     /*****************************************************************************
      * Gets Name of the group
@@ -270,14 +265,13 @@ private:
      *
      * NOTE: Assumes group manager has been locked with Lock()
      *
-     * @param connectionId IN: Connection ID
      * @param groupId      IN  Group to get gpuIds of
      *
      * @return Group pointer on success.
      *         NULL if not found
      */
 
-    DcgmGroupInfo *GetGroupById(dcgm_connection_id_t connectionId, unsigned int groupId);
+    DcgmGroupInfo *GetGroupById(unsigned int groupId);
 
     /*****************************************************************************
      * Add every entity of a given entityGroup to this group.
@@ -378,13 +372,14 @@ public:
      */
     dcgmReturn_t GetEntities(std::vector<dcgmGroupEntityPair_t> &entities);
 
-    /*****************************************************************************
-     * Are all of the GPUs in this group the same SKU?
-     *
-     * Returns 1 if all of the GPUs of this group are the same
-     *         0 if any of the GPUs of this group are different from each other
+    /**
+     * Checks that all GPUs, directly specified in the group, have the same SKU.
+     * For each non-GPU entity in the group, extracts ID of the related GPU and checks that it also have the same SKU.
+     * @return
+     *      \c true    All GPUs in the group have the same SKU.<br>
+     *      \c false   If there is any GPU which SKU is different.
      */
-    int AreAllTheSameSku(void);
+    bool AreAllTheSameSku();
 
 private:
     unsigned int mGroupId;                          /* ID representing GPU group */
