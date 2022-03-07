@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+find_package(fmt REQUIRED)
+
 add_library(diag_interface INTERFACE)
 target_include_directories(diag_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(diag_interface INTERFACE dcgm_interface modules_interface nvvs_interface config_interface)
@@ -27,6 +29,7 @@ target_link_libraries(dcgmmodulediag_common
     PRIVATE
         diag_interface
         dcgm_common
+        fmt::fmt
 )
 
 set(SRCS 
@@ -47,6 +50,7 @@ target_link_libraries(dcgmmodulediag_private_static
         diag_interface
         transport_interface
         dcgm_common
+        fmt::fmt
 )
 target_sources(dcgmmodulediag_private_static
     PRIVATE
@@ -66,6 +70,7 @@ target_link_libraries(dcgmmodulediag
         dcgm_logging
         dcgm_mutex
         ${JSONCPP_STATIC_LIBS}
+        fmt::fmt
 )
 target_sources(dcgmmodulediag
     PRIVATE

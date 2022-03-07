@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1080,7 +1080,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "FBTTL",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_FREE,
                                              DCGM_FT_INT64,
@@ -1090,7 +1090,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "FBFRE",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_USED,
                                              DCGM_FT_INT64,
@@ -1100,7 +1100,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "FBUSD",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VIRTUAL_MODE,
                                              DCGM_FT_INT64,

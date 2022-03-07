@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,7 @@
 #include <Task.hpp>
 #include <TaskRunner.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <functional>
-#include <string>
-#include <thread>
 #include <unordered_set>
-#include <utility>
-#include <vector>
 
 
 using namespace DcgmNs;

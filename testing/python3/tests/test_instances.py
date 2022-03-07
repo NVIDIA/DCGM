@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -286,13 +286,13 @@ class ExpectedValues(object):
         self.ciCount = ciCount
         self.verified = False
 
-def create_small_mig_objects(handle, gpuIds):
+def create_small_mig_objects(handle, gpuIds, numToCreate):
     numInstancesCreated = 0
     for gpuId in gpuIds:
         try:
             dcgm_agent.dcgmCreateMigEntity(handle, gpuId, dcgm_structs.DcgmMigProfileGpuInstanceSlice1, dcgm_structs.DcgmMigCreateGpuInstance, 0)
             numInstancesCreated = numInstancesCreated + 1
-            if numInstancesCreated > 3:
+            if numInstancesCreated >= numToCreate:
                 break
         except:
             # There may not be space; ignore this.
@@ -375,13 +375,13 @@ def delete_gpu_instances_no_fail(handle, newGpuInstances, flags):
     except:
         pass
 
-def helper_test_mig_reconfigure(handle, gpuIds):
+def create_mig_entities_and_verify(handle, gpuIds, instanceCreateCount, minInstanceCreateCount):
     # get mig hierarchy
     hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
     oGpuInstances, oGpuCIIds = populate_counts_per_gpu(hierarchy)
 
-    numInstancesCreated = create_small_mig_objects(handle, gpuIds)
-    if numInstancesCreated == 0:
+    numInstancesCreated = create_small_mig_objects(handle, gpuIds, 3)
+    if numInstancesCreated < minInstanceCreateCount:
         test_utils.skip_test("Cannot create any GPU instances, skipping test.")
        
     # Make sure the new instances appear 
@@ -411,9 +411,12 @@ def helper_test_mig_reconfigure(handle, gpuIds):
         delete_gpu_instances_no_fail(handle, newGpuInstances, flags)
         
     assert errMsg == '', errMsg
-    
-    verify_profile_names_exist(handle, newComputeInstances, False)
 
+    return newGpuInstances, newComputeInstances
+
+def delete_compute_instances_and_verify(handle, newComputeInstances):
+    errMsg = ''
+    flags = dcgm_structs.DCGM_MIG_RECONFIG_DELAY_PROCESSING
     # Delete the new instances
     for ciId in newComputeInstances[:-1]:
         dcgm_agent.dcgmDeleteMigEntity(handle, dcgm_fields.DCGM_FE_GPU_CI, ciId, flags)
@@ -441,12 +444,11 @@ def helper_test_mig_reconfigure(handle, gpuIds):
 
         time.sleep(1)
 
-    # Save this and attempt to cleanup the rest even though we failed here
-    ciFailMsg = ''
-    if errMsg != '':
-        ciFailMsg = errMsg
-        logger.warning("The compute instances didn't clean up correctly, but we'll attempt to clean up anyway")
+    return errMsg
 
+def delete_gpu_instances_and_verify(handle, newGpuInstances):
+    errMsg = ''
+    flags = dcgm_structs.DCGM_MIG_RECONFIG_DELAY_PROCESSING
     delete_gpu_instances(handle, newGpuInstances, flags)
 
     retries = 20
@@ -467,9 +469,24 @@ def helper_test_mig_reconfigure(handle, gpuIds):
             gpuInstancesStillHere = updated
 
         time.sleep(1)
+
+    return errMsg
+
+def helper_test_mig_reconfigure(handle, gpuIds):
+    newGpuInstances, newComputeInstances = create_mig_entities_and_verify(handle, gpuIds, 3, 1)
+    
+    verify_profile_names_exist(handle, newComputeInstances, False)
+
+    ciFailMsg = delete_compute_instances_and_verify(handle, newComputeInstances)
+
+    # Save this and attempt to cleanup the rest even though we failed here
+    if ciFailMsg != '':
+        logger.warning("The compute instances didn't clean up correctly, but we'll attempt to clean up the GPU instances anyway")
+
+    instanceFailMsg = delete_gpu_instances_and_verify(handle, newGpuInstances)
     
     assert ciFailMsg == '', ciFailMsg
-    assert errMsg == '', errMsg
+    assert instanceFailMsg == '', instanceFailMsg
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
@@ -522,3 +539,89 @@ def test_mig_cuda_visible_devices_string_embedded(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_mig_cuda_visible_devices_string_standalone(handle, gpuIds):
     helper_test_mig_cuda_visible_devices_string(handle, gpuIds)
+
+def helper_test_mig_value_reporting(handle, gpuIds):
+    # These fields should report the same value for GPUs, instances, and compute instances
+    sameValueFieldIds = [
+        dcgm_fields.DCGM_FI_DEV_COMPUTE_MODE,
+        dcgm_fields.DCGM_FI_DEV_MIG_MODE,
+        dcgm_fields.DCGM_FI_DEV_SHUTDOWN_TEMP,
+    ]
+
+    differentValueFieldIds = [
+        dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
+    ]
+    
+    newGpuInstances, newComputeInstances = create_mig_entities_and_verify(handle, gpuIds, 3, 1)
+
+    # Make sure we get the same values for these fields on the GPU, instances, and compute instances
+
+    # Build the entity list
+    entities = []
+    for gpuId in gpuIds:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId))
+    for instanceId in newGpuInstances:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU_I, instanceId))
+    for ciId in newComputeInstances:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU_CI, ciId))
+
+    fieldIds = []
+    fieldIds.extend(sameValueFieldIds)
+    fieldIds.extend(differentValueFieldIds)    
+    values = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entities, fieldIds, dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
+    gpuValues = {}
+
+    # Make a map of a map the values reported by the GPUs: gpuId -> fieldId -> value
+    for value in values:
+        if value.entityGroupId == dcgm_fields.DCGM_FE_GPU:
+            if value.entityId not in gpuValues:
+                gpuValues[value.entityId] = {}
+                gpuValues[value.entityId][value.fieldId] = value.value.i64
+            elif value.fieldId not in gpuValues[value.entityId]:
+                gpuValues[value.entityId][value.fieldId] = value.value.i64
+
+    errMsg = ''    
+    for value in values:
+        if value.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
+            gpuId = value.entityId % dcgm_structs.DCGM_MAX_INSTANCES_PER_GPU
+            same = gpuValues[gpuId][value.fieldId] == value.value.i64
+            if not same and value.fieldId in sameValueFieldIds:
+                errMsg = errMsg + "\nExpected %d but found %d for field %d GPU instance %d on GPU %d" \
+                          % (gpuValues[gpuId][value.fieldId], value.value.i64, value.fieldId, value.entityId, gpuId)
+            elif same and value.fieldId in differentValueFieldIds:
+                errMsg = errMsg + "\nExpected different values but found %d for field %d for GPU instance %d on GPU %d" \
+                          % (value.value.i64, value.fieldId, value.entityId, gpuId)
+        if value.entityGroupId == dcgm_fields.DCGM_FE_GPU_CI:
+            gpuId = value.entityId % dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU
+            same = gpuValues[gpuId][value.fieldId] == value.value.i64
+            if not same and value.fieldId in sameValueFieldIds:
+                errMsg = errMsg + "\nExpected %d but found %d for field %d compute instance %d on GPU %d" \
+                          % (gpuValues[gpuId][value.fieldId], value.value.i64, value.fieldId, value.entityId, gpuId)
+            elif same and value.fieldId in differentValueFieldIds:
+                errMsg = errMsg + "\nExpected different values but found %d for field %d for compute instance %d on GPU %d" \
+                          % (value.value.i64, value.fieldId, value.entityId, gpuId)
+
+    ciFailMsg = delete_compute_instances_and_verify(handle, newComputeInstances)
+    instanceFailMsg = delete_gpu_instances_and_verify(handle, newGpuInstances)
+
+    if ciFailMsg != '':
+        logger.warning("The compute instances didn't clean up correctly: %s" % ciFailMsg)
+    if instanceFailMsg != '':
+        logger.warning("The GPU instances didn't clean up correctly: %s" % instanceFailMsg)
+
+    assert errMsg == '', errMsg
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_enabled()
+@test_utils.run_only_as_root()
+def test_mig_value_reporting_embedded(handle, gpuIds):
+    helper_test_mig_value_reporting(handle, gpuIds)
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_enabled()
+@test_utils.run_only_as_root()
+def test_mig_value_reporting_standalone(handle, gpuIds):
+    helper_test_mig_value_reporting(handle, gpuIds)

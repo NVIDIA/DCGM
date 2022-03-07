@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,18 +49,18 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
     m_testParameters->AddString(PS_RUN_IF_GOM_ENABLED, "False");
     m_testParameters->AddString(TS_STR_USE_DGEMM, "True");
     m_testParameters->AddString(TS_STR_IS_ALLOWED, "False");
-    m_testParameters->AddDouble(TS_STR_TEST_DURATION, 120.0, 1.0, 86400.0);
-    m_testParameters->AddDouble(TS_STR_TARGET_PERF, 100.0, 1.0, 100000.0);
-    m_testParameters->AddDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.95, 0.5, 1.0);
-    m_testParameters->AddDouble(TS_STR_CUDA_STREAMS_PER_GPU, TS_MAX_STREAMS_PER_DEVICE, 1.0, TS_MAX_STREAMS_PER_DEVICE);
-    m_testParameters->AddDouble(TS_STR_CUDA_OPS_PER_STREAM, 100.0, 1.0, TS_MAX_CONCURRENT_OPS_PER_STREAM);
-    m_testParameters->AddDouble(TS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE, 30.0, 120.0);
-    m_testParameters->AddDouble(TS_STR_MAX_PCIE_REPLAYS, 160.0, 1.0, 1000000.0);
-    m_testParameters->AddDouble(TS_STR_MAX_MEMORY_CLOCK, 0.0, 0.0, 100000.0);
-    m_testParameters->AddDouble(TS_STR_MAX_GRAPHICS_CLOCK, 0.0, 0.0, 100000.0);
-    m_testParameters->AddDouble(TS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK, 0.0, DCGM_FP64_BLANK);
+    m_testParameters->AddDouble(TS_STR_TEST_DURATION, 120.0);
+    m_testParameters->AddDouble(TS_STR_TARGET_PERF, 100.0);
+    m_testParameters->AddDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.95);
+    m_testParameters->AddDouble(TS_STR_CUDA_STREAMS_PER_GPU, TS_MAX_STREAMS_PER_DEVICE);
+    m_testParameters->AddDouble(TS_STR_CUDA_OPS_PER_STREAM, 100.0);
+    m_testParameters->AddDouble(TS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
+    m_testParameters->AddDouble(TS_STR_MAX_PCIE_REPLAYS, 160.0);
+    m_testParameters->AddDouble(TS_STR_MAX_MEMORY_CLOCK, 0.0);
+    m_testParameters->AddDouble(TS_STR_MAX_GRAPHICS_CLOCK, 0.0);
+    m_testParameters->AddDouble(TS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_stress.json");
-    m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
 
     if (Init(gpuInfo) == false)
@@ -471,7 +471,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
     {
         DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_STRESS_LEVEL, d, maxVal, m_targetPerf, device->gpuId);
-        std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime, endTime);
+        std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime);
         if (utilNote.empty() == false)
         {
             d.AddDetail(utilNote);
@@ -692,7 +692,7 @@ bool ConstantPerf::RunTest()
     earliestStopTime = INT64_MAX;
     for (size_t i = 0; i < m_device.size(); i++)
     {
-        earliestStopTime = MIN(earliestStopTime, workerThreads[i]->GetStopTime());
+        earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;
     }

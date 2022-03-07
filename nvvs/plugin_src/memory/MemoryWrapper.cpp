@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
     // TODO: Add a version check
     // parameterNames must be null terminated
     const char *parameterNames[] = { MEMORY_STR_IS_ALLOWED,
+                                     MEMORY_STR_MIN_ALLOCATION_PERCENTAGE,
                                      MEMORY_L1TAG_STR_IS_ALLOWED,
                                      MEMORY_L1TAG_STR_TEST_DURATION,
                                      MEMORY_L1TAG_STR_TEST_LOOPS,
@@ -35,8 +36,8 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      nullptr };
 
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamInt, DcgmPluginParamInt,
-            DcgmPluginParamInt,  DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamNone };
+        = { DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamInt,
+            DcgmPluginParamInt,  DcgmPluginParamInt, DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+find_package(fmt REQUIRED)
+
 add_library(health_interface INTERFACE)
 target_include_directories(health_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(health_interface INTERFACE dcgm_interface modules_interface)
@@ -21,6 +23,7 @@ target_link_libraries(dcgmmodulehealth
     PRIVATE
         health_interface
         sdk_nvml_essentials_objects
+        fmt::fmt
 )
 target_sources(dcgmmodulehealth
     PRIVATE

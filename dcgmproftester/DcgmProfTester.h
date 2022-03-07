@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,18 +201,15 @@ private:
         unsigned int m_ci;
         bool m_isMig;
 
-        entity_id_t(unsigned int gpuId)
-            : m_gpuId(gpuId)
-            , m_gi(0)
-            , m_ci(0)
-            , m_isMig(false)
-        {}
-
-        entity_id_t(unsigned int gpuId, unsigned int gi, unsigned int ci)
+        entity_id_t(unsigned int gpuId, unsigned int gi, unsigned int ci, bool isMig = true)
             : m_gpuId(gpuId)
             , m_gi(gi)
             , m_ci(ci)
-            , m_isMig(true)
+            , m_isMig(isMig)
+        {}
+
+        entity_id_t(unsigned int gpuId)
+            : entity_id_t(gpuId, 0, 0, false)
         {}
     };
 

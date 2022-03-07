@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "PcieMain.h"
+#include "Brokenp2p.h"
 #include "CudaCommon.h"
 #include "PluginCommon.h"
 #include "cuda.h"
@@ -29,11 +30,6 @@
 
 #ifdef __x86_64__
 __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
-#endif
-
-/*****************************************************************************/
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
 /*****************************************************************************/
@@ -1520,10 +1516,11 @@ int outputP2PLatencyMatrix(BusGrindGlobals *bgGlobals, bool p2p)
 int bg_cache_and_check_parameters(BusGrindGlobals *bgGlobals)
 {
     /* Set defaults before we parse parameters */
-    bgGlobals->test_pinned   = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_PINNED);
-    bgGlobals->test_unpinned = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_UNPINNED);
-    bgGlobals->test_p2p_on   = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_ON);
-    bgGlobals->test_p2p_off  = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_OFF);
+    bgGlobals->test_pinned     = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_PINNED);
+    bgGlobals->test_unpinned   = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_UNPINNED);
+    bgGlobals->test_p2p_on     = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_ON);
+    bgGlobals->test_p2p_off    = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_OFF);
+    bgGlobals->test_broken_p2p = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_BROKEN_P2P);
     return 0;
 }
 
@@ -1716,12 +1713,24 @@ bool bg_check_error_conditions(BusGrindGlobals *bgGlobals,
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
 
     if (bgGlobals->testParameters->GetBoolFromString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK))
@@ -1825,6 +1834,12 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1);
@@ -1832,6 +1847,12 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL); // Previously unchecked
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL); // Previously unchecked
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL);
@@ -1980,6 +2001,15 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
         {
             goto NO_MORE_TESTS;
         }
+    }
+
+    if (bgGlobals->test_broken_p2p && !bg_should_stop(bgGlobals))
+    {
+        size_t size
+            = bgGlobals->testParameters->GetSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB);
+        size *= 1024; // convert to bytes
+        Brokenp2p p2p(bgGlobals->busGrind, bgGlobals->gpu, size);
+        p2p.RunTest();
     }
 
 /* This should come after all of the tests have run */

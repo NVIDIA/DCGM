@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ class DcgmPrometheus(DcgmReader):
     ###########################################################################
     def __init__(self):
         #Have DCGM update its watches twice as fast as our update interval so we don't get out of phase by our update interval
-        updateIntervalUsec = (1000000 * g_settings['prometheusPublishInterval']) / 2
+        updateIntervalUsec = int((1000000 * g_settings['prometheusPublishInterval']) / 2)
         #Add our PID to our field group name so we can have multiple instances running
         fieldGroupName = 'dcgm_prometheus_' + str(os.getpid())
 

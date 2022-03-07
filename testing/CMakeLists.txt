@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 find_package(Jsoncpp REQUIRED)
 find_package(Threads REQUIRED)
+find_package(fmt REQUIRED)
 
 add_executable(testdcgmunittests)
 target_link_libraries(testdcgmunittests
@@ -35,6 +36,7 @@ target_link_libraries(testdcgmunittests
         dcgmmodulediag_private_static
         ${JSONCPP_STATIC_LIBS}
         ${CMAKE_THREAD_LIBS_INIT}
+        fmt::fmt
         rt
         dl
 )
@@ -92,6 +94,8 @@ install(TARGETS testdcgmunittests stub_library_test RUNTIME DESTINATION ${DCGM_T
 
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/generate_coverage_report.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.awk DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
 
 # Install python bindings
 set(DCGM_BINDINGS_PYTHON2_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR})
@@ -145,6 +149,7 @@ install(
     FILES
         python3/dcgm_agent.py
         python3/dcgm_fields.py
+        python3/dcgm_fields_collectd.py
         python3/dcgm_structs.py
         python3/dcgmvalue.py
         python3/DcgmDiag.py
@@ -166,3 +171,27 @@ install(
     DESTINATION
         ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}
     COMPONENT DCGM)
+
+set(DCGM_COLLECTD_INSTALL_DIR "${CMAKE_INSTALL_DATAROOTDIR}/dcgm/collectd")
+set(COLLECTD_TYPES_DB_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/python3/dcgm_fields_collectd.py")
+set(COLLECTD_TYPES_DB_FILE "${DCGM_COLLECTD_INSTALL_DIR}/types.db")
+
+# For collectd types.db
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/types.db
+  DEPENDS ${COLLECTD_TYPES_DB_GENERATOR}
+  # -B to prevent caching bytecode
+  COMMAND ${PYTHON_VER} -B ${COLLECTD_TYPES_DB_GENERATOR} >${CMAKE_CURRENT_BINARY_DIR}/types.db)
+
+# For collectd types.db
+add_custom_target(
+  db_types ALL
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/types.db)
+
+# For collectd types.db
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/types.db DESTINATION ${DCGM_COLLECTD_INSTALL_DIR} COMPONENT DCGM)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/python3/dcgm-collectd-example.conf DESTINATION ${DCGM_COLLECTD_INSTALL_DIR} COMPONENT DCGM)
+
+
+

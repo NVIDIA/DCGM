@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include <time.h>
 #include <vector>
 
+using namespace DcgmNs::Nvvs;
 
 DcgmHandle dcgmHandle;
 DcgmSystem dcgmSystem;
@@ -50,6 +51,7 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , tpVect()
     , whitelist(0)
     , fwcfg()
+    , parser(nullptr)
     , m_tf(nullptr)
     , configFile()
     , debugFile(NVVS_LOGGING_DEFAULT_NVVS_LOGFILE)
@@ -63,8 +65,6 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , m_sysCheck()
     , m_pv()
 {
-    parser = new ConfigFileParser_v2("/etc/nvidia-validation-suite/nvvs.conf", fwcfg);
-
     // init globals
     nvvsCommon.Init();
 }
@@ -318,6 +318,17 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
                       DcgmLogging::severityFromString(debugLogLevel.c_str(), DcgmLoggingSeverityDebug));
     DCGM_LOG_INFO << "Initialized NVVS logger";
     logInit = true;
+    {
+        std::ostringstream out;
+        for (int i = 0; i < argc; i++)
+        {
+            out << argv[i] << " ";
+        }
+        DCGM_LOG_DEBUG << "argc: " << argc << ". argv: " << out.str();
+    }
+
+
+    parser = new ConfigFileParser_v2("", fwcfg);
 
     /*
     startTimer();
@@ -375,11 +386,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         }
     }
 
-    // second process the config file
-    if (!nvvsCommon.configless)
-        parser->ParseGlobalsAndGpu();
-    else
-        parser->legacyGlobalStructHelper();
+    parser->legacyGlobalStructHelper();
 
     std::vector<std::unique_ptr<GpuSet>> &gpuSets = parser->getGpuSetVec();
 
@@ -543,7 +550,7 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
         throw std::runtime_error(buf.str());
     }
 
-    whitelist = new Whitelist();
+    whitelist = new Whitelist(*parser);
 
     for (size_t i = 0; i < gpuIds.size(); i++)
     {
@@ -560,7 +567,19 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
            3. a Maxwell or newer part of any other brand (Quadro, GeForce, Titan, Grid)
         */
 
-        isWhitelisted        = whitelist->isWhitelisted(gpu->getDevicePciDeviceId());
+        if (whitelist->isWhitelisted(gpu->getDevicePciDeviceId()))
+        {
+            isWhitelisted = true;
+        }
+        else if (whitelist->isWhitelisted(gpu->getDevicePciDeviceId(), gpu->getDevicePciSubsystemId()))
+        {
+            isWhitelisted = true;
+            gpu->setUseSsid(true);
+        }
+        else
+        {
+            isWhitelisted = false;
+        }
         std::string gpuBrand = gpu->getDeviceBrandAsString();
         uint64_t gpuArch     = gpu->getDeviceArchitecture();
 
@@ -703,8 +722,6 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
     //    then all available GPU objects are included in the set
     // b) the "tests" vector is also exclusionary. If tests.size() == 0 then all available test
     //    objects are included in the set
-    parser->SetParameterValidator(m_pv);
-
     for (unsigned int i = 0; i < gpuSets.size(); i++)
     {
         bool first_pass = true;
@@ -784,12 +801,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
 
 
                             whitelist->getDefaultsByDeviceId(
-                                compareRequestedName, gpuSets[i]->gpuObjs[0]->getDevicePciDeviceId(), tp);
-
-                            if (!nvvsCommon.configless)
-                            {
-                                parser->ParseTestOverrides(compareRequestedName, *tp);
-                            }
+                                compareRequestedName, gpuSets[i]->gpuObjs[0]->getDeviceId(), tp);
 
                             if (nvvsCommon.parms.size() > 0)
                             {
@@ -797,10 +809,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             }
 
                             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetTestName());
-                            tp->AddDouble(PS_LOGFILE_TYPE,
-                                          (double)nvvsCommon.logFileType,
-                                          NVVS_LOGFILE_TYPE_JSON,
-                                          NVVS_LOGFILE_TYPE_BINARY);
+                            tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
 
                             (*testIt)->pushArgVectorElement(Test::NVVS_CLASS_CUSTOM, tp);
                             gpuSets[i]->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
@@ -825,11 +834,8 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
 /*****************************************************************************/
 void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, GpuSet *set)
 {
-    std::vector<Test *>::iterator itSkip = FindTestName(Test::NVVS_CLASS_CUSTOM, "Skip");
     int type;
     std::vector<std::string> testNames;
-    bool skipIsPushed = false;
-
 
     switch (testClass)
     {
@@ -887,14 +893,14 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
         else
         {
             testIt = FindTestName(testClass, SW_PLUGIN_NAME);
-            if (testIt == itSkip)
+            if (testIt == testVect.end())
             {
                 throw std::runtime_error(
                     "The software deployment program was not properly loaded. Please check the plugin path and that the plugins are valid.");
             }
         }
 
-        if (testIt != itSkip)
+        if (testIt != testVect.end())
         {
             TestParameters *tp = new TestParameters();
             tpVect.push_back(tp); // purely for accounting when we go to cleanup
@@ -909,36 +915,18 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                 */
 
                 // pull just the first GPU device ID since they are all meant to be the same at this point
-                whitelist->getDefaultsByDeviceId(*it, set->gpuObjs[0]->getDevicePciDeviceId(), tp);
+                whitelist->getDefaultsByDeviceId(*it, set->gpuObjs[0]->getDeviceId(), tp);
 
                 if (nvvsCommon.parms.size() > 0)
                     overrideParameters(tp, *it);
-                else if (!nvvsCommon.configless)
-                    parser->ParseTestOverrides(*it, *tp);
             }
 
             tp->AddString(PS_PLUGIN_NAME, (*it));
-            tp->AddDouble(
-                PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+            tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
 
 
             (*testIt)->pushArgVectorElement(testClass, tp);
             set->AddTestObject(type, *testIt);
-        }
-        else
-        {
-            TestParameters *tp = new TestParameters();
-            tpVect.push_back(tp); // purely for accounting when we go to cleanup
-
-            tp->AddString(PS_PLUGIN_NAME, (*it));
-
-            (*testIt)->pushArgVectorElement(testClass, tp);
-        }
-
-        if (testIt == itSkip && skipIsPushed == false)
-        {
-            skipIsPushed = true;
-            set->AddTestObject(type, *itSkip);
         }
     }
 }
@@ -947,16 +935,15 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
 std::vector<Test *>::iterator NvidiaValidationSuite::FindTestName(Test::testClasses_enum testClass,
                                                                   std::string testName)
 {
-    std::vector<Test *>::iterator it;
     std::string compareName = m_tf->GetCompareName(testClass, testName);
 
-    for (it = testVect.begin(); it != testVect.end(); it++)
+    for (auto it = testVect.begin(); it != testVect.end(); ++it)
     {
         if ((*it)->GetTestName() == compareName)
             return it;
     }
 
-    return --it; // returns the skip test
+    return testVect.end();
 }
 
 /*****************************************************************************/

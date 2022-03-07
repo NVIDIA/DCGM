@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,20 +303,17 @@ public:
     dcgmReturn_t SetValue(int gpuId, unsigned short fieldId, dcgmcm_sample_p value);
 
     /**
-     * @param[in]  connectionId - the id of the connection
      * @param[in]  groupId - the id of the group whose entities are being retrieved
      * @param[out] entities - the list of entities with information about entity group and id
      */
-    dcgmReturn_t GetGroupEntities(dcgm_connection_id_t connectionId,
-                                  unsigned int groupId,
-                                  std::vector<dcgmGroupEntityPair_t> &entities);
+    dcgmReturn_t GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities) const;
 
     /**
      * @param[in]  connectionId - the id of the connection
      * @param[in]  groupId - the id of the group we're checking
      * @param[out] areAllSameSku - set to true if all GPUs in this group and the same SKU, false otherwise.
      */
-    dcgmReturn_t AreAllTheSameSku(dcgm_connection_id_t connectionId, unsigned int groupId, int *areAllSameSku);
+    dcgmReturn_t AreAllTheSameSku(dcgm_connection_id_t connectionId, unsigned int groupId, int *areAllSameSku) const;
 
     /**
      * @param[in]  connectionId - the id of the connection
@@ -337,7 +334,7 @@ public:
     /**
      * @param[in,out] groupId - the group ID to verify and update
      */
-    dcgmReturn_t VerifyAndUpdateGroupId(unsigned int *groupId);
+    dcgmReturn_t VerifyAndUpdateGroupId(unsigned int *groupId) const;
 
     DcgmLoggingSeverity_t GetLoggerSeverity(dcgm_connection_id_t connectionId, loggerCategory_t logger = BASE_LOGGER);
 
@@ -395,6 +392,20 @@ public:
     dcgmReturn_t GetGpuInstanceEntityId(unsigned int gpuId,
                                         DcgmNs::Mig::Nvml::GpuInstanceId const &instanceId,
                                         dcgm_field_eid_t *entityId) const;
+
+    /**
+     * @brief For the given entity pair returns MIG ids if the requested entity is either GPU_I or GPU_CI
+     * @param[in]   entity      Entity pair for the desired MIG instance.
+     *                          The entityGroupId should be either \c DCGM_FE_GPU_I or \c DCGM_FE_GPU_CI
+     * @param[out]  gpuId       GPU ID of the requested MIG instance
+     * @param[out]  instanceId  GPU Instance ID if the requested entityGroupId was \c DCGM_FE_GPU_CI
+     * @return
+     *          \c\b DCGM_ST_OK       Success<br>
+     *          \c\b DCGM_ST_BADPARAM In case entity is not GPU_I or GPU_CI<br>
+     */
+    dcgmReturn_t GetMigIndicesForEntity(dcgmGroupEntityPair_t const &entity,
+                                        unsigned int *gpuId,
+                                        dcgm_field_eid_t *instanceId = nullptr) const;
 
     /**
      * Returns information about how many GPCs are allocated and occupied for the GPU instance.

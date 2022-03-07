@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,28 @@ int TestFieldGroups::TestFieldGroupObject(void)
     fieldIdsBefore.push_back(DCGM_FI_DEV_NAME);
 
     DcgmWatcher watcher(DcgmWatcherTypeClient);
+    DcgmWatcher watcher2(DcgmWatcherTypeHostEngine);
+    DcgmWatcher watcher3(DcgmWatcherTypeHostEngine);
+
+    if (watcher == watcher2)
+    {
+        std::cerr << "TestFieldGroupObject watchers 1 and 2 should be different." << std::endl;
+        numErrors++;
+    }
+    else
+    {
+        std::cerr << "TestFieldGroupObject 1 PASS" << std::endl;
+    }
+
+    if (watcher2 != watcher3)
+    {
+        std::cerr << "TestFieldGroupObject watchers 2 and 3 should be same." << std::endl;
+        numErrors++;
+    }
+    else
+    {
+        std::cerr << "TestFieldGroupObject 2 PASS" << std::endl;
+    }
 
     std::string groupNameBefore = "bestgroupever";
 

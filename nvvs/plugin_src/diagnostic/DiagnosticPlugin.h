@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,13 @@
 
 #define PERF_STAT_NAME "perf_gflops"
 
+#define DIAG_HALF_PRECISION   0x0001
+#define DIAG_SINGLE_PRECISION 0x0002
+#define DIAG_DOUBLE_PRECISION 0x0004
+
+#define USE_HALF_PRECISION(x)   (((x)&DIAG_HALF_PRECISION) != 0)
+#define USE_SINGLE_PRECISION(x) (((x)&DIAG_SINGLE_PRECISION) != 0)
+#define USE_DOUBLE_PRECISION(x) (((x)&DIAG_DOUBLE_PRECISION) != 0)
 
 /*****************************************************************************/
 /* Class for a single gpuburn device */
@@ -153,6 +160,14 @@ public:
     void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters);
 
     /*************************************************************************/
+    /*
+     * Initializes the value for m_precision from the test parameters string for precision
+     *
+     * @param supportsDoubles - if no string is set, then whether or not cublasDgemm() is supported
+     */
+    int32_t SetPrecisionFromString(bool supportsDoubles);
+
+    /*************************************************************************/
 
 private:
     /*************************************************************************/
@@ -175,13 +190,25 @@ private:
 
     /*************************************************************************/
     /*
+     * Updates m_precision if necessary; checks if DIAG_HALF_PRECISION is supported, and
+     * removes it from the list if it isn't supported.
+     */
+    void UpdateForHGemmSupport(int deviceId);
+
+    /*************************************************************************/
+    /*
+     * Updates m_precision if necessary; checks if DIAG_DOUBLE_PRECISION is supported
+     */
+    void UpdateForDGemmSupport(int deviceId);
+
+    /*************************************************************************/
+    /*
      * Runs the Diagnostic test
      *
      * Returns:
      *      false if there were issues running the test (test failures are not considered issues),
      *      true otherwise.
      */
-    template <class T>
     bool RunTest();
 
     /*************************************************************************/
@@ -199,11 +226,12 @@ private:
     dcgmHandle_t m_handle;
     bool m_dcgmRecorderInitialized; /* Has DcgmRecorder been initialized? */
     bool m_dcgmCommErrorOccurred;   /* Has there been a communication error with DCGM? */
+    bool m_explicitTests;           /* Were explicit tests requested via parameters? */
 
     /* Cached parameters read from testParameters */
     double m_testDuration;             /* test length, in seconds */
     double m_sbeFailureThreshold;      /* Failure threshold for SBEs. Below this it's a warning */
-    bool m_useDoubles;                 /* true if we should use doubles instead of floats */
+    int32_t m_precision;               /* bitmap for what precision we should use (half, single, double) */
     unsigned int m_matrixDim;          /* The dimension size of the matrix */
     dcgmDiagPluginGpuList_t m_gpuInfo; // The information about each GPU
 };

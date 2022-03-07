@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,7 +192,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
 
     for (unsigned int i = 0; i < m_gpus.size(); i++)
     {
-        st = pDcgmGrpManager->AddEntityToGroup(0, groupId, DCGM_FE_GPU, m_gpus[i].gpuId);
+        st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[i].gpuId);
         if (DCGM_ST_OK != st)
         {
             fprintf(stderr, "pDcgmGrp->AddEntityToGroup returned %d\n", st);
@@ -200,7 +200,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
         }
     }
 
-    st = pDcgmGrpManager->GetGroupEntities(0, groupId, groupEntities);
+    st = pDcgmGrpManager->GetGroupEntities(groupId, groupEntities);
     if (st != DCGM_ST_OK)
     {
         fprintf(stderr, "pDcgmGrpManager->GetGroupEntities() Failed with %d", st);
@@ -276,7 +276,7 @@ int TestGroupManager::TestGroupManageGpus()
 
         vecGroupIds.push_back(groupId);
 
-        st = pDcgmGrpManager->GetGroupEntities(0, groupId, groupEntities);
+        st = pDcgmGrpManager->GetGroupEntities(groupId, groupEntities);
         if (st != DCGM_ST_OK)
         {
             fprintf(stderr, "pDcgmGrpManager->GetGroupEntities returned %d\n", st);
@@ -328,7 +328,7 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->AddEntityToGroup(0, groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
+    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
     if (DCGM_ST_OK != st)
     {
         fprintf(stderr, "pDcgmGrp->AddEntityToGroup returned %d\n", st);
@@ -336,7 +336,7 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->AddEntityToGroup(0, groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
+    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
     if (DCGM_ST_BADPARAM != st)
     {
         fprintf(stderr, "pDcgmGrp->AddEntityToGroup must fail for duplicate entry %d\n", st);
@@ -428,7 +428,7 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     DcgmGroupManager *groupManager   = heHandler->GetGroupManager();
 
     groupId    = groupManager->GetAllGpusGroup();
-    dcgmReturn = groupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = groupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "Got error %d from GetGroupEntities()\n", dcgmReturn);
@@ -448,7 +448,7 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     /* Add a fake GPU and make sure it appears in the entity list */
     fakeEntityId = cacheManager->AddFakeGpu();
 
-    dcgmReturn = groupManager->GetGroupEntities(0, groupId, entities);
+    dcgmReturn = groupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "Got error %d from GetGroupEntities()\n", dcgmReturn);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,44 +17,35 @@
 #include "MigIdParser.hpp"
 
 #include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
 #include <DcgmVariantHelper.hpp>
 
 #include <charconv>
-#include <tuple>
 
 
-namespace
-{
-constexpr inline std::size_t hash_combine(std::size_t const hash1, std::size_t const hash2) noexcept
-{
-    return hash1 ^ (hash2 * 0x9e3779b9 + (hash1 << 6u) + (hash1 >> 2u));
-}
-
-} // namespace
+using DcgmNs::Utils::Hash::CompoundHash;
+using DcgmNs::Utils::Hash::StdHash;
 
 namespace std
 {
 size_t hash<DcgmNs::ParsedUnknown>::operator()(DcgmNs::ParsedUnknown const &obj) const
 {
-    return std::hash<DcgmNs::ParsedUnknown const *>()(&obj);
+    return StdHash(&obj);
 }
 
 size_t hash<DcgmNs::ParsedGpu>::operator()(DcgmNs::ParsedGpu const &obj) const
 {
-    return std::hash<decltype(obj.gpuUuid)>()(obj.gpuUuid);
+    return StdHash(obj.gpuUuid);
 }
 
 size_t hash<DcgmNs::ParsedGpuI>::operator()(DcgmNs::ParsedGpuI const &obj) const
 {
-    return hash_combine(std::hash<decltype(obj.gpuUuid)>()(obj.gpuUuid),
-                        std::hash<decltype(obj.instanceId)>()(obj.instanceId));
+    return CompoundHash(obj.gpuUuid, obj.instanceId);
 }
 
 size_t hash<DcgmNs::ParsedGpuCi>::operator()(DcgmNs::ParsedGpuCi const &obj) const
 {
-    return hash_combine(std::hash<decltype(obj.gpuUuid)>()(obj.gpuUuid),
-                        hash_combine(std::hash<decltype(obj.instanceId)>()(obj.instanceId),
-                                     std::hash<decltype(obj.computeInstanceId)>()(obj.computeInstanceId)));
+    return CompoundHash(obj.gpuUuid, obj.instanceId, obj.computeInstanceId);
 }
 } // namespace std
 
@@ -145,16 +136,15 @@ bool ParsedUnknown::operator==(ParsedUnknown const &obj) const
 
 std::ostream &operator<<(std::ostream &os, ParseResult const &val)
 {
-    std::visit(overloaded {
-                   [&](ParsedUnknown const &) { os << "ParsedUnknown"; },
+    std::visit(
+        overloaded([&](ParsedUnknown const &) { os << "ParsedUnknown"; },
                    [&](ParsedGpu const &obj) { os << "ParsedGpu(" << obj.gpuUuid << ")"; },
                    [&](ParsedGpuI const &obj) { os << "ParsedGpuI(" << obj.gpuUuid << ", " << obj.instanceId << ")"; },
                    [&](ParsedGpuCi const &obj) {
                        os << "ParsedGpuCi(" << obj.gpuUuid << ", " << obj.instanceId << ", " << obj.computeInstanceId
                           << ")";
-                   },
-               },
-               val);
+                   }),
+        val);
 
     return os;
 }

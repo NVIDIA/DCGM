@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,12 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3:
         case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4:
         case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11:
             return "CRC FLIT Error";
         case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0:
         case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1:
@@ -54,6 +60,12 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3:
         case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4:
         case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11:
             return "CRC Data Error";
         case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0:
         case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1:
@@ -61,6 +73,12 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3:
         case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4:
         case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11:
             return "Replay Error";
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0:
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1:
@@ -68,6 +86,12 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3:
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4:
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11:
             return "Recovery Error";
         default:
             return "Unknown";
@@ -100,14 +124,17 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     fieldIds[1]  = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0;
     fieldIds[2]  = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0;
     fieldIds[3]  = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0;
+
     fieldIds[4]  = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1;
     fieldIds[5]  = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1;
     fieldIds[6]  = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1;
     fieldIds[7]  = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1;
+
     fieldIds[8]  = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2;
     fieldIds[9]  = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2;
     fieldIds[10] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2;
     fieldIds[11] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2;
+
     fieldIds[12] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3;
     fieldIds[13] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3;
     fieldIds[14] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3;

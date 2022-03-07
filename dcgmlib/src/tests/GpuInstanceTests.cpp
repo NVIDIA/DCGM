@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,25 +15,6 @@
  */
 #include <DcgmGpuInstance.h>
 #include <catch2/catch.hpp>
-
-TEST_CASE("GpuInstance: TruncateCIDeviceName")
-{
-    std::string name;
-
-    dcgmReturn_t ret = DcgmGpuInstance::TruncateCIDeviceName("bob", name);
-    REQUIRE(ret == DCGM_ST_BADPARAM); // didn't have 'MIG' in the string
-
-    ret = DcgmGpuInstance::TruncateCIDeviceName("dalMIG4c.4g.8gb", name);
-    REQUIRE(ret == DCGM_ST_BADPARAM);
-
-    ret = DcgmGpuInstance::TruncateCIDeviceName("dal MIG 4c.4g.8gb", name);
-    REQUIRE(ret == DCGM_ST_OK);
-    REQUIRE(name == "4c.4g.8gb"); // capure just the suffix
-
-    ret = DcgmGpuInstance::TruncateCIDeviceName("kal MIG 4g.8gb", name);
-    REQUIRE(ret == DCGM_ST_OK);
-    REQUIRE(name == "4g.8gb"); // capture just the suffix if 'Xc.' is missing as well
-}
 
 TEST_CASE("GpuInstance: DriveGpuInstanceName")
 {

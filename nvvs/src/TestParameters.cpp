@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,33 +21,24 @@
 
 /*****************************************************************************/
 TestParameterValue::TestParameterValue(std::string defaultValue)
-{
-    m_doubleValue    = 0.0;
-    m_stringValue    = defaultValue;
-    m_valueType      = TP_T_STRING;
-    m_doubleMinValue = DBL_MIN;
-    m_doubleMaxValue = DBL_MAX;
-}
+    : m_valueType(TP_T_STRING)
+    , m_stringValue(defaultValue)
+    , m_doubleValue(0.0)
+{}
 
 /*****************************************************************************/
-TestParameterValue::TestParameterValue(double defaultValue, double minValue, double maxValue)
-{
-    m_doubleValue    = defaultValue;
-    m_stringValue    = "";
-    m_valueType      = TP_T_DOUBLE;
-    m_doubleMinValue = minValue;
-    m_doubleMaxValue = maxValue;
-}
+TestParameterValue::TestParameterValue(double defaultValue)
+    : m_valueType(TP_T_DOUBLE)
+    , m_stringValue("")
+    , m_doubleValue(defaultValue)
+{}
 
 /*****************************************************************************/
 TestParameterValue::TestParameterValue(const TestParameterValue &copyMe)
-{
-    m_valueType      = copyMe.m_valueType;
-    m_stringValue    = copyMe.m_stringValue;
-    m_doubleValue    = copyMe.m_doubleValue;
-    m_doubleMinValue = copyMe.m_doubleMinValue;
-    m_doubleMaxValue = copyMe.m_doubleMaxValue;
-}
+    : m_valueType(copyMe.m_valueType)
+    , m_stringValue(copyMe.m_stringValue)
+    , m_doubleValue(copyMe.m_doubleValue)
+{}
 
 /*****************************************************************************/
 int TestParameterValue::GetValueType()
@@ -64,8 +55,6 @@ TestParameterValue::~TestParameterValue()
 /*****************************************************************************/
 int TestParameterValue::Set(std::string value)
 {
-    double beforeDoubleValue = m_doubleValue;
-
     /* Possibly coerce the value into the other type */
     if (m_valueType == TP_T_STRING)
     {
@@ -73,16 +62,13 @@ int TestParameterValue::Set(std::string value)
         return 0;
     }
 
-    m_doubleValue = atof(value.c_str());
+    double beforeDoubleValue = m_doubleValue;
+    m_doubleValue            = std::stof(value);
+
     if (m_doubleValue == 0.0 && value.c_str()[0] != '0')
     {
         m_doubleValue = beforeDoubleValue;
         return TP_ST_CANTCOERCE; /* atof failed. Must be a bad value */
-    }
-    else if ((m_doubleValue < m_doubleMinValue || m_doubleValue > m_doubleMaxValue) && !nvvsCommon.overrideMinMax)
-    {
-        m_doubleValue = beforeDoubleValue;
-        return TP_ST_OUTOFRANGE;
     }
 
     return 0;
@@ -94,9 +80,6 @@ int TestParameterValue::Set(double value)
     /* Possibly coerce the value into the other type */
     if (m_valueType == TP_T_DOUBLE)
     {
-        if ((value < m_doubleMinValue || value > m_doubleMaxValue) && !nvvsCommon.overrideMinMax)
-            return TP_ST_OUTOFRANGE;
-
         m_doubleValue = value;
         return 0;
     }
@@ -116,7 +99,7 @@ double TestParameterValue::GetDouble(void)
         return m_doubleValue;
     }
 
-    return atof(m_stringValue.c_str());
+    return std::stof(m_stringValue);
 }
 
 /*****************************************************************************/
@@ -225,30 +208,15 @@ int TestParameters::AddString(std::string key, std::string value)
 }
 
 /*****************************************************************************/
-int TestParameters::AddDouble(std::string key, double value, double minValue, double maxValue)
+int TestParameters::AddDouble(std::string key, double value)
 {
     if (m_globalParameters.find(key) != m_globalParameters.end())
     {
-        PRINT_WARNING("%s %f %f %f",
-                      "Tried to add parameter %s => %f (min %f, max %f), but it already exists",
-                      key.c_str(),
-                      value,
-                      minValue,
-                      maxValue);
+        DCGM_LOG_WARNING << "Tried to add parameter " << key << " => " << value << ", but it already exists";
         return TP_ST_ALREADYEXISTS;
     }
-    else if (value < minValue || value > maxValue)
-    {
-        PRINT_WARNING("%s %f %f %f",
-                      "Tried to add parameter %s => %f (min %f, max %f) outside of its own range",
-                      key.c_str(),
-                      value,
-                      minValue,
-                      maxValue);
-        return TP_ST_OUTOFRANGE; /* Our default value is outside our own range */
-    }
 
-    m_globalParameters[key] = new TestParameterValue((double)value, minValue, maxValue);
+    m_globalParameters[key] = new TestParameterValue((double)value);
     return TP_ST_OK;
 }
 
@@ -279,19 +247,10 @@ int TestParameters::AddSubTestString(std::string subTest, std::string key, std::
 }
 
 /*****************************************************************************/
-int TestParameters::AddSubTestDouble(std::string subTest,
-                                     std::string key,
-                                     double value,
-                                     double minValue,
-                                     double maxValue)
+int TestParameters::AddSubTestDouble(std::string subTest, std::string key, double value)
 {
     std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
     std::map<std::string, TestParameterValue *>::iterator it;
-
-    if (value < minValue || value > maxValue)
-    {
-        return TP_ST_OUTOFRANGE; /* Our default value is outside our own range */
-    }
 
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt != m_subTestParameters.end())
@@ -299,18 +258,16 @@ int TestParameters::AddSubTestDouble(std::string subTest,
         it = outerIt->second.find(key);
         if (it != outerIt->second.end())
         {
-            PRINT_WARNING("%s %s %f %f %f",
-                          "Tried to add subtest %s parameter %s => %f (min %f, max %f), but it already exists",
+            PRINT_WARNING("%s %s %f",
+                          "Tried to add subtest %s parameter %s => %f, but it already exists",
                           subTest.c_str(),
                           key.c_str(),
-                          value,
-                          minValue,
-                          maxValue);
+                          value);
             return TP_ST_ALREADYEXISTS;
         }
     }
 
-    m_subTestParameters[subTest][key] = new TestParameterValue((double)value, minValue, maxValue);
+    m_subTestParameters[subTest][key] = new TestParameterValue((double)value);
     return TP_ST_OK;
 }
 
@@ -326,7 +283,9 @@ int TestParameters::SetString(std::string key, std::string value, bool silent)
         return TP_ST_NOTFOUND;
     }
 
-    return m_globalParameters[key]->Set((std::string)value);
+    int st = m_globalParameters[key]->Set((std::string)value);
+    DCGM_LOG_DEBUG << "Set global parameter " << key << " -> " << value << ". st " << st;
+    return st;
 }
 
 /*****************************************************************************/
@@ -338,7 +297,9 @@ int TestParameters::SetDouble(std::string key, double value)
         return TP_ST_NOTFOUND;
     }
 
-    return m_globalParameters[key]->Set(value);
+    int st = m_globalParameters[key]->Set(value);
+    DCGM_LOG_DEBUG << "Set global parameter " << key << " -> " << value << ". st " << st;
+    return st;
 }
 
 /*****************************************************************************/

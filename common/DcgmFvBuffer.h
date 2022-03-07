@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,8 @@ typedef struct
     } value;                             //!< Value
 } dcgmBufferedFv_v1, dcgmBufferedFv_t;
 
+#define DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE 32 /* Size of the dcgmBufferedFv_v1 struct if the value is an i64/dbl */
+
 /* Current version of dcgmBufferedFv_t */
 #define dcgmBufferedFv_version 1
 
@@ -62,7 +64,8 @@ typedef struct
 typedef size_t dcgmBufferedFvCursor_t;
 
 /* Macro to estimate the initial capacity needed */
-#define FVBUFFER_GUESS_INITIAL_CAPACITY(numEntities, numFieldIds) ((size_t)((numEntities) * (numFieldIds)*32))
+#define FVBUFFER_GUESS_INITIAL_CAPACITY(numEntities, numFieldIds) \
+    ((size_t)((numEntities) * (numFieldIds)*DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE))
 
 /*
  * DcgmFvBuffer is a class for buffering field values between subsystems and processes

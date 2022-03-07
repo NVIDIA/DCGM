@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ class DcgmiDiag:
 
     ################################################################################
     def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, train=False, forceTrain=False, 
-                 dcgmiPrefix='', runMode=0, configFile='', debugLevel=0, debugFile='', pluginPath=''):
+                 dcgmiPrefix='', runMode=0, configFile='', debugLevel=0, debugFile=''):
         #gpuList is expected to be a string. Convert it if it was provided
         self.gpuList = None
         if gpuIds is not None:
@@ -161,7 +161,6 @@ class DcgmiDiag:
         self.configFile = configFile
         self.debugLevel = debugLevel
         self.debugFile = debugFile
-        self.pluginPath = pluginPath
 
     ################################################################################
     def DebugLevelToString(self):
@@ -236,10 +235,6 @@ class DcgmiDiag:
         if self.gpuList is not None:
             cmd.append('-i')
             cmd.append(self.gpuList)
-
-        if self.pluginPath:
-            cmd.append('--plugin-path')
-            cmd.append(self.pluginPath)
 
         return cmd
     

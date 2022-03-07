@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,6 @@
 #include "keyedvector.h"
 #include "timelib.h"
 #include <string.h>
-
-/*****************************************************************************/
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /*****************************************************************************/
 typedef struct kv_test_t
@@ -788,9 +785,10 @@ int TestKeyedVector::TestRemoveRangeByCursor()
     for (Nelem = keyedvector_size(kv); Nelem >= endTestNelem; Nelem = keyedvector_size(kv))
     {
         startDeleteIdx = rand() % ((Nelem * 9) / 10); /* Start within first 90% of Nelem */
-        endDeleteIdx
-            = startDeleteIdx
-              + rand() % MIN(((Nelem - 1) - startDeleteIdx), endTestNelem); /* Don't delete too many. Set at max 10% */
+        endDeleteIdx   = startDeleteIdx
+                       + rand()
+                             % std::min(((Nelem - 1) - startDeleteIdx),
+                                        endTestNelem); /* Don't delete too many. Set at max 10% */
         beforeStartDeleteIdx = startDeleteIdx - 1;
         afterEndDeleteIdx    = endDeleteIdx + 1;
 

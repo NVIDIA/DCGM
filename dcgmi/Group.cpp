@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,18 +146,18 @@ dcgmReturn_t Group::RunGroupDestroy(dcgmHandle_t mDcgmHandle)
 }
 
 /*******************************************************************************/
-dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t mDcgmHandle, bool json)
+dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, bool outputJson)
 {
     DcgmiOutputTree outTree(20, 60);
     DcgmiOutputJson outJson;
-    DcgmiOutput &out = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
+    DcgmiOutput &out = outputJson ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
     std::ostringstream ss;
     ss << (unsigned int)(uintptr_t)groupId;
     DcgmiOutputBoxer &outGroup = out[ss.str()];
 
     out.addHeader(GROUP_INFO_HEADER);
 
-    dcgmReturn_t result = RunGroupInfo(mDcgmHandle, outGroup);
+    dcgmReturn_t result = RunGroupInfo(dcgmHandle, outGroup);
 
     if (result == DCGM_ST_OK)
     {
@@ -167,14 +167,14 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t mDcgmHandle, bool json)
     return result;
 }
 
-dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t mDcgmHandle, DcgmiOutputBoxer &outGroup)
+dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outGroup)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     dcgmGroupInfo_t stDcgmGroupInfo;
     std::stringstream ss;
 
     stDcgmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(mDcgmHandle, groupId, &stDcgmGroupInfo);
+    result                  = dcgmGroupGetInfo(dcgmHandle, groupId, &stDcgmGroupInfo);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -244,9 +244,9 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t mDcgmHandle, DcgmiOutputBoxer &out
 }
 
 /*******************************************************************************/
-dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t mDcgmHandle, bool add)
+dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add)
 {
-    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(mDcgmHandle, groupInfo);
+    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(dcgmHandle, groupInfo);
 
     // Fallback to old method
 
@@ -267,11 +267,11 @@ dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t mDcgmHandle, bool add)
     {
         if (add)
         {
-            result = dcgmGroupAddEntity(mDcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
+            result = dcgmGroupAddEntity(dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
         }
         else
         {
-            result = dcgmGroupRemoveEntity(mDcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
+            result = dcgmGroupRemoveEntity(dcgmHandle, groupId, entityList[i].entityGroupId, entityList[i].entityId);
         }
         if (DCGM_ST_OK != result)
         {

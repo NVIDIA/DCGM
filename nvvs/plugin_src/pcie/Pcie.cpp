@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,111 +41,71 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddString(PCIE_STR_TEST_UNPINNED, "True");
     tp->AddString(PCIE_STR_TEST_P2P_ON, "True");
     tp->AddString(PCIE_STR_TEST_P2P_OFF, "True");
+    tp->AddString(PCIE_STR_TEST_BROKEN_P2P, "True");
     tp->AddString(PS_LOGFILE, "stats_pcie.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
 
     tp->AddString(PCIE_STR_IS_ALLOWED, "False");
 
-    tp->AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0, 1.0, 1000000.0);
+    tp->AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0);
 
-    tp->AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0, 0.0, 100000.0);
-    tp->AddDouble(PCIE_STR_MAX_GRAPHICS_CLOCK, 0.0, 0.0, 100000.0);
+    tp->AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0);
+    tp->AddDouble(PCIE_STR_MAX_GRAPHICS_CLOCK, 0.0);
     // CRC_ERROR_THRESHOLD is the number of CRC errors per second, per RM recommendation
-    tp->AddDouble(PCIE_STR_CRC_ERROR_THRESHOLD, 100.0, 0.0, 1000000.0);
+    tp->AddDouble(PCIE_STR_CRC_ERROR_THRESHOLD, 100.0);
     tp->AddString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK, "False");
 
-    /* Bandwidth parameters' allowed range */
-    double minBwIterations  = 1.0;
-    double maxBwIterations  = 1000000000000.0;
-    double minBwIntsPerCopy = 1.0;
-    double maxBwIntsPerCopy = 1000000000.0;
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, 50.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    /* latency parameters' allowed range */
-    double minLatIterations = 1.0;
-    double maxLatIterations = 1000000000000.0;
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0, 0.0, 3.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0, 0.0, 3.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0, 1.0, 16.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_ITERATIONS, 5000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MAX_LATENCY, 100000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED,
-                         PCIE_STR_INTS_PER_COPY,
-                         10000000.0,
-                         minBwIntsPerCopy,
-                         maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_ITERATIONS, 5000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_ITERATIONS, 5000.0, minLatIterations, maxLatIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MAX_LATENCY, 100000.0, 0.0, 1000000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_ITERATIONS, 5000.0, minLatIterations, maxLatIterations);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0, 0.0, 1000000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0, 0.0, 1000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
-                         PCIE_STR_INTS_PER_COPY,
-                         10000000.0,
-                         minBwIntsPerCopy,
-                         maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
-                         PCIE_STR_INTS_PER_COPY,
-                         10000000.0,
-                         minBwIntsPerCopy,
-                         maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0, minBwIntsPerCopy, maxBwIntsPerCopy);
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0, minBwIterations, maxBwIterations);
-
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0, minLatIterations, maxLatIterations);
-
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0, minLatIterations, maxLatIterations);
-
+    tp->AddSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, 4096.0);
 
     m_infoStruct.defaultTestParameters = tp;
 

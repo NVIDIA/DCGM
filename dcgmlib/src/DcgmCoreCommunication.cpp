@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <chrono>
+#include <fmt/format.h>
 #include <mutex>
 #include <thread>
 
@@ -653,7 +654,16 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGroupEntities(dcgm_module_command_
     memcpy(&gge, header, sizeof(gge));
 
     std::vector<dcgmGroupEntityPair_t> entities;
-    gge.response.ret = m_groupManagerPtr->GetGroupEntities(gge.request.connectionId, gge.request.groupId, entities);
+    gge.response.ret = m_groupManagerPtr->GetGroupEntities(gge.request.groupId, entities);
+
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    {
+        DCGM_LOG_ERROR << fmt::format("Too many entities in the group {}. Provided {}, supported up to {}",
+                                      gge.request.groupId,
+                                      entities.size(),
+                                      DCGM_GROUP_MAX_ENTITIES);
+        return DCGM_ST_MAX_LIMIT;
+    }
 
     for (size_t i = 0; i < entities.size(); i++)
     {
@@ -1152,6 +1162,14 @@ dcgmReturn_t DcgmCoreCommunication::ProcessLoggingGetSeverity(dcgm_module_comman
             getSeverity.response = DcgmLogging::getLoggerSeverity<SYSLOG_LOGGER>();
             success              = true;
             break;
+        case CONSOLE_LOGGER:
+            getSeverity.response = DcgmLogging::getLoggerSeverity<CONSOLE_LOGGER>();
+            success              = true;
+            break;
+        case FILE_LOGGER:
+            getSeverity.response = DcgmLogging::getLoggerSeverity<FILE_LOGGER>();
+            success              = true;
+            break;
             // Do not add a default case so that the compiler catches missing loggers
     }
 
@@ -1467,6 +1485,47 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetMigInstanceEntityId(dcgm_module_co
 
     query.response.uintAnswer = entityId;
     query.response.ret        = entityId == DCGM_BLANK_ENTITY_ID ? DCGM_ST_NO_DATA : DCGM_ST_OK;
+
+    memcpy(header, &query, sizeof(query));
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessGetMigIndicesForEntity(dcgm_module_command_header_t *header)
+{
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    dcgmCoreGetMigIndicesForEntity_t query {};
+    auto ret = DcgmModule::CheckVersion(header, dcgmCoreGetMigIndicesForEntity_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    memcpy(&query, header, sizeof(query));
+
+    auto const entityGroupId = query.request.entityGroupId;
+    auto const entityId      = query.request.entityId;
+
+    if (entityGroupId != DCGM_FE_GPU_I && entityGroupId != DCGM_FE_GPU_CI)
+    {
+        query.response.ret = DCGM_ST_BADPARAM;
+    }
+    else
+    {
+        unsigned int gpuId = {};
+        DcgmNs::Mig::GpuInstanceId instanceId {};
+        DcgmNs::Mig::ComputeInstanceId computeInstanceId {};
+        auto result = m_cacheManagerPtr->GetMigIndicesForEntity(
+            { entityGroupId, entityId }, &gpuId, &instanceId, &computeInstanceId);
+        query.response.ret = result;
+        if (result == DCGM_ST_OK)
+        {
+            query.response.gpuId      = gpuId;
+            query.response.instanceId = instanceId.id;
+        }
+    }
 
     memcpy(header, &query, sizeof(query));
 
@@ -1805,6 +1864,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqIdGetMigUtilization:
         {
             ret = ProcessGetMigUtilization(header);
+            break;
+        }
+
+        case DcgmCoreReqMigIndicesForEntity:
+        {
+            ret = ProcessGetMigIndicesForEntity(header);
             break;
         }
 

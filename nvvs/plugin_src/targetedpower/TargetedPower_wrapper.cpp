@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,25 +50,25 @@ ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
     tp->AddString(PS_RUN_IF_GOM_ENABLED, "False");
     tp->AddString(TP_STR_USE_DGEMM, "True");
     tp->AddString(TP_STR_FAIL_ON_CLOCK_DROP, "True");
-    tp->AddDouble(TP_STR_TEST_DURATION, 120.0, 1.0, 86400.0);
-    tp->AddDouble(TP_STR_TARGET_POWER, 100.0, 1.0, 500.0);
-    tp->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 4.0, 1.0, (double)TP_MAX_STREAMS_PER_DEVICE);
-    tp->AddDouble(TP_STR_READJUST_INTERVAL, 2.0, 1.0, 10.0);
-    tp->AddDouble(TP_STR_PRINT_INTERVAL, 1.0, 1.0, 300.0);
-    tp->AddDouble(TP_STR_TARGET_POWER_MIN_RATIO, 0.75, 0.5, 1.0);
-    tp->AddDouble(TP_STR_TARGET_POWER_MAX_RATIO, 1.2, 1.0, 2.0);
-    tp->AddDouble(TP_STR_MOV_AVG_PERIODS, 15.0, 1.0, 86400.0); // Max is same as max for test duration
-    tp->AddDouble(TP_STR_TARGET_MOVAVG_MIN_RATIO, 0.95, 0.5, 1.0);
-    tp->AddDouble(TP_STR_TARGET_MOVAVG_MAX_RATIO, 1.05, 1.0, 2.0);
-    tp->AddDouble(TP_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE, 30.0, 120.0);
-    tp->AddDouble(TP_STR_MAX_MEMORY_CLOCK, 0.0, 0.0, 100000.0);
-    tp->AddDouble(TP_STR_MAX_GRAPHICS_CLOCK, 0.0, 0.0, 100000.0);
-    tp->AddDouble(TP_STR_OPS_PER_REQUEUE, 1.0, 1.0, 32.0);
-    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1.0, 1.0, 1024.0);
-    tp->AddDouble(TP_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK, 0.0, DCGM_FP64_BLANK);
+    tp->AddDouble(TP_STR_TEST_DURATION, 120.0);
+    tp->AddDouble(TP_STR_TARGET_POWER, 100.0);
+    tp->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 4.0);
+    tp->AddDouble(TP_STR_READJUST_INTERVAL, 2.0);
+    tp->AddDouble(TP_STR_PRINT_INTERVAL, 1.0);
+    tp->AddDouble(TP_STR_TARGET_POWER_MIN_RATIO, 0.75);
+    tp->AddDouble(TP_STR_TARGET_POWER_MAX_RATIO, 1.2);
+    tp->AddDouble(TP_STR_MOV_AVG_PERIODS, 15.0); // Max is same as max for test duration
+    tp->AddDouble(TP_STR_TARGET_MOVAVG_MIN_RATIO, 0.95);
+    tp->AddDouble(TP_STR_TARGET_MOVAVG_MAX_RATIO, 1.05);
+    tp->AddDouble(TP_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
+    tp->AddDouble(TP_STR_MAX_MEMORY_CLOCK, 0.0);
+    tp->AddDouble(TP_STR_MAX_GRAPHICS_CLOCK, 0.0);
+    tp->AddDouble(TP_STR_OPS_PER_REQUEUE, 1.0);
+    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1.0);
+    tp->AddDouble(TP_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
     tp->AddString(TP_STR_IS_ALLOWED, "False");
     tp->AddString(PS_LOGFILE, "stats_targeted_power.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
     m_testParameters                   = new TestParameters(*tp);
 
@@ -493,7 +493,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_TARGET_POWER, d, maxVal, TP_STR_TARGET_POWER_MIN_RATIO, minRatioTarget, device->gpuId);
 
-            std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime, earliestStopTime);
+            std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime);
             if (utilNote.empty() == false)
             {
                 d.AddDetail(utilNote);
@@ -774,7 +774,7 @@ bool ConstantPower::RunTest()
             continue;
         }
 
-        earliestStopTime = MIN(earliestStopTime, workerThreads[i]->GetStopTime());
+        earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;
     }
@@ -875,7 +875,7 @@ int ConstantPowerWorker::RecalcMatrixDim(int currentMatrixDim, double power)
     /* If we are below our target power, set a floor so that we never go below this matrix size */
     if (pctDiff < 0.0)
     {
-        m_device->minMatrixDim = MAX(currentMatrixDim, m_device->minMatrixDim);
+        m_device->minMatrixDim = std::max(currentMatrixDim, m_device->minMatrixDim);
         PRINT_DEBUG("%d %d", "device %u, minMatrixDim: %d\n", m_device->gpuId, currentMatrixDim);
     }
 

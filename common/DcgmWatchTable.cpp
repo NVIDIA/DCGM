@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include <dcgm_fields_internal.h>
 
 #include "DcgmLogging.h"
+#include "DcgmUtilities.h"
 #include "DcgmWatchTable.h"
 
 /*****************************************************************************/
@@ -35,21 +36,11 @@ void DcgmWatchTable::ClearWatches()
 dcgmReturn_t DcgmWatchTable::ClearEntityWatches(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
-    std::vector<dcgm_entity_key_t> toRemove;
     DcgmLockGuard dlg(&m_mutex);
 
-    for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
-    {
-        if (watchKey.entityGroupId == entityGroupId && watchKey.entityId == entityId)
-        {
-            toRemove.push_back(watchKey);
-        }
-    }
-
-    for (auto &&watchKey : toRemove)
-    {
-        m_entityWatchHashTable.erase(watchKey);
-    }
+    DcgmNs::Utils::EraseIf(m_entityWatchHashTable, [&](auto const &pair) {
+        return pair.first.entityGroupId == entityGroupId && pair.first.entityId == entityId;
+    });
 
     return ret;
 }
@@ -59,18 +50,63 @@ dcgmReturn_t DcgmWatchTable::RemoveConnectionWatches(
     dcgm_connection_id_t connectionId,
     std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo)
 {
-    DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
-    return RemoveWatches(dcgmWatcher, postWatchInfo);
+    DcgmLockGuard dlg(&m_mutex);
+
+    size_t totalWatchersRemoved = 0;
+
+    for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
+    {
+        auto const numOfRemoved = DcgmNs::Utils::EraseIf(
+            watchInfo.watchers, [&](auto const &w) { return w.watcher.connectionId == connectionId; });
+
+        totalWatchersRemoved += numOfRemoved;
+
+        if (numOfRemoved != 0)
+        {
+            DCGM_LOG_DEBUG << "[WatchTable] " << numOfRemoved << " watchers were removed for connectionId "
+                           << connectionId << " for watchKey entityGroupId:" << watchKey.entityGroupId
+                           << ";entityId:" << watchKey.entityGroupId << ";fieldId:" << watchKey.fieldId;
+            UpdateWatchFromWatchers(watchInfo);
+        }
+
+        if (postWatchInfo != nullptr && watchInfo.watchers.empty())
+        {
+            DCGM_LOG_DEBUG << "[WatchTable] There are not watchers left for the watchKey entityGroupId:"
+                           << watchKey.entityGroupId << ";entityId:" << watchKey.entityId
+                           << ";fieldId:" << watchKey.fieldId;
+            switch (watchKey.entityGroupId)
+            {
+                case DCGM_FE_GPU:
+                    (*postWatchInfo)[watchKey.entityId].push_back(watchKey.fieldId);
+                    break;
+                case DCGM_FE_NONE:
+                    (*postWatchInfo)[watchKey.entityGroupId].push_back(watchKey.fieldId);
+                    break;
+                default: // Do nothing
+                    break;
+            }
+        }
+    }
+
+    IF_DCGM_LOG_DEBUG
+    {
+        if (totalWatchersRemoved == 0)
+        {
+            DCGM_LOG_DEBUG << "[WatchTable] connectionId " << connectionId << " did not have any active watchers";
+        }
+    };
+
+    return DCGM_ST_OK;
 }
 
 dcgmReturn_t DcgmWatchTable::RemoveWatches(DcgmWatcher watcher,
                                            std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo)
 {
     dcgm_watcher_info_t watcherInfo;
-    watcherInfo.watcher = watcher;
+    watcherInfo.watcher = std::move(watcher);
     DcgmLockGuard dlg(&m_mutex);
 
-    for (auto &[watchkey, watchInfo] : m_entityWatchHashTable)
+    for ([[maybe_unused]] auto &[_, watchInfo] : m_entityWatchHashTable)
     {
         /* RemoveWatcher will log any failures */
         RemoveWatcher(watchInfo, watcherInfo, postWatchInfo);
@@ -151,7 +187,7 @@ dcgmReturn_t DcgmWatchTable::UpdateWatchFromWatchers(dcgm_watch_info_t &watchInf
     {
         if (minUpdateIntervalUsec != 0)
         {
-            minUpdateIntervalUsec = DCGM_MIN(minUpdateIntervalUsec, watcher.updateIntervalUsec);
+            minUpdateIntervalUsec = std::min(minUpdateIntervalUsec, watcher.updateIntervalUsec);
         }
         else
         {
@@ -159,7 +195,7 @@ dcgmReturn_t DcgmWatchTable::UpdateWatchFromWatchers(dcgm_watch_info_t &watchInf
         }
         if (minMaxAgeUsec != 0)
         {
-            minMaxAgeUsec = DCGM_MIN(minMaxAgeUsec, watcher.maxAgeUsec);
+            minMaxAgeUsec = std::min(minMaxAgeUsec, watcher.maxAgeUsec);
         }
         else
         {
@@ -292,8 +328,8 @@ bool DcgmWatchTable::AddWatcher(dcgm_field_entity_group_t entityGroupId,
     }
     else
     {
-        watchInfo.updateIntervalUsec = DCGM_MIN(watchInfo.updateIntervalUsec, updateIntervalUsec);
-        watchInfo.maxAgeUsec         = DCGM_MIN(watchInfo.maxAgeUsec, maxAgeUsec);
+        watchInfo.updateIntervalUsec = std::min(watchInfo.updateIntervalUsec, updateIntervalUsec);
+        watchInfo.maxAgeUsec         = std::min(watchInfo.maxAgeUsec, maxAgeUsec);
 
         AddWatcherInfoIfNeeded(watchInfo, watcherInfo);
     }

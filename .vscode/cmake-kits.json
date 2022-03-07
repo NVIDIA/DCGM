@@ -1,6 +1,6 @@
 [
   {
-    "name": "DCGM GCC for x86_64-linux-gnu 9.2.0",
+    "name": "DCGM GCC for x86_64-linux-gnu 9.4.0",
     "toolchainFile": "${workspaceRoot}/cmake/x86_64-linux-gnu-toolchain.cmake",
     "compilers": {
       "C": "/opt/cross/bin/x86_64-linux-gnu-gcc",
@@ -8,7 +8,7 @@
     }
   },
   {
-    "name": "DCGM GCC for ppc64le-linux-gnu 9.2.0",
+    "name": "DCGM GCC for ppc64le-linux-gnu 9.4.0",
     "toolchainFile": "${workspaceRoot}/cmake/powerpc64le-linux-gnu-toolchain.cmake",
     "compilers": {
       "C": "/opt/cross/bin/powerpc64le-linux-gnu-gcc",
@@ -16,7 +16,7 @@
     }
   },
   {
-    "name": "DCGM GCC for aarch64-linux-gnu 9.2.0",
+    "name": "DCGM GCC for aarch64-linux-gnu 9.4.0",
     "toolchainFile": "${workspaceRoot}/cmake/aarch64-linux-gnu-toolchain.cmake",
     "compilers": {
       "C": "/opt/cross/bin/aarch64-linux-gnu-gcc",

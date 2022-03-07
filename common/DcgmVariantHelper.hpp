@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include <utility>
+
+
 namespace DcgmNs
 {
 /** Helper class to provide better std::visitor usability
@@ -26,15 +29,15 @@ namespace DcgmNs
  *      varObj);
  * @endcode
  */
-template <class... Ts>
+template <typename... Ts>
 struct overloaded : Ts...
 {
-    constexpr explicit overloaded(Ts &&... ts)
+    constexpr explicit overloaded(Ts &&...ts)
         : Ts(std::forward<Ts>(ts))...
     {}
     using Ts::operator()...;
 };
 
-template <class... Ts>
-overloaded(Ts...)->overloaded<Ts...>;
+template <typename... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
 } // namespace DcgmNs

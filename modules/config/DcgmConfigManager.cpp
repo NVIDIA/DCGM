@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -822,7 +822,7 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
 
 
     /* GroupId was already validated by the caller */
-    dcgmReturn = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_DEBUG("%d %u", "GetGroupEntities returned %d for groupId %u", dcgmReturn, groupId);
@@ -901,7 +901,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
 
     /* The caller already verified and updated the groupId */
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupGpuIds()", (int)dcgmReturn);

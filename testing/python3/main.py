@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@
 
 print('Starting DCGM test framework')
 
-# Early check to make sure we're at a supported version
+# Early check to make sure we're running on a supported version of Python
 import sys
 print('Python version: {}'.format(sys.version))
-if sys.version < '3.5':
-    print('DCGM Testing framework requires Python 3.5+')
-    sys.exit(1)
+def _version_check():
+    version = sys.version.split()[0] # Discard compilation information
+    version_tuple = tuple(map(int, version.split('.')))
+    if version_tuple < (3, 5):
+        print('DCGM Testing framework requires Python 3.5+')
+        sys.exit(1)
+_version_check()
 
 import os
 import platform

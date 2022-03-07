@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ class TestParameterValue
 {
 public:
     TestParameterValue(std::string defaultValue);
-    TestParameterValue(double defaultValue, double minValue, double maxValue);
+    TestParameterValue(double defaultValue);
     TestParameterValue(const TestParameterValue &copyMe);
     ~TestParameterValue();
 
@@ -71,10 +71,6 @@ private:
     /* Actual parameter value */
     std::string m_stringValue;
     double m_doubleValue;
-
-    /* Minimum and maximum allowed values for doubles */
-    double m_doubleMinValue;
-    double m_doubleMaxValue;
 };
 
 /*****************************************************************************/
@@ -90,11 +86,11 @@ public:
     /*************************************************************************/
     /* Add a global parameter to the test. Call this from the plugin stub */
     int AddString(std::string key, std::string value);
-    int AddDouble(std::string key, double value, double minValue, double maxValue);
+    int AddDouble(std::string key, double value);
 
     /* Add a subtest parameter. Call this from the plugin stub  */
     int AddSubTestString(std::string subTest, std::string key, std::string value);
-    int AddSubTestDouble(std::string subTest, std::string key, double value, double minValue, double maxValue);
+    int AddSubTestDouble(std::string subTest, std::string key, double value);
 
     /*************************************************************************/
     /* Setters. Call these from the config parser */

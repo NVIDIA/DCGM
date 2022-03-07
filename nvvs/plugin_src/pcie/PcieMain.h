@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ public:
     bool test_unpinned;
     bool test_p2p_on;
     bool test_p2p_off;
+    bool test_broken_p2p;
 
     BusGrind *busGrind; /* Plugin handle for setting status */
 
@@ -55,6 +56,7 @@ public:
         , test_unpinned(false)
         , test_p2p_on(false)
         , test_p2p_off(false)
+        , test_broken_p2p(true)
         , busGrind(nullptr)
         , gpu()
         , m_dcgmRecorder(nullptr)

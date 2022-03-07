@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import collectd_tester_globals
 import dcgm_collectd_plugin
 
 ################################################################################
-def register_config(func_ptr):
+def register_config(func_ptr, name=None):
     collectd_tester_globals.gvars['config'] = func_ptr
 
 ################################################################################
@@ -27,8 +27,9 @@ def register_init(func_ptr):
     collectd_tester_globals.gvars['init'] = func_ptr
 
 ################################################################################
-def register_read(func_ptr):
+def register_read(func_ptr, interval=10):
     collectd_tester_globals.gvars['read'] = func_ptr
+    collectd_tester_globals.interval = interval
 
 ################################################################################
 def register_shutdown(func_ptr):

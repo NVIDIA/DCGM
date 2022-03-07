@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@
 #define DCGM_LOGGING_SEVERITY_STRING_NONE    "NONE"
 
 #define DCGM_LOGGING_DEFAULT_DCGMI_SEVERITY      DCGM_LOGGING_SEVERITY_STRING_NONE
-#define DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY DCGM_LOGGING_SEVERITY_STRING_WARNING
+#define DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY DCGM_LOGGING_SEVERITY_STRING_ERROR
 #define DCGM_LOGGING_DEFAULT_NVVS_SEVERITY       DCGM_LOGGING_SEVERITY_STRING_DEBUG
 
 #define DCGM_LOGGING_DEFAULT_DCGMI_FILE      "./dcgmi.log"
@@ -93,7 +93,7 @@ extern HostengineAppender hostengineAppender;
 namespace
 {
 template <class... Args>
-void SyslogAdapter(int priority, char const *format, Args &&... args)
+void SyslogAdapter(int priority, char const *format, Args &&...args)
 {
     syslog(priority, format, std::forward<Args>(args)...);
 }
@@ -125,13 +125,17 @@ void SyslogAdapter(int priority, char const *format, Args &&... args)
 
 #define DCGM_MAX_LOG_ROTATE 5
 
-#define DCGM_LOGGING_LOGGER_STRING_BASE   "BASE"
-#define DCGM_LOGGING_LOGGER_STRING_SYSLOG "SYSLOG"
+#define DCGM_LOGGING_LOGGER_STRING_BASE    "BASE"
+#define DCGM_LOGGING_LOGGER_STRING_SYSLOG  "SYSLOG"
+#define DCGM_LOGGING_LOGGER_STRING_CONSOLE "CONSOLE"
+#define DCGM_LOGGING_LOGGER_STRING_FILE    "FILE"
 
 enum loggerCategory_t
 {
     BASE_LOGGER = 0, // Default logger. You are probably looking to use this
     SYSLOG_LOGGER,
+    CONSOLE_LOGGER,
+    FILE_LOGGER,
 };
 
 DCGM_CASSERT(DcgmLoggingSeverityNone == (DcgmLoggingSeverity_t)plog::none, 1);
@@ -180,7 +184,7 @@ DCGM_CASSERT(DcgmLoggingSeverityVerbose == (DcgmLoggingSeverity_t)plog::verbose,
 namespace
 {
 template <class... Args>
-void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, char const *format, Args &&... args)
+void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, char const *format, Args &&...args)
 {
     snprintf(outBuffer, bufSize, format, std::forward<Args>(args)...);
 }
@@ -355,14 +359,16 @@ public:
     DcgmLogging(const DcgmLogging &other) = delete;
     DcgmLogging &operator=(const DcgmLogging &other) = delete;
 
-    static void init(const char *logFile, const DcgmLoggingSeverity_t severity)
+    static void init(const char *logFile,
+                     const DcgmLoggingSeverity_t severity,
+                     const DcgmLoggingSeverity_t consoleSeverity = DcgmLoggingSeverityNone)
     {
         if (!singletonInstance.m_loggingInitialized.load(std::memory_order_relaxed))
         {
             std::lock_guard<std::mutex> guard(singletonInstance.m_loggerMutex);
             if (!singletonInstance.m_loggingInitialized.load(std::memory_order_relaxed))
             {
-                singletonInstance.Initialize(logFile, severity);
+                singletonInstance.Initialize(logFile, severity, consoleSeverity);
                 return;
             }
         }
@@ -404,6 +410,10 @@ public:
                 return DCGM_LOGGING_LOGGER_STRING_BASE;
             case SYSLOG_LOGGER:
                 return DCGM_LOGGING_LOGGER_STRING_SYSLOG;
+            case CONSOLE_LOGGER:
+                return DCGM_LOGGING_LOGGER_STRING_CONSOLE;
+            case FILE_LOGGER:
+                return DCGM_LOGGING_LOGGER_STRING_FILE;
                 // Do not add default case so the compiler can catch missing cases
         }
 
@@ -491,6 +501,7 @@ public:
         return (DcgmLoggingSeverity_t)plog::get<logger>()->getMaxSeverity();
     }
 
+    // See specializations below for special cases
     template <loggerCategory_t logger>
     static int setLoggerSeverity(int severity)
     {
@@ -518,9 +529,17 @@ public:
 
     // See specialization below for invalid inputs
     template <loggerCategory_t logger>
-    static int appendLogToBaseLogger()
+    static int routeLogToBaseLogger()
     {
         plog::get<logger>()->addAppender(plog::get<BASE_LOGGER>());
+        return 0;
+    }
+
+    // See specialization below for invalid inputs
+    template <loggerCategory_t logger>
+    static int routeLogToConsoleLogger()
+    {
+        plog::get<logger>()->addAppender(plog::get<CONSOLE_LOGGER>());
         return 0;
     }
 
@@ -593,12 +612,19 @@ private:
     std::atomic<bool> m_loggingInitialized = false;
     std::mutex m_severityMutex;
     std::mutex m_loggerMutex;
-    DcgmLogging() = default;
+    bool m_fileLoggerInitialized = false;
+    DcgmLogging()                = default;
 
-    void Initialize(const char *logFile, const DcgmLoggingSeverity_t severity)
+    void Initialize(const char *logFile,
+                    const DcgmLoggingSeverity_t severity,
+                    const DcgmLoggingSeverity_t consoleSeverity)
     {
-        InitLogger<BASE_LOGGER>(logFile, (plog::Severity)severity);
+        InitLogger<FILE_LOGGER>(logFile, (plog::Severity)severity);
+        m_fileLoggerInitialized = true;
+        // BASE_LOGGER always redirects to FILE_LOGGER
+        plog::init<BASE_LOGGER>((plog::Severity)severity, plog::get<FILE_LOGGER>());
         plog::init<SYSLOG_LOGGER>((plog::Severity)severity, &syslogAppender);
+        plog::init<CONSOLE_LOGGER>((plog::Severity)consoleSeverity, &consoleAppender);
 
         m_loggingInitialized = true;
     }
@@ -623,11 +649,40 @@ private:
     }
 };
 
+// Whenever BASE severity is changed, we also want to change FILE severity
 template <>
-inline int DcgmLogging::appendLogToBaseLogger<BASE_LOGGER>()
+inline int DcgmLogging::setLoggerSeverity<BASE_LOGGER>(int severity)
+{
+    if (severity < plog::none || severity > plog::verbose)
+    {
+        // invalid severity
+        return 1;
+    }
+
+    plog::get<BASE_LOGGER>()->setMaxSeverity((plog::Severity)severity);
+    // FILE logger does not exist in modules which redirect their logs to
+    // hostengine core. Check that we have initilized it (i.e. running in
+    // hostengine) before changing FILE severity
+    if (getInstance().m_fileLoggerInitialized)
+    {
+        plog::get<FILE_LOGGER>()->setMaxSeverity((plog::Severity)severity);
+    }
+    return 0;
+}
+
+template <>
+inline int DcgmLogging::routeLogToBaseLogger<BASE_LOGGER>()
 {
     // Invalid logger here
-    std::cerr << "ERROR: BASE_LOGGER passed to appendLogToBaseLogger()" << std::endl;
+    std::cerr << "ERROR: BASE_LOGGER passed to routeLogToBaseLogger()" << std::endl;
+    return 1;
+}
+
+template <>
+inline int DcgmLogging::routeLogToConsoleLogger<CONSOLE_LOGGER>()
+{
+    // Invalid logger here
+    std::cerr << "ERROR: CONSOLE_LOGGER passed to routeLogToConsoleLogger()" << std::endl;
     return 1;
 }
 

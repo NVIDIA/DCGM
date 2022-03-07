@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,6 +192,20 @@ public:
     dcgmReturn_t ConnectDomain(std::string path, dcgm_connection_id_t &connectionId, unsigned int timeoutMs);
 
     /*************************************************************************/
+    /* Monitor a socket file descriptor (fd) that has already been opened
+     * elsewhere. This could be from a socketpair() or even an existing domain
+     * or TCP/IP fd.
+     *
+     * fd            IN: Open file descriptor to monitor
+     * connectionId OUT: Connection ID that was allocated for this
+     *
+     * Returns: DCGM_ST_OK if the request was successful.
+     *          Any nonzero DCGM_ST_? error code on failure.
+     *
+     */
+    dcgmReturn_t MonitorSocketFd(int fd, dcgm_connection_id_t &connectionId);
+
+    /*************************************************************************/
     /* Send a message to a given connectionId. Note that this returns once the
      * message has been queued to be sent.
      *
@@ -232,7 +246,7 @@ private:
     dcgmReturn_t AddConnection(struct bufferevent *bev,
                                dcgm_connection_id_t connectionId,
                                DcgmIpcConnectionState_t initialConnState,
-                               std::promise<dcgmReturn_t> &&connectPromise);
+                               std::promise<dcgmReturn_t> connectPromise);
     dcgmReturn_t RemoveConnectionByBev(struct bufferevent *bev);
     dcgmReturn_t RemoveConnectionById(dcgm_connection_id_t connectionId);
     dcgmReturn_t SetConnectionState(dcgm_connection_id_t connectionId, DcgmIpcConnectionState_t state);
@@ -278,6 +292,26 @@ private:
 
     static void ConnectDomainAsyncImplCB(evutil_socket_t, short, void *data);
     void ConnectDomainAsyncImpl(DcgmIpcConnectDomain &domainConnect);
+
+    /*****************************************************************************/
+    struct DcgmIpcMonitorSocketFd
+    {
+    public:
+        DcgmIpc *m_ipc;                       /* Instance of DcgmIpc this is associated with. Not owned here */
+        int m_fd;                             /* File descriptor to monitor */
+        dcgm_connection_id_t m_connectionId;  /* Connection ID that was assigned to this
+                                             pending connect */
+        std::promise<dcgmReturn_t> m_promise; /* Promise used to return if we connected or not */
+
+        DcgmIpcMonitorSocketFd(DcgmIpc *ipc, int fd, dcgm_connection_id_t connectionId)
+            : m_ipc(ipc)
+            , m_fd(fd)
+            , m_connectionId(connectionId)
+        {}
+    };
+
+    static void MonitorSocketFdAsyncImplCB(evutil_socket_t, short, void *data);
+    void MonitorSocketFdAsyncImpl(DcgmIpcMonitorSocketFd &monitorFd);
 
     /*****************************************************************************/
     class DcgmIpcSendMessage

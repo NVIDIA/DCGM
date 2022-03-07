@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,6 +120,7 @@ DCGM_FI_DEV_PCI_SUBSYS_ID       = 59  #The 32-bit Sub System Device ID
 DCGM_FI_GPU_TOPOLOGY_PCI        = 60  #Topology of all GPUs on the system via PCI (static)
 DCGM_FI_GPU_TOPOLOGY_NVLINK     = 61  #Topology of all GPUs on the system via NVLINK (static)
 DCGM_FI_GPU_TOPOLOGY_AFFINITY   = 62  #Affinity of all GPUs on the system (static)
+DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY = 63 #Cuda compute capability for the device
 DCGM_FI_DEV_COMPUTE_MODE        = 65  #Compute mode for the device
 DCGM_FI_DEV_PERSISTENCE_MODE    = 66  #Persistence mode for the device
 DCGM_FI_DEV_MIG_MODE            = 67  #MIG mode for the device
@@ -153,6 +154,8 @@ DCGM_FI_DEV_AUTOBOOST           = 120 #Auto-boost for the device (1 = enabled. 0
 DCGM_FI_DEV_SUPPORTED_CLOCKS    = 130 #Supported clocks for the device
 DCGM_FI_DEV_MEMORY_TEMP         = 140 #Memory temperature for the device
 DCGM_FI_DEV_GPU_TEMP            = 150 #Current temperature readings for the device, in degrees C
+DCGM_FI_DEV_MEM_MAX_OP_TEMP     = 151 #Maximum operating temperature for the memory of this GPU
+DCGM_FI_DEV_GPU_MAX_OP_TEMP     = 152 #Maximum operating temperature for this GPU
 DCGM_FI_DEV_POWER_USAGE         = 155 #Power usage for the device in Watts
 DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION = 156 #Total energy consumption for the GPU in mJ since the driver was last reloaded
 DCGM_FI_DEV_SLOWDOWN_TEMP       = 158 #Slowdown temperature for the device

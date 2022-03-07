@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,9 +55,11 @@
 
 using namespace DcgmNs::ProfTester;
 
-static Reporter<plog::info> info_reporter;
-static Reporter<plog::warning> warn_reporter;
-static Reporter<plog::error> error_reporter;
+namespace DcgmNs::ProfTester
+{
+std::atomic_bool g_signalCaught = false;
+}
+
 
 /*****************************************************************************/
 /* ctor/dtor */
@@ -1029,7 +1031,10 @@ void DcgmProfTester::InitializeLogging(std::string logFile, DcgmLoggingSeverity_
      */
     if (!m_isLoggingInitialized)
     {
-        DcgmLogging::init(logFile.c_str(), logLevel);
+        DcgmLogging &logging                        = DcgmLogging::getInstance();
+        const DcgmLoggingSeverity_t consoleSeverity = DcgmLoggingSeverityWarning;
+        DcgmLogging::init(logFile.c_str(), logLevel, consoleSeverity);
+        logging.routeLogToConsoleLogger<BASE_LOGGER>();
         m_isLoggingInitialized = true;
     }
     else
@@ -1038,6 +1043,13 @@ void DcgmProfTester::InitializeLogging(std::string logFile, DcgmLoggingSeverity_
     }
 }
 
+
+/*****************************************************************************/
+static void signalHandler(int signal)
+{
+    std::cerr << "Received signal " << signal << std::endl;
+    g_signalCaught = true;
+}
 
 /*****************************************************************************/
 int main(int argc, char **argv)
@@ -1065,6 +1077,11 @@ int main(int argc, char **argv)
 
             return DCGM_ST_GENERIC_ERROR;
         }
+
+        // Ensure clean termination for code coverage tests.
+        signal(SIGPIPE, signalHandler);
+        signal(SIGTERM, signalHandler);
+        signal(SIGHUP, signalHandler);
 
         // We do this to avoid zombies. We don't care about worker exit codes.
         struct sigaction sa;
@@ -1124,6 +1141,11 @@ int main(int argc, char **argv)
 
             return st;
         });
+
+        if (dcgmReturn == DCGM_ST_OK)
+        {
+            std::cout << "All Tests Passed." << std::endl;
+        }
 
         return dcgmReturn;
     }

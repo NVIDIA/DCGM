@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@
 #define PCIE_STR_TEST_P2P_ON              "test_p2p_on"
 #define PCIE_STR_TEST_P2P_OFF             "test_p2p_off"
 #define PCIE_STR_NVSWITCH_NON_FATAL_CHECK "check_non_fatal"
+#define PCIE_STR_TEST_BROKEN_P2P          "test_broken_p2p"
 
 /* Private parameters */
 #define PCIE_STR_IS_ALLOWED "is_allowed" /* Is the busgrind plugin allowed to run? */
@@ -113,6 +114,9 @@
 
 #define PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED  "p2p_latency_p2p_enabled"
 #define PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED "p2p_latency_p2p_disabled"
+
+#define PCIE_SUBTEST_BROKEN_P2P            "broken_p2p"
+#define PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB "broken_p2p_size_in_kb"
 
 /******************************************************************************
  * TARGETED POWER PLUGIN
@@ -209,11 +213,12 @@
  *****************************************************************************/
 #define MEMORY_PLUGIN_NAME "memory"
 
-#define MEMORY_STR_IS_ALLOWED "is_allowed" /* Is the memory plugin allowed to run? */
+#define MEMORY_STR_IS_ALLOWED                "is_allowed" /* Is the memory plugin allowed to run? */
+#define MEMORY_STR_MIN_ALLOCATION_PERCENTAGE "minimum_allocation_percentage"
 
 // Parameters controlling the cache subtest
 #define MEMORY_SUBTEST_L1TAG                     "gpu_memory_cache"
-#define MEMORY_L1TAG_STR_IS_ALLOWED              "is_allowed" /* Is the l1tag subtest allowed to run? */
+#define MEMORY_L1TAG_STR_IS_ALLOWED              "l1_is_allowed" /* Is the l1tag subtest allowed to run? */
 #define MEMORY_L1TAG_STR_TEST_DURATION           "test_duration"
 #define MEMORY_L1TAG_STR_TEST_LOOPS              "test_loops"
 #define MEMORY_L1TAG_STR_INNER_ITERATIONS        "inner_iterations"
@@ -267,6 +272,7 @@
 #define DIAGNOSTIC_STR_TEMPERATURE_MAX     "temperature_max" /* Max temperature allowed during test */
 #define DIAGNOSTIC_STR_IS_ALLOWED          "is_allowed"      /* Is this plugin allowed to run? */
 #define DIAGNOSTIC_STR_MATRIX_DIM          "matrix_dim"      /* The starting dimension of the matrix used for S/Dgemm */
+#define DIAGNOSTIC_STR_PRECISION           "precision"       /* The precision to use: half, single, or double */
 
 /****************************************************************************
  * CONTEXT CREATE PLUGIN

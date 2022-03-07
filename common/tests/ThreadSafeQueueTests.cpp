@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 
 #include <catch2/catch.hpp>
 
-#include <chrono>
-#include <thread>
 
 using namespace DcgmNs;
 
@@ -26,16 +24,35 @@ TEST_CASE("ThreadSafeQueue : Lock")
 {
     ThreadSafeQueue<int> queue;
 
-    auto proxy = queue.Lock();
+    {
+        auto proxy = queue.LockRW();
     proxy.Enqueue(10);
+    }
 
-    std::thread th1([proxy = std::move(proxy)] {
+    std::thread th1([&queue] {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        auto proxy = queue.LockRW();
         proxy.Enqueue(20);
     });
 
-    proxy = queue.Lock();
+    {
+        auto proxy = queue.LockRW();
     REQUIRE(proxy.Dequeue() == 10);
+    }
+    int attempts = 0;
+    while (attempts++ < 10)
+    {
+        if (auto proxy = queue.LockRO(); !proxy.IsEmpty())
+        {
+            break;
+        }
+        else
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    }
+    REQUIRE(attempts < 10);
+    auto proxy = queue.LockRW();
     REQUIRE(proxy.Dequeue() == 20);
     th1.join();
 }

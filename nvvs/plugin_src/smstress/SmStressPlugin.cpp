@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,16 +50,16 @@ SmPerfPlugin::SmPerfPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
     tp->AddString(PS_RUN_IF_GOM_ENABLED, "False");
     tp->AddString(SMSTRESS_STR_USE_DGEMM, "True");
     tp->AddString(SMSTRESS_STR_IS_ALLOWED, "False");
-    tp->AddDouble(SMSTRESS_STR_TEST_DURATION, 90.0, 1.0, 86400.0);
-    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 100.0, 1.0, 100000.0);
-    tp->AddDouble(SMSTRESS_STR_TARGET_PERF_MIN_RATIO, 0.95, 0.5, 1.0);
-    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE, 30.0, 120.0);
-    tp->AddDouble(SMSTRESS_STR_MAX_MEMORY_CLOCK, 0.0, 0.0, 100000.0);
-    tp->AddDouble(SMSTRESS_STR_MAX_GRAPHICS_CLOCK, 0.0, 0.0, 100000.0);
-    tp->AddDouble(SMSTRESS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK, 0.0, DCGM_FP64_BLANK);
-    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, SMSTRESS_TEST_DIMENSION, SMSTRESS_TEST_DIMENSION, 8192.0);
+    tp->AddDouble(SMSTRESS_STR_TEST_DURATION, 90.0);
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 100.0);
+    tp->AddDouble(SMSTRESS_STR_TARGET_PERF_MIN_RATIO, 0.95);
+    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
+    tp->AddDouble(SMSTRESS_STR_MAX_MEMORY_CLOCK, 0.0);
+    tp->AddDouble(SMSTRESS_STR_MAX_GRAPHICS_CLOCK, 0.0);
+    tp->AddDouble(SMSTRESS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
+    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, SMSTRESS_TEST_DIMENSION);
     tp->AddString(PS_LOGFILE, "stats_sm_stress.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters                   = new TestParameters(*tp);
     m_infoStruct.defaultTestParameters = tp;
 
@@ -391,7 +391,7 @@ bool SmPerfPlugin::CheckGpuPerf(SmPerfDevice *smDevice,
     {
         DcgmError d { smDevice->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_STRESS_LEVEL, d, maxVal, m_targetPerf, smDevice->gpuId);
-        std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(smDevice->gpuId, startTime, endTime);
+        std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(smDevice->gpuId, startTime);
         if (utilNote.empty() == false)
         {
             d.AddDetail(utilNote);
@@ -591,7 +591,7 @@ bool SmPerfPlugin::RunTest()
     earliestStopTime = INT64_MAX;
     for (size_t i = 0; i < m_device.size(); i++)
     {
-        earliestStopTime = MIN(earliestStopTime, workerThreads[i]->GetStopTime());
+        earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;
     }

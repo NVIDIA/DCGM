@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ def test_dcgm_field_values_since_agent(handle, gpuIds):
             dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
             expectedValueCount += 1
 
-        newValueCount = fieldWatcher.GetMore()
+        newValueCount = fieldWatcher.GetAllSinceLastCall()
         nextSinceTimestamp = fieldWatcher._nextSinceTimestamp
 
         assert nextSinceTimestamp != 0, "Got 0 nextSinceTimestamp"
@@ -139,7 +139,7 @@ def helper_dcgm_values_since(handle, gpuIds):
     sleepFor = (updateFreq / 1000000.0) * 2 #Sleep for 2x update freq to allow an update to occur
     time.sleep(sleepFor)
 
-    numRead = fieldWatcher.GetMore()
+    numRead = fieldWatcher.GetAllSinceLastCall()
     secondReadSize = len(fieldWatcher.values[gpuId][fieldId])
 
     assert fieldWatcher._nextSinceTimestamp != 0, "Expected nonzero nextSinceTimestamp"
@@ -182,7 +182,7 @@ def helper_dcgm_values_since_entities(handle, gpuIds):
     sleepFor = (updateFreq / 1000000.0) * 2 #Sleep for 2x update freq to allow an update to occur
     time.sleep(sleepFor)
 
-    numRead = fieldWatcher.GetMore()
+    numRead = fieldWatcher.GetAllSinceLastCall()
     secondReadSize = len(fieldWatcher.values[entityGroupId][entityId][fieldId])
 
     assert fieldWatcher._nextSinceTimestamp != 0, "Expected nonzero nextSinceTimestamp"

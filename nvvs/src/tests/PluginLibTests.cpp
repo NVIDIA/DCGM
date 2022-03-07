@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ TEST_CASE("PluginLib: General")
     CHECK(ret == DCGM_ST_OK);
 
     TestParameters tp;
-    tp.AddDouble(PS_LOGFILE_TYPE, 0.0, 0.0, 10.0);
+    tp.AddDouble(PS_LOGFILE_TYPE, 0.0);
     setenv("result", "pass", 1);
     pl.RunTest(10, &tp);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,8 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_UNCORRECTABLE_ROW_REMAP, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_PENDING_ROW_REMAP, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BROKEN_P2P_MEMORY_DEVICE, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BROKEN_P2P_WRITER_DEVICE, DCGM_ERROR_ISOLATE),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)

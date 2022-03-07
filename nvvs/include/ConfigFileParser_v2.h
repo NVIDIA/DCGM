@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef _NVVS_NVVS_ConfigFileParser2_H_
-#define _NVVS_NVVS_ConfigFileParser2_H_
-
+#pragma once
 #include "GpuSet.h"
-#include "ParameterValidator.h"
 #include "TestParameters.h"
 #include <fstream>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <yaml-cpp/yaml.h>
+
+namespace DcgmNs::Nvvs
+{
+// Forward declaration
+class ConfigFileParser_v2;
 
 enum nvvs_fwcfg_enum
 {
@@ -51,7 +54,6 @@ public:
     /* GLOBALS */
     std::string dataFile;          /* name of the file to output data */
     logFileType_enum dataFileType; /* type of data output */
-    bool overrideMinMax;           /* allow override of the min and max whitelist values */
     bool overrideSerial;           /* force serialization of naturally parallel plugins */
     bool scriptable;               /* give a concise colon-separated output for easy parsing */
     bool requirePersistence;       /* require that persistence mode be on */
@@ -71,7 +73,6 @@ public:
 
     NvvsFrameworkConfig()
         : dataFileType(NVVS_LOGFILE_TYPE_JSON)
-        , overrideMinMax(false)
         , overrideSerial(false)
         , scriptable(false)
         , requirePersistence(true)
@@ -125,7 +126,6 @@ public:
      * management of the FrameworkConfig object
      */
     ConfigFileParser_v2(const std::string &configFile, const FrameworkConfig &fwcfg);
-    ~ConfigFileParser_v2();
 
     /***************************************************************/
     /* Open the stringstream for the config file and initialize
@@ -133,65 +133,38 @@ public:
      */
     bool Init();
 
-    /***************************************************************/
-    /* Parse the config file for globals and gpu specifications
-     * if configFile is empty then return immediate success and assume
-     * defaults are fine.
-     * This function will throw an exception on error.
-     */
-    void ParseGlobalsAndGpu();
 
     /***************************************************************/
-    /* Parse the test overrides for a given test and fill in the
-     * appropriate fields in the TestParameters object.  If the
-     * configFile is empty then return immediate success and assume
-     * the defaults already in the TestParameters object are fine
-     * This function will throw an exception on error.
+    /* Return a map from SKU ID to wrapped YAML nodes
      */
-    void ParseTestOverrides(std::string testName, TestParameters &tp);
+    const std::unordered_map<std::string, YAML::Node> &GetSkus() const;
+
 
     /***************************************************************/
-    /* Allow the config file to be overridden
-     * This closes the currently opened stream and resets everything
+    /* Specify the user-supplied config file
      */
-    void setConfigFile(std::string newConfig)
+    void setConfigFile(std::string_view userConfig)
     {
-        m_configFile = newConfig;
-        Init();
+        m_configFile = userConfig;
     }
 
-    FrameworkConfig &_test_getConfig()
-    {
-        return m_fwcfg;
-    }
-
+    void legacyGlobalStructHelper();
     std::vector<std::unique_ptr<GpuSet>> &getGpuSetVec()
     {
         return gpuSets;
     }
 
-    void legacyGlobalStructHelper();
-
-    void SetParameterValidator(ParameterValidator &pv);
-
 private:
+    /* Returns reference to m_skus[id]. Adds the GPU if it does not exist */
+    YAML::Node &GetOrAddSku(const std::string &id);
+    void ParseYaml();
     FrameworkConfig m_fwcfg;
     std::string m_configFile;
-    std::ifstream m_inputstream;
-    YAML::Node m_yamltoplevelnode;
+    YAML::Node m_fallbackYaml;
+    YAML::Node m_userYaml;
+    std::unordered_map<std::string, YAML::Node> m_skus;
 
     std::vector<std::unique_ptr<GpuSet>> gpuSets;
-
-    ParameterValidator m_pv;
-
-    /* private functions to recursively go through the gpu and globals stanzas looking for known tokens */
-    void CheckTokens_globals(const YAML::Node &node);
-    void CheckTokens_gpus(const YAML::Node &node);
-    void CheckTokens_testDefaults(const YAML::Node &node, std::string const &testName, TestParameters &tp);
-    void handleGpuSetBlock(const YAML::Node &node);
-    void handleGpuSetParameters(const YAML::Node &node);
-    void handleGpuSetTests(const YAML::Node &node);
-    void handleTestDefaults(const std::string &testName, const YAML::Node &node, TestParameters &tp, bool subTest);
 };
 
 class CFPv2Exception : public std::runtime_error
@@ -216,5 +189,4 @@ private:
         return output.str();
     }
 };
-
-#endif //_NVVS_NVVS_ConfigFileParser2_H_
+} // namespace DcgmNs::Nvvs

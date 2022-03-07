@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ public:
      *          DCGM_ST_? on other error
      *
      */
-    static dcgmReturn_t CheckVersion(dcgm_module_command_header_t *moduleCommand, unsigned int compareVersion);
+    static dcgmReturn_t CheckVersion(dcgm_module_command_header_t const *moduleCommand, unsigned int compareVersion);
 
     /*************************************************************************/
     /*
@@ -66,16 +66,6 @@ public:
      */
     virtual void OnLoggingSeverityChange(dcgm_core_msg_logging_changed_t *msg)
     {}
-
-    /*
-     * Virtual method informing the module that the MIG configuration has
-     * been updated
-     *
-     * An empty fuction is provided by default, which ignores this event.
-     */
-    virtual void OnMigReconfigure(dcgm_core_msg_mig_updated_t *msg) {};
-
-    /*************************************************************************/
 };
 
 

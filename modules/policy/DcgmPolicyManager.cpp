@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -379,7 +379,7 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
     }
 
     // use the oldest error timestamp
-    timestamp = DCGM_MIN(sbeTimestamp, dbeTimestamp);
+    timestamp = std::min(sbeTimestamp, dbeTimestamp);
 
     unsigned int maxRetiredPages = (unsigned int)m_gpus[fv->entityId]
                                        .currentPolicies.parms[DCGM_VIOLATION_POLICY_FAIL_MAX_RETIRED_PAGES]
@@ -686,7 +686,7 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -743,7 +743,7 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
@@ -801,7 +801,7 @@ dcgmReturn_t DcgmPolicyManager::ProcessGetPolicies(dcgm_policy_msg_get_policies_
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(0, groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);

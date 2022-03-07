@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,17 @@ add_subdirectory(tests)
 
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
+
+file(READ ${CMAKE_CURRENT_BINARY_DIR}/../diag-skus.yaml FALLBACK_DIAG_YAML_CONTENTS_RAW)
+string(REPLACE "\n"
+       "\\n" FALLBACK_DIAG_YAML_CONTENTS
+       "${FALLBACK_DIAG_YAML_CONTENTS_RAW}")
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/FallbackDiagConfig.cpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/FallbackDiagConfig.cpp
+    ESCAPE_QUOTES
+    @ONLY)
 
 add_library(nvvs_without_main_objects OBJECT)
 target_link_libraries(nvvs_without_main_objects PUBLIC nvvs_interface dcgm dcgm_common dcgm_logging dcgm_mutex)
@@ -53,6 +64,7 @@ target_sources(nvvs_without_main_objects
         PluginLib.cpp
         PluginCoreFunctionality.cpp
         CustomStatHolder.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/FallbackDiagConfig.cpp
 )
 
 add_library(nvvs_main_objects OBJECT)

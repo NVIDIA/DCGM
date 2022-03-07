@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,13 @@ public:
     timelib64_t updateIntervalUsec;
 };
 
+class DcgmNvSwitchError
+{
+public:
+    unsigned int error = 0;
+    uint64_t timestamp = 0;
+    int port           = -1; // -1 indicates not port-specific
+};
 
 class DcgmNvSwitchManager
 {
@@ -157,6 +164,15 @@ public:
 
     /*************************************************************************/
     /**
+     * Updates the fatal error fields in CacheManager
+     *
+     * @return DCGM_ST_OK:            Fields pushed correctly to the cache
+     *         DCGM_ST_*:             Indicating any other return
+     */
+    dcgmReturn_t UpdateFatalErrorsAllSwitches();
+
+    /*************************************************************************/
+    /**
      * Updates the watched fields for this module
      *
      * @param nextUpdateTime[out]  - the earliest next time we should wake up
@@ -208,6 +224,7 @@ protected:
     DcgmCoreProxy m_coreProxy;                                // Proxy class for communication with DCGM core
     nscq_session_t m_nscqSession;                             // NSCQ session for communicating with driver
     bool m_attachedToNscq = false;                            // Have we attached to nscq yet? */
+    DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES];   // Fatal errors. Max 1 per switch
 
     /*************************************************************************/
     /**
@@ -272,5 +289,11 @@ protected:
      * Sets link state for single link. Does not query for data
      */
     dcgmReturn_t UpdateLinkState(unsigned int, link_id_t, nvlink_state_t);
+
+    /*************************************************************************/
+    /**
+     * Read fatal errors for all switches
+     */
+    dcgmReturn_t ReadNvSwitchFatalErrorsAllSwitches();
 };
 } // namespace DcgmNs

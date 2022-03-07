@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,5 +58,14 @@ void ReporterBase::log(std::stringstream &buffer, plog::Severity severity, Repor
         }
     }
 }
+
+/*
+ * Reporter wrappers around DCGM logs (to output to the log and console)
+ * should be defined here for the various log levels.
+ */
+
+Reporter info_reporter(plog::info);
+Reporter warn_reporter(plog::warning);
+Reporter error_reporter(plog::error);
 
 } // namespace DcgmNs::ProfTester

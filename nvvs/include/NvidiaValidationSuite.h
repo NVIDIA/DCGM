@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,7 @@
  *
  */
 
-#ifndef _NVVS_NVVS_NvidiaValidationSuite_H_
-#define _NVVS_NVVS_NvidiaValidationSuite_H_
+#pragma once
 
 #include "ConfigFileParser_v2.h"
 #include "Gpu.h"
@@ -41,8 +40,10 @@
 #include <vector>
 
 #define MIN_MAJOR_VERSION 346
-#define MAX_MAJOR_VERSION 500
+#define MAX_MAJOR_VERSION 600
 
+namespace DcgmNs::Nvvs
+{
 class NvidiaValidationSuite
 {
 public:
@@ -126,4 +127,4 @@ protected:
     /***************************PROTECTED********************************/
 protected:
 };
-#endif // _NVVS_NVVS_NvidiaValidationSuite_H_
+} // namespace DcgmNs::Nvvs

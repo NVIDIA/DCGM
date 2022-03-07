@@ -3,23 +3,12 @@
     "C_Cpp.intelliSenseEngineFallback": "Disabled",
     "C_Cpp.intelliSenseEngine": "Default",
     "git.ignoreLimitWarning": true,
-    "clangd.path": "/usr/bin/clangd",
-    "clangd.semanticHighlighting": true,
-    "clangd.syncFileEvents": true,
-    "clangd.arguments": [
-        "--compile-commands-dir=/workspaces/dcgm",
-        "--query-driver=/opt/cross/bin/x86_64-linux-gnu-g++",
-        "--all-scopes-completion",
-        "--clang-tidy",
-        "--completion-style=detailed"
-    ],
     "kanban": {
         "trackTime": true
     },
     "editor.tabCompletion": "on",
     "cmake.configureOnOpen": false,
     "cmake.buildDirectory": "${workspaceRoot}/_out/build/${buildType}",
-    "cmake.useCMakeServer": false,
     "C_Cpp.configurationWarnings": "Disabled",
     "C_Cpp.autoAddFileAssociations": false,
     "C_Cpp.formatting": "Disabled"

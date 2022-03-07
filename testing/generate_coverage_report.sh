@@ -23,7 +23,7 @@ COVERAGE_CTEST_DIR="$COVERAGE_DIR/ctest"
 COVERAGE_PYTHON_DIR="$COVERAGE_DIR/python"
 COVERAGE_LCOV_DIR="$COVERAGE_DIR/processed"
 COVERAGE_REPORT_DIR="$DIR/coverage_report"
-LCOV="lcov --rc lcov_branch_coverage=1 --gcov-tool /opt/cross/bin/x86_64-linux-gnu-gcov"
+LCOV="lcov --rc lcov_branch_coverage=1 --rc genhtml_hi_limit=70 --rc genhtml_med_limit=70 --gcov-tool /opt/cross/bin/x86_64-linux-gnu-gcov"
 
 if [[ ! -f "$DCGM_DIR/intodocker.sh" ]]; then
     echo "Could not find intodocker.sh. Make sure DCGM_DIR is properly configured" \
@@ -64,4 +64,4 @@ $LCOV -o "$COVERAGE_LCOV_DIR/pass3.info" -r "$COVERAGE_LCOV_DIR/pass2.info" '*/s
 $LCOV -o "$COVERAGE_LCOV_DIR/pass4.info" -r "$COVERAGE_LCOV_DIR/pass3.info" '*/_out/*/protobuf/*'
 $LCOV -o "$COVERAGE_LCOV_DIR/dcgm_coverage.info" -r "$COVERAGE_LCOV_DIR/pass4.info" '*/dcgm_private/PerfWorks/*'
 
-genhtml --rc lcov_branch_coverage=1 -o "$COVERAGE_REPORT_DIR" "$COVERAGE_LCOV_DIR/dcgm_coverage.info"
+genhtml --rc lcov_branch_coverage=1 --rc genhtml_hi_limit=70 --rc genhtml_med_limit=70 -o "$COVERAGE_REPORT_DIR" "$COVERAGE_LCOV_DIR/dcgm_coverage.info"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,6 +133,13 @@ int TestPolicyManager::TestPolicyRegUnreg()
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         goto cleanup;
+    }
+
+    if (groupInfo.count < 1)
+    {
+        printf("Skipping TestPolicyRegUnreg due to no GPUs being present");
+        result = DCGM_ST_OK; /* Don't fail */
+        return result;
     }
 
     result = dcgmStatusCreate(&statusHandle);
@@ -368,6 +375,13 @@ int TestPolicyManager::TestPolicyRegUnregXID()
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         goto cleanup;
+    }
+
+    if (groupInfo.count < 1)
+    {
+        printf("Skipping TestPolicyRegUnregXID due to no GPUs present.");
+        result = DCGM_ST_OK;
+        return result;
     }
 
     result = dcgmStatusCreate(&statusHandle);

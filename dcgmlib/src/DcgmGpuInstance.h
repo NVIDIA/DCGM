@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ struct dcgmcm_gpu_compute_instance_t
     nvmlComputeInstanceProfileInfo_t profile {};                //!< Profile information for this compute instance
     dcgmMigProfile_t sliceProfile {};                           //!< The slice profile for this compute instance
     std::string profileName;                                    //!< The name of the compute instance profile
+    nvmlDevice_t migDevice {};                                  //!< The handle of the MIG device type
 };
 using dcgmcm_gpu_compute_instance_p = dcgmcm_gpu_compute_instance_t *;
 
@@ -76,19 +77,29 @@ public:
      */
     static std::string DeriveGpuInstanceName(std::string const &ciName);
 
-    /*************************************************************************/
-    /**
-     * Truncates the device name for a compute instance. This expects a string in the format: <gpu name> MIG [Xc.]Yg.Zb
-     * X = compute instance slice count. This may be ommitted if X == Y
-     * Y = GPU instance slice count
-     * Z = memory size in gigabytes, rounded up.
-     * @param ciNameToEdit[in]  - a string containing the full name of the compute instance
-     * @param ciNameEdited[out] - the string where we'll store the edited compute instance name (without <gpu name>MIG)
+    /*****************************************************************************/
+    /*
+     * Stores the MIG device handle for the specified compute instance
      *
-     * @return DCGM_ST_BADPARAM if ciNameBuf is nullptr or doesn't contain MIG
-     *         DCGM_ST_OK on success
+     * @param nvmlComputeInstanceId - the NVML compute instance id whose device handle this is.
+     * @param migDevice             - the NVML mig device handle
+     *
+     * @return DCGM_ST_OK                         - if the specified compute instance exists
+     *         DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND - if the compute instance isn't found
      */
-    static dcgmReturn_t TruncateCIDeviceName(std::string const &ciNameToEdit, std::string &ciNameEdited);
+    dcgmReturn_t StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, nvmlDevice_t migDevice);
+
+    /*****************************************************************************/
+    /*
+     * Retrieve the specified MIG nvml device handle
+     * NOTE: passing in an id of DCGM_MAX_COMPUTE_INSTANCES will retrieve the first handle we find
+     *
+     * @param dcgmComputeInstanceId - the DCGM id of the compute instance
+     *
+     * @return the NVML mig device handle if found
+     *         nullptr if no matching compute instance is found
+     */
+    nvmlDevice_t GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const;
 
     /*****************************************************************************/
     DcgmNs::Mig::GpuInstanceId const &GetInstanceId() const;
@@ -107,6 +118,7 @@ public:
 
     /*****************************************************************************/
     nvmlGpuInstanceProfileInfo_t GetProfileInfo() const;
+
 
     /*****************************************************************************/
     unsigned int GetComputeInstanceCount() const;

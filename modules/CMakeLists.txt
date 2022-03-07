@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+find_package(fmt REQUIRED)
+
 add_library(modules_interface INTERFACE)
 
 target_link_libraries(modules_interface
@@ -48,6 +50,7 @@ function(define_dcgm_module lib_name)
       dcgm_logging
       dcgm_mutex
       dcgm
+      fmt::fmt
   )
   target_compile_definitions(${lib_name} PRIVATE DCGM_API_EXPORT=1)
   target_link_options(${lib_name} PRIVATE -Wl,--version-script,${LOCAL_CURRENT_LIST_DIR}/dcgm_modules.linux_def

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuL
     tp->AddString(CTXCREATE_IGNORE_EXCLUSIVE, "False");
     tp->AddString(CTXCREATE_IS_ALLOWED, "True");
     tp->AddString(PS_LOGFILE, "stats_context.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0, NVVS_LOGFILE_TYPE_JSON, NVVS_LOGFILE_TYPE_BINARY);
+    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
 
     if (gpuInfo != nullptr)

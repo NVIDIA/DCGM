@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,7 @@ typedef enum
     DcgmCoreReqIdCMPopulateWatchInfo           = 44, // DcgmCacheManager::PopulateGpuInfo()
     DcgmCoreReqIdGetMigInstanceEntityId        = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
     DcgmCoreReqIdGetMigUtilization             = 46, // DcgmCacheManager::GetMigUtilization()
+    DcgmCoreReqMigIndicesForEntity             = 47, // DcgmCacheManager::GetMigIndicesForEntity()
     DcgmCoreReqIdCount                               // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -768,3 +769,27 @@ typedef struct
 #define dcgmCoreGetMigUtilization_version1 MAKE_DCGM_VERSION(dcgmCoreGetMigUtilization_v1, 1)
 #define dcgmCoreGetMigUtilization_version  dcgmCoreGetMigUtilization_version1
 typedef dcgmCoreGetMigUtilization_v1 dcgmCoreGetMigUtilization_t;
+
+typedef struct
+{
+    dcgm_field_entity_group_t entityGroupId;
+    dcgm_field_eid_t entityId;
+} dcgmCoreGetMigIndicesForEntityParams_t;
+
+typedef struct
+{
+    dcgmReturn_t ret;
+    unsigned int gpuId;
+    dcgm_field_eid_t instanceId;
+} dcgmCoreGetMigIndicesForEntityResponse_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmCoreGetMigIndicesForEntityParams_t request;
+    dcgmCoreGetMigIndicesForEntityResponse_t response;
+} dcgmCoreGetMigIndicesForEntity_v1;
+
+#define dcgmCoreGetMigIndicesForEntity_version1 MAKE_DCGM_VERSION(dcgmCoreGetMigIndicesForEntity_v1, 1)
+#define dcgmCoreGetMigIndicesForEntity_version  dcgmCoreGetMigIndicesForEntity_version1
+typedef dcgmCoreGetMigIndicesForEntity_v1 dcgmCoreGetMigIndicesForEntity_t;

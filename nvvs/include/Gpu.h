@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,17 @@ public:
     {
         return m_attributes.identifiers.deviceName;
     }
+
+    std::string getDeviceId()
+    {
+        if (!m_useSsid)
+        {
+            return m_pciDeviceId;
+        }
+
+        return m_pciDeviceId + m_pciSubSystemId;
+    }
+
     unsigned int getDeviceIndex(gpuEnumMethod_enum method = NVVS_GPUENUM_NVML) const;
     bool getDeviceIsSupported()
     {
@@ -98,6 +109,12 @@ public:
     {
         m_isSupported = value;
     }
+
+    void setUseSsid(bool value)
+    {
+        m_useSsid = value;
+    }
+
     void setDeviceEntityStatus(DcgmEntityStatus_t status)
     {
         m_status = status;
@@ -148,6 +165,7 @@ private:
     unsigned int m_maxMemoryClock; /* Maximum memory clock supported for the GPU. DCGM_FI_DEV_MAX_MEM_CLOCK */
     uint64_t m_maxGpuOpTemp;
     DcgmEntityStatus_t m_status;
+    bool m_useSsid = false;
 
     void PopulateMaxMemoryClock(void);
 

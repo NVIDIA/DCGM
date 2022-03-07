@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -434,7 +434,7 @@ public:
     /**
      * \brief Set this worker's synchronized tries.
      *
-     * The main process sets the number of actovity level tries available.
+     * The main process sets the number of activity level tries available.
      */
     void SetTries(unsigned int tries);
 
@@ -444,6 +444,20 @@ public:
      * We call this to see if we can try again.
      */
     unsigned int GetTries(void) const;
+
+    /**
+     * \brief Set this worker's validated status.
+     *
+     * The main process sets validated status of the last test.
+     */
+    void SetValidated(bool validated);
+
+    /**
+     * \brief Get worker's validated status.
+     *
+     * Returns the last test validated status.
+     */
+    bool GetValidated(void) const;
 
     /**@}*/
 
@@ -491,11 +505,6 @@ private:
             : std::runtime_error("")
             , m_error(error)
         {}
-
-        /**
-         * \brief No copy constructor.
-         */
-        RespondException(const RespondException &) = delete;
 
         /**
          * \brief No assignment operator.
@@ -705,6 +714,7 @@ private:
     bool m_wait { false };      //<! wait to process a tick
     bool m_buffered { false };  //<! we have buffered data to process.
     bool m_finished { false };  //<! worker is finished
+    bool m_validated { true };  //<! last test passed
 
     /**@}*/
 

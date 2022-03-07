@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +47,10 @@ class DcgmFieldGroup:
                 try:
                     dcgm_agent.dcgmFieldGroupDestroy(self._dcgmHandle.handle, self.fieldGroupId)
                 except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NO_DATA):
-                    #someone may have deleted the group under us. That's ok.
+                    # someone may have deleted the group under us. That's ok.
+                    pass
+                except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+                    # We lost our connection, but we're destructing this object anyway.
                     pass
             except AttributeError as ae:
                 # When we're cleaning up at the end, dcgm_agent and dcgm_structs have been unloaded and we'll 

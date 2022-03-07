@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ class DcgmException : std::runtime_error
 {
 public:
     explicit DcgmException(dcgmReturn_t errorCode) noexcept
-        : runtime_error(nullptr)
+        : runtime_error("")
         , m_errorCode(errorCode)
     {}
 

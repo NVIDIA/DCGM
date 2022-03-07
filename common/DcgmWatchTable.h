@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,7 +269,7 @@ private:
      * @param currentModule[in] - the id of the module considering this field
      * @return true if this module is updated by a different module than current module
      */
-    bool IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t currentModule);
+    static bool IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t currentModule);
 
     /*****************************************************************************/
     /**

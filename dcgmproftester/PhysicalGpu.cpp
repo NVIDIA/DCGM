@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,13 +56,14 @@ namespace DcgmNs::ProfTester
 {
 static const std::streamsize MaxStreamLength { std::numeric_limits<std::streamsize>::max() };
 
-static Reporter<plog::info> info_reporter;
-static Reporter<plog::warning> warn_reporter;
-static Reporter<plog::error> error_reporter;
-
 // Dump field Values returned.
-static void ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, PhysicalGpu::ValueType type, double divisor)
+void PhysicalGpu::ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, ValueType type, double divisor)
 {
+    if (IsMIG())
+    {
+        info_reporter << "M:";
+    }
+
     if (values.size() > 1)
     {
         info_reporter << "{ ";
@@ -465,7 +466,7 @@ void PhysicalGpu::SetTickHandler(TickHandlerType tickHandler)
 }
 
 // Validate measured value within valid range or against expected value.
-bool PhysicalGpu::Validate(double expected, double current, double measured, double howFarIn)
+bool PhysicalGpu::Validate(double expected, double current, double measured, double howFarIn, bool prevValidate)
 {
     if (!m_parameters.m_validate)
     {
@@ -484,7 +485,7 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
             if (!m_parameters.m_fast)
             {
                 warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                              << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
+                              << "% Validation Retry: " << m_parameters.m_minValue << " !< " << measured << " < "
                               << m_parameters.m_maxValue << "." << warn_reporter.new_line;
             }
 
@@ -496,11 +497,18 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
             if (!m_parameters.m_fast)
             {
                 warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                              << "% Validation Fail: " << m_parameters.m_minValue << " !< " << measured << " < "
+                              << "% Validation Retry: " << m_parameters.m_minValue << " !< " << measured << " < "
                               << m_parameters.m_maxValue << "." << warn_reporter.new_line;
             }
 
             return false;
+        }
+
+        if (!prevValidate)
+        {
+            warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                          << "% Validation Pass: " << m_parameters.m_minValue << " < " << measured << " < "
+                          << m_parameters.m_maxValue << "." << warn_reporter.new_line;
         }
 
         return true;
@@ -516,7 +524,7 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
             if (!m_parameters.m_fast)
             {
                 warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                              << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
+                              << "% Validation Retry: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
                               << " !< " << measured << " < " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0)
                               << "." << warn_reporter.new_line;
             }
@@ -529,12 +537,20 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
             if (!m_parameters.m_fast)
             {
                 warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                              << "% Validation Fail: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
+                              << "% Validation Retry: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0)
                               << " < " << measured << " !< " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0)
                               << "." << warn_reporter.new_line;
             }
 
             return false;
+        }
+
+        if (!prevValidate)
+        {
+            warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                          << "% Validation Pass: " << lowExpected * (1.0 - m_parameters.m_tolerance / 100.0) << " < "
+                          << measured << " < " << highExpected * (1.0 + m_parameters.m_tolerance / 100.0) << "."
+                          << warn_reporter.new_line;
         }
 
         return true;
@@ -545,7 +561,7 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         if (!m_parameters.m_fast)
         {
             warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "!< " << measured
+                          << "% Validation Retry: " << lowExpected - m_parameters.m_tolerance << "!< " << measured
                           << " < " << highExpected + m_parameters.m_tolerance << "." << warn_reporter.new_line;
         }
 
@@ -557,11 +573,18 @@ bool PhysicalGpu::Validate(double expected, double current, double measured, dou
         if (!m_parameters.m_fast)
         {
             warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
-                          << "% Validation Fail: " << lowExpected - m_parameters.m_tolerance << "< " << measured
+                          << "% Validation Retry: " << lowExpected - m_parameters.m_tolerance << "< " << measured
                           << " !< " << highExpected + m_parameters.m_tolerance << "." << warn_reporter.new_line;
         }
 
         return false;
+    }
+
+    if (!prevValidate)
+    {
+        warn_reporter << "Field " << m_parameters.m_fieldId << " @ " << howFarIn * 100
+                      << "% Validation Pass: " << lowExpected - m_parameters.m_tolerance << "< " << measured << " < "
+                      << highExpected + m_parameters.m_tolerance << "." << warn_reporter.new_line;
     }
 
     return true;
@@ -1506,7 +1529,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
                                              bool valid,
                                              std::map<Entity, dcgmFieldValue_v1> &values,
                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -1582,13 +1604,13 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
 
             double value;
 
-            validated = ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                        && Validate(1.0, 1.0, value, howFarIn);
+            worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                && Validate(1.0, 1.0, value, howFarIn, worker.GetValidated()));
 
             AppendSubtestRecord(1.0, value);
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -1612,7 +1634,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                                                            bool valid,
                                                            std::map<Entity, dcgmFieldValue_v1> &values,
                                                            DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -1698,8 +1719,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(prevOccupancy, curOccupancy, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevOccupancy, value);
             }
@@ -1800,8 +1821,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(prevOccupancy, curOccupancy, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevOccupancy, value);
             }
@@ -1897,14 +1918,14 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(prevOccupancy, curOccupancy, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevOccupancy, value);
             }
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -1926,7 +1947,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                                                            bool valid,
                                                            std::map<Entity, dcgmFieldValue_v1> &values,
                                                            DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -2010,8 +2030,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(prevSmActivity, curSmActivity, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(prevSmActivity, curSmActivity, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevSmActivity, value);
             }
@@ -2104,14 +2124,14 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(prevSmActivity, curSmActivity, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(prevSmActivity, curSmActivity, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevSmActivity, value);
             }
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2133,7 +2153,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
                                              bool valid,
                                              std::map<Entity, dcgmFieldValue_v1> &values,
                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -2188,13 +2207,13 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
 
             double value;
 
-            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                         && Validate(prevHowFarIn, curHowFarIn, value, howFarIn);
+            worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                && Validate(prevHowFarIn, curHowFarIn, value, howFarIn, worker.GetValidated()));
 
             AppendSubtestRecord(howFarIn, value);
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2212,157 +2231,185 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 {
     dcgmReturn_t rtSt;
 
-    SetTickHandler([this, firstTick = false, fieldHeading = "", subtestTag = ""](
-                       size_t index,
-                       bool valid,
-                       std::map<Entity, dcgmFieldValue_v1> &values,
-                       DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
-        unsigned int part;
-        unsigned int parts;
-        bool firstPartTick = worker.IsFirstTick();
+    SetTickHandler(
+        [this, firstTick = false, fieldHeading = "", subtestTag = "", prevGpuPerSecond = 0.0, curGpuPerSecond = 0.0](
+            size_t index,
+            bool valid,
+            std::map<Entity, dcgmFieldValue_v1> &values,
+            DistributedCudaContext &worker) mutable -> dcgmReturn_t {
+            unsigned int part;
+            unsigned int parts;
+            bool firstPartTick = worker.IsFirstTick();
 
-        worker.GetParts(part, parts);
+            worker.GetParts(part, parts);
 
-        if (firstPartTick)
-        {
-            if (!firstTick) // First per-test per-GPU code here.
+            if (firstPartTick)
             {
-                firstTick = true;
-
-                if (m_parameters.m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
+                if (!firstTick) // First per-test per-GPU code here.
                 {
-                    fieldHeading = "PcieRxBytes";
-                    subtestTag   = "pcie_rx_bytes";
+                    firstTick = true;
+
+                    if (m_parameters.m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
+                    {
+                        fieldHeading = "PcieRxBytes";
+                        subtestTag   = "pcie_rx_bytes";
+                    }
+                    else
+                    {
+                        fieldHeading = "PcieTxBytes";
+                        subtestTag   = "pcie_tx_bytes";
+                    }
+
+                    BeginSubtest(fieldHeading, subtestTag, false);
                 }
-                else
+
+                if (!m_tester->IsFirstTick()) // Add first per test code here.
                 {
-                    fieldHeading = "PcieTxBytes";
-                    subtestTag   = "pcie_tx_bytes";
+                    m_tester->SetFirstTick();
                 }
-
-                BeginSubtest(fieldHeading, subtestTag, false);
             }
 
-            if (!m_tester->IsFirstTick()) // Add first per test code here.
-            {
-                m_tester->SetFirstTick();
-            }
-        }
+            double howFarIn;
+            double prevPerSecond;
+            double curPerSecond;
 
-        double howFarIn;
-        double prevPerSecond;
-        double curPerSecond;
-
-        worker.Input() >> howFarIn;
-        worker.Input() >> prevPerSecond;
-        worker.Input() >> curPerSecond;
-        worker.Input().ignore(MaxStreamLength, '\n');
-
-        if (valid)
-        {
-            dcgmGroupEntityPair_t entity;
-            unsigned short fieldId { DCGM_FI_DEV_PCIE_LINK_GEN };
-            dcgmFieldValue_v2 value2 {};
-
-            entity.entityGroupId = DCGM_FE_GPU;
-            entity.entityId      = worker.Entities()[DCGM_FE_GPU];
-
-            dcgmReturn_t dcgmReturn
-                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
-
-            if (dcgmReturn != DCGM_ST_OK)
-            {
-                error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId " << m_gpuId
-                               << " PCIE test." << error_reporter.new_line;
-
-                return DCGM_ST_NOT_SUPPORTED;
-            }
-
-            unsigned long long pcieVersion = value2.value.i64;
-
-            fieldId = DCGM_FI_DEV_PCIE_LINK_WIDTH;
-
-            dcgmReturn
-                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
-
-            if (dcgmReturn != DCGM_ST_OK)
-            {
-                error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId " << m_gpuId
-                               << " PCIE test." << error_reporter.new_line;
-
-                return DCGM_ST_NOT_SUPPORTED;
-            }
-
-            unsigned long long pcieLanes = value2.value.i64;
-
-            // 16x rate for PCIE versions, starting with 1.0, through 5.0
-            static double rateX16[] = {
-                2.50 * 8 / 10 * 16 / 8,    // 1.0 GT/s * coding rate * 16 lines / 8 bits per byte
-                5.00 * 8 / 10 * 16 / 8,    // 2.0
-                8.00 * 128 / 130 * 16 / 8, // 3.0
-                16.0 * 128 / 130 * 16 / 8, // 4.0
-                32.0 * 128 / 130 * 16 / 8, // 5.0
-                64.0 * 128 / 130 * 16 / 8  // 6.0 Yes, there is a FEC, but it is part of the line coding
-            };
-
-            if (pcieVersion > (sizeof(rateX16) / sizeof(rateX16[0])))
-            {
-                // Cap the version at the max we know about.
-                pcieVersion = sizeof(rateX16) / sizeof(rateX16[0]);
-            }
-
-            double expectedRate = rateX16[pcieVersion - 1] / 16 * pcieLanes * 1000.0;
-
-            if (m_parameters.m_report)
-            {
-                auto ss    = std::cout.precision();
-                auto flags = std::cout.flags();
-
-                info_reporter << std::fixed << std::setprecision(0);
-
-                info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                              << "]: " << fieldHeading << " generated " << prevPerSecond << "/" << curPerSecond
-                              << ", dcgm ";
-
-                ValuesDump(values, ValueType::Int64, 1000.0 * 1000.0);
-                //<< dcgmValue RSH - i64 / 10^6
-
-                info_reporter << " MiB/sec (";
-
-                std::cout.precision(ss);
-                std::cout.flags(flags);
-            }
-
-            double value;
+            worker.Input() >> howFarIn;
+            worker.Input() >> prevPerSecond;
+            worker.Input() >> curPerSecond;
+            worker.Input().ignore(MaxStreamLength, '\n');
 
             /*
-             * Restore validation to driven vs. measured instead of against
-             * speed of light maximum.
+             * We need to compare across the whole GPU, so we update whole-GPU
+             * activity, subtracting the previous activity, and adding the current
+             * activity generated.
              */
-            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU, ValueType::Int64, 1000.0 * 1000.0, value)
-                         && Validate(prevPerSecond, curPerSecond, value, howFarIn);
 
-            AppendSubtestRecord(prevPerSecond, value);
+            curGpuPerSecond += curPerSecond - prevPerSecond;
 
-            if (m_parameters.m_report)
+            if (valid)
             {
-                auto ss    = std::cout.precision();
-                auto flags = std::cout.flags();
+                dcgmGroupEntityPair_t entity;
+                unsigned short fieldId { DCGM_FI_DEV_PCIE_LINK_GEN };
+                dcgmFieldValue_v2 value2 {};
 
-                info_reporter << std::fixed << std::setprecision(0);
+                entity.entityGroupId = DCGM_FE_GPU;
+                entity.entityId      = worker.Entities()[DCGM_FE_GPU];
 
-                info_reporter << 100.0 * value / expectedRate << "% speed-of-light)"
-                              << ", PCIE version/lanes: " << pcieVersion << "/" << pcieLanes << "."
-                              << info_reporter.new_line;
+                dcgmReturn_t dcgmReturn = dcgmEntitiesGetLatestValues(
+                    m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
 
-                std::cout.precision(ss);
-                std::cout.flags(flags);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId "
+                                   << m_gpuId << " PCIE test." << error_reporter.new_line;
+
+                    return DCGM_ST_NOT_SUPPORTED;
+                }
+
+                unsigned long long pcieVersion = value2.value.i64;
+
+                fieldId = DCGM_FI_DEV_PCIE_LINK_WIDTH;
+
+                dcgmReturn = dcgmEntitiesGetLatestValues(
+                    m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
+
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    error_reporter << "dcgmEntitiesGetLatestValues failed with " << dcgmReturn << " for gpuId "
+                                   << m_gpuId << " PCIE test." << error_reporter.new_line;
+
+                    return DCGM_ST_NOT_SUPPORTED;
+                }
+
+                unsigned long long pcieLanes = value2.value.i64;
+
+                // 16x rate for PCIE versions, starting with 1.0, through 5.0
+                static double rateX16[] = {
+                    2.50 * 8 / 10 * 16 / 8,    // 1.0 GT/s * coding rate * 16 lines / 8 bits per byte
+                    5.00 * 8 / 10 * 16 / 8,    // 2.0
+                    8.00 * 128 / 130 * 16 / 8, // 3.0
+                    16.0 * 128 / 130 * 16 / 8, // 4.0
+                    32.0 * 128 / 130 * 16 / 8, // 5.0
+                    64.0 * 128 / 130 * 16 / 8  // 6.0 Yes, there is a FEC, but it is part of the line coding
+                };
+
+                if (pcieVersion > (sizeof(rateX16) / sizeof(rateX16[0])))
+                {
+                    // Cap the version at the max we know about.
+                    pcieVersion = sizeof(rateX16) / sizeof(rateX16[0]);
+                }
+
+                double expectedRate = rateX16[pcieVersion - 1] / 16 * pcieLanes * 1000.0;
+
+                if (m_parameters.m_report)
+                {
+                    auto ss    = std::cout.precision();
+                    auto flags = std::cout.flags();
+
+                    info_reporter << std::fixed << std::setprecision(0);
+
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: " << fieldHeading << " generated " << prevGpuPerSecond << "/"
+                                  << curGpuPerSecond << " (" << prevPerSecond << "/" << curPerSecond << ")"
+                                  << ", dcgm ";
+
+                    ValuesDump(values, ValueType::Int64, 1000.0 * 1000.0);
+                    //<< dcgmValue RSH - i64 / 10^6
+
+                    info_reporter << " MiB/sec (";
+
+                    std::cout.precision(ss);
+                    std::cout.flags(flags);
+                }
+
+                double value;
+
+                /*
+                 * Restore validation to driven vs. measured instead of against
+                 * speed of light maximum. We also scale by the number of workers
+                 * since the value read is for the whole GPU and the value driven
+                 * is per worker, and driving is distributed evenly among workers,
+                 * regardless of the partition size of the per-worker MIG slice.
+                 */
+                auto validated
+                    = ValueGet(values, worker.Entities(), DCGM_FE_GPU, ValueType::Int64, 1000.0 * 1000.0, value);
+
+                AppendSubtestRecord(prevPerSecond, value);
+
+                if (m_parameters.m_report)
+                {
+                    auto ss    = std::cout.precision();
+                    auto flags = std::cout.flags();
+
+                    info_reporter << std::fixed << std::setprecision(0);
+
+                    info_reporter << 100.0 * value / expectedRate << "% speed-of-light)"
+                                  << ", PCIE version/lanes: " << pcieVersion << "/" << pcieLanes << "."
+                                  << info_reporter.new_line;
+
+                    std::cout.precision(ss);
+                    std::cout.flags(flags);
+                }
+
+                // We clamp near zero to avoid problems with noise.
+                if (value < 0.5)
+                {
+                    value = 0.0;
+                }
+
+                if (curGpuPerSecond < 0.5)
+                {
+                    curGpuPerSecond = 0.0;
+                }
+
+                worker.SetValidated(
+                    validated && Validate(prevGpuPerSecond, curGpuPerSecond, value, howFarIn, worker.GetValidated()));
             }
-        }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
-    });
+            prevGpuPerSecond = curGpuPerSecond;
+
+            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        });
 
     rtSt = CommandAll(false,
                       "R %u %.3f %.3f %s\n",
@@ -2387,7 +2434,7 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_WARNING << "dcgmGetDeviceTopology failed with " << dcgmReturn << " for gpuId " << m_gpuId << "."
-                         << Reporter<plog::none>::Flags::new_line;
+                         << Reporter::Flags::new_line;
 
         return DCGM_ST_NOT_SUPPORTED;
     }
@@ -2469,7 +2516,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                        bool valid,
                        std::map<Entity, dcgmFieldValue_v1> &values,
                        DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -2564,9 +2610,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
             }
 
             double value;
-
-            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Int64, 1000.0 * 1000.0, value)
-                         && Validate(prevPerSecond, curPerSecond, value, howFarIn);
+            auto validated
+                = ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Int64, 1000.0 * 1000.0, value);
 
             AppendSubtestRecord(prevPerSecond, value);
 
@@ -2582,9 +2627,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                 std::cout.precision(ss);
                 std::cout.flags(flags);
             }
+
+            worker.SetValidated(validated
+                                && Validate(prevPerSecond, curPerSecond, value, howFarIn, worker.GetValidated()));
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2608,7 +2656,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
                                              bool valid,
                                              std::map<Entity, dcgmFieldValue_v1> &values,
                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-        bool validated { true };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -2674,13 +2721,14 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
 
             double value;
 
-            validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_I, ValueType::Double, bandwidthDivisor, value)
-                         && Validate(prevDramAct, curDramAct, value, howFarIn);
+            worker.SetValidated(
+                ValueGet(values, worker.Entities(), DCGM_FE_GPU_I, ValueType::Double, bandwidthDivisor, value)
+                && Validate(prevDramAct, curDramAct, value, howFarIn, worker.GetValidated()));
 
             AppendSubtestRecord(prevDramAct, value);
         }
 
-        return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2777,7 +2825,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
                                                               bool valid,
                                                               std::map<Entity, dcgmFieldValue_v1> &values,
                                                               DistributedCudaContext &worker) mutable -> dcgmReturn_t {
-            bool validated { true };
             unsigned int part;
             unsigned int parts;
             bool firstPartTick = worker.IsFirstTick();
@@ -2830,15 +2877,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
 
                 double value;
 
-                validated &= ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                             && Validate(limit, 0.9, value, howFarIn);
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(limit, 0.9, value, howFarIn, worker.GetValidated()));
 
                 ////prevValue = value;
 
                 AppendSubtestRecord(0.0, value);
             }
 
-            return validated ? DCGM_ST_OK : DCGM_ST_PENDING;
+            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
         });
 
     rtSt = CommandAll(false,

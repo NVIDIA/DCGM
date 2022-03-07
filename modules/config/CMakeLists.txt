@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+find_package(fmt REQUIRED)
+
 add_library(config_interface INTERFACE)
 target_include_directories(config_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(config_interface INTERFACE common_interface dcgm_interface modules_interface module_common_interface)
@@ -23,6 +25,7 @@ target_link_libraries(
         config_interface
         sdk_nvml_essentials_objects
         module_common_objects
+        fmt::fmt
 )
 target_sources(
     dcgmmoduleconfig

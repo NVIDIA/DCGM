@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cstring>
+#include <fmt/format.h>
 
 #include "DcgmCoreProxy.h"
 #include "dcgm_core_communication.h"
@@ -801,6 +802,14 @@ dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEn
 {
     dcgmCoreGetMultipleLatestLiveSamples_t gml = {};
 
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    {
+        DCGM_LOG_ERROR << fmt::format("Too many entities in the group. Provided {}, supported up to {}",
+                                      entities.size(),
+                                      DCGM_GROUP_MAX_ENTITIES);
+        return DCGM_ST_MAX_LIMIT;
+    }
+
     gml.request.entityPairCount = entities.size();
     for (size_t i = 0; i < entities.size(); i++)
     {
@@ -950,12 +959,10 @@ dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_s
     return ret;
 }
 
-dcgmReturn_t DcgmCoreProxy::GetGroupEntities(dcgm_connection_id_t connectionId,
-                                             unsigned int groupId,
-                                             std::vector<dcgmGroupEntityPair_t> &entities)
+dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities) const
 {
     dcgmCoreGetGroupEntities_t gge = {};
-    gge.request.connectionId       = connectionId;
+    gge.request.connectionId       = 0;
     gge.request.groupId            = groupId;
 
     initializeCoreHeader(gge.header, DcgmCoreReqIdGMGetGroupEntities, dcgmCoreGetGroupEntities_version, sizeof(gge));
@@ -981,7 +988,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupEntities(dcgm_connection_id_t connectionId,
 
 dcgmReturn_t DcgmCoreProxy::AreAllTheSameSku(dcgm_connection_id_t connectionId,
                                              unsigned int groupId,
-                                             int *areAllSameSku)
+                                             int *areAllSameSku) const
 {
     if (areAllSameSku == nullptr)
     {
@@ -1062,7 +1069,7 @@ int DcgmCoreProxy::GpuIdToNvmlIndex(unsigned int gpuId)
     }
 }
 
-dcgmReturn_t DcgmCoreProxy::VerifyAndUpdateGroupId(unsigned int *groupId)
+dcgmReturn_t DcgmCoreProxy::VerifyAndUpdateGroupId(unsigned int *groupId) const
 {
     dcgmCoreBasicQuery_t bq = {};
     bq.request.entityId     = *groupId;
@@ -1425,4 +1432,51 @@ dcgmReturn_t DcgmCoreProxy::GetMigUtilizationHelper(unsigned int gpuId,
                    << " while getting the profile ID for gpuId: " << gpuId << ", InstanceId: " << instanceId.id;
 
     return ret;
+}
+dcgmReturn_t DcgmCoreProxy::GetMigIndicesForEntity(dcgmGroupEntityPair_t const &entity,
+                                                   unsigned int *gpuId,
+                                                   dcgm_field_eid_t *instanceId) const
+{
+    dcgmCoreGetMigIndicesForEntity_t query {};
+    query.request.entityGroupId = entity.entityGroupId;
+    query.request.entityId      = entity.entityId;
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqMigIndicesForEntity, dcgmCoreGetMigIndicesForEntity_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "[CoreProxy] Got error: " << errorString(ret) << " while getting MIG instance IDs";
+
+        return ret;
+    }
+
+    if (gpuId != nullptr)
+    {
+        if (query.response.gpuId != std::numeric_limits<decltype(query.response.gpuId)>::max())
+        {
+            *gpuId = query.response.gpuId;
+        }
+        else
+        {
+            DCGM_LOG_ERROR << "Requested entityId was not a MIG instance";
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    if (instanceId != nullptr)
+    {
+        if (query.response.instanceId != std::numeric_limits<decltype(query.response.instanceId)>::max())
+        {
+            *instanceId = query.response.instanceId;
+        }
+        else
+        {
+            DCGM_LOG_ERROR << "Requested entityId was not a MIG instance";
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    return query.response.ret;
 }

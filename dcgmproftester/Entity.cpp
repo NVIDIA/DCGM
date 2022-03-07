@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,8 @@ Entity::Entity(const dcgmGroupEntityPair_t &entity)
 
 Entity::Entity(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId)
     : m_entity { entityGroupId, entityId }
-
 {}
 
-dcgmGroupEntityPair_t Entity::operator*(void)const
-{
-    return m_entity;
-}
 
 bool Entity::operator<(const Entity &other) const
 {

@@ -1,5 +1,5 @@
 //
-// Copyright 2020 NVIDIA Corporation.  All rights reserved.
+// Copyright 2021 NVIDIA Corporation.  All rights reserved.
 //
 // NOTICE TO USER:
 //
@@ -59,9 +59,18 @@ _NSCQ_DEF_PATH(nscq_nvswitch_firmware_version, "/{nvswitch}/version/firmware");
 _NSCQ_DEF_PATH(nscq_nvswitch_pcie_location, "/{nvswitch}/pcie/location");
 _NSCQ_DEF_PATH(nscq_nvswitch_fabric_status, "/{nvswitch}/status/fabric");
 _NSCQ_DEF_PATH(nscq_nvswitch_reset_required, "/{nvswitch}/status/reset_required");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_fatal, "/{nvswitch}/status/error/fatal");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_link_status, "/{nvswitch}/nvlink/{port}/status/link");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_reset_required,
                "/{nvswitch}/nvlink/{port}/status/reset_required");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_fatal, "/{nvswitch}/nvlink/{port}/status/error/fatal");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_replay_count, "/{nvswitch}/nvlink/{port}/status/error/replay_count");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_recovery_count, "/{nvswitch}/nvlink/{port}/status/error/recovery_count");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_flit_err_count, "/{nvswitch}/nvlink/{port}/status/error/flit_err_count");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_lane_crc_err_count_aggregate, "/{nvswitch}/nvlink/{port}/status/error/lane_crc_err_count_aggregate");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_lane_ecc_err_count_aggregate, "/{nvswitch}/nvlink/{port}/status/error/lane_ecc_err_count_aggregate");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_lane_crc_err_count, "/{nvswitch}/nvlink/{port}/{lane}/status/error/crc_err_count");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_lane_ecc_err_count, "/{nvswitch}/nvlink/{port}/{lane}/status/error/ecc_err_count");
 
 #undef _NSCQ_DEF_PATH
 

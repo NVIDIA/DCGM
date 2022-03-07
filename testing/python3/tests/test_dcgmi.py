@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -422,6 +422,7 @@ def test_dcgmi_diag(handle, gpuIds):
 
     _test_valid_args([
            ["diag", "--run", "1", "-i", allGpusCsv], # run diagnostic other settings currently run for too long
+           ["diag", "--run", "1", "-i", str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"], # Test that we can pass a long debugLogFile
            ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early"], # verifies --fail-early option
            ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval", "3"], # verifies --check-interval option
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "HW_SLOWDOWN"], # verifies that --throttle-mask with HW_SLOWDOWN reason to be ignored
@@ -433,9 +434,8 @@ def test_dcgmi_diag(handle, gpuIds):
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "40"], # verifies that --throttle-mask with HW_SLOWDOWN (8) and SW_THERMAL (32) reason to be ignored
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "96"], # verifies that --throttle-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "232"], # verifies that --throttle-mask with ALL reasons to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--plugin-path", "./apps/nvvs/plugins"], # verifies --plugin-path actually sees the plugins on a specified path
            ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in gpuIds)], # verifies --gpuList option accepts and validates list of GPUs passed in
-           ["diag", "--run", "pcie", "-p", "pcie.h2d_d2h_single_unpinned.min_pci_width=8", "-i", str(gpuIds[0])],
+           ["diag", "--run", "pcie", "-p", "pcie.h2d_d2h_single_unpinned.min_pci_width=4", "-i", str(gpuIds[0])],
 
     ])
       
@@ -475,86 +475,8 @@ def test_dcgmi_diag(handle, gpuIds):
             ["diag", "--run", "1", "-i", "0-1-2-3-4"], # Make sure -i is a comma-separated list of integers
             ["diag", "--run", "1", "-i", "roshar"], # Make sure -i is a comma-separated list of integers
             ["diag", "--run", "1", "-i", "a,b,c,d,e,f"], # Make sure -i is a comma-separated list of integers
+            ["diag", "--run", "1", "-i", allGpusCsv, "--plugin-path", "./apps/nvvs/plugins"], # verifies --plugin-path no longer works (removed)
     ])
-
-@test_utils.run_with_persistence_mode_on()
-@test_utils.run_with_standalone_host_engine(320)
-@test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-def test_dcgmi_diag_statspath(handle, gpuIds):
-    """
-    Verifies that the --statspath option works as expected
-    and places the output file in the specified directory
-    """
-
-    outputFile = "stats_pcie.json"
-    try:
-        testDirectory = tempfile.mkdtemp()
-        os.mkdir(testDirectory)
-    except OSError:
-        test_utils.skip_test("Unable to create the test directory")
-    else:
-        try:
-            _run_dcgmi_command(["diag", "--run", "2", "--statspath", testDirectory])
-            assert os.path.isfile(os.path.join(testDirectory, outputFile)), "Expected stats file {} was not created".format(os.path.join(testDirectory, outputFile))
-        finally:
-            shutil.rmtree(testDirectory, ignore_errors=True)
-
-def helper_test_dcgm_diag_dbe_insertion(handle, gpuIds, testDir):
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=30')
-    dd.SetStatsPath(testDir)
-    dd.SetStatsOnFail(1)
-
-    def run(dd):
-        dd.Execute(handle)
-
-    # Setup injection app
-    fieldId = dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS
-    failGpuId = gpuIds[0]
-    inject_error = dcgm_internal_helpers.InjectionThread(handle, failGpuId, fieldId, dcgm_fields.DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN, offset=5)
-    logger.info("Injecting HW_SLOWDOWN throttle error for GPU %s" % failGpuId)
-    inject_error.start()
-    # Verify that the inserted values are visible in DCGM before starting the diag
-    assert dcgm_internal_helpers.verify_field_value(failGpuId, fieldId, 8, maxWait=5), \
-            "Expected inserted values to be visible"
-
-    t = threading.Thread(target=run, args=[dd])
-    logger.info("Started diag")
-    t.start()
-
-    # Wait for diag to finish
-    logger.info("Waiting for diag to finish")
-    t.join()
-
-    # Stop error insertion
-    logger.info("Stopped error injection")
-    inject_error.Stop()
-    inject_error.join()
-    assert inject_error.retCode == dcgm_structs.DCGM_ST_OK, "Error injection failed: %s" % inject_error.retCode
-
-@test_utils.run_with_persistence_mode_on()
-@test_utils.run_with_standalone_host_engine(320)
-@test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-def test_dcgmi_diag_statsonfail(handle, gpuIds):
-    """
-    Verifies that the --statsonfail option works as expected
-    and generates the stats file upon failure
-    """
-    outputFile = "stats_diagnostic.json"
-    try:
-        testDirectory = tempfile.mkdtemp()
-        os.mkdir(testDirectory)
-    except OSError:
-        test_utils.skip_test("Unable to create the test directory")
-    else:
-        try:
-            helper_test_dcgm_diag_dbe_insertion(handle, gpuIds, testDirectory)
-            assert os.path.isfile(os.path.join(testDirectory, outputFile)), "Expected stats file {} was not created".format(os.path.join(testDirectory, outputFile))
-        finally:
-             shutil.rmtree(testDirectory, ignore_errors=True)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()

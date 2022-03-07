@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,18 +231,31 @@ std::string DcgmGpuInstance::DeriveGpuInstanceName(std::string const &ciName)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGpuInstance::TruncateCIDeviceName(std::string const &ciNameToEdit, std::string &ciNameEdited)
+dcgmReturn_t DcgmGpuInstance::StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, nvmlDevice_t migDevice)
 {
-    std::size_t pos = ciNameToEdit.find("MIG ");
-
-    if (pos == std::string::npos)
+    for (auto &computeInstance : m_computeInstances)
     {
-        DCGM_LOG_ERROR << "Device name '" << ciNameToEdit
-                       << "' isn't the name of a MIG device: MIG doesn't appear in the name.";
-        return DCGM_ST_BADPARAM;
+        if (computeInstance.nvmlComputeInstanceId.id == nvmlComputeInstanceId)
+        {
+            computeInstance.migDevice = migDevice;
+            return DCGM_ST_OK;
+        }
     }
 
-    ciNameEdited = ciNameToEdit.substr(pos + 4); // 4 moves us past 'MIG '
+    return DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND;
+}
 
-    return DCGM_ST_OK;
+/*****************************************************************************/
+nvmlDevice_t DcgmGpuInstance::GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const
+{
+    for (auto const &computeInstance : m_computeInstances)
+    {
+        if (computeInstance.dcgmComputeInstanceId.id == dcgmComputeInstanceId
+            || dcgmComputeInstanceId == DCGM_MAX_COMPUTE_INSTANCES)
+        {
+            return computeInstance.migDevice;
+        }
+    }
+
+    return nullptr;
 }

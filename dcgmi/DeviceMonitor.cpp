@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@
 /*****************************************************************************/
 /* This is used by the signal handler to let the device monitor know that
    we've received a signal from a ctrl-c..etc that we should stop */
-static bool deviceMonitorShouldStop = false;
+static std::atomic<bool> deviceMonitorShouldStop = false;
 
 static std::string_view HelperGetGroupIdPrefix(dcgm_field_entity_group_t const groupId)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -375,19 +375,11 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
     }
 
     // Plugin path
-    if (drd->pluginPath[0] != '\0')
+    const char *pluginDir = getenv(NVVS_PLUGIN_DIR);
+    if (pluginDir)
     {
         cmdArgs.push_back("-p");
-        cmdArgs.push_back(std::string(drd->pluginPath));
-    }
-    else
-    {
-        const char *pluginDir = getenv(NVVS_PLUGIN_DIR);
-        if (pluginDir)
-        {
-            cmdArgs.push_back("-p");
-            cmdArgs.push_back(std::string(pluginDir));
-        }
+        cmdArgs.push_back(std::string(pluginDir));
     }
 
     if (drd->throttleMask[0] != '\0')
@@ -1244,7 +1236,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_t *drd,
             return dcgmReturn;
         }
 
-        dcgmReturn = m_coreProxy.GetGroupEntities(0, gId, entities);
+        dcgmReturn = m_coreProxy.GetGroupEntities(gId, entities);
         if (dcgmReturn != DCGM_ST_OK)
         {
             PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);

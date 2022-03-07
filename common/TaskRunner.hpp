@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ public:
         task.SetPromise(std::move(prom)); /* after this prom is invalid */
 
         {
-            auto queueHandle = m_queue.Lock();
+            auto queueHandle = m_queue.LockRW();
             auto taskPtr     = std::make_unique<Task<T>>(std::move(task)); /* after this task is invalid */
             queueHandle.Enqueue(std::move(taskPtr));
         }
@@ -164,7 +164,7 @@ public:
         task.SetPromise(std::move(contProm)); /* after this prom is invalid */
 
         {
-            auto queueHandle = m_queue.Lock();
+            auto queueHandle = m_queue.LockRW();
             auto taskPtr
                 = std::make_unique<Task<std::shared_future<T>>>(std::move(task)); /* after this task is invalid */
             queueHandle.Enqueue(std::move(taskPtr));
@@ -263,12 +263,15 @@ public:
             std::vector<std::unique_ptr<ITask>> tasks;
             std::vector<std::unique_ptr<ITask>> deferredTasks;
             {
-                auto &&queueHandle = m_queue.Lock();
-                if (queueHandle.IsEmpty())
                 {
-                    continue;
+                    auto queueHandle = m_queue.LockRO();
+                    if (queueHandle.IsEmpty())
+                    {
+                        continue;
+                    }
                 }
 
+                auto queueHandle = m_queue.LockRW();
                 if (m_debugLogging.load(std::memory_order_relaxed))
                 {
                     DCGM_LOG_DEBUG << "TaskRunner is consuming " << std::to_string(queueHandle.GetSize())
@@ -283,7 +286,7 @@ public:
                 }
             }
 
-            for (auto &&task : tasks)
+            for (auto &task : tasks)
             {
                 if (m_stop.load(std::memory_order_relaxed))
                 {
@@ -319,8 +322,8 @@ public:
             }
             if (!deferredTasks.empty())
             {
-                auto &&queueHandle = m_queue.Lock();
-                for (auto &&task : deferredTasks)
+                auto queueHandle = m_queue.LockRW();
+                for (auto &task : deferredTasks)
                 {
                     queueHandle.Enqueue(std::move(task));
                 }
