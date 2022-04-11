@@ -24,6 +24,7 @@ import string
 import json
 import dcgmvalue
 import platform
+import distro
 
 DCGM_MAX_STR_LENGTH                   =   256
 DCGM_MAX_NUM_DEVICES                  =   32 # DCGM 2.0 and newer = 32. DCGM 1.8 and older = 16
@@ -452,11 +453,11 @@ def _LoadDcgmLibrary(libDcgmPath=None):
                         dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
                     else:
                         if not libDcgmPath:
-                            dist_name, dist_version, dist_id = platform.linux_distribution(full_distribution_name=0)
+                            dist_name, dist_version, dist_id = distro.linux_distribution(full_distribution_name=0)
                             dist_name = dist_name.lower()
                             if dist_name in {'ubuntu', 'debian'}:
                                 libDcgmPath = '/usr/lib/{}-linux-gnu'.format(platform.machine())
-                            elif dist_name in {'fedora', 'redhat', 'centos', 'suse'}:
+                            elif dist_name in {'fedora', 'redhat', 'centos', 'suse', 'amzn'}:
                                 libDcgmPath = '/usr/lib64'
 
                         dcgmLib = CDLL(os.path.join(libDcgmPath, "libdcgm.so.2"))
