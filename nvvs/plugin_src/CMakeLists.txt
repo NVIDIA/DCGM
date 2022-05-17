@@ -17,11 +17,13 @@ set(CMAKE_C_VISIBILITY_PRESET default)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
 
 find_package(Cuda REQUIRED)
+find_package(fmt REQUIRED)
 
 add_library(nvvs_plugins INTERFACE)
 
 add_library(nvvs_plugins_interface INTERFACE)
 target_include_directories(nvvs_plugins_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(nvvs_plugins_interface INTERFACE fmt::fmt)
 
 macro(declare_nvvs_plugin plugin_name)
     add_library(nvvs_plugins_${plugin_name}_interface INTERFACE)

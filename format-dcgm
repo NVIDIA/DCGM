@@ -16,12 +16,14 @@
 
 set -e
 
+TOP_LEVEL_DIR=$(pwd)
+
 if [ "$DCGM_BUILD_INSIDE_DOCKER" = 1 ]; then
     for file in $(find . "(" -not -ipath "./_out/*" -a -not -ipath "./sdk/*" -a -not -ipath "./PerfWorks/*" ")" \
                   -a "(" -iname "*.h" -o -iname "*.hpp" -o -iname "*.c" -o -iname "*.cpp" ")"); do
 
-        pushd $(dirname $(realpath $file)) >/dev/null
-        clang-format -i --style=file $(basename $file) &
+        pushd $(dirname $(realpath ${TOP_LEVEL_DIR}/$file)) >/dev/null
+        clang-format -i --style=file $(basename ${TOP_LEVEL_DIR}/$file) &
         popd >/dev/null
 
     done

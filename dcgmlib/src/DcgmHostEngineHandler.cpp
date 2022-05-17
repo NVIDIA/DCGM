@@ -3444,7 +3444,18 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
     /* Make sure that server is stopped first so that no new connections or
      * requests are accepted by the HostEngine.
      * Always keep this first */
-    m_dcgmIpc.StopAndWait(60000);
+    try
+    {
+        m_dcgmIpc.StopAndWait(60000);
+    }
+    catch (std::exception const &ex)
+    {
+        DCGM_LOG_ERROR << "Exception caught in DcgmHostEngineHandler::~DcgmHostEngineHandler(): " << ex.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "Unknown exception caught in DcgmHostEngineHandler::~DcgmHostEngineHandler()";
+    }
 
     Lock();
     /* Free sub-modules before we unload core modules */

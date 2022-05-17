@@ -1807,20 +1807,34 @@ dcgmReturn_t DcgmCacheManager::Init(int pollInLockStep, double /*maxSampleAge*/)
 dcgmReturn_t DcgmCacheManager::Shutdown()
 {
     dcgmReturn_t retSt = DCGM_ST_OK;
-    int st;
     nvmlVgpuInstance_t vgpuInstanceCount;
 
     if (m_eventThread)
     {
         PRINT_INFO("", "Stopping event thread.");
-        st = m_eventThread->StopAndWait(10000);
-        if (st)
+        try
         {
-            PRINT_WARNING("", "Killing event thread that is still running.");
+            int st = m_eventThread->StopAndWait(10000);
+            if (st)
+            {
+                PRINT_WARNING("", "Killing event thread that is still running.");
+                m_eventThread->Kill();
+            }
+            else
+            {
+                PRINT_INFO("", "Event thread was stopped normally.");
+            }
+        }
+        catch (std::exception const &ex)
+        {
+            DCGM_LOG_ERROR << "Exception in m_eventThread->StopAndWait(): " << ex.what();
             m_eventThread->Kill();
         }
-        else
-            PRINT_INFO("", "Event thread was stopped normally.");
+        catch (...)
+        {
+            DCGM_LOG_ERROR << "Unknown exception in m_eventThread->StopAndWait()";
+            m_eventThread->Kill();
+        }
         delete m_eventThread;
         m_eventThread = 0;
     }
@@ -1833,10 +1847,23 @@ dcgmReturn_t DcgmCacheManager::Shutdown()
 
     /* Wait for the thread to exit for a reasonable amount of time. After that,
        just kill the polling thread so we don't wait forever */
-    st = StopAndWait(30000);
-    if (st)
+    try
     {
-        PRINT_WARNING("", "Killing stats thread that is still running.");
+        int st = StopAndWait(30000);
+        if (st)
+        {
+            DCGM_LOG_WARNING << "Killing stats thread that is still running.";
+            Kill();
+        }
+    }
+    catch (std::exception const &ex)
+    {
+        DCGM_LOG_ERROR << "Exception in StopAndWait(): " << ex.what();
+        Kill();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "Unknown exception in StopAndWait()";
         Kill();
     }
 

@@ -242,6 +242,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
         case DCGM_ST_NVVS_BINARY_NOT_FOUND:
             return "The NVVS binary was not found in the specified location; please install it to "
                    "/usr/share/nvidia-validation-suite/ or set environment variable NVVS_BIN_PATH to the directory containing nvvs.";
+        case DCGM_ST_NVVS_KILLED:
+            return "The DCGM diagnostic was killed by a signal";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

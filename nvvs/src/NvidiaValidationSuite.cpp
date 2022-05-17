@@ -501,7 +501,7 @@ void NvidiaValidationSuite::banner()
 {
     if (nvvsCommon.jsonOutput == false)
     {
-        std::cout << std::endl << NVVS_NAME << " (version " << DRIVER_MAJOR_VERSION << ")" << std::endl << std::endl;
+        std::cout << std::endl << NVVS_NAME << " (version " << DRIVER_MAJOR_VERSION << ")\n" << std::endl;
     }
 }
 
@@ -1114,8 +1114,7 @@ public:
     {
         TCLAP::StdOutput::usage(_cmd);
 
-        std::cout << "Please email cudatools@nvidia.com with any questions, bug reports, etc." << std::endl
-                  << std::endl;
+        std::cout << "Please email cudatools@nvidia.com with any questions, bug reports, etc.\n" << std::endl;
     }
 };
 

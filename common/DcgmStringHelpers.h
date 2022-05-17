@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <fmt/format.h>
 #include <string>
 #include <vector>
 
@@ -67,13 +68,15 @@ constexpr void dcgmTerminateCharBuffer(T (&arr)[N])
 template <std::size_t N, std::size_t Z>
 void SafeCopyTo(char (&dst)[N], char const (&src)[Z])
 {
-    snprintf(dst, std::min(N, Z), "%s", src);
+    auto result = fmt::format_to_n(dst, std::min(N, Z) - 1, "{}", src);
+    *result.out = '\0';
 }
 
 template <std::size_t N>
 void SafeCopyTo(char (&dst)[N], char const *src)
 {
-    snprintf(dst, N, "%s", src);
+    auto result = fmt::format_to_n(dst, N - 1, "{}\0", src);
+    *result.out = '\0';
 }
 
 namespace DcgmNs

@@ -30,15 +30,24 @@ struct [[nodiscard]] Defer final
 
     ~Defer()
     {
-        try
+        if (!m_disarmed)
         {
-            std::invoke(m_func);
+            try
+            {
+                std::invoke(m_func);
+            }
+            catch (...)
+            {}
         }
-        catch (...)
-        {}
+    }
+
+    void Disarm()
+    {
+        m_disarmed = true;
     }
 
 private:
     Func m_func;
+    bool m_disarmed = false;
 };
 } // namespace DcgmNs

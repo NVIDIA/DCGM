@@ -798,7 +798,7 @@ private:
 
 dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEntityPair_t> const &entities,
                                                          std::vector<unsigned short> const &fieldIds,
-                                                         DcgmFvBuffer *fvBuffer)
+                                                         DcgmFvBuffer *fvBuffer) const
 {
     dcgmCoreGetMultipleLatestLiveSamples_t gml = {};
 
@@ -876,7 +876,7 @@ dcgmReturn_t DcgmCoreProxy::RemoveFieldWatch(dcgm_field_entity_group_t entityGro
                                              dcgm_field_eid_t entityId,
                                              unsigned short fieldId,
                                              int clearCache,
-                                             DcgmWatcher watcher)
+                                             DcgmWatcher watcher) const
 {
     dcgmCoreRemoveFieldWatch_t rfw = {};
     rfw.request.entityGroupId      = entityGroupId;
@@ -905,7 +905,7 @@ dcgmReturn_t DcgmCoreProxy::RemoveFieldWatch(dcgm_field_entity_group_t entityGro
     return ret;
 }
 
-dcgmReturn_t DcgmCoreProxy::AppendSamples(DcgmFvBuffer *fvBuffer)
+dcgmReturn_t DcgmCoreProxy::AppendSamples(DcgmFvBuffer *fvBuffer) const
 {
     dcgmCoreAppendSamples_t as = {};
     as.request.buffer          = fvBuffer->GetBuffer();
@@ -935,7 +935,7 @@ dcgmReturn_t DcgmCoreProxy::AppendSamples(DcgmFvBuffer *fvBuffer)
     return ret;
 }
 
-dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_sample_p value)
+dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_sample_p value) const
 {
     dcgmCoreSetValue_t sv = {};
     sv.request.gpuId      = gpuId;
@@ -1019,7 +1019,7 @@ dcgmReturn_t DcgmCoreProxy::AreAllTheSameSku(dcgm_connection_id_t connectionId,
 
 dcgmReturn_t DcgmCoreProxy::GetGroupGpuIds(dcgm_connection_id_t connectionId,
                                            unsigned int groupId,
-                                           std::vector<unsigned int> &gpuIds)
+                                           std::vector<unsigned int> &gpuIds) const
 {
     dcgmCoreGetGroupGpuIds_t ggg = {};
     ggg.request.connectionId     = connectionId;
@@ -1047,7 +1047,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupGpuIds(dcgm_connection_id_t connectionId,
     return ret;
 }
 
-int DcgmCoreProxy::GpuIdToNvmlIndex(unsigned int gpuId)
+int DcgmCoreProxy::GpuIdToNvmlIndex(unsigned int gpuId) const
 {
     dcgmCoreBasicQuery_t bq = {};
     bq.request.entityId     = gpuId;
@@ -1092,7 +1092,7 @@ dcgmReturn_t DcgmCoreProxy::VerifyAndUpdateGroupId(unsigned int *groupId) const
     return ret;
 }
 
-DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(dcgm_connection_id_t connectionId, loggerCategory_t logger)
+DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(dcgm_connection_id_t connectionId, loggerCategory_t logger) const
 {
     dcgmCoreGetSeverity_t getSeverity = {};
 
@@ -1113,7 +1113,7 @@ DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(dcgm_connection_id_t conn
     return DcgmLoggingSeverityUnspecified;
 }
 
-dcgmReturn_t DcgmCoreProxy::SendModuleCommand(void *msg)
+dcgmReturn_t DcgmCoreProxy::SendModuleCommand(void *msg) const
 {
     dcgmCoreSendModuleCommand_t smc = {};
 
@@ -1135,7 +1135,7 @@ dcgmReturn_t DcgmCoreProxy::SendRawMessageToClient(dcgm_connection_id_t connecti
                                                    dcgm_request_id_t requestId,
                                                    void *msgData,
                                                    unsigned int msgSize,
-                                                   dcgmReturn_t status)
+                                                   dcgmReturn_t status) const
 {
     dcgmCoreSendRawMessage_t msg = {};
 

@@ -40,7 +40,7 @@
 #include <vector>
 
 #define MIN_MAJOR_VERSION 346
-#define MAX_MAJOR_VERSION 600
+#define MAX_MAJOR_VERSION 2000
 
 namespace DcgmNs::Nvvs
 {

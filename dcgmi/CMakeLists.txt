@@ -60,9 +60,7 @@ target_link_libraries(dcgmi
         dcgm_interface
         common_interface
         diag_interface
-
         dcgmi_objects
-
         dcgmmodulediag_common
         buildinfo_objects
         dcgm

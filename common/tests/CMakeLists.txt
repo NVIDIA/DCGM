@@ -14,6 +14,7 @@
 set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Catch2 REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -50,6 +51,7 @@ if (BUILD_TESTING)
             sdk_nvml_loader
             ${CMAKE_THREAD_LIBS_INIT}
             rt
+            fmt::fmt
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

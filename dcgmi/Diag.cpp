@@ -21,6 +21,7 @@
  */
 
 #include "Diag.h"
+#include <chrono>
 #include <ctype.h>
 #include <fstream>
 #include <iomanip>
@@ -32,6 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -116,8 +118,9 @@ std::ifstream::pos_type filesize(const std::string &filename)
 /*******************************************************************************/
 /* Variables for terminating a running diag on a SIGINT and other signals */
 // To avoid conflicting with STL reserved namespace, variables are prefixed with diag_
-static bool diag_stopDiagOnSignal = false;     // Whether we should attempt to stop a running diag on recieving a signal
-static std::string diag_hostname  = "";        // Hostname for the remote host engine
+static std::atomic<bool> g_signalExit = false;
+static bool diag_stopDiagOnSignal     = false; // Whether we should attempt to stop a running diag on recieving a signal
+static std::string diag_hostname      = "";    // Hostname for the remote host engine
 static std::string diag_pathToExecutable = ""; // Path to the dcgmi executable
 static bool diag_installed_sig_handlers  = false; // Whether sig handlers have been installed
 static void (*diag_oldHupHandler)(int)   = NULL;  // reference to old sig hup handler if any
@@ -158,62 +161,7 @@ void handle_signal_during_diag(int signum)
 {
     if (diag_stopDiagOnSignal)
     {
-        int st;
-        int fd { -1 };
-        std::vector<std::string> args(2);
-        pid_t pid;
-        char buf[512];
-        ssize_t bytesRead;
-
-        memset(buf, 0, sizeof(buf));
-        args[0] = diag_pathToExecutable;
-        args[1] = "diag";
-        // Tell child to stop launched diagnostic
-        setenv(STOP_DIAG_ENV_VARIABLE_NAME, diag_hostname.c_str(), 1);
-        pid = DcgmUtilForkAndExecCommand(args, NULL, &fd, NULL, true);
-        if (pid < 0)
-        {
-            std::cerr << "Error: Could not fork to stop the launched diagnostic." << std::endl;
-        }
-        else
-        {
-            // Capture output of child and send to stdout
-            while ((bytesRead = read(fd, buf, sizeof(buf) - 1)) > 0)
-            {
-                // Insert null after the number of bytes read to avoid emptying buffer after every read
-                buf[bytesRead] = '\0';
-                std::cout << buf;
-            }
-            // Wait for child to end
-            waitpid(pid, &st, 0);
-            if (bytesRead == -1 || st)
-            {
-                std::cerr << "Error: Could not stop the launched diagnostic." << std::endl;
-            }
-        }
-
-        if (fd >= 0)
-        {
-            close(fd);
-        }
-    }
-    // Run previous sig handler
-    switch (signum)
-    {
-        case SIGHUP:
-            RUN_OLD_HANDLER(Hup, signum, handle_signal_during_diag);
-            break;
-        case SIGINT:
-            RUN_OLD_HANDLER(Int, signum, handle_signal_during_diag);
-            break;
-        case SIGQUIT:
-            RUN_OLD_HANDLER(Quit, signum, handle_signal_during_diag);
-            break;
-        case SIGTERM:
-            RUN_OLD_HANDLER(Term, signum, handle_signal_during_diag);
-            break;
-        default:
-            break;
+        g_signalExit = true;
     }
 }
 
@@ -233,15 +181,46 @@ void InstallSigHandlers()
 
 /*****************************************************************************
  *****************************************************************************
+ * RemoteDiagExecutor
+ *****************************************************************************
+ *****************************************************************************/
+RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_t &drd)
+    : m_handle(handle)
+    , m_result(DCGM_ST_OK)
+{
+    memcpy(&m_drd, &drd, sizeof(m_drd));
+    memset(&m_diagResult, 0, sizeof(m_diagResult));
+    m_diagResult.version = dcgmDiagResponse_version;
+}
+
+void RemoteDiagExecutor::run()
+{
+    m_result = dcgmActionValidate_v2(m_handle, &m_drd, &m_diagResult);
+}
+
+dcgmReturn_t RemoteDiagExecutor::GetResult() const
+{
+    return m_result;
+}
+
+dcgmDiagResponse_t RemoteDiagExecutor::GetResponse() const
+{
+    return m_diagResult;
+}
+
+
+/*****************************************************************************
+ *****************************************************************************
  * Diag
  *****************************************************************************
  *****************************************************************************/
 
 /*****************************************************************************/
-Diag::Diag()
-    : mJsonOutput(false)
+Diag::Diag(const std::string &hostname)
+    : m_jsonOutput(false)
+    , m_hostname(hostname)
 {
-    memset(&this->mDrd, 0, sizeof(this->mDrd));
+    memset(&this->m_drd, 0, sizeof(this->m_drd));
 }
 
 Diag::~Diag()
@@ -250,13 +229,13 @@ Diag::~Diag()
 /*******************************************************************************/
 void Diag::setDcgmRunDiag(dcgmRunDiag_t *drd)
 {
-    memcpy(&this->mDrd, drd, sizeof(this->mDrd));
+    memcpy(&this->m_drd, drd, sizeof(this->m_drd));
 }
 
 /*******************************************************************************/
 void Diag::setJsonOutput(bool jsonOutput)
 {
-    this->mJsonOutput = jsonOutput;
+    this->m_jsonOutput = jsonOutput;
 }
 
 /*******************************************************************************/
@@ -337,7 +316,7 @@ void Diag::InitializeDiagResponse(dcgmDiagResponse_t &diagResult)
 
 void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t result)
 {
-    if (mJsonOutput)
+    if (m_jsonOutput)
     {
         Json::Value output;
         output[NVVS_NAME][NVVS_RUNTIME_ERROR] = errMsg;
@@ -352,15 +331,14 @@ void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t r
     {
         PRINT_ERROR("%u %d %s",
                     "Error in diagnostic for group with ID: %u. Return: %d '%s'",
-                    (unsigned int)(uintptr_t)mDrd.groupId,
+                    (unsigned int)(uintptr_t)m_drd.groupId,
                     result,
                     errMsg.c_str());
     }
 }
 
 /*******************************************************************************/
-dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
-
+dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 {
     dcgmReturn_t result = DCGM_ST_OK;
     ;
@@ -372,12 +350,8 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
 
     // Setup signal handlers
     InstallSigHandlers();
-    diag_stopDiagOnSignal = true;
 
-    /* Run Diagnostic */
-    result = dcgmActionValidate_v2(handle, &mDrd, &diagResult);
-    // Reset global flag so that the sig handler does not attempt to stop a diag when no diag is running.
-    diag_stopDiagOnSignal = false;
+    result = ExecuteDiagOnServer(handle, diagResult);
 
     if (result == DCGM_ST_GROUP_INCOMPATIBLE)
     {
@@ -399,7 +373,7 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
         }
         else
         {
-            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)mDrd.groupId
+            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
                    << ". Return: (" << result << ") " << errorString(result) << ".";
         }
 
@@ -417,7 +391,7 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
         HelperDisplayFailureMessage(errMsg.str(), result);
         return result;
     }
-    else if (mJsonOutput == false && diagResult.systemError.msg[0] != '\0')
+    else if (m_jsonOutput == false && diagResult.systemError.msg[0] != '\0')
     {
         std::stringstream errMsg;
         errMsg << "Error: " << diagResult.systemError.msg << std::endl;
@@ -425,9 +399,9 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
         return DCGM_ST_NVVS_ERROR;
     }
 
-    if (strlen(mDrd.gpuList) > 0)
+    if (strlen(m_drd.gpuList) > 0)
     {
-        dcgmTokenizeString(mDrd.gpuList, ",", gpuStrList);
+        dcgmTokenizeString(m_drd.gpuList, ",", gpuStrList);
         for (size_t i = 0; i < gpuStrList.size(); i++)
         {
             gpuVec.push_back(strtol(gpuStrList[i].c_str(), NULL, 10));
@@ -438,7 +412,7 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
         PopulateGpuList(diagResult, gpuVec);
     }
 
-    if (mJsonOutput)
+    if (m_jsonOutput)
     {
         result = HelperDisplayAsJson(diagResult, gpuVec);
     }
@@ -448,7 +422,7 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
 
         std::cout << DIAG_HEADER;
 
-        if (mDrd.flags & DCGM_RUN_FLAGS_TRAIN)
+        if (m_drd.flags & DCGM_RUN_FLAGS_TRAIN)
         {
             HelperDisplayTrainingOutput(diagResult);
         }
@@ -473,6 +447,49 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
     }
 
     return result;
+}
+
+/*******************************************************************************/
+dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_t &diagResult)
+{
+    RemoteDiagExecutor rde(handle, m_drd);
+    dcgmReturn_t result   = DCGM_ST_OK;
+    diag_stopDiagOnSignal = true;
+
+    // Start the diagnostic
+    rde.Start();
+
+    while (1)
+    {
+        if (g_signalExit)
+        {
+            AbortDiag ad(m_hostname);
+            ad.Execute();
+            rde.Stop();
+            result = DCGM_ST_NVVS_KILLED;
+            break;
+        }
+        else if (rde.HasExited())
+        {
+            result     = rde.GetResult();
+            diagResult = rde.GetResponse();
+            break;
+        }
+
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(100ms);
+    }
+
+    // Reset global flag so that the sig handler does not attempt to stop a diag when no diag is running.
+    diag_stopDiagOnSignal = false;
+
+    return result;
+}
+
+/*******************************************************************************/
+dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
+{
+    return RunDiagOnce(handle);
 }
 
 dcgmReturn_t Diag::RunViewDiag()
@@ -580,7 +597,7 @@ void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v2 *diagResults, const s
 
     std::cout << DIAG_HARDWARE;
 
-    if (!strcasecmp(mDrd.testNames[0], CTXCREATE_PLUGIN_NAME))
+    if (!strcasecmp(m_drd.testNames[0], CTXCREATE_PLUGIN_NAME))
         HelperDisplayGpuResults(DISPLAY_CTXCREATE, DCGM_CONTEXT_CREATE_INDEX, diagResults, gpuIndices);
     else
         HelperDisplayGpuResults(DISPLAY_MEMORY, DCGM_MEMORY_INDEX, diagResults, gpuIndices);
@@ -710,16 +727,16 @@ void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::strin
     }
 }
 
-void Diag::HelperDisplayDetails(bool forceWarnings,
+void Diag::HelperDisplayDetails(bool forceVerbose,
                                 const std::vector<unsigned int> &gpuIndices,
                                 unsigned int testIndex,
                                 CommandOutputController &cmdView,
                                 dcgmDiagResponsePerGpu_v2 *diagResults)
 {
-    bool displayInfo     = false;
-    bool displayWarnings = forceWarnings;
+    bool displayInfo     = forceVerbose;
+    bool displayWarnings = forceVerbose;
 
-    if (mDrd.flags & DCGM_RUN_FLAGS_VERBOSE)
+    if (m_drd.flags & DCGM_RUN_FLAGS_VERBOSE)
     {
         displayInfo     = true;
         displayWarnings = true;
@@ -952,7 +969,7 @@ std::string Diag::HelperGetPluginName(unsigned int index)
     {
         case DCGM_MEMORY_INDEX:
         {
-            if (!strcasecmp(mDrd.testNames[0], CTXCREATE_PLUGIN_NAME))
+            if (!strcasecmp(m_drd.testNames[0], CTXCREATE_PLUGIN_NAME))
                 return DISPLAY_CTXCREATE;
             else
                 return DISPLAY_MEMORY;
@@ -1058,7 +1075,7 @@ void Diag::HelperJsonBuildOutput(Json::Value &output,
     integration[NVVS_HEADER]   = DISPLAY_INTEGRATION;
     stress[NVVS_HEADER]        = DISPLAY_STRESS;
 
-    std::string gpuList = mDrd.gpuList;
+    std::string gpuList = m_drd.gpuList;
 
     // Make sure we have an accurate gpu list
     if (gpuList.size() == 0)
@@ -1130,7 +1147,7 @@ dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std
     Json::Value output;
     dcgmReturn_t result = DCGM_ST_OK;
 
-    if (mDrd.flags & DCGM_RUN_FLAGS_TRAIN)
+    if (m_drd.flags & DCGM_RUN_FLAGS_TRAIN)
     {
         output[NVVS_NAME][NVVS_TRAINING_MSG] = diagResult.trainingMsg;
     }
@@ -1157,10 +1174,7 @@ StartDiag::StartDiag(const std::string &hostname,
                      bool jsonOutput,
                      dcgmRunDiag_t &drd,
                      const std::string &pathToDcgmExecutable)
-    :
-
-    mDiagObj()
-
+    : m_diagObj(hostname)
 {
     std::string configFileContents;
     drd.version = dcgmRunDiag_version;
@@ -1220,8 +1234,8 @@ StartDiag::StartDiag(const std::string &hostname,
         throw TCLAP::CmdLineParseException(err_text);
     }
 
-    this->mDiagObj.setDcgmRunDiag(&drd);
-    this->mDiagObj.setJsonOutput(jsonOutput);
+    this->m_diagObj.setDcgmRunDiag(&drd);
+    this->m_diagObj.setJsonOutput(jsonOutput);
 
     // Set path to dcgm executable. This is used by the signal handler to stop the launched diagnostic if needed.
     diag_pathToExecutable = pathToDcgmExecutable;
@@ -1275,7 +1289,7 @@ dcgmReturn_t StartDiag::DoExecuteConnected()
     // Set global hostname so that the signal handler can terminate a launched diagnostic if necessary
     diag_hostname = m_hostName;
 
-    dcgmReturn_t ret = mDiagObj.RunStartDiag(m_dcgmHandle);
+    dcgmReturn_t ret = m_diagObj.RunStartDiag(m_dcgmHandle);
 
     // reset global hostname
     diag_hostname = "";
@@ -1300,7 +1314,7 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
     }
     else
     {
-        connectionStatus = mDiagObj.RunStartDiag(embeddedHandle);
+        connectionStatus = m_diagObj.RunStartDiag(embeddedHandle);
 
         dcgmStopEmbedded(embeddedHandle);
     }

@@ -319,6 +319,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_PLUGIN_EXCEPTION            = -50, //!< Exception thrown from a diagnostic plugin
     DCGM_ST_NVVS_ISOLATE_ERROR    = -51, //!< The diagnostic returned an error that indicates the need for isolation
     DCGM_ST_NVVS_BINARY_NOT_FOUND = -52, //!< The NVVS binary was not found in the specified location
+    DCGM_ST_NVVS_KILLED           = -53, //!< The NVVS process was killed by a signal
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);

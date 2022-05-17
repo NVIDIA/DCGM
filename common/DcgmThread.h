@@ -34,24 +34,20 @@
 class DcgmThread
 {
 private:
-    std::atomic_bool m_hasRun;     /* Has this thread run yet? */
-    std::atomic_bool m_shouldStop; /* Has our thread been signalled to quit or not? */
-    std::atomic_bool m_hasExited;  /* Has our thread finished running yet? */
-    std::atomic_bool m_hasStarted; /* Has this thread been started yet? (call to pthread_create
-                                      was made but pthread might not be running yet) */
+    std::atomic_bool m_hasRun;        /* Has this thread run yet? */
+    std::atomic_bool m_shouldStop;    /* Has our thread been signalled to quit or not? */
+    std::atomic_bool m_hasExited;     /* Has our thread finished running yet? */
+    std::atomic_bool m_hasStarted;    /* Has this thread been started yet? (call to pthread_create
+                                         was made but pthread might not be running yet) */
+    std::atomic_bool m_alreadyJoined; /* Already called pthread_join; calling a second time is undefined behavior */
 
-#ifndef __linux__
-    /* Windows specific stuff */
-    HANDLE m_handle;
-    DWORD m_threadId;
-#else
     pthread_t m_pthread;
-    bool m_alreadyJoined;    /* Already called pthread_join; calling a second time is undefined behavior */
     bool m_sendSignalOnStop; /* Should we send a signal to this thread when someone calls Stop() or
                                      StopAndWait() on it? Only set this to true if you have a signal handler
                                      installed or it will cause a seg fault in this thread due to an unhandled
                                      exception. */
-#endif
+
+    std::exception_ptr m_exception; /*!< Exception preserved from the running thread. Will be thrown on Wait */
 
     std::mutex m_mutex;                 /* Mutex used for m_stopCond */
     std::condition_variable m_stopCond; /* Condition used to signal that it's time to stop */

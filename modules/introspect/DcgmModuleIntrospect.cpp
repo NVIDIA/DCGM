@@ -36,7 +36,7 @@ DcgmModuleIntrospect::DcgmModuleIntrospect(dcgmCoreCallbacks_t &dcc)
 {
     SetRunInterval(std::chrono::milliseconds(DEFAULT_RUN_INTERVAL_MS));
 
-    IF_LOG_(BASE_LOGGER, plog::debug)
+    IF_PLOG_(BASE_LOGGER, plog::debug)
     {
         SetDebugLogging(true);
     }
@@ -47,7 +47,18 @@ DcgmModuleIntrospect::DcgmModuleIntrospect(dcgmCoreCallbacks_t &dcc)
 /*****************************************************************************/
 DcgmModuleIntrospect::~DcgmModuleIntrospect()
 {
-    StopAndWait(60000);
+    try
+    {
+        StopAndWait(60000);
+    }
+    catch (std::exception &e)
+    {
+        DCGM_LOG_ERROR << "Exception caught in ~DcgmModuleIntrospect: " << e.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "Unknown exception caught in ~DcgmModuleIntrospect";
+    }
 }
 
 void DcgmModuleIntrospect::run()

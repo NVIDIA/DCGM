@@ -9,8 +9,8 @@ VERSION=1.2.11
 mkdir -p ${HOME}/.build/${TARGET}
 pushd ${HOME}/.build/${TARGET}
 
-download_url "https://www.zlib.net/zlib-${VERSION}.tar.gz" zlib.tar.gz
-echo "73fd3fff4adeccd4894084c15ddac89890cd10ef105dd5e1835e1e9bbb6a49ff229713bd197d203edfa17c2727700fce65a2a235f07568212d820dca88b528ae  zlib.tar.gz" | sha512sum -c -
+download_url "https://github.com/madler/zlib/archive/refs/tags/v${VERSION}.tar.gz" zlib.tar.gz
+echo "104c62ed1228b5f1199bc037081861576900eb0697a226cafa62a35c4c890b5cb46622e399f9aad82ee5dfb475bae26ae75e2bd6da3d261361b1c8b996970faf zlib.tar.gz" | sha512sum -c -
 mkdir -p zlib_src
 tar xf zlib.tar.gz -C zlib_src --strip-components=1
 

@@ -157,7 +157,8 @@ void TestDiagManager::RemoveDummyScript()
 
 int TestDiagManager::TestPositiveDummyExecutable()
 {
-    std::string output;
+    std::string stdoutStr;
+    std::string stderrStr;
     dcgmReturn_t result;
 
     /*  this is, in practice, really bad... ok if the only public calls made are
@@ -166,7 +167,7 @@ int TestDiagManager::TestPositiveDummyExecutable()
     DcgmDiagManager *am = new DcgmDiagManager(g_coreCallbacks);
 
     CreateDummyScript();
-    result = am->PerformDummyTestExecute(&output);
+    result = am->PerformDummyTestExecute(&stdoutStr, &stderrStr);
 
     delete (am);
     am = 0;
@@ -174,19 +175,20 @@ int TestDiagManager::TestPositiveDummyExecutable()
     if (result != DCGM_ST_OK)
         return -1;
 
-    DCGM_LOG_DEBUG << output;
+    DCGM_LOG_DEBUG << stdoutStr;
     return 0;
 }
 
 int TestDiagManager::TestNegativeDummyExecutable()
 {
-    std::string output;
+    std::string stdoutStr;
+    std::string stderrStr;
     dcgmReturn_t result;
 
     DcgmDiagManager *am = new DcgmDiagManager(g_coreCallbacks);
 
     RemoveDummyScript();
-    result = am->PerformDummyTestExecute(&output);
+    result = am->PerformDummyTestExecute(&stdoutStr, &stderrStr);
 
     delete (am);
     am = 0;
@@ -1191,7 +1193,8 @@ void TestDiagManager::CreateDummyFailScript()
 
 int TestDiagManager::TestPerformExternalCommand()
 {
-    std::string output;
+    std::string stdoutStr;
+    std::string stderrStr;
     std::vector<std::string> dummyCmds;
     dummyCmds.push_back("dummy"); // added to DcgmDiagManager so we can generate stderr
     dcgmReturn_t result = DCGM_ST_OK;
@@ -1200,8 +1203,8 @@ int TestDiagManager::TestPerformExternalCommand()
 
     // Make the script that will fail
     CreateDummyFailScript();
-    am.PerformExternalCommand(dummyCmds, &output);
-    if (output.size() == 0)
+    am.PerformExternalCommand(dummyCmds, &stdoutStr, &stderrStr);
+    if (stdoutStr.empty() && stderrStr.empty())
     {
         fprintf(stderr, "TestPerformExternalCommand should've captured stderr, but failed to do so.\n");
         return -1;

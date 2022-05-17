@@ -58,9 +58,20 @@ DcgmClientHandler::~DcgmClientHandler()
 {
     /* Explicitly tell DcgmIpc to shut down so we don't get async callbacks after
        this destructor */
-    if (m_dcgmIpc.StopAndWait(60000))
+    try
     {
-        DCGM_LOG_ERROR << "m_dcgmIpc.StopAndWait returned that it was still running.";
+        if (m_dcgmIpc.StopAndWait(60000))
+        {
+            DCGM_LOG_ERROR << "m_dcgmIpc.StopAndWait returned that it was still running.";
+        }
+    }
+    catch (std::exception &ex)
+    {
+        DCGM_LOG_ERROR << "m_dcgmIpc.StopAndWait raised exception " << ex.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "m_dcgmIpc.StopAndWait raised unknown exception";
     }
 
     /* Clear all of the structures that are protected by locks */

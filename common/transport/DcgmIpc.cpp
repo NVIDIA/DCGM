@@ -78,7 +78,7 @@ dcgmReturn_t DcgmIpc::Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters
     (void)evthread_use_pthreads();
 
     /* Enable libevent logging if we're at debug or higher */
-    IF_LOG_(BASE_LOGGER, plog::verbose)
+    IF_PLOG_(BASE_LOGGER, plog::verbose)
     {
         event_set_log_callback(DcgmIpcEventLogCB);
         event_enable_debug_logging(EVENT_DBG_ALL);
@@ -137,11 +137,22 @@ dcgmReturn_t DcgmIpc::Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters
 /*****************************************************************************/
 DcgmIpc::~DcgmIpc()
 {
-    int st = StopAndWait(60000);
-    if (st)
+    try
     {
-        DCGM_LOG_ERROR << "Killing DcgmIpc thread that is still running.";
-        Kill();
+        int st = StopAndWait(60000);
+        if (st)
+        {
+            DCGM_LOG_ERROR << "Killing DcgmIpc thread that is still running.";
+            Kill();
+        }
+    }
+    catch (std::exception const &ex)
+    {
+        DCGM_LOG_ERROR << "StopAndWait() threw " << ex.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "StopAndWait() threw unknown exception";
     }
 
     if (m_tcpListenEvent != nullptr)
@@ -622,19 +633,19 @@ dcgmReturn_t DcgmIpc::WaitForConnectHelper(dcgm_connection_id_t connectionId,
 {
     try
     {
-    auto futStatus = fut.wait_for(std::chrono::milliseconds(timeoutMs));
-    if (futStatus != std::future_status::ready)
-    {
-        DCGM_LOG_ERROR << "connectionId " << connectionId << " timed out after " << timeoutMs << " ms.";
-        /* Close the connection, which will handle both:
-           1. If the connection was established right after the timeout
-           2. If the connection was still pending and just blocked on libevent's ~2 minute timeout */
-        CloseConnection(connectionId);
-        return DCGM_ST_CONNECTION_NOT_VALID;
-    }
+        auto futStatus = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+        if (futStatus != std::future_status::ready)
+        {
+            DCGM_LOG_ERROR << "connectionId " << connectionId << " timed out after " << timeoutMs << " ms.";
+            /* Close the connection, which will handle both:
+               1. If the connection was established right after the timeout
+               2. If the connection was still pending and just blocked on libevent's ~2 minute timeout */
+            CloseConnection(connectionId);
+            return DCGM_ST_CONNECTION_NOT_VALID;
+        }
 
-    return fut.get();
-}
+        return fut.get();
+    }
     catch (const std::future_error &e)
     {
         DCGM_LOG_ERROR << "Caught future error for connectionId " << connectionId << ", what: " << e.what();

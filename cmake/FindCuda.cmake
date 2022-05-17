@@ -2,7 +2,7 @@ include(utils)
 
 set(Cuda9_prefix usr/local/cuda-9.2)
 set(Cuda10_prefix usr/local/cuda-10.0)
-set(Cuda11_prefix usr/local/cuda-11.0)
+set(Cuda11_prefix usr/local/cuda-11.4)
 
 macro (load_cuda cuda_version)
     foreach (prefix ${Cuda${cuda_version}_prefix})

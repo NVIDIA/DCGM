@@ -51,9 +51,21 @@ DcgmModuleNvSwitch::DcgmModuleNvSwitch(dcgmCoreCallbacks_t &dcc)
 
 DcgmModuleNvSwitch::~DcgmModuleNvSwitch()
 {
-    if (StopAndWait(60000))
+    try
     {
-        DCGM_LOG_WARNING << "Not all threads for the NVSwitch module exited correctly; exiting anyway";
+        if (StopAndWait(60000))
+        {
+            DCGM_LOG_WARNING << "Not all threads for the NVSwitch module exited correctly; exiting anyway";
+            Kill();
+        }
+    }
+    catch (std::exception const &ex)
+    {
+        DCGM_LOG_ERROR << "Exception caught while stopping the NVSwitch module: " << ex.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "Unknown exception caught while stopping the NVSwitch module";
     }
 }
 

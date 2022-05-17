@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef _NVVS_NVVS_Output_H
-#define _NVVS_NVVS_Output_H
+#ifndef NVVS_NVVS_Output_H
+#define NVVS_NVVS_Output_H
 
 #include "NvvsCommon.h"
 #include "PluginInterface.h"
@@ -29,19 +29,15 @@ public:
     Output()
         : m_out(std::cout.rdbuf())
         , m_err(std::cerr.rdbuf())
-        , globalInfo()
     {
         if (nvvsCommon.quietMode)
         {
             m_out.rdbuf(m_nullSS.rdbuf());
             m_err.rdbuf(m_nullSS.rdbuf());
         }
-        m_oldCout = std::cout.rdbuf();
-        m_oldCerr = std::cerr.rdbuf();
     }
 
-    virtual ~Output()
-    {}
+    virtual ~Output() = default;
 
     enum fillType_enum
     {
@@ -64,9 +60,6 @@ public:
 
     /***************************PRIVATE**********************************/
 private:
-    std::streambuf *m_oldCout;
-    std::streambuf *m_oldCerr;
-
     std::stringstream m_nullSS;
 
     // methods

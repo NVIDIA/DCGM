@@ -13,26 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstring>
 
 #include "DcgmDiagResponseWrapper.h"
-#include "DcgmLogging.h"
-#include "NvvsJsonStrings.h"
-#include "dcgm_errors.h"
 
-const std::string blacklistName("Blacklist");
-const std::string nvmlLibName("NVML Library");
-const std::string cudaMainLibName("CUDA Main Library");
-const std::string cudaTkLibName("CUDA Toolkit Libraries");
-const std::string permissionsName("Permissions and OS-related Blocks");
-const std::string persistenceName("Persistence Mode");
-const std::string envName("Environmental Variables");
-const std::string pageRetirementName("Page Retirement/Row Remap");
-const std::string graphicsName("Graphics Processes");
-const std::string inforomName("Inforom");
+#include <DcgmLogging.h>
+#include <DcgmStringHelpers.h>
+#include <dcgm_errors.h>
 
-const std::string swTestNames[] = { blacklistName,   nvmlLibName, cudaMainLibName,    cudaTkLibName, permissionsName,
-                                    persistenceName, envName,     pageRetirementName, graphicsName,  inforomName };
+#include <cstring>
+
+
+const std::string_view blacklistName("Blacklist");
+const std::string_view nvmlLibName("NVML Library");
+const std::string_view cudaMainLibName("CUDA Main Library");
+const std::string_view cudaTkLibName("CUDA Toolkit Libraries");
+const std::string_view permissionsName("Permissions and OS-related Blocks");
+const std::string_view persistenceName("Persistence Mode");
+const std::string_view envName("Environmental Variables");
+const std::string_view pageRetirementName("Page Retirement/Row Remap");
+const std::string_view graphicsName("Graphics Processes");
+const std::string_view inforomName("Inforom");
+
+const std::string_view swTestNames[]
+    = { blacklistName,   nvmlLibName, cudaMainLibName,    cudaTkLibName, permissionsName,
+        persistenceName, envName,     pageRetirementName, graphicsName,  inforomName };
 
 
 /*****************************************************************************/
@@ -52,9 +56,9 @@ bool DcgmDiagResponseWrapper::StateIsValid() const
 /*****************************************************************************/
 void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
 {
-    if (StateIsValid() == false)
+    if (!StateIsValid())
     {
-        PRINT_ERROR("", "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
         return;
     }
 
@@ -129,25 +133,24 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
                                                      unsigned int gpuIndex,
                                                      unsigned int rc)
 {
-    if (StateIsValid() == false)
+    if (!StateIsValid())
     {
-        PRINT_ERROR("", "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
+        return;
+    }
+
+    if (!IsValidGpuIndex(gpuIndex))
+    {
         return;
     }
 
     // Only set the results for tests run for each GPU
-    if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
-    {
-        return;
-    }
-
-    if (IsValidGpuIndex(gpuIndex) == false)
-    {
-        return;
-    }
-
     if (m_version == dcgmDiagResponse_version6)
     {
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
+        {
+            return;
+        }
         // Version 6
         m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].status = result;
         if (testIndex == DCGM_DIAGNOSTIC_INDEX)
@@ -168,9 +171,9 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
                                                      dcgmDiagErrorDetail_t &ed,
                                                      dcgmDiagResult_t result)
 {
-    if (StateIsValid() == false)
+    if (!StateIsValid())
     {
-        PRINT_ERROR("", "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
         return DCGM_ST_UNINITIALIZED;
     }
 
@@ -226,13 +229,13 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
                                                unsigned int gpuIndex,
                                                bool warning)
 {
-    if (StateIsValid() == false)
+    if (!StateIsValid())
     {
-        PRINT_ERROR("", "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
         return;
     }
 
-    if (IsValidGpuIndex(gpuIndex) == false)
+    if (!IsValidGpuIndex(gpuIndex))
     {
         return;
     }
@@ -240,7 +243,7 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
     if (m_version == dcgmDiagResponse_version6)
     {
         // version 6
-        if (warning == true)
+        if (warning)
         {
             snprintf(m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg,
                      sizeof(m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg),
@@ -264,9 +267,9 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
 /*****************************************************************************/
 void DcgmDiagResponseWrapper::SetGpuIndex(unsigned int gpuIndex)
 {
-    if (StateIsValid() == false)
+    if (!StateIsValid())
     {
-        PRINT_ERROR("", "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
         return;
     }
 
@@ -281,7 +284,7 @@ void DcgmDiagResponseWrapper::SetGpuIndex(unsigned int gpuIndex)
 }
 
 /*****************************************************************************/
-unsigned int DcgmDiagResponseWrapper::GetBasicTestResultIndex(const std::string &testname)
+unsigned int DcgmDiagResponseWrapper::GetBasicTestResultIndex(std::string_view const &testname)
 {
     for (unsigned int i = 0; i < DCGM_SWTEST_COUNT; i++)
     {
@@ -295,11 +298,11 @@ unsigned int DcgmDiagResponseWrapper::GetBasicTestResultIndex(const std::string 
 }
 
 /*****************************************************************************/
-void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError)
+void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError) const
 {
     if (m_version == dcgmDiagResponse_version6)
     {
-        snprintf(m_response.v6ptr->systemError.msg, sizeof(m_response.v6ptr->systemError.msg), "%s", sysError.c_str());
+        SafeCopyTo(m_response.v6ptr->systemError.msg, sysError.c_str());
         m_response.v6ptr->systemError.code = DCGM_FR_INTERNAL;
     }
     else
@@ -309,7 +312,7 @@ void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError)
 }
 
 /*****************************************************************************/
-void DcgmDiagResponseWrapper::SetGpuCount(unsigned int gpuCount)
+void DcgmDiagResponseWrapper::SetGpuCount(unsigned int gpuCount) const
 {
     if (m_version == dcgmDiagResponse_version6)
     {
@@ -338,7 +341,7 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion6(dcgmDiagResponse_v6 *response)
 
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagResponseWrapper::RecordTrainingMessage(const std::string &trainingMsg)
+dcgmReturn_t DcgmDiagResponseWrapper::RecordTrainingMessage(const std::string &trainingMsg) const
 {
     if (m_version == dcgmDiagResponse_version6)
     {

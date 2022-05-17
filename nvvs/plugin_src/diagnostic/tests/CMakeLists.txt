@@ -17,6 +17,7 @@ find_package(Catch2 REQUIRED)
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Cuda REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -43,6 +44,7 @@ if (BUILD_TESTING)
         PRIVATE
             nvvs_without_main_objects
             Catch2::Catch2
+            fmt::fmt
     )
     target_link_libraries(diagnostictests PUBLIC nvvs_interface)
     target_link_libraries(diagnostictests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)

@@ -72,7 +72,7 @@ void OutputMainError(const std::string &error)
         Json::Value jv;
         jv[NVVS_NAME][NVVS_VERSION_STR]   = DRIVER_MAJOR_VERSION;
         jv[NVVS_NAME][NVVS_RUNTIME_ERROR] = error;
-        std::cerr << jv.toStyledString() << std::endl;
+        std::cout << jv.toStyledString() << std::endl;
     }
 
     PRINT_ERROR("%s", "Got runtime_error: %s", error.c_str());

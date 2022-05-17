@@ -5,11 +5,11 @@ set -ex
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
 PKGNAME=fmt
-PKGVER=8.0.1
+PKGVER=8.1.1
 PKG="${PKGNAME}-${PKGVER}"
 PKGDIR="${HOME}/.build/${TARGET}/${PKG}"
 SOURCE="https://github.com/fmtlib/fmt/archive/refs/tags/${PKGVER}.tar.gz"
-SHA512SUM="643e68d5b2e0e9c83231ab2b0036596a6297b1d9ed6bd7b1172bee4ff134c8af8f09174c06c94225132c1b635b0977ea4ce783748d7bd76a9a0b5ad597456c84"
+SHA512SUM="794a47d7cb352a2a9f2c050a60a46b002e4157e5ad23e15a5afc668e852b1e1847aeee3cda79e266c789ff79310d792060c94976ceef6352e322d60b94e23189"
 
 mkdir -p ${PKGDIR}_{build,src}
 mkdir -p ${PKGDIR}_build_{Release,Debug,RelWithDebInfo}

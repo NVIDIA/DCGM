@@ -15,9 +15,10 @@
  */
 
 #include "JsonOutput.h"
-#include "NvidiaValidationSuite.h"
+
 #include "NvvsCommon.h"
 #include <DcgmBuildInfo.hpp>
+#include <fmt/format.h>
 
 /* This class fills in a json object in the format:
  * {
@@ -49,9 +50,6 @@
  *   }
  * }
  */
-
-// Forward declarations
-void AddStringVectorToJson(Json::Value &value, const std::vector<std::string> &strings, const char *prefix = "");
 
 void JsonOutput::header(const std::string &headerString)
 {
@@ -106,40 +104,27 @@ void JsonOutput::prep(const std::string &testString)
     }
     else
     {
-        int nextGpuId;
+        int nextGpuId = -1;
 
         // testString is in the format "Test Name GPU<index>", so we need to make the gpu results a member of this
         // test.
-        std::string testName(testString.substr(0, pos));                  // Capture just the name
-        nextGpuId = strtol(testString.substr(pos + 4).c_str(), NULL, 10); // Capture just the <index>
+        std::string testName(testString.substr(0, pos)); // Capture just the name
+        try
+        {
+            nextGpuId = std::stoi(testString.substr(pos + 4)); // Capture just the index
+        }
+        catch (std::exception const &)
+        {
+            nextGpuId = -1;
+        }
 
-        if (nextGpuId <= m_gpuId)
+        if (nextGpuId != -1 && nextGpuId <= m_gpuId)
         {
             m_testIndex++;
         }
         m_gpuId = nextGpuId;
 
         jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_TEST_NAME] = testName;
-    }
-}
-
-void AddStringVectorToJson(Json::Value &errorArray, const std::vector<std::string> &strings, const char *prefix)
-{
-    for (size_t i = 0; i < strings.size(); i++)
-    {
-        errorArray.append(prefix + strings[i]);
-    }
-}
-
-void AddErrorVectorToJson(Json::Value &errorArray, const std::vector<DcgmError> &errors, const char *prefix = "")
-{
-    for (size_t i = 0; i < errors.size(); i++)
-    {
-        Json::Value entry;
-        entry[NVVS_WARNING]  = prefix + errors[i].GetMessage();
-        entry[NVVS_ERROR_ID] = errors[i].GetCode();
-
-        errorArray.append(entry);
     }
 }
 
@@ -169,7 +154,6 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
         return; // Training mode doesn't want this output
     }
 
-    char buf[26];
     std::string resultStr = resultEnumToString(overallResult);
 
     if (overallResult == NVVS_RESULT_SKIP)
@@ -177,9 +161,19 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
         for (size_t i = 0; i < m_gpuIndices.size(); i++)
         {
             Json::Value resultField;
-            resultField[NVVS_STATUS] = resultStr;
-            snprintf(buf, sizeof(buf), "%d", m_gpuIndices[i]);
-            resultField[NVVS_GPU_IDS]                                                             = buf;
+            resultField[NVVS_STATUS]  = resultStr;
+            resultField[NVVS_GPU_IDS] = fmt::to_string(m_gpuIndices[i]);
+            unsigned int gpuId        = m_gpuIndices[i];
+
+            for (auto &&singleInfo : info)
+            {
+                if (singleInfo.gpuId == DCGM_DIAG_ALL_GPUS
+                    || (singleInfo.gpuId >= 0 && (unsigned)singleInfo.gpuId == gpuId))
+                {
+                    AppendInfo(singleInfo, resultField, "");
+                }
+            }
+
             jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][m_gpuIndices[i]] = resultField;
         }
         m_testIndex++;
@@ -224,28 +218,29 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
 
             Json::Value resultField;
             // GPU %u: Prefix for general warnings/info messages
-            snprintf(buf, sizeof(buf), "GPU %u: ", gpuId);
 
             for (auto &&error : errors)
             {
-                if (error.gpuId == gpuId || error.gpuId == DCGM_DIAG_ALL_GPUS)
+                if (error.gpuId == DCGM_DIAG_ALL_GPUS || (error.gpuId >= 0 && (unsigned)error.gpuId == gpuId))
                 {
-                    AppendError(error, resultField, buf);
+                    AppendError(error, resultField, fmt::format("GPU {}", gpuId));
                     gpuResult = NVVS_RESULT_FAIL;
                 }
             }
 
             for (auto &&singleInfo : info)
             {
-                if (singleInfo.gpuId == gpuId || singleInfo.gpuId == DCGM_DIAG_ALL_GPUS)
+                if (singleInfo.gpuId == DCGM_DIAG_ALL_GPUS
+                    || (singleInfo.gpuId >= 0 && (unsigned)singleInfo.gpuId == gpuId))
                 {
-                    AppendInfo(singleInfo, resultField, buf);
+                    AppendInfo(singleInfo, resultField, fmt::format("GPU {}", gpuId));
                 }
             }
 
             /* if any errors are detected then the test fails, but individual gpus may pass */
-            resultField[NVVS_STATUS]                                                    = resultEnumToString(gpuResult);
-            resultField[NVVS_GPU_IDS]                                                   = gpuId;
+            resultField[NVVS_STATUS]  = resultEnumToString(gpuResult);
+            resultField[NVVS_GPU_IDS] = gpuId;
+
             jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][gpuId] = resultField;
         }
     }
@@ -256,7 +251,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
     }
 }
 
-void JsonOutput::updatePluginProgress(unsigned int progress, bool clear)
+void JsonOutput::updatePluginProgress(unsigned int /*progress*/, bool /*clear*/)
 {
     // NO-OP for Json Output
 }
@@ -265,7 +260,7 @@ void JsonOutput::print()
 {
     Json::Value complete;
     complete[NVVS_NAME] = jv;
-    if (nvvsCommon.fromDcgm == false)
+    if (!nvvsCommon.fromDcgm)
     {
         complete[NVVS_GLOBAL_WARN] = DEPRECATION_WARNING;
     }
@@ -275,11 +270,12 @@ void JsonOutput::print()
 
 void JsonOutput::addInfoStatement(const std::string &info)
 {
-    if (jv[NVVS_INFO].empty() == true)
+    if (jv[NVVS_INFO].empty())
     {
         Json::Value infoArray;
         infoArray[globalInfoCount] = RemoveNewlines(info);
-        jv[NVVS_INFO]              = infoArray;
+
+        jv[NVVS_INFO] = infoArray;
     }
     else
     {
@@ -298,3 +294,8 @@ void JsonOutput::AddTrainingResult(const std::string &trainingOut)
 
     jv[NVVS_TRAINING_MSG] = trainingOut;
 }
+
+JsonOutput::JsonOutput(std::vector<unsigned int> gpuIndices)
+    : gpuList(fmt::to_string(fmt::join(gpuIndices, ",")))
+    , m_gpuIndices(std::move(gpuIndices))
+{}
