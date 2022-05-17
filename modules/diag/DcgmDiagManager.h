@@ -21,9 +21,11 @@
 
 #include "DcgmDiagResponseWrapper.h"
 #include "DcgmMutex.h"
+#include "DcgmUtilities.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
+#include <fmt/format.h>
 #include <json/json.h>
 
 #define NVVS_PLUGIN_DIR "NVVS_PLUGIN_DIR"
@@ -84,11 +86,13 @@ public:
      * Currently output is stored in a local variable and JSON output is not collected but
      * place holders are there for when these pieces should be inserted
      */
-    dcgmReturn_t PerformNVVSExecute(std::string *out, dcgmRunDiag_t *drd, std::string gpuIds = "");
-    dcgmReturn_t PerformNVVSExecute(std::string *out, dcgmPolicyValidation_t validation, std::string gpuIds = "");
+    dcgmReturn_t PerformNVVSExecute(std::string *stdoutStr,
+                                    std::string *stderrStr,
+                                    dcgmRunDiag_t *drd,
+                                    std::string const &gpuIds = "") const;
 
     /* Should not be made public... for testing purposes only */
-    dcgmReturn_t PerformDummyTestExecute(std::string *out);
+    dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const;
 
     /*************************************************************************/
     /*
@@ -104,7 +108,9 @@ public:
      *          DCGM_ST_BADPARAM if the given cmdArgs vector is non-empty
      *
      */
-    dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd, std::string gpuIds = "");
+    dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs,
+                                   dcgmRunDiag_t *drd,
+                                   std::string const &gpuIds = "") const;
 
     /*
      * Fill the response structure during a validation action - made public for unit testing
@@ -119,7 +125,7 @@ public:
      */
     dcgmReturn_t FillResponseStructure(const std::string &output,
                                        DcgmDiagResponseWrapper &response,
-                                       unsigned long long groupId,
+                                       int groupId,
                                        dcgmReturn_t oldRet);
 
     void FillTestResult(Json::Value &test,
@@ -128,16 +134,18 @@ public:
                         double nvvsVersion);
 
     /* perform external command - switched to public for testing*/
-    dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args, std::string *output);
+    dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
+                                        std::string *stdoutStr,
+                                        std::string *stderrStr) const;
 
 private:
     /* variables */
     const std::string m_nvvsPath;
 
     /* Variables for ensuring only one instance of nvvs is running at a time */
-    DcgmMutex m_mutex; // mutex for m_nvvsPid and m_ticket
-    pid_t m_nvvsPID;   // Do not directly modify this variable. Use UpdateChildPID instead.
-    uint64_t m_ticket; // Ticket used to prevent invalid updates to pid of child process.
+    mutable DcgmMutex m_mutex; // mutex for m_nvvsPid and m_ticket
+    mutable pid_t m_nvvsPID;   // Do not directly modify this variable. Use UpdateChildPID instead.
+    mutable uint64_t m_ticket; // Ticket used to prevent invalid updates to pid of child process.
 
     /* pointers to libdcgm callback functions */
     DcgmCoreProxy m_coreProxy;
@@ -148,11 +156,11 @@ private:
     /* methods */
 
     /* convert a string to a dcgmDiagResponse_t */
-    dcgmDiagResult_t StringToDiagResponse(std::string);
+    static dcgmDiagResult_t StringToDiagResponse(std::string_view result);
 
     static bool IsMsgForThisTest(unsigned int testIndex, const std::string &msg, const std::string &gpuMsg);
 
-    unsigned int GetTestIndex(const std::string &testName);
+    static unsigned int GetTestIndex(const std::string &testName);
 
     /* Converts the given JSON array to a CSV string using the values in the array */
     static std::string JsonStringArrayToCsvString(Json::Value &array,
@@ -164,14 +172,14 @@ private:
      *
      * Caller MUST ensure that m_mutex is locked by the calling thread before calling this method.
      */
-    uint64_t GetTicket();
+    uint64_t GetTicket() const;
 
     /*
      * Updates the PID of the nvvs child.
      * myTicket is used to ensure that the current thread is allowed to update the pid. (e.g. ensure another thread
      * has not modified the PID since the calling thread last updated it.)
      */
-    void UpdateChildPID(pid_t value, uint64_t myTicket);
+    void UpdateChildPID(pid_t value, uint64_t myTicket) const;
 
     /*
      * Adds the training related options to the command argument array for NVVS based on the contents of the
@@ -180,19 +188,21 @@ private:
      * Returns true if training arguments were added
      *         false if no training arguments were added
      */
-    bool AddTrainingOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd);
+    bool AddTrainingOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd) const;
 
     /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
      */
-    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd);
+    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd) const;
 
-    void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd, const std::string &gpuIds);
+    void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
+                                     dcgmRunDiag_t *drd,
+                                     const std::string &gpuIds) const;
 
     /*
      * Populates the error detail struct with the error and error code if present in the Json
      */
-    void PopulateErrorDetail(Json::Value &jsonResult, dcgmDiagErrorDetail_t &ed, double nvvsVersion);
+    static void PopulateErrorDetail(Json::Value &jsonResult, dcgmDiagErrorDetail_t &ed, double nvvsVersion);
 
     /*
      * Validate and parse the json output from NVVS into jv, and record the position of jsonStart
@@ -212,10 +222,16 @@ private:
      */
     dcgmReturn_t KillActiveNvvs(unsigned int maxRetries);
 
-    std::string GetCompareTestName(const std::string &testname);
+    static std::string GetCompareTestName(const std::string &testname);
 
     /*
      * Write the config file (if needed) and add that to the command arguments
      */
-    dcgmReturn_t AddConfigFile(dcgmRunDiag_t *drd, std::vector<std::string> &cmdArgs);
+    dcgmReturn_t AddConfigFile(dcgmRunDiag_t *drd, std::vector<std::string> &cmdArgs) const;
+    static void AppendDummyArgs(std::vector<std::string> &args);
+    dcgmReturn_t CanRunNewNvvsInstance() const;
+    dcgmReturn_t ReadProcessOutput(fmt::memory_buffer &stdoutStream,
+                                   fmt::memory_buffer &stderrStream,
+                                   DcgmNs::Utils::FileHandle stdoutFd,
+                                   DcgmNs::Utils::FileHandle stderrFd) const;
 };

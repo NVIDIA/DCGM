@@ -22,7 +22,18 @@ DcgmTaskRunner::~DcgmTaskRunner()
 {
     /* Wait for the worker. DcgmThread::StopAndWait() will call DcgmThread::Stop(),
        which will trigger OnStop() to wake up our thread */
-    StopAndWait(60000);
+    try
+    {
+        StopAndWait(60000);
+    }
+    catch (const std::exception &e)
+    {
+        DCGM_LOG_ERROR << "DcgmTaskRunner::~DcgmTaskRunner(): " << e.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "DcgmTaskRunner::~DcgmTaskRunner(): Unknown exception";
+    }
 }
 
 void DcgmTaskRunner::OnStop()

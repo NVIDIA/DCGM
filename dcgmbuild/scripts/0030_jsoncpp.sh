@@ -4,13 +4,13 @@ set -ex
 
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
-VERSION=1.8.4
+VERSION=1.9.5
 
 mkdir -p ${HOME}/.build/${TARGET}/jsoncpp_{build,src}
 pushd ${HOME}/.build/${TARGET}/jsoncpp_build
 
 download_url "https://github.com/open-source-parsers/jsoncpp/archive/${VERSION}.tar.gz" jsoncpp.tar.gz
-echo "f70361a3263dd8b9441374a9a409462be1426c0d6587c865171a80448ab73b3f69de2b4d70d2f0c541764e1e6cccc727dd53178347901f625ec6fb54fb94f4f1  jsoncpp.tar.gz" | sha512sum -c -
+echo "1d06e044759b1e1a4cc4960189dd7e001a0a4389d7239a6d59295af995a553518e4e0337b4b4b817e70da5d9731a4c98655af90791b6287870b5ff8d73ad8873  jsoncpp.tar.gz" | sha512sum -c -
 tar xzf jsoncpp.tar.gz -C ${HOME}/.build/${TARGET}/jsoncpp_src --strip-components=1
 
 cmake -DJSONCPP_WITH_TEST=ON \

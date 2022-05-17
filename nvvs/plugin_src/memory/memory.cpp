@@ -470,7 +470,7 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
     {
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_UNSUPPORTED, d);
-        memGlobals->memory->AddInfo(d.GetMessage());
+        memGlobals->memory->AddInfoVerboseForGpu(gpuId, d.GetMessage());
         memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
         mem_cleanup(memGlobals);
         return 1;
@@ -481,7 +481,7 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         std::stringstream ss;
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_DISABLED, d, "Memory", gpuId);
-        memGlobals->memory->AddInfo(d.GetMessage());
+        memGlobals->memory->AddInfoVerboseForGpu(gpuId, d.GetMessage());
         memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
         mem_cleanup(memGlobals);
         return 1;

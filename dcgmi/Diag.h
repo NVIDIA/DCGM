@@ -29,12 +29,14 @@
 #include "json/json.h"
 #include <dcgm_structs_internal.h>
 
+#include <DcgmThread.h>
+
 #define STOP_DIAG_ENV_VARIABLE_NAME "DCGMI_STOP_DIAG_HOSTNAME"
 
 class Diag
 {
 public:
-    Diag();
+    Diag(const std::string &hostname);
     virtual ~Diag();
     dcgmReturn_t RunStartDiag(dcgmHandle_t mNvcmHandle);
     dcgmReturn_t RunViewDiag();
@@ -77,12 +79,24 @@ private:
     dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std::vector<unsigned int> &gpuIndices);
     void HelperJsonAddPlugin(Json::Value &category, int &pluginCount, Json::Value &testEntry);
     void HelperJsonAddCategory(Json::Value &output, int &categoryIndex, Json::Value &category, int categoryCount);
-    void HelperDisplayDetails(bool forceWarnings,
+    void HelperDisplayDetails(bool forceVerbose,
                               const std::vector<unsigned int> &gpuIndices,
                               unsigned int testIndex,
                               CommandOutputController &cmdView,
                               dcgmDiagResponsePerGpu_v2 *diagResults);
     void HelperDisplayTrainingOutput(dcgmDiagResponse_t &diagResult);
+
+    /*****************************************************************************/
+    /*
+     * Runs the diag one time and returns the result
+     *
+     * @return DCGM_ST_OK if the diagnostic found no problems
+     *         DCGM_ST_* indicating what error was found
+     */
+    dcgmReturn_t RunDiagOnce(dcgmHandle_t handle);
+
+    /*****************************************************************************/
+    dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_t &diagResult);
 
     /*
      * Displays a complete failure message for the diag accounting for JSON or normal output
@@ -92,8 +106,35 @@ private:
 
     bool isWhitespace(char c);
 
-    dcgmRunDiag_t mDrd;
-    bool mJsonOutput;
+    dcgmRunDiag_t m_drd;
+    bool m_jsonOutput;
+    std::string m_hostname;
+};
+
+/*****************************************************************************
+ * Make a simple class for launching the diagnostic in a thread so we can
+ * monitor it and interrupt it as needed.
+ *****************************************************************************/
+class RemoteDiagExecutor : public DcgmThread
+{
+public:
+    /*****************************************************************************/
+    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_t &drd);
+
+    /*****************************************************************************/
+    void run(void);
+
+    /*****************************************************************************/
+    dcgmReturn_t GetResult() const;
+
+    /*****************************************************************************/
+    dcgmDiagResponse_t GetResponse() const;
+
+private:
+    dcgmHandle_t m_handle;
+    dcgmRunDiag_t m_drd;
+    dcgmDiagResponse_t m_diagResult;
+    dcgmReturn_t m_result;
 };
 
 /**
@@ -114,7 +155,7 @@ protected:
     dcgmReturn_t DoExecuteConnectionFailure(dcgmReturn_t connectionStatus) override;
 
 private:
-    Diag mDiagObj;
+    Diag m_diagObj;
 
     bool validGpuListFormat(const std::string &gpuList);
 

@@ -27,32 +27,32 @@ class TestDiagResponseWrapper : public TestDcgmModule
 {
 public:
     TestDiagResponseWrapper();
-    virtual ~TestDiagResponseWrapper();
+    ~TestDiagResponseWrapper() override;
 
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
-    int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus);
-    int Run();
-    int Cleanup();
-    std::string GetTag();
+    int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus) override;
+    int Run() override;
+    int Cleanup() override;
+    std::string GetTag() override;
 
 private:
     /*************************************************************************/
-    /*
+    /**
      * Actual test cases. These should return a status like below
      *
      * Returns 0 on success
      *        <0 on fatal error. Will abort entire framework
      *        >0 on non-fatal error
      *
-     **/
-    int TestInitializeDiagResponse();
-    int TestSetPerGpuResponseState();
-    int TestAddPerGpuMessage();
-    int TestSetGpuIndex();
-    int TestGetBasicTestResultIndex();
-    int TestRecordSystemError();
-    int TestAddErrorDetail();
+     */
+    static int TestInitializeDiagResponse();
+    static int TestSetPerGpuResponseState();
+    static int TestAddPerGpuMessage();
+    static int TestSetGpuIndex();
+    static int TestGetBasicTestResultIndex();
+    static int TestRecordSystemError();
+    static int TestAddErrorDetail();
 };
 
-#endif /* TESTDIAGMANAGER_H */
+#endif /* TEST_DIAG_RESPONSE_WRAPPER_H */

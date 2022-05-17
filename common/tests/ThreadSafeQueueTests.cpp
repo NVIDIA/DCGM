@@ -26,7 +26,7 @@ TEST_CASE("ThreadSafeQueue : Lock")
 
     {
         auto proxy = queue.LockRW();
-    proxy.Enqueue(10);
+        proxy.Enqueue(10);
     }
 
     std::thread th1([&queue] {
@@ -37,7 +37,7 @@ TEST_CASE("ThreadSafeQueue : Lock")
 
     {
         auto proxy = queue.LockRW();
-    REQUIRE(proxy.Dequeue() == 10);
+        REQUIRE(proxy.Dequeue() == 10);
     }
     int attempts = 0;
     while (attempts++ < 10)

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #define __STDC_LIMIT_MACROS
+#include <fmt/format.h>
 #include <stdint.h>
 
 #include "DiagnosticPlugin.h"
@@ -596,11 +597,22 @@ bool GpuBurnPlugin::RunTest()
                 for (size_t j = 0; j <= i; j++)
                 {
                     // Ask each worker to stop and wait up to 3 seconds for the thread to stop
-                    st = workerThreads[i]->StopAndWait(3000);
-                    if (st)
+                    try
+                    {
+                        st = workerThreads[i]->StopAndWait(3000);
+                        if (st)
+                        {
+                            // Thread did not stop
+                            workerThreads[i]->Kill();
+                        }
+                    }
+                    catch (std::exception const &ex)
                     {
                         // Thread did not stop
                         workerThreads[i]->Kill();
+                        DcgmError d { m_device[i]->gpuId };
+                        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
+                        AddError(d);
                     }
                     delete (workerThreads[i]);
                     workerThreads[i] = NULL;
@@ -623,7 +635,22 @@ bool GpuBurnPlugin::RunTest()
 
             for (size_t i = 0; i < m_device.size(); i++)
             {
-                st = workerThreads[i]->Wait(1000);
+                /* If nvvs requested we stop, ping each worker to stop */
+                if (main_should_stop)
+                {
+                    workerThreads[i]->Stop();
+                }
+
+                try
+                {
+                    st = workerThreads[i]->Wait(1000);
+                }
+                catch (std::exception const &ex)
+                {
+                    DcgmError d { m_device[i]->gpuId };
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
+                    AddError(d);
+                }
                 if (st)
                 {
                     activeThreadCount++;
@@ -633,7 +660,7 @@ bool GpuBurnPlugin::RunTest()
             timeCount++;
         }
     }
-    catch (const std::runtime_error &e)
+    catch (const std::exception &e)
     {
         PRINT_ERROR("%s", "Caught exception %s", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -648,11 +675,21 @@ bool GpuBurnPlugin::RunTest()
                 continue;
             }
             // Ask each worker to stop and wait up to 3 seconds for the thread to stop
-            st = workerThreads[i]->StopAndWait(3000);
-            if (st)
+            try
             {
-                // Thread did not stop
+                st = workerThreads[i]->StopAndWait(3000);
+                if (st)
+                {
+                    // Thread did not stop
+                    workerThreads[i]->Kill();
+                }
+            }
+            catch (std::exception const &ex)
+            {
                 workerThreads[i]->Kill();
+                DcgmError err { m_device[i]->gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, err, ex.what());
+                AddError(err);
             }
             delete (workerThreads[i]);
             workerThreads[i] = NULL;
@@ -1138,12 +1175,12 @@ void GpuBurnWorker::run()
             }
 
             st = Compute(precision);
-            if (st)
+            if (st || ShouldStop())
             {
                 break;
             }
             st = Compare(precision);
-            if (st)
+            if (st || ShouldStop())
             {
                 break;
             }
@@ -1171,6 +1208,6 @@ void GpuBurnWorker::run()
         double gflops = m_iters * OPS_PER_MUL / (1024 * 1024 * 1024) / (iterEnd - iterStart);
         m_plugin.SetGpuStat(m_device->gpuId, gflopsKey, gflops);
 
-    } while (iterEnd - startTime < m_testDuration && !ShouldStop());
+    } while (iterEnd - startTime < m_testDuration && !ShouldStop() && !st);
     m_stopTime = timelib_usecSince1970();
 }

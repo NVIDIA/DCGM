@@ -22,8 +22,21 @@ As previously stated, DCGM is a tool used to monitor the health and telemetry of
 
 DCGM is licensed under the Apache 2.0 license.
 
-# Communication Is Key
+# How to Contribute
+Contributions can be made by creating a pull request on
+https://github.com/NVIDIA/DCGM. We'll respond via GitHub.
 
+This code base is shared with NVIDIA's proprietary software, and various processing is performed on the shared code to produce the source code that is published here. This has several implications for the foreseeable future:
+
+* The GitHub repository will function mostly as a snapshot of each DCGM release.
+
+* We do not expect to be able to provide revision history for individual contributions that were made to NVIDIA's shared code base.  There will likely only be one git commit per DCGM release.
+
+* We may not be able to reflect individual contributions as separate git commits in the GitHub repository.
+
+* Because the code undergoes various processing prior to publishing here, contributions made here require manual merging to be applied to the shared code base. Therefore, large refactoring changes made here may be difficult to merge and accept back into the shared code base. If you have large refactoring to suggest, please contact us in advance, so we can coordinate.
+
+# Communication Is Key
 Early communication is essential for successfully contributing to DCGM, and the larger the change is, the more critical communication becomes. The same applies to the degree of complexity, as well as risk factors such as refactoring, behavioral changes, large changes, or other similarly impactful changes. Naturally, the most impactful and or risky a change is, the harder it is to plan as part of a release, and changes in behavior must be consistent with overall DCGM goals in order to be accepted and merged into the product as a whole. A good rule of thumb is that if there’s a significant amount of work involved, reach out to us early on.
 
 # Testing Your Merge Request
@@ -33,8 +46,6 @@ Additionally, the code must be tested to verify that it doesn’t cause any regr
 
 # Merging Changes and Release
 DCGM follows semver best practices, so the nature of the change will determine whether it is released in a major, minor, or patch release. A total of two minor releases are typically made per year, and some years one of those is replaced with a major release. Patch releases happen much more frequently. As a result, bug fixes are likely to be released quickly, and more complicated changes will have to fit into a release cycle for their target release.
-
-Please note: we are currently snapshotting DCGM code for the public repo, so changes that are submitted will be merged first there and then become visible in the public repo later. At the time they are accepted, we should still be able to communicate a targeted release for the merge.
 
 ## Conditions that Can Cause a Change to Not Be Accepted
  - Inadequate testing / test regressions: all submissions must pass existing tests and include adequate testing coverage and functionality before they can be accepted.
@@ -47,7 +58,9 @@ Please note: we are currently snapshotting DCGM code for the public repo, so cha
 
 ## The Mechanics of Contributing
 1. Create a github issue which explains the change that you desire to make.
-    1. Simple changes may not require this step, but generally speaking merge requests will be more productive and accepted faster if all parties have a clear understanding of why the change is needed or desired.
+Simple changes may not require this step, but generally speaking merge requests
+will be more productive and accepted faster if all parties have a clear understanding
+of why the change is needed or desired.
 2. Clone the repository and configure the pre-commit hooks using install_git_hooks.sh.
 3. Create a branch from main or a currently maintained branch.
 4. Develop and test the desired change.

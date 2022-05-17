@@ -21,6 +21,7 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <string>
 #include <timelib.h>
 #include <type_traits>
@@ -32,33 +33,6 @@
 /*************************************************************************
  * Utility methods for DCGM
  *************************************************************************/
-
-/*************************************************************************/
-/*
- * Creates a child process and executes the command given by args where args is an argv style array of strings.
- *
- * @param args: (IN) argv style args given as a vector of strings. The program to execute is the first element of the
- * vector.
- * @param infp: (OUT) pointer to a file descriptor for the child process's STDIN. Pass in NULL to ignore STDIN.
- * @param outfp: (OUT) pointer to a file descriptor for the child process's STDOUT. Cannot be NULL.
- * @param errfp: (OUT) pointer to a file descriptor for the child process's STDERR. Pass in NULL to ignore STDERR.
- * @param stderrToStdout: (IN) if true, child's stderr will be redirected to outfp and errfp will be ignored.
- *
- * @return: pid of the child process.
- *          If the returned pid is < 0, then there was an error creating the child process or outfp was NULL.
- *          Errors are logged using the PRINT_ERROR macro.
- *
- * Notes:
- * - It is caller's reponsibility to close the file descriptors associated with infp, outfp, errfp (if non-null
- *   values are given). If you want to run a process and ignore its output, redirect the descriptor to /dev/null.
- *
- * - Caller is responsible for waiting for child to exit (if desired).
- */
-pid_t DcgmUtilForkAndExecCommand(std::vector<std::string> &args,
-                                 int *infp,
-                                 int *outfp,
-                                 int *errfp,
-                                 bool stderrToStdout);
 
 namespace DcgmNs::Utils
 {
@@ -222,5 +196,155 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
     return DCGM_ST_GENERIC_ERROR; /* Shouldn't get here */
 }
 
+/**
+ * @brief Represents a system file descriptor
+ */
+class FileHandle
+{
+public:
+    /**
+     * @brief Creates invalid (-1) file descriptor
+     */
+    FileHandle() noexcept;
+
+    /**
+     * @brief Acquires ownership of the \a fd file descriptor
+     * @param[in] fd    A valid file descriptor. External caller must no call \c close() on this descriptor once it's
+     *                  transferred to the \c FileHandle
+     */
+    explicit FileHandle(int fd) noexcept;
+
+    ~FileHandle() noexcept;
+
+    FileHandle(FileHandle const &) = delete;
+    FileHandle &operator=(FileHandle const &) = delete;
+
+    FileHandle(FileHandle &&other) noexcept;
+    FileHandle &operator=(FileHandle &&other) noexcept;
+
+    explicit operator int() const;
+    /**
+     * @brief Returns underlying system file descriptor. Caller must not call \c close() on the descriptor returned from
+     *          this function.
+     * @return \c int  File descriptor.
+     */
+    [[nodiscard]] int Get() const &;
+    /**
+     * @brief Returns the underlying system file descriptor and abandons ownership so that it's caller responsibility to
+     *          call \c close() on the result descriptor
+     * @return \c int  File descriptor. Caller must call \c close() on the value later.
+     */
+    [[nodiscard]] int Release();
+
+private:
+    int m_fd;
+};
+
+
+/**
+ * @brief Smart wrapper around system pipes
+ * @example
+ * @code{.cpp}
+ * auto pipe_in = PipePair::Create();
+ * auto pipe_out = PipePair::Create();
+ * if (!pipe_in.has_value() || !pipe_out.has_value()) {
+ *  // handle error here
+ * }
+ *
+ * if (auto out_fd = (*pipe_out)->GiveupSender(); dup2(out_fd.Get(), STDOUT_FILENO) == -1) {
+ *  // handle error here
+ * }
+ * if (auto in_fd = (*pipe_in)->GiveupReceiver(); dup2(in_fd.Get(), STDIN_FILENO) == -1) {
+ *  // handle error here
+ * }
+ *
+ * int reader_fd = (*pipe_out)->GiveupReader().Release();
+ * int writer_fd = (*pipe_in)->GiveupWriter().Release();
+ *
+ * return std::make_tuple(reader_fd, writer_fd);
+ * @endcode
+ */
+class PipePair
+{
+    /**
+     * @brief The constructor is private so the only way to create an instance is to call \c PipePair::Create()
+     */
+    PipePair() = default;
+
+public:
+    ~PipePair() = default;
+
+    enum class BlockingType
+    {
+        Blocking,
+        NonBlocking
+    };
+
+    /**
+     * @brief Creates a PipePair instance if possible.
+     * @param[in] blockingType  Specify if pipe is blocking or non-blocking.
+     * @return \c nullptr       If the pipe cannot be created.
+     * @return \c std::unique_ptr&lt;PipePair&gt;   Pointer to the created pipe.
+     * @note This function does not throw and exception in case of \c pipe() error. In erroneous cases this function
+     *          will log error message to the standard logger and return \c nullptr.
+     */
+    static std::unique_ptr<PipePair> Create(BlockingType blockingType) noexcept;
+
+    /**
+     * @brief Closes the writing end of the pipe
+     */
+    void CloseSender();
+    /**
+     * @brief Closes the reading end of the pipe
+     */
+    void CloseReceiver();
+
+    /**
+     * @brief Returns a file descriptor for the writing end of the pipe.
+     * The ownership moves to the caller. The PipePair object does not own or close this descriptor after this call.
+     * @return \c FileHandle    File descriptor for the writing end
+     */
+    [[nodiscard]] FileHandle GiveupSender();
+    [[nodiscard]] FileHandle const &BorrowSender() const &;
+    /**
+     * @brief Returns a file descriptor for the reading end of the pipe.
+     * The ownership moves to the caller. The pipe object does not own or close this descriptor after this call.
+     * @return \c FileHandle    File descriptor for the reading end
+     */
+    [[nodiscard]] FileHandle GiveupReceiver();
+    [[nodiscard]] FileHandle const &BorrowReceiver() const &;
+
+private:
+    FileHandle m_sender;
+    FileHandle m_receiver;
+};
+
+/*************************************************************************/
+/*
+ * Creates a child process and executes the command given by args where args is an argv style array of strings.
+ *
+ * @param args: (IN) argv style args given as a vector of strings. The program to execute is the first element of the
+ * vector.
+ * @param infp: (OUT) pointer to a file descriptor for the child process's STDIN. Pass in NULL to ignore STDIN.
+ * @param outfp: (OUT) pointer to a file descriptor for the child process's STDOUT. Cannot be NULL.
+ * @param errfp: (OUT) pointer to a file descriptor for the child process's STDERR. Pass in NULL to ignore STDERR.
+ * @param stderrToStdout: (IN) if true, child's stderr will be redirected to outfp and errfp will be ignored.
+ *
+ * @return: pid of the child process.
+ *          If the returned pid is < 0, then there was an error creating the child process or outfp was NULL.
+ *          Errors are logged using the PRINT_ERROR macro.
+ *
+ * Notes:
+ * - It is caller's responsibility to close the file descriptors associated with infp, outfp, errfp (if non-null
+ *   values are given). If you want to run a process and ignore its output, redirect the descriptor to /dev/null.
+ *
+ * - Caller is responsible for waiting for child to exit (if desired).
+ */
+pid_t ForkAndExecCommand(std::vector<std::string> const &args,
+                         FileHandle *infp,
+                         FileHandle *outfp,
+                         FileHandle *errfp,
+                         bool stderrToStdout,
+                         const char *userName = nullptr);
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

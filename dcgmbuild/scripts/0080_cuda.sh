@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -ex -o nounset
 
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
@@ -19,6 +19,8 @@ PARTS_TO_UNPACK=(
     cuda-license
     cuda-nvcc
     libcublas-dev
+    libcufft-dev
+    libcurand-dev
     )
 
 download_cuda_package(){
@@ -30,6 +32,22 @@ download_cuda_package(){
     if [[ -n "${chksum}" ]]; then
         echo "${chksum}  ${outdir}/${filename}" | sha512sum -c -
     fi
+}
+
+unpack_rpm_to() {
+    local filename=$(realpath ${1}); shift
+    local dest_dir=$(realpath ${1}); shift
+    rpm2cpio "${filename}" | cpio -idm -D "${dest_dir}"
+}
+
+process_rpm_package() {
+    local tmpdir=$(realpath ${1}); shift
+    pushd ${tmpdir}
+    unpack_rpm_to package.rpm "${tmpdir}"
+    for cuda_file in ${PARTS_TO_UNPACK[@]}; do
+        find . -iname "${cuda_file}*" -print0 | while IFS= read -r -d '' file; do unpack_rpm_to "${file}" "${PREFIX}"; done
+    done
+    popd
 }
 
 process_cuda_package(){
@@ -59,7 +77,7 @@ case ${TARGET} in
         CUDA10_URL_CHKSUM=65bc98980ecdb275dcd55304425cbb6ed5a8afe0505e778caa4333bf4ab9d3310639bc69c302e32207e624a7217e684318f0ddc4f121b56c0c2c845f6ccae5d6
 
         CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.0.2/local_installers/cuda-repo-ubuntu1804-11-0-local_11.0.2-450.51.05-1_amd64.deb
-        CUDA11_URL_CHKSUM=12661466cacd450cc7e36c9abda59cae91573655bded31a58e8cfa073464fa8bab47dae9a43ca50e0f52e837d13c83079812240ba71628a2b7d1a440d2f73357
+        CUDA11_URL_CHKSUM=4f8db6a8c027979faaaee405be135b9cac411507cda86f39035bf5d5b30873cf5ac0e510c24248b9b1e46a0a0f9226241b676a5a56d5c26c7c115a1eb01180e7
         ;;
     powerpc64le-linux-gnu)
         CUDA9_URL=https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda-repo-ubuntu1604-9-2-local_9.2.148-1_ppc64el
@@ -72,11 +90,11 @@ case ${TARGET} in
         CUDA10_URL_CHKSUM=950be9a5022907774739c52c5a25779253e9b8bad8bc7e05db91e02afcbe0d6c68c2bf32dffaa79b12b9fbfb93dd0e14cd56269e13f01915d0106645efd6451c
 
         CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.0.2/local_installers/cuda-repo-ubuntu1804-11-0-local_11.0.2-450.51.05-1_ppc64el.deb
-        CUDA11_URL_CHKSUM=85f5640912e44d97007ab1e61a02d23e1a3f36339609f245f1d67872b578acb05a7ed02352e49c82b1f072d48c69eaba1be00ce70f63db8204f8aacca9646987
+        CUDA11_URL_CHKSUM=0592136d947ad4f12dbbe087258573c1677ecb6f1f5fd9242644faf6a05895c1ff22d44feeaf3993ea782250db1e2103b2b047a41de20ff8d3d075ba8c62df53
         ;;
     aarch64-linux-gnu)
         CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.0.2/local_installers/cuda-repo-ubuntu1804-11-0-local_11.0.2-450.51.05-1_arm64.deb
-        CUDA11_URL_CHKSUM=0f8b961cd62dd0b3d5ff89a7aa639b630cbbb08a51cc3e72c79289dfb1b7f87e842d52c16d731e2fad4fd7375567723ef65ea079962c7d4c104303cb64bbe4e8
+        CUDA11_URL_CHKSUM=4c7955942410aaab7a3be20de8608d0119076aade17c2accf8cee5237496c115abb02a24beac6b3cf73502c7fc93d353bb6e5130876ad52576b43971515dbb9a
         ;;
     *)
         die "Unknown architecture"
@@ -95,7 +113,12 @@ if [[ "${TARGET}" != "aarch64-linux-gnu" ]]; then
 fi
 
 mkdir cuda11
+if [[ "${TARGET}" != "powerpc64le-linux-gnu" ]]; then
 download_cuda_package "${CUDA11_URL}" cuda11 package.deb "${CUDA11_URL_CHKSUM}"
 process_cuda_package cuda11
+else
+    download_cuda_package "${CUDA11_URL}" cuda11 package.rpm "${CUDA11_URL_CHKSUM}"
+    process_rpm_package cuda11
+fi
 
 popd

@@ -151,4 +151,3 @@ def test_collectd_config_integration(handle, gpuIds):
             # values.
 #           assert gpuDict[fieldTag] == fieldValues[i]
 
-

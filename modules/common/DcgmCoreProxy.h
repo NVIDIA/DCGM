@@ -148,7 +148,7 @@ public:
     /**
      * @param[in] msgheader - header containing module and command info
      */
-    dcgmReturn_t SendModuleCommand(void *header);
+    dcgmReturn_t SendModuleCommand(void *header) const;
 
     /**
      * @param[in] connectionId - recipient of message
@@ -163,7 +163,7 @@ public:
                                         dcgm_request_id_t requestId,
                                         void *msgData,
                                         unsigned int msgSize,
-                                        dcgmReturn_t status);
+                                        dcgmReturn_t status) const;
 
     /**
      * @param[in] connectionId - connection to notify
@@ -274,7 +274,7 @@ public:
      */
     dcgmReturn_t GetMultipleLatestLiveSamples(std::vector<dcgmGroupEntityPair_t> const &entities,
                                               std::vector<unsigned short> const &fieldIds,
-                                              DcgmFvBuffer *fvBuffer);
+                                              DcgmFvBuffer *fvBuffer) const;
 
     /**
      * @param[in] entityGroupId - which entity group we are dealing with
@@ -288,19 +288,19 @@ public:
                                   dcgm_field_eid_t entityId,
                                   unsigned short fieldId,
                                   int clearCache,
-                                  DcgmWatcher watcher);
+                                  DcgmWatcher watcher) const;
 
     /**
      * @param[in] fvBuffer - buffer of field values to add to the cache
      */
-    dcgmReturn_t AppendSamples(DcgmFvBuffer *fvBuffer);
+    dcgmReturn_t AppendSamples(DcgmFvBuffer *fvBuffer) const;
 
     /**
      * @param[in] gpuId - the id of the GPU whose calue is being set
      * @param[in] fieldId - the field id that is getting populated
      * @param[in] value - the value being set
      */
-    dcgmReturn_t SetValue(int gpuId, unsigned short fieldId, dcgmcm_sample_p value);
+    dcgmReturn_t SetValue(int gpuId, unsigned short fieldId, dcgmcm_sample_p value) const;
 
     /**
      * @param[in]  groupId - the id of the group whose entities are being retrieved
@@ -322,21 +322,22 @@ public:
      */
     dcgmReturn_t GetGroupGpuIds(dcgm_connection_id_t connectionId,
                                 unsigned int groupId,
-                                std::vector<unsigned int> &gpuIds);
+                                std::vector<unsigned int> &gpuIds) const;
 
 
     /**
      * @param[in] gpuId - the DCGM GPU ID we'd like to convert to an NVML GPU index
      * @return the NVML index of this GPU ID
      */
-    int GpuIdToNvmlIndex(unsigned int gpuId);
+    int GpuIdToNvmlIndex(unsigned int gpuId) const;
 
     /**
      * @param[in,out] groupId - the group ID to verify and update
      */
     dcgmReturn_t VerifyAndUpdateGroupId(unsigned int *groupId) const;
 
-    DcgmLoggingSeverity_t GetLoggerSeverity(dcgm_connection_id_t connectionId, loggerCategory_t logger = BASE_LOGGER);
+    DcgmLoggingSeverity_t GetLoggerSeverity(dcgm_connection_id_t connectionId,
+                                            loggerCategory_t logger = BASE_LOGGER) const;
 
     /**
      * @param[out] watchInfo - array of relevant global watch information from cache manager

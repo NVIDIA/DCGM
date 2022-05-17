@@ -476,7 +476,7 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
         diagApp.signal(signum)
         retCode = diagApp.wait()
         # Check the return code and stdout/stderr output before asserting for better debugging info
-        if retCode != (signum + 128):
+        if retCode == 0:
             logger.error("Got retcode '%s' from launched diag." % retCode)
             if diagApp.stderr_lines or diagApp.stdout_lines:
                 logger.info("dcgmi output:")
@@ -484,7 +484,7 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
                     logger.info(line)
                 for line in diagApp.stderr_lines:
                     logger.error(line)
-        assert retCode == (signum + 128)
+        assert retCode != 0, "Expected a non-zero exit code, but got 0"
         # Since the app returns a non zero exit code, we call the validate method to prevent false
         # failures from the test framework
         diagApp.validate()

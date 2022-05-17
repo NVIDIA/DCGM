@@ -1,4 +1,5 @@
 _out/
+_out*/
 .vscode/ipch/
 .clangd/
 .vs/
@@ -8,3 +9,5 @@ _out/
 .vscode/vscode-kanban.json
 tags
 cscope.out
+.cache/
+**/__pycache__/*.pyc

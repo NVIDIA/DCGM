@@ -13,20 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <fmt/core.h>
 #include <iostream>
 #include <string.h>
 
 #include "DcgmDiagResponseWrapper.h"
+#include "DcgmStringHelpers.h"
 #include "NvvsJsonStrings.h"
 #include "TestDiagResponseWrapper.h"
 
-TestDiagResponseWrapper::TestDiagResponseWrapper()
-{}
+TestDiagResponseWrapper::TestDiagResponseWrapper() = default;
 
-TestDiagResponseWrapper::~TestDiagResponseWrapper()
-{}
+TestDiagResponseWrapper::~TestDiagResponseWrapper() = default;
 
-int TestDiagResponseWrapper::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestDiagResponseWrapper::Init(std::vector<std::string> /*argv*/, std::vector<test_nvcm_gpu_t> /*gpus*/)
 {
     return 0;
 }
@@ -38,7 +38,8 @@ int TestDiagResponseWrapper::Cleanup()
 
 std::string TestDiagResponseWrapper::GetTag()
 {
-    return std::string("diagresponsewrapper");
+    using namespace std::string_literals;
+    return "diagresponsewrapper"s;
 }
 
 int TestDiagResponseWrapper::Run()
@@ -49,65 +50,84 @@ int TestDiagResponseWrapper::Run()
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestInitializeDiagResponse FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestInitializeDiagResponse FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestInitializeDiagResponse PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestInitializeDiagResponse PASSED\n");
+    }
 
     st = TestSetPerGpuResponseState();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestSetPerGpuResponseState FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestSetPerGpuResponseState FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestSetPerGpuResponseState PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestSetPerGpuResponseState PASSED\n");
+    }
 
     st = TestAddPerGpuMessage();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestAddPerGpuMessage FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestAddPerGpuMessage FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestAddPerGpuMessage PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestAddPerGpuMessage PASSED\n");
+    }
 
     st = TestSetGpuIndex();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestSetGpuIndex FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestSetGpuIndex FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestSetGpuIndex PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestSetGpuIndex PASSED\n");
+    }
 
     st = TestGetBasicTestResultIndex();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestGetBasicTestResultIndex FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestGetBasicTestResultIndex FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestGetBasicTestResultIndex PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestGetBasicTestResultIndex PASSED\n");
+    }
 
     st = TestRecordSystemError();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestRecordSystemError FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestRecordSystemError FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
-        printf("TestDiagManager::TestRecordSystemError PASSED\n");
+    {
+        fmt::print("TestDiagManager::TestRecordSystemError PASSED\n");
+    }
 
     st = TestAddErrorDetail();
     if (st < 0)
     {
         nFailed++;
-        fprintf(stderr, "TestDiagManager::TestAddErrorDetail FAILED with %d\n", st);
+        fmt::print(stderr, "TestDiagManager::TestAddErrorDetail FAILED with {}\n", st);
+        fflush(stderr);
     }
     else
     {
-        printf("TestDiagManager::TestAddErrorDetail PASSED\n");
+        fmt::print("TestDiagManager::TestAddErrorDetail PASSED\n");
     }
 
     return st;
@@ -129,13 +149,15 @@ int TestDiagResponseWrapper::TestInitializeDiagResponse()
 
     if (rv6.gpuCount != 8)
     {
-        fprintf(stderr, "Gpu count was set to %d, but it should've been 8", rv6.gpuCount);
+        fmt::print(stderr, "Gpu count was set to {}, but it should've been 8", rv6.gpuCount);
+        fflush(stderr);
         return -1;
     }
 
     if (rv6.version != dcgmDiagResponse_version6)
     {
-        fprintf(stderr, "Diag Response version wasn't set correctly");
+        fmt::print(stderr, "Diag Response version wasn't set correctly");
+        fflush(stderr);
         return -1;
     }
 
@@ -145,7 +167,8 @@ int TestDiagResponseWrapper::TestInitializeDiagResponse()
         {
             if (rv6.perGpuResponses[i].results[j].status != DCGM_DIAG_RESULT_NOT_RUN)
             {
-                fprintf(stderr, "Initial test status wasn't set correctly");
+                fmt::print(stderr, "Initial test status wasn't set correctly");
+                fflush(stderr);
                 return -1;
             }
         }
@@ -168,7 +191,8 @@ int TestDiagResponseWrapper::TestSetPerGpuResponseState()
 
     if (rv6.perGpuResponses[0].results[0].status != DCGM_DIAG_RESULT_PASS)
     {
-        fprintf(stderr, "GPU 0 test 0 should be PASS, but is %d\n", rv6.perGpuResponses[0].results[0].status);
+        fmt::print(stderr, "GPU 0 test 0 should be PASS, but is {}\n", rv6.perGpuResponses[0].results[0].status);
+        fflush(stderr);
         return -1;
     }
 
@@ -192,10 +216,11 @@ int TestDiagResponseWrapper::TestAddPerGpuMessage()
 
     if (warn != rv6.perGpuResponses[0].results[0].error.msg)
     {
-        fprintf(stderr,
-                "GPU 0 test 0 warning should be '%s', but found '%s'.\n",
-                warn.c_str(),
-                rv6.perGpuResponses[0].results[0].error.msg);
+        fmt::print(stderr,
+                   "GPU 0 test 0 warning should be '{}', but found '{}'.\n",
+                   warn.c_str(),
+                   rv6.perGpuResponses[0].results[0].error.msg);
+        fflush(stderr);
         return -1;
     }
 
@@ -214,7 +239,8 @@ int TestDiagResponseWrapper::TestSetGpuIndex()
 
     if (rv6.perGpuResponses[2].gpuId != 2)
     {
-        fprintf(stderr, "Slot 2 should have gpu id 2 but is %u\n", rv6.perGpuResponses[2].gpuId);
+        fmt::print(stderr, "Slot 2 should have gpu id 2 but is {}\n", rv6.perGpuResponses[2].gpuId);
+        fflush(stderr);
         return -1;
     }
 
@@ -223,65 +249,73 @@ int TestDiagResponseWrapper::TestSetGpuIndex()
 
 int TestDiagResponseWrapper::TestGetBasicTestResultIndex()
 {
-    DcgmDiagResponseWrapper drw;
-
-    if (drw.GetBasicTestResultIndex(blacklistName) != DCGM_SWTEST_BLACKLIST)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(blacklistName) != DCGM_SWTEST_BLACKLIST)
     {
-        fprintf(stderr, "%s didn't match its index.\n", blacklistName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", blacklistName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(nvmlLibName) != DCGM_SWTEST_NVML_LIBRARY)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(nvmlLibName) != DCGM_SWTEST_NVML_LIBRARY)
     {
-        fprintf(stderr, "%s didn't match its index.\n", nvmlLibName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", nvmlLibName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(cudaMainLibName) != DCGM_SWTEST_CUDA_MAIN_LIBRARY)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(cudaMainLibName) != DCGM_SWTEST_CUDA_MAIN_LIBRARY)
     {
-        fprintf(stderr, "%s didn't match its index.\n", cudaMainLibName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", cudaMainLibName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(cudaTkLibName) != DCGM_SWTEST_CUDA_RUNTIME_LIBRARY)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(cudaTkLibName) != DCGM_SWTEST_CUDA_RUNTIME_LIBRARY)
     {
-        fprintf(stderr, "%s didn't match its index.\n", cudaTkLibName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", cudaTkLibName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(permissionsName) != DCGM_SWTEST_PERMISSIONS)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(permissionsName) != DCGM_SWTEST_PERMISSIONS)
     {
-        fprintf(stderr, "%s didn't match its index.\n", permissionsName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", permissionsName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(persistenceName) != DCGM_SWTEST_PERSISTENCE_MODE)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(persistenceName) != DCGM_SWTEST_PERSISTENCE_MODE)
     {
-        fprintf(stderr, "%s didn't match its index.\n", persistenceName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", persistenceName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(envName) != DCGM_SWTEST_ENVIRONMENT)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(envName) != DCGM_SWTEST_ENVIRONMENT)
     {
-        fprintf(stderr, "%s didn't match its index.\n", envName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", envName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(pageRetirementName) != DCGM_SWTEST_PAGE_RETIREMENT)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(pageRetirementName) != DCGM_SWTEST_PAGE_RETIREMENT)
     {
-        fprintf(stderr, "%s didn't match its index.\n", pageRetirementName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", pageRetirementName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(graphicsName) != DCGM_SWTEST_GRAPHICS_PROCESSES)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(graphicsName) != DCGM_SWTEST_GRAPHICS_PROCESSES)
     {
-        fprintf(stderr, "%s didn't match its index.\n", graphicsName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", graphicsName);
+        fflush(stderr);
         return -1;
     }
 
-    if (drw.GetBasicTestResultIndex(inforomName) != DCGM_SWTEST_INFOROM)
+    if (DcgmDiagResponseWrapper::GetBasicTestResultIndex(inforomName) != DCGM_SWTEST_INFOROM)
     {
-        fprintf(stderr, "%s didn't match its index.\n", inforomName.c_str());
+        fmt::print(stderr, "{} didn't match its index.\n", inforomName);
+        fflush(stderr);
         return -1;
     }
 
@@ -304,7 +338,9 @@ int TestDiagResponseWrapper::TestRecordSystemError()
 
     if (horrible != rv6.systemError.msg)
     {
-        fprintf(stderr, "V4 should've had system error '%s', but found '%s'.\n", horrible.c_str(), rv6.systemError.msg);
+        fmt::print(
+            stderr, "V4 should've had system error '{}', but found '{}'.\n", horrible.c_str(), rv6.systemError.msg);
+        fflush(stderr);
         return -1;
     }
 
@@ -320,24 +356,26 @@ int TestDiagResponseWrapper::TestAddErrorDetail()
     r3.SetVersion6(&rv6);
 
     dcgmDiagErrorDetail_t ed;
-    snprintf(ed.msg, sizeof(ed.msg), "Egads! Kaladin failed to say his fourth ideal.");
+    SafeCopyTo(ed.msg, (const char *)"Egads! Kaladin failed to say his fourth ideal.");
     ed.code = 20;
 
     r3.AddErrorDetail(0, 0, "Diagnostic", ed, DCGM_DIAG_RESULT_FAIL);
 
     if (strcmp(rv6.perGpuResponses[0].results[0].error.msg, ed.msg))
     {
-        fprintf(stderr,
-                "Expected to find warning '%s', but found '%s'\n",
-                ed.msg,
-                rv6.perGpuResponses[0].results[0].error.msg);
+        fmt::print(stderr,
+                   "Expected to find warning '{}', but found '{}'\n",
+                   ed.msg,
+                   rv6.perGpuResponses[0].results[0].error.msg);
+        fflush(stderr);
         return -1;
     }
 
     if (rv6.perGpuResponses[0].results[0].error.code != ed.code)
     {
-        fprintf(
-            stderr, "Expected to find code %u, but found %u\n", ed.code, rv6.perGpuResponses[0].results[0].error.code);
+        fmt::print(
+            stderr, "Expected to find code {}, but found {}\n", ed.code, rv6.perGpuResponses[0].results[0].error.code);
+        fflush(stderr);
         return -1;
     }
 
@@ -345,19 +383,21 @@ int TestDiagResponseWrapper::TestAddErrorDetail()
 
     if (strcmp(rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.msg, ed.msg))
     {
-        fprintf(stderr,
-                "Expected to find error message '%s', but found '%s'\n",
-                ed.msg,
-                rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.msg);
+        fmt::print(stderr,
+                   "Expected to find error message '{}', but found '{}'\n",
+                   ed.msg,
+                   rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.msg);
+        fflush(stderr);
         return -1;
     }
 
     if (rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.code != ed.code)
     {
-        fprintf(stderr,
-                "Expected to find error code %u, but found %u\n",
-                ed.code,
-                rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.code);
+        fmt::print(stderr,
+                   "Expected to find error code {}, but found {}\n",
+                   ed.code,
+                   rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.code);
+        fflush(stderr);
         return -1;
     }
 

@@ -612,7 +612,7 @@ dcgmReturn_t DcgmMetadataManager::aggregateOverFields(ContextKey partialAggregat
             goto PRINT_AGGREGATE_ALL_FIELDS_ERROR;
         }
 
-    PRINT_AGGREGATE_ALL_FIELDS_ERROR:
+PRINT_AGGREGATE_ALL_FIELDS_ERROR:
         if (DCGM_ST_OK != retSt)
         {
             PRINT_ERROR("%d %zu", "got error %d when aggregating all-fields on aggregator %zu", retSt, i);

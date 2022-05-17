@@ -21,18 +21,18 @@
 #include "dcgm_structs.h"
 #include "json/json.h"
 
-extern const std::string blacklistName;
-extern const std::string nvmlLibName;
-extern const std::string cudaMainLibName;
-extern const std::string cudaTkLibName;
-extern const std::string permissionsName;
-extern const std::string persistenceName;
-extern const std::string envName;
-extern const std::string pageRetirementName;
-extern const std::string graphicsName;
-extern const std::string inforomName;
+extern const std::string_view blacklistName;
+extern const std::string_view nvmlLibName;
+extern const std::string_view cudaMainLibName;
+extern const std::string_view cudaTkLibName;
+extern const std::string_view permissionsName;
+extern const std::string_view persistenceName;
+extern const std::string_view envName;
+extern const std::string_view pageRetirementName;
+extern const std::string_view graphicsName;
+extern const std::string_view inforomName;
 
-extern const std::string swTestNames[];
+extern const std::string_view swTestNames[];
 
 /*****************************************************************************/
 /*
@@ -60,19 +60,19 @@ public:
     void SetGpuIndex(unsigned int gpuIndex);
 
     /*****************************************************************************/
-    void RecordSystemError(const std::string &errorStr);
+    void RecordSystemError(const std::string &errorStr) const;
 
     /*****************************************************************************/
-    void SetGpuCount(unsigned int gpuCount);
+    void SetGpuCount(unsigned int gpuCount) const;
 
     /*****************************************************************************/
-    unsigned int GetBasicTestResultIndex(const std::string &testname);
+    static unsigned int GetBasicTestResultIndex(std::string_view const &testname);
 
     /*****************************************************************************/
     dcgmReturn_t SetVersion6(dcgmDiagResponse_v6 *response);
 
     /*****************************************************************************/
-    dcgmReturn_t RecordTrainingMessage(const std::string &trainingMsg);
+    dcgmReturn_t RecordTrainingMessage(const std::string &trainingMsg) const;
 
     /*****************************************************************************/
     dcgmReturn_t AddErrorDetail(unsigned int gpuIndex,

@@ -22,65 +22,41 @@
 #include "json/json.h"
 #include <iostream>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 class JsonOutput : public Output
 {
     /***************************PUBLIC***********************************/
 public:
-    JsonOutput(const std::vector<unsigned int> &gpuIndices)
-        : jv()
-        , m_testIndex(0)
-        , headerIndex(0)
-        , m_gpuId(-1)
-        , globalInfoCount(0)
-        , gpuList()
-        , m_gpuIndices(gpuIndices)
-        , softwareTest(false)
-    {
-        char buf[50];
-        for (size_t i = 0; i < gpuIndices.size(); i++)
-        {
-            if (i != 0)
-            {
-                snprintf(buf, sizeof(buf), ",%u", gpuIndices[i]);
-            }
-            else
-            {
-                snprintf(buf, sizeof(buf), "%u", gpuIndices[i]);
-            }
+    explicit JsonOutput(std::vector<unsigned int> gpuIndices);
 
-            gpuList += buf;
-        }
-    }
-    ~JsonOutput()
-    {}
+    ~JsonOutput() override = default;
 
-
-    void header(const std::string &headerSting);
+    void header(const std::string &headerSting) override;
     void Result(nvvsPluginResult_t overallResult,
                 const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
                 const std::vector<dcgmDiagEvent_t> &errors,
                 const std::vector<dcgmDiagEvent_t> &info) override;
-    void prep(const std::string &testString);
-    void updatePluginProgress(unsigned int progress, bool clear);
-    void print();
-    void addInfoStatement(const std::string &info);
-    void AddTrainingResult(const std::string &trainingOut);
+    void prep(const std::string &testString) override;
+    void updatePluginProgress(unsigned int progress, bool clear) override;
+    void print() override;
+    void addInfoStatement(const std::string &info) override;
+    void AddTrainingResult(const std::string &trainingOut) override;
 
     /***************************PRIVATE**********************************/
 private:
     Json::Value jv;
-    unsigned int m_testIndex;
-    unsigned int headerIndex;
-    int m_gpuId;
-    int globalInfoCount;
+    unsigned int m_testIndex { 0 };
+    unsigned int headerIndex { 0 };
+    int m_gpuId { -1 };
+    int globalInfoCount { 0 };
     std::string gpuList;
     std::vector<unsigned int> m_gpuIndices;
-    bool softwareTest;
+    bool softwareTest { false };
 
-    void AppendError(const dcgmDiagEvent_t &error, Json::Value &resultField, const std::string &prefix = "");
-    void AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultField, const std::string &prefix = "");
+    static void AppendError(const dcgmDiagEvent_t &error, Json::Value &resultField, const std::string &prefix = "");
+    static void AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultField, const std::string &prefix = "");
 };
 
 #endif // _NVVS_NVVS_JsonOutput_H

@@ -2,16 +2,19 @@
 
 set -ex
 
-source $(dirname $(realpath ${0}))/common_for_targets.sh
+DIR=$(dirname $(realpath ${0}))
+source $DIR/common_for_targets.sh
 
-VERSION=0.6.3
+VERSION=0.7.0
 
 mkdir -p ${HOME}/.build/${TARGET}/yaml_{build,src}
 pushd ${HOME}/.build/${TARGET}/yaml_build
 
 download_url "https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-${VERSION}.tar.gz" yaml-cpp.tar.gz
-echo "68b9ce987cabc1dec79382f922de20cc2c222cb9c090ecb93dc686b048da5c917facf4fce6d8f72feea44b61e5a6770ed3b0c199c4cd4e6bde5b6245c09f8e49  yaml-cpp.tar.gz" | sha512sum -c -
+echo "2de0f0ec8f003cd3c498d571cda7a796bf220517bad2dc02cba70c522dddde398f33cf1ad20da251adaacb2a07b77844111f297e99d45a7c46ebc01706bbafb5  yaml-cpp.tar.gz" | sha512sum -c -
 tar xzf yaml-cpp.tar.gz -C ${HOME}/.build/${TARGET}/yaml_src --strip-components=1
+
+patch -d ${HOME}/.build/${TARGET}/yaml_src < $DIR/yaml/github-pr-1037.patch
 
 cmake -E env CXXFLAGS='-Wno-unused-variable' CFLAGS='-Wno-unused-variable' \
 cmake \

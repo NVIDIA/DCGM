@@ -119,7 +119,7 @@ SCENARIO("FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const 
 
     // Valid inputs
     res = fc.SetFrameworkConfigValue<>(NVVS_FWCFG_GLOBAL_OVERRIDEMINMAX, true);
-    CHECK(res == true);
+    CHECK(res == false);
 
     res = fc.SetFrameworkConfigValue<>(NVVS_FWCFG_GLOBAL_OVERRIDESERIAL, true);
     CHECK_CONFIG_FIELD_VALUE(fc, overrideSerial, true);

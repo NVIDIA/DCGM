@@ -15,7 +15,7 @@
 DOCKER   ?= docker
 REGISTRY ?= nvidia
 
-DCGM_VERSION   := 2.3.4
+DCGM_VERSION   := 2.3.6
 
 all: ubuntu20.04 ubi8
 
