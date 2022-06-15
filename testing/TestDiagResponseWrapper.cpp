@@ -137,24 +137,24 @@ int TestDiagResponseWrapper::TestInitializeDiagResponse()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6 = {};
+    dcgmDiagResponse_v7 rv7 = {};
 
     // These should be no ops, but make sure there's no crash
     r3.InitializeResponseStruct(6);
 
     // Set versions and make sure the state is valid
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     r3.InitializeResponseStruct(8);
 
-    if (rv6.gpuCount != 8)
+    if (rv7.gpuCount != 8)
     {
-        fmt::print(stderr, "Gpu count was set to {}, but it should've been 8", rv6.gpuCount);
+        fmt::print(stderr, "Gpu count was set to {}, but it should've been 8", rv7.gpuCount);
         fflush(stderr);
         return -1;
     }
 
-    if (rv6.version != dcgmDiagResponse_version6)
+    if (rv7.version != dcgmDiagResponse_version7)
     {
         fmt::print(stderr, "Diag Response version wasn't set correctly");
         fflush(stderr);
@@ -163,9 +163,9 @@ int TestDiagResponseWrapper::TestInitializeDiagResponse()
 
     for (unsigned int i = 0; i < 8; i++)
     {
-        for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT; j++)
+        for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
         {
-            if (rv6.perGpuResponses[i].results[j].status != DCGM_DIAG_RESULT_NOT_RUN)
+            if (rv7.perGpuResponses[i].results[j].status != DCGM_DIAG_RESULT_NOT_RUN)
             {
                 fmt::print(stderr, "Initial test status wasn't set correctly");
                 fflush(stderr);
@@ -181,17 +181,17 @@ int TestDiagResponseWrapper::TestSetPerGpuResponseState()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6 = {};
+    dcgmDiagResponse_v7 rv7 = {};
 
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     r3.InitializeResponseStruct(8);
 
     r3.SetPerGpuResponseState(0, DCGM_DIAG_RESULT_PASS, 0);
 
-    if (rv6.perGpuResponses[0].results[0].status != DCGM_DIAG_RESULT_PASS)
+    if (rv7.perGpuResponses[0].results[0].status != DCGM_DIAG_RESULT_PASS)
     {
-        fmt::print(stderr, "GPU 0 test 0 should be PASS, but is {}\n", rv6.perGpuResponses[0].results[0].status);
+        fmt::print(stderr, "GPU 0 test 0 should be PASS, but is {}\n", rv7.perGpuResponses[0].results[0].status);
         fflush(stderr);
         return -1;
     }
@@ -203,9 +203,9 @@ int TestDiagResponseWrapper::TestAddPerGpuMessage()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6 = {};
+    dcgmDiagResponse_v7 rv7 = {};
 
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     r3.InitializeResponseStruct(8);
 
@@ -214,12 +214,12 @@ int TestDiagResponseWrapper::TestAddPerGpuMessage()
 
     r3.AddPerGpuMessage(0, warn, 0, true);
 
-    if (warn != rv6.perGpuResponses[0].results[0].error.msg)
+    if (warn != rv7.perGpuResponses[0].results[0].error.msg)
     {
         fmt::print(stderr,
                    "GPU 0 test 0 warning should be '{}', but found '{}'.\n",
                    warn.c_str(),
-                   rv6.perGpuResponses[0].results[0].error.msg);
+                   rv7.perGpuResponses[0].results[0].error.msg);
         fflush(stderr);
         return -1;
     }
@@ -231,15 +231,15 @@ int TestDiagResponseWrapper::TestSetGpuIndex()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6 = {};
+    dcgmDiagResponse_v7 rv7 = {};
 
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     r3.SetGpuIndex(2);
 
-    if (rv6.perGpuResponses[2].gpuId != 2)
+    if (rv7.perGpuResponses[2].gpuId != 2)
     {
-        fmt::print(stderr, "Slot 2 should have gpu id 2 but is {}\n", rv6.perGpuResponses[2].gpuId);
+        fmt::print(stderr, "Slot 2 should have gpu id 2 but is {}\n", rv7.perGpuResponses[2].gpuId);
         fflush(stderr);
         return -1;
     }
@@ -326,9 +326,9 @@ int TestDiagResponseWrapper::TestRecordSystemError()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6 = {};
+    dcgmDiagResponse_v7 rv7 = {};
 
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     r3.InitializeResponseStruct(8);
 
@@ -336,10 +336,10 @@ int TestDiagResponseWrapper::TestRecordSystemError()
 
     r3.RecordSystemError(horrible);
 
-    if (horrible != rv6.systemError.msg)
+    if (horrible != rv7.systemError.msg)
     {
         fmt::print(
-            stderr, "V4 should've had system error '{}', but found '{}'.\n", horrible.c_str(), rv6.systemError.msg);
+            stderr, "V4 should've had system error '{}', but found '{}'.\n", horrible.c_str(), rv7.systemError.msg);
         fflush(stderr);
         return -1;
     }
@@ -351,9 +351,9 @@ int TestDiagResponseWrapper::TestAddErrorDetail()
 {
     DcgmDiagResponseWrapper r3;
 
-    dcgmDiagResponse_v6 rv6;
+    dcgmDiagResponse_v7 rv7;
 
-    r3.SetVersion6(&rv6);
+    r3.SetVersion7(&rv7);
 
     dcgmDiagErrorDetail_t ed;
     SafeCopyTo(ed.msg, (const char *)"Egads! Kaladin failed to say his fourth ideal.");
@@ -361,42 +361,42 @@ int TestDiagResponseWrapper::TestAddErrorDetail()
 
     r3.AddErrorDetail(0, 0, "Diagnostic", ed, DCGM_DIAG_RESULT_FAIL);
 
-    if (strcmp(rv6.perGpuResponses[0].results[0].error.msg, ed.msg))
+    if (strcmp(rv7.perGpuResponses[0].results[0].error.msg, ed.msg))
     {
         fmt::print(stderr,
                    "Expected to find warning '{}', but found '{}'\n",
                    ed.msg,
-                   rv6.perGpuResponses[0].results[0].error.msg);
+                   rv7.perGpuResponses[0].results[0].error.msg);
         fflush(stderr);
         return -1;
     }
 
-    if (rv6.perGpuResponses[0].results[0].error.code != ed.code)
+    if (rv7.perGpuResponses[0].results[0].error.code != ed.code)
     {
         fmt::print(
-            stderr, "Expected to find code {}, but found {}\n", ed.code, rv6.perGpuResponses[0].results[0].error.code);
+            stderr, "Expected to find code {}, but found {}\n", ed.code, rv7.perGpuResponses[0].results[0].error.code);
         fflush(stderr);
         return -1;
     }
 
-    r3.AddErrorDetail(0, DCGM_PER_GPU_TEST_COUNT, "Inforom", ed, DCGM_DIAG_RESULT_FAIL);
+    r3.AddErrorDetail(0, DCGM_PER_GPU_TEST_COUNT_V7, "Inforom", ed, DCGM_DIAG_RESULT_FAIL);
 
-    if (strcmp(rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.msg, ed.msg))
+    if (strcmp(rv7.levelOneResults[DCGM_SWTEST_INFOROM].error.msg, ed.msg))
     {
         fmt::print(stderr,
                    "Expected to find error message '{}', but found '{}'\n",
                    ed.msg,
-                   rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.msg);
+                   rv7.levelOneResults[DCGM_SWTEST_INFOROM].error.msg);
         fflush(stderr);
         return -1;
     }
 
-    if (rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.code != ed.code)
+    if (rv7.levelOneResults[DCGM_SWTEST_INFOROM].error.code != ed.code)
     {
         fmt::print(stderr,
                    "Expected to find error code {}, but found {}\n",
                    ed.code,
-                   rv6.levelOneResults[DCGM_SWTEST_INFOROM].error.code);
+                   rv7.levelOneResults[DCGM_SWTEST_INFOROM].error.code);
         fflush(stderr);
         return -1;
     }

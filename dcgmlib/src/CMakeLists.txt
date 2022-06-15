@@ -38,6 +38,7 @@ set(INCLUDES
 set(DEPS 
     dcgm_interface
     common_interface
+    dcgm_thread_interface
     config_interface
     diag_interface
     health_interface
@@ -94,6 +95,7 @@ target_link_libraries(
         dcgm_common
         dcgm_logging
         dcgm_mutex
+        dcgm_thread
         -Wl,--no-whole-archive
         transport_objects
         sdk_nvml_essentials_objects

@@ -20,6 +20,7 @@
 #include "Config.h"
 #include "DcgmiProfile.h"
 #include "DcgmiSettings.h"
+#include "DcgmiTest.h"
 #include "DeviceMonitor.h"
 #include "Diag.h"
 #include "FieldGroup.h"
@@ -51,11 +52,6 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
-
-
-#ifdef DEBUG
-#include "DcgmiTest.h"
-#endif
 
 #define CHECK_TCLAP_ARG_NEGATIVE_VALUE(arg, name) \
     if (arg.getValue() < 0)                       \
@@ -93,10 +89,7 @@ CommandLineParser::StaticConstructor::StaticConstructor()
     m_functionMap.insert(std::make_pair("modules", &CommandLineParser::ProcessModuleCommandLine));
     m_functionMap.insert(std::make_pair("profile", &CommandLineParser::ProcessProfileCommandLine));
     m_functionMap.insert(std::make_pair("set", &CommandLineParser::ProcessSettingsCommandLine));
-
-#ifdef DEBUG
     m_functionMap.insert(std::make_pair("test", &CommandLineParser::ProcessAdminCommandLine));
-#endif
 }
 
 /* Entry method into this class for a given command line provided by main()
@@ -120,11 +113,13 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
         TCLAP::UnlabeledValueArg<std::string> subsystemArg("subsystem",
                                                            "The desired subsystem to be accessed."
                                                            "\n Subsystems Available:",
-                                                           true,
+                                                           false,
                                                            "",
                                                            "subsystem");
 
-        cmd.xorAdd(versionArg, subsystemArg);
+        TCLAP::OneOf input;
+        input.add(versionArg).add(subsystemArg);
+        cmd.add(input);
 #ifdef DEBUG
         TCLAP::ValueArg<std::string> testArg(
             "", "test", "Tests and Cache Manager [dcgmi test –h for more info]", false, "", "", cmd);
@@ -163,7 +158,6 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
         TCLAP::ValueArg<std::string> profileArg(
             "", "profile", "Control and list DCGM profiling metrics", false, "", "", cmd);
         TCLAP::ValueArg<std::string> settingsArg("", "set", "Configure hostengine settings", false, "", "", cmd);
-
 
         nvout.addToGroup("1", &subsystemArg);
         nvout.addToGroup("2", &versionArg);
@@ -1337,6 +1331,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                            " 1 - Quick (System Validation ~ seconds) \n"
                                            " 2 - Medium (Extended System Validation ~ 2 minutes) \n"
                                            " 3 - Long (System HW Diagnostics ~ 15 minutes) \n"
+                                           " 4 - Extended (Longer-running System HW Diagnostics) \n"
                                            "Specific tests to run may be specified by name, and multiple tests may be "
                                            "specified as a comma separated list. For example, the command:\n\n"
                                            " dcgmi diag -r \"sm stress,diagnostic\" \n\n"
@@ -1484,6 +1479,16 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "failure check interval",
         cmd);
 
+    TCLAP::ValueArg<unsigned int> iterations("",
+                                             "iterations",
+                                             "Specify a number of iterations of the diagnostic to run consecutively."
+                                             " (Must be greater than 0.)",
+                                             false,
+                                             1,
+                                             "iterations",
+                                             cmd);
+
+
     // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
     helpOutput.addFooter("Verbose diagnostic output is currently limited on client, for full diagnostic and validation "
@@ -1510,6 +1515,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &goldenValuesFile);
     helpOutput.addToGroup("1", &failEarly);
     helpOutput.addToGroup("1", &failCheckInterval);
+    helpOutput.addToGroup("1", &iterations);
 
     cmd.parse(argc, argv);
 
@@ -1563,6 +1569,11 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     if (throttleMask.getValue().size() > DCGM_THROTTLE_MASK_LEN - 1)
     {
         throw TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters");
+    }
+
+    if (iterations.getValue() == 0)
+    {
+        throw TCLAP::CmdLineParseException("The value for iterations cannot be 0.");
     }
 
     // This will throw an exception if an error occurs
@@ -1657,7 +1668,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException(error);
     }
 
-    return StartDiag { hostAddress.getValue(), parms.getValue(), config.getValue(), json.getValue(), drd, argv[0] }
+    return StartDiag { hostAddress.getValue(), parms.getValue(), config.getValue(), json.getValue(), drd,
+                       iterations.getValue(),  argv[0] }
         .Execute();
 }
 
@@ -2163,14 +2175,14 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     if (list.isSet())
     {
-        return DeviceInfo(hostAddress.getValue(),
-                          gpuId.getValue(),
-                          groupId.getValue(),
-                          fieldId.getValue(),
-                          fieldGroupId.getValue(),
-                          delay.getValue(),
-                          count.getValue(),
-                          true)
+        return DeviceMonitor(hostAddress.getValue(),
+                             gpuId.getValue(),
+                             groupId.getValue(),
+                             fieldId.getValue(),
+                             fieldGroupId.getValue(),
+                             std::chrono::milliseconds(delay.getValue()),
+                             count.getValue(),
+                             true)
             .Execute();
     }
 
@@ -2186,14 +2198,14 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("Invalid value", "field-id");
     }
 
-    return DeviceInfo(hostAddress.getValue(),
-                      gpuId.getValue(),
-                      groupId.getValue(),
-                      fieldId.getValue(),
-                      fieldGroupId.getValue(),
-                      delay.getValue(),
-                      count.getValue(),
-                      false)
+    return DeviceMonitor(hostAddress.getValue(),
+                         gpuId.getValue(),
+                         groupId.getValue(),
+                         fieldId.getValue(),
+                         fieldGroupId.getValue(),
+                         std::chrono::milliseconds(delay.getValue()),
+                         count.getValue(),
+                         false)
         .Execute();
 }
 
@@ -2357,7 +2369,6 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
     return result;
 }
 
-#ifdef DEBUG
 dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
@@ -2374,7 +2385,7 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     TCLAP::ValueArg<std::string> fieldId("f", "field", "Field identifier to view/inject.", false, "1", "fieldId", cmd);
     TCLAP::ValueArg<std::string> injectValue("v", "value", "Value to inject.", false, "0", "value", cmd);
     TCLAP::ValueArg<int> timeVal(
-        "", "in", "Number of seconds into the future in which to inject the data.", false, 1, "sec", cmd);
+        "", "offset", "Number of seconds into the future in which to inject the data.", false, 1, "sec", cmd);
     TCLAP::SwitchArg introspect("", "introspect", "View values (injected and non injected) in cache.", false);
     TCLAP::SwitchArg inject("", "inject", "Inject values into cache.", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
@@ -2401,11 +2412,16 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     // Check for negative (invalid) inputs
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(gpuId, "gpuid");
-    CHECK_TCLAP_ARG_NEGATIVE_VALUE(timeVal, "in");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(timeVal, "offset");
 
     if (gpuId.isSet() && groupId.isSet())
     {
         throw TCLAP::CmdLineParseException("Both group and GPU ID set. Please use only one at a time");
+    }
+
+    if (!fieldId.isSet())
+    {
+        throw TCLAP::CmdLineParseException("The --field argument is required for --inject and --introspect");
     }
 
     if (introspect.isSet())
@@ -2420,6 +2436,11 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
             throw TCLAP::CmdLineParseException("Injection can only be specified for a single GPU");
         }
 
+        if (!injectValue.isSet())
+        {
+            throw TCLAP::CmdLineParseException("The -v/--value argument is required for --inject");
+        }
+
         result = InjectCache(hostAddress.getValue(),
                              gpuId.getValue(),
                              fieldId.getValue(),
@@ -2430,4 +2451,3 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
 
     return result;
 }
-#endif

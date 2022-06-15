@@ -68,9 +68,9 @@ typedef struct
     unsigned int creatableVgpuTypeCount;                                  //!< Creatable vGPU type count
     unsigned int creatableVgpuTypeIds[DCGM_MAX_VGPU_TYPES_PER_PGPU];      //!< List of Creatable vGPU types
     unsigned int supportedVgpuTypeCount;                                  //!< Supported vGPU type count
-    dcgmDeviceVgpuTypeInfo_t
+    dcgmDeviceVgpuTypeInfo_v1
         supportedVgpuTypeInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Info related to vGPUs supported on the device
-    dcgmDeviceVgpuUtilInfo_t vgpuUtilInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Utilization specific to vGPU instance
+    dcgmDeviceVgpuUtilInfo_v1 vgpuUtilInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Utilization specific to vGPU instance
     unsigned int gpuUtil;                                                //!< GPU utilization
     unsigned int memCopyUtil;                                            //!< Memory utilization
     unsigned int encUtil;                                                //!< Encoder utilization
@@ -78,19 +78,41 @@ typedef struct
 } dcgmVgpuDeviceAttributes_v6;
 
 /**
- * Typedef for \ref dcgmVgpuDeviceAttributes_v6
- */
-typedef dcgmVgpuDeviceAttributes_v6 dcgmVgpuDeviceAttributes_t;
-
-/**
  * Version 6 for \ref dcgmVgpuDeviceAttributes_v6
  */
 #define dcgmVgpuDeviceAttributes_version6 MAKE_DCGM_VERSION(dcgmVgpuDeviceAttributes_v6, 1)
 
+typedef struct
+{
+    unsigned int version;                 //!< Version number (dcgmVgpuDeviceAttributes_version)
+    unsigned int activeVgpuInstanceCount; //!< Count of active vGPU instances on the device
+    unsigned int activeVgpuInstanceIds[DCGM_MAX_VGPU_INSTANCES_PER_PGPU]; //!< List of vGPU instances
+    unsigned int creatableVgpuTypeCount;                                  //!< Creatable vGPU type count
+    unsigned int creatableVgpuTypeIds[DCGM_MAX_VGPU_TYPES_PER_PGPU];      //!< List of Creatable vGPU types
+    unsigned int supportedVgpuTypeCount;                                  //!< Supported vGPU type count
+    dcgmDeviceVgpuTypeInfo_v2
+        supportedVgpuTypeInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Info related to vGPUs supported on the device
+    dcgmDeviceVgpuUtilInfo_v1 vgpuUtilInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Utilization specific to vGPU instance
+    unsigned int gpuUtil;                                                 //!< GPU utilization
+    unsigned int memCopyUtil;                                             //!< Memory utilization
+    unsigned int encUtil;                                                 //!< Encoder utilization
+    unsigned int decUtil;                                                 //!< Decoder utilization
+} dcgmVgpuDeviceAttributes_v7;
+
+/**
+ *  * Typedef for \ref dcgmVgpuDeviceAttributes_v7
+ *   */
+typedef dcgmVgpuDeviceAttributes_v7 dcgmVgpuDeviceAttributes_t;
+
+/**
+ * Version 7 for \ref dcgmVgpuDeviceAttributes_v7
+ */
+#define dcgmVgpuDeviceAttributes_version7 MAKE_DCGM_VERSION(dcgmVgpuDeviceAttributes_v7, 7)
+
 /**
  * Latest version for \ref dcgmVgpuDeviceAttributes_t
  */
-#define dcgmVgpuDeviceAttributes_version dcgmVgpuDeviceAttributes_version6
+#define dcgmVgpuDeviceAttributes_version dcgmVgpuDeviceAttributes_version7
 
 /**
  * Represents attributes specific to vGPU instance

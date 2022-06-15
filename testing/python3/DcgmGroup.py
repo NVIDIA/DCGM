@@ -154,12 +154,12 @@ class DcgmGroupSamples:
             dfvc = dcgm_field_helpers.DcgmFieldValueCollection(self._dcgmHandle.handle, self._groupId)
             dfvc.GetLatestValues(fieldGroup)
         else:
-            dfvc.GetAllSinceLastCall(fieldGroup)
             # We used to expect at least one value (GetLatestValues), so this
             # ensures we provide one at the risk of repetition. This should not
             # happen if we call this function infrequently enough (slower than
             # the sampling rate).
-            if dfvc.values.len() == 0:
+            dfvc.GetAllSinceLastCall(fieldGroup)
+            if len(dfvc.values) == 0:
                 dfvc.GetLatestValues(fieldGroup)
         return dfvc
 
@@ -185,7 +185,7 @@ class DcgmGroupSamples:
             # ensures we provide one at the risk of repetition. This should not
             # happen if we call this function infrequently enough (slower than
             # the sampling rate).
-            if dfvec.values.len() == 0:
+            if len(dfvec.values) == 0:
                 dfvec.GetLatestValues_v2(fieldGroup)
 
         return dfvec

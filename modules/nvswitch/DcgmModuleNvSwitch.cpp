@@ -115,7 +115,15 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessage(dcgm_module_command_header_t *mo
         auto task = Enqueue(make_task("Process message in TaskRunner",
                                       [this, moduleCommand] { return ProcessMessageFromTaskRunner(moduleCommand); }));
 
-        retSt = task.get();
+        if (!task.has_value())
+        {
+            DCGM_LOG_ERROR << "Unable to enqueue NvSwitch Module task";
+            retSt = DCGM_ST_GENERIC_ERROR;
+        }
+        else
+        {
+            retSt = (*task).get();
+        }
     }
 
     return retSt;

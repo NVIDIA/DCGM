@@ -60,6 +60,8 @@ IF (CPACK_GENERATOR MATCHES "DEB")
         ", datacenter-gpu-manager-wsgi"
         ", datacenter-gpu-manager-fabricmanager-internal-api-header")
 
+    set(CPACK_DEBIAN_DCGM_PACKAGE_CONTROL_EXTRA ${CPACK_MODULE_PATH}/../scripts/deb/postinst)
+
 ELSEIF(CPACK_GENERATOR MATCHES "TGZ")
 
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
@@ -113,5 +115,7 @@ ELSEIF(CPACK_GENERATOR MATCHES "RPM")
     # Remove .build-id generation to comply with Cuda repo requirements.
     set(CPACK_RPM_SPEC_MORE_DEFINE "%define _build_id_links none \n%define debug_package %{nil}")
     set(CPACK_RPM_DCGM_USER_FILELIST "%license LICENSE")
+
+    set(CPACK_RPM_DCGM_POST_INSTALL_SCRIPT_FILE ${CPACK_MODULE_PATH}/../scripts/rpm/postinstall)
 
 ENDIF()

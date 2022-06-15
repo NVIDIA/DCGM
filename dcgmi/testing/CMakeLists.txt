@@ -15,6 +15,7 @@ set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Catch2 REQUIRED)
 find_package(Jsoncpp REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -29,6 +30,7 @@ if (BUILD_TESTING)
         MigTests.cpp
         OutputTests.cpp
         MigTestsHelper.cpp
+        WildcardTests.cpp
     )
 
     # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
@@ -49,6 +51,7 @@ if (BUILD_TESTING)
             dcgm_mutex
             ${CMAKE_THREAD_LIBS_INIT}
             ${JSONCPP_STATIC_LIBS}
+            fmt::fmt
             rt
             dl
     )

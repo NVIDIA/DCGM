@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 2.3.6)
+project(dcgm VERSION 2.4.5)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -22,7 +22,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${PROJECT_SOURCE_DIR}/cmake")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Build Position Independent Code")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -77,6 +77,11 @@ endif()
 
 if (ANY_SANITIZER)
     add_compile_definitions(SANITIZERS=1)
+endif()
+
+option(VMWARE "Build for VMWare environment" OFF)
+if (VMWARE)
+    add_compile_definitions(NV_VMWARE=1)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -331,7 +336,7 @@ foreach(plugin ${NVVS_PLUGINS})
             "${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins"
             INSTALL_TO
             ${INSTALL_TO_DIR}
-)
+    )
     install(TARGETS ${plugin}
         LIBRARY DESTINATION ${INSTALL_TO}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -386,7 +391,7 @@ install(
 if (ANY_SANITIZER)
     set(CPACK_COMPONENTS_ALL Tests)
 else()
-set(CPACK_COMPONENTS_ALL DCGM Tests)
+    set(CPACK_COMPONENTS_ALL DCGM Tests)
 endif()
 
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

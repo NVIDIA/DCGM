@@ -110,7 +110,7 @@ def _run_burn_in_tests():
         burn = Popen([sys.executable, file_name, "-t", "3"], stdout=None, stderr=None, env = env)
         
         if burn.pid == None:
-            assert False, "Failed to launch Burn-in Tests" 
+            assert False, "Failed to launch Burn-in Tests"
         burn.wait()
     else:
         logger.warning("burn_in_stress.py script not found!")
@@ -126,11 +126,19 @@ class TestFrameworkSetup(object):
             sys.exit(1)
         
         # Various setup steps
-        option_parser.parse_options() 
+        option_parser.parse_options()
         utils.verify_user_file_permissions()
         utils.verify_localhost_dns()
         if not option_parser.options.use_running_hostengine:
             utils.verify_hostengine_port_is_usable()
+        utils.verify_dcgm_service_not_active()
+        if not test_utils.verify_dcgmi_executible_visible_for_all_users():
+            print('DCGM Testing framework is located in the directory that is does have proper permissions to run ' \
+                  'tests under unprivileged service account.')
+            print('See the logs to understand which part of the path lacks the read+execute permissions')
+            print('Either run `chmod o+rx <directory>` or move the DCGM Testing framework to another location')
+            sys.exit(1)
+        utils.verify_nvidia_fabricmanager_service_active_if_needed()
 
         if not test_utils.noLogging:
             logger.setup_environment()

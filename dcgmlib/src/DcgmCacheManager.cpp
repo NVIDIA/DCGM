@@ -25,6 +25,9 @@
 #include <dcgm_agent.h>
 #include <dcgm_nvswitch_structs.h>
 
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -37,6 +40,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+
+#define DRIVER_VERSION_510 510
 
 /*****************************************************************************/
 /* Conditional / Debug Features */
@@ -868,6 +873,7 @@ DcgmCacheManager::DcgmCacheManager()
     , m_pollInLockStep(0)
     , m_maxSampleAgeUsec((timelib64_t)3600 * 1000000)
     , m_driverIsR450OrNewer(false)
+    , m_driverMajorVersion(0)
     , m_numGpus(0)
     , m_numInstances(0)
     , m_numComputeInstances(0)
@@ -879,6 +885,7 @@ DcgmCacheManager::DcgmCacheManager()
     , m_updateCompleteCondition()
     , m_nvmlEventSetInitialized(false)
     , m_nvmlEventSet()
+    , m_runStats {}
     , m_subscriptions()
     , m_migManager()
     , m_delayedMigReconfigProcessingTimestamp(0)
@@ -891,8 +898,6 @@ DcgmCacheManager::DcgmCacheManager()
     m_mutex         = new DcgmMutex(0);
     m_nvmlTopoMutex = new DcgmMutex(0);
     // m_mutex->EnableDebugLogging(true);
-
-    memset(&m_runStats, 0, sizeof(m_runStats));
 
     m_entityWatchHashTable = hashtable_create(entityKeyHashCB, entityKeyCmpCB, 0, entityValueFreeCB);
     if (!m_entityWatchHashTable)
@@ -1063,8 +1068,8 @@ dcgmReturn_t DcgmCacheManager::UpdateNvLinkLinkState(unsigned int gpuId)
 
     for (linkId = 0; linkId < DCGM_NVLINK_MAX_LINKS_PER_GPU; linkId++)
     {
-        /* If we know MIG is enabled, we can save a driver call to NVML */
-        if (migIsEnabledForGpu)
+        /* If we know MIG is enabled or we're over the NVLink count, then we can save a driver call to NVML */
+        if (migIsEnabledForGpu || linkId >= gpu->numNvLinks)
         {
             gpu->nvLinkLinkState[linkId] = DcgmNvLinkLinkStateNotSupported;
             continue;
@@ -1300,6 +1305,27 @@ void DcgmCacheManager::MergeNewlyDetectedGpuList(dcgmcm_gpu_info_p detectedGpus,
 }
 
 /*****************************************************************************/
+void DcgmCacheManager::InitializeNvLinkCount(dcgmcm_gpu_info_t &gpuInfo)
+{
+    // Get the number of links on this device
+    nvmlFieldValue_t value = {};
+    value.fieldId          = NVML_FI_DEV_NVLINK_LINK_COUNT;
+    nvmlReturn_t nvmlSt    = nvmlDeviceGetFieldValues(gpuInfo.nvmlDevice, 1, &value);
+
+    if ((NVML_SUCCESS != nvmlSt) || (NVML_SUCCESS != value.nvmlReturn) || (value.value.uiVal == 0))
+    {
+        // Set to 0 NVLinks
+        gpuInfo.numNvLinks = 0;
+    }
+    else
+    {
+        gpuInfo.numNvLinks = value.value.uiVal;
+    }
+
+    DCGM_LOG_INFO << "Detected " << gpuInfo.numNvLinks << " NVLinks for GPU " << gpuInfo.gpuId;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::AttachGpus()
 {
     nvmlReturn_t nvmlSt;
@@ -1351,11 +1377,23 @@ dcgmReturn_t DcgmCacheManager::AttachGpus()
         PRINT_ERROR("%s", "Couldn't create the proper NVML event set when re-attaching to GPUS: %s", errorString(ret));
     }
 
+    /* Get the confidential computing (cc) mode of the system */
+
+    nvmlConfComputeSystemState_t ccMode = {};
+    nvmlSt                              = nvmlSystemGetConfComputeState(&ccMode);
+    if (nvmlSt != NVML_SUCCESS)
+    {
+        memset(&ccMode, 0, sizeof(ccMode));
+        DCGM_LOG_INFO << "nvmlSystemGetConfComputeState returned " << (int)nvmlSt;
+        /* Non-fatal. Keep going. */
+    }
+
     for (int i = 0; i < detectedGpusCount; i++)
     {
         detectedGpus[i].gpuId     = i; /* For now, gpuId == index == nvmlIndex */
         detectedGpus[i].nvmlIndex = i;
         detectedGpus[i].status    = DcgmEntityStatusOk; /* Start out OK */
+        detectedGpus[i].ccMode    = ccMode.feature;
 
         nvmlSt = nvmlDeviceGetHandleByIndex_v2(detectedGpus[i].nvmlIndex, &detectedGpus[i].nvmlDevice);
 
@@ -1421,6 +1459,8 @@ dcgmReturn_t DcgmCacheManager::AttachGpus()
             DCGM_LOG_ERROR << "nvmlDeviceGetVirtualizationMode returned " << (int)nvmlSt << " for nvmlIndex " << i;
             /* Non-fatal. Keep going. */
         }
+
+        InitializeNvLinkCount(detectedGpus[i]);
 
         ret = InitializeGpuInstances(detectedGpus[i]);
         if (ret != DCGM_ST_OK)
@@ -1641,11 +1681,33 @@ bool DcgmCacheManager::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupI
                    == DCGM_ST_OK;
         }
 
-        default:
+        case DCGM_FE_NONE:
+            return true;
+
+        case DCGM_FE_SWITCH:
+        case DCGM_FE_COUNT:
             PRINT_DEBUG(
                 "%u %u", "GetIsValidEntityId not supported for entityGroup %u, entityId %u", entityGroupId, entityId);
             return false;
+
+        case DCGM_FE_VGPU:
+            /* Handle below */
+            break;
     }
+
+    /* This is O(n^2) but only used by injecting FVs from the test framework */
+    for (size_t i = 0; i < m_numGpus; i++)
+    {
+        for (dcgmcm_vgpu_info_p vgpu = m_gpus[i].vgpuList; vgpu != nullptr; vgpu = vgpu->next)
+        {
+            if (vgpu->vgpuId == entityId)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /*****************************************************************************/
@@ -1679,6 +1741,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeInstance(dcgm_field_eid_t parentId)
 
     m_gpus[parentId].migEnabled = true;
     m_gpus[parentId].usedGpcs += 1;
+    m_gpus[parentId].maxGpcs = DCGM_MAX_INSTANCES_PER_GPU;
 
     return entityId;
 }
@@ -2321,7 +2384,7 @@ dcgmReturn_t DcgmCacheManager::UpdateAllFields(int waitForUpdate)
 
     /* Wait for signals that update loops have completed until the loop we care
        about has completed */
-    while (m_runStats.updateCycleFinished < waitForFinishedCycle)
+    while (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
     {
 #ifdef DEBUG_UPDATE_LOOP
         PRINT_DEBUG("%u %lld %lld",
@@ -2333,10 +2396,11 @@ dcgmReturn_t DcgmCacheManager::UpdateAllFields(int waitForUpdate)
         dcgm_mutex_lock(m_mutex);
 
         /* Check the updateCycleFinished one more time, now that we got the lock */
-        if (m_runStats.updateCycleFinished < waitForFinishedCycle)
+        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
         {
             m_mutex->CondWait(m_updateCompleteCondition, sleepAtATimeMs, [this, waitForFinishedCycle] {
-                return not(m_runStats.updateCycleFinished < waitForFinishedCycle) || ShouldStop() != 0;
+                return not(m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
+                       || ShouldStop() != 0;
             });
 #ifdef DEBUG_UPDATE_LOOP
             PRINT_DEBUG("%d", "UpdateAllFields() RETURN st %d", st);
@@ -2517,6 +2581,8 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
     {
         m_driverIsR450OrNewer = false;
     }
+
+    m_driverMajorVersion = stoi(m_driverVersion) / 100;
 
     DCGM_LOG_INFO << "Parsed driver string is " << m_driverVersion << ", IsR450OrNewer: " << m_driverIsR450OrNewer;
 }
@@ -2986,6 +3052,12 @@ dcgmReturn_t DcgmCacheManager::RemoveWatcher(dcgmcm_watch_info_p watchInfo, dcgm
 {
     std::vector<dcgm_watch_watcher_info_t>::iterator it;
 
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "RemoveWatcher got watchInfo == null";
+        return DCGM_ST_BADPARAM;
+    }
+
     for (it = watchInfo->watchers.begin(); it != watchInfo->watchers.end(); ++it)
     {
         if ((*it).watcher == watcher->watcher)
@@ -3028,6 +3100,12 @@ dcgmReturn_t DcgmCacheManager::AddOrUpdateWatcher(dcgmcm_watch_info_p watchInfo,
                                                   bool *wasAdded,
                                                   dcgm_watch_watcher_info_t *newWatcher)
 {
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "AddOrUpdateWatcher got watchInfo == null";
+        return DCGM_ST_BADPARAM;
+    }
+
     for (auto it = watchInfo->watchers.begin(); it != watchInfo->watchers.end(); ++it)
     {
         if ((*it).watcher == newWatcher->watcher)
@@ -3062,6 +3140,12 @@ dcgmReturn_t DcgmCacheManager::AddOrUpdateWatcher(dcgmcm_watch_info_p watchInfo,
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::UpdateWatchFromWatchers(dcgmcm_watch_info_p watchInfo)
 {
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "UpdateWatchFromWatchers got watchInfo == null";
+        return DCGM_ST_BADPARAM;
+    }
+
     if (watchInfo->watchers.empty())
     {
         watchInfo->hasSubscribedWatchers = 0;
@@ -3156,6 +3240,11 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
     DcgmLockGuard dlg(m_mutex);
 
     watchInfo = GetEntityWatchInfo(watchEntityGroupId, watchEntityId, dcgmFieldId, 1);
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "Got watchInfo == null from the GetEntityWatchInfo";
+        return DCGM_ST_GENERIC_ERROR;
+    }
 
     /* New watch? */
     if (!watchInfo->isWatched && watchEntityGroupId == DCGM_FE_GPU)
@@ -3265,9 +3354,14 @@ dcgmReturn_t DcgmCacheManager::AddGlobalFieldWatch(unsigned short dcgmFieldId,
     if (dcgmFieldId >= DCGM_FI_MAX_FIELDS)
         return DCGM_ST_BADPARAM;
 
-    dcgm_mutex_lock(m_mutex);
+    DcgmLockGuard dlg(m_mutex);
 
     watchInfo = GetGlobalWatchInfo(dcgmFieldId, 1);
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "Got watchInfo == null from GetGlobalWatchInfo";
+        return DCGM_ST_GENERIC_ERROR;
+    }
 
     /* Populate the cache manager version of watcher so we can insert/update it in this watchInfo's
         watcher table */
@@ -3288,8 +3382,6 @@ dcgmReturn_t DcgmCacheManager::AddGlobalFieldWatch(unsigned short dcgmFieldId,
     AddOrUpdateWatcher(watchInfo, &wasAdded, &newWatcher);
 
     watchInfo->isWatched = 1;
-
-    dcgm_mutex_unlock(m_mutex);
 
     PRINT_DEBUG("%u %lld %f %d %d",
                 "AddGlobalFieldWatch dcgmFieldId %u, mfu %lld, msa %f, mka %d, sfu %d",
@@ -4606,6 +4698,12 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
         watchInfo = GetGlobalWatchInfo(dcgmFieldId, 1);
     }
 
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "Got watchInfo == null from GetGlobalWatchInfo";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
     now = timelib_usecSince1970();
 
     expireTime = 0;
@@ -4857,6 +4955,12 @@ dcgmReturn_t DcgmCacheManager::AppendSamples(DcgmFvBuffer *fvBuffer)
             watchInfo = GetEntityWatchInfo((dcgm_field_entity_group_t)fv->entityGroupId, fv->entityId, fv->fieldId, 1);
         }
 
+        if (watchInfo == nullptr)
+        {
+            DCGM_LOG_ERROR << "Got watchInfo == null from GetEntityWatchInfo";
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
         timelib64_t expireTime = 0;
         if (watchInfo->maxAgeUsec)
             expireTime = now - watchInfo->maxAgeUsec;
@@ -4940,6 +5044,15 @@ dcgmReturn_t DcgmCacheManager::InjectSamples(dcgm_field_entity_group_t entityGro
     }
     else
     {
+        /* Note: we can only validate entity types other than switches here, as those are tracked by
+                 the switch module */
+        if (entityGroupId != DCGM_FE_SWITCH && !GetIsValidEntityId(entityGroupId, entityId))
+        {
+            DCGM_LOG_ERROR << "Got fv injection for invalid entityId " << entityId << " in entityGroupId "
+                           << entityGroupId;
+            return DCGM_ST_BADPARAM;
+        }
+
         watchInfo = GetEntityWatchInfo(entityGroupId, entityId, dcgmFieldId, 1);
     }
 
@@ -5260,6 +5373,10 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateAllFields(dcgmcm_update_thread_t *t
          hashIter       = hashtable_iter_next(m_entityWatchHashTable, hashIter))
     {
         watchInfo = (dcgmcm_watch_info_p)hashtable_iter_value(hashIter);
+        if (watchInfo == nullptr)
+        {
+            continue;
+        }
 
         if (!watchInfo->isWatched)
             continue; /* Not watched */
@@ -5845,6 +5962,10 @@ dcgmReturn_t DcgmCacheManager::ClearEntity(dcgm_field_entity_group_t entityGroup
     {
         numScanned++;
         watchInfo = (dcgmcm_watch_info_p)hashtable_iter_value(hashIter);
+        if (watchInfo == nullptr)
+        {
+            continue;
+        }
 
         if (watchInfo->watchKey.entityGroupId != entityGroupId || watchInfo->watchKey.entityId != entityId)
         {
@@ -5904,10 +6025,11 @@ void DcgmCacheManager::RunLockStep(dcgmcm_update_thread_t *threadCtx)
 
         /* Wait for someone to call UpdateAllFields(). Check if shouldFinishCycle changed before we got the lock.
          * If so, we need to skip our sleep and do another update cycle */
-        if (m_runStats.updateCycleFinished >= m_runStats.shouldFinishCycle)
+        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) >= m_runStats.shouldFinishCycle)
         {
             m_mutex->CondWait(m_startUpdateCondition, sleepAtATimeMs, [this] {
-                return (m_runStats.updateCycleFinished < m_runStats.shouldFinishCycle) || (ShouldStop() != 0);
+                return (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < m_runStats.shouldFinishCycle)
+                       || (ShouldStop() != 0);
             });
             if (ShouldStop() != 0)
             {
@@ -5927,7 +6049,7 @@ void DcgmCacheManager::RunLockStep(dcgmcm_update_thread_t *threadCtx)
         }
 
 
-        if (m_runStats.updateCycleFinished >= m_runStats.shouldFinishCycle)
+        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) >= m_runStats.shouldFinishCycle)
         {
             lastWakeupTime = 0;
             continue;
@@ -5953,7 +6075,7 @@ void DcgmCacheManager::RunLockStep(dcgmcm_update_thread_t *threadCtx)
         if (threadCtx->fvBuffer)
             UpdateFvSubscribers(threadCtx);
 
-        m_runStats.updateCycleFinished++;
+        m_runStats.updateCycleFinished.fetch_add(1, std::memory_order_relaxed);
 #ifdef DEBUG_UPDATE_LOOP
         PRINT_DEBUG(
             "%lld", "Setting m_updateCompleteCondition at updateCycleFinished %lld", m_runStats.updateCycleFinished);
@@ -5998,7 +6120,7 @@ void DcgmCacheManager::RunTimedWakeup(dcgmcm_update_thread_t *threadCtx)
         if (threadCtx->fvBuffer)
             UpdateFvSubscribers(threadCtx);
 
-        m_runStats.updateCycleFinished++;
+        m_runStats.updateCycleFinished.fetch_add(1, std::memory_order_relaxed);
         dcgm_mutex_unlock(m_mutex);
         /* Let anyone waiting on this update cycle know we're done */
         m_updateCompleteCondition.notify_all();
@@ -6040,7 +6162,8 @@ void DcgmCacheManager::RunTimedWakeup(dcgmcm_update_thread_t *threadCtx)
         /* Sleep for diff usec. This is an interruptible wait in case someone calls UpdateAllFields() */
         dcgm_mutex_lock(m_mutex);
         m_mutex->CondWait(m_startUpdateCondition, sleepAtATimeMs, [this] {
-            return (m_runStats.updateCycleFinished < m_runStats.shouldFinishCycle) || (ShouldStop() != 0);
+            return (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < m_runStats.shouldFinishCycle)
+                   || (ShouldStop() != 0);
         });
         /* We don't care about st. Either it timed out or we were woken up. Either way, run
          * another update loop
@@ -6274,6 +6397,12 @@ dcgmReturn_t DcgmCacheManager::AppendEntityDouble(dcgmcm_update_thread_t *thread
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::AllocWatchInfoTimeSeries(dcgmcm_watch_info_p watchInfo, int tsType)
 {
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_DEBUG << "Called AllocWatchInfoTimeSeries with watchInfo == null";
+        return DCGM_ST_NOT_WATCHED;
+    }
+
     if (watchInfo->timeSeries)
         return DCGM_ST_OK; /* Already alloc'd */
 
@@ -6574,6 +6703,45 @@ double DcgmCacheManager::NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn)
     return DCGM_FP64_BLANK;
 }
 
+/*****************************************************************************/
+static std::string_view ConvertNvmlGridLicenseStateToString(unsigned int licenseState)
+{
+    switch (licenseState)
+    {
+        case NVML_GRID_LICENSE_STATE_UNLICENSED_UNRESTRICTED:
+            return "Unlicensed (Unrestricted)";
+        case NVML_GRID_LICENSE_STATE_UNLICENSED_RESTRICTED:
+            return "Unlicensed (Restricted)";
+        case NVML_GRID_LICENSE_STATE_UNINITIALIZED:
+        case NVML_GRID_LICENSE_STATE_UNLICENSED:
+            return "Unlicensed";
+        case NVML_GRID_LICENSE_STATE_LICENSED:
+            return "Licensed";
+        default:
+            return "Unknown";
+    }
+}
+
+/*****************************************************************************/
+static std::string_view ConvertNvmlLicenseExpiryStatusToString(unsigned int licenseExpiry)
+{
+    switch (licenseExpiry)
+    {
+        case NVML_GRID_LICENSE_EXPIRY_INVALID:
+            return "ERR!";
+        case NVML_GRID_LICENSE_EXPIRY_NOT_APPLICABLE:
+            return "N/A";
+        case NVML_GRID_LICENSE_EXPIRY_PERMANENT:
+            return "Permanent";
+        case NVML_GRID_LICENSE_EXPIRY_VALID:
+            return "";
+        default:
+            return "Not Available";
+    }
+}
+
+/*****************************************************************************/
+
 const unsigned int DCGM_BLANK_ENTITY_ID = 0xFFFFFFFF;
 
 std::optional<unsigned int> DcgmCacheManager::GetGpuIdForEntity(dcgm_field_entity_group_t entityGroupId,
@@ -6704,9 +6872,14 @@ void DcgmCacheManager::RecordXidForGpu(unsigned int gpuId,
     // If the instance and compute instance IDs are set to blank, that means the XID is
     // at the GPU level, so store it there.
     dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_XID_ERRORS, 1);
-    threadCtx.entityKey           = watchInfo->watchKey;
-    threadCtx.watchInfo           = watchInfo;
-    timelib64_t expireTime        = 0;
+    if (watchInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "Got watchInfo == null from GetEntityWatchInfo";
+        return;
+    }
+    threadCtx.entityKey    = watchInfo->watchKey;
+    threadCtx.watchInfo    = watchInfo;
+    timelib64_t expireTime = 0;
     if (watchInfo->maxAgeUsec)
         expireTime = now - watchInfo->maxAgeUsec;
 
@@ -6918,7 +7091,7 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
 
                 if (ret != DCGM_ST_OK)
                 {
-                    DCGM_LOG_ERROR << "Coult not re-initialize MIG information for GPU " << gpuId << ": "
+                    DCGM_LOG_ERROR << "Could not re-initialize MIG information for GPU " << gpuId << ": "
                                    << errorString(ret);
                 }
 
@@ -7340,6 +7513,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
             {
 #if defined(NV_VMWARE)
                 /* Command executed is specific to VMware */
+                FILE *fp;
+                char cmd[156], tmp_name[DCGM_DEVICE_UUID_BUFFER_SIZE];
                 snprintf(cmd,
                          sizeof(cmd),
                          "localcli vm process list | grep \"World ID: %s\" -B 1 | head -1 | cut -f1 -d ':'",
@@ -7352,7 +7527,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
                 {
                     nvmlReturn = NVML_ERROR_NOT_FOUND;
                     AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
-                    return NvmlReturnToDcgmReturn(nvmlReturn);
+                    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
                 }
                 if (fgets(tmp_name, sizeof(tmp_name), fp))
                 {
@@ -7429,14 +7604,19 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            if (strcmp("Unknown", buffer))
+            if (strcmp("Not Available", buffer))
             {
                 /* Updating the cache frequency to once every 15 minutes after a known driver version is fetched. */
                 if (watchInfo && watchInfo->monitorFrequencyUsec != 900000000)
                 {
-                    UpdateFieldWatch(watchInfo, 900000000, 900.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
-                    PRINT_ERROR(
-                        "%d %u", "UpdateFieldWatch failed for vgpuId %u and fieldId %d", vgpuId, fieldMeta->fieldId);
+                    dcgmReturn_t status
+                        = UpdateFieldWatch(watchInfo, 900000000, 900.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
+                    if (DCGM_ST_OK != status)
+                    {
+                        DCGM_LOG_ERROR << "UpdateFieldWatch failed for vgpuId " << vgpuId << " and fieldId "
+                                       << fieldMeta->fieldId;
+                        return status;
+                    }
                 }
             }
 
@@ -7463,23 +7643,99 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
             break;
         }
 
-        case DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS:
+        case DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE:
         {
-            unsigned int licenseState;
+            nvmlVgpuLicenseInfo_t licenseInfo;
+            char licenseState[NVML_GRID_LICENSE_BUFFER_SIZE]  = { 0 };
+            char licenseExpiry[NVML_GRID_LICENSE_BUFFER_SIZE] = { 0 };
 
-            nvmlReturn = nvmlVgpuInstanceGetLicenseStatus(vgpuId, &licenseState);
-            if (watchInfo)
+            nvmlReturn = nvmlVgpuInstanceGetLicenseInfo_v2(vgpuId, &licenseInfo);
+            if (watchInfo != nullptr)
+            {
                 watchInfo->lastStatus = nvmlReturn;
+            }
             if (NVML_SUCCESS != nvmlReturn)
             {
-                PRINT_ERROR("%d %u",
-                            "nvmlVgpuInstanceGetLicenseStatus failed with status %d for vgpuId %u",
-                            (int)nvmlReturn,
-                            vgpuId);
-                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+                DCGM_LOG_ERROR << fmt::format(
+                    "nvmlVgpuInstanceGetLicenseInfo_v2 for vgpuId {} failed with error: ({}) {}",
+                    vgpuId,
+                    nvmlReturn,
+                    nvmlErrorString(nvmlReturn));
+                SafeCopyTo(licenseState, (char const *)"Not Available");
+                AppendEntityString(threadCtx, licenseState, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
-            AppendEntityInt64(threadCtx, licenseState, 0, now, expireTime);
+
+            if (licenseInfo.currentState == NVML_GRID_LICENSE_STATE_LICENSED)
+            {
+                if (licenseInfo.licenseExpiry.status == NVML_GRID_LICENSE_EXPIRY_VALID)
+                {
+                    auto const &expInfo = licenseInfo.licenseExpiry;
+                    using namespace fmt::literals;
+                    SafeCopyTo(licenseExpiry,
+                               fmt::format(" (Expiry: {year}-{month}-{day} {hour}:{min}:{sec} GMT)",
+                                           "year"_a  = expInfo.year,
+                                           "month"_a = expInfo.month,
+                                           "day"_a   = expInfo.day,
+                                           "hour"_a  = expInfo.hour,
+                                           "min"_a   = expInfo.min,
+                                           "sec"_a   = expInfo.sec)
+                                   .c_str());
+                }
+                else
+                {
+                    SafeCopyTo(licenseExpiry,
+                               fmt::format(" (Expiry: {})",
+                                           ConvertNvmlLicenseExpiryStatusToString(licenseInfo.licenseExpiry.status))
+                                   .c_str());
+                }
+
+                SafeCopyTo(
+                    licenseState,
+                    fmt::format("{}{}", ConvertNvmlGridLicenseStateToString(licenseInfo.currentState), licenseExpiry)
+                        .c_str());
+
+                /* Updating the cache frequency to once every 20 seconds when VM is licensed. */
+                if ((watchInfo != nullptr) && watchInfo->monitorFrequencyUsec != 20000000)
+                {
+                    dcgmReturn_t status
+                        = UpdateFieldWatch(watchInfo, 20000000, 20.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
+                    if (DCGM_ST_OK != status)
+                    {
+                        DCGM_LOG_ERROR << fmt::format(
+                            "UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
+                            vgpuId,
+                            fieldMeta->fieldId,
+                            status,
+                            errorString(status));
+                        return status;
+                    }
+                }
+            }
+            else
+            {
+                SafeCopyTo(licenseState, ConvertNvmlGridLicenseStateToString(licenseInfo.currentState).data());
+
+                if ((watchInfo != nullptr) && watchInfo->monitorFrequencyUsec != 1000000)
+                {
+                    /* Updating the cache frequency to once every 1 sec, when VM is unlicensed and current caching
+                     * frequency is 20 sec. */
+                    dcgmReturn_t status
+                        = UpdateFieldWatch(watchInfo, 1000000, 600.0, 600, DcgmWatcher(DcgmWatcherTypeCacheManager));
+                    if (DCGM_ST_OK != status)
+                    {
+                        DCGM_LOG_ERROR << fmt::format(
+                            "UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
+                            vgpuId,
+                            fieldMeta->fieldId,
+                            status,
+                            errorString(status));
+                        return status;
+                    }
+                }
+            }
+
+            AppendEntityString(threadCtx, licenseState, now, expireTime);
             break;
         }
 
@@ -7488,14 +7744,17 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
             unsigned int frameRateLimit;
 
             nvmlReturn = nvmlVgpuInstanceGetFrameRateLimit(vgpuId, &frameRateLimit);
-            if (watchInfo)
+            if (watchInfo != nullptr)
+            {
                 watchInfo->lastStatus = nvmlReturn;
+            }
             if (NVML_SUCCESS != nvmlReturn)
             {
-                PRINT_ERROR("%d %u",
-                            "nvmlVgpuInstanceGetFrameRateLimit failed with status %d for vgpuId %u",
-                            (int)nvmlReturn,
-                            vgpuId);
+                DCGM_LOG_ERROR << fmt::format(
+                    "nvmlVgpuInstanceGetFrameRateLimit for vgpuId {} failed with error: ({}) {}",
+                    vgpuId,
+                    nvmlReturn,
+                    nvmlErrorString(nvmlReturn));
                 AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -7503,9 +7762,51 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
             break;
         }
 
+        case DCGM_FI_DEV_VGPU_PCI_ID:
+        {
+            char vgpuPciId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
+            unsigned int length = NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE;
+
+            nvmlReturn = nvmlVgpuInstanceGetGpuPciId(vgpuId, vgpuPciId, &length);
+            if (watchInfo != nullptr)
+            {
+                watchInfo->lastStatus = nvmlReturn;
+            }
+            if (NVML_SUCCESS != nvmlReturn && NVML_ERROR_DRIVER_NOT_LOADED != nvmlReturn)
+            {
+                DCGM_LOG_ERROR << fmt::format("nvmlVgpuInstanceGetGpuPciId for vgpuId {} failed with error: ({}) {}",
+                                              vgpuId,
+                                              nvmlReturn,
+                                              nvmlErrorString(nvmlReturn));
+                AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            /* Updating the cache frequency to once every 60 minutes after a valid vGPU PCI Id is fetched. */
+            if ((strcmp("00000000:00:00.0", vgpuPciId) != 0)
+                && (watchInfo && watchInfo->monitorFrequencyUsec != 3600000000))
+            {
+                dcgmReturn_t status
+                    = UpdateFieldWatch(watchInfo, 3600000000, 3600.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
+                if (DCGM_ST_OK != status)
+                {
+                    DCGM_LOG_ERROR << fmt::format("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
+                                                  vgpuId,
+                                                  fieldMeta->fieldId,
+                                                  status,
+                                                  errorString(status));
+                    return status;
+                }
+            }
+
+            AppendEntityString(threadCtx, vgpuPciId, now, expireTime);
+            break;
+        }
+
         case DCGM_FI_DEV_VGPU_ENC_STATS:
         {
             dcgmDeviceEncStats_t vgpuEncStats;
+            vgpuEncStats.version = dcgmDeviceEncStats_version;
 
             nvmlReturn = nvmlVgpuInstanceGetEncoderStats(
                 vgpuId, &vgpuEncStats.sessionCount, &vgpuEncStats.averageFps, &vgpuEncStats.averageLatency);
@@ -7523,57 +7824,45 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
 
         case DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO:
         {
-            dcgmDeviceVgpuEncSessions_t *vgpuEncSessionsInfo = NULL;
-            nvmlEncoderSessionInfo_t *sessionInfo            = NULL;
-            unsigned int i, sessionCount = 0;
+            std::unique_ptr<dcgmDeviceVgpuEncSessions_t[]> vgpuEncSessionsInfo;
+            std::unique_ptr<nvmlEncoderSessionInfo_t[]> sessionInfo;
+            unsigned int sessionCount = 0;
 
-            nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, NULL);
-            if (watchInfo)
+            nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, nullptr);
+            if (watchInfo != nullptr)
+            {
                 watchInfo->lastStatus = nvmlReturn;
-
-            sessionInfo = (nvmlEncoderSessionInfo_t *)malloc(sizeof(*sessionInfo) * (sessionCount));
-            if (!sessionInfo)
-            {
-                PRINT_ERROR("%d", "malloc of %d bytes failed", (int)(sizeof(*sessionInfo) * (sessionCount)));
-                return DCGM_ST_MEMORY;
             }
 
-            vgpuEncSessionsInfo
-                = (dcgmDeviceVgpuEncSessions_t *)malloc(sizeof(*vgpuEncSessionsInfo) * (sessionCount + 1));
-            if (!vgpuEncSessionsInfo)
-            {
-                PRINT_ERROR(
-                    "%d", "malloc of %d bytes failed", (int)(sizeof(*vgpuEncSessionsInfo) * (sessionCount + 1)));
-                free(sessionInfo);
-                return DCGM_ST_MEMORY;
-            }
+            sessionInfo         = std::make_unique<nvmlEncoderSessionInfo_t[]>(sessionCount);
+            vgpuEncSessionsInfo = std::make_unique<dcgmDeviceVgpuEncSessions_t[]>(sessionCount + 1);
+
+            /* Initialize the first session object since the code below only updates index 1 and beyond */
+            memset(vgpuEncSessionsInfo.get(), 0, sizeof(nvmlEncoderSessionInfo_t));
+            vgpuEncSessionsInfo[0].version = dcgmDeviceVgpuEncSessions_version;
 
             if (nvmlReturn != NVML_SUCCESS)
             {
                 vgpuEncSessionsInfo[0].encoderSessionInfo.sessionCount = 0;
-                AppendEntityBlob(threadCtx,
-                                 vgpuEncSessionsInfo,
-                                 (int)(sizeof(*vgpuEncSessionsInfo) * (sessionCount + 1)),
-                                 now,
-                                 expireTime);
-                free(sessionInfo);
-                free(vgpuEncSessionsInfo);
+                AppendEntityBlob(
+                    threadCtx, &vgpuEncSessionsInfo[0], (int)(sizeof(dcgmDeviceVgpuEncSessions_t)), now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
             if (sessionCount != 0)
             {
-                nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, sessionInfo);
-                if (watchInfo)
+                nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, sessionInfo.get());
+                if (watchInfo != nullptr)
+                {
                     watchInfo->lastStatus = nvmlReturn;
+                }
                 if (nvmlReturn != NVML_SUCCESS)
                 {
-                    PRINT_ERROR("%d %u",
-                                "nvmlVgpuInstanceGetEncoderSessions failed with status %d for vgpuId %d",
-                                (int)nvmlReturn,
-                                vgpuId);
-                    free(sessionInfo);
-                    free(vgpuEncSessionsInfo);
+                    DCGM_LOG_ERROR << fmt::format(
+                        "nvmlVgpuInstanceGetEncoderSessions failed for vgpuId {} with status ({}){}",
+                        vgpuId,
+                        nvmlReturn,
+                        nvmlErrorString(nvmlReturn));
                     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
                 }
             }
@@ -7581,24 +7870,26 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestVgpuValue(dcgmcm_update_thread
             /* First element of the array holds the count */
             vgpuEncSessionsInfo[0].encoderSessionInfo.sessionCount = sessionCount;
 
-            for (i = 0; i < sessionCount; i++)
+            for (unsigned int i = 0; i < sessionCount; i++)
             {
-                vgpuEncSessionsInfo[i + 1].encoderSessionInfo.vgpuId = sessionInfo[i].vgpuInstance;
-                vgpuEncSessionsInfo[i + 1].sessionId                 = sessionInfo[i].sessionId;
-                vgpuEncSessionsInfo[i + 1].pid                       = sessionInfo[i].pid;
-                vgpuEncSessionsInfo[i + 1].codecType                 = (dcgmEncoderType_t)sessionInfo[i].codecType;
-                vgpuEncSessionsInfo[i + 1].hResolution               = sessionInfo[i].hResolution;
-                vgpuEncSessionsInfo[i + 1].vResolution               = sessionInfo[i].vResolution;
-                vgpuEncSessionsInfo[i + 1].averageFps                = sessionInfo[i].averageFps;
-                vgpuEncSessionsInfo[i + 1].averageLatency            = sessionInfo[i].averageLatency;
+                auto &encInfo    = vgpuEncSessionsInfo[i + 1];
+                auto const &info = sessionInfo[i];
+
+                encInfo.version                   = dcgmDeviceVgpuEncSessions_version;
+                encInfo.encoderSessionInfo.vgpuId = info.vgpuInstance;
+                encInfo.sessionId                 = info.sessionId;
+                encInfo.pid                       = info.pid;
+                encInfo.codecType                 = (dcgmEncoderType_t)info.codecType;
+                encInfo.hResolution               = info.hResolution;
+                encInfo.vResolution               = info.vResolution;
+                encInfo.averageFps                = info.averageFps;
+                encInfo.averageLatency            = info.averageLatency;
             }
             AppendEntityBlob(threadCtx,
-                             vgpuEncSessionsInfo,
-                             (int)(sizeof(*vgpuEncSessionsInfo) * (sessionCount + 1)),
+                             vgpuEncSessionsInfo.get(),
+                             (int)(sizeof(dcgmDeviceVgpuEncSessions_t) * (sessionCount + 1)),
                              now,
                              expireTime);
-            free(sessionInfo);
-            free(vgpuEncSessionsInfo);
             break;
         }
 
@@ -7927,6 +8218,11 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
                 case DCGM_FE_GPU_I:
                 {
+                    if (!m_gpus[gpuId].migEnabled)
+                    {
+                        DCGM_LOG_ERROR << "A MIG related fields is requested for GPU without enabled MIG";
+                        return DCGM_ST_NOT_SUPPORTED;
+                    }
                     unsigned int localGIIndex      = entityId % m_gpus[gpuId].maxGpcs;
                     std::string const &profileName = m_gpus[gpuId].instances[localGIIndex].GetProfileName();
                     if (profileName.empty())
@@ -7944,6 +8240,11 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
                 case DCGM_FE_GPU_CI:
                 {
+                    if (!m_gpus[gpuId].migEnabled)
+                    {
+                        DCGM_LOG_ERROR << "A MIG related fields is requested for GPU without enabled MIG";
+                        return DCGM_ST_NOT_SUPPORTED;
+                    }
                     DcgmNs::Mig::GpuInstanceId gpuInstanceId {};
                     ret = m_migManager.GetInstanceIdFromComputeInstanceId(DcgmNs::Mig::ComputeInstanceId { entityId },
                                                                           gpuInstanceId);
@@ -8120,14 +8421,38 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
             else
             {
-                char buf[DCGM_DEVICE_UUID_BUFFER_SIZE] = { 0 };
+                char buf[NVML_DEVICE_UUID_V2_BUFFER_SIZE] = { 0 };
 
                 nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
-                if (nvmlDevice != nullptr)
+                switch (threadCtx->entityKey.entityGroupId)
                 {
-                    nvmlReturn = nvmlDeviceGetUUID(nvmlDevice, buf, sizeof(buf));
+                    case DCGM_FE_GPU:
+                    {
+                        if (nvmlDevice != nullptr)
+                        {
+                            nvmlReturn = nvmlDeviceGetUUID(nvmlDevice, buf, sizeof(buf));
+                        }
+                        break;
+                    }
+                    case DCGM_FE_GPU_I: // Fall through
+                    case DCGM_FE_GPU_CI:
+                    {
+                        nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
+                            gpuId,
+                            static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
+                            threadCtx->entityKey.entityId);
+                        if (instanceDevice != nullptr)
+                        {
+                            nvmlReturn = nvmlDeviceGetUUID(instanceDevice, buf, sizeof(buf));
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+                        break;
+                    }
                 }
-
                 if (watchInfo)
                 {
                     watchInfo->lastStatus = nvmlReturn;
@@ -8138,7 +8463,6 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                     AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
                     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
                 }
-
                 AppendEntityString(threadCtx, buf, now, expireTime);
             }
 
@@ -8843,41 +9167,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             nvmlBAR1Memory_t bar1Memory;
             long long value;
 
-            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                 : nvmlDeviceGetBAR1MemoryInfo(nvmlDevice, &bar1Memory);
-            if (watchInfo)
-                watchInfo->lastStatus = nvmlReturn;
-            if (NVML_SUCCESS != nvmlReturn)
-            {
-                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
-                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
-            }
-
-            if (fieldMeta->fieldId == DCGM_FI_DEV_BAR1_TOTAL)
-                value = (long long)bar1Memory.bar1Total;
-            else if (fieldMeta->fieldId == DCGM_FI_DEV_BAR1_USED)
-                value = (long long)bar1Memory.bar1Used;
-            else // DCGM_FI_DEV_BAR1_FREE
-                value = (long long)bar1Memory.bar1Free;
-
-            value = value / 1024 / 1024;
-            AppendEntityInt64(threadCtx, value, 0, now, expireTime);
-            break;
-        }
-
-        case DCGM_FI_DEV_FB_TOTAL:
-        case DCGM_FI_DEV_FB_USED:
-        case DCGM_FI_DEV_FB_FREE:
-        {
-            nvmlMemory_t fbMemory;
-            unsigned int total, used, free;
-
             switch (threadCtx->entityKey.entityGroupId)
             {
                 case DCGM_FE_GPU:
                 {
                     nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                         : nvmlDeviceGetMemoryInfo(nvmlDevice, &fbMemory);
+                                                         : nvmlDeviceGetBAR1MemoryInfo(nvmlDevice, &bar1Memory);
                     break;
                 }
                 case DCGM_FE_GPU_I: // Fall through
@@ -8889,7 +9184,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                         static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
                         threadCtx->entityKey.entityId);
                     nvmlReturn = (instanceDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                             : nvmlDeviceGetMemoryInfo(instanceDevice, &fbMemory);
+                                                             : nvmlDeviceGetBAR1MemoryInfo(instanceDevice, &bar1Memory);
                     break;
                 }
                 default:
@@ -8906,23 +9201,25 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            if (fieldMeta->fieldId == DCGM_FI_DEV_FB_TOTAL)
-            {
-                total = fbMemory.total / (1024 * 1024);
-                AppendEntityInt64(threadCtx, total, 0, now, expireTime);
-            }
-            else if (fieldMeta->fieldId == DCGM_FI_DEV_FB_USED)
-            {
-                used = fbMemory.used / (1024 * 1024);
-                AppendEntityInt64(threadCtx, used, 0, now, expireTime);
-            }
+            if (fieldMeta->fieldId == DCGM_FI_DEV_BAR1_TOTAL)
+                value = (long long)bar1Memory.bar1Total;
+            else if (fieldMeta->fieldId == DCGM_FI_DEV_BAR1_USED)
+                value = (long long)bar1Memory.bar1Used;
             else
-            {
-                free = fbMemory.free / (1024 * 1024);
-                AppendEntityInt64(threadCtx, free, 0, now, expireTime);
-            }
+                value = (long long)bar1Memory.bar1Free;
+
+            value = value / 1024 / 1024;
+            AppendEntityInt64(threadCtx, value, 0, now, expireTime);
             break;
         }
+
+        case DCGM_FI_DEV_FB_TOTAL:
+        case DCGM_FI_DEV_FB_USED:
+        case DCGM_FI_DEV_FB_FREE:
+        case DCGM_FI_DEV_FB_RESERVED:
+
+            ReadAndCacheFBMemoryInfo(gpuId, nvmlDevice, threadCtx, watchInfo, expireTime, fieldMeta->fieldId);
+            break;
 
         case DCGM_FI_DEV_VIRTUAL_MODE:
         {
@@ -8962,6 +9259,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DCGM_ST_MEMORY;
             }
 
+            vgpuTypeInfo[0].version = dcgmDeviceVgpuTypeInfo_version2;
+
             if (nvmlReturn != NVML_ERROR_INSUFFICIENT_SIZE)
             {
                 vgpuTypeInfo[0].vgpuTypeInfo.supportedVgpuTypeCount = 0;
@@ -8994,6 +9293,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             for (i = 0; i < vgpuCount; i++)
             {
+                vgpuTypeInfo[i + 1].version = dcgmDeviceVgpuTypeInfo_version2;
+
                 unsigned int nameBufferSize = NVML_VGPU_NAME_BUFFER_SIZE;
                 unsigned long long fbTotal;
 
@@ -9075,6 +9376,14 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 {
                     errorCode                   = nvmlReturn;
                     vgpuTypeInfo[i + 1].fbTotal = -1;
+                }
+
+                nvmlReturn = nvmlVgpuTypeGetGpuInstanceProfileId(
+                    supportedVgpuTypeIds[i], (unsigned int *)&vgpuTypeInfo[i + 1].gpuInstanceProfileId);
+                if ((NVML_SUCCESS != nvmlReturn))
+                {
+                    errorCode                                = nvmlReturn;
+                    vgpuTypeInfo[i + 1].gpuInstanceProfileId = INVALID_GPU_INSTANCE_PROFILE_ID;
                 }
             }
 
@@ -9603,6 +9912,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_MIG_MODE:
         {
             AppendEntityInt64(threadCtx, m_gpus[gpuId].migEnabled, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_CC_MODE:
+        {
+            AppendEntityInt64(threadCtx, m_gpus[gpuId].ccMode, 0, now, expireTime);
             break;
         }
 
@@ -10154,6 +10469,143 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 }
 
 /*****************************************************************************/
+void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
+                                                nvmlDevice_t nvmlDevice,
+                                                dcgmcm_update_thread_t *threadCtx,
+                                                dcgmcm_watch_info_p watchInfo,
+                                                timelib64_t expireTime,
+                                                unsigned short fieldId)
+{
+    unsigned long long nvTotal    = 0;
+    unsigned long long nvFree     = 0;
+    unsigned long long nvUsed     = 0;
+    unsigned long long nvReserved = 0;
+    unsigned int total, free, used, reserved;
+
+    nvmlReturn_t nvmlReturn;
+
+    timelib64_t now = timelib_usecSince1970();
+
+    if (m_driverMajorVersion < DRIVER_VERSION_510)
+    {
+        nvmlMemory_t fbMemory;
+
+        switch (threadCtx->entityKey.entityGroupId)
+        {
+            case DCGM_FE_GPU:
+            {
+                nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                     : nvmlDeviceGetMemoryInfo(nvmlDevice, &fbMemory);
+                break;
+            }
+            case DCGM_FE_GPU_I: // Fall through
+            case DCGM_FE_GPU_CI:
+            {
+                // Pass NVML the NVML device for the GPU instance
+                nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
+                    gpuId,
+                    static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
+                    threadCtx->entityKey.entityId);
+                nvmlReturn = (instanceDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                         : nvmlDeviceGetMemoryInfo(instanceDevice, &fbMemory);
+                break;
+            }
+            default:
+            {
+                nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+                break;
+            }
+        }
+
+        if (NVML_SUCCESS == nvmlReturn)
+        {
+            nvTotal = fbMemory.total;
+            nvFree  = fbMemory.free;
+            nvUsed  = fbMemory.used;
+        }
+    }
+    else
+    {
+        nvmlMemory_v2_t fbMemory;
+
+        fbMemory.version = nvmlMemory_v2;
+
+        switch (threadCtx->entityKey.entityGroupId)
+        {
+            case DCGM_FE_GPU:
+            {
+                nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                     : nvmlDeviceGetMemoryInfo_v2(nvmlDevice, &fbMemory);
+                break;
+            }
+            case DCGM_FE_GPU_I: // Fall through
+            case DCGM_FE_GPU_CI:
+            {
+                // Pass NVML the NVML device for the GPU instance
+                nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
+                    gpuId,
+                    static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
+                    threadCtx->entityKey.entityId);
+                nvmlReturn = (instanceDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                         : nvmlDeviceGetMemoryInfo_v2(instanceDevice, &fbMemory);
+                break;
+            }
+            default:
+            {
+                nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+                break;
+            }
+        }
+
+        if (NVML_SUCCESS == nvmlReturn)
+        {
+            nvTotal    = fbMemory.total;
+            nvFree     = fbMemory.free;
+            nvUsed     = fbMemory.used;
+            nvReserved = fbMemory.reserved;
+        }
+    }
+
+    if (watchInfo)
+        watchInfo->lastStatus = nvmlReturn;
+    if (NVML_SUCCESS != nvmlReturn)
+    {
+        AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+        return;
+    }
+
+    if (fieldId == DCGM_FI_DEV_FB_TOTAL)
+    {
+        total = nvTotal / (1024 * 1024);
+        AppendEntityInt64(threadCtx, total, 0, now, expireTime);
+    }
+    else if (fieldId == DCGM_FI_DEV_FB_USED)
+    {
+        used = nvUsed / (1024 * 1024);
+        AppendEntityInt64(threadCtx, used, 0, now, expireTime);
+    }
+    else if (fieldId == DCGM_FI_DEV_FB_RESERVED)
+    {
+        if (m_driverMajorVersion < DRIVER_VERSION_510)
+        {
+            AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(NVML_ERROR_NOT_SUPPORTED), 0, now, expireTime);
+            return;
+        }
+        else
+        {
+            reserved = nvReserved / (1024 * 1024);
+            AppendEntityInt64(threadCtx, reserved, 0, now, expireTime);
+        }
+    }
+    else
+    {
+        free = nvFree / (1024 * 1024);
+        AppendEntityInt64(threadCtx, free, 0, now, expireTime);
+    }
+}
+
+
+/*****************************************************************************/
 void DcgmCacheManager::ReadAndCacheNvLinkBandwidthTotal(dcgmcm_update_thread_t *threadCtx,
                                                         nvmlDevice_t nvmlDevice,
                                                         unsigned int scopeId,
@@ -10218,12 +10670,12 @@ void DcgmCacheManager::ReadAndCacheNvLinkBandwidthTotal(dcgmcm_update_thread_t *
     /* Get the previous value so we can calculate an average bandwidth */
     timeseries_entry_p prevValue = nullptr;
     timeseries_cursor_t cursor   = {};
-    if (watchInfo->timeSeries)
+    if (watchInfo != nullptr && watchInfo->timeSeries)
     {
         prevValue = timeseries_last(watchInfo->timeSeries, &cursor);
     }
 
-    if (currentSum == 0 || !watchInfo->timeSeries)
+    if (currentSum == 0 || (watchInfo != nullptr && !watchInfo->timeSeries) || prevValue == nullptr)
     {
         /* Current value is zero or no previous value. Publish a zero current value with
            our current value as value2. We'll use it next time around to calculate a difference */
@@ -10231,7 +10683,7 @@ void DcgmCacheManager::ReadAndCacheNvLinkBandwidthTotal(dcgmcm_update_thread_t *
         return;
     }
 
-    double timeDiffSec = (fvTimestamp - prevValue->usecSince1970) / 1000000.0;
+    double timeDiffSec = prevValue == nullptr ? 0.0 : (fvTimestamp - prevValue->usecSince1970) / 1000000.0;
 
     if (timeDiffSec == 0.0)
     {
@@ -11147,7 +11599,8 @@ void DcgmCacheManager::GetRuntimeStats(dcgmcm_runtime_stats_p stats)
         return;
 
     m_runStats.lockCount = m_mutex->GetLockCount();
-    memcpy(stats, &m_runStats, sizeof(*stats));
+
+    *stats = m_runStats;
 }
 
 void DcgmCacheManager::GetValidFieldIds(std::vector<unsigned short> &validFieldIds, bool includeModulePublished)
@@ -11237,9 +11690,10 @@ void DcgmCacheManager::WatchVgpuFields(nvmlVgpuInstance_t vgpuId)
     AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_TYPE, 3600000000, 3600.0, 1, dcgmWatcher, false);
     AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_UUID, 3600000000, 3600.0, 1, dcgmWatcher, false);
     AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_DRIVER_VERSION, 30000000, 30.0, 1, dcgmWatcher, false);
-    AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_MEMORY_USAGE, 60000000, 3600.0, 60, dcgmWatcher, false);
+    AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_MEMORY_USAGE, 1000000, 600.0, 600, dcgmWatcher, false);
+    AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_PCI_ID, 30000000, 30.0, 1, dcgmWatcher, false);
     AddEntityFieldWatch(
-        DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS, 900000000, 900.0, 1, dcgmWatcher, false);
+        DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE, 1000000, 600.0, 600, dcgmWatcher, false);
     AddEntityFieldWatch(
         DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT, 900000000, 900.0, 1, dcgmWatcher, false);
     AddEntityFieldWatch(DCGM_FE_VGPU, vgpuId, DCGM_FI_DEV_VGPU_ENC_STATS, 1000000, 600.0, 600, dcgmWatcher, false);
@@ -11644,7 +12098,7 @@ dcgmReturn_t DcgmCacheManager::SelectGpusByTopology(std::vector<unsigned int> &g
 
         // Set an error if there aren't enough GPUs to fulfill the request
         if (gpuIds.size() < numGpus)
-            ret = DCGM_ST_INSUFFICIENT_SIZE;
+            return DCGM_ST_INSUFFICIENT_SIZE;
     }
     else
     {
@@ -11750,6 +12204,10 @@ dcgmReturn_t DcgmCacheManager::PopulateMigHierarchy(dcgmMigHierarchy_v1 &migHier
 
     for (unsigned int i = 0; i < m_numGpus; i++)
     {
+        if (!m_gpus[i].migEnabled)
+        {
+            continue;
+        }
         for (size_t instanceIndex = 0; instanceIndex < m_gpus[i].instances.size(); instanceIndex++)
         {
             DcgmGpuInstance &instance = m_gpus[i].instances[instanceIndex];
@@ -12291,6 +12749,10 @@ dcgmReturn_t DcgmCacheManager::PopulateMigHierarchy(dcgmMigHierarchy_v2 &migHier
 
     for (unsigned int i = 0; i < m_numGpus; i++)
     {
+        if (!m_gpus[i].migEnabled)
+        {
+            continue;
+        }
         for (size_t instanceIndex = 0; instanceIndex < m_gpus[i].instances.size(); instanceIndex++)
         {
             DcgmGpuInstance const &instance = m_gpus[i].instances[instanceIndex];

@@ -948,7 +948,7 @@ std::string DcgmRecorder::GetGpuUtilizationNote(unsigned int gpuId, timelib64_t 
 dcgmReturn_t DcgmRecorder::GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &attributes)
 {
     memset(&attributes, 0, sizeof(attributes));
-    attributes.version = dcgmDeviceAttributes_version2;
+    attributes.version = dcgmDeviceAttributes_version3;
     return m_dcgmSystem.GetDeviceAttributes(gpuId, attributes);
 }
 

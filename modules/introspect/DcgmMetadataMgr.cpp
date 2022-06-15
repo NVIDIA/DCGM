@@ -118,8 +118,7 @@ DcgmMetadataManager::DcgmMetadataManager(DcgmCoreProxy *dcc)
     : m_runIntervalMs(0)
     , m_coreProxy(dcc)
 {
-    m_startUpdateTriggered = true;
-    m_statCollection       = new DcgmStatCollection(false);
+    m_statCollection = new DcgmStatCollection(false);
 
     m_currentlyUpdating = false;
     m_updateLoopId      = 1; // not necessary, but easier to read logs if it starts at 1

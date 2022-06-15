@@ -50,8 +50,8 @@ if (BUILD_TESTING)
             sdk_nvml_interface
             sdk_nvml_loader
             ${CMAKE_THREAD_LIBS_INIT}
-            rt
             fmt::fmt
+            rt
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

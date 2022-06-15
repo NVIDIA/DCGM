@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/cuda:11.4.1-base-ubuntu20.04
+FROM nvcr.io/nvidia/cuda:11.6.0-base-ubuntu20.04
 
 LABEL io.k8s.display-name="NVIDIA DCGM"
 LABEL name="NVIDIA DCGM"
@@ -12,15 +12,7 @@ ARG DCGM_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gnupg2 curl ca-certificates && \
-    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub | apt-key add - && \
-    echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64 /" > /etc/apt/sources.list.d/cuda.list && \
-    echo "deb https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu2004/x86_64 /" > /etc/apt/sources.list.d/nvidia-ml.list && \
-    apt-get purge --autoremove -y curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    datacenter-gpu-manager=1:${DCGM_VERSION} && apt-get purge --autoremove -y openssl
+    datacenter-gpu-manager=1:${DCGM_VERSION} libcap2-bin && apt-get purge --autoremove -y openssl
 
 # Required for full gpu access
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,compat32

@@ -14,27 +14,24 @@
  * limitations under the License.
  */
 #include "CudaCommon.h"
+
 #include "DcgmError.h"
 #include "cuda_runtime.h"
 #include <NvvsCommon.h>
 
-#include <sstream>
+#include <fmt/format.h>
+
 
 std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
 {
-    const char *cudaErrorStr = 0;
+    const char *cudaErrorStr = nullptr;
     cuGetErrorString(cuRes, &cudaErrorStr);
 
-    if (cudaErrorStr != 0)
+    if (cudaErrorStr != nullptr)
     {
-        std::stringstream buf;
-        buf << error << ": '" << cudaErrorStr << "'.";
-        return buf.str();
+        return fmt::format("{}: '{}'.", error, cudaErrorStr);
     }
-    else
-    {
-        return error;
-    }
+    return error;
 }
 
 
@@ -80,11 +77,9 @@ std::string AddAPIError(Plugin *p,
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL_GPU, d, callName, gpuId, errorText);
     }
 
-    if (bytes)
+    if (bytes != 0U)
     {
-        std::stringstream ss;
-        ss << "(for " << bytes << " bytes)";
-        d.AddDetail(ss.str());
+        d.AddDetail(fmt::format("(for {} bytes", bytes));
     }
 
     if (isGpuSpecific)
@@ -118,22 +113,26 @@ std::string AddCudaError(Plugin *p,
                          size_t bytes,
                          bool isGpuSpecific)
 {
-    std::stringstream errorBuf;
-    const char *errorText = NULL;
+    const char *errorText = nullptr;
     cuGetErrorString(cuSt, &errorText);
-    if (!errorText)
+
+    std::string errorBuf;
+    if (errorText == nullptr)
     {
-        errorBuf << "Unknown error";
+        errorBuf = "Unknown error";
     }
     else
     {
-        errorBuf << errorText;
-        if (!strcmp(callName, "cuInit"))
+        if (strcmp(callName, "cuInit") == 0)
         {
-            errorBuf << GetAdditionalCuInitDetail(cuSt);
+            errorBuf = fmt::format("{}{}", errorText, GetAdditionalCuInitDetail(cuSt));
+        }
+        else
+        {
+            errorBuf.assign(errorText);
         }
     }
-    return AddAPIError(p, callName, errorBuf.str().c_str(), gpuId, bytes, isGpuSpecific);
+    return AddAPIError(p, callName, errorBuf.c_str(), gpuId, bytes, isGpuSpecific);
 }
 
 /*****************************************************************************/
@@ -153,8 +152,5 @@ const char *GetAdditionalCuInitDetail(CUresult cuSt)
     {
         return CHECK_FABRIC_MANAGER_MSG;
     }
-    else
-    {
-        return "";
-    }
+    return "";
 }

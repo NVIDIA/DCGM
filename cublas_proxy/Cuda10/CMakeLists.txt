@@ -12,3 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 define_proxy_lib(10)
+target_compile_options(${lib_name} PRIVATE -Wno-volatile)

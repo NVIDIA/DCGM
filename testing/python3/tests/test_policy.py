@@ -31,8 +31,8 @@ import os
 
 POLICY_CALLBACK_TIMEOUT_SECS = 15 #How long to wait for policy callbacks to occur. The loop runs every 10 seconds in the host engine, so this should be 10 seconds + some fuzz time
 
-# creates a callback function for dcgmPolicyRegister calls which will push its args 
-# into "queue" when it is called.  This allows synchronization on the callback by 
+# creates a callback function for dcgmPolicyRegister calls which will push its args
+# into "queue" when it is called.  This allows synchronization on the callback by
 # retrieving the args from the queue as well as checks of the args via asserts.
 def create_c_callback(queue=None):
     @CFUNCTYPE(None, c_void_p)
@@ -54,9 +54,9 @@ def test_dcgm_policy_reg_unreg_for_policy_update_standalone(handle, gpuIds):
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
     group = dcgmSystem.GetGroupWithGpuIds('test', gpuIds)
-    
+
     empty_c_callback = create_c_callback()  # must hold ref so func is not GC'ed before c api uses it
-    
+
     # Register/Unregister will throw exceptions if they fail
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, None, empty_c_callback)
     group.policy.Unregister(dcgm_structs.DCGM_POLICY_COND_DBE)
@@ -86,7 +86,7 @@ def test_dcgm_policy_negative_unregister_standalone(handle):
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_set_get_violation_policy_standalone(handle, gpuIds):
-    """ 
+    """
     Verifies that set and get violation policy work
     """
     dcgmHandle = pydcgm.DcgmHandle(handle)
@@ -96,12 +96,12 @@ def test_dcgm_policy_set_get_violation_policy_standalone(handle, gpuIds):
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_DBE
-    newPolicy.parms[0].tag = 0
-    newPolicy.parms[0].val.boolean = True
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].val.boolean = True
 
     group.policy.Set(newPolicy)
     policies = group.policy.Get()
-    
+
     _assert_policies_equal(policies[0], newPolicy)
 
 def _assert_policies_equal(policy1, policy2):
@@ -109,18 +109,18 @@ def _assert_policies_equal(policy1, policy2):
     assert(policy2)
     assert(policy1.version == policy2.version)
     assert(policy1.condition == policy2.condition)
-    assert(policy1.parms[0].tag == policy2.parms[0].tag)
-    assert(policy1.parms[0].val.boolean == policy2.parms[0].val.boolean)
-    
+    assert(policy1.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].tag == policy2.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].tag)
+    assert(policy1.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].val.boolean == policy2.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].val.boolean)
+
 def helper_dcgm_policy_inject_eccerror(handle, gpuIds):
-    """ 
+    """
     Verifies that we can inject an error into the ECC counters and receive a callback
     """
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_DBE
-    newPolicy.parms[0].tag = 0
-    newPolicy.parms[0].val.boolean = True
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].val.boolean = True
 
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -173,22 +173,22 @@ def test_dcgm_policy_inject_eccerror_standalone(handle, gpuIds):
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
-    """ 
+    """
     Verifies that we can inject an error into the NVLINK error and receive a callback
     """
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
-    
+
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_NVLINK
-    newPolicy.parms[5].tag = 0
-    newPolicy.parms[5].val.boolean = True
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_NVLINK].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_NVLINK].val.boolean = True
 
     # find a GPU that supports nvlink (otherwise internal test will ignore it)
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
     group = dcgmSystem.GetGroupWithGpuIds('test1', gpuIds)
     group.policy.Set(newPolicy)
- 
+
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_NVLINK, finishCallback=c_callback)
@@ -200,7 +200,7 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     field.ts = int((time.time()+60) * 1000000.0) # set the injected data into the future
     field.value.i64 = 1
-    
+
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
@@ -218,15 +218,15 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
     assert(1 == callbackData.val.nvlink.counter), 'Expected 1 PCI error but got %s' % callbackData.val.nvlink.counter
 
 def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
-    """ 
+    """
     Verifies that we can inject an XID error and receive a callback
     """
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
-    
+
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_XID
-    newPolicy.parms[6].tag = 0
-    newPolicy.parms[6].val.boolean = True
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_XID].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_XID].val.boolean = True
 
     dcgmHandle = pydcgm.DcgmHandle(handle)
     validDeviceId = -1
@@ -242,7 +242,7 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
     group = pydcgm.DcgmGroup(dcgmHandle, groupName="test1", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(validDeviceId)
     group.policy.Set(newPolicy)
- 
+
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_XID, finishCallback=c_callback)
@@ -254,7 +254,7 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     field.ts = int((time.time()+60) * 1000000.0) # set the injected data into the future
     field.value.i64 = 16
-    
+
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, validDeviceId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
@@ -279,25 +279,25 @@ def test_dcgm_policy_inject_xiderror_standalone(handle, gpuIds):
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_xiderror_embedded(handle, gpuIds):
     helper_test_dcgm_policy_inject_xiderror(handle, gpuIds)
-    
+
 
 def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
-    """ 
+    """
     Verifies that we can inject an error into the PCI counters and receive a callback
     """
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
-    
+
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_PCI
-    newPolicy.parms[1].tag = 1
-    newPolicy.parms[1].val.llval = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_PCI].tag = 1
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_PCI].val.llval = 0
 
     gpuId = gpuIds[0]
-    
+
     group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupName="test1", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(gpuId)
     group.policy.Set(newPolicy)
- 
+
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_PCI, finishCallback=c_callback)
@@ -309,7 +309,7 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     field.ts = int((time.time()+60) * 1000000.0) # set the injected data into the future
     field.value.i64 = 1
-    
+
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
@@ -340,21 +340,21 @@ def test_dcgm_policy_inject_pcierror_embedded(handle, gpuIds):
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
-    """ 
+    """
     Verifies that we can inject an error into the retired pages counters and receive a callback
     """
     newPolicy = dcgm_structs.c_dcgmPolicy_v1()
 
     newPolicy.version = dcgm_structs.dcgmPolicy_version1
     newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED
-    newPolicy.parms[2].tag = 1
-    newPolicy.parms[2].val.llval = 5
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED].tag = 1
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED].val.llval = 5
 
     # find a GPU that supports ECC and retired pages (otherwise internal test will ignore it)
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
     group = dcgmSystem.GetGroupWithGpuIds("test1", gpuIds)
-    
+
     group.policy.Set(newPolicy)
 
     callbackQueue = queue.Queue()
@@ -400,22 +400,135 @@ def test_dcgm_policy_get_with_no_gpus_standalone(handle):
     Test that getting the policies when no GPUs are in the group raises an exception
     '''
     group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupType=dcgm_structs.DCGM_GROUP_EMPTY, groupName="test")
-    
+
     with test_utils.assert_raises(pydcgm.DcgmException):
         policies = group.policy.Get()
-        
+
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
     '''
-    Test that getting the policies returns the correct number of policies as GPUs in the system 
+    Test that getting the policies returns the correct number of policies as GPUs in the system
     when "count" is not specified for policy.Get
     '''
     group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupType=dcgm_structs.DCGM_GROUP_EMPTY, groupName="test")
-    
+
     group.AddGpu(gpuIds[0])
     policies = group.policy.Get()
     assert len(policies) == 1, len(policies)
 
-    
+def helper_dcgm_policy_inject_powererror(handle, gpuIds):
+    """
+    Verifies that we can inject an error into the Power level and receive a callback
+    """
+    newPolicy = dcgm_structs.c_dcgmPolicy_v1()
+    newPolicy.version = dcgm_structs.dcgmPolicy_version1
+    newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_POWER
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_POWER].tag = 1
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_POWER].val.llval = 200
+
+    gpuId = gpuIds[0]
+
+    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupName="test1", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group.AddGpu(gpuId)
+    group.policy.Set(newPolicy)
+
+    # the order of the callbacks will change once implementation is complete
+    callbackQueue = queue.Queue()
+    c_callback = create_c_callback(callbackQueue)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_POWER, c_callback, None)
+
+    # inject an error into Power Violation
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_POWER_USAGE
+    field.status = 0
+    field.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
+    field.ts = int((time.time()+60) * 1000000.0) # set the injected data into the future
+    field.value.dbl = 210.0
+    logger.debug("injecting %s for gpuId %d" % (str(field), gpuIds[0]))
+
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    # wait for the the policy manager to call back
+    try:
+        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+    except queue.Empty:
+        assert False, "Callback never happened"
+
+    # check that the callback occurred with the correct arguments
+    assert(dcgm_structs.DCGM_POLICY_COND_POWER == callbackData.condition), \
+        ("error callback was not for a Power Violation error, got: %s" % callbackData.condition)
+    assert(210 == callbackData.val.power.powerViolation), \
+        'Expected Power Violation at 210 but got %s' % callbackData.val.power.powerViolation
+
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus()
+def test_dcgm_policy_inject_powererror_standalone(handle, gpuIds):
+    helper_dcgm_policy_inject_powererror(handle, gpuIds)
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus()
+def test_dcgm_policy_inject_powererror_embedded(handle, gpuIds):
+    helper_dcgm_policy_inject_powererror(handle, gpuIds)
+
+
+def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
+    """
+    Verifies that we can inject an error into the Thermal level and receive a callback
+    """
+    newPolicy = dcgm_structs.c_dcgmPolicy_v1()
+    newPolicy.version = dcgm_structs.dcgmPolicy_version1
+    newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_THERMAL
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_THERMAL].tag = 1
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_THERMAL].val.llval = 90
+
+    gpuId = gpuIds[0]
+
+    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupName="test1", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group.AddGpu(gpuId)
+    group.policy.Set(newPolicy)
+
+    # the order of the callbacks will change once implementation is complete
+    callbackQueue = queue.Queue()
+    c_callback = create_c_callback(callbackQueue)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_THERMAL, c_callback, None)
+
+    # inject an error into Power Violation
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
+    field.status = 0
+    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
+    field.ts = int((time.time()+60) * 1000000.0) # set the injected data into the future
+    field.value.i64 = 95
+    logger.debug("injecting %s for gpuId %d" % (str(field), gpuIds[0]))
+
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    # wait for the the policy manager to call back
+    try:
+        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+    except queue.Empty:
+        assert False, "Callback never happened"
+
+    # check that the callback occurred with the correct arguments
+    assert(dcgm_structs.DCGM_POLICY_COND_THERMAL == callbackData.condition), \
+        ("error callback was not for a Thermal Violation error, got: %s" % callbackData.condition)
+    assert(95 == callbackData.val.power.powerViolation), \
+        'Expected Thermal Violation at 95 but got %s' % callbackData.val.power.powerViolation
+
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus()
+def test_dcgm_policy_inject_thermalerror_standalone(handle, gpuIds):
+    helper_dcgm_policy_inject_thermalerror(handle, gpuIds)
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus()
+def test_dcgm_policy_inject_thermalerror_embedded(handle, gpuIds):
+    helper_dcgm_policy_inject_thermalerror(handle, gpuIds)

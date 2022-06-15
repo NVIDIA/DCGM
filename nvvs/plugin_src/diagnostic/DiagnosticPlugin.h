@@ -43,8 +43,8 @@
 class GpuBurnDevice : public PluginDevice
 {
 public:
-    CUdevice cuDevice;
-    CUcontext cuContext;
+    CUdevice cuDevice {};
+    CUcontext cuContext {};
 
     GpuBurnDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
         : PluginDevice(ndi, pciBusId, p)

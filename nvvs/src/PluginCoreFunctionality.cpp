@@ -160,39 +160,28 @@ long long PluginCoreFunctionality::DetermineMaxTemp(const dcgmDiagPluginGpuInfo_
 {
     unsigned int flags           = DCGM_FV_FLAG_LIVE_DATA;
     dcgmFieldValue_v2 maxTempVal = {};
-    double parameterValue        = DUMMY_TEMPERATURE_VALUE;
     dcgmReturn_t ret
         = m_dcgmRecorder.GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
 
-    if (tp.HasKey(TP_STR_TEMPERATURE_MAX))
+    if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
     {
-        parameterValue = tp.GetDouble(TP_STR_TEMPERATURE_MAX);
-    }
+        DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuInfo.gpuId << ": "
+                         << errorString(ret) << ", defaulting to the slowdown temperature";
 
-    if (parameterValue == DUMMY_TEMPERATURE_VALUE)
-    {
-        if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
+        if (gpuInfo.status == DcgmEntityStatusFake)
         {
-            DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuInfo.gpuId << ": "
-                             << errorString(ret) << ", defaulting to the slowdown temperature";
-
-            if (gpuInfo.status == DcgmEntityStatusFake)
-            {
-                /* fake gpus don't report max temp */
-                return 85;
-            }
-            else
-            {
-                return gpuInfo.attributes.thermalSettings.slowdownTemp;
-            }
+            /* fake gpus don't report max temp */
+            return 85;
         }
         else
         {
-            return maxTempVal.value.i64;
+            return gpuInfo.attributes.thermalSettings.slowdownTemp;
         }
     }
-
-    return static_cast<long long>(parameterValue);
+    else
+    {
+        return maxTempVal.value.i64;
+    }
 }
 
 nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp,

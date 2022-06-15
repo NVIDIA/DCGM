@@ -59,12 +59,10 @@ class DcgmProfTesterApp(app_runner.AppRunner):
 
         super(DcgmProfTesterApp, self).__init__(path, args)
         
-        #if not test_utils.noLogging:
-        #    self.trace_fname = os.path.join(logger.log_dir, "app_%03d_dcgm_trace.log" % (self.process_nb))
-        #    self.env["__DCGM_DBG_FILE"] = self.trace_fname
-        #    self.env["__DCGM_DBG_LVL"] = test_utils.loggingLevel
-        #else:
-        #    self.trace_fname = None
+        if not test_utils.noLogging:
+            self.trace_fname = os.path.join(logger.log_dir, "app_%03d_dcgm_trace.log" % (self.process_nb))
+            self.env["__DCGM_DBG_FILE"] = self.trace_fname
+            self.env["__DCGM_DBG_LVL"] = test_utils.loggingLevel
    
     def _process_finish(self, stdout_buf, stderr_buf):
         super(DcgmProfTesterApp, self)._process_finish(stdout_buf, stderr_buf)

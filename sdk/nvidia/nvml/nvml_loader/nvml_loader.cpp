@@ -2,10 +2,12 @@
 #include "nvml_error_strings.h"
 #include "nvml_loader_hook.h"
 #include <dlfcn.h>
+
+#include <atomic>
 #include <mutex>
 
 static void *g_nvmlLib                                      = 0;
-static volatile unsigned int g_nvmlStaticLibResetHooksCount = 0;
+static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 0;
 
 // The following defines the hooking mechanism that calls the hooked function
 // set by a user of this library. Insert this macro to enable an API to be hooked

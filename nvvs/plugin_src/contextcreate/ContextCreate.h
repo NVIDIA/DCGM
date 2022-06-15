@@ -44,7 +44,7 @@ public:
         const char *errorString;
         dcgmDeviceAttributes_t attr;
         memset(&attr, 0, sizeof(attr));
-        attr.version = dcgmDeviceAttributes_version2;
+        attr.version = dcgmDeviceAttributes_version3;
 
         dcgmReturn_t ret = dcgmGetDeviceAttributes(handle.GetHandle(), ndi, &attr);
 

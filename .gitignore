@@ -10,4 +10,6 @@ _out*/
 tags
 cscope.out
 .cache/
+.vscode/remote_
 **/__pycache__/*.pyc
+__pycache__

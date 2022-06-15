@@ -24,6 +24,7 @@
 #include "dcgm_util.h"
 #include "timelib.h"
 #include <DcgmIpc.h>
+#include <dcgm_core_structs.h>
 #include <iostream>
 #include <stdexcept>
 #include <stdlib.h>
@@ -80,6 +81,7 @@ DcgmClientHandler::~DcgmClientHandler()
         m_blockingReqs.clear();
         m_persistentReqs.clear();
         m_connectionRequests.clear();
+        m_connectionAttributes.clear();
     }
 }
 
@@ -112,6 +114,8 @@ void DcgmClientHandler::ProcessDisconnect(dcgm_connection_id_t connectionId)
     }
 
     m_connectionRequests.erase(connectionId);
+
+    m_connectionAttributes.erase(connectionId);
 
     DCGM_LOG_DEBUG << "Erased " << numFound << " requests for connectionId " << connectionId;
 }
@@ -271,7 +275,8 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
 
     if (connected)
     {
-        PRINT_DEBUG("", "successfully connected to hostengine");
+        DCGM_LOG_DEBUG << "successfully connected to hostengine. Getting connection attributes.";
+        PopulateConnectionAttributes((dcgm_connection_id_t)*pDcgmHandle);
         return DCGM_ST_OK;
     }
     else
@@ -543,6 +548,67 @@ dcgmReturn_t DcgmClientHandler::ExchangeMsgAsync(dcgmHandle_t dcgmHandle,
 
     /* If the request was persistent, it still exists in m_persistentReqs */
     return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmClientHandler::PopulateConnectionAttributes(dcgmHandle_t dcgmHandle)
+{
+    dcgm_core_msg_hostengine_version_t msg = {};
+
+    dcgm_connection_id_t connectionId = (dcgm_connection_id_t)dcgmHandle;
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_HOSTENGINE_VERSION;
+    msg.header.version    = dcgm_core_msg_hostengine_version_version;
+    msg.version.version   = dcgmVersionInfo_version;
+
+    dcgmReturn_t dcgmReturn = ExchangeModuleCommandAsync(connectionId, &msg.header, nullptr, sizeof(msg));
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "ConnectionId " << connectionId << " Got error " << dcgmReturn
+                       << " from ExchangeModuleCommandAsync";
+        return dcgmReturn;
+    }
+
+    /* Don't lock until here. If we had the lock going into ExchangeModuleCommandAsync(), we could
+       never receive our message from the libevent processing thread */
+    DcgmLockGuard dlg(&m_mutex);
+
+    /* Returns pair of {iterator, wasInsertedBool} */
+    auto [attributesIt, wasInserted]
+        = m_connectionAttributes.emplace(connectionId, DCHConnectionAttributes(false, msg.version.rawBuildInfoString));
+
+    /* Right now, 2.4.0 and above support sending only module commands */
+    if (attributesIt->second.m_buildInfo.GetVersion() >= std::string_view("2.4.0"))
+    {
+        attributesIt->second.m_requiresModuleCommands = true;
+    }
+
+    DCGM_LOG_DEBUG << "connectionId " << connectionId << " returned version "
+                   << attributesIt->second.m_buildInfo.GetVersion()
+                   << " requiresModuleCommands = " << attributesIt->second.m_requiresModuleCommands;
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+bool DcgmClientHandler::HandleRequiresModuleCommands(dcgmHandle_t dcgmHandle)
+{
+    dcgm_connection_id_t connectionId = (dcgm_connection_id_t)dcgmHandle;
+
+    DcgmLockGuard dlg(&m_mutex);
+
+    auto it = m_connectionAttributes.find(connectionId);
+    if (it == m_connectionAttributes.end())
+    {
+        DCGM_LOG_WARNING << "connectionId " << connectionId << " was unknown";
+        return true; /* Use the new protocol if the connection is unknown */
+    }
+
+    DCGM_LOG_VERBOSE << "connectionId " << connectionId << " has requiresModuleCommands "
+                     << it->second.m_requiresModuleCommands;
+    return it->second.m_requiresModuleCommands;
 }
 
 /*****************************************************************************/

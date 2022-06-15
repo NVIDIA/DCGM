@@ -43,6 +43,7 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
 
     if (moduleCommand == nullptr)
     {
+        DCGM_LOG_ERROR << "NULL module command seen";
         return DCGM_ST_BADPARAM;
     }
     if (moduleCommand->moduleId != DcgmModuleIdCore)
@@ -777,6 +778,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
     MsampleBuffer = msg.fv.count;
     if (MsampleBuffer < 1)
     {
+        DCGM_LOG_ERROR << "Message sample buffer count less than 1";
         msg.fv.cmdRet = DCGM_ST_BADPARAM;
         return DCGM_ST_OK;
     }
@@ -967,8 +969,16 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
     fieldMeta = DcgmFieldGetById(msg.iv.fieldValue.fieldId);
     if (fieldMeta == nullptr)
     {
-        DCGM_LOG_ERROR << "Bad param";
-        return DCGM_ST_BADPARAM;
+        DCGM_LOG_ERROR << "Bad fieldId " << msg.iv.fieldValue.fieldId;
+        msg.iv.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    if (!DcgmHostEngineHandler::Instance()->GetIsValidEntityId(entityGroupId, entityId))
+    {
+        DCGM_LOG_ERROR << "Invalid entityId " << entityId << ", entityGroupId " << entityGroupId;
+        msg.iv.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
     }
 
     sample.timestamp = msg.iv.fieldValue.ts;
@@ -979,6 +989,8 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
             if (fieldMeta->fieldType != DCGM_FT_INT64)
             {
                 msg.iv.cmdRet = DCGM_ST_BADPARAM;
+                DCGM_LOG_ERROR << "Unexpected fieldType " << msg.iv.fieldValue.fieldType
+                               << " != " << fieldMeta->fieldType << " expected for fieldId " << fieldMeta->fieldId;
                 return DCGM_ST_OK;
             }
             sample.val.i64 = msg.iv.fieldValue.value.i64;
@@ -988,6 +1000,8 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
             if (fieldMeta->fieldType != DCGM_FT_DOUBLE)
             {
                 msg.iv.cmdRet = DCGM_ST_BADPARAM;
+                DCGM_LOG_ERROR << "Unexpected fieldType " << msg.iv.fieldValue.fieldType
+                               << " != " << fieldMeta->fieldType << " expected for fieldId " << fieldMeta->fieldId;
                 return DCGM_ST_OK;
             }
             sample.val.d = msg.iv.fieldValue.value.dbl;
@@ -997,6 +1011,8 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
             if (fieldMeta->fieldType != DCGM_FT_STRING)
             {
                 msg.iv.cmdRet = DCGM_ST_BADPARAM;
+                DCGM_LOG_ERROR << "Unexpected fieldType " << msg.iv.fieldValue.fieldType
+                               << " != " << fieldMeta->fieldType << " expected for fieldId " << fieldMeta->fieldId;
                 return DCGM_ST_OK;
             }
 
@@ -1008,6 +1024,8 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
 
         default:
             msg.iv.cmdRet = DCGM_ST_BADPARAM;
+            DCGM_LOG_ERROR << "Unknown fieldType " << msg.iv.fieldValue.fieldType << " for fieldId "
+                           << fieldMeta->fieldId;
             return DCGM_ST_OK;
     }
 

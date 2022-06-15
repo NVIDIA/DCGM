@@ -17,7 +17,7 @@
 
 #include "DcgmThread.h"
 #include "DcgmLogging.h"
-#include <stdio.h>
+#include <cstdio>
 
 #ifdef __linux__
 #include <sys/syscall.h> //syscall()

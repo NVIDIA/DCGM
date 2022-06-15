@@ -104,7 +104,6 @@ int read_from_pidfile(char const *pidfile, pid_t *pid)
 int isDaemonProcessAlive(pid_t pid)
 {
     char procfs_path[PATH_MAX];
-    struct stat sb;
     int ret;
 
     procfs_path[0] = 0;
@@ -114,6 +113,7 @@ int isDaemonProcessAlive(pid_t pid)
     sprintf(procfs_path, "/bin/ps | grep -q %ld", (long)pid);
     ret = system(procfs_path);
 #else
+    struct stat sb;
     /* For others, check if the PID exists as part of proc fs */
     sprintf(procfs_path, "/proc/%ld", (long)pid);
     ret = stat(procfs_path, &sb);
@@ -418,6 +418,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "nv-hostengine running as non-root. Some functionality will be limited.\n");
     }
 
+    // coverity[var_deref_model] If we get this far, cmdLine is initialized
     if (cmdLine.ShouldTerminate())
     {
         terminateHostEngineDaemon(cmdLine.GetPidFilePath().c_str());
@@ -453,8 +454,8 @@ int main(int argc, char **argv)
         return cleanup(dcgmHandle, -1, parentPid);
     }
 
-    dcgmStartEmbeddedV2Params_v1 params {};
-    params.version  = dcgmStartEmbeddedV2Params_version1;
+    dcgmStartEmbeddedV2Params_v2 params {};
+    params.version  = dcgmStartEmbeddedV2Params_version2;
     params.opMode   = DCGM_OPERATION_MODE_AUTO;
     params.logFile  = cmdLine.GetLogFileName().c_str();
     params.severity = DcgmLogging::severityFromString(cmdLine.GetLogLevel().c_str(), DcgmLoggingSeverityUnspecified);
@@ -469,7 +470,10 @@ int main(int argc, char **argv)
         params.blackListCount++;
     }
 
-    ret = dcgmStartEmbedded_v2(&params);
+    auto const serviceAccount = cmdLine.GetServiceAccount();
+    params.serviceAccount     = serviceAccount.c_str();
+
+    ret = dcgmStartEmbedded_v2((dcgmStartEmbeddedV2Params_v1 *)&params);
 
     dcgmHandle = params.dcgmHandle;
     if (DCGM_ST_OK != ret)

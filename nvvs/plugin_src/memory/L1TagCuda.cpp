@@ -153,6 +153,15 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 {
     CUresult cuRes;
     int attr;
+    nvvsPluginResult_t retVal = NVVS_RESULT_PASS;
+
+    /* Declaring here because of goto CLEANUP's */
+    double durationSec       = 0.0; /* Will be set later.  */
+    uint64_t totalNumErrors  = 0;
+    uint64_t kernLaunchCount = 0;
+    CUevent startEvent       = nullptr;
+    CUevent stopEvent        = nullptr;
+    CUstream stream          = nullptr;
 
     cuRes = cuModuleLoadData(&m_cuMod, l1tag_ptx_string);
     if (CUDA_SUCCESS != cuRes)
@@ -190,9 +199,9 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     numBlocks = (uint32_t)attr;
 
     // Get Compute capability
-    int cuMajor;
-    int cuMinor;
-    cuRes = cuDeviceGetAttribute(&cuMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, m_cuDevice);
+    int cuMajor = 0;
+    int cuMinor = 0;
+    cuRes       = cuDeviceGetAttribute(&cuMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, m_cuDevice);
     if (CUDA_SUCCESS != cuRes)
     {
         return LogCudaFail("Unable to get compute capability major", "cuDeviceGetAttribute", cuRes);
@@ -251,6 +260,11 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     }
     m_hostErrorLog = new L1TagError[m_errorLogLen];
 
+    for (size_t i = 0; i < m_errorLogLen; i++)
+    {
+        m_hostErrorLog[i] = {};
+    }
+
     // Format kernel parameters
     m_kernelParams.data          = m_l1Data;
     m_kernelParams.sizeBytes     = l1Size;
@@ -283,32 +297,30 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     }
 
     // Create events for timing kernel
-    CUevent startEvent;
     cuRes = cuEventCreate(&startEvent, CU_EVENT_DEFAULT);
     if (CUDA_SUCCESS != cuRes)
     {
-        return LogCudaFail("Unable create CUDA event", "cuEventCreate", cuRes);
+        retVal = LogCudaFail("Unable create CUDA event", "cuEventCreate", cuRes);
+        goto CLEANUP;
     }
 
-    CUevent stopEvent;
     cuRes = cuEventCreate(&stopEvent, CU_EVENT_DEFAULT);
     if (CUDA_SUCCESS != cuRes)
     {
-        return LogCudaFail("Unable create CUDA event", "cuEventCreate", cuRes);
+        retVal = LogCudaFail("Unable create CUDA event", "cuEventCreate", cuRes);
+        goto CLEANUP;
     }
 
     // Create stream to synchronize accesses
-    CUstream stream;
     cuRes = cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING);
     if (CUDA_SUCCESS != cuRes)
     {
-        return LogCudaFail("Unable create CUDA stream", "cuStreamCreate", cuRes);
+        retVal = LogCudaFail("Unable create CUDA stream", "cuStreamCreate", cuRes);
+        goto CLEANUP;
     }
 
     // Run for runtimeMs if it is nonzero.
     // Otherwise run for m_testLoops loops.
-    uint64_t totalNumErrors  = 0;
-    uint64_t kernLaunchCount = 0;
     for (uint64_t loop = 0; m_runtimeMs ? durationMs < static_cast<double>(m_runtimeMs) : loop < m_testLoops; loop++)
     {
         // Clear error counter
@@ -316,7 +328,8 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
         cuRes            = cuMemcpyHtoDAsync(m_devMiscompareCount, &zeroVal, sizeof(uint64_t), stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to clear m_devMiscompareCount", "cuMemsetD32Async", cuRes);
+            retVal = LogCudaFail("Failed to clear m_devMiscompareCount", "cuMemsetD32Async", cuRes);
+            goto CLEANUP;
         }
 
         // Use a different RNG seed each loop
@@ -337,14 +350,16 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                                NULL);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to launch InitL1Data kernel", "cuLaunchKernel", cuRes);
+            retVal = LogCudaFail("Failed to launch InitL1Data kernel", "cuLaunchKernel", cuRes);
+            goto CLEANUP;
         }
 
         // The run the test kernel, recording elaspsed time with events
         cuRes = cuEventRecord(startEvent, stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to record start event", "cuEventRecord", cuRes);
+            retVal = LogCudaFail("Failed to record start event", "cuEventRecord", cuRes);
+            goto CLEANUP;
         }
 
         cuRes = cuLaunchKernel(testRunDataFunc,
@@ -360,35 +375,40 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                                NULL);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to launch L1TagTest kernel", "cuLaunchKernel", cuRes);
+            retVal = LogCudaFail("Failed to launch L1TagTest kernel", "cuLaunchKernel", cuRes);
+            goto CLEANUP;
         }
         kernLaunchCount++;
 
         cuRes = cuEventRecord(stopEvent, stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to record stop event", "cuEventRecord", cuRes);
+            retVal = LogCudaFail("Failed to record stop event", "cuEventRecord", cuRes);
+            goto CLEANUP;
         }
 
         // Get error count
         cuRes = cuMemcpyDtoHAsync(&hostMiscompareCount, m_devMiscompareCount, sizeof(uint64_t), stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to schedule miscompareCount copy", "cuMemcpyDtoHAsync", cuRes);
+            retVal = LogCudaFail("Failed to schedule miscompareCount copy", "cuMemcpyDtoHAsync", cuRes);
+            goto CLEANUP;
         }
 
         // Synchronize and get time for kernel completion
         cuRes = cuStreamSynchronize(stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed to synchronize", "cuStreamSynchronize", cuRes);
+            retVal = LogCudaFail("Failed to synchronize", "cuStreamSynchronize", cuRes);
+            goto CLEANUP;
         }
 
         float elapsedMs;
         cuRes = cuEventElapsedTime(&elapsedMs, startEvent, stopEvent);
         if (CUDA_SUCCESS != cuRes)
         {
-            return LogCudaFail("Failed elapsed time calculation", "cuEventElapsedTime", cuRes);
+            retVal = LogCudaFail("Failed elapsed time calculation", "cuEventElapsedTime", cuRes);
+            goto CLEANUP;
         }
         durationMs += elapsedMs;
 
@@ -401,7 +421,8 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
             cuRes = cuMemcpyDtoH(m_hostErrorLog, m_devErrorLog, sizeof(L1TagError) * m_errorLogLen);
             if (CUDA_SUCCESS != cuRes)
             {
-                return LogCudaFail("Failed to copy error log to host", "cuMemcpyDtoH", cuRes);
+                retVal = LogCudaFail("Failed to copy error log to host", "cuMemcpyDtoH", cuRes);
+                goto CLEANUP;
             }
 
             DcgmError d { m_gpuIndex };
@@ -444,7 +465,8 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                                 error.laneid);
                 }
             }
-            return NVVS_RESULT_FAIL;
+            retVal = NVVS_RESULT_FAIL;
+            goto CLEANUP;
         }
     }
 
@@ -452,7 +474,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 
     // Kernel runtime and error prints useful for debugging
     // Guard against divide-by-zero errors (that shouldn't occur)
-    const double durationSec = durationMs / 1000.0;
+    durationSec = durationMs / 1000.0;
     if (totalNumErrors && durationMs)
     {
         PRINT_INFO("%lu %f",
@@ -470,7 +492,27 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                    durationMs,
                    durationMs / kernLaunchCount);
     }
-    return NVVS_RESULT_PASS;
+
+    retVal = NVVS_RESULT_PASS;
+
+CLEANUP:
+    if (startEvent != nullptr)
+    {
+        cuEventDestroy(startEvent);
+        startEvent = nullptr;
+    }
+    if (stopEvent != nullptr)
+    {
+        cuEventDestroy(stopEvent);
+        stopEvent = nullptr;
+    }
+    if (stream != nullptr)
+    {
+        cuStreamDestroy(stream);
+        stream = nullptr;
+    }
+
+    return retVal;
 }
 
 nvvsPluginResult_t L1TagCuda::TestMain(unsigned int dcgmGpuIndex)

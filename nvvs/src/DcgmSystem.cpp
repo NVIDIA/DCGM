@@ -198,7 +198,8 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
     for (unsigned int i = 0; i < numValues; i++)
     {
         // Create a copy of the value since the call back function expects dcgmFieldValue_v1
-        dcgmFieldValue_v1 val_copy;
+        dcgmFieldValue_v1 val_copy {};
+        val_copy.version   = dcgmFieldValue_version1;
         val_copy.fieldId   = values[i].fieldId;
         val_copy.fieldType = values[i].fieldType;
         val_copy.status    = values[i].status;

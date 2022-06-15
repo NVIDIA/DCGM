@@ -38,8 +38,9 @@ struct HostEngineCommandLine::Impl
     std::string m_logLevel;                  /*!< Logging level string */
     std::string m_hostEngineBindInterfaceIp; /*!< IP address to bind to. "" = all interfaces */
     std::string m_logFileName;               /*!< Log file name */
-    //! PID filename to use to prevent more than one nv-hostengine daemon instance from running
-    std::string m_pidFilePath;
+    std::string m_pidFilePath;               /*!< PID filename to use to prevent more than one nv-hostengine daemon
+                                                  instance from running */
+    std::string m_serviceAccount;            /*!< Service account that will be used for unprivileged processes */
 
     std::set<dcgmModuleId_t> m_blacklistModules; /*!< Modules to blacklist */
 
@@ -109,6 +110,11 @@ std::string const &HostEngineCommandLine::GetLogFileName() const
 std::set<dcgmModuleId_t> const &HostEngineCommandLine::GetBlacklistedModules() const
 {
     return m_pimpl->m_blacklistModules;
+}
+
+std::string const &HostEngineCommandLine::GetServiceAccount() const
+{
+    return m_pimpl->m_serviceAccount;
 }
 
 namespace
@@ -195,7 +201,6 @@ protected:
     using ValueArg<T>::_ignoreable;
     using ValueArg<T>::_hasBlanks;
     using ValueArg<T>::_alreadySet;
-    using ValueArg<T>::_xorSet;
     using ValueArg<T>::_checkWithVisitor;
     using ValueArg<T>::_value;
     using ValueArg<T>::_default;
@@ -252,7 +257,7 @@ public:
     using ValueArg<T>::ValueArg;
     bool processArg(int *i, std::vector<std::string> &args) override
     {
-        if (_ignoreable && Arg::ignoreRest())
+        if (Arg::isIgnoreable() && Arg::getName() == Arg::ignoreNameString())
         {
             return false;
         }
@@ -271,11 +276,6 @@ public:
         {
             if (_alreadySet)
             {
-                if (_xorSet)
-                {
-                    throw(CmdLineParseException("Mutually exclusive argument already set!", toString()));
-                }
-
                 throw(CmdLineParseException("Argument already set!", toString()));
             }
 
@@ -434,6 +434,14 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                     /*default*/ "",
                                     &blacklistConstraint,
                                     cmdLine);
+        auto serviceAccount = ValueArg<std::string>("",
+                                                    "service-account",
+                                                    "Service account that will be used for unprivileged processes."
+                                                    "\nUsually this should be set to the default nvidia-dcgm account",
+                                                    /*req*/ false,
+                                                    /*default*/ "",
+                                                    /*typedesc*/ "USERNAME",
+                                                    cmdLine);
 
         cmdLine.parse(argc, argv);
 
@@ -448,6 +456,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
         impl->m_isTermHostEngine          = termArg.getValue();
         impl->m_shouldDaemonize           = not daemonizeArg.getValue();
         impl->m_isLogRotate               = logRotateArg.getValue();
+        impl->m_serviceAccount            = serviceAccount.getValue();
     }
     catch (TCLAP::ArgException const &ex)
     {

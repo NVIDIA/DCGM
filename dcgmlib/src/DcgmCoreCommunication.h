@@ -131,6 +131,7 @@ private:
     dcgmReturn_t ProcessGetMigInstanceEntityId(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigUtilization(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigIndicesForEntity(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessGetServiceAccount(dcgm_module_command_header_t *header);
 };
 
 #if 0

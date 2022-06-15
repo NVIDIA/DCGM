@@ -82,7 +82,7 @@ public:
         return m_numOfWorkers;
     }
 
-    template <class Func>
+    template <std::invocable Func>
     auto Enqueue(Func func)
     {
         return m_runner.Enqueue(DcgmNs::make_task(

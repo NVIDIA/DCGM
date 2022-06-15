@@ -25,9 +25,15 @@
 #include "DcgmModule.h"
 #include "dcgm_core_communication.h"
 #include "dcgm_nvswitch_structs.h"
+#include "dcgm_structs.h"
 
 dcgmReturn_t PostRequestToCore(dcgm_module_command_header_t *header, void *poster)
 {
+    if (poster == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
     auto communicator = reinterpret_cast<DcgmCoreCommunication *>(poster);
     return communicator->ProcessRequestInCore(header);
 }
@@ -1573,6 +1579,31 @@ dcgmReturn_t DcgmCoreCommunication::ProcessPopulateWatchInfo(dcgm_module_command
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreCommunication::ProcessGetServiceAccount(dcgm_module_command_header_t *header)
+{
+    dcgmCoreGetServiceAccount_v1 query = {};
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (auto const ret = DcgmModule::CheckVersion(header, dcgmCoreGetServiceAccount_version1); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    auto const &serviceAccount = DcgmHostEngineHandler::Instance()->GetServiceAccount();
+
+    std::strncpy(query.response.serviceAccount, serviceAccount.c_str(), sizeof(query.response.serviceAccount));
+    query.response.serviceAccount[sizeof(query.response.serviceAccount) - 1] = '\0';
+
+    memcpy(header, &query, sizeof(query));
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_header_t *header)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
@@ -1870,6 +1901,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqMigIndicesForEntity:
         {
             ret = ProcessGetMigIndicesForEntity(header);
+            break;
+        }
+
+        case DcgmCoreReqGetServiceAccount:
+        {
+            ret = ProcessGetServiceAccount(header);
             break;
         }
 

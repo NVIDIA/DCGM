@@ -130,6 +130,7 @@ DCGM_FI_DEV_CPU_AFFINITY_0      = 70  #Device CPU affinity. part 1/8 = cpus 0 - 
 DCGM_FI_DEV_CPU_AFFINITY_1      = 71  #Device CPU affinity. part 1/8 = cpus 64 - 127
 DCGM_FI_DEV_CPU_AFFINITY_2      = 72  #Device CPU affinity. part 2/8 = cpus 128 - 191
 DCGM_FI_DEV_CPU_AFFINITY_3      = 73  #Device CPU affinity. part 3/8 = cpus 192 - 255
+DCGM_FI_DEV_CC_MODE             = 74  #Device CC/APM mode
 DCGM_FI_DEV_ECC_INFOROM_VER     = 80  #ECC inforom version
 DCGM_FI_DEV_POWER_INFOROM_VER   = 81  #Power management object inforom version
 DCGM_FI_DEV_INFOROM_IMAGE_VER   = 82  #Inforom image version
@@ -198,6 +199,7 @@ DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION = 247 #Base Clocks Violation time in use
 DCGM_FI_DEV_FB_TOTAL            = 250 #Total framebuffer memory in MB
 DCGM_FI_DEV_FB_FREE             = 251 #Total framebuffer used in MB
 DCGM_FI_DEV_FB_USED             = 252 #Total framebuffer free in MB
+DCGM_FI_DEV_FB_RESERVED         = 253 #Total framebuffer reserved in MB
 #Device ECC Counters
 DCGM_FI_DEV_ECC_CURRENT         = 300 #Current ECC mode for the device
 DCGM_FI_DEV_ECC_PENDING         = 301 #Pending ECC mode for the device
@@ -320,13 +322,14 @@ DCGM_FI_DEV_VGPU_TYPE                    = 522  #vGPU type of the vGPU instance
 DCGM_FI_DEV_VGPU_UUID                    = 523  #UUID of the vGPU instance
 DCGM_FI_DEV_VGPU_DRIVER_VERSION          = 524  #Driver version of the vGPU instance
 DCGM_FI_DEV_VGPU_MEMORY_USAGE            = 525  #Memory usage of the vGPU instance
-DCGM_FI_DEV_VGPU_LICENSE_STATUS          = 526  #License status of the vGPU instance
+DCGM_FI_DEV_VGPU_LICENSE_STATUS          = 526  #License status of the vGPU
 DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT        = 527  #Frame rate limit of the vGPU instance
 DCGM_FI_DEV_VGPU_ENC_STATS               = 528  #Current encoder statistics of the vGPU instance
 DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO       = 529  #Information about all active encoder sessions on the vGPU instance
 DCGM_FI_DEV_VGPU_FBC_STATS               = 530  #Statistics of current active frame buffer capture sessions on the vGPU instance
 DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO       = 531  #Information about active frame buffer capture sessions on the vGPU instance
-DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS = 532  #License status of the vGPU
+DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE  = 532  #License state information of the vGPU instance
+DCGM_FI_DEV_VGPU_PCI_ID                  = 533  #PCI Id of the vGPU instance
 #Internal fields reserve the range 600..699
 #below fields related to NVSwitch
 DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00             = 700
@@ -490,7 +493,7 @@ DCGM_FI_PROF_SM_OCCUPANCY                        = 1003 #The ratio of number of 
                                                         #(number of resident as a ratio of the theoretical 
                                                         #maximum number of warps per elapsed cycle)
 
-DCGM_FI_PROF_PIPE_TENSOR_ACTIVE                  = 1004 #The ratio of cycles the tensor (HMMA) pipe is active 
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE                  = 1004 #The ratio of cycles the any tensor pipe is active
                                                         #(off the peak sustained elapsed cycles)
 
 DCGM_FI_PROF_DRAM_ACTIVE                         = 1005 #The ratio of cycles the device memory interface is active sending or receiving data.
@@ -501,9 +504,11 @@ DCGM_FI_PROF_PCIE_TX_BYTES                       = 1009 #The number of bytes of 
 DCGM_FI_PROF_PCIE_RX_BYTES                       = 1010 #The number of bytes of active PCIe rx (read) data including both header and payload.
 DCGM_FI_PROF_NVLINK_TX_BYTES                     = 1011 #The number of bytes of active NvLink tx (transmit) data including both header and payload.
 DCGM_FI_PROF_NVLINK_RX_BYTES                     = 1012 #The number of bytes of active NvLink rx (receive) data including both header and payload.
+DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE             = 1013 #The ratio of cycles the IMMA tensor pipe is active (off the peak sustained elapsed cycles)
+DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE             = 1014 #The ratio of cycles the HMMA tensor pipe is active (off the peak sustained elapsed cycles)
 
 #greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS              = 1013
+DCGM_FI_MAX_FIELDS              = 1015
 
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):

@@ -12,4 +12,4 @@ expect daemon
 
 console none
 
-exec @DCGM_HOSTENGINE_LOCATION@/nv-hostengine
+exec @DCGM_HOSTENGINE_LOCATION@/nv-hostengine --service-account nvidia-dcgm

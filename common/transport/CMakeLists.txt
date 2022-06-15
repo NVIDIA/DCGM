@@ -17,14 +17,17 @@ target_include_directories(transport_interface INTERFACE ${CMAKE_CURRENT_SOURCE_
 
 add_library(transport_objects STATIC)
 target_link_libraries(transport_objects PUBLIC
+    transport_interface
     dcgm_interface
     common_interface
+    dcgm_thread_interface
     sdk_nvml_interface
     )
 
 find_package(Libevent REQUIRED)
 target_include_directories(transport_objects SYSTEM PUBLIC ${LIBEVENT_INCLUDE_DIR})
 target_link_libraries(transport_objects PUBLIC ${LIBEVENT_STATIC_LIBS})
+target_link_libraries(transport_objects PRIVATE dcgm_thread)
 
 target_sources(transport_objects PRIVATE
     DcgmProtocol.cpp

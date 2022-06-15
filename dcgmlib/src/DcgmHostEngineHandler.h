@@ -165,6 +165,16 @@ public:
                                              dcgm_field_entity_group_t entityGroupId,
                                              std::vector<dcgmGroupEntityPair_t> &entities);
 
+    /*************************************************************************/
+    /*
+     * Get if the given entityGroupId and entityId are known by DCGM.
+     *
+     * Returns true if the entities are valid and known
+     *         false if not
+     *
+     */
+    bool GetIsValidEntityId(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
+
     /*****************************************************************************
      This method is used to cleanup the Host Engine Handler Instance
      *****************************************************************************/
@@ -328,6 +338,9 @@ public:
      * Process a GET_PROCESS_INFO message
      *****************************************************************************/
     dcgmReturn_t GetProcessInfo(unsigned int groupId, dcgmPidInfo_t *pidInfo);
+
+    void SetServiceAccount(const char *serviceAccout);
+    std::string const &GetServiceAccount() const;
 
 private:
     std::mutex m_lock; /* Lock used for accessing table of job stats and the objects within them */
@@ -617,6 +630,7 @@ private:
     watchedRequests_t m_watchedRequests;
 
     unsigned int m_hostengineHealth;
+    std::string m_serviceAccount;
 };
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

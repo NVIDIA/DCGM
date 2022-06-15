@@ -3,7 +3,7 @@
 ## Do NOT include this script if you want to build something for the host
 ## This script changes build toolset to cross-build to the specified target
 
-set -ex -o nounset
+set -ex -o nounset -o pipefail
 
 export CROSS_PREFIX=${CROSS_PREFIX:-/opt/cross}
 export TARGET=${TARGET:-x86_64-linux-gnu}

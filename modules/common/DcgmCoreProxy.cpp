@@ -42,6 +42,7 @@ dcgmReturn_t DcgmCoreProxy::GetGpuIds(int activeOnly, std::vector<unsigned int> 
 
     initializeCoreHeader(cgg.header, DcgmCoreReqIdCMGetGpuIds, dcgmCoreGetGpuList_version, sizeof(cgg));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&cgg.header, m_coreCallbacks.poster);
 
     gpuIds.clear();
@@ -75,6 +76,7 @@ dcgmReturn_t DcgmCoreProxy::IsGlobalFieldWatched(unsigned short dcgmFieldId, boo
 
     initializeCoreHeader(qf.header, DcgmCoreReqIdCMIsGlobalFieldWatched, dcgmCoreQueryField_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -103,6 +105,7 @@ dcgmReturn_t DcgmCoreProxy::IsGpuFieldWatchedOnAnyGpu(unsigned short dcgmFieldId
 
     initializeCoreHeader(qf.header, DcgmCoreReqIdCMIsGlobalFieldWatched, dcgmCoreQueryField_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -329,6 +332,7 @@ bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds)
 
     initializeCoreHeader(qg.header, DcgmCoreReqIdCMAreAllGpuIdsSameSku, dcgmCoreQueryGpuList_version, sizeof(qg));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qg.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -356,6 +360,7 @@ bool DcgmCoreProxy::AnyGlobalFieldsWatched(std::vector<unsigned short> *fieldIds
 
     initializeCoreHeader(qf.header, DcgmCoreReqIdCMAnyGlobalFieldsWatched, dcgmCoreQueryFieldList_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -382,6 +387,7 @@ bool DcgmCoreProxy::AnyFieldsWatched(std::vector<unsigned short> *fieldIds)
 
     initializeCoreHeader(qf.header, DcgmCoreReqIdCMAnyFieldsWatched, dcgmCoreQueryFieldList_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -411,6 +417,7 @@ bool DcgmCoreProxy::AnyGpuFieldsWatched(unsigned int gpuId, std::vector<unsigned
 
     initializeCoreHeader(qf.header, DcgmCoreReqIdCMAnyGpuFieldsWatched, dcgmCoreQueryFieldList_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -438,6 +445,7 @@ bool DcgmCoreProxy::AnyGpuFieldsWatchedAnywhere(std::vector<unsigned short> *fie
     initializeCoreHeader(
         qf.header, DcgmCoreReqIdCMAnyGpuFieldsWatchedAnywhere, dcgmCoreQueryFieldList_version, sizeof(qf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -459,6 +467,7 @@ int DcgmCoreProxy::GetGpuCount(int activeOnly)
 
     initializeCoreHeader(ggc.header, DcgmCoreReqIdCMGetGpuCount, dcgmCoreGetGpuCount_version, sizeof(ggc));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&ggc.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -478,6 +487,7 @@ dcgmReturn_t DcgmCoreProxy::GetAllGpuInfo(std::vector<dcgmcm_gpu_info_cached_t> 
     dcgmCoreQueryGpuInfo_t qgi = {};
     initializeCoreHeader(qgi.header, DcgmCoreReqIdCMGetAllGpuInfo, dcgmCoreQueryGpuInfo_version, sizeof(qgi));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qgi.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -504,6 +514,7 @@ unsigned int DcgmCoreProxy::NvmlIndexToGpuId(int nvmlIndex)
 
     initializeCoreHeader(bq.header, DcgmCoreReqIdCMNvmlIndexToGpuId, dcgmCoreBasicQuery_version, sizeof(bq));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&bq.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -526,6 +537,7 @@ dcgmReturn_t DcgmCoreProxy::UpdateAllFields(int waitForUpdate)
 
     initializeCoreHeader(qg.header, DcgmCoreReqIdCMUpdateAllFields, dcgmCoreGetGpuCount_version, sizeof(qg));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&qg.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -551,6 +563,7 @@ dcgmReturn_t DcgmCoreProxy::GetEntityNvLinkLinkStatus(dcgm_field_entity_group_t 
     initializeCoreHeader(
         nls.header, DcgmCoreReqIdCMGetEntityNvLinkLinkStatus, dcgmCoreGetEntityNvLinkLinkStatus_version, sizeof(nls));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&nls.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -601,6 +614,7 @@ dcgmReturn_t DcgmCoreProxy::AddFieldWatch(dcgm_field_entity_group_t entityGroupI
 
     initializeCoreHeader(afw.header, DcgmCoreReqIdCMAddFieldWatch, dcgmCoreAddFieldWatch_version, sizeof(afw));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&afw.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -646,6 +660,7 @@ dcgmReturn_t DcgmCoreProxy::GetInt64SummaryData(dcgm_field_entity_group_t entity
     initializeCoreHeader(
         gisd.header, DcgmCoreReqIdCMGetInt64SummaryData, dcgmCoreGetInt64SummaryData_version, sizeof(gisd));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&gisd.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -677,6 +692,7 @@ dcgmReturn_t DcgmCoreProxy::GetLatestSample(dcgm_field_entity_group_t entityGrou
 
     initializeCoreHeader(gls.header, DcgmCoreReqIdCMGetLatestSample, dcgmCoreGetLatestSample_version, sizeof(gls));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&gls.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -721,6 +737,7 @@ dcgmReturn_t DcgmCoreProxy::GetSamples(dcgm_field_entity_group_t entityGroupId,
     gs.request.order         = order;
     gs.response.samples      = samples;
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&gs.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -824,6 +841,7 @@ dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEn
                          dcgmCoreGetMultipleLatestLiveSamples_version,
                          sizeof(gml));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&gml.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -835,7 +853,8 @@ dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEn
         while (gml.response.dataDidNotFit)
         {
             gml.request.bufferPosition = blob.GetUsed();
-            ret                        = m_coreCallbacks.postfunc(&gml.header, m_coreCallbacks.poster);
+            // coverity[overrun-buffer-val]
+            ret = m_coreCallbacks.postfunc(&gml.header, m_coreCallbacks.poster);
 
             if (ret != DCGM_ST_OK)
             {
@@ -944,6 +963,7 @@ dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_s
 
     initializeCoreHeader(sv.header, DcgmCoreReqIdCMSetValue, dcgmCoreSetValue_version, sizeof(sv));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&sv.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -967,6 +987,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId, std::vector<d
 
     initializeCoreHeader(gge.header, DcgmCoreReqIdGMGetGroupEntities, dcgmCoreGetGroupEntities_version, sizeof(gge));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&gge.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1001,6 +1022,7 @@ dcgmReturn_t DcgmCoreProxy::AreAllTheSameSku(dcgm_connection_id_t connectionId,
 
     initializeCoreHeader(bg.header, DcgmCoreReqIdGMAreAllTheSameSku, dcgmCoreBasicGroup_version, sizeof(bg));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&bg.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1027,6 +1049,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupGpuIds(dcgm_connection_id_t connectionId,
 
     initializeCoreHeader(ggg.header, DcgmCoreReqIdGMGetGroupGpuIds, dcgmCoreGetGroupGpuIds_version, sizeof(ggg));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&ggg.header, m_coreCallbacks.poster);
 
     gpuIds.clear();
@@ -1054,6 +1077,7 @@ int DcgmCoreProxy::GpuIdToNvmlIndex(unsigned int gpuId) const
 
     initializeCoreHeader(bq.header, DcgmCoreReqIdCMGpuIdToNvmlIndex, dcgmCoreBasicQuery_version, sizeof(bq));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&bq.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1076,6 +1100,7 @@ dcgmReturn_t DcgmCoreProxy::VerifyAndUpdateGroupId(unsigned int *groupId) const
 
     initializeCoreHeader(bq.header, DcgmCoreReqIdGMVerifyAndUpdateGroupId, dcgmCoreBasicQuery_version, sizeof(bq));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&bq.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1101,6 +1126,7 @@ DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(dcgm_connection_id_t conn
     initializeCoreHeader(
         getSeverity.header, DcgmCoreReqIdLoggingGetSeverity, dcgmCoreGetSeverity_version, sizeof(getSeverity));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&getSeverity.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1120,6 +1146,7 @@ dcgmReturn_t DcgmCoreProxy::SendModuleCommand(void *msg) const
     initializeCoreHeader(smc.header, DcgmCoreReqIdSendModuleCommand, dcgmCoreSendModuleCommand_version, sizeof(smc));
     smc.command = msg;
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&smc.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1147,6 +1174,7 @@ dcgmReturn_t DcgmCoreProxy::SendRawMessageToClient(dcgm_connection_id_t connecti
     msg.request.msgSize      = msgSize;
     msg.request.status       = status;
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&msg.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1166,6 +1194,7 @@ dcgmReturn_t DcgmCoreProxy::NotifyRequestOfCompletion(dcgm_connection_id_t conne
     req.request.connectionId = connectionId;
     req.request.requestId    = requestId;
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&req.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1183,6 +1212,7 @@ dcgmReturn_t DcgmCoreProxy::PopulateFieldGroupGetAll(dcgmAllFieldGroup_t *allGro
     initializeCoreHeader(
         req.header, DcgmCoreReqIdFGMPopulateFieldGroups, dcgmCorePopulateFieldGroups_version, sizeof(req));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&req.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1205,6 +1235,7 @@ dcgmReturn_t DcgmCoreProxy::GetFieldGroupFields(dcgmFieldGrp_t fieldGrp, std::ve
     initializeCoreHeader(
         fgf.header, DcgmCoreReqIdFGMGetFieldGroupFields, dcgmCoreGetFieldGroupFields_version, sizeof(fgf));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&fgf.header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
@@ -1420,6 +1451,7 @@ dcgmReturn_t DcgmCoreProxy::GetMigUtilizationHelper(unsigned int gpuId,
     initializeCoreHeader(
         query.header, DcgmCoreReqIdGetMigUtilization, dcgmCoreGetMigUtilization_version1, sizeof(query));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
     if (ret == DCGM_ST_OK)
     {
@@ -1444,6 +1476,7 @@ dcgmReturn_t DcgmCoreProxy::GetMigIndicesForEntity(dcgmGroupEntityPair_t const &
     initializeCoreHeader(
         query.header, DcgmCoreReqMigIndicesForEntity, dcgmCoreGetMigIndicesForEntity_version1, sizeof(query));
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
     if (ret != DCGM_ST_OK)
     {
@@ -1479,4 +1512,22 @@ dcgmReturn_t DcgmCoreProxy::GetMigIndicesForEntity(dcgmGroupEntityPair_t const &
     }
 
     return query.response.ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::GetServiceAccount(std::string &serviceAccount) const
+{
+    dcgmCoreGetServiceAccount_t query {};
+    initializeCoreHeader(query.header, DcgmCoreReqGetServiceAccount, dcgmCoreGetServiceAccount_version1, sizeof(query));
+    // coverity[overrun-buffer-val]
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "[CoreProxy] Got error: " << errorString(ret) << " while getting service account name";
+        return ret;
+    }
+
+    auto const nameLen = strnlen(query.response.serviceAccount, sizeof(query.response.serviceAccount));
+    serviceAccount     = std::string(query.response.serviceAccount, nameLen);
+
+    return DCGM_ST_OK;
 }

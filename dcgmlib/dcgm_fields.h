@@ -356,6 +356,13 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_CPU_AFFINITY_3 73
 
 /**
+ * ConfidentialCompute/AmpereProtectedMemory status for this system
+ * 0 = disabled
+ * 1 = enabled
+ */
+#define DCGM_FI_DEV_CC_MODE 74
+
+/**
  * ECC inforom version
  */
 #define DCGM_FI_DEV_ECC_INFOROM_VER 80
@@ -683,6 +690,11 @@ typedef unsigned int dcgm_field_eid_t;
  * Used Frame Buffer in MB
  */
 #define DCGM_FI_DEV_FB_USED 252
+
+/**
+ * Reserved Frame Buffer in MB
+ */
+#define DCGM_FI_DEV_FB_RESERVED 253
 
 /**
  * Current ECC mode for the device
@@ -1271,7 +1283,7 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_VGPU_MEMORY_USAGE 525
 
 /**
- * License status of the vGPU instance
+ * License status of the vGPU
  */
 #define DCGM_FI_DEV_VGPU_LICENSE_STATUS 526
 
@@ -1301,9 +1313,14 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO 531
 
 /**
- * License status of the vGPU host
+ * License state information of the vGPU instance
  */
-#define DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS 532
+#define DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE 532
+
+/**
+ * PCI Id of the vGPU instance
+ */
+#define DCGM_FI_DEV_VGPU_PCI_ID 533
 
 /**
  * Starting field ID of the vGPU instance
@@ -2090,7 +2107,7 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_SM_OCCUPANCY 1003
 
 /**
- * The ratio of cycles the tensor (HMMA) pipe is active
+ * The ratio of cycles the any tensor pipe is active
  * (off the peak sustained elapsed cycles)
  */
 #define DCGM_FI_PROF_PIPE_TENSOR_ACTIVE 1004
@@ -2143,9 +2160,19 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_NVLINK_RX_BYTES 1012
 
 /**
+ * The ratio of cycles the tensor (IMMA) pipe is active (off the peak sustained elapsed cycles)
+ */
+#define DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE 1013
+
+/**
+ * The ratio of cycles the tensor (HMMA) pipe is active (off the peak sustained elapsed cycles)
+ */
+#define DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE 1014
+
+/**
  * 1 greater than maximum fields above. This is the 1 greater than the maximum field id that could be allocated
  */
-#define DCGM_FI_MAX_FIELDS 1013
+#define DCGM_FI_MAX_FIELDS 1015
 
 
 /** @} */

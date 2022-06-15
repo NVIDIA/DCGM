@@ -86,6 +86,10 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
     {
         drd.validate = DCGM_POLICY_VALID_SV_LONG;
     }
+    else if (testNames == "4")
+    {
+        drd.validate = DCGM_POLICY_VALID_SV_XLONG;
+    }
     else if (training == true)
     {
         if (testNames.size() != 0)

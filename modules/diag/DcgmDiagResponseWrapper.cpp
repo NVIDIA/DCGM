@@ -78,7 +78,7 @@ void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
 
         for (unsigned int i = 0; i < numGpus; i++)
         {
-            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT; j++)
+            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V6; j++)
             {
                 m_response.v6ptr->perGpuResponses[i].results[j].status       = DCGM_DIAG_RESULT_NOT_RUN;
                 m_response.v6ptr->perGpuResponses[i].results[j].info[0]      = '\0';
@@ -96,6 +96,40 @@ void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
             m_response.v6ptr->perGpuResponses[i].gpuId = DCGM_MAX_NUM_DEVICES;
         }
     }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        // Version 5
+        m_response.v7ptr->version           = dcgmDiagResponse_version;
+        m_response.v7ptr->levelOneTestCount = DCGM_SWTEST_COUNT;
+
+        // initialize everything as a skip
+        for (unsigned int i = 0; i < DCGM_SWTEST_COUNT; i++)
+        {
+            m_response.v7ptr->levelOneResults[i].status = DCGM_DIAG_RESULT_NOT_RUN;
+        }
+
+        m_response.v7ptr->gpuCount = numGpus;
+
+        for (unsigned int i = 0; i < numGpus; i++)
+        {
+            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
+            {
+                m_response.v7ptr->perGpuResponses[i].results[j].status       = DCGM_DIAG_RESULT_NOT_RUN;
+                m_response.v7ptr->perGpuResponses[i].results[j].info[0]      = '\0';
+                m_response.v7ptr->perGpuResponses[i].results[j].error.msg[0] = '\0';
+                m_response.v7ptr->perGpuResponses[i].results[j].error.code   = DCGM_FR_OK;
+            }
+
+            // Set correct GPU ids for the valid portion of the response
+            m_response.v7ptr->perGpuResponses[i].gpuId = i;
+        }
+
+        // Set the unused part of the response to have bogus GPU ids
+        for (unsigned int i = numGpus; i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            m_response.v7ptr->perGpuResponses[i].gpuId = DCGM_MAX_NUM_DEVICES;
+        }
+    }
     else
     {
         DCGM_LOG_ERROR << "Version " << m_version << " is not handled.";
@@ -111,6 +145,10 @@ bool DcgmDiagResponseWrapper::IsValidGpuIndex(unsigned int gpuIndex)
         case dcgmDiagResponse_version6:
             count = m_response.v6ptr->gpuCount;
             break;
+        case dcgmDiagResponse_version7:
+            count = m_response.v7ptr->gpuCount;
+            break;
+
         default:
             PRINT_ERROR("%u", "ERROR: Internal version %u doesn't match any supported!", m_version);
             return false;
@@ -147,15 +185,30 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
     // Only set the results for tests run for each GPU
     if (m_version == dcgmDiagResponse_version6)
     {
-        if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V6)
         {
             return;
         }
+        // Version 6
         // Version 6
         m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].status = result;
         if (testIndex == DCGM_DIAGNOSTIC_INDEX)
         {
             m_response.v6ptr->perGpuResponses[gpuIndex].hwDiagnosticReturn = rc;
+        }
+    }
+    if (m_version == dcgmDiagResponse_version7)
+    {
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
+        {
+            return;
+        }
+
+        // Version 7
+        m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].status = result;
+        if (testIndex == DCGM_DIAGNOSTIC_INDEX)
+        {
+            m_response.v7ptr->perGpuResponses[gpuIndex].hwDiagnosticReturn = rc;
         }
     }
     else
@@ -178,7 +231,7 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
     }
 
     unsigned int l1Index = 0;
-    if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
+    if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
     {
         l1Index = GetBasicTestResultIndex(testname);
         if (l1Index >= DCGM_SWTEST_COUNT)
@@ -195,7 +248,7 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
     if (m_version == dcgmDiagResponse_version6)
     {
         // version 6
-        if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V6)
         {
             // We are looking at the l1 tests
             snprintf(m_response.v6ptr->levelOneResults[l1Index].error.msg,
@@ -215,6 +268,24 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
             m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].status     = result;
         }
     }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        // version 7
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
+        {
+            // We are looking at the l1 tests
+            SafeCopyTo(m_response.v7ptr->levelOneResults[l1Index].error.msg, ed.msg);
+            m_response.v7ptr->levelOneResults[l1Index].error.code = ed.code;
+            m_response.v7ptr->levelOneResults[l1Index].status     = result;
+        }
+        else
+        {
+            SafeCopyTo(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg, ed.msg);
+            m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].error.code = ed.code;
+            m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].status     = result;
+        }
+    }
+
     else
     {
         DCGM_LOG_ERROR << "Version " << m_version << " is not handled.";
@@ -243,6 +314,12 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
     if (m_version == dcgmDiagResponse_version6)
     {
         // version 6
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V6)
+        {
+            DCGM_LOG_ERROR << "testIndex " << testIndex << " too large for v6";
+            return;
+        }
+
         if (warning)
         {
             snprintf(m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg,
@@ -254,6 +331,24 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
         {
             snprintf(m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].info,
                      sizeof(m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].info),
+                     "%s",
+                     msg.c_str());
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        // version 6
+        if (warning)
+        {
+            snprintf(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg,
+                     sizeof(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].error.msg),
+                     "%s",
+                     msg.c_str());
+        }
+        else
+        {
+            snprintf(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].info,
+                     sizeof(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].info),
                      "%s",
                      msg.c_str());
         }
@@ -275,7 +370,11 @@ void DcgmDiagResponseWrapper::SetGpuIndex(unsigned int gpuIndex)
 
     if (m_version == dcgmDiagResponse_version6)
     {
-        m_response.v6ptr->perGpuResponses[gpuIndex].gpuId = gpuIndex;
+        m_response.v7ptr->perGpuResponses[gpuIndex].gpuId = gpuIndex;
+    }
+    if (m_version == dcgmDiagResponse_version7)
+    {
+        m_response.v7ptr->perGpuResponses[gpuIndex].gpuId = gpuIndex;
     }
     else
     {
@@ -305,6 +404,11 @@ void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError) con
         SafeCopyTo(m_response.v6ptr->systemError.msg, sysError.c_str());
         m_response.v6ptr->systemError.code = DCGM_FR_INTERNAL;
     }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        SafeCopyTo(m_response.v7ptr->systemError.msg, sysError.c_str());
+        m_response.v7ptr->systemError.code = DCGM_FR_INTERNAL;
+    }
     else
     {
         DCGM_LOG_ERROR << "Version mismatch. Version " << m_version << " is not handled.";
@@ -317,6 +421,10 @@ void DcgmDiagResponseWrapper::SetGpuCount(unsigned int gpuCount) const
     if (m_version == dcgmDiagResponse_version6)
     {
         m_response.v6ptr->gpuCount = gpuCount;
+    }
+    if (m_version == dcgmDiagResponse_version7)
+    {
+        m_response.v7ptr->gpuCount = gpuCount;
     }
     else
     {
@@ -339,6 +447,19 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion6(dcgmDiagResponse_v6 *response)
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmDiagResponseWrapper::SetVersion7(dcgmDiagResponse_v7 *response)
+{
+    if (m_version != 0)
+    {
+        // We don't support setting the version twice
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    m_version        = dcgmDiagResponse_version7;
+    m_response.v7ptr = response;
+
+    return DCGM_ST_OK;
+}
 
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagResponseWrapper::RecordTrainingMessage(const std::string &trainingMsg) const
@@ -346,6 +467,10 @@ dcgmReturn_t DcgmDiagResponseWrapper::RecordTrainingMessage(const std::string &t
     if (m_version == dcgmDiagResponse_version6)
     {
         snprintf(m_response.v6ptr->trainingMsg, sizeof(m_response.v6ptr->trainingMsg), "%s", trainingMsg.c_str());
+    }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        snprintf(m_response.v7ptr->trainingMsg, sizeof(m_response.v7ptr->trainingMsg), "%s", trainingMsg.c_str());
     }
     else
     {

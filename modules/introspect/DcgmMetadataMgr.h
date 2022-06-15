@@ -359,7 +359,6 @@ private:
     unsigned int m_runIntervalMs; // how often to wait between cycles of metadata gathering
     bool m_currentlyUpdating;     // set to true when an update loop is occuring and false when the
                                   // update thread goes to sleep.
-    bool m_startUpdateTriggered;  // A variable to check during the m_startUpdateCondition condVar waiting loops
     std::uint64_t m_updateLoopId; // identifier for an update loop iteration that changes the moment that a loop
                                   // finishes. This changes in no guaranteed order.
 

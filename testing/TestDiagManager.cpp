@@ -732,7 +732,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
     dcgmDiagResponse_t response;
     response.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion6(&response);
+    drw.SetVersion7(&response);
 
     dcgmReturn_t ret = am.FillResponseStructure(rawJsonOutput, drw, 0, DCGM_ST_OK);
 
@@ -821,6 +821,7 @@ int TestDiagManager::TestInvalidVersion()
     ggc.header.subCommand = DcgmCoreReqIdCMGetGpuCount;
     ggc.header.length     = sizeof(ggc);
 
+    // coverity[overrun-buffer-val]
     dcgmReturn_t ret = g_coreCallbacks.postfunc(&ggc.header, g_coreCallbacks.poster);
 
     if (ret != DCGM_ST_OK)
@@ -831,6 +832,7 @@ int TestDiagManager::TestInvalidVersion()
 
     ggc.header.version = dcgmCoreGetGpuList_version;
 
+    // coverity[overrun-buffer-val]
     ret = g_coreCallbacks.postfunc(&ggc.header, g_coreCallbacks.poster);
 
     if (ret != DCGM_ST_VER_MISMATCH)
@@ -861,7 +863,7 @@ int TestDiagManager::TestFillResponseStructure()
     dcgmDiagResponse_t response;
     response.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion6(&response);
+    drw.SetVersion7(&response);
 
     dcgmReturn_t ret = am.FillResponseStructure(NVVS_1_3_JSON, drw, 0, DCGM_ST_OK);
     if (response.gpuCount != 4)
@@ -982,7 +984,7 @@ int TestDiagManager::TestFillResponseStructure()
     dcgmDiagResponse_t trainingResponse;
     trainingResponse.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper trainingDrw;
-    trainingDrw.SetVersion6(&trainingResponse);
+    trainingDrw.SetVersion7(&trainingResponse);
 
     ret = am.FillResponseStructure(trainingJson, trainingDrw, 0, DCGM_ST_OK);
     if (ret != DCGM_ST_OK)
@@ -1001,7 +1003,7 @@ int TestDiagManager::TestFillResponseStructure()
     dcgmDiagResponse_t perGpuResponse;
     perGpuResponse.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper perGpuDrw;
-    perGpuDrw.SetVersion6(&perGpuResponse);
+    perGpuDrw.SetVersion7(&perGpuResponse);
 
     fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
 

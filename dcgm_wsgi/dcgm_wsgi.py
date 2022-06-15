@@ -201,9 +201,9 @@ class DcgmHttpServer:
 
         if queryParams.has_key('level'):
             validationLevel = int(cgi.escape(queryParams['level'][0]))
-            if validationLevel < dcgm_structs.DCGM_POLICY_VALID_SV_SHORT or validationLevel > dcgm_structs.DCGM_POLICY_VALID_SV_LONG:
+            if validationLevel < dcgm_structs.DCGM_POLICY_VALID_SV_SHORT or validationLevel > dcgm_structs.DCGM_POLICY_VALID_SV_XLONG:
                 self.SetHttpResponseCode(DCGM_HTTP_CODE_BAD_REQUEST)
-                return self.GetJsonError("\"level\" parameter must be between 1 and 3")
+                return self.GetJsonError("\"level\" parameter must be between 1 and 4")
 
         try:
             diagResponse = self._defaultGpuGroup.action.Validate(validationLevel)

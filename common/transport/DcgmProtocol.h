@@ -21,6 +21,8 @@
 #define DCGM_PROTOCOL_H
 
 #include "dcgm_structs.h"
+
+#include <cstdint>
 #include <vector>
 
 /* Align to byte boundaries */
@@ -120,7 +122,7 @@ public:
     /**
      * This message is used to get the length of the message
      */
-    size_t GetLength();
+    std::size_t GetLength();
 
     /**
      * This message is used to get the msgType

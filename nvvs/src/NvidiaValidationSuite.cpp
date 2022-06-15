@@ -95,7 +95,7 @@ void NvidiaValidationSuite::CheckDriverVersion()
     dcgmDeviceAttributes_t deviceAttr;
 
     memset(&deviceAttr, 0, sizeof(deviceAttr));
-    deviceAttr.version = dcgmDeviceAttributes_version2;
+    deviceAttr.version = dcgmDeviceAttributes_version3;
     dcgmReturn_t ret   = dcgmSystem.GetDeviceAttributes(0, deviceAttr);
     unsigned int count = 0;
     std::stringstream additionalMsg;
@@ -754,6 +754,11 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                 found = true;
                 suite = NVVS_SUITE_LONG;
             }
+            else if (compareTestName == "xlong")
+            {
+                found = true;
+                suite = NVVS_SUITE_XLONG;
+            }
 
             if (found)
             {
@@ -859,15 +864,22 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                 testNames.push_back(MEMORY_PLUGIN_NAME);
             if (suite == NVVS_SUITE_LONG)
                 testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
+            if (suite == NVVS_SUITE_XLONG)
+            {
+                testNames.push_back(MEMORY_PLUGIN_NAME);
+                testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
+                testNames.push_back(MEMTEST_PLUGIN_NAME);
+                testNames.push_back(PULSE_TEST_PLUGIN_NAME);
+            }
             type = HARDWARE_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_INTEGRATION:
-            if (suite == NVVS_SUITE_MEDIUM || suite == NVVS_SUITE_LONG)
+            if (suite == NVVS_SUITE_MEDIUM || suite == NVVS_SUITE_LONG || suite == NVVS_SUITE_XLONG)
                 testNames.push_back(PCIE_PLUGIN_NAME);
             type = INTEGRATION_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_PERFORMANCE:
-            if (suite == NVVS_SUITE_LONG)
+            if (suite == NVVS_SUITE_LONG || suite == NVVS_SUITE_XLONG)
             {
                 testNames.push_back(MEMBW_PLUGIN_NAME);
                 testNames.push_back(SMSTRESS_PLUGIN_NAME);

@@ -460,6 +460,8 @@ public:
                                                  size_t *capacityGpcs,
                                                  size_t *usedGpcs);
 
+    dcgmReturn_t GetServiceAccount(std::string &serviceAccount) const;
+
 private:
     dcgmCoreCallbacks_t m_coreCallbacks;
 

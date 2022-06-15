@@ -622,7 +622,7 @@ typedef struct
 
 #define dcgmMigHierarchy_version2 MAKE_DCGM_VERSION(dcgmMigHierarchy_v2, 2)
 
-#define dcgmMigHierarchy_version dcgmMigHiearchyVersion2
+#define dcgmMigHierarchy_version dcgmMigHierarchy_version2
 
 /**
  * Maximum number of field groups that can exist
@@ -1146,19 +1146,46 @@ typedef struct
 } dcgmDeviceVgpuTypeInfo_v1;
 
 /**
- * Typedef for \ref dcgmDeviceVgpuTypeInfo_v1
- */
-typedef dcgmDeviceVgpuTypeInfo_v1 dcgmDeviceVgpuTypeInfo_t;
-
-/**
  * Version 1 for \ref dcgmDeviceVgpuTypeInfo_v1
  */
 #define dcgmDeviceVgpuTypeInfo_version1 MAKE_DCGM_VERSION(dcgmDeviceVgpuTypeInfo_v1, 1)
 
+typedef struct
+{
+    unsigned int version; //!< Version number (dcgmDeviceVgpuTypeInfo_version2)
+    union
+    {
+        unsigned int vgpuTypeId;
+        unsigned int supportedVgpuTypeCount;
+    } vgpuTypeInfo;                                      //!< vGPU type ID and Supported vGPU type count
+    char vgpuTypeName[DCGM_VGPU_NAME_BUFFER_SIZE];       //!< vGPU type Name
+    char vgpuTypeClass[DCGM_VGPU_NAME_BUFFER_SIZE];      //!< Class of vGPU type
+    char vgpuTypeLicense[DCGM_GRID_LICENSE_BUFFER_SIZE]; //!< license of vGPU type
+    int deviceId;                                        //!< device ID of vGPU type
+    int subsystemId;                                     //!< Subsystem ID of vGPU type
+    int numDisplayHeads;                                 //!< Count of vGPU's supported display heads
+    int maxInstances;         //!< maximum number of vGPU instances creatable on a device for given vGPU type
+    int frameRateLimit;       //!< Frame rate limit value of the vGPU type
+    int maxResolutionX;       //!< vGPU display head's maximum supported resolution in X dimension
+    int maxResolutionY;       //!< vGPU display head's maximum supported resolution in Y dimension
+    int fbTotal;              //!< vGPU Total framebuffer size in megabytes
+    int gpuInstanceProfileId; //!< GPU Instance Profile ID for the given vGPU type
+} dcgmDeviceVgpuTypeInfo_v2;
+
+/**
+ * Typedef for \ref dcgmDeviceVgpuTypeInfo_v2
+ */
+typedef dcgmDeviceVgpuTypeInfo_v2 dcgmDeviceVgpuTypeInfo_t;
+
+/**
+ * Version 2 for \ref dcgmDeviceVgpuTypeInfo_v2
+ */
+#define dcgmDeviceVgpuTypeInfo_version2 MAKE_DCGM_VERSION(dcgmDeviceVgpuTypeInfo_v2, 2)
+
 /**
  * Latest version for \ref dcgmDeviceVgpuTypeInfo_t
  */
-#define dcgmDeviceVgpuTypeInfo_version dcgmDeviceVgpuTypeInfo_version1
+#define dcgmDeviceVgpuTypeInfo_version dcgmDeviceVgpuTypeInfo_version2
 
 typedef struct
 {
@@ -1167,11 +1194,21 @@ typedef struct
     unsigned int migModeEnabled;
 } dcgmDeviceSettings_v1;
 
-typedef dcgmDeviceSettings_v1 dcgmDeviceSettings_t;
-
 #define dcgmDevicesSettings_version1 MAKE_DCGM_VERSION(dcgmDeviceSettings_v1, 1)
 
-#define dcgmDeviceSettings_version dcgmDeviceSettings_version1
+typedef struct
+{
+    unsigned int version;
+    unsigned int persistenceModeEnabled;
+    unsigned int migModeEnabled;
+    unsigned int confidentialComputeMode;
+} dcgmDeviceSettings_v2;
+
+typedef dcgmDeviceSettings_v2 dcgmDeviceSettings_t;
+
+#define dcgmDeviceSettings_version2 MAKE_DCGM_VERSION(dcgmDeviceSettings_v2, 2)
+
+#define dcgmDeviceSettings_version dcgmDeviceSettings_version2
 
 /**
  * Represents attributes corresponding to a device
@@ -1200,23 +1237,39 @@ typedef struct
     dcgmDevicePowerLimits_t powerLimits;      //!< Various power limits for the device
     dcgmDeviceIdentifiers_t identifiers;      //!< Identifiers for the device
     dcgmDeviceMemoryUsage_t memoryUsage;      //!< Memory usage info for the device
-    dcgmDeviceSettings_t settings;            //!< Basic device settings
+    dcgmDeviceSettings_v1 settings;           //!< Basic device settings
 } dcgmDeviceAttributes_v2;
 
 /**
- * Typedef for \ref dcgmDeviceAttributes_v2
- */
-typedef dcgmDeviceAttributes_v2 dcgmDeviceAttributes_t;
-
-/**
- * Version 1 for \ref dcgmDeviceAttributes_v2
+ * Version 2 for \ref dcgmDeviceAttributes_v2
  */
 #define dcgmDeviceAttributes_version2 MAKE_DCGM_VERSION(dcgmDeviceAttributes_v2, 2)
+
+typedef struct
+{
+    unsigned int version;                     //!< Version number (dcgmDeviceAttributes_version)
+    dcgmDeviceSupportedClockSets_t clockSets; //!< Supported clocks for the device
+    dcgmDeviceThermals_t thermalSettings;     //!< Thermal settings for the device
+    dcgmDevicePowerLimits_t powerLimits;      //!< Various power limits for the device
+    dcgmDeviceIdentifiers_t identifiers;      //!< Identifiers for the device
+    dcgmDeviceMemoryUsage_t memoryUsage;      //!< Memory usage info for the device
+    dcgmDeviceSettings_v2 settings;           //!< Basic device settings
+} dcgmDeviceAttributes_v3;
+
+/**
+ * Typedef for \ref dcgmDeviceAttributes_v3
+ */
+typedef dcgmDeviceAttributes_v3 dcgmDeviceAttributes_t;
+
+/**
+ * Version 3 for \ref dcgmDeviceAttributes_v3
+ */
+#define dcgmDeviceAttributes_version3 MAKE_DCGM_VERSION(dcgmDeviceAttributes_v3, 3)
 
 /**
  * Latest version for \ref dcgmDeviceAttributes_t
  */
-#define dcgmDeviceAttributes_version dcgmDeviceAttributes_version2
+#define dcgmDeviceAttributes_version dcgmDeviceAttributes_version3
 
 /**
  * Maximum number of vGPU types per physical GPU
@@ -1326,6 +1379,27 @@ typedef dcgmPolicyViolation_v1 dcgmPolicyViolation_t;
  * When used as part of dcgmPolicy_t these have corresponding parameters to
  * allow them to be switched on/off or set specific violation thresholds
  */
+typedef enum dcgmPolicyConditionIdx_enum
+{
+    // These are sequential rather than bitwise.
+    DCGM_POLICY_COND_IDX_DBE = 0,           //!< Double bit errors -- boolean in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_PCI,               //!< PCI events/errors -- boolean in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED, //!< Maximum number of retired pages -- number
+                                            //!< required in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_THERMAL,           //!< Thermal violation -- number required in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_POWER,             //!< Power violation -- number required in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_NVLINK,            //!< NVLINK errors -- boolean in dcgmPolicyConditionParams_t
+    DCGM_POLICY_COND_IDX_XID                //!< XID errors -- number required in dcgmPolicyConditionParams_t
+} dcgmPolicyConditionIdx_t;
+
+#define DCGM_POLICY_COND_IDX_MAX 7
+#define DCGM_POLICY_COND_MAX     DCGM_POLICY_COND_IDX_MAX
+
+/**
+ * Bitmask enumeration for policy conditions.
+ * When used as part of dcgmPolicy_t these have corresponding parameters to
+ * allow them to be switched on/off or set specific violation thresholds
+ */
 typedef enum dcgmPolicyCondition_enum
 {
     // these are bitwise rather than sequential
@@ -1338,8 +1412,6 @@ typedef enum dcgmPolicyCondition_enum
     DCGM_POLICY_COND_NVLINK  = 0x20,          //!< NVLINK errors -- boolean in dcgmPolicyConditionParams_t
     DCGM_POLICY_COND_XID     = 0x40,          //!< XID errors -- number required in dcgmPolicyConditionParams_t
 } dcgmPolicyCondition_t;
-
-#define DCGM_POLICY_COND_MAX 7
 
 /**
  * Structure for policy condition parameters.
@@ -1396,6 +1468,7 @@ typedef enum dcgmPolicyValidation_enum
     DCGM_POLICY_VALID_SV_SHORT = 1, //!< run a short System Validation on the system after failure
     DCGM_POLICY_VALID_SV_MED   = 2, //!< run a medium System Validation test after failure
     DCGM_POLICY_VALID_SV_LONG  = 3, //!< run a extensive System Validation test after failure
+    DCGM_POLICY_VALID_SV_XLONG = 4, //!< run a more extensive System Validation test after failure
 } dcgmPolicyValidation_t;
 
 /**
@@ -2040,6 +2113,7 @@ typedef enum
     DCGM_DIAG_LVL_SHORT   = 10, //!< run a very basic health check on the system
     DCGM_DIAG_LVL_MED     = 20, //!< run a medium-length diagnostic (a few minutes)
     DCGM_DIAG_LVL_LONG    = 30, //!< run a extensive diagnostic (several minutes)
+    DCGM_DIAG_LVL_XLONG   = 40, //!< run a very extensive diagnostic (many minutes)
 } dcgmDiagnosticLevel_t;
 
 /**
@@ -2081,11 +2155,13 @@ typedef enum dcgmPerGpuTestIndices_enum
     DCGM_TARGETED_STRESS_INDEX  = 4, //!< Targeted Stress test index
     DCGM_TARGETED_POWER_INDEX   = 5, //!< Targeted Power test index
     DCGM_MEMORY_BANDWIDTH_INDEX = 6, //!< Memory bandwidth test index
+    DCGM_MEMTEST_INDEX          = 7, //!< Memtest test index
+    DCGM_PULSE_TEST_INDEX       = 8, //!< Pulse test index
     // Remaining tests are included for convenience but have different execution rules
     // See DCGM_PER_GPU_TEST_COUNT
-    DCGM_SOFTWARE_INDEX       = 7, //!< Software test index
-    DCGM_CONTEXT_CREATE_INDEX = 8, //!< Context create test index
-    DCGM_UNKNOWN_INDEX        = 9  //!< Unknown test
+    DCGM_SOFTWARE_INDEX       = 9,  //!< Software test index
+    DCGM_CONTEXT_CREATE_INDEX = 10, //!< Context create test index
+    DCGM_UNKNOWN_INDEX        = 11  //!< Unknown test
 } dcgmPerGpuTestIndices_t;
 
 // TODO: transition these to dcgm_deprecated.h
@@ -2094,7 +2170,8 @@ typedef enum dcgmPerGpuTestIndices_enum
 
 // Number of diag tests
 // NOTE: does not include software and context_create which have different execution rules
-#define DCGM_PER_GPU_TEST_COUNT 7
+#define DCGM_PER_GPU_TEST_COUNT_V6 7
+#define DCGM_PER_GPU_TEST_COUNT_V7 9
 
 /**
  * Per GPU diagnostics result structure
@@ -2103,8 +2180,21 @@ typedef struct
 {
     unsigned int gpuId;                                     //!< ID for the GPU this information pertains
     unsigned int hwDiagnosticReturn;                        //!< Per GPU hardware diagnostic test return code
-    dcgmDiagTestResult_v2 results[DCGM_PER_GPU_TEST_COUNT]; //!< Array with a result for each per-gpu test
+    dcgmDiagTestResult_v2 results[DCGM_PER_GPU_TEST_COUNT_V6]; //!< Array with a result for each per-gpu test
 } dcgmDiagResponsePerGpu_v2;
+
+/**
+ * Per gpu response structure v3
+ *
+ * Since DCGM 2.4
+ */
+typedef struct
+{
+    unsigned int gpuId;                                        //!< ID for the GPU this information pertains
+    unsigned int hwDiagnosticReturn;                           //!< Per GPU hardware diagnostic test return code
+    dcgmDiagTestResult_v2 results[DCGM_PER_GPU_TEST_COUNT_V7]; //!< Array with a result for each per-gpu test
+} dcgmDiagResponsePerGpu_v3;
+
 
 #define DCGM_SWTEST_COUNT     10
 #define LEVEL_ONE_MAX_RESULTS 16
@@ -2141,9 +2231,26 @@ typedef struct
 } dcgmDiagResponse_v6;
 
 /**
+ * Global diagnostics result structure v7
+ *
+ * Since DCGM 2.4
+ */
+typedef struct
+{
+    unsigned int version;           //!< version number (dcgmDiagResult_version)
+    unsigned int gpuCount;          //!< number of valid per GPU results
+    unsigned int levelOneTestCount; //!< number of valid levelOne results
+
+    dcgmDiagTestResult_v2 levelOneResults[LEVEL_ONE_MAX_RESULTS];    //!< Basic, system-wide test results.
+    dcgmDiagResponsePerGpu_v3 perGpuResponses[DCGM_MAX_NUM_DEVICES]; //!< per GPU test results
+    dcgmDiagErrorDetail_t systemError;                               //!< System-wide error reported from NVVS
+    char trainingMsg[1024];                                          //!< Training Message
+} dcgmDiagResponse_v7;
+
+/**
  * Typedef for \ref dcgmDiagResponse_v6
  */
-typedef dcgmDiagResponse_v6 dcgmDiagResponse_t;
+typedef dcgmDiagResponse_v7 dcgmDiagResponse_t;
 
 /**
  * Version 6 for \ref dcgmDiagResponse_v6
@@ -2151,9 +2258,14 @@ typedef dcgmDiagResponse_v6 dcgmDiagResponse_t;
 #define dcgmDiagResponse_version6 MAKE_DCGM_VERSION(dcgmDiagResponse_v6, 6)
 
 /**
+ * Version 7 for \ref dcgmDiagResponse_v7
+ */
+#define dcgmDiagResponse_version7 MAKE_DCGM_VERSION(dcgmDiagResponse_v7, 7)
+
+/**
  * Latest version for \ref dcgmDiagResponse_t
  */
-#define dcgmDiagResponse_version dcgmDiagResponse_version6
+#define dcgmDiagResponse_version dcgmDiagResponse_version7
 
 /**
  * Represents level relationships within a system between two GPUs
@@ -2794,6 +2906,29 @@ typedef struct
  * Version 1 for \ref dcgmStartEmbeddedV2Params_v1
  */
 #define dcgmStartEmbeddedV2Params_version1 MAKE_DCGM_VERSION(dcgmStartEmbeddedV2Params_v1, 1)
+
+/**
+ * Options for dcgmStartEmbedded_v2
+ *
+ * Added in DCGM 2.4.0
+ */
+typedef struct
+{
+    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version2 */
+    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int blackListCount;    /*!< IN: Number of modules that to be blacklisted in blackList[] */
+    const char *serviceAccount;     /*!< IN: Service account for unprivileged processes */
+    dcgmModuleId_t blackList[DcgmModuleIdCount]; /*!< IN: IDs of modules to blacklist */
+    char _padding[4];                            /*!< IN: Unused. Aligns the struct to 8 bytes. */
+} dcgmStartEmbeddedV2Params_v2;
+
+/**
+ * Version 2 for \ref dcgmStartEmbeddedV2Params
+ */
+#define dcgmStartEmbeddedV2Params_version2 MAKE_DCGM_VERSION(dcgmStartEmbeddedV2Params_v2, 2)
 
 /**
  * Maximum number of metric ID groups that can exist in DCGM

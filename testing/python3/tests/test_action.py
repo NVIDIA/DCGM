@@ -23,7 +23,8 @@ import option_parser
 import DcgmDiag
 
 g_allValidations = [dcgm_structs.DCGM_POLICY_VALID_NONE, dcgm_structs.DCGM_POLICY_VALID_SV_SHORT,
-                    dcgm_structs.DCGM_POLICY_VALID_SV_MED, dcgm_structs.DCGM_POLICY_VALID_SV_LONG]
+                    dcgm_structs.DCGM_POLICY_VALID_SV_MED, dcgm_structs.DCGM_POLICY_VALID_SV_LONG,
+                    dcgm_structs.DCGM_POLICY_VALID_SV_XLONG]
 
 def helper_validate_action(groupObj):
     
@@ -40,8 +41,8 @@ def helper_validate_action(groupObj):
         response = groupObj.action.Validate(validation)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version6, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version6, response.version)
+        assert response.version == dcgm_structs.dcgmDiagResponse_version7, "Version mismatch. Expected %d. got %d" % \
+                                                                           (dcgm_structs.dcgmDiagResponse_version7, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -68,7 +69,8 @@ def test_dcgm_action_validate_remote(handle, gpuIds):
 
 g_allDiagLevels = [dcgm_structs.DCGM_DIAG_LVL_SHORT,
                    dcgm_structs.DCGM_DIAG_LVL_MED,
-                   dcgm_structs.DCGM_DIAG_LVL_LONG]
+                   dcgm_structs.DCGM_DIAG_LVL_LONG,
+                   dcgm_structs.DCGM_DIAG_LVL_XLONG]
 
 def helper_validate_run_diag(groupObj):
     if not option_parser.options.developer_mode:
@@ -81,8 +83,8 @@ def helper_validate_run_diag(groupObj):
         response = groupObj.action.RunDiagnostic(diagLevel)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version6, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version6, response.version)
+        assert response.version == dcgm_structs.dcgmDiagResponse_version7, "Version mismatch. Expected %d. got %d" % \
+                                                                           (dcgm_structs.dcgmDiagResponse_version7, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -156,7 +158,7 @@ def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
 
     drd = dcgm_structs.c_dcgmRunDiag_t()
     drd.version = dcgm_structs.dcgmRunDiag_version
-    drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_LONG + 1 #use an invalid value
+    drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_XLONG + 1 #use an invalid value
     drd.groupId = 0 #Initializing to 0 in case the constructor above doesn't
     drd.gpuList = gpuIdStr
 

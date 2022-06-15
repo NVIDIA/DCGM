@@ -113,7 +113,7 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
 dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
                                     unsigned int gpuId,
                                     std::string const &fieldId,
-                                    unsigned int pTime,
+                                    unsigned int secondsInFuture,
                                     std::string &injectValue)
 {
     dcgmReturn_t result = DCGM_ST_OK;
@@ -125,13 +125,25 @@ dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
     time_t timev;
     time(&timev);
 
-    injectFieldValue.ts = (pTime + timev) * 1000000 + 4000000; /// adding default of 4 microseconds into the future
-    HelperParseForFieldId(fieldId, injectFieldValue.fieldId, mDcgmHandle);
-    HelperInitFieldValue(injectFieldValue, injectValue);
+    injectFieldValue.ts = (secondsInFuture + timev) * 1000000;
+
+    result = HelperParseForFieldId(fieldId, injectFieldValue.fieldId, mDcgmHandle);
+    if (result != DCGM_ST_OK)
+    {
+        std::cout << "Error: Unable to parse fieldId.'" << fieldId << "' Return: " << errorString(result) << std::endl;
+        return result;
+    }
+
+    result = HelperInitFieldValue(injectFieldValue, injectValue);
+    if (result != DCGM_ST_OK)
+    {
+        std::cout << "Error: Unable to parse value '" << injectValue << "' Return: " << errorString(result)
+                  << std::endl;
+        return result;
+    }
 
     // inject field value
     result = dcgmInjectFieldValue(mDcgmHandle, gpuId, &injectFieldValue);
-
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to inject info. Return: " << errorString(result) << std::endl;
@@ -139,28 +151,30 @@ dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
     }
 
     std::cout << "Successfully injected field info." << std::endl;
-
     return DCGM_ST_OK;
 }
 
 void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo)
 {
     CommandOutputController cmdView = CommandOutputController();
-    dcgm_field_meta_p fieldMeta;
 
-    fieldMeta = DcgmFieldGetById(fieldInfo.fieldId);
+    dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldInfo.fieldId);
+    if (fieldMeta == nullptr)
+    {
+        std::cout << "Unable to get field info for fieldId " << fieldInfo.fieldId << std::endl;
+        return;
+    }
 
     cmdView.setDisplayStencil(TEST_DATA);
 
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Field ID");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldMeta == nullptr ? "Unknown" : fieldMeta->tag);
+    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldMeta->tag); /* FieldMeta != nullptr is already checked above */
     cmdView.display();
 
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Flags");
     cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.flags);
     cmdView.display();
 
-    // buffer = fieldInfo.lastStatus;
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Last Status");
     cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.lastStatus);
     cmdView.display();
@@ -177,9 +191,8 @@ void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo)
     cmdView.addDisplayParameter(DATA_INFO_TAG, HelperFormatTimestamp(fieldInfo.oldestTimestamp));
     cmdView.display();
 
-    // buffer = fieldInfo.monitorFrequencyUsec / 1000000;
-    cmdView.addDisplayParameter(DATA_NAME_TAG, "Monitor Frequency");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.monitorFrequencyUsec / 1000000);
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "Monitor Interval (ms)");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.monitorFrequencyUsec / 1000);
     cmdView.display();
 
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Max Age (sec)");
@@ -201,6 +214,10 @@ void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo)
     }
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Usec Per Fetch");
     cmdView.addDisplayParameter(DATA_INFO_TAG, usecPerFetch);
+    cmdView.display();
+
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "Number of Watchers");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.numWatchers);
     cmdView.display();
 
     std::cout << std::endl;
@@ -232,9 +249,9 @@ dcgmReturn_t DcgmiTest::HelperInitFieldValue(dcgmInjectFieldValue_t &injectField
             break;
         case DCGM_FT_BINARY:
             // Not Supported
-            // injectFieldValue.value.blob
             injectFieldValue.value.i64 = 0;
-            break;
+            std::cout << "Field types of DCGM_FT_BINARY cannot be injected." << std::endl;
+            return DCGM_ST_NOT_SUPPORTED;
         default:
             break;
     }
@@ -340,12 +357,12 @@ dcgmReturn_t IntrospectCache::DoExecuteConnected()
 InjectCache::InjectCache(std::string hostname,
                          unsigned int gpuId,
                          std::string fieldId,
-                         unsigned int pTime,
+                         unsigned int secondsInFuture,
                          std::string injectValue)
     : Command()
     , mGId(gpuId)
     , mFieldId(std::move(fieldId))
-    , mTime(pTime)
+    , mSecondsInFuture(secondsInFuture)
     , mInjectValue(std::move(injectValue))
 {
     m_hostName = std::move(hostname);
@@ -354,5 +371,5 @@ InjectCache::InjectCache(std::string hostname,
 /*****************************************************************************/
 dcgmReturn_t InjectCache::DoExecuteConnected()
 {
-    return adminObj.InjectCache(m_dcgmHandle, mGId, mFieldId, mTime, mInjectValue);
+    return adminObj.InjectCache(m_dcgmHandle, mGId, mFieldId, mSecondsInFuture, mInjectValue);
 }

@@ -18,6 +18,7 @@ import ctypes
 import os
 import sys
 import fnmatch
+import logger
 import platform
 import subprocess
 import string
@@ -110,6 +111,11 @@ if __name__ == '__main__':
          CacheInfo(hits=56, misses=30, maxsize=None, currsize=30)
     '''
 ## end of http://code.activestate.com/recipes/577479/ }}}
+
+# Log an exception message before raising it.
+def logException(msg):
+    logger.error("Exception. " + msg);
+    raise Exception(msg)
 
 def is_root():
     if is_linux():
@@ -435,13 +441,34 @@ def wait_for_pid_to_die(pid):
         except OSError:
             break
 
-
 def verify_dcgm_service_not_active():
     cmd = 'systemctl is-active --quiet dcgm'
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     if p.returncode == 0:
-        raise Exception("Tests cannot run because the DCGM service is active")
+        logException("Tests cannot run because the DCGM service is active")
+
+    cmd = 'systemctl is-active --quiet nvidia-dcgm'
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate()
+    if p.returncode == 0:
+        logException("Tests cannot run because the Nvidia DCGM service is active")
+
+def verify_nvidia_fabricmanager_service_active_if_needed():
+    cmd = "find /dev -regextype egrep -regex '/dev/nvidia-nvswitch[0-9]+'"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out_buf, _ = p.communicate()
+    out = out_buf.decode('utf-8')
+    if not "nvswitch" in out.rstrip():
+        return
+
+    # Fabricmanager must be running if there are nvswitch devices.
+    cmd = 'systemctl status nvidia-fabricmanager'
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out_buf, _ = p.communicate()
+    out = out_buf.decode('utf-8')
+    if not "running" in out.rstrip():
+        logException("Tests cannot run because the Nvidia Fabricmanager service is not active on systems with nvswitches")
 
 def find_process_using_hostengine_port():
     cmd = 'lsof -i -P -n | grep 5555'
@@ -475,7 +502,7 @@ def find_process_using_hostengine_port():
     if process_name:
         # We have some other process using port 5555
         msg = "Process %s with pid %d is listening to port 5555. Cannot run tests." % (process_name, pid)
-        raise Exception(msg)
+        logException(msg)
 
 '''
 Attempt to clean up zombie or accidentally left-open processes using port 5555
@@ -509,7 +536,7 @@ def get_testing_framework_library_path():
         elif platform.machine().lower().startswith('aarch64'):
             return 'aarch64'
 
-        raise Exception("Unsupported arch: %s" % platform.machine())
+        logException("Unsupported arch: %s" % platform.machine())
 
     return './apps/%s/' % _get_arch_string()
 

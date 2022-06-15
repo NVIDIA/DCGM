@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <concepts>
+#include <fmt/format.h>
 #include <functional>
 #include <future>
 #include <iomanip>
@@ -22,6 +24,7 @@
 #include <optional>
 #include <sstream>
 #include <utility>
+
 
 namespace DcgmNs
 {
@@ -74,26 +77,10 @@ struct ITask
      * It's up to the implementation to decide what those names should be.
      *
      * The name will be used for logging purposes and in other places where
-     * human readable explanation and destinction of the task is preferred.
+     * human-readable explanation and distinction of the task is preferred.
      */
     [[nodiscard]] virtual char const *GetName() const noexcept = 0;
 };
-
-namespace
-{
-    /**
-     * A helper function to represent size_t (usually an address) in a hexadecimal form.
-     * @param val   A numeric value to represent in the hex form
-     *
-     * @return Hexadecimal string in the following form `0xabcdef0123`
-     */
-    inline std::string to_hex_string(size_t val)
-    {
-        std::stringstream ss;
-        ss << "0x" << std::hex << val;
-        return ss.str();
-    }
-} // namespace
 
 /**
  * Base class for all templated tasks and deferred.
@@ -102,7 +89,7 @@ namespace
  *                      This type is equal T by default.
  *                      This type cannot be `void`
  *
- * Objects of this class are not copyable but moveable.
+ * Objects of this class are not copyable but movable.
  *
  * @sa class Task<void>
  * @sa class Task<T>
@@ -114,8 +101,8 @@ public:
     /**
      * Creates NamedBasicTask with given task name and a function
      *
-     * @param[in] taskName  A mnemonic human readable name of the task.
-     *                      The name cannot be changed during the livetime of the object.
+     * @param[in] taskName  A mnemonic human-readable name of the task.
+     *                      The name cannot be changed during the lifetime of the object.
      * @param[in] func      A function that fill be executed inside `NamedBasicTask::Run()`
      */
     NamedBasicTask(std::string taskName, std::function<std::optional<T>()> func)
@@ -126,15 +113,15 @@ public:
     /**
      * Creates NamedBasicTask with a function that will be executed inside the `NamedBasicTask::Run()`
      * The name of the task will be generated automatically based on the address of the object.
-     * The name cannot be changed during the livetime of the object.
+     * The name cannot be changed during the lifetime of the object.
      *
      * @note If the object is created on a stack and moved to a heap later (e.g. moved to a unique_ptr)
      *       the name will still have an address in the stack. That may have implication if name is used for debugging
      *       purposes.
      * @param[in] func  A function that will be executed inside `NamedBasicTask::Run()`
      */
-    NamedBasicTask(std::function<std::optional<T>()> func)
-        : NamedBasicTask(std::string("Unknown at 0x") + to_hex_string(std::size_t(this)), std::move(func))
+    explicit NamedBasicTask(std::function<std::optional<T>()> func)
+        : NamedBasicTask(fmt::format("Unknown at {:#x}", std::size_t(this)), std::move(func))
     {}
 
     NamedBasicTask(NamedBasicTask const &) = delete;
@@ -163,21 +150,31 @@ public:
      */
     [[nodiscard]] RunResult Run() override
     {
-        auto &&result = std::invoke(m_func);
-        if (!result.has_value())
+        try
         {
-            return RunResult::Deferred;
-        }
-
-        if (m_promise)
-        {
-            if constexpr (std::is_same_v<void, PromiseType>)
+            auto &&result = std::invoke(m_func);
+            if (!result.has_value())
             {
-                m_promise->set_value();
+                return RunResult::Deferred;
             }
-            else
+
+            if (m_promise)
             {
-                m_promise->set_value(std::move(result.value()));
+                if constexpr (std::is_same_v<void, PromiseType>)
+                {
+                    m_promise->set_value();
+                }
+                else
+                {
+                    m_promise->set_value(std::move(result.value()));
+                }
+            }
+        }
+        catch (...)
+        {
+            if (m_promise)
+            {
+                m_promise->set_exception(std::current_exception());
             }
         }
 
@@ -192,7 +189,7 @@ public:
         return m_taskName.c_str();
     }
 
-private:
+protected:
     std::unique_ptr<std::promise<PromiseType>> m_promise;
     std::function<std::optional<T>()> m_func;
     std::string m_taskName;
@@ -208,12 +205,13 @@ template <>
 class Task<void> : public NamedBasicTask<int, void>
 {
 public:
+    using BaseType = NamedBasicTask<int, void>;
     /**
      * Creates a Task<void> instance with given task name and function.
      * @sa `NamedBasicTask::NamedBasicTask(std::string, std::function)`
      */
-    Task(std::string taskName, std::function<void()> func)
-        : NamedBasicTask<int, void>(std::move(taskName), [func = std::move(func)] {
+    [[nodiscard]] Task(std::string taskName, std::function<void()> func)
+        : BaseType(std::move(taskName), [func = std::move(func)] {
             std::invoke(func);
             return 0;
         })
@@ -223,8 +221,8 @@ public:
      * Creates a Task<void> instance with given function
      * @sa `NamedBasicTask::NamedBasicTask(std::function)`
      */
-    Task(std::function<void()> func)
-        : NamedBasicTask<int, void>([func = std::move(func)] {
+    [[nodiscard]] explicit Task(std::function<void()> func)
+        : BaseType([func = std::move(func)] {
             std::invoke(func);
             return 0;
         })
@@ -239,31 +237,84 @@ template <class T>
 class Task : public NamedBasicTask<T>
 {
 public:
+    using BaseType = NamedBasicTask<T>;
     /**
      * Creates a Task<T> instance with given task name and function.
      * @sa `NamedBasicTask::NamedBasicTask(std::string, std::function)`
      */
-    Task(std::string taskName, std::function<std::optional<T>()> func)
-        : NamedBasicTask<T>(std::move(taskName), std::move(func))
+    [[nodiscard]] Task(std::string taskName, std::function<std::optional<T>()> func)
+        : BaseType(std::move(taskName), std::move(func))
     {}
 
     /**
      * Creates a Task<T> instance with given function
      * @sa `NamedBasicTask::NamedBasicTask(std::function)`
      */
-    Task(std::function<std::optional<T>()> func)
-        : NamedBasicTask<T>(std::move(func))
+    [[nodiscard]] explicit Task(std::function<std::optional<T>()> func)
+        : BaseType(std::move(func))
     {}
+
+    Task(Task const &) = delete;
+    Task &operator=(Task const &) = delete;
+
+    Task(Task &&) noexcept = default;
+    Task &operator=(Task &&) noexcept = default;
+};
+
+/**
+ * Task that returns some value (void results are not supported here) and will try to execute the provided
+ * function up to \a attempts number of times.<br>
+ * Every attempt will be enqueued to the TaskRunner as an individual task.<br>
+ * When the attempts are exhausted and the function did not return a value (aka not ready/deferred) the promise
+ * will be destroyed and the the get() method of the waiting shared_future will throw the std::future_error
+ * exception.
+ * @tparam T result type
+ */
+template <class T>
+class TaskWithAttempts : public NamedBasicTask<T>
+{
+public:
+    using BaseType = NamedBasicTask<T>;
+
+    [[nodiscard]] TaskWithAttempts(std::string taskName, int attempts, std::function<std::optional<T>()> func)
+        : BaseType(std::move(taskName), std::move(func))
+        , m_attempts(attempts)
+    {}
+
+    [[nodiscard]] TaskWithAttempts(int attempts, std::function<std::optional<T>()> func)
+        : BaseType(std::move(func))
+        , m_attempts(attempts)
+    {}
+
+    [[nodiscard]] ITask::RunResult Run() override
+    {
+        auto result = BaseType::Run();
+        if (result == ITask::RunResult::Deferred)
+        {
+            if (--m_attempts == 0)
+            {
+                if (this->m_promise)
+                {
+                    this->m_promise.reset();
+                }
+                return ITask::RunResult::Ok;
+            }
+        }
+
+        return result;
+    }
+
+    int m_attempts;
 };
 
 /**
  * Helper function to create proper Task<T> from a given function
  * @param[in] func  A function that will perform main task work. Can be a lambda with `void` return type
  */
-template <class Fn>
-auto make_task(Fn &&func) -> Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>
+template <std::invocable Fn>
+auto make_task(Fn &&func) -> std::unique_ptr<typename Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>::BaseType>
 {
-    return Task<OptionalNestedType_t<std::invoke_result_t<Fn>>> { std::forward<Fn>(func) };
+    return std::make_unique<Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>>(std::forward<Fn>(func));
 }
 
 /**
@@ -271,10 +322,43 @@ auto make_task(Fn &&func) -> Task<OptionalNestedType_t<std::invoke_result_t<Fn>>
  * @param[in] taskName  Name of the crated task. @sa See `NamedBasicTask::NamedBasicTask()` for the name definition.
  * @param[in] func      A function that will perform main task work. Can be a lambda with `void` return type
  */
-template <class Fn>
-auto make_task(std::string taskName, Fn &&func) -> Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>
+template <std::invocable Fn>
+auto make_task(std::string taskName, Fn &&func)
+    -> std::unique_ptr<typename Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>::BaseType>
 {
-    return Task<OptionalNestedType_t<std::invoke_result_t<Fn>>> { std::move(taskName), std::forward<Fn>(func) };
+    return std::make_unique<Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>>(std::move(taskName),
+                                                                                  std::forward<Fn>(func));
+}
+
+/**
+ * Helper function to create a Task with specified number of \a attempts
+ * @param attempts  Number of attempts to perform before giving up
+ * @param func      A function that will perform the work. Cannot return void or optional<void>.
+ * @return  A Task that can be Enqueued to a TaskRunner.
+ */
+template <std::invocable Fn>
+    requires(!std::is_same_v<OptionalNestedType_t<std::invoke_result_t<Fn>>, void>)
+auto make_task_with_attempts(int attempts, Fn &&func)
+    -> std::unique_ptr<typename TaskWithAttempts<OptionalNestedType_t<std::invoke_result_t<Fn>>>::BaseType>
+{
+    return std::make_unique<TaskWithAttempts<OptionalNestedType_t<std::invoke_result_t<Fn>>>>(attempts,
+                                                                                              std::forward<Fn>(func));
+}
+
+/**
+ * Helper function to create a named Task with specified number of \a attempts.
+ * @param taskName  Name of the Task
+ * @param attempts  Number of attempts to perform before give up
+ * @param func      A function what will perform the work. Cannot return void or optional<void>
+ * @return  A Task that can be Enqueued to a TaskRunner.
+ */
+template <std::invocable Fn>
+    requires(!std::is_same_v<OptionalNestedType_t<std::invoke_result_t<Fn>>, void>)
+auto make_task_with_attempts(std::string taskName, int attempts, Fn &&func)
+    -> std::unique_ptr<typename TaskWithAttempts<OptionalNestedType_t<std::invoke_result_t<Fn>>>::BaseType>
+{
+    return std::make_unique<TaskWithAttempts<OptionalNestedType_t<std::invoke_result_t<Fn>>>>(
+        std::move(taskName), attempts, std::forward<Fn>(func));
 }
 
 } // namespace DcgmNs

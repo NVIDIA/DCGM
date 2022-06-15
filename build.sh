@@ -59,6 +59,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
            --thread-san     : Turn on ThreadSanitizer
            --ub-san         : Turn on UndefinedSanitizer
            --leak-san       : Turn on LeakSanitizer
+           --vmware         : Make vmware build of the DCGM
         -h --help           : This information
 
     Default options are: --release --arch amd64
@@ -119,6 +120,7 @@ function run_cmake() {
     local thread_san=${1:-0}; shift || true
     local ub_san=${1:-0}; shift || true
     local leak_san=${1:-0}; shift || true
+    local vmware=${1:-0}; shift || true
 
     if [[ ${static_analysis} -ge ${STATIC_ANALYSIS_MODE_ON} ]] && [[ ! -f /coverity/bin/cov-build ]]; then
         echo "[WARNING] Could not find Coverity. Disabling static analysis" >&2
@@ -153,6 +155,9 @@ function run_cmake() {
     if [[ ${leak_san} -eq 1 ]]; then
         CMAKE_COMMON_ARGS+="-DLEAK_SANITIZER=ON "
     fi
+    if [[ ${vmware} -eq 1 ]]; then
+        CMAKE_COMMON_ARGS+="-DVMWARE=1 "
+    fi
     CMAKE_COMMON_ARGS+="-DCMAKE_TOOLCHAIN_FILE=${DIR}/cmake/${TARGET}-toolchain.cmake ${BUILD_TESTING} ${cmake_install_prefix:-}"
     CMAKE_ARGS="${CMAKE_COMMON_ARGS} ${DIR} $@"
 
@@ -185,8 +190,8 @@ function run_cmake() {
 
     if [[ ${runtests} -eq 1 ]]; then
         if [[ ${DCGM_SKIP_PYTHON_LINTING:-0} == 0 ]]; then
-        echo "Linting Python code"
-        (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint --rcfile pylintrc $(find . -type f -a -iname '*.py'))
+          echo "Linting Python code"
+          (cd "${DIR}/testing/python3" && PYLINTHOME="$output_dir/pylint_out" pylint --rcfile pylintrc $(find . -type f -a -iname '*.py'))
         fi
         ctest --output-on-failure
     fi
@@ -259,6 +264,7 @@ function dcgm_build_within_docker() {
     local thread_san=${1}; shift
     local ub_san=${1}; shift
     local leak_san=${1}; shift
+    local vmware=${1}; shift
 
     case $( echo "${arch}" | awk '{print tolower($0)}' ) in
         amd64|x64|x86_64)
@@ -285,8 +291,13 @@ function dcgm_build_within_docker() {
         popd
     fi
 
-    local debug_suffix=Linux-${arch}-debug
-    local release_suffix=Linux-${arch}-release
+    if [[ ${vmware} -eq 1 ]]; then
+        local debug_suffix=VMware-${arch}-debug
+        local release_suffix=VMware-${arch}-release
+    else
+        local debug_suffix=Linux-${arch}-debug
+        local release_suffix=Linux-${arch}-release
+    fi
 
     local cwd=$(pwd)
     local outdir_debug=${cwd}/_out/build/${debug_suffix}
@@ -305,11 +316,11 @@ function dcgm_build_within_docker() {
             install_prefix=${cwd}/_out/${debug_suffix}
         fi
         run_cmake ${outdir_debug} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} \
-            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${cmake_args} -DCMAKE_BUILD_TYPE=Debug "$@"
+            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${vmware} ${cmake_args} -DCMAKE_BUILD_TYPE=Debug "$@"
 
-        find ${outdir_debug} -maxdepth 1 -iname '*.tar.gz' -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
-        find ${outdir_debug} -maxdepth 1 -iname '*.deb'    -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
-        find ${outdir_debug} -maxdepth 1 -iname '*.rpm'    -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
+        find ${outdir_debug} -maxdepth 1 -iname '*.tar.gz'  -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
+        find ${outdir_debug} -maxdepth 1 -iname '*.deb'     -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
+        find ${outdir_debug} -maxdepth 1 -iname '*.rpm'     -exec mv {} ${cwd}/_out/${debug_suffix}/ \;
         find ${outdir_debug} -maxdepth 1 -iname '*rt.props' -exec cp -fv {} ${cwd}/_out/${debug_suffix}/ \;
     fi
 
@@ -319,11 +330,11 @@ function dcgm_build_within_docker() {
             install_prefix=${cwd}/_out/${release_suffix}
         fi
         run_cmake ${outdir_release} ${clean} ${packs} "${install_prefix}" ${runtests} ${static_analysis} ${makedeb} ${makerpm} \
-            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${cmake_args} -DCMAKE_BUILD_TYPE=Release "$@"
+            ${address_san} ${thread_san} ${ub_san} ${leak_san} ${vmware} ${cmake_args} -DCMAKE_BUILD_TYPE=Release "$@"
 
-        find ${outdir_release} -maxdepth 1 -iname '*.tar.gz' -exec mv {} ${cwd}/_out/${release_suffix}/ \;
-        find ${outdir_release} -maxdepth 1 -iname '*.deb'    -exec mv {} ${cwd}/_out/${release_suffix}/ \;
-        find ${outdir_release} -maxdepth 1 -iname '*.rpm'    -exec mv {} ${cwd}/_out/${release_suffix}/ \;
+        find ${outdir_release} -maxdepth 1 -iname '*.tar.gz'  -exec mv {} ${cwd}/_out/${release_suffix}/ \;
+        find ${outdir_release} -maxdepth 1 -iname '*.deb'     -exec mv {} ${cwd}/_out/${release_suffix}/ \;
+        find ${outdir_release} -maxdepth 1 -iname '*.rpm'     -exec mv {} ${cwd}/_out/${release_suffix}/ \;
         find ${outdir_release} -maxdepth 1 -iname '*rt.props' -exec cp -fv {} ${cwd}/_out/${release_suffix}/ \;
     fi
 }
@@ -344,6 +355,7 @@ function dcgm_build_using_docker() {
     local thread_san=${1}; shift
     local ub_san=${1}; shift
     local leak_san=${1}; shift
+    local vmware=${1}; shift
 
     local static_analysis_mount=""
     if [[ ${static_analysis} -ge ${STATIC_ANALYSIS_MODE_ON} ]]; then
@@ -392,6 +404,9 @@ function dcgm_build_using_docker() {
     if [[ ${leak_san} -eq 1 ]]; then
         remote_args="${remote_args} --leak-san"
     fi
+    if [[ ${vmware} -eq 1 ]]; then
+        remote_args="${remote_args} --vmware"
+    fi
 
     docker run --rm -u "$(id -u)":"$(id -g)" \
         ${DOCKER_ARGS:-} \
@@ -424,8 +439,9 @@ ADDRESS_SANITIZER=0
 THREAD_SANITIZER=0
 UB_SANITIZER=0
 LEAK_SANITIZER=0
+VMWAREBUILD=0
 
-LONGOPTS=debug,release,coverage,arch:,packages,clean,help,no-tests,sa-mode:,deb,rpm,no-install,address-san,thread-san,ub-san,leak-san
+LONGOPTS=debug,release,coverage,arch:,packages,clean,help,no-tests,sa-mode:,deb,rpm,no-install,address-san,thread-san,ub-san,leak-san,vmware
 SHORTOPTS=dra:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -517,6 +533,10 @@ while true; do
             CLEAN_BUILD=1
             shift
             ;;
+        --vmware)
+            VMWAREBUILD=1
+            shift
+            ;;
         --)
             shift
             break
@@ -540,11 +560,11 @@ for arch in "${TARGET_ARCH[@]}"; do
     if [[ ${DCGM_BUILD_INSIDE_DOCKER:-} -eq 1 ]]; then
         dcgm_build_within_docker ${DEBUG_BUILD} ${RELEASE_BUILD} ${COVERAGE_BUILD} "${arch}" \
             ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} \
-            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} "$@"
+            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} ${VMWAREBUILD} "$@"
     else
         dcgm_build_using_docker ${DEBUG_BUILD} ${RELEASE_BUILD} ${COVERAGE_BUILD} "${arch}" \
             ${PACKAGES_BUILD} ${CLEAN_BUILD} ${RUN_TESTS} ${STATIC_ANALYSIS} ${NO_INSTALL} ${MAKE_DEB} ${MAKE_RPM} \
-            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} "$@"
+            ${ADDRESS_SANITIZER} ${THREAD_SANITIZER} ${UB_SANITIZER} ${LEAK_SANITIZER} ${VMWAREBUILD} "$@"
     fi
 done
 

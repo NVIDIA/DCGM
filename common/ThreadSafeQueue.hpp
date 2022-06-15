@@ -17,6 +17,7 @@
 
 #include <cassert>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <shared_mutex>
 #include <thread>
@@ -125,6 +126,18 @@ public:
         return m_owner.get().m_queue.empty();
     }
 
+    /**
+     * @brief Swaps the content of the internal queue with the provided \a other queue
+     * @param other An empty queue that will get the content of the internal queue.
+     */
+    void Swap(std::queue<T> &other) noexcept(noexcept(m_owner.get().m_queue.swap(other)))
+    {
+        assert(m_owningThread == std::this_thread::get_id());
+        assert(other.empty());
+        using std::swap;
+        swap(m_owner.get().m_queue, other);
+    }
+
 private:
     std::reference_wrapper<ThreadSafeQueue<T>> m_owner;
     std::unique_lock<std::shared_mutex> m_lock;
@@ -206,6 +219,7 @@ template <class T>
 class ThreadSafeQueue
 {
 public:
+    using QueueItemType = T;
     /**
      * Lock the queue and return a proxy object.
      * @return Proxy object that must be used to perform all operations with the queue.

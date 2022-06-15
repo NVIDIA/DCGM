@@ -113,7 +113,8 @@ typedef enum dcgmError_enum
     DCGM_FR_PENDING_ROW_REMAP            = 85, //!< Row remapping is pending
     DCGM_FR_BROKEN_P2P_MEMORY_DEVICE     = 86, //!< P2P copy test detected an error writing to this GPU
     DCGM_FR_BROKEN_P2P_WRITER_DEVICE     = 87, //!< P2P copy test detected an error writing from this GPU
-    DCGM_FR_ERROR_SENTINEL               = 88, //!< MUST BE THE LAST ERROR CODE
+    DCGM_FR_NVSWITCH_NVLINK_DOWN         = 88, //!< An NvLink is down for the specified NVSwitch
+    DCGM_FR_ERROR_SENTINEL               = 89, //!< MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -345,6 +346,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_PENDING_ROW_REMAP_MSG            "GPU %u has uncorrectable memory errors and row remappings are pending"
 #define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG     "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
 #define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG     "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
+#define DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG         "NVSwitch %u's NvLink %u is down."
 
 /*
  * Suggestions for next steps for the corresponding error message
@@ -476,6 +478,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_PENDING_ROW_REMAP_NEXT            ""
 #define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT     BUG_REPORT_MSG
 #define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT     BUG_REPORT_MSG
+#define DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT                                                      \
+    "Please check fabric manager and initialization logs to figure out why the link is down. " \
+    "You may also need to run a field diagnostic."
 
 #ifdef __cplusplus
 extern "C" {

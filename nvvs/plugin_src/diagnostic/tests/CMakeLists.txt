@@ -17,7 +17,6 @@ find_package(Catch2 REQUIRED)
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Cuda REQUIRED)
-find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -40,20 +39,20 @@ if (BUILD_TESTING)
 
     # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
     #       for any libdcgm function that is needed.    
+    # NOTE: linking cuda is not allowed for this library. We are using a CUDA stub library instead (testing_cuda_stubs)
+    # 
     target_link_libraries(diagnostictests
         PRIVATE
             nvvs_without_main_objects
             Catch2::Catch2
-            fmt::fmt
+            testing_cuda_stubs
+            testing_dcgm_cublas_stubs
+            pluginCudaCommon_11
     )
     target_link_libraries(diagnostictests PUBLIC nvvs_interface)
     target_link_libraries(diagnostictests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
     target_link_libraries(diagnostictests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-    target_link_libraries(diagnostictests PRIVATE dcgm_cublas_proxy11)
-    target_link_libraries(diagnostictests PRIVATE ${CUDA11_STATIC_LIBS})
     target_link_libraries(diagnostictests PRIVATE sdk_nvml_essentials_objects)
-    target_link_libraries(diagnostictests PUBLIC ${CUDA11_LIBS})
-    target_link_libraries(diagnostictests PUBLIC pluginCommon_11)
     
     target_link_options(diagnostictests PRIVATE -rdynamic)
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

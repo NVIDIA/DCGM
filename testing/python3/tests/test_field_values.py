@@ -41,7 +41,9 @@ g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES,
     dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES,
     dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES,
-    dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES
+    dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES,
+    dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE,
+    dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE,
 ]
 
 def get_usec_since_1970():
@@ -800,8 +802,9 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
                          dcgm_fields.DCGM_FI_DEV_VGPU_UUID,
                          dcgm_fields.DCGM_FI_DEV_VGPU_DRIVER_VERSION,
                          dcgm_fields.DCGM_FI_DEV_VGPU_MEMORY_USAGE,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS,
+                         dcgm_fields.DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE,
                          dcgm_fields.DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT,
+                         dcgm_fields.DCGM_FI_DEV_VGPU_PCI_ID,
                          dcgm_fields.DCGM_FI_DEV_VGPU_ENC_STATS,
                          dcgm_fields.DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO,
                          dcgm_fields.DCGM_FI_DEV_VGPU_FBC_STATS,
@@ -956,12 +959,36 @@ def test_dcgm_verify_auto_mode_behavior():
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_device_attributes(handle, gpuIds):
+def test_dcgm_device_attributes_v3(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
 
     for gpuId in gpuIds:
         gpuAttrib = systemObj.discovery.GetGpuAttributes(gpuId)
+
+        #Validate field values
+        assert gpuAttrib.version != 0, "gpuAttrib.version == 0"
+        assert len(gpuAttrib.identifiers.brandName) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.brandName), \
+            "gpuAttrib.identifiers.brandName: '%s'" % gpuAttrib.identifiers.brandName
+        assert len(gpuAttrib.identifiers.deviceName) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.deviceName), \
+            "gpuAttrib.identifiers.deviceName: '%s'" % gpuAttrib.identifiers.deviceName
+        assert len(gpuAttrib.identifiers.pciBusId) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.pciBusId), \
+            "gpuAttrib.identifiers.pciBusId: '%s'" % gpuAttrib.identifiers.pciBusId
+        assert len(gpuAttrib.identifiers.uuid) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.uuid), \
+            "gpuAttrib.identifiers.uuid: '%s'" % gpuAttrib.identifiers.uuid
+        assert len(gpuAttrib.identifiers.vbios) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.vbios), \
+            "gpuAttrib.identifiers.vbios: '%s'" % gpuAttrib.identifiers.vbios
+        assert len(gpuAttrib.identifiers.driverVersion) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.driverVersion), \
+            "gpuAttrib.identifiers.driverVersion: '%s'" % gpuAttrib.identifiers.driverVersion
+        assert gpuAttrib.identifiers.pciDeviceId != 0, "gpuAttrib.identifiers.pciDeviceId: %08X" % gpuAttrib.identifiers.pciDeviceId
+        assert gpuAttrib.identifiers.pciSubSystemId != 0, "gpuAttrib.identifiers.pciSubSystemId: %08X" % gpuAttrib.identifiers.pciSubSystemId
+        assert gpuAttrib.settings.confidentialComputeMode >= 0, "gpuAttrib.settings.confidentialComputeMode: '%d'" % gpuAttrib.settings.confidentialComputeMode
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_device_attributes_v2(handle, gpuIds):
+    for gpuId in gpuIds:
+        gpuAttrib = dcgm_agent.dcgmGetDeviceAttributes(handle, gpuId, version=dcgm_structs.dcgmDeviceAttributes_version2)
 
         #Validate field values
         assert gpuAttrib.version != 0, "gpuAttrib.version == 0"

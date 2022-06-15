@@ -76,6 +76,7 @@ typedef enum
     DcgmCoreReqIdGetMigInstanceEntityId        = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
     DcgmCoreReqIdGetMigUtilization             = 46, // DcgmCacheManager::GetMigUtilization()
     DcgmCoreReqMigIndicesForEntity             = 47, // DcgmCacheManager::GetMigIndicesForEntity()
+    DcgmCoreReqGetServiceAccount               = 48, // DcgmHostEngineHandler::GetServiceAccount()
     DcgmCoreReqIdCount                               // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -793,3 +794,18 @@ typedef struct
 #define dcgmCoreGetMigIndicesForEntity_version1 MAKE_DCGM_VERSION(dcgmCoreGetMigIndicesForEntity_v1, 1)
 #define dcgmCoreGetMigIndicesForEntity_version  dcgmCoreGetMigIndicesForEntity_version1
 typedef dcgmCoreGetMigIndicesForEntity_v1 dcgmCoreGetMigIndicesForEntity_t;
+
+typedef struct
+{
+    char serviceAccount[256];
+} dcgmCoreGetServiceAccountResponse_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmCoreGetServiceAccountResponse_t response;
+} dcgmCoreGetServiceAccount_v1;
+
+#define dcgmCoreGetServiceAccount_version1 MAKE_DCGM_VERSION(dcgmCoreGetServiceAccount_v1, 1)
+#define dcgmCoreGetServiceAccount_version  dcgmCoreGetServiceAccount_version1
+typedef dcgmCoreGetServiceAccount_v1 dcgmCoreGetServiceAccount_t;

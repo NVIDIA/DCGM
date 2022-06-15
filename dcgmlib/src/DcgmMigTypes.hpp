@@ -111,22 +111,19 @@ std::ostream &operator<<(std::ostream &os, GpuInstanceId const &val);
 
 } // namespace DcgmNs::Mig
 
-namespace std
-{
 template <>
-struct hash<DcgmNs::Mig::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::GpuInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::GpuInstanceId::BaseType>
 {};
 
 template <>
-struct hash<DcgmNs::Mig::Nvml::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::Nvml::GpuInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::Nvml::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::Nvml::GpuInstanceId::BaseType>
 {};
 
 template <>
-struct hash<DcgmNs::Mig::Nvml::ComputeInstanceId>
+struct std::hash<DcgmNs::Mig::Nvml::ComputeInstanceId>
     : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::Nvml::ComputeInstanceId::BaseType>
 {};
 
 template <>
-struct hash<DcgmNs::Mig::ComputeInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::ComputeInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::ComputeInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::ComputeInstanceId::BaseType>
 {};
-} // namespace std

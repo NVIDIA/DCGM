@@ -317,7 +317,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "UUID#",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_40));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MINOR_NUMBER,
                                              DCGM_FT_INT64,
@@ -712,6 +712,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CC_MODE,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "cc_mode",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "CCMOD",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CUDA_VISIBLE_DEVICES_STR,
                                              DCGM_FT_STRING,
                                              0,
@@ -1050,7 +1060,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "B1TTL",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_BAR1_USED,
                                              DCGM_FT_INT64,
@@ -1060,7 +1070,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "B1USE",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_BAR1_FREE,
                                              DCGM_FT_INT64,
@@ -1070,7 +1080,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "B1FRE",
                                              "",
-                                             DCGM_FE_GPU,
+                                             DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_TOTAL,
                                              DCGM_FT_INT64,
@@ -1099,6 +1109,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FS_DEVICE,
                                              0,
                                              "FBUSD",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_RESERVED,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fb_resv",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBRSV",
                                              "",
                                              DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
@@ -1202,16 +1222,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_VGPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "vgpu_instance_license_instance_status",
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE,
+                                             DCGM_FT_STRING,
+                                             0,
+                                             "vgpu_instance_license_state",
                                              DCGM_FS_DEVICE,
                                              0,
                                              "VLCIST",
                                              "",
                                              DCGM_FE_VGPU,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_40));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_LICENSE_STATUS,
                                              DCGM_FT_INT64,
                                              8,
@@ -1232,6 +1252,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_VGPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_PCI_ID,
+                                             DCGM_FT_STRING,
+                                             0,
+                                             "vgpu_instance_pci_id",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VPCIID",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_ENC_STATS,
                                              DCGM_FT_BINARY,
                                              0,
@@ -3894,6 +3924,26 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE,
+                                             DCGM_FT_DOUBLE,
+                                             0,
+                                             "tensor_imma_active",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "TIMMA",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE,
+                                             DCGM_FT_DOUBLE,
+                                             0,
+                                             "tensor_hmma_active",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "THMMA",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
     return 0;
 }
 

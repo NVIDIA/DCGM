@@ -53,6 +53,8 @@ public:
     //! Get modules to blacklist
     [[nodiscard]] std::set<dcgmModuleId_t> const &GetBlacklistedModules() const;
 
+    [[nodiscard]] std::string const &GetServiceAccount() const; //!< Service account for unprivileged processes
+
 private:
     struct Impl;
     struct ImplDeleter

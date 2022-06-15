@@ -138,6 +138,10 @@ NVML_ENTRY_POINT(nvmlDeviceGetMemoryInfo, tsapiDeviceGetMemoryInfo,
         (nvmlDevice_t device, nvmlMemory_t *memory),
         "(%p, %p)",
         device, memory)
+NVML_ENTRY_POINT(nvmlDeviceGetMemoryInfo_v2, tsapiDeviceGetMemoryInfo_v2,
+        (nvmlDevice_t device, nvmlMemory_v2_t *memory),
+        "(%p, %p)",
+        device, memory)
 NVML_ENTRY_POINT(nvmlDeviceGetPciInfo, tsapiDeviceGetPciInfo,
         (nvmlDevice_t device, nvmlPciInfo_t *pci),
         "(%p, %p)",
@@ -628,6 +632,11 @@ NVML_ENTRY_POINT(nvmlVgpuTypeGetName, tsapiVgpuTypeGetName,
         "(%d %p %p)",
         vgpuTypeId, vgpuTypeName, size)
 
+NVML_ENTRY_POINT(nvmlVgpuTypeGetGpuInstanceProfileId, tsapiVgpuTypeGetGpuInstanceProfileId,
+        (nvmlVgpuTypeId_t vgpuTypeId, unsigned int *gpuInstanceProfileId),
+        "(%d %p)",
+        vgpuTypeId, gpuInstanceProfileId);
+
 NVML_ENTRY_POINT(nvmlVgpuTypeGetDeviceID, tsapiVgpuTypeGetDeviceID,
         (nvmlVgpuTypeId_t vgpuTypeId, unsigned long long *deviceID, unsigned long long *subsystemID),
         "(%d %p %p)",
@@ -703,6 +712,16 @@ NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseStatus, tsapiVgpuInstanceGetLicenseSt
         "(%d %p)",
         vgpuInstance, licensed)
 
+NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseInfo, tsapiVgpuInstanceGetLicenseInfo,
+        (nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo),
+        "(%d %p)",
+        vgpuInstance, licenseInfo);
+
+NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseInfo_v2, tsapiVgpuInstanceGetLicenseInfo_v2,
+        (nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo),
+        "(%d %p)",
+        vgpuInstance, licenseInfo);
+
 NVML_ENTRY_POINT(nvmlVgpuInstanceGetType, tsapiVgpuInstanceGetType,
         (nvmlVgpuInstance_t vgpuInstance, unsigned int *vgpuTypeId),
         "(%d %p)",
@@ -739,6 +758,11 @@ NVML_ENTRY_POINT(nvmlVgpuInstanceGetMetadata, tsapiVgpuInstanceGetMetadata,
         (nvmlVgpuInstance_t vgpuInstance, nvmlVgpuMetadata_t *vgpuMetadata, unsigned int *bufferSize),
         "(%d %p %p)",
         vgpuInstance, vgpuMetadata, bufferSize)
+
+NVML_ENTRY_POINT(nvmlVgpuInstanceGetGpuPciId, tsapiVgpuInstanceGetGpuPciId,
+        (nvmlVgpuInstance_t vgpuInstance, char *vgpuPciId, unsigned int *length),
+        "(%d, %p, %p)",
+        vgpuInstance, vgpuPciId, length);
 
 NVML_ENTRY_POINT(nvmlDeviceGetVgpuMetadata, tsapiDeviceGetVgpuMetadata,
         (nvmlDevice_t device, nvmlVgpuPgpuMetadata_t *pgpuMetadata, unsigned int *bufferSize),
@@ -1014,6 +1038,11 @@ NVML_ENTRY_POINT(nvmlDeviceGetMigDeviceHandleByIndex, tsapiDeviceGetMigDeviceHan
         (nvmlDevice_t device, unsigned int index, nvmlDevice_t *migDevice),
         "(%p, %u, %p)",
         device, index, migDevice)
+
+NVML_ENTRY_POINT(nvmlSystemGetConfComputeState, tsapiSystemGetConfComputeState,
+        (nvmlConfComputeSystemState_t *ccMode),
+        "(%p)",
+        ccMode)
 
 NVML_ENTRY_POINT(nvmlDeviceGetDeviceHandleFromMigDeviceHandle, tsapiDeviceGetDeviceHandleFromMigDeviceHandle,
         (nvmlDevice_t migDevice, nvmlDevice_t *device),

@@ -595,9 +595,24 @@ dcgmReturn_t PhysicalGpu::CommandAll(bool all, const char *format, ...)
 {
     std::va_list args;
 
+    if (all)
+    {
+        // Reset failed worker count as we are commanding all of them.
+        m_failedWorkers = 0;
+    }
+
     for (auto &worker : m_dcgmCudaContexts)
     {
-        worker->ClrFailed();
+        if (all && worker->Failed())
+        {
+            // Reset worker failure status.
+            worker->ClrFailed();
+        }
+
+        if (worker->Failed())
+        {
+            continue;
+        }
 
         va_start(args, format);
         int err = worker->Command(format, args);
@@ -618,6 +633,13 @@ dcgmReturn_t PhysicalGpu::CommandAll(bool all, const char *format, ...)
 // Start tests running.
 dcgmReturn_t PhysicalGpu::StartTests(void)
 {
+    if (m_dcgmCudaContexts.size() == 0)
+    {
+        DCGM_LOG_ERROR << "Error: no GPUs or MIG instances to run on.";
+
+        return DCGM_ST_NO_DATA;
+    }
+
     m_responseFn      = &PhysicalGpu::ProcessStartingResponse;
     m_startedWorkers  = 0;
     m_finishedWorkers = 0;
@@ -648,11 +670,10 @@ dcgmReturn_t PhysicalGpu::StartTests(void)
             m_startedWorkers++;
         }
 
-
         m_tester->ReportWorkerStarted(worker);
     }
 
-    return DCGM_ST_OK;
+    return CreateDcgmGroups();
 }
 
 // Actually run tests when all are started.
@@ -660,10 +681,19 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
 {
     dcgmReturn_t rtSt { DCGM_ST_OK };
 
+    /*
     rtSt = CreateDcgmGroups();
 
     if (rtSt != DCGM_ST_OK)
     {
+        return rtSt;
+    }
+    */
+
+    if (AllFinished())
+    {
+        DCGM_LOG_INFO << "RunTests aborted because already finished";
+
         return rtSt;
     }
 
@@ -1368,14 +1398,19 @@ bool PhysicalGpu::AllReported(void) const
 }
 
 
-bool PhysicalGpu::AnyFailed(void) const
+bool PhysicalGpu::AnyWorkerRequestFailed(void) const
 {
     return m_failedWorkers > 0;
 }
 
 bool PhysicalGpu::IsValidated(void) const
 {
-    return m_valid;
+    /*
+     * Gate reported measurement validity by the last operation actually
+     * succeeding.
+     */
+
+    return m_valid && !AnyWorkerRequestFailed();
 }
 
 /*****************************************************************************/
@@ -2469,9 +2504,9 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
         return DCGM_ST_NOT_SUPPORTED;
     }
 
-    dcgmDeviceAttributes_v2 peerDeviceAttr;
+    dcgmDeviceAttributes_t peerDeviceAttr;
     memset(&peerDeviceAttr, 0, sizeof(peerDeviceAttr));
-    peerDeviceAttr.version = dcgmDeviceAttributes_version2;
+    peerDeviceAttr.version = dcgmDeviceAttributes_version;
     dcgmReturn             = dcgmGetDeviceAttributes(m_dcgmHandle, bestGpuId, &peerDeviceAttr);
     if (dcgmReturn != DCGM_ST_OK)
     {

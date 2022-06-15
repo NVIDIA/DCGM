@@ -19,7 +19,7 @@
 #include "TargetedPower_wrapper.h"
 #include <stdexcept>
 
-#include "NvvsThread.h"
+#include "DcgmThread/DcgmThread.h"
 #include "PluginStrings.h"
 
 /*************************************************************************/
@@ -599,7 +599,7 @@ bool ConstantPower::EnforcedPowerLimitTooLow()
 }
 
 /****************************************************************************/
-class ConstantPowerWorker : public NvvsThread
+class ConstantPowerWorker : public DcgmThread
 {
 private:
     CPDevice *m_device;               /* Which device this worker thread is running on */

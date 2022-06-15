@@ -78,6 +78,7 @@
         dcgmShutdown;
         dcgmStartEmbedded;
         dcgmStartEmbedded_v2;
+        dcgmStartEmbedded_v3;
         dcgmStatusClear;
         dcgmStatusCreate;
         dcgmStatusDestroy;

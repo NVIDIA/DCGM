@@ -17,6 +17,7 @@
 #include "DcgmLogging.h"
 #include "timelib.h"
 
+#include <atomic>
 #include <chrono>
 #include <ratio>
 
@@ -201,7 +202,7 @@ dcgmMutexReturn_t DcgmMutex::Lock(int complainMe, const char *file, int line)
     m_locker.ownerTid = myTid;
     m_locker.line     = line;
     m_locker.file     = file;
-    m_lockCount++;
+    m_lockCount.fetch_add(1, std::memory_order_relaxed);
     if (m_timeoutUsec)
     {
         m_locker.whenLockedUsec = timelib_usecSince1970();
@@ -215,7 +216,7 @@ dcgmMutexReturn_t DcgmMutex::Lock(int complainMe, const char *file, int line)
                     std::hash<decltype(m_locker.ownerTid)> {}(m_locker.ownerTid),
                     m_locker.file,
                     m_locker.line,
-                    m_lockCount);
+                    m_lockCount.load(std::memory_order_relaxed));
     }
 
     return DCGM_MUTEX_ST_OK;
@@ -298,7 +299,7 @@ dcgmMutexReturn_t DcgmMutex::CondWait(std::condition_variable &cv,
 /*****************************************************************************/
 long long DcgmMutex::GetLockCount(void)
 {
-    return m_lockCount;
+    return m_lockCount.load(std::memory_order_relaxed);
 }
 
 /*****************************************************************************/

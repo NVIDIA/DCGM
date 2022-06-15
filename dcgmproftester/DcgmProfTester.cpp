@@ -23,6 +23,7 @@
 #include "Reporter.h"
 #include "dcgm_fields.h"
 #include "dcgm_fields_internal.h"
+#include "dcgm_structs.h"
 #include "timelib.h"
 #include "vector_types.h"
 #include <cublas_proxy.hpp>
@@ -596,31 +597,30 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 
             entity.entityGroupId = DCGM_FE_GPU_CI;
             entity.entityId      = gpuInstance.m_ci;
-
-            dcgmFieldValue_v2 value {};
-
-            dcgmReturn_t dcgmReturn
-                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
-
-            if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
-            {
-                AbortOtherChildren(gpuInstance.m_gpuId);
-
-                DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
-                               << "] to CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
-                               << value.status << ")";
-
-                return DCGM_ST_GENERIC_ERROR;
-            }
-
-            cudaVisibleDevices = value.value.str;
         }
         else
         {
             entity.entityGroupId = DCGM_FE_GPU;
             entity.entityId      = gpuInstance.m_gpuId;
-            cudaVisibleDevices   = "";
         }
+
+        dcgmFieldValue_v2 value {};
+
+        dcgmReturn_t dcgmReturn
+            = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+
+        if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
+        {
+            AbortOtherChildren(gpuInstance.m_gpuId);
+
+            DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
+                           << "] to CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
+                           << value.status;
+
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        cudaVisibleDevices = value.value.str;
 
         worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);
 
@@ -705,10 +705,16 @@ dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
     {
         std::memcpy(&rfds, &m_parentReadFds, sizeof(fd_set));
 
+        double timeout = duration * m_gpuInstances.size() * 2.0 + 0.5;
+
+        // Some tests (1004) take a while to spin up.
+        if (timeout < 30.0)
+        {
+            timeout = 30.0;
+        }
+
         timeval tv;
 
-        // Wait up to twice the duration, per GPU instance, rounded up.
-        double timeout = duration * m_gpuInstances.size() * 2.0 + 0.5;
         double timeoutInt;
         double timeoutFrac;
 
@@ -930,11 +936,32 @@ dcgmReturn_t DcgmProfTester::RunTests(double reportingInterval,
 
     for (auto &[_, gpu] : m_gpus)
     {
+        /*
+         * By default, a Physical GPU has testing marked "valid". It can become
+         * invalid if testing fails. However, if testing is never started
+         * because of an initialization failure (which can happen whether or not
+         * we validate operation), it remains "valid". In that case, we double
+         * check if any worker was marked failed because it did not properly
+         * start up. That's the difference between TEST failure and TESTING
+         * failure.
+         */
+        if (gpu->AnyWorkerRequestFailed())
+        {
+            error_reporter << "GPU " << i << ", TestField " << testFieldId << " testing FAILED."
+                           << ReporterBase::new_line;
+            failed = true;
+        }
+
         if (!gpu->IsValidated())
         {
-            error_reporter << "GPU " << i << ", TestField " << testFieldId << " test FAILED." << ReporterBase::new_line;
-
+            error_reporter << "GPU " << i << ", TestField " << testFieldId << " test "
+                           << "FAILED." << ReporterBase::new_line;
             failed = true;
+        }
+        else
+        {
+            info_reporter << "GPU " << i << ", TestField " << testFieldId << " test "
+                          << "PASSED." << ReporterBase::new_line;
         }
 
         i++;
@@ -965,22 +992,25 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
 
     try
     {
-        std::unordered_map<dcgm_field_eid_t, dcgmMigHierarchyInfo_v2 *> gpuInstances;
+        if (hierarchy.count > 0)
+        {
+            std::unordered_map<dcgm_field_eid_t, dcgmMigHierarchyInfo_v2 *> gpuInstances;
 
         // Count GPU instances and per-GPU instance Compute instances.
-        for (auto *p = hierarchy.entityList; p < hierarchy.entityList + hierarchy.count; p++)
-        {
-            if ((p->entity.entityGroupId == DCGM_FE_GPU_I) && (p->parent.entityGroupId == DCGM_FE_GPU)
-                && (m_gpus.find(p->parent.entityId) != m_gpus.end()))
+            for (auto *p = hierarchy.entityList; p < hierarchy.entityList + hierarchy.count; p++)
             {
-                gpuInstances[p->entity.entityId] = p;
-            }
-            else if ((p->entity.entityGroupId == DCGM_FE_GPU_CI) && (p->parent.entityGroupId == DCGM_FE_GPU_I)
-                     && (gpuInstances.find(p->parent.entityId) != gpuInstances.end()))
-            {
-                m_gpuInstances.emplace_back(gpuInstances[p->parent.entityId]->parent.entityId,
-                                            gpuInstances[p->parent.entityId]->entity.entityId,
-                                            p->entity.entityId);
+                if ((p->entity.entityGroupId == DCGM_FE_GPU_I) && (p->parent.entityGroupId == DCGM_FE_GPU)
+                    && (m_gpus.find(p->parent.entityId) != m_gpus.end()))
+                {
+                    gpuInstances[p->entity.entityId] = p;
+                }
+                else if ((p->entity.entityGroupId == DCGM_FE_GPU_CI) && (p->parent.entityGroupId == DCGM_FE_GPU_I)
+                         && (gpuInstances.find(p->parent.entityId) != gpuInstances.end()))
+                {
+                    m_gpuInstances.emplace_back(gpuInstances[p->parent.entityId]->parent.entityId,
+                                                gpuInstances[p->parent.entityId]->entity.entityId,
+                                                p->entity.entityId);
+                }
             }
         }
 
@@ -1120,7 +1150,7 @@ int main(int argc, char **argv)
                                             arguments->m_parameters.m_fieldId,
                                             arguments->m_parameters.m_maxGpusInParallel);
 
-            if (dcgmReturn)
+            if (st != DCGM_ST_OK)
             {
                 DCGM_LOG_ERROR << "Error " << dcgmReturn << " from RunTests(). Exiting.";
             }

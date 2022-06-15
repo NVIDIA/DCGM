@@ -14,6 +14,7 @@
 add_subdirectory(testing)
 
 find_package(Jsoncpp REQUIRED)
+find_package(fmt REQUIRED)
 
 add_library(dcgmi_interface INTERFACE)
 target_include_directories(dcgmi_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -23,6 +24,7 @@ add_library(dcgmi_objects STATIC)
 target_link_libraries(dcgmi_objects
     PUBLIC
         dcgmi_interface
+        dcgm_thread_interface
         common_interface
         diag_interface
 )
@@ -60,6 +62,7 @@ target_link_libraries(dcgmi
         dcgm_interface
         common_interface
         diag_interface
+        dcgm_thread
         dcgmi_objects
         dcgmmodulediag_common
         buildinfo_objects
@@ -70,6 +73,7 @@ target_link_libraries(dcgmi
         nvvs_interface
         diag_interface
         ${JSONCPP_STATIC_LIBS}
+        fmt::fmt
 )
 
 target_link_options(dcgmi PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/dcgmi.linux_def)

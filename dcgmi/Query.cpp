@@ -51,13 +51,15 @@ static const char c_deviceUuid[] = "Device UUID";
 
 
 /* Device Info */
-static char QUERY_DEVICE_HEADER[] = "+--------------------------+-------------------------------------------------+\n"
-                                    "| <HEADER_INFO           > | Device Information                              |\n"
-                                    "+==========================+=================================================+\n";
+static const char QUERY_DEVICE_HEADER[]
+    = "+--------------------------+-------------------------------------------------+\n"
+      "| <HEADER_INFO           > | Device Information                              |\n"
+      "+==========================+=================================================+\n";
 
-static char QUERY_ATTRIBUTE_DATA[] = "| <ATTRIBUTE              >| <DEVICE_ATTRIBUTE_INFO                         >|\n";
+static const char QUERY_ATTRIBUTE_DATA[]
+    = "| <ATTRIBUTE              >| <DEVICE_ATTRIBUTE_INFO                         >|\n";
 
-static char QUERY_ATTRIBUTE_FOOTER[]
+static const char QUERY_ATTRIBUTE_FOOTER[]
     = "+--------------------------+-------------------------------------------------+\n";
 
 #define HEADER_TAG         "<HEADER_INFO"

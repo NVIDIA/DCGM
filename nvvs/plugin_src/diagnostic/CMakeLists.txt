@@ -14,7 +14,7 @@
 
 add_subdirectory(tests)
 
-declare_nvvs_plugin(gpuburn)
+declare_nvvs_plugin(gpuburn .)
 
 add_compile_options(-Wno-deprecated-declarations)
 

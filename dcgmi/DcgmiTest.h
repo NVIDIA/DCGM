@@ -99,6 +99,6 @@ private:
     DcgmiTest adminObj;
     unsigned int mGId;
     std::string mFieldId;
-    unsigned int mTime;
+    unsigned int mSecondsInFuture = 0; /* Number of seconds in the future to inject the value */
     std::string mInjectValue;
 };

@@ -161,6 +161,9 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so.2
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so.${VERSION}
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so.2
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.2

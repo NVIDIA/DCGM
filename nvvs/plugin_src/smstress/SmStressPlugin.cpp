@@ -20,7 +20,7 @@
 #include "SmStressPlugin.h"
 
 #include "DcgmLogging.h"
-#include "NvvsThread.h"
+#include "DcgmThread/DcgmThread.h"
 #include "PluginStrings.h"
 #include "cuda_runtime_api.h"
 
@@ -452,7 +452,7 @@ bool SmPerfPlugin::CheckPassFail(timelib64_t startTime, timelib64_t earliestStop
 }
 
 /*****************************************************************************/
-class SmPerfWorker : public NvvsThread
+class SmPerfWorker : public DcgmThread
 {
 private:
     SmPerfDevice *m_device;           /* Which device this worker thread is running on */
@@ -466,6 +466,7 @@ private:
     bool m_failEarly; /* true if we should check for failures while running and abort after the first one */
     unsigned long m_failCheckInterval; /* seconds between checks for failures */
     unsigned int m_matrixDim;          /* the size of the matrix dimensions */
+    DcgmMutex m_sync_mutex; /* Synchronization mutex for use by subclasses to control access to global data */
 
 public:
     /*************************************************************************/
@@ -631,6 +632,7 @@ SmPerfWorker::SmPerfWorker(SmPerfDevice *device,
     , m_dcgmRecorder(dr)
     , m_failEarly(failEarly)
     , m_failCheckInterval(failCheckInterval)
+    , m_sync_mutex(0)
 {
     m_useDgemm     = m_testParameters->GetBoolFromString(SMSTRESS_STR_USE_DGEMM);
     m_targetPerf   = m_testParameters->GetDouble(SMSTRESS_STR_TARGET_PERF);

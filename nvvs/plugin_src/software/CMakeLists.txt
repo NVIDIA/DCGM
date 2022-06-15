@@ -14,7 +14,7 @@
 
 add_subdirectory(tests)
 
-declare_nvvs_plugin(sw)
+declare_nvvs_plugin(sw .)
 
 set(LOCAL_NVVS_PLUGINS "")
 

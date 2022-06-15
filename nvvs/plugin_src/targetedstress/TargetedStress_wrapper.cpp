@@ -22,7 +22,7 @@
 #include <stdexcept>
 #include <stdio.h>
 
-#include "NvvsThread.h"
+#include "DcgmThread/DcgmThread.h"
 #include "PluginStrings.h"
 #include "cuda_runtime_api.h"
 
@@ -534,7 +534,7 @@ bool ConstantPerf::CheckPassFail(timelib64_t startTime, timelib64_t earliestStop
 }
 
 /*****************************************************************************/
-class ConstantPerfWorker : public NvvsThread
+class ConstantPerfWorker : public DcgmThread
 {
 private:
     CPerfDevice *m_device;             /* Which device this worker thread is running on */

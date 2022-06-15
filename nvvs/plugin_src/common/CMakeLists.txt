@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-declare_nvvs_plugin(common)
+declare_nvvs_plugin(common .)
 
 set(LOCAL_NVVS_PLUGINS "")
 
@@ -36,3 +36,4 @@ set(NVVS_PLUGINS "${NVVS_PLUGINS};${LOCAL_NVVS_PLUGINS}" PARENT_SCOPE)
 add_library(nvvs_plugins_common_objects OBJECT)
 target_sources(nvvs_plugins_common_objects PRIVATE PluginCommon.cpp)
 target_link_libraries(nvvs_plugins_common_objects PRIVATE nvvs_plugins_common_interface)
+

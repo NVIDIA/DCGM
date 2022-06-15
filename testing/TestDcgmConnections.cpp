@@ -417,7 +417,11 @@ public:
             if (op >= 99)
             {
                 dcgmReturn = dcgmDisconnect(dcgmHandle);
-                assert(dcgmReturn == DCGM_ST_OK);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    std::cerr << "Unable to disconnect to host engine from worker " << m_threadIndex << " return "
+                              << errorString(dcgmReturn);
+                }
                 connected = false;
             }
             else if (op >= 50)
@@ -425,13 +429,21 @@ public:
                 unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES] = {};
                 int count                                    = 0;
                 dcgmReturn = dcgmGetAllSupportedDevices(dcgmHandle, gpuIdList, &count);
-                assert(dcgmReturn == DCGM_ST_OK);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    std::cerr << "dcgmGetAllSupportedDevices failed for worker " << m_threadIndex << " return "
+                              << errorString(dcgmReturn);
+                }
             }
             else
             {
                 dcgmHostengineHealth_t health = { dcgmHostengineHealth_version, 0 };
                 dcgmReturn                    = dcgmHostengineIsHealthy(dcgmHandle, &health);
-                assert(dcgmReturn == DCGM_ST_OK);
+                if (dcgmReturn != DCGM_ST_OK)
+                {
+                    std::cerr << "dcgmHostengineIsHealthy failed for worker " << m_threadIndex << " return "
+                              << errorString(dcgmReturn);
+                }
             }
 
             if (i % 10000 == 0) // Log every 0.01%

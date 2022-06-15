@@ -46,8 +46,6 @@ fi
 
 eval set -- "${PARSED}"
 
-
-STATIC_ANALYSIS=0
 while true; do
     case "${1}" in
         -h | --help)
@@ -64,10 +62,6 @@ while true; do
             ;;
     esac
 done
-
-if [[ ${STATIC_ANALYSIS} -eq 1 ]]; then
-    MOUNT_OPTIONS="--mount source=dcgm_coverity,target=/coverity"
-fi
 
 if [[ -t 0 ]]; then
     DOCKER_ARGS=-it

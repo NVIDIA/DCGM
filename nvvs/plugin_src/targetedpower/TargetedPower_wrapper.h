@@ -21,12 +21,12 @@
 #include <string>
 #include <vector>
 
-#include "CudaCommon.h"
 #include "DcgmError.h"
 #include "DcgmRecorder.h"
 #include "Plugin.h"
 #include "PluginCommon.h"
 #include "PluginDevice.h"
+#include <CudaCommon.h>
 
 #include <NvvsStructs.h>
 #include <cublas_proxy.hpp>

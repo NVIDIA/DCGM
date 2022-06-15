@@ -40,7 +40,8 @@ TEST_CASE("TaskRunner: Single Thread")
     auto fut    = tr.Enqueue(make_task([] { return 10; }));
     auto result = tr.Run();
     REQUIRE(result == TaskRunner::RunResult::Ok);
-    REQUIRE(fut.get() == 10);
+    REQUIRE(fut.has_value());
+    REQUIRE((*fut).get() == 10);
 }
 
 TEST_CASE("TaskRunner: Deferred")
@@ -66,7 +67,8 @@ TEST_CASE("TaskRunner: Deferred")
 
     result = tr.Run();
     REQUIRE(result == TaskRunner::RunResult::Ok);
-    REQUIRE(fut.get() == 10);
+    REQUIRE(fut.has_value());
+    REQUIRE((*fut).get() == 10);
 }
 
 TEST_CASE("TaskRunner: Simple")
@@ -84,7 +86,8 @@ TEST_CASE("TaskRunner: Simple")
     });
     auto fut = tr.Enqueue(make_task([] { return 10; }));
 
-    REQUIRE(fut.get() == 10);
+    REQUIRE(fut.has_value());
+    REQUIRE((*fut).get() == 10);
     tr.Stop();
     stop.store(true, std::memory_order_relaxed);
     runner.join();
@@ -116,11 +119,20 @@ TEST_CASE("TaskRunner: Complex")
         auto intFut1     = HelperTestFunction(tr);
         auto intFut2     = HelperTestFunction(tr);
         auto complexFunc = [f1 = std::move(intFut1), f2 = std::move(intFut2)] {
-            return f1.get() + f2.get();
+            if (!f1.has_value())
+            {
+                return -1;
+            }
+            if (!f2.has_value())
+            {
+                return -2;
+            }
+            return (*f1).get() + (*f2).get();
         };
         return tr.Enqueue(make_task(std::move(complexFunc)));
     }));
-    REQUIRE(fut.get() == 20);
+    REQUIRE(fut.has_value());
+    REQUIRE((*fut).get() == 20);
     tr.Stop();
     stop.store(true, std::memory_order_relaxed);
     runner.join();
@@ -150,14 +162,23 @@ TEST_CASE("TaskRunner: Complex with multiple runners")
     });
     auto fut = tr.Enqueue(make_task([&tr]() mutable {
         auto intFut1 = HelperTestFunction(tr);
+        if (!intFut1.has_value())
+        {
+            return -1;
+        }
         auto intFut2 = HelperTestFunction(tr);
+        if (!intFut2.has_value())
+        {
+            return -2;
+        }
 
         // This code would deadlock if there is only one runner thread as future.get() would block the only
         // thread that executes the tasks. See "TaskRunner: Complex" test for an example how this can be solved if there
         // is only one runner thread.
-        return intFut1.get() + intFut2.get();
+        return (*intFut1).get() + (*intFut2).get();
     }));
-    REQUIRE(fut.get() == 20);
+    REQUIRE(fut.has_value());
+    REQUIRE((*fut).get() == 20);
     tr.Stop();
     stop.store(true, std::memory_order_relaxed);
     runner1.join();
@@ -171,6 +192,7 @@ TEST_CASE("TaskRunner: Multiple runners", "[!mayfail]")
      * This test may fail CHECK(seenIds.size() == 10) assertion
      */
     TaskRunner tr;
+    tr.SetQueueCapacity(10000);
     std::vector<std::thread> runners;
     std::atomic_bool stop { false };
     runners.reserve(10);
@@ -212,4 +234,80 @@ TEST_CASE("TaskRunner: Multiple runners", "[!mayfail]")
     }
     REQUIRE(seenIds.size() > 1);
     CHECK(seenIds.size() == 10);
+}
+
+TEST_CASE("TaskRunner: Limited Queue")
+{
+    const size_t cTaskRunnerCapacity = 10;
+    TaskRunner tr;
+    tr.SetQueueCapacity(cTaskRunnerCapacity);
+
+    std::jthread runner([&tr](std::stop_token const &stop_token) {
+        while (!stop_token.stop_requested())
+        {
+            if (tr.Run() != TaskRunner::RunResult::Ok)
+            {
+                break;
+            }
+        }
+    });
+
+    const size_t cNumOffenders      = 50;
+    const size_t cEventsPerOffender = 1000;
+    std::atomic_size_t executed     = 0;
+    std::vector<std::jthread> offenders {};
+    std::atomic_size_t iterations  = 0;
+    std::atomic_size_t failedToAdd = 0;
+    offenders.reserve(cNumOffenders);
+    for (size_t i = 0; i < cNumOffenders; ++i)
+    {
+        offenders.emplace_back([&tr, &executed, &iterations, &failedToAdd]() {
+            for (size_t j = 0; j < cEventsPerOffender; ++j)
+            {
+                iterations.fetch_add(1, std::memory_order_relaxed);
+                auto fut = tr.Enqueue(make_task([&executed]() { executed.fetch_add(1, std::memory_order_relaxed); }));
+                if (!fut.has_value())
+                {
+                    failedToAdd.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        });
+    }
+
+    for (auto &o : offenders)
+    {
+        o.join();
+    }
+    int cWaitIterations = 5;
+    int waitIterations  = cWaitIterations;
+    while (waitIterations > 0 && (failedToAdd + executed) < iterations)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        --waitIterations;
+    }
+
+    tr.Stop();
+    fmt::print("Wait iterations elapsed: {}\n", cWaitIterations - waitIterations);
+    fmt::print("Iterations: {}\nExecutions: {}\nFailed to add: {}\n", iterations, executed, failedToAdd);
+    REQUIRE(executed >= cTaskRunnerCapacity);
+    REQUIRE((failedToAdd + executed) == iterations);
+}
+
+TEST_CASE("TaskRunner: Task with attempts")
+{
+    TaskRunner tr {};
+    std::jthread runner([&tr](std::stop_token const &token) {
+        while (!token.stop_requested())
+        {
+            if (tr.Run() == TaskRunner::RunResult::Ok)
+            {
+                break;
+            }
+        }
+    });
+    auto fut = tr.Enqueue(make_task_with_attempts(1, []() -> std::optional<int> { return std::nullopt; }));
+
+    REQUIRE(fut.has_value());
+    REQUIRE_THROWS_AS((*fut).get(), std::future_error);
+    tr.Stop();
 }

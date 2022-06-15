@@ -143,7 +143,7 @@ int TestDiag::TestPopulateGpuList()
 
     // The server code will set the gpuId sometimes on GPUs that haven't run, but when it does
     // it'll initialize the tests to not have run, so let's set up ours that way
-    for (unsigned int i = 0; i < DCGM_PER_GPU_TEST_COUNT; i++)
+    for (unsigned int i = 0; i < DCGM_PER_GPU_TEST_COUNT_V7; i++)
     {
         diagResult.perGpuResponses[0].results[i].status = DCGM_DIAG_RESULT_NOT_RUN;
         diagResult.perGpuResponses[1].results[i].status = DCGM_DIAG_RESULT_PASS;
@@ -513,14 +513,14 @@ int TestDiag::TestHelperJsonBuildOutput()
     {
         if (i == 0)
         {
-            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT; j++)
+            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
             {
                 r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_PASS;
             }
         }
         else if (i == 1)
         {
-            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT; j++)
+            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
             {
                 r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_FAIL;
                 snprintf(r.perGpuResponses[i].results[j].error.msg,
@@ -531,7 +531,7 @@ int TestDiag::TestHelperJsonBuildOutput()
         }
         else
         {
-            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT; j++)
+            for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
             {
                 r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_NOT_RUN;
             }

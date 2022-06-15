@@ -16,17 +16,20 @@
 #ifndef _NVCMI_TCLAP_DEFS_H
 #define _NVCMI_TCLAP_DEFS_H
 
+#include <tclap/Arg.h>
+#include <tclap/CmdLine.h>
+#include <tclap/CmdLineInterface.h>
+#include <tclap/CmdLineOutput.h>
+
+#include <fmt/format.h>
+
 #include <iomanip>
 #include <iostream>
 #include <locale>
 #include <sstream>
 #include <stdexcept>
-#include <tclap/Arg.h>
-#include <tclap/CmdLine.h>
-#include <tclap/CmdLineInterface.h>
-#include <tclap/CmdLineOutput.h>
-#include <tclap/XorHandler.h>
 #include <unordered_set>
+
 
 /* Extensions to the TCLAP library for very specific processing and display */
 
@@ -53,8 +56,8 @@ public:
             TCLAP::SwitchArg *help
                 = new TCLAP::SwitchArg("h", "help", "Displays usage information and exits.", false, v);
             CmdLine::add(help);
-            CmdLine::deleteOnExit(help);
-            CmdLine::deleteOnExit(v);
+            CmdLine::_deleteOnExit(help);
+            CmdLine::_deleteOnExit(v);
         }
     }
 
@@ -157,54 +160,73 @@ private:
 
     virtual void _longUsage(TCLAP::CmdLineInterface &_cmd, std::ostream &os) const
     {
-        std::list<TCLAP::Arg *> argList = _cmd.getArgList();
-        std::string message             = _cmd.getMessage();
-        TCLAP::XorHandler xorHandler    = _cmd.getXorHandler();
-        std::stringstream ss;
+        std::string message   = _cmd.getMessage();
+        auto const &argGroups = _cmd.getArgGroups();
 
         // First the host
-        for (TCLAP::ArgListIterator it = argList.begin(); it != argList.end(); it++)
-            if (!(*it)->getName().compare("host") || !(*it)->getName().compare("group"))
+        for (auto const &group : argGroups)
+        {
+            if (group->isExclusive())
             {
-                ss.str("");
-                ss << std::left << std::setw(17) << std::setfill(' ')
-                   << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + "  --" + (*it)->getName();
-                ss << std::left << std::setw(10) << _helperGetValueFromShortID((*it)->shortID());
-                DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 29);
+                continue;
             }
+            for (auto const &arg : *group)
+            {
+                auto const &name = arg->getName();
+                if (!(name == "host" || name == "group"))
+                {
+                    continue;
+                }
+                auto const ss = fmt::format(
+                    "{: <17}{:<10} {}",
+                    fmt::format("{}{}  --{}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), arg->getName()),
+                    _helperGetValueFromShortID(arg->shortID()),
+                    arg->getDescription());
+                DCGMOutput::spacePrint(os, ss, 80, 2, 29);
+            }
+        }
 
         // Second is XOR
-        std::vector<std::vector<TCLAP::Arg *>> xorList = xorHandler.getXorList();
-        for (int i = 0; static_cast<unsigned int>(i) < xorList.size(); i++)
+        for (auto const &group : argGroups)
         {
-            for (TCLAP::ArgVectorIterator it = xorList[i].begin(); it != xorList[i].end(); it++)
+            if (!group->isExclusive())
             {
-                if ((*it)->getName().compare("group"))
+                continue;
+            }
+            for (auto const &arg : *group)
+            {
+                if (arg->getName() == "group")
                 {
-                    ss.str("");
-                    ss << std::left << std::setw(17) << std::setfill(' ')
-                       << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + "  --" + (*it)->getName();
-                    ss << std::left << std::setw(10) << _helperGetValueFromShortID((*it)->shortID());
-                    DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 29);
+                    continue;
                 }
+                auto const ss = fmt::format(
+                    "{: <17}{:<10} {}",
+                    fmt::format("{}{}  --{}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), arg->getName()),
+                    _helperGetValueFromShortID(arg->shortID()),
+                    arg->getDescription());
+                DCGMOutput::spacePrint(os, ss, 80, 2, 29);
             }
         }
 
         // Then the rest
-        for (TCLAP::ArgListIterator it = argList.begin(); it != argList.end(); it++)
+        for (auto const &group : argGroups)
         {
-            if (ArgIsHidden((*it)->getName()))
+            if (group->isExclusive())
             {
                 continue;
             }
-
-            if (!xorHandler.contains((*it)) && (*it)->getName().compare("host") && (*it)->getName().compare("group"))
+            for (auto const &arg : *group)
             {
-                ss.str("");
-                ss << std::left << std::setw(17) << std::setfill(' ')
-                   << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + "  --" + (*it)->getName();
-                ss << std::left << std::setw(10) << _helperGetValueFromShortID((*it)->shortID());
-                DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 29);
+                if (arg->getName() == "host" || arg->getName() == "group")
+                {
+                    continue;
+                }
+                auto const ss = fmt::format(
+                    "{: <17}{:<10} {}",
+                    fmt::format("{}{}  --{}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), arg->getName()),
+                    _helperGetValueFromShortID(arg->shortID()),
+                    arg->getDescription());
+                DCGMOutput::spacePrint(os, ss, 80, 2, 29);
             }
         }
 
@@ -347,46 +369,70 @@ class DCGMEntryOutput : public DCGMOutput
 {
     virtual void _longUsage(TCLAP::CmdLineInterface &_cmd, std::ostream &os) const
     {
-        std::list<TCLAP::Arg *> argList = _cmd.getArgList();
-        std::string message             = _cmd.getMessage();
-        TCLAP::XorHandler xorHandler    = _cmd.getXorHandler();
-        std::stringstream ss;
+        std::string message = _cmd.getMessage();
+        auto argGroups      = _cmd.getArgGroups();
 
         // First the required
-        for (TCLAP::ArgListIterator it = argList.begin(); it != argList.end(); it++)
-            if (!xorHandler.contains((*it)) && (*it)->isRequired())
+        for (auto const &group : argGroups)
+        {
+            /* Skip Exclusive (used to be XOR groups) */
+            if (group->isExclusive())
             {
-                ss << std::left << std::setw(17) << std::setfill(' ')
-                   << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + "    " + (*it)->getName();
-                DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 19);
+                continue;
             }
+            for (auto const &arg : *group)
+            {
+                if (arg->isRequired())
+                {
+                    auto const ss = fmt::format(
+                        "{: <17} {}",
+                        fmt::format(
+                            "{}{}    {}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), arg->getName()),
+                        arg->getDescription());
+                    DCGMOutput::spacePrint(os, ss, 80, 2, 19);
+                }
+            }
+        }
 
         // Second is XOR
-        std::vector<std::vector<TCLAP::Arg *>> xorList = xorHandler.getXorList();
-        for (int i = 0; static_cast<unsigned int>(i) < xorList.size(); i++)
+        for (auto const group : argGroups)
         {
-            for (TCLAP::ArgVectorIterator it = xorList[i].begin(); it != xorList[i].end(); it++)
+            if (!group->isExclusive())
             {
-                ss.str("");
-                ss << std::left << std::setw(17) << std::setfill(' ')
-                   << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + "  " + (*it)->getName();
-                DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 19);
-                // if ( it+1 != xorList[i].end() )
-                // spacePrint(os, "-- OR --", 75, 9, 0);
+                continue;
+            }
+            for (auto const &arg : *group)
+            {
+                auto const ss = fmt::format(
+                    "{: <17} {}",
+                    fmt::format("{}{}    {}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), arg->getName()),
+                    arg->getDescription());
+                DCGMOutput::spacePrint(os, ss, 80, 2, 19);
             }
         }
 
         // Then the rest
-        for (TCLAP::ArgListIterator it = argList.begin(); it != argList.end(); it++)
-            if (!xorHandler.contains((*it)) && !(*it)->isRequired())
+        for (auto const &group : argGroups)
+        {
+            if (group->isExclusive())
             {
-                std::string prefix
-                    = (!(*it)->getName().compare("help") || !(*it)->getName().compare("version")) ? "  --" : "    ";
-                ss.str("");
-                ss << std::left << std::setw(17) << std::setfill(' ')
-                   << ((*it)->getFlag().empty() ? "  " : "-") + (*it)->getFlag() + prefix + (*it)->getName();
-                DCGMOutput::spacePrint(os, ss.str() + " " + (*it)->getDescription(), 80, 2, 19);
+                continue;
             }
+            for (auto const &arg : *group)
+            {
+                if (arg->isRequired())
+                {
+                    continue;
+                }
+                auto const prefix = (arg->getName() == "help" || arg->getName() == "version") ? "  --" : "    ";
+                auto const ss     = fmt::format(
+                    "{: <17} {}",
+                    fmt::format(
+                        "{}{}{}{}", (arg->getFlag().empty() ? "  " : "-"), arg->getFlag(), prefix, arg->getName()),
+                    arg->getDescription());
+                DCGMOutput::spacePrint(os, ss, 80, 2, 19);
+            }
+        }
 
         std::cout << std::endl;
         DCGMOutput::spacePrint(os, footer, 80, 1, 0);
