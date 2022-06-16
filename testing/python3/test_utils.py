@@ -67,6 +67,29 @@ def set_tests_directory(testDir):
 
     test_directory = testDir
 
+def verify_dcgmi_executible_visible_for_all_users():
+    # We don't run it if not on this platform
+    if utils.platform_identifier not in apps.dcgmi_app.DcgmiApp.paths:
+        logger.info('Skip unsupported platform')
+        return False
+
+    dcgmi_path = apps.dcgmi_app.DcgmiApp.paths[utils.platform_identifier]
+    abs_path = os.path.realpath(dcgmi_path)
+
+    import stat
+    while True:
+        mode = os.stat(abs_path).st_mode
+        if (not(bool(mode & stat.S_IXOTH) and bool(mode & stat.S_IROTH))):
+            logger.error("dcgmi tests cannot run because of insufficient perms on %s, need o:rx" % abs_path)
+            return False
+
+        if abs_path == "/":
+            break
+
+        abs_path = os.path.split(abs_path)[0]
+
+    return True
+
 def is_nvswitch_detected():
     """ Tries to detect if nvswitch is present """
 
@@ -174,7 +197,11 @@ def get_cuda_driver_version(handle, gpuId):
 
 def cuda_visible_devices_required(handle, gpuId):
     # We need to have a cuda_visible_devices value if this GPU has any MIG entities
-    hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
+    try:
+        hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
+    except dcgm_structs.DCGMError_NotSupported:
+        return False
+
     for i in range(0, hierarchy.count):
         entity = hierarchy.entityList[i]
         if entity.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
@@ -324,6 +351,45 @@ def run_only_on_bare_metal():
         return wrapper
     return decorator
 
+def run_only_on_architecture(arch):
+    """
+    Run only on the specified architectures
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            framework_path = utils.get_testing_framework_library_path()
+            if framework_path.find(arch) == -1:
+                skip_test("The plugin we're testing doesn't exist on this platform.")
+            else:
+                result = fn(*args, **kwds)
+        return wrapper
+    return decorator
+
+def run_only_with_minimum_cuda_version(major_ver, minor_ver):
+    """
+    Run only if we're on the specified version or higher
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                skip_test("Can't guarantee the cuda version without a valid handle to DCGM, skipping test.")
+            if 'gpuIds' not in kwds:
+                skip_test("Can't guarantee the cuda version without a GPU list, skipping test.")
+            handle = kwds['handle']
+            gpuIds = kwds['gpuIds']
+
+            major, minor = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+            if major < major_ver:
+                test_utils.skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
+                        % (major_ver, minor_ver))
+            elif major == major_ver and minor < minor_ver:
+                test_utils.skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
+                        % (major_ver, minor_ver))
+        return wrapper
+    return decorator
+
 def run_first():
     """
     Forces get_test_content to move this test at the top of the list.
@@ -438,7 +504,7 @@ class assert_raises(object):
         #If we weren't expecting a connection exception and we get one, pass it up the stack rather than the assertion exception
         notConnectedClass = dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID)
         if (not self.expected_exception == notConnectedClass) and isinstance(exception, notConnectedClass):
-           return False
+            return False
 
         assert not exception is None, \
             "This code block didn't return ANY exception (expected %s exception)" % self.expected_exception.__name__
@@ -1167,6 +1233,7 @@ def run_with_injection_gpus(gpuCount=1):
                 skip_test("unable to add fake Gpu with more than %d gpus" % dcgm_structs.DCGM_MAX_NUM_DEVICES)
             cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
             cfe.numToCreate = gpuCount
+            logger.info("Injecting %u fake GPUs" % (gpuCount))
             for i in range(0, gpuCount):
                 cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU
             updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
@@ -1224,7 +1291,7 @@ def run_with_injection_gpu_compute_instances(totalCIs=1):
         @wraps(fn)
         def wrapper(*args, **kwds):
             if 'handle' not in kwds:
-                raise Exception("Not connected to remote or embedded host engine. Use approriate decorator")
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if 'instanceIds' not in kwds:
                 raise Exception("Injected CIs require instance IDs")
@@ -1501,6 +1568,31 @@ def group_gpu_ids_by_sku(handle, gpuIds):
 
     #logger.info("skuGpuLists: %s, retList %s" % (str(skuGpuLists), str(retList)))
     return retList
+
+def exclude_non_compute_gpus():
+    '''
+    Exclude non-display GPUs on, for example, RedOctober (Nvidia T1000).
+
+    This decorator must come after a decorator that provides a list of gpuIds like run_only_with_live_gpus
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            gpuIds = []
+            for gpuId in kwds['gpuIds']:
+                deviceId = get_device_id(kwds['handle'], gpuId)
+                '''
+                Exclude non-compute GPUs here. Right now this is just
+                Nvidia T1000 GPU.
+                '''
+                if deviceId != 0x1fb0:
+                    gpuIds.append(gpuId)
+            kwds['gpuIds'] = gpuIds
+            fn(*args, **kwds)
+            return
+
+        return wrapper
+    return decorator
 
 def for_all_same_sku_gpus():
     '''
@@ -1971,3 +2063,33 @@ def set_nvvs_bin_path():
     else:
         logger.debug("NVVS directory: %s" % nvvsDir)
         os.environ['NVVS_BIN_PATH'] = nvvsDir #The env variable parser in DcgmDiagManager is only the directory
+
+
+def run_for_each_gpu_individually():
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            gpu_ids = kwargs['gpuIds']
+            del kwargs['gpuIds']
+            for gpu_id in gpu_ids:
+                kwargs['gpuId'] = gpu_id
+                try:
+                    fn(*args, **kwargs)
+                except TestSkipped as skip:
+                    logger.info("Skipping for gpuId %u due to %s" % (gpu_id, skip))
+                    continue
+        return wrapper
+    return decorator
+
+def with_service_account(serviceAccountName):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                os.system('useradd -r -s /usr/sbin/nologin -M %s' % serviceAccountName)
+                fn(*args, **kwargs)
+            finally:
+                os.system('userdel %s' % serviceAccountName)
+
+        return wrapper
+    return decorator

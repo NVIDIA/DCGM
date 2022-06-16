@@ -21,10 +21,9 @@
 #include <DcgmVariantHelper.hpp>
 #include <MigIdParser.hpp>
 #include <Query.h>
+#include <dcgmi_common.h>
 
-#include <algorithm>
 #include <cstring>
-#include <random>
 
 
 TEST_CASE("Parse CUDA Format MIG")
@@ -46,8 +45,8 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpuI const &) { REQUIRE(false); },
                           [](ParsedGpuCi const &val) {
                               REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                              REQUIRE(val.instanceId == 0);
-                              REQUIRE(val.computeInstanceId == 0);
+                              REQUIRE(val.instanceId == 0u);
+                              REQUIRE(val.computeInstanceId == 0u);
                           }),
                value);
 
@@ -57,8 +56,8 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpuI const &) { REQUIRE(false); },
                           [](ParsedGpuCi const &val) {
                               REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                              REQUIRE(val.instanceId == 1);
-                              REQUIRE(val.computeInstanceId == 0);
+                              REQUIRE(val.instanceId == 1u);
+                              REQUIRE(val.computeInstanceId == 0u);
                           }),
                value);
 
@@ -68,8 +67,8 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpuI const &) { REQUIRE(false); },
                           [](ParsedGpuCi const &val) {
                               REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                              REQUIRE(val.instanceId == 2);
-                              REQUIRE(val.computeInstanceId == 3);
+                              REQUIRE(val.instanceId == 2u);
+                              REQUIRE(val.computeInstanceId == 3u);
                           }),
                value);
 
@@ -78,7 +77,7 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpu const &) { REQUIRE(false); },
                           [](ParsedGpuI const &val) {
                               REQUIRE(val.gpuUuid == "aeab3757-56a6-7e30-3f7c-1f322454bde2");
-                              REQUIRE(val.instanceId == 4);
+                              REQUIRE(val.instanceId == 4u);
                           },
                           [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
@@ -103,8 +102,8 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpuI const &) { REQUIRE(false); },
                           [](ParsedGpuCi const &val) {
                               REQUIRE(val.gpuUuid == "0");
-                              REQUIRE(val.instanceId == 1);
-                              REQUIRE(val.computeInstanceId == 0);
+                              REQUIRE(val.instanceId == 1u);
+                              REQUIRE(val.computeInstanceId == 0u);
                           }),
                value);
 
@@ -113,7 +112,7 @@ TEST_CASE("Parse CUDA Format MIG")
                           [](ParsedGpu const &) { REQUIRE(false); },
                           [](ParsedGpuI const &val) {
                               REQUIRE(val.gpuUuid == "0");
-                              REQUIRE(val.instanceId == 1);
+                              REQUIRE(val.instanceId == 1u);
                           },
                           [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
@@ -122,6 +121,55 @@ TEST_CASE("Parse CUDA Format MIG")
     std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
                           [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == "0"); },
                           [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
+               value);
+
+    value = ParseInstanceId("*");
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &val) { REQUIRE(val.gpuUuid == DcgmNs::Wildcarded {}); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
+               value);
+
+    value = ParseInstanceId("0/*");
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &val) {
+                              REQUIRE(val.gpuUuid == "0");
+                              REQUIRE(val.instanceId == DcgmNs::Wildcarded {});
+                          },
+                          [](ParsedGpuCi const &) { REQUIRE(false); }),
+               value);
+
+    value = ParseInstanceId("0/0/*");
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == "0");
+                              REQUIRE(val.instanceId == 0u);
+                              REQUIRE(val.computeInstanceId == DcgmNs::Wildcarded {});
+                          }),
+               value);
+
+    value = ParseInstanceId("*/*/*");
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &) { REQUIRE(false); },
+                          [](ParsedGpuCi const &val) {
+                              REQUIRE(val.gpuUuid == DcgmNs::Wildcarded {});
+                              REQUIRE(val.instanceId == DcgmNs::Wildcarded {});
+                              REQUIRE(val.computeInstanceId == DcgmNs::Wildcarded {});
+                          }),
+               value);
+
+    value = ParseInstanceId("*/*");
+    std::visit(overloaded([](ParsedUnknown const &) { REQUIRE(false); },
+                          [](ParsedGpu const &) { REQUIRE(false); },
+                          [](ParsedGpuI const &val) {
+                              REQUIRE(val.gpuUuid == DcgmNs::Wildcarded {});
+                              REQUIRE(val.instanceId == DcgmNs::Wildcarded {});
+                          },
                           [](ParsedGpuCi const &) { REQUIRE(false); }),
                value);
 }
@@ -290,5 +338,59 @@ TEST_CASE("Topological Sort")
             REQUIRE(ci_3_1.info.nvmlInstanceId == 3);
             REQUIRE(ci_3_1.info.nvmlComputeInstanceId == 1);
         }
+    }
+}
+
+enum class UuidPolicy
+{
+    UseUuid,
+    UseGpuIndex
+};
+
+static DcgmNs::ParseResult FromHierarchyInfo(dcgmMigHierarchyInfo_v2 const &info, UuidPolicy policy)
+{
+    using namespace DcgmNs;
+    auto const uuid = CutUuidPrefix(info.info.gpuUuid);
+    switch (info.entity.entityGroupId)
+    {
+        case DCGM_FE_GPU_I:
+            return ParsedGpuI { (policy == UuidPolicy::UseUuid ? std::string { uuid }
+                                                               : std::to_string(info.info.nvmlGpuIndex)),
+                                info.info.nvmlInstanceId };
+            break;
+
+        case DCGM_FE_GPU_CI:
+            return ParsedGpuCi { (policy == UuidPolicy::UseUuid ? std::string { uuid }
+                                                                : std::to_string(info.info.nvmlGpuIndex)),
+                                 info.info.nvmlInstanceId,
+                                 info.info.nvmlComputeInstanceId };
+            break;
+
+        default:
+            return ParsedUnknown {};
+            break;
+    }
+}
+
+TEST_CASE("EntityMap lookup")
+{
+    auto hierarchy = CreateLifeLikeData();
+    TopologicalSort(hierarchy);
+
+    DcgmNs::EntityMap entityList;
+    for (auto idx = 0u; idx < hierarchy.count; ++idx)
+    {
+        entityList << hierarchy.entityList[idx];
+    }
+
+    REQUIRE(entityList.size() >= hierarchy.count);
+
+    for (auto idx = 0u; idx < hierarchy.count; ++idx)
+    {
+        auto parseResult = FromHierarchyInfo(hierarchy.entityList[idx], UuidPolicy::UseUuid);
+        REQUIRE(entityList.count(parseResult) != 0);
+        parseResult = FromHierarchyInfo(hierarchy.entityList[idx], UuidPolicy::UseGpuIndex);
+        REQUIRE_FALSE(std::holds_alternative<DcgmNs::ParsedUnknown>(parseResult));
+        REQUIRE(entityList.count(parseResult) != 0);
     }
 }

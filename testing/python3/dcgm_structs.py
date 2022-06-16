@@ -167,7 +167,10 @@ DCGM_SM_STRESS_INDEX        = 3
 DCGM_TARGETED_STRESS_INDEX  = 4
 DCGM_TARGETED_POWER_INDEX   = 5
 DCGM_MEMORY_BANDWIDTH_INDEX = 6
-DCGM_PER_GPU_TEST_COUNT     = 7
+DCGM_MEMTEST_INDEX          = 7
+DCGM_PULSE_TEST_INDEX       = 8
+DCGM_PER_GPU_TEST_COUNT_V7  = 9
+DCGM_PER_GPU_TEST_COUNT_V6  = 7
 
 # DCGM Diag Level One test indices
 DCGM_SWTEST_BLACKLIST            = 0
@@ -987,11 +990,39 @@ class  c_dcgmDeviceVgpuTypeInfo_v1(_PrintableStructure):
         ('fbTotal', c_uint)
     ]
 
+class  c_dcgmDeviceVgpuTypeInfo_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('vgpuTypeId', c_uint),
+        ('vgpuTypeName', c_char * DCGM_VGPU_NAME_BUFFER_SIZE),
+        ('vgpuTypeClass', c_char * DCGM_VGPU_NAME_BUFFER_SIZE),
+        ('vgpuTypeLicense', c_char * DCGM_GRID_LICENSE_BUFFER_SIZE),
+        ('deviceId', c_uint),
+        ('subsystemId', c_uint),
+        ('numDisplayHeads', c_uint),
+        ('maxInstances', c_uint),
+        ('frameRateLimit', c_uint),
+        ('maxResolutionX', c_uint),
+        ('maxResolutionY', c_uint),
+        ('fbTotal', c_uint),
+        ('gpuInstanceProfileId', c_uint)
+    ]
+
+dcgmDeviceVgpuTypeInfo_version2 = make_dcgm_version(c_dcgmDeviceVgpuTypeInfo_v2, 2)
+
 class c_dcgmDeviceSettings_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('persistenceModeEnabled', c_uint),
         ('migModeEnabled', c_uint),
+    ]
+
+class c_dcgmDeviceSettings_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('persistenceModeEnabled', c_uint),
+        ('migModeEnabled', c_uint),
+        ('confidentialComputeMode', c_uint),
     ]
 
 # /**
@@ -1026,6 +1057,19 @@ class c_dcgmDeviceAttributes_v2(_PrintableStructure):
 
 dcgmDeviceAttributes_version2 = make_dcgm_version(c_dcgmDeviceAttributes_v2, 2)
 
+class c_dcgmDeviceAttributes_v3(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('clockSets', c_dcgmDeviceSupportedClockSets_v1),
+        ('thermalSettings', c_dcgmDeviceThermals_v1),
+        ('powerLimits', c_dcgmDevicePowerLimits_v1),
+        ('identifiers', c_dcgmDeviceIdentifiers_v1),
+        ('memoryUsage', c_dcgmDeviceMemoryUsage_v1),
+        ('settings', c_dcgmDeviceSettings_v2),
+    ]
+
+dcgmDeviceAttributes_version3 = make_dcgm_version(c_dcgmDeviceAttributes_v3, 3)
+
 # /**
 #  * Represents vGPU attributes corresponding to a device
 #  */
@@ -1046,6 +1090,24 @@ class c_dcgmVgpuDeviceAttributes_v6(_PrintableStructure):
     ]
 
 dcgmVgpuDeviceAttributes_version6 = make_dcgm_version(c_dcgmVgpuDeviceAttributes_v6, 1)
+
+class c_dcgmVgpuDeviceAttributes_v7(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('activeVgpuInstanceCount', c_uint),
+        ('activeVgpuInstanceIds', c_uint * DCGM_MAX_VGPU_INSTANCES_PER_PGPU),
+        ('creatableVgpuTypeCount', c_uint),
+        ('creatableVgpuTypeIds', c_uint * DCGM_MAX_VGPU_TYPES_PER_PGPU),
+        ('supportedVgpuTypeCount', c_uint),
+        ('supportedVgpuTypeInfo', c_dcgmDeviceVgpuTypeInfo_v2 * DCGM_MAX_VGPU_TYPES_PER_PGPU),
+        ('vgpuUtilInfo', c_dcgmDeviceVgpuUtilInfo_v1 * DCGM_MAX_VGPU_TYPES_PER_PGPU),
+        ('gpuUtil', c_uint),
+        ('memCopyUtil', c_uint),
+        ('encUtil', c_uint),
+        ('decUtil', c_uint)
+    ]
+
+dcgmVgpuDeviceAttributes_version7 = make_dcgm_version(c_dcgmVgpuDeviceAttributes_v7, 7)
 
 # /**
 #  * Represents attributes specific to vGPU instance
@@ -1159,7 +1221,17 @@ dcgmUpdateAllFields_version1 = make_dcgm_version(c_dcgmUpdateAllFields_v1, 1)
 
 dcgmGetMultipleValuesForFieldResponse_version1 = 1
 
-# policy enums
+# policy enums (and table indices)
+DCGM_POLICY_COND_IDX_DBE = 0
+DCGM_POLICY_COND_IDX_PCI = 1
+DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED = 2
+DCGM_POLICY_COND_IDX_THERMAL = 3
+DCGM_POLICY_COND_IDX_POWER = 4
+DCGM_POLICY_COND_IDX_NVLINK = 5
+DCGM_POLICY_COND_IDX_XID = 6
+DCGM_POLICY_COND_IDX_MAX = 7
+
+# policy enum bitmasks
 DCGM_POLICY_COND_DBE = 0x1
 DCGM_POLICY_COND_PCI = 0x2
 DCGM_POLICY_COND_MAX_PAGES_RETIRED = 0x4
@@ -1181,6 +1253,7 @@ DCGM_POLICY_VALID_NONE = 0
 DCGM_POLICY_VALID_SV_SHORT = 1
 DCGM_POLICY_VALID_SV_MED = 2
 DCGM_POLICY_VALID_SV_LONG = 3
+DCGM_POLICY_VALID_SV_XLONG = 4
 
 DCGM_POLICY_FAILURE_NONE = 0
 
@@ -1188,6 +1261,7 @@ DCGM_DIAG_LVL_INVALID = 0
 DCGM_DIAG_LVL_SHORT   = 10
 DCGM_DIAG_LVL_MED     = 20
 DCGM_DIAG_LVL_LONG    = 30
+DCGM_DIAG_LVL_XLONG   = 40
 
 DCGM_DIAG_RESULT_PASS = 0
 DCGM_DIAG_RESULT_SKIP = 1
@@ -1537,28 +1611,28 @@ class c_dcgmDiagTestResult_v2(_PrintableStructure):
         ('info', c_char * 1024)
     ]
 
-class c_dcgmDiagResponsePerGpu_v2(_PrintableStructure):
+class c_dcgmDiagResponsePerGpu_v3(_PrintableStructure):
     _fields_ = [
         ('gpuId', c_uint),
         ('hwDiagnosticReturn', c_uint),
-        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT)
+        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT_V7)
     ]
 
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
 
-class c_dcgmDiagResponse_v6(_PrintableStructure):
+class c_dcgmDiagResponse_v7(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('gpuCount', c_uint),
         ('levelOneTestCount', c_uint),
         ('levelOneResults', c_dcgmDiagTestResult_v2 * LEVEL_ONE_MAX_RESULTS),
-        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v2 * DCGM_MAX_NUM_DEVICES),
+        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v3 * DCGM_MAX_NUM_DEVICES),
         ('systemError',     c_dcgmDiagErrorDetail_t),
         ('trainingMsg',     c_char * 1024)
     ]
 
-dcgmDiagResponse_version6 = make_dcgm_version(c_dcgmDiagResponse_v6, 6)
+dcgmDiagResponse_version7 = make_dcgm_version(c_dcgmDiagResponse_v7, 7)
 
 DCGM_AFFINITY_BITMASK_ARRAY_SIZE = 8
 

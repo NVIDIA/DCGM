@@ -6,7 +6,7 @@ Conflicts=nvidia-dcgm.service
 User=root
 PrivateTmp=false
 
-ExecStart=@DCGM_HOSTENGINE_LOCATION@/nv-hostengine -n
+ExecStart=@DCGM_HOSTENGINE_LOCATION@/nv-hostengine -n --service-account nvidia-dcgm
 
 Restart=on-abort
 

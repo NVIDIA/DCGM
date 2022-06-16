@@ -1,5 +1,5 @@
 if (NOT TARGET JsonCpp::JsonCpp)
-find_package(jsoncpp REQUIRED CONFIG)
+    find_package(jsoncpp REQUIRED CONFIG)
     set(JSONCPP_STATIC_LIBS jsoncpp_static)
     set(JSONCPP_INCLUDE_PATH $<TARGET_PROPERTY:jsoncpp_static,INTERFACE_INCLUDE_DIRECTORIES>)
 endif()

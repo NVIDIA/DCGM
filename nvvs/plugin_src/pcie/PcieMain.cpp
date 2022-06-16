@@ -97,7 +97,7 @@ int enableP2P(BusGrindGlobals *bgGlobals)
 
         for (size_t j = 0; j < bgGlobals->gpu.size(); j++)
         {
-            int access;
+            int access = 0;
             cudaIndexJ = bgGlobals->gpu[j]->cudaDeviceIdx;
             cudaDeviceCanAccessPeer(&access, cudaIndexI, cudaIndexJ);
 
@@ -530,7 +530,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
         stream2[i]   = 0;
     }
 
+#ifndef PCIE_UNIT_TESTING
     omp_set_num_threads(bgGlobals->gpu.size());
+#endif
 
     std::string key;
     std::string groupName;
@@ -548,9 +550,15 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
     int repeat   = (int)bgGlobals->testParameters->GetSubTestDouble(groupName, PCIE_STR_ITERATIONS);
 
     // one thread per GPU
+#ifndef PCIE_UNIT_TESTING
 #pragma omp parallel
+#endif
     {
+#ifndef PCIE_UNIT_TESTING
         int d = omp_get_thread_num();
+#else
+        int d = 0;
+#endif
         cudaSetDevice(bgGlobals->gpu[d]->cudaDeviceIdx);
 
         if (pinned)
@@ -565,7 +573,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
 
         cudaDeviceSynchronize();
 
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d]);
         // initiate H2D copies
         for (int r = 0; r < repeat; r++)
@@ -583,7 +593,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
         bandwidthMatrix[0 * bgGlobals->gpu.size() + d] = gb / time_s;
 
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d]);
         for (int r = 0; r < repeat; r++)
         {
@@ -599,7 +611,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
         bandwidthMatrix[1 * bgGlobals->gpu.size() + d] = gb / time_s;
 
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d]);
         // Bidirectional
         for (int r = 0; r < repeat; r++)
@@ -610,7 +624,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
 
         cudaEventRecord(stop[d]);
         cudaCheckErrorOmp(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, d);
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
 
         cudaEventElapsedTime(&time_ms, start[d], stop[d]);
         time_s = time_ms / 1e3;
@@ -1093,10 +1109,16 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
     int numElems = (int)bgGlobals->testParameters->GetSubTestDouble(groupName, PCIE_STR_INTS_PER_COPY);
     int repeat   = (int)bgGlobals->testParameters->GetSubTestDouble(groupName, PCIE_STR_ITERATIONS);
 
+#ifndef PCIE_UNIT_TESTING
     omp_set_num_threads(numGPUs);
 #pragma omp parallel
+#endif
     {
+#ifndef PCIE_UNIT_TESTING
         int d = omp_get_thread_num();
+#else
+        int d = 0;
+#endif
         cudaSetDevice(bgGlobals->gpu[d]->cudaDeviceIdx);
         cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -1105,7 +1127,9 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
 
         cudaDeviceSynchronize();
 
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d], stream[d]);
         // right to left tests
         if (d % 2 == 0)
@@ -1131,7 +1155,9 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
         }
 
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d], stream[d]);
         // left to right tests
         if (d % 2 == 1)
@@ -1157,7 +1183,9 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
         }
 
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d], stream[d]);
         // Bidirectional tests
         if (d % 2 == 0)
@@ -1187,7 +1215,9 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p2p
 
         cudaEventRecord(stop[d], stream[d]);
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
 
         if (d % 2 == 0)
         {
@@ -1301,10 +1331,16 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
     {
         enableP2P(bgGlobals);
     }
+#ifndef PCIE_UNIT_TESTING
     omp_set_num_threads(numGPUs);
 #pragma omp parallel
+#endif
     {
+#ifndef PCIE_UNIT_TESTING
         int d = omp_get_thread_num();
+#else
+        int d = 0;
+#endif
         cudaSetDevice(bgGlobals->gpu[d]->cudaDeviceIdx);
         cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
         cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
@@ -1314,8 +1350,9 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
 
         cudaDeviceSynchronize();
 
-
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d], stream1[d]);
         // L2R tests
         for (int r = 0; r < repeat; r++)
@@ -1342,7 +1379,9 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
             gb = 0;
         bandwidthMatrix[0 * numGPUs + d] = gb / time_s;
         cudaDeviceSynchronize();
+#ifndef PCIE_UNIT_TESTING
 #pragma omp barrier
+#endif
         cudaEventRecord(start[d], stream1[d]);
         // R2L tests
         for (int r = 0; r < repeat; r++)
@@ -1617,7 +1656,7 @@ void bg_record_cliques(BusGrindGlobals *bgGlobals)
 
         for (size_t j = i + 1; j < bgGlobals->gpu.size(); j++)
         {
-            int access;
+            int access = 0;
             cudaDeviceCanAccessPeer(&access, bgGlobals->gpu[i]->cudaDeviceIdx, bgGlobals->gpu[j]->cudaDeviceIdx);
 
             // if GPU i can acces j then add to current clique
@@ -1801,6 +1840,73 @@ bool bg_check_global_pass_fail(BusGrindGlobals *bgGlobals, timelib64_t startTime
     return allPassed;
 }
 
+bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginGpuList_t &gpuInfo)
+{
+    for (unsigned int i = 0; i < gpuInfo.numGpus; i++)
+    {
+        if (gpuInfo.gpus[i].gpuId == gpuId)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t &gpuInfo, dcgmHandle_t handle)
+{
+    dcgmNvLinkStatus_v2 linkStatus;
+    memset(&linkStatus, 0, sizeof(linkStatus));
+
+    linkStatus.version = dcgmNvLinkStatus_version2;
+    dcgmReturn_t ret   = dcgmGetNvLinkLinkStatus(handle, &linkStatus);
+
+    if (ret != DCGM_ST_OK)
+    {
+        std::stringstream buf;
+        buf << "Cannot check NvLink status: " << errorString(ret);
+        bgGlobals->busGrind->AddInfoVerbose(buf.str());
+        DCGM_LOG_ERROR << buf.str();
+        return;
+    }
+
+    if (linkStatus.numGpus <= 1)
+    {
+        return;
+    }
+
+    for (unsigned int i = 0; i < linkStatus.numGpus; i++)
+    {
+        if (pcie_gpu_id_in_list(linkStatus.gpus[i].entityId, gpuInfo) == false)
+        {
+            continue;
+        }
+
+        for (unsigned int j = 0; j < DCGM_NVLINK_MAX_LINKS_PER_GPU; j++)
+        {
+            if (linkStatus.gpus[i].linkState[j] == DcgmNvLinkLinkStateDown)
+            {
+                DcgmError d { DcgmError::GpuIdTag::Unknown };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, linkStatus.gpus[i].entityId, j);
+                bgGlobals->busGrind->AddErrorForGpu(linkStatus.gpus[i].entityId, d);
+            }
+        }
+    }
+
+    for (unsigned int i = 0; i < linkStatus.numNvSwitches; i++)
+    {
+        for (unsigned int j = 0; j < DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH; j++)
+        {
+            if (linkStatus.nvSwitches[i].linkState[j] == DcgmNvLinkLinkStateDown)
+            {
+                DcgmError d { DcgmError::GpuIdTag::Unknown };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVSWITCH_NVLINK_DOWN, d, linkStatus.nvSwitches[i].entityId, j);
+                bgGlobals->busGrind->AddError(d);
+            }
+        }
+    }
+}
+
 /*****************************************************************************/
 int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t &gpuInfo, dcgmHandle_t handle)
 {
@@ -1871,7 +1977,22 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
     }
     bgGlobals->m_dcgmRecorder->AddWatches(fieldIds, gpuVec, false, fieldGroupName, groupName, 300.0);
 
+    pcie_check_nvlink_status(bgGlobals, gpuInfo, handle);
+
     bg_record_cliques(bgGlobals);
+
+    // Cuda currently throws an error on more than 8 GPUs
+    static const int MAX_PCIE_CONCURRENT_GPUS = 8;
+
+    if (bgGlobals->test_p2p_on == true && gpuInfo.numGpus > MAX_PCIE_CONCURRENT_GPUS)
+    {
+        bgGlobals->test_p2p_on = false;
+        std::stringstream ss;
+        ss << "Skipping p2p tests because we have " << gpuInfo.numGpus << " GPUs, which is above the limit of "
+           << MAX_PCIE_CONCURRENT_GPUS << ".";
+        bgGlobals->busGrind->AddInfoVerbose(ss.str());
+        DCGM_LOG_INFO << ss.str();
+    }
 
     /* For the following tests, a return of 0 is success. > 0 is
      * a failure of a test condition, and a < 0 is a fatal error

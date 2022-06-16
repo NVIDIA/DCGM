@@ -638,8 +638,8 @@ dcgmReturn_t DcgmIpc::WaitForConnectHelper(dcgm_connection_id_t connectionId,
         {
             DCGM_LOG_ERROR << "connectionId " << connectionId << " timed out after " << timeoutMs << " ms.";
             /* Close the connection, which will handle both:
-               1. If the connection was established right after the timeout
-               2. If the connection was still pending and just blocked on libevent's ~2 minute timeout */
+            1. If the connection was established right after the timeout
+            2. If the connection was still pending and just blocked on libevent's ~2 minute timeout */
             CloseConnection(connectionId);
             return DCGM_ST_CONNECTION_NOT_VALID;
         }
@@ -811,7 +811,7 @@ dcgmReturn_t DcgmIpc::MonitorSocketFd(int fd, dcgm_connection_id_t &connectionId
     }
     else
     {
-        /* No longer owned by us on success */
+        /* coverity[leaked_storage] No longer owned by us on success */
         monitorSocketFd.release();
     }
 
@@ -965,7 +965,13 @@ void DcgmIpc::ReadCB(bufferevent *bev)
     {
         processMessage.dcgmMessage = dcgmMessage.release();
 
-        m_workersPool.Enqueue([processMessage]() mutable { DcgmIpc::ProcessMessageInPool(processMessage); });
+        auto const task
+            = m_workersPool.Enqueue([processMessage]() mutable { DcgmIpc::ProcessMessageInPool(processMessage); });
+        if (!task.has_value())
+        {
+            delete processMessage.dcgmMessage; // we are responsible for this memory if the enqueue fails
+            DCGM_LOG_ERROR << "Unable to enqueue message";
+        }
     }
 }
 

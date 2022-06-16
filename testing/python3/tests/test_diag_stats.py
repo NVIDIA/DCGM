@@ -23,15 +23,22 @@ import DcgmDiag
 import json
 import os.path
 
-def load_json_stats_file(filename):
+def load_json_stats_file(filename, logContentsOnError=True):
     with open(filename) as json_file:
         data = json.load(json_file)
+
+        if data == None and logContentsOnError:
+            logger.error("Unable to load json file %s. File contents: %s" % (filename, json_file.read()))
         return data
 
     raise "Couldn't open stats file %s" % filename
 
 def helper_basic_stats_file_check(statsFile, gpuIds, statName):
-    json_data = load_json_stats_file(statsFile)
+    try:
+        json_data = load_json_stats_file(statsFile)
+    finally:
+        os.remove(statsFile);
+        
     assert json_data != None, "Could not load json data from the stats file"
     foundGpuIds = []
     foundStatName = False
@@ -66,7 +73,7 @@ def helper_basic_stats_file_check(statsFile, gpuIds, statName):
         assert gpuId in foundGpuIds, "Couldn't find GPU %d in the stats file (found %s)" % (gpuId, str(foundGpuIds))
 
 def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, pluginIndex, statName=None):
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr='%s.test_duration=20' % pluginName)
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr='%s.test_duration=20' % pluginName) # was 20
 
     dd.SetStatsPath('/tmp/')
 
@@ -75,42 +82,57 @@ def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, plu
 
     if statsAsString == True:
         dd.SetConfigFileContents("%YAML 1.2\n\nglobals:\n  logfile_type: text\n")
-    
+
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     skippedAll = True
 
-    if len(response.systemError.msg) == 0:
-        passedCount = 0
-        errors = ""
-        for gpuIndex in range(response.gpuCount):
-            resultType = response.perGpuResponses[gpuIndex].results[pluginIndex].result
-            if resultType != dcgm_structs.DCGM_DIAG_RESULT_SKIP \
-                             and resultType != dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
-                skippedAll = False
-                if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
-                    passedCount = passedCount + 1
-                else:
-                    warning = response.perGpuResponses[gpuIndex].results[pluginIndex].error.msg
-                    if len(warning):
-                        errors = "%s GPU %d failed: %s" % (errors, gpuIndex, warning)
+    try:
+        if len(response.systemError.msg) == 0:
+            passedCount = 0
+            errors = ""
+            
+            for gpuIndex in range(response.gpuCount):
+                resultType = response.perGpuResponses[gpuIndex].results[pluginIndex].result
+                if resultType != dcgm_structs.DCGM_DIAG_RESULT_SKIP \
+                   and resultType != dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
+                    skippedAll = False
+                    if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
+                        passedCount = passedCount + 1
+                    else:
+                        warning = response.perGpuResponses[gpuIndex].results[pluginIndex].error.msg
+                        if len(warning):
+                            errors = "%s GPU %d failed: %s" % (errors, gpuIndex, warning)
 
-        if skippedAll == False and passedCount > 0:
-            detailedMsg = "passed on %d of %d GPUs" % (passedCount, response.gpuCount)
-            if len(errors):
-                detailedMsg = "%s and had these errors: %s" % (detailedMsg, errors)
-                logger.info("%s when running the %s plugin" % (detailedMsg, pluginName))
+            if skippedAll == False and passedCount > 0:
+                detailedMsg = "passed on %d of %d GPUs" % (passedCount, response.gpuCount)
+                if len(errors):
+                    detailedMsg = "%s and had these errors: %s" % (detailedMsg, errors)
+                    logger.info("%s when running the %s plugin" % (detailedMsg, pluginName))
 
-            assert os.path.isfile(statsfile), "Statsfile '%s' was not created as expected and %s" % (statsfile, detailedMsg)
+                    assert os.path.isfile(statsfile), "Statsfile '%s' was not created as expected and %s" % (statsfile, detailedMsg)
 
-            if not statsAsString:
-                helper_basic_stats_file_check(statsfile, gpuIds, statName)
-        elif passedCount == 0:
-            test_utils.skip_test("Unable to pass any of these short runs for plugin %s." % pluginName)
+                if not statsAsString:
+                    helper_basic_stats_file_check(statsfile, gpuIds, statName)
+            elif passedCount == 0:
+                test_utils.skip_test("Unable to pass any of these short runs for plugin %s." % pluginName)
+            else:
+                test_utils.skip_test("The %s plugin was skipped, so we cannot run this test." % pluginName)
         else:
-            test_utils.skip_test("The %s plugin was skipped, so we cannot run this test." % pluginName)
-    else:
-        test_utils.skip_test("The %s plugin had a problem when executing, so we cannot run this test." % pluginName)
+            test_utils.skip_test("The %s plugin had a problem when executing, so we cannot run this test." % pluginName)
+    finally:
+        if os.path.exists(statsfile):
+            os.remove(statsfile)
+
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_action_stats_file_present_standalone_with_service_account(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, statName='perf_gflops')
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -126,6 +148,16 @@ def test_dcgm_action_stats_file_present_standalone(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_file_present_embedded(handle, gpuIds):
     helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, statName='perf_gflops')
+
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_action_string_stats_file_present_standalone_with_service_account(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -149,6 +181,16 @@ def test_dcgm_action_string_stats_file_present_embedded(handle, gpuIds):
 def test_dcgm_action_stats_basics_targeted_power_embedded(handle, gpuIds):
     helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX)
 
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_action_stats_basics_targeted_power_standalone_with_service_account(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX)
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
@@ -164,6 +206,16 @@ def test_dcgm_action_stats_basics_targeted_power_standalone(handle, gpuIds):
 def test_dcgm_action_stats_basics_targeted_stress_embedded(handle, gpuIds):
     helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, statName='flops_per_op')
 
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_action_stats_basics_targeted_stress_standalone_with_service_account(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, statName='flops_per_op')
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
@@ -177,6 +229,16 @@ def test_dcgm_action_stats_basics_targeted_stress_standalone(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_sm_stress_embedded(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'sm stress', dcgm_structs.DCGM_SM_STRESS_INDEX, statName='perf_gflops')
+
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_action_stats_basics_sm_stress_standalone_with_service_account(handle, gpuIds):
     helper_test_stats_file_basics(handle, gpuIds, False, 'sm stress', dcgm_structs.DCGM_SM_STRESS_INDEX, statName='perf_gflops')
 
 @test_utils.run_with_standalone_host_engine(20)
@@ -222,6 +284,16 @@ def helper_test_bad_statspath(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_stats_bad_statspath_embedded(handle, gpuIds):
+    helper_test_bad_statspath(handle, gpuIds)
+
+@test_utils.run_only_as_root()
+@test_utils.with_service_account('dcgm-tests-service-account')
+@test_utils.run_with_standalone_host_engine(20, heArgs=['--service-account', 'dcgm-tests-service-account'])
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_diag_stats_bad_statspath_standalone_with_service_account(handle, gpuIds):
     helper_test_bad_statspath(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)

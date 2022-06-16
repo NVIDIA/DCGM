@@ -19,7 +19,6 @@ add_subdirectory(tests)
 
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
-find_package(fmt REQUIRED)
 
 file(READ ${CMAKE_CURRENT_BINARY_DIR}/../diag-skus.yaml FALLBACK_DIAG_YAML_CONTENTS_RAW)
 string(REPLACE "\n"
@@ -53,7 +52,6 @@ target_sources(nvvs_without_main_objects
         NvvsCommon.cpp
         NvvsDeviceList.cpp
         NvvsSystemChecker.cpp
-        NvvsThread.cpp
         Output.cpp
         ParameterValidator.cpp
         ParsingUtility.cpp
@@ -83,7 +81,6 @@ target_link_libraries(
     PRIVATE
         nvvs_without_main_objects
         nvvs_main_objects
-        fmt::fmt
 )
 target_link_libraries(nvvs INTERFACE nvvs_plugins)
 

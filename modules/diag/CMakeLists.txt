@@ -18,6 +18,7 @@ target_include_directories(diag_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(diag_interface INTERFACE dcgm_interface modules_interface nvvs_interface config_interface)
 
 find_package(Jsoncpp REQUIRED)
+find_package(fmt REQUIRED)
 
 add_library(dcgmmodulediag_common STATIC)
 target_sources(dcgmmodulediag_common

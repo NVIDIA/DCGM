@@ -14,15 +14,23 @@
  * limitations under the License.
  */
 
+#include <DcgmVariantHelper.hpp>
 #include <cstring>
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
 
 #include "DcgmStringHelpers.h"
+#include "MigIdParser.hpp"
 #include "dcgm_agent.h"
 #include "dcgm_fields.h"
 #include "dcgmi_common.h"
+
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
+#include <sys/ioctl.h>
 
 
 /*******************************************************************************/
@@ -263,7 +271,118 @@ bool operator==(dcgmGroupEntityPair_t const &left, dcgmGroupEntityPair_t const &
     return std::tie(left.entityGroupId, left.entityId) == std::tie(right.entityGroupId, right.entityId);
 }
 
-using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>;
+struct EntityMapTypedSentinel
+{};
+
+template <typename T>
+struct EntityMapTypedIterator : std::iterator<std::forward_iterator_tag, T>
+{
+    EntityMapTypedIterator() = default;
+
+    explicit EntityMapTypedIterator(EntityMap const &map)
+    {
+        m_it  = cbegin(map);
+        m_end = cend(map);
+
+        while (m_it != m_end && !std::holds_alternative<T>(m_it->first))
+        {
+            ++m_it;
+        }
+    }
+
+    auto const &operator*() const noexcept
+    {
+        return *m_it;
+    }
+
+    auto const *operator->() const noexcept
+    {
+        return m_it.operator->();
+    }
+
+    bool operator==(EntityMapTypedSentinel const &) const
+    {
+        return m_it == m_end;
+    }
+
+    bool operator==(EntityMapTypedIterator const &other) const
+    {
+        return m_it == other.it;
+    }
+
+    template <typename Y>
+    bool operator!=(Y const &other) const
+    {
+        return !(*this == other);
+    }
+
+    EntityMapTypedIterator &operator++()
+    {
+        if (m_it != m_end)
+        {
+            do
+            {
+                ++m_it;
+            } while (m_it != m_end && !std::holds_alternative<T>(m_it->first));
+        }
+        return *this;
+    }
+
+private:
+    EntityMap::const_iterator m_it;
+    EntityMap::const_iterator m_end;
+};
+
+template <typename T>
+auto typed_begin(EntityMap const &map)
+{
+    return EntityMapTypedIterator<T> { map };
+}
+
+auto typed_end(EntityMap const &)
+{
+    return EntityMapTypedSentinel {};
+}
+
+EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info)
+{
+    auto const uuid = CutUuidPrefix(info.info.gpuUuid);
+    switch (info.entity.entityGroupId)
+    {
+        case DCGM_FE_GPU_I:
+            entityMap.insert_or_assign(ParsedGpuI { std::string { uuid }, info.info.nvmlInstanceId }, info.entity);
+            entityMap.insert_or_assign(ParsedGpuI { std::to_string(info.info.nvmlGpuIndex), info.info.nvmlInstanceId },
+                                       info.entity);
+
+            /* We add GPUs with both UUID and index to the map as the 0/0/0 and UUID/0/0 are identical */
+            entityMap.insert_or_assign(ParsedGpu { std::string { uuid } }, info.parent);
+            entityMap.insert_or_assign(ParsedGpu { std::to_string(info.info.nvmlGpuIndex) }, info.parent);
+
+            break;
+
+        case DCGM_FE_GPU_CI:
+            entityMap.insert_or_assign(
+                ParsedGpuCi { std::string { uuid }, info.info.nvmlInstanceId, info.info.nvmlComputeInstanceId },
+                info.entity);
+            entityMap.insert_or_assign(ParsedGpuCi { std::to_string(info.info.nvmlGpuIndex),
+                                                     info.info.nvmlInstanceId,
+                                                     info.info.nvmlComputeInstanceId },
+                                       info.entity);
+
+            /* We add GPUs with both UUID and index to the map as the 0/0/0 and UUID/0/0 are identical */
+            entityMap.insert_or_assign(ParsedGpu { std::string { uuid } }, info.parent);
+            entityMap.insert_or_assign(ParsedGpu { std::to_string(info.info.nvmlGpuIndex) }, info.parent);
+
+            break;
+
+        default:
+            SHOW_AND_LOG_ERROR << "Unexpected entity group in the MIG hierarchy results. GroupId: "
+                               << info.entity.entityGroupId;
+            break;
+    }
+
+    return entityMap;
+}
 
 /**
  * Fills in a lookup table for entity ids for GPUs and MIG devices known to the hostengine
@@ -294,39 +413,16 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
         for (size_t idx = 0; idx < migHierarchy.count; ++idx)
         {
             auto const &instance = migHierarchy.entityList[idx];
-            auto const uuid      = CutUuidPrefix(instance.info.gpuUuid);
-            switch (instance.entity.entityGroupId)
-            {
-                case DCGM_FE_GPU_I:
-                    entityMap.insert_or_assign(ParsedGpuI { uuid, instance.info.nvmlInstanceId }, instance.entity);
-
-                    /* We add GPUs with both UUID and index to the map as the 0/0/0 and UUID/0/0 are identical */
-                    entityMap.insert_or_assign(ParsedGpu { uuid }, instance.parent);
-                    entityMap.insert_or_assign(ParsedGpu { std::to_string(instance.parent.entityId) }, instance.parent);
-
-                    break;
-
-                case DCGM_FE_GPU_CI:
-                    entityMap.insert_or_assign(
-                        ParsedGpuCi { uuid, instance.info.nvmlInstanceId, instance.info.nvmlComputeInstanceId },
-                        instance.entity);
-
-                    break;
-
-                default:
-                    SHOW_AND_LOG_ERROR << "Unexpected entity group in the MIG hierarchy results. GroupId: "
-                                       << instance.entity.entityGroupId;
-                    break;
-            }
+            entityMap << instance;
         }
     }
 
     // GPU entities
 
-    dcgm_field_eid_t entities[DCGM_MAX_NUM_DEVICES];
+    std::array<dcgm_field_eid_t, DCGM_MAX_NUM_DEVICES> entities {};
     int numItems = DCGM_MAX_NUM_DEVICES;
 
-    ret = dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities, &numItems, 0);
+    ret = dcgmGetEntityGroupEntities(dcgmHandle, DCGM_FE_GPU, entities.data(), &numItems, 0);
     if (ret != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << "Unable to collect GPU entities. "
@@ -341,7 +437,7 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
                                        dcgmGroupEntityPair_t { DCGM_FE_GPU, entities[idx] });
 
             dcgmDeviceAttributes_t deviceAttributes {};
-            deviceAttributes.version = dcgmDeviceAttributes_version2;
+            deviceAttributes.version = dcgmDeviceAttributes_version3;
 
             ret = dcgmGetDeviceAttributes(dcgmHandle, entities[idx], &deviceAttributes);
             if (ret != DCGM_ST_OK)
@@ -360,13 +456,81 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
     return entityMap;
 }
 
+namespace detail
+{
+    HandleWildcardResult HandleWildcard(ParseResult const &value,
+                                        EntityMap const &entities,
+                                        EntityGroupContainer &result)
+    {
+        return std::visit(overloaded(
+                              [&entities, &result](ParsedGpu const &val) {
+                                  if (!val.gpuUuid.IsWildcarded())
+                                  {
+                                      return HandleWildcardResult::Unhandled;
+                                  }
+                                  for (auto it = typed_begin<ParsedGpu>(entities); it != typed_end(entities); ++it)
+                                  {
+                                      result.insert(it->second);
+                                  }
+                                  return HandleWildcardResult::Handled;
+                              },
+                              [&entities, &result](ParsedGpuI const &val) {
+                                  if (!val.gpuUuid.IsWildcarded() && !val.instanceId.IsWildcarded())
+                                  {
+                                      return HandleWildcardResult::Unhandled;
+                                  }
+                                  for (auto it = typed_begin<ParsedGpuI>(entities); it != typed_end(entities); ++it)
+                                  {
+                                      auto const &entity = std::get<ParsedGpuI>(it->first);
+
+                                      bool const isGpuMatched      = compare(entity.gpuUuid, val.gpuUuid);
+                                      bool const isInstanceMatched = compare(entity.instanceId, val.instanceId);
+
+                                      if (isGpuMatched && isInstanceMatched)
+                                      {
+                                          result.insert(it->second);
+                                      }
+                                  }
+                                  return HandleWildcardResult::Handled;
+                              },
+                              [&entities, &result](ParsedGpuCi const &val) {
+                                  if (!val.gpuUuid.IsWildcarded() && !val.instanceId.IsWildcarded()
+                                      && !val.computeInstanceId.IsWildcarded())
+                                  {
+                                      return HandleWildcardResult::Unhandled;
+                                  }
+                                  for (auto it = typed_begin<ParsedGpuCi>(entities); it != typed_end(entities); ++it)
+                                  {
+                                      auto const &entity           = std::get<ParsedGpuCi>(it->first);
+                                      bool const isGpuMatched      = compare(entity.gpuUuid, val.gpuUuid);
+                                      bool const isInstanceMatched = compare(entity.instanceId, val.instanceId);
+                                      bool const isCInstanceMatched
+                                          = compare(entity.computeInstanceId, val.computeInstanceId);
+
+                                      if (isGpuMatched && isInstanceMatched && isCInstanceMatched)
+                                      {
+                                          result.insert(it->second);
+                                      }
+                                  }
+                                  return HandleWildcardResult::Handled;
+                              },
+                              [&](auto const &) { return HandleWildcardResult::Error; }),
+                          value);
+    }
+} // namespace detail
+
+
 [[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(dcgmHandle_t dcgmHandle,
                                                                                              std::string const &Ids)
 {
-    std::vector<dcgmGroupEntityPair_t> entityList;
+    detail::EntityGroupContainer entityList;
     std::string rejectedIds;
 
     auto entities = DcgmNs::PopulateEntitiesMap(dcgmHandle);
+    /*
+     * Note (nkonyuchenko): entities will contain duplicates of GPUs as PopulateEntitiesMap adds GPUs with indices and
+     * UUIDs as gpuUuid values. This is automatically handled by using EntityGroupContainer which is an unordered_set.
+     */
 
     {
         auto tokens = Split(Ids, ',');
@@ -375,6 +539,14 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
 
         for (auto const &token : tokens)
         {
+            /// For wildcard cases, we need to understand which part is wildcarded.
+            ///     *       - all GPUs
+            ///     */*     - all MIG GPU instances
+            ///     */*/*   - all Compute Instances
+            ///     To add all possible entities, we will have to specify "*,*/*,*/*/*"
+            ///     0/*     - all GPU instance on GPU 0
+            ///     0/*/0   - all Compute Instances 0 on all GPU Instance on GPU 0
+
             auto parsedResult = ParseInstanceId(token);
             if (std::holds_alternative<ParsedUnknown>(parsedResult))
             {
@@ -382,22 +554,81 @@ using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>
                 continue;
             }
 
-            auto it = entities.find(parsedResult);
-            if (it == entities.end())
-            {
-                DCGM_LOG_DEBUG << "Specified entity ID is valid but unknown: " << token
-                               << ". ParsedResult: " << parsedResult;
-                rejectedTokens.push_back(token);
-                continue;
-            }
+            auto result = detail::HandleWildcard(parsedResult, entities, entityList);
 
-            entityList.push_back(it->second);
+            switch (result)
+            {
+                case detail::HandleWildcardResult::Error:
+                {
+                    DCGM_LOG_DEBUG << fmt::format("Unable to parse token {}", token);
+                    rejectedTokens.push_back(token);
+                }
+                break;
+
+                case detail::HandleWildcardResult::Unhandled:
+                {
+                    auto it = entities.find(parsedResult);
+                    if (it == entities.end())
+                    {
+                        DCGM_LOG_DEBUG << "Specified entity ID is valid but unknown: " << token
+                                       << ". ParsedResult: " << parsedResult;
+                        rejectedTokens.push_back(token);
+                        continue;
+                    }
+
+                    entityList.insert(it->second);
+                }
+                break;
+
+                case detail::HandleWildcardResult::Handled:
+                    continue;
+
+                default:
+                    DCGM_LOG_ERROR << "Unexpected value of HandleWildcardResult: " << static_cast<std::int32_t>(result);
+            }
         }
 
         rejectedIds = Join(rejectedTokens, ",");
     }
 
-    return std::make_tuple(std::move(entityList), std::move(rejectedIds));
+    std::vector<dcgmGroupEntityPair_t> result;
+    result.reserve(entityList.size());
+    for (auto it = entityList.begin(); it != entityList.end();)
+    {
+        result.push_back(entityList.extract(it++).value());
+    }
+
+    /*
+     * This is not a topological sort. Just for better output of the dcgmi group -l command
+     */
+    std::sort(begin(result), end(result), [](auto const &left, auto const &right) {
+        return std::tie(left.entityGroupId, left.entityId) < std::tie(right.entityGroupId, right.entityId);
+    });
+
+    return std::make_tuple(std::move(result), std::move(rejectedIds));
+}
+
+namespace Terminal
+{
+    bool IsTTY()
+    {
+        return !!isatty(fileno(stdout));
+    }
+
+    std::optional<TermDimensions> GetTermDimensions()
+    {
+        if (!IsTTY())
+        {
+            return std::nullopt;
+        }
+        winsize w = {};
+        ioctl(fileno(stdout), TIOCGWINSZ, &w);
+        if (w.ws_col == 0 || w.ws_row == 0)
+        {
+            return std::nullopt;
+        }
+        return TermDimensions { w.ws_row, w.ws_col };
+    }
 }
 
 } // namespace DcgmNs

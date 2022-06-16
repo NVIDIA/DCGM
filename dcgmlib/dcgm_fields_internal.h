@@ -31,7 +31,7 @@ extern "C" {
 
 /* Profiling field IDs */
 #define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_ACTIVE
-#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_NVLINK_RX_BYTES
+#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE
 
 #ifdef __cplusplus
 }

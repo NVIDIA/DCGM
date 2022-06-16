@@ -69,5 +69,9 @@ public:
 int main_entry(const dcgmDiagPluginGpuList_t &gpuList, BusGrind *busGrind, TestParameters *testParameters);
 
 /*****************************************************************************/
+bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginGpuList_t &gpuInfo);
+
+/*****************************************************************************/
+void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t &gpuInfo, dcgmHandle_t handle);
 
 #endif // PCIEMAIN_H

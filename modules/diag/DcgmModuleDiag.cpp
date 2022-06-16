@@ -33,12 +33,57 @@ DcgmModuleDiag::DcgmModuleDiag(dcgmCoreCallbacks_t &dcc)
 DcgmModuleDiag::~DcgmModuleDiag() = default;
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModuleDiag::ProcessRun(dcgm_diag_msg_run_t *msg)
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
 
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version);
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version5);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+    else
+    {
+        drw.SetVersion7(&msg->diagResponse);
+    }
+
+    /* Sanitize the inputs */
+    dcgmTerminateCharBuffer(msg->runDiag.fakeGpuList);
+    dcgmTerminateCharBuffer(msg->runDiag.gpuList);
+    dcgmTerminateCharBuffer(msg->runDiag.debugLogFile);
+    dcgmTerminateCharBuffer(msg->runDiag.statsPath);
+    dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
+    dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
+    dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
+    dcgmTerminateCharBuffer(msg->runDiag.goldenValuesFile);
+
+    size_t i;
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
+    {
+        dcgmTerminateCharBuffer(msg->runDiag.testNames[i]);
+    }
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testParms); i++)
+    {
+        dcgmTerminateCharBuffer(msg->runDiag.testParms[i]);
+    }
+
+    /* Run the diag */
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        DCGM_LOG_ERROR << "RunDiagAndAction returned " << dcgmReturn;
+    }
+
+    return dcgmReturn;
+}
+
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v4(dcgm_diag_msg_run_v4 *msg)
+{
+    dcgmReturn_t dcgmReturn;
+    DcgmDiagResponseWrapper drw;
+
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version4);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
@@ -78,6 +123,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun(dcgm_diag_msg_run_t *msg)
     return dcgmReturn;
 }
 
+
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleDiag::ProcessStop(dcgm_diag_msg_stop_t *msg)
 {
@@ -107,6 +153,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
 {
     dcgmReturn_t retSt = DCGM_ST_OK;
 
+    if (moduleCommand == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
     if (moduleCommand->moduleId == DcgmModuleIdCore)
     {
         retSt = ProcessCoreMessage(moduleCommand);
@@ -117,15 +168,21 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
         {
             case DCGM_DIAG_SR_RUN:
 
-                retSt = CheckVersion(moduleCommand, dcgm_diag_msg_run_version);
-                if (retSt != DCGM_ST_OK)
+                if (moduleCommand->version == dcgm_diag_msg_run_version4)
+                {
+                    retSt = ProcessRun_v4((dcgm_diag_msg_run_v4 *)moduleCommand);
+                }
+                else if (moduleCommand->version == dcgm_diag_msg_run_version5)
+                {
+                    retSt = ProcessRun_v5((dcgm_diag_msg_run_v5 *)moduleCommand);
+                }
+                else
                 {
                     DCGM_LOG_ERROR << "Version mismatch " << moduleCommand->version
                                    << " != " << dcgm_diag_msg_run_version;
                     return retSt;
                 }
 
-                retSt = ProcessRun((dcgm_diag_msg_run_t *)moduleCommand);
                 break;
 
             case DCGM_DIAG_SR_STOP:

@@ -21,7 +21,7 @@
 
 SCENARIO("Diag::GetFailureResult")
 {
-    Diag d("localhost");
+    Diag d(1, "localhost");
     dcgmDiagResponse_t result {};
 
     // Initialized to all zeros should pass

@@ -279,6 +279,8 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
                     ss << "System Validation (Medium)";
                 if (pPolicy[i].validation == DCGM_POLICY_VALID_SV_LONG)
                     ss << "System Validation (Long)";
+                if (pPolicy[i].validation == DCGM_POLICY_VALID_SV_XLONG)
+                    ss << "System Validation (Extended)";
 
 
                 out["Validation after action"] = ss.str();

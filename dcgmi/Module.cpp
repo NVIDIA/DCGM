@@ -19,12 +19,14 @@
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
 
+#include <tclap/ArgException.h>
+
 #include "algorithm"
 #include "cctype"
 #include "iomanip"
 #include "iostream"
 #include "sstream"
-#include <tclap/XorHandler.h>
+
 
 // Module names
 #define MODULE_CORE_NAME       "Core"

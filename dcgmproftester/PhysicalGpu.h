@@ -144,7 +144,7 @@ public:
     bool AllStarted(void) const;  // Did all workers start (or fail to)?
     bool AllFinished(void) const; // Did all workers finish?
     bool AllReported(void) const; // Did all workers report?
-    bool AnyFailed(void) const;   // Did any workers fail to start?
+    bool AnyWorkerRequestFailed(void) const; // Did any workers fail to start?
 
     bool IsValidated(void) const; // Did all workers pass validation?
 

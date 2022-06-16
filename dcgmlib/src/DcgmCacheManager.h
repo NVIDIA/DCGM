@@ -21,7 +21,6 @@
 #include "DcgmMigManager.h"
 #include "DcgmMutex.h"
 #include "DcgmSettings.h"
-#include "DcgmThread.h"
 #include "DcgmWatchTable.h"
 #include "DcgmWatcher.h"
 #include "dcgm_fields.h"
@@ -30,6 +29,9 @@
 #include "hashtable.h"
 #include "timelib.h"
 #include "timeseries.h"
+
+#include <DcgmThread.h>
+
 #include <bitset>
 #include <condition_variable>
 #include <dcgm_nvml.h>
@@ -171,6 +173,7 @@ typedef struct dcgmcm_gpu_info_t
         virtualizationMode = DCGM_GPU_VIRTUALIZATION_MODE_NONE;
         memset(&vgpuList, 0, sizeof(vgpuList));
         memset(nvLinkLinkState, DcgmNvLinkLinkStateNotSupported, sizeof(nvLinkLinkState));
+        numNvLinks = 0;
     }
 
     dcgmcm_gpu_info_t(dcgmcm_gpu_info_t const &other)
@@ -182,6 +185,7 @@ typedef struct dcgmcm_gpu_info_t
         , arch(other.arch)
         , virtualizationMode(other.virtualizationMode)
         , migEnabled(false)
+        , ccMode(0)
         , maxGpcs(other.maxGpcs)
         , usedGpcs(other.usedGpcs)
         , instances(other.instances)
@@ -205,8 +209,10 @@ typedef struct dcgmcm_gpu_info_t
             arch               = other.arch;
             virtualizationMode = other.virtualizationMode;
             migEnabled         = other.migEnabled;
+            ccMode             = other.ccMode;
             maxGpcs            = other.maxGpcs;
             usedGpcs           = other.usedGpcs;
+            numNvLinks         = other.numNvLinks;
             memcpy(uuid, other.uuid, sizeof(uuid));
             memcpy(&pciInfo, &other.pciInfo, sizeof(pciInfo));
             memcpy(&vgpuList, &other.vgpuList, sizeof(vgpuList));
@@ -229,6 +235,7 @@ typedef struct dcgmcm_gpu_info_t
     dcgmChipArchitecture_t arch;                    /* chip architecture */
     dcgmGpuVirtualizationMode_t virtualizationMode; /* Virtualization mode */
     bool migEnabled       = false;                  /*!< is the device in MIG mode */
+    unsigned int ccMode   = 0;                      /* confidential computing mode */
     unsigned int maxGpcs  = 0; /*!< max number of Compute Instances that could be created on the device */
     unsigned int usedGpcs = 0; /*!< Number of actually used GPCs */
 
@@ -237,6 +244,7 @@ typedef struct dcgmcm_gpu_info_t
 
     /* NvLink per-lane status */
     dcgmNvLinkLinkState_t nvLinkLinkState[DCGM_NVLINK_MAX_LINKS_PER_GPU];
+    unsigned int numNvLinks; // The number of NVLinks on the system according to NVML
 
     std::vector<DcgmGpuInstance> instances; /* Configured GPU instances */
     unsigned int ciCount = 0;               // Number of compute instances for this GPU
@@ -262,23 +270,57 @@ typedef struct dcgmcm_gpu_info_cached_t
 
 /*****************************************************************************/
 /* Runtime stats for the cache manager */
-typedef struct dcgmcm_runtime_stats_t
+struct dcgmcm_runtime_stats_t
 {
-    long long numSleepsSkipped; /* Number of times the cache manager update thread skipped sleeping due
+    long long numSleepsSkipped = 0; /* Number of times the cache manager update thread skipped sleeping due
                                    to the update loop taking too long */
-    long long numSleepsDone;    /* Number of times the cache manager thread slept for any duration */
-    long long sleepTimeUsec;    /* Amount of time the cache manager update thread was sleeping in usec */
-    long long awakeTimeUsec;    /* Amount of time the cache manager update thread was awake in usec */
+    long long numSleepsDone = 0;    /* Number of times the cache manager thread slept for any duration */
+    long long sleepTimeUsec = 0;    /* Amount of time the cache manager update thread was sleeping in usec */
+    long long awakeTimeUsec = 0;    /* Amount of time the cache manager update thread was awake in usec */
 
-    long long updateCycleStarted;  /* Counter of how many update cycles have been started */
-    long long updateCycleFinished; /* Counter of how many update cycles have been finished */
-    long long shouldFinishCycle;   /* Lockstep mode only. How many cycles should we be
-                                      finished with? If m_updateCycleFinished < m_shouldFinishCycle,
-                                      we start another cycle loop. This is technically the
-                                      predicate for m_condition */
-    long long lockCount;           /* Number of times that the cache manager mutex has been locked. This is
-                                      periodically snapshotted from the cache manager update threads */
-} dcgmcm_runtime_stats_t, *dcgmcm_runtime_stats_p;
+    long long updateCycleStarted          = 0; /* Counter of how many update cycles have been started */
+    std::atomic_llong updateCycleFinished = 0; /* Counter of how many update cycles have been finished */
+    long long shouldFinishCycle           = 0; /* Lockstep mode only. How many cycles should we be
+                                              finished with? If m_updateCycleFinished < m_shouldFinishCycle,
+                                              we start another cycle loop. This is technically the
+                                              predicate for m_condition */
+    long long lockCount = 0;                   /* Number of times that the cache manager mutex has been locked. This is
+                                              periodically snapshotted from the cache manager update threads */
+
+    dcgmcm_runtime_stats_t() = default;
+
+    dcgmcm_runtime_stats_t(dcgmcm_runtime_stats_t const &other) noexcept
+    {
+        numSleepsSkipped   = other.numSleepsSkipped;
+        numSleepsDone      = other.numSleepsDone;
+        sleepTimeUsec      = other.sleepTimeUsec;
+        awakeTimeUsec      = other.awakeTimeUsec;
+        updateCycleStarted = other.updateCycleStarted;
+        shouldFinishCycle  = other.shouldFinishCycle;
+        lockCount          = other.lockCount;
+
+        updateCycleFinished.store(other.updateCycleFinished);
+    }
+    dcgmcm_runtime_stats_t &operator=(dcgmcm_runtime_stats_t const &other) noexcept
+    {
+        if (this != &other)
+        {
+            numSleepsSkipped   = other.numSleepsSkipped;
+            numSleepsDone      = other.numSleepsDone;
+            sleepTimeUsec      = other.sleepTimeUsec;
+            awakeTimeUsec      = other.awakeTimeUsec;
+            updateCycleStarted = other.updateCycleStarted;
+            shouldFinishCycle  = other.shouldFinishCycle;
+            lockCount          = other.lockCount;
+
+            updateCycleFinished.store(other.updateCycleFinished);
+        }
+
+        return *this;
+    }
+};
+
+using dcgmcm_runtime_stats_p = dcgmcm_runtime_stats_t *;
 
 /*****************************************************************************/
 /* Cache manager update thread context structure. This exists to prevent stack
@@ -1138,7 +1180,7 @@ public:
     /*
      * Populate a cache manager field info structure
      *
-     * fieldInfo  IN/OUT: Structure to populate. fieldInfo->gpuId and fieldInfo->fieldId
+     * fieldInfo  IN,OUT: Structure to populate. fieldInfo->gpuId and fieldInfo->fieldId
      *                    are used to find the correct field record to query
      *
      *
@@ -1800,6 +1842,7 @@ private:
     std::atomic_bool
         m_driverIsR450OrNewer; /* Is the driver r450.00 or newer? This is the driver version of nvml_11.0.h APIs */
 
+    unsigned int m_driverMajorVersion;                          /* Major driver version, eg. 470, 510, etc */
     unsigned int m_numGpus;                                     /* Number of entries in m_gpus[] that are valid */
     unsigned int m_numInstances;                                // Number of total GPU instances created
     unsigned int m_numComputeInstances;                         // Number of total compute instances created
@@ -1858,6 +1901,17 @@ private:
     timelib64_t m_delayedMigReconfigProcessingTimestamp;
 
     DcgmMutex *m_nvmlTopoMutex; /* NVML topology APIs aren't thread safe. Make sure only one thread is using them */
+
+    /*************************************************************************/
+    /*
+     * Helper function for DCGM_FI_DEV_FB_* fields.
+     */
+    void ReadAndCacheFBMemoryInfo(unsigned int gpuId,
+                                  nvmlDevice_t nvmlDevice,
+                                  dcgmcm_update_thread_t *threadCtx,
+                                  dcgmcm_watch_info_p watchInfo,
+                                  timelib64_t expireTime,
+                                  unsigned short fieldId);
 
     /*************************************************************************/
     /*
@@ -2433,6 +2487,15 @@ private:
      * Helper for GetActiveNvSwitchNvLinkCountsForAllGpus
      */
     dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNSCQ(std::vector<unsigned int> &gpuCounts);
+
+    /*************************************************************************/
+    /**
+     * Set the NvLink count for the GPU described by gpuInfo
+     *
+     * @param gpuInfo [in,out] - the struct containing the nvmlDevice handle and where we'll store the
+     *                           number of NVLinks
+     */
+    void InitializeNvLinkCount(dcgmcm_gpu_info_t &gpuInfo);
 
     /*************************************************************************/
     dcgmReturn_t SetPracticalEntityInfo(dcgmcm_watch_info_t &watchInfo) const;

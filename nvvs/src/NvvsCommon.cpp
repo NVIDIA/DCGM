@@ -211,6 +211,10 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(SW_PLUGIN_NAME);
         case DCGM_CONTEXT_CREATE_INDEX:
             return std::string(CTXCREATE_PLUGIN_NAME);
+        case DCGM_MEMTEST_INDEX:
+            return std::string(MEMTEST_PLUGIN_NAME);
+        case DCGM_PULSE_TEST_INDEX:
+            return std::string(PULSE_TEST_PLUGIN_NAME);
         default:
             return std::string("Unknown");
     }
@@ -252,6 +256,14 @@ dcgmPerGpuTestIndices_t GetTestIndex(const std::string name)
     else if (testName == MEMORY_PLUGIN_NAME)
     {
         return DCGM_MEMORY_INDEX;
+    }
+    else if (testName == MEMTEST_PLUGIN_NAME)
+    {
+        return DCGM_MEMTEST_INDEX;
+    }
+    else if (testName == PULSE_TEST_PLUGIN_NAME)
+    {
+        return DCGM_PULSE_TEST_INDEX;
     }
     else if (testName == CTXCREATE_PLUGIN_NAME)
     {

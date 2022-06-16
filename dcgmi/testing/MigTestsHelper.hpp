@@ -19,3 +19,4 @@
 #include <dcgm_structs.h>
 
 dcgmMigHierarchy_v2 Create_4GPU_4_GI_2_CI();
+dcgmMigHierarchy_v2 CreateLifeLikeData();

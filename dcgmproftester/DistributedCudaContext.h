@@ -38,8 +38,19 @@
  *
  * The worker process will respond with "P\n" (pass) or "F\n" fail over the
  * pipe to the parent when it forks. In both cases, it will wait for commands,
- * though the only reasonable one to send is "X\n" (exit). Upon receipt, it
- * will exit, closing its end of communication pipes.
+ * though the only reasonable one to send is "X\n" (exit), or "A\n" (advance),
+ * in the case of synchronous operation. Upon receipt, it will exit, closing its
+ * end of communication pipes. Operation is usually asyncronous, once a worker
+ * has been given a "R"un command, except in the case of synchronous operation
+ * where the main process may wish to retry the current stimulus if the previous
+ * response was unsatisfactory.
+ *
+ * In operation the worker will send back periodic "tick" responses, indicated
+ * by "T ...\b", specific to the test being run. In synchronous operation, each
+ * response will related to an advancement of the test. In asynchonous
+ * operation, the test will not advance unless an "A\n" (advance) command is
+ * sent to it. In this way the same test can be repeated until it either passes
+ * and "A" is sent, or fails and "X" is sent to terminate and fail the test.
  *
  * To start a test, the parent sends an "R <Test ID> <Duration>
  * <Reporting Interval> <Max Target Value> ...\n" command, with the arbitrary
@@ -71,6 +82,7 @@
  * of the test, and <part> is the ordinal of the one that just finished
  * (starting from 1). Within a test, the format of data that is sent back on
  * a "Tick" is consistent within a sub-test, but may vary between sub-tests.
+ * A test can also send back "D 0 x\n" just before tests start.
  *
  * While a sub-test is running, no more frequently than indicated by the
  * Reporting Interval, "Tick" status reports will be sent from the worker

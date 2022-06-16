@@ -66,7 +66,7 @@ void DcgmModuleIntrospect::run()
     using DcgmNs::TaskRunner;
     while (ShouldStop() == 0)
     {
-        if (TaskRunner::Run() != TaskRunner::RunResult::Ok)
+        if (TaskRunner::Run(true) != TaskRunner::RunResult::Ok)
         {
             break;
         }
@@ -467,12 +467,6 @@ dcgmReturn_t DcgmModuleIntrospect::ProcessMetadataStateToggle(dcgm_introspect_ms
             if (NULL == mpMetadataManager)
             {
                 mpMetadataManager = std::make_unique<DcgmMetadataManager>(&m_coreProxy);
-
-                /*
-                 *[[maybe_unused]] auto discard = Enqueue(DcgmNs::make_task([this]() mutable {
-                 *    return (mpMetadataManager != nullptr ? mpMetadataManager->UpdateAll(0) : DCGM_ST_INIT_ERROR);
-                 *}));
-                 */
             }
             else
             {
@@ -539,33 +533,74 @@ dcgmReturn_t DcgmModuleIntrospect::VerifyMetadataEnabled()
     return DCGM_ST_OK;
 }
 
-template <class Fn>
+template <std::invocable Fn>
 dcgmReturn_t DcgmModuleIntrospect::ProcessInTaskRunner(Fn action)
 {
     using namespace DcgmNs;
     auto fut = Enqueue(make_task([action = std::forward<Fn>(action)]() mutable { return std::invoke(action); }));
-    return fut.get();
+    if (!fut.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Introspect Module task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    return (*fut).get();
 }
 
-template <class Fn>
+template <std::invocable Fn>
 dcgmReturn_t DcgmModuleIntrospect::ProcessInTaskRunnerWithAttempts(int attempts, Fn action)
 {
     using namespace DcgmNs;
-    auto fut
-        = Enqueue(make_task([action = std::forward<Fn>(action), attempts]() mutable -> std::optional<dcgmReturn_t> {
-              auto result = std::invoke(action);
-              if (!result.has_value())
-              {
-                  --attempts;
-              }
-              if (attempts == 0)
-              {
-                  return DCGM_ST_NO_DATA;
-              }
+    /*
+     * Enqueueing a task returns std::optional which value is the future for the added task.
+     * If the Enqueue result does not have value (has_value() == false), that means the task was not added to the
+     * processing queue. At this moment, the only reason for such situation is too many Tasks in the queue already.
+     * Adding the task to the queue should be considered as an attempt on its own.
+     */
 
-              return result;
-          }));
-    return fut.get();
+    while (true)
+    {
+        auto fut = Enqueue(
+            make_task_with_attempts("Introspect Task with attempts", attempts, [action = std::move(action)]() mutable {
+                return std::invoke(action);
+            }));
+        if (!fut.has_value())
+        {
+            --attempts;
+            if (attempts == 0)
+            {
+                DCGM_LOG_ERROR << "Unable to enqueue Introspect Module task";
+                return DCGM_ST_GENERIC_ERROR;
+            }
+            continue;
+        }
+
+        try
+        {
+            // The task with attempts will destroy its promise if the attempts are exhausted.
+            return (*fut).get();
+        }
+        catch (std::future_error const &ex)
+        {
+            if (ex.code() == std::future_errc::broken_promise)
+            {
+                DCGM_LOG_ERROR << "Introspect Module task exhaust its attempts";
+                return DCGM_ST_GENERIC_ERROR;
+            }
+
+            DCGM_LOG_ERROR << "Task thrown exception: " << ex.what();
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        catch (std::exception const &ex)
+        {
+            DCGM_LOG_ERROR << "Task thrown exception: " << ex.what();
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        catch (...)
+        {
+            DCGM_LOG_ERROR << "Task thrown unknown exception.";
+            return DCGM_ST_GENERIC_ERROR;
+        }
+    }
 }
 
 dcgmReturn_t DcgmModuleIntrospect::ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand)

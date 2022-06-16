@@ -15,25 +15,50 @@
  */
 
 #include "DcgmDiagManager.h"
+
 #include "DcgmError.h"
 #include "DcgmStringHelpers.h"
 #include "DcgmUtilities.h"
 #include "Defer.hpp"
 #include "NvvsJsonStrings.h"
 #include "dcgm_config_structs.h"
+#include "dcgm_structs.h"
+
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fmt/format.h>
 #include <iterator>
 #include <sstream>
 #include <sys/epoll.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 
 namespace
 {
+std::optional<std::string> GetServiceAccount(DcgmCoreProxy const &proxy)
+{
+    std::string serviceAccount;
+    if (auto ret = proxy.GetServiceAccount(serviceAccount); ret == DCGM_ST_OK)
+    {
+        if (serviceAccount.empty())
+        {
+            return std::nullopt;
+        }
+        DCGM_LOG_DEBUG << fmt::format("GetServiceAccount result: {}", serviceAccount);
+        return serviceAccount;
+    }
+    else
+    {
+        DCGM_LOG_DEBUG << fmt::format("GetServiceAccount error: ({}) {}.", ret, errorString(ret));
+    }
+
+    return std::nullopt;
+}
+
 std::string SanitizedString(std::string const &str)
 {
     std::string sanitized;
@@ -264,6 +289,9 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
             case DCGM_POLICY_VALID_SV_LONG:
                 cmdArgs.push_back("long");
                 break;
+            case DCGM_POLICY_VALID_SV_XLONG:
+                cmdArgs.push_back("xlong");
+                break;
             default:
                 PRINT_ERROR("%u", "Bad drd->validate %u", drd->validate);
                 return DCGM_ST_BADPARAM;
@@ -324,6 +352,45 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_t *drd, std::vector<std:
         }
         size_t written = write(fd, drd->configFileContents, configFileContentsSize);
         close(fd);
+        // Adjust file permissions
+        if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
+        {
+            if (auto cred = GetUserCredentials((*serviceAccount).c_str()); cred.has_value())
+            {
+                if (chown(fileName, (*cred).uid, (*cred).gid) != 0)
+                {
+                    auto const err = errno;
+
+                    DCGM_LOG_ERROR << fmt::format(
+                        "The service account {} is specified, but it's impossible to set permissions for the file '{}'"
+                        ". chown returned ({}) {}",
+                        *serviceAccount,
+                        fileName,
+                        err,
+                        strerror(err));
+
+                    throw std::system_error(
+                        std::error_code(err, std::generic_category()),
+                        fmt::format("Unable to change permissions for the configuration file {}", fileName));
+                }
+            }
+            else
+            {
+                DCGM_LOG_ERROR << fmt::format(
+                    "The service account {} is specified, but there is not such user in the system."
+                    " Unable to set permissions for the file {}",
+                    (*serviceAccount),
+                    fileName);
+
+                return DCGM_ST_GENERIC_ERROR;
+            }
+        }
+        else
+        {
+            DCGM_LOG_DEBUG << fmt::format(
+                "Service account is not specified. Skipping permissions adjustments for the config file {}", fileName);
+        }
+
         if (written == configFileContentsSize)
         {
             cmdArgs.push_back("--config");
@@ -548,8 +615,73 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
             return ret;
         }
 
+        auto serviceAccount = GetServiceAccount(m_coreProxy);
         // Run command
-        pid = DcgmNs::Utils::ForkAndExecCommand(args, nullptr, &stdoutFd, &stderrFd, false, nullptr);
+        if (serviceAccount.has_value())
+        {
+            // traverse all parts of the filename path and check if the serviceAccount has read and execute permissions
+            auto serviceAccountCredentials = GetUserCredentials((*serviceAccount).c_str());
+            if (!serviceAccountCredentials.has_value())
+            {
+                DCGM_LOG_ERROR << "Failed to get user credentials for service account " << (*serviceAccount);
+                return DCGM_ST_GENERIC_ERROR;
+            }
+            std::set<gid_t> accountGroups { (*serviceAccountCredentials).groups.begin(),
+                                            (*serviceAccountCredentials).groups.end() };
+            std::filesystem::path path(filename);
+            std::filesystem::path traverseSoFar;
+            for (auto const &pathPart : path)
+            {
+                traverseSoFar /= pathPart;
+                if (statSt = stat(traverseSoFar.c_str(), &fileStat); statSt != 0)
+                {
+                    auto const msg = fmt::format(
+                        "Unable to validate if the service account {} has read and execute permissions to access the file {}."
+                        " Stat failed for {} with errno {}: {}",
+                        (*serviceAccount),
+                        filename,
+                        traverseSoFar.string(),
+                        statSt,
+                        strerror(statSt));
+                    DCGM_LOG_ERROR << msg;
+                    *stderrStr = msg;
+                    return DCGM_ST_GENERIC_ERROR;
+                }
+
+                bool const canBeAccessedByUser = fileStat.st_uid == (*serviceAccountCredentials).uid
+                                                 && (fileStat.st_mode & S_IRUSR) == S_IRUSR
+                                                 && (fileStat.st_mode & S_IXUSR) == S_IXUSR;
+
+                bool const canBeAccessedByGroup = (fileStat.st_gid == (*serviceAccountCredentials).gid
+                                                   || accountGroups.find(fileStat.st_gid) != accountGroups.end())
+                                                  && (fileStat.st_mode & S_IRGRP) == S_IRGRP
+                                                  && (fileStat.st_mode & S_IXGRP) == S_IXGRP;
+
+                bool const canBeAccessedByAll
+                    = (fileStat.st_mode & S_IROTH) == S_IROTH && (fileStat.st_mode & S_IXOTH) == S_IXOTH;
+
+                if (canBeAccessedByUser || canBeAccessedByGroup || canBeAccessedByAll)
+                {
+                    continue;
+                }
+
+                auto const msg = fmt::format(
+                    "The service account {} does not have read and execute permissions on the file/directory {}",
+                    (*serviceAccount),
+                    traverseSoFar.string());
+                DCGM_LOG_ERROR << msg;
+                *stderrStr = msg;
+                return DCGM_ST_GENERIC_ERROR;
+            }
+        }
+
+        // Run command
+        pid = DcgmNs::Utils::ForkAndExecCommand(args,
+                                                nullptr,
+                                                &stdoutFd,
+                                                &stderrFd,
+                                                false,
+                                                serviceAccount.has_value() ? (*serviceAccount).c_str() : nullptr);
         // Update the nvvs pid
         myTicket = GetTicket();
         UpdateChildPID(pid, myTicket);
@@ -831,7 +963,7 @@ std::string DcgmDiagManager::GetCompareTestName(const std::string &testname)
 unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
 {
     std::string compareName = GetCompareTestName(testName);
-    unsigned int index      = DCGM_PER_GPU_TEST_COUNT;
+    unsigned int index      = DCGM_PER_GPU_TEST_COUNT_V7;
     if (compareName == "diagnostic")
         index = DCGM_DIAGNOSTIC_INDEX;
     else if (compareName == "pcie")
@@ -846,8 +978,14 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
         index = DCGM_MEMORY_BANDWIDTH_INDEX;
     else if (compareName.find("memory") != std::string::npos)
         index = DCGM_MEMORY_INDEX;
+    else if (compareName == "memtest")
+        index = DCGM_MEMTEST_INDEX;
     else if (compareName == "context_create")
         index = DCGM_CONTEXT_CREATE_INDEX;
+    else if (compareName == "pulse_test")
+    {
+        index = DCGM_PULSE_TEST_INDEX;
+    }
 
     return index;
 }
@@ -973,7 +1111,7 @@ void DcgmDiagManager::FillTestResult(Json::Value &test,
 
         dcgmDiagResult_t ret = StringToDiagResponse(result[NVVS_STATUS].asString());
 
-        if (testIndex >= DCGM_PER_GPU_TEST_COUNT)
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
         {
             // Software test
             dcgmDiagErrorDetail_t ed = { { 0 }, 0 };

@@ -316,13 +316,14 @@ DCGM_FI_DEV_VGPU_TYPE                    = 522  #vGPU type of the vGPU instance
 DCGM_FI_DEV_VGPU_UUID                    = 523  #UUID of the vGPU instance
 DCGM_FI_DEV_VGPU_DRIVER_VERSION          = 524  #Driver version of the vGPU instance
 DCGM_FI_DEV_VGPU_MEMORY_USAGE            = 525  #Memory usage of the vGPU instance
-DCGM_FI_DEV_VGPU_LICENSE_STATUS          = 526  #License status of the vGPU instance
+DCGM_FI_DEV_VGPU_LICENSE_STATUS          = 526  #License status of the vGPU
 DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT        = 527  #Frame rate limit of the vGPU instance
 DCGM_FI_DEV_VGPU_ENC_STATS               = 528  #Current encoder statistics of the vGPU instance
 DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO       = 529  #Information about all active encoder sessions on the vGPU instance
 DCGM_FI_DEV_VGPU_FBC_STATS               = 530  #Statistics of current active frame buffer capture sessions on the vGPU instance
 DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO       = 531  #Information about active frame buffer capture sessions on the vGPU instance
-DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATUS = 532  #License status of the vGPU
+DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE  = 532  #License state information of the vGPU instance
+DCGM_FI_DEV_VGPU_PCI_ID                  = 533  #PCI Id of the vGPU instance
 #Internal fields reserve the range 600..699
 #below fields related to NVSwitch
 DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00             = 700
@@ -486,7 +487,7 @@ DCGM_FI_PROF_SM_OCCUPANCY                        = 1003 #The ratio of number of 
                                                         #(number of resident as a ratio of the theoretical 
                                                         #maximum number of warps per elapsed cycle)
 
-DCGM_FI_PROF_PIPE_TENSOR_ACTIVE                  = 1004 #The ratio of cycles the tensor (HMMA) pipe is active 
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE                  = 1004 #The ratio of cycles the any tensor (HMMA) pipe is active
                                                         #(off the peak sustained elapsed cycles)
 
 DCGM_FI_PROF_DRAM_ACTIVE                         = 1005 #The ratio of cycles the device memory interface is active sending or receiving data.
@@ -499,7 +500,7 @@ DCGM_FI_PROF_NVLINK_TX_BYTES                     = 1011 #The number of bytes of 
 DCGM_FI_PROF_NVLINK_RX_BYTES                     = 1012 #The number of bytes of active NvLink rx (receive) data including both header and payload.
 
 #greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS              = 1013
+DCGM_FI_MAX_FIELDS              = 1015
 
 
 class struct_c_dcgm_field_meta_t(Structure):

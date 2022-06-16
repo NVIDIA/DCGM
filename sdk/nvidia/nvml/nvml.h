@@ -116,7 +116,11 @@ extern "C" {
     #define nvmlComputeInstanceGetInfo              nvmlComputeInstanceGetInfo_v2
     #define nvmlDeviceGetComputeRunningProcesses    nvmlDeviceGetComputeRunningProcesses_v2
     #define nvmlDeviceGetGraphicsRunningProcesses   nvmlDeviceGetGraphicsRunningProcesses_v2
+    #define nvmlVgpuInstanceGetLicenseInfo          nvmlVgpuInstanceGetLicenseInfo_v2
 #endif // #ifndef NVML_NO_UNVERSIONED_FUNC_DEFS
+
+#define NVML_STRUCT_VERSION(data, ver) (unsigned int)(sizeof(nvml ## data ## _v ## ver ## _t) | \
+                                                      (ver << 24U))
 
 /***************************************************************************************************/
 /** @defgroup nvmlDeviceStructs Device Structs
@@ -211,6 +215,23 @@ typedef struct nvmlMemory_st
     unsigned long long free;         //!< Unallocated FB memory (in bytes)
     unsigned long long used;         //!< Allocated FB memory (in bytes). Note that the driver/GPU always sets aside a small amount of memory for bookkeeping
 } nvmlMemory_t;
+
+/**
+ * Memory allocation information for a device (v2).
+ * 
+ * Version 2 adds versioning for the struct and the amount of system-reserved memory as an output.
+ * @note The \ref nvmlMemory_v2_t.used amount also includes the \ref nvmlMemory_v2_t.reserved amount.
+ */
+typedef struct nvmlMemory_v2_st
+{
+    unsigned int version;            //!< Structure format version (must be 2)
+    unsigned long long total;        //!< Total physical device memory (in bytes)
+    unsigned long long reserved;     //!< Device memory (in bytes) reserved for system use (driver or firmware)
+    unsigned long long free;         //!< Unallocated device memory (in bytes)
+    unsigned long long used;         //!< Allocated device memory (in bytes). Note that the driver/GPU always sets aside a small amount of memory for bookkeeping
+} nvmlMemory_v2_t;
+
+#define nvmlMemory_v2 NVML_STRUCT_VERSION(Memory, 2)
 
 /**
  * BAR1 Memory allocation Information for a device
@@ -906,6 +927,15 @@ typedef enum {
     NVML_GRID_LICENSE_FEATURE_CODE_VWORKSTATION = 2  //!< Virtual Workstation
 } nvmlGridLicenseFeatureCode_t;
 
+/**
+ *  * Status codes for license expiry
+ *   */
+#define NVML_GRID_LICENSE_EXPIRY_NOT_AVAILABLE   0   //!< Expiry information not available
+#define NVML_GRID_LICENSE_EXPIRY_INVALID         1   //!< Invalid expiry or error fetching expiry
+#define NVML_GRID_LICENSE_EXPIRY_VALID           2   //!< Valid expiry
+#define NVML_GRID_LICENSE_EXPIRY_NOT_APPLICABLE  3   //!< Expiry not applicable
+#define NVML_GRID_LICENSE_EXPIRY_PERMANENT       4   //!< Permanent expiry
+
 /** @} */
 
 /***************************************************************************************************/
@@ -981,6 +1011,37 @@ typedef struct nvmlVgpuProcessUtilizationSample_st
     unsigned int encUtil;                           //!< Encoder Util Value
     unsigned int decUtil;                           //!< Decoder Util Value
 } nvmlVgpuProcessUtilizationSample_t;
+
+/**
+ *  * Structure to store the vGPU license expiry details
+ *   */
+typedef struct nvmlVgpuLicenseExpiry_st
+{
+    unsigned int    year;        //!< Year of license expiry
+    unsigned short  month;       //!< Month of license expiry
+    unsigned short  day;         //!< Day of license expiry
+    unsigned short  hour;        //!< Hour of license expiry
+    unsigned short  min;         //!< Minutes of license expiry
+    unsigned short  sec;         //!< Seconds of license expiry
+    unsigned char   status;      //!< License expiry status
+} nvmlVgpuLicenseExpiry_t;
+
+/**
+ *  * vGPU license state
+ *   */
+#define NVML_GRID_LICENSE_STATE_UNKNOWN                 0   //!< Unknown state
+#define NVML_GRID_LICENSE_STATE_UNINITIALIZED           1   //!< Uninitialized state
+#define NVML_GRID_LICENSE_STATE_UNLICENSED_UNRESTRICTED 2   //!< Unlicensed unrestricted state
+#define NVML_GRID_LICENSE_STATE_UNLICENSED_RESTRICTED   3   //!< Unlicensed restricted state
+#define NVML_GRID_LICENSE_STATE_UNLICENSED              4   //!< Unlicensed state
+#define NVML_GRID_LICENSE_STATE_LICENSED                5   //!< Licensed state
+
+typedef struct nvmlVgpuLicenseInfo_st
+{
+    unsigned char               isLicensed;     //!< License status
+    nvmlVgpuLicenseExpiry_t     licenseExpiry;  //!< License expiry information
+    unsigned int                currentState;   //!< Current license state
+} nvmlVgpuLicenseInfo_t;
 
 /**
  * Structure to store utilization value and process Id
@@ -3781,26 +3842,29 @@ nvmlReturn_t DECLDIR nvmlDeviceGetEnforcedPowerLimit(nvmlDevice_t device, unsign
 nvmlReturn_t DECLDIR nvmlDeviceGetGpuOperationMode(nvmlDevice_t device, nvmlGpuOperationMode_t *current, nvmlGpuOperationMode_t *pending);
 
 /**
- * Retrieves the amount of used, free and total memory available on the device, in bytes.
- * 
+ * Retrieves the amount of used, free, reserved and total memory available on the device, in bytes.
+ * The reserved amount is supported on version 2 only.
+ *
  * For all products.
  *
  * Enabling ECC reduces the amount of total available memory, due to the extra required parity bits.
  * Under WDDM most device memory is allocated and managed on startup by Windows.
  *
- * Under Linux and Windows TCC, the reported amount of used memory is equal to the sum of memory allocated 
+ * Under Linux and Windows TCC, the reported amount of used memory is equal to the sum of memory allocated
  * by all active channels on the device.
  *
- * See \ref nvmlMemory_t for details on available memory info.
+ * See \ref nvmlMemory_v2_t for details on available memory info.
  *
  * @note In MIG mode, if device handle is provided, the API returns aggregate
  *       information, only if the caller has appropriate privileges. Per-instance
  *       information can be queried by using specific MIG device handles.
+ * 
+ * @note nvmlDeviceGetMemoryInfo_v2 adds additional memory information.
  *
  * @param device                               The identifier of the target device
  * @param memory                               Reference in which to return the memory information
- * 
- * @return 
+ *
+ * @return
  *         - \ref NVML_SUCCESS                 if \a memory has been populated
  *         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
  *         - \ref NVML_ERROR_NO_PERMISSION     if the user doesn't have permission to perform this operation
@@ -3809,6 +3873,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetGpuOperationMode(nvmlDevice_t device, nvmlGpuO
  *         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
  */
 nvmlReturn_t DECLDIR nvmlDeviceGetMemoryInfo(nvmlDevice_t device, nvmlMemory_t *memory);
+nvmlReturn_t DECLDIR nvmlDeviceGetMemoryInfo_v2(nvmlDevice_t device, nvmlMemory_v2_t *memory);
 
 /**
  * Retrieves the current compute mode for the device.
@@ -6544,6 +6609,26 @@ nvmlReturn_t DECLDIR nvmlVgpuInstanceGetFBCSessions(nvmlVgpuInstance_t vgpuInsta
 */
 nvmlReturn_t DECLDIR nvmlVgpuInstanceGetGpuInstanceId(nvmlVgpuInstance_t vgpuInstance, unsigned int *gpuInstanceId);
 
+/**
+* Retrieves the PCI Id of the given vGPU Instance i.e. the PCI Id of the GPU as seen inside the VM.
+*
+* The vGPU PCI id is returned as "00000000:00:00.0" if NVIDIA driver is not installed on the vGPU instance.
+*
+* @param vgpuInstance                         Identifier of the target vGPU instance
+* @param vgpuPciId                            Caller-supplied buffer to return vGPU PCI Id string
+* @param length                               Size of the vgpuPciId buffer
+*
+* @return
+*         - \ref NVML_SUCCESS                 if vGPU PCI Id is sucessfully retrieved
+*         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+*         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a vgpuInstance is 0, or \a vgpuPciId is NULL
+*         - \ref NVML_ERROR_NOT_FOUND         if \a vgpuInstance does not match a valid active vGPU instance on the system
+*         - \ref NVML_ERROR_DRIVER_NOT_LOADED if NVIDIA driver is not running on the vGPU instance
+*         - \ref NVML_ERROR_INSUFFICIENT_SIZE if \a length is too small, \a length is set to required length
+*         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
+*/
+nvmlReturn_t DECLDIR nvmlVgpuInstanceGetGpuPciId(nvmlVgpuInstance_t vgpuInstance, char *vgpuPciId, unsigned int *length);
+
 /** @} */
 
 /***************************************************************************************************/
@@ -6991,6 +7076,23 @@ nvmlReturn_t DECLDIR nvmlVgpuInstanceGetAccountingStats(nvmlVgpuInstance_t vgpuI
  *         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
  */
 nvmlReturn_t DECLDIR nvmlVgpuInstanceClearAccountingPids(nvmlVgpuInstance_t vgpuInstance);
+
+/**
+ * Query the license information of the vGPU instance.
+ *  
+ * %MAXWELL_OR_NEWER%
+ * 
+ * @param vgpuInstance              Identifier of the target vGPU instance
+ * @param licenseInfo               Pointer to vGPU license information structure
+ * 
+ * @return
+ *         - \ref NVML_SUCCESS                 if information is successfully retrieved
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a vgpuInstance is 0, or \a licenseInfo is NULL
+ *         - \ref NVML_ERROR_NOT_FOUND         if \a vgpuInstance does not match a valid active vGPU instance on the system
+ *         - \ref NVML_ERROR_DRIVER_NOT_LOADED if NVIDIA driver is not running on the vGPU instance
+ *         - \ref NVML_ERROR_UNKNOWN           on any unexpected error
+ */
+nvmlReturn_t DECLDIR nvmlVgpuInstanceGetLicenseInfo_v2(nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo);
 /** @} */
 
 /***************************************************************************************************/
@@ -7688,6 +7790,17 @@ nvmlReturn_t DECLDIR nvmlDeviceGetMigDeviceHandleByIndex(nvmlDevice_t device, un
                                                          nvmlDevice_t *migDevice);
 
 /**
+ * FIXME: see DCGM-2190, these should be removed and nvml.h updated once APM/CC is ready
+ */
+typedef struct {
+    unsigned int devMode;
+    unsigned int env;
+    unsigned int feature;
+} nvmlConfComputeSystemState_t;
+
+nvmlReturn_t DECLDIR nvmlSystemGetConfComputeState(nvmlConfComputeSystemState_t *);
+
+/**
  * Get parent device handle from a MIG device handle.
  *
  * For Ampere &tm; or newer fully supported devices.
@@ -7727,6 +7840,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetAttributes(nvmlDevice_t device, nvmlDeviceAttr
 nvmlReturn_t DECLDIR nvmlComputeInstanceGetInfo(nvmlComputeInstance_t computeInstance, nvmlComputeInstanceInfo_t *info);
 nvmlReturn_t DECLDIR nvmlDeviceGetComputeRunningProcesses(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos);
 nvmlReturn_t DECLDIR nvmlDeviceGetGraphicsRunningProcesses(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos);
+nvmlReturn_t DECLDIR nvmlVgpuInstanceGetLicenseInfo(nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo);
 #endif // #ifdef NVML_NO_UNVERSIONED_FUNC_DEFS
 
 #if defined(NVML_NO_UNVERSIONED_FUNC_DEFS)
@@ -7746,6 +7860,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetGraphicsRunningProcesses(nvmlDevice_t device, 
 #undef nvmlDeviceGetHandleByIndex
 #undef nvmlDeviceGetHandleByPciBusId
 #undef nvmlInit
+#undef nvmlVgpuInstanceGetLicenseInfo
 #endif
 
 #ifdef __cplusplus

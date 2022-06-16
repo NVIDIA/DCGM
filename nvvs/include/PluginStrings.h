@@ -227,6 +227,27 @@
 #define MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM "l1cache_size_kb_per_sm"
 
 /******************************************************************************
+ * MEMTEST PLUGIN
+ *****************************************************************************/
+#define MEMTEST_PLUGIN_NAME "memtest"
+
+#define MEMTEST_STR_IS_ALLOWED     "is_allowed"     /* Is the memory plugin allowed to run? */
+#define MEMTEST_STR_PATTERN        "pattern"        /* test pattern for test4/test8/test10 */
+#define MEMTEST_STR_TEST_DURATION  "test_duration"  /* target test time */
+#define MEMTEST_STR_USE_MAPPED_MEM "use_mapped_mem" /* use cuda mapped memory instead of native device memory */
+#define MEMTEST_STR_TEST0          "test0"          /* whether to enable test0 */
+#define MEMTEST_STR_TEST1          "test1"          /* whether to enable test1 */
+#define MEMTEST_STR_TEST2          "test2"          /* whether to enable test2 */
+#define MEMTEST_STR_TEST3          "test3"          /* whether to enable test3 */
+#define MEMTEST_STR_TEST4          "test4"          /* whether to enable test4 */
+#define MEMTEST_STR_TEST5          "test5"          /* whether to enable test5 */
+#define MEMTEST_STR_TEST6          "test6"          /* whether to enable test6 */
+#define MEMTEST_STR_TEST7          "test7"          /* whether to enable test7 */
+#define MEMTEST_STR_TEST8          "test8"          /* whether to enable test8 */
+#define MEMTEST_STR_TEST9          "test9"          /* whether to enable test9 */
+#define MEMTEST_STR_TEST10         "test10"         /* whether to enable test10 */
+
+/******************************************************************************
  * HARDWARE PLUGIN
  *****************************************************************************/
 #define HARDWARE_PLUGIN_INTERNAL_NAME "hardware"
@@ -292,6 +313,38 @@
 
 #define MEMBW_STR_IS_ALLOWED          "is_allowed"     /* Is the memory bandwidth plugin allowed to run? */
 #define MEMBW_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
+
+/****************************************************************************
+ * PULSE TEST PLUGIN
+ ***************************************************************************/
+#define PULSE_TEST_PLUGIN_NAME "pulse_test"
+
+#define PULSE_TEST_STR_IS_ALLOWED          "is_allowed"              /* Is the plugin allowed to run */
+#define PULSE_TEST_STR_INJECT_ERRORS       "inject_errors"           /* number of errors to inect (test only( */
+#define PULSE_TEST_STR_ADAPTERS            "adapters"                /* CUDA adapters to use */
+#define PULSE_TEST_STR_CHECK_MODE          "check_mode"              /* Either diff or crc (way to check results) */
+#define PULSE_TEST_STR_WORKLOAD            "workload"                /* type of workload */
+#define PULSE_TEST_STR_KERNEL              "kernel"                  /* which kernel to use */
+#define PULSE_TEST_STR_MATRIX_SIZE_MODE    "matrix_size_mode"        /* standard or max alloc */
+#define PULSE_TEST_STR_EXIT_ON_ERROR       "exit_on_error"           /* if true, exit on the first error */
+#define PULSE_TEST_STR_SKIP_HOSTALLOC_INIT "skip_hostalloc_mem_init" /* initialize the host memory or not */
+#define PULSE_TEST_STR_USE_CURAND          "use_curand"              /* Use curand if available */
+#define PULSE_TEST_STR_USE_CUPTI           "use_cupti"               /* Use cupti if available */
+#define PULSE_TEST_STR_SYNC_TIMEOUT        "sync_timeout"            /* timeout before marking a workload slow */
+#define PULSE_TEST_STR_MIN_K_SIZE          "min_k_size"              /* minimum k size for a k-schmoo */
+#define PULSE_TEST_STR_K_SIZE              "k_size"                  /* value to use for k */
+#define PULSE_TEST_STR_INTERNAL_LOOPS      "internal_loops"          /* number of kernel calls between checks */
+#define PULSE_TEST_STR_RANDOM_SEED         "random_seed"             /* seed value for random number generator */
+#define PULSE_TEST_STR_WAVES               "waves"                   /* multiply the minimum saturation by a factor */
+#define PULSE_TEST_STR_FORCE_M             "force_m"                 /* forced value for m */
+#define PULSE_TEST_STR_FORCE_N             "force_n"                 /* forced value for n */
+#define PULSE_TEST_STR_TEST_DURATION       "test_duration"           /* amount of time to run. 0 = forever */
+#define PULSE_TEST_STR_ALPHA               "alpha"                   /* alpha value */
+#define PULSE_TEST_STR_BETA                "beta"                    /* beta value */
+#define PULSE_TEST_STR_FREQ_0              "freq0"                   /* frequency 0 in hertz */
+#define PULSE_TEST_STR_FREQ_1              "freq1"                   /* frequency 1 in hertz */
+#define PULSE_TEST_STR_DUTY_0              "duty0"                   /* duty 0 as a decimal */
+#define PULSE_TEST_STR_DUTY_1              "duty1"                   /* duty 1 as a decimal */
 
 /*****************************************************************************
  * PER PLUGIN ERROR DEFINITIONS AND THEIR BITMASKS

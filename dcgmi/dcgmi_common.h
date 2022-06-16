@@ -20,9 +20,16 @@
 #include "dcgm_structs.h"
 
 #include <DcgmLogging.h>
+#include <DcgmUtilities.h>
 
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 
@@ -50,14 +57,15 @@ struct ConsoleErrorLogger
             record << msg;
         }
 
-        std::cerr << msg;
+        fmt::print(stderr, "{}", msg);
         return *this;
     }
 
     ~ConsoleErrorLogger()
     {
         IF_PLOG_(BASE_LOGGER, plog::debug)(*plog::get<BASE_LOGGER>()) += record;
-        std::cerr << std::endl;
+        fmt::print(stderr, "\n");
+        fflush(stderr);
     }
 
 private:
@@ -218,6 +226,93 @@ namespace DcgmNs
  */
 [[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(dcgmHandle_t dcgmHandle,
                                                                                              std::string const &Ids);
+
+using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>;
+
+EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info);
+
+namespace detail
+{
+    struct GroupEntityPairHasher
+    {
+        size_t operator()(dcgmGroupEntityPair_t const &value) const
+        {
+            return Utils::Hash::CompoundHash(value.entityGroupId, value.entityId);
+        }
+    };
+
+    struct GroupEntityPairEq
+    {
+        constexpr bool operator()(dcgmGroupEntityPair_t const &left, dcgmGroupEntityPair_t const &right) const
+        {
+            return std::tie(left.entityGroupId, left.entityId) == std::tie(right.entityGroupId, right.entityId);
+        }
+    };
+
+    /**
+     * @brief Result type for the `HandleWildcard()` function
+     * @see `HandleWildcard()` for details about each value meaning.
+     */
+    enum class HandleWildcardResult
+    {
+        Handled,   /*!< Wildcards were found */
+        Unhandled, /*!< No Wildcards were found */
+        Error,     /*!< Error during parsing */
+    };
+
+    using EntityGroupContainer = std::unordered_set<dcgmGroupEntityPair_t, GroupEntityPairHasher, GroupEntityPairEq>;
+
+    /**
+     * @brief Handles cases if \a value has wildcards in one of its fields.
+     *
+     * @param[in]   value       Parsed Entity
+     * @param[in]   entities    Entities that will be used to satisfy wildcards
+     * @param[out]  result      Final list of entity pairs after the wildcards are unrolled
+     * @return \c `HandleWildcardResult::Handled` - if wildcards were found and the \a result was updated
+     * @return \c `HandleWildcardResult::Unhandled` - no wildcards were found and the \a result was unchanged
+     * @return \c `HandleWildcardResult::Error` - an error happened in the process. The state of the \a result is
+     *                                            undefined
+     */
+    HandleWildcardResult HandleWildcard(ParseResult const &value,
+                                        EntityMap const &entities,
+                                        EntityGroupContainer &result);
+} // namespace detail
+
+namespace Terminal
+{
+    /**
+     * @brief Checks if there is an interactive session associated with stdout
+     * @return true if the terminal session is interactive (output is visible to a user)
+     * @return false if teh terminal session is not interactive (e.g. the output piped to another process)
+     */
+    bool IsTTY();
+
+    /**
+     * @brief Represents col/row dimensions of an interactive terminal.
+     * @note The default constructor produces 24x80 terminal dimensions.
+     * @see GetTermDimensions()
+     */
+    struct TermDimensions
+    {
+        TermDimensions(std::uint16_t rows, std::uint16_t cols)
+            : rows(rows)
+            , cols(cols)
+        {}
+        TermDimensions()
+            : TermDimensions(24, 80)
+        {}
+        std::uint16_t rows; /*!< number of rows in the interactive terminal */
+        std::uint16_t cols; /*!< number of columns in the interactive terminal */
+    };
+
+    /**
+     * @brief Returns terminal dimensions for interactive session if any.
+     * @return std::nullopt if there is no interactive terminal associated with stdout.
+     * @return TermDimensions if it's possible to get interactive terminal size.
+     */
+    std::optional<TermDimensions> GetTermDimensions();
+} // namespace Terminal
+
 } // namespace DcgmNs
 
 #endif // DCGMI_COMMON_H

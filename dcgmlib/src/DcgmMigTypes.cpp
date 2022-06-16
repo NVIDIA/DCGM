@@ -17,28 +17,28 @@
 
 std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::GpuInstanceId const &val)
 {
-    static_assert(std::is_trivially_copyable<DcgmNs::Mig::GpuInstanceId>::value,
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::GpuInstanceId>,
                   "DcgmNs::Mig::GpuInstanceId should be trivially copyable");
     os << "GPU_I(" << val.id << ")";
     return os;
 }
 std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::ComputeInstanceId const &val)
 {
-    static_assert(std::is_trivially_copyable<DcgmNs::Mig::ComputeInstanceId>::value,
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::ComputeInstanceId>,
                   "DcgmNs::Mig::ComputeInstanceId should be trivially copyable");
     os << "GPU_CI(" << val.id << ")";
     return os;
 }
 std::ostream &DcgmNs::Mig::Nvml::operator<<(std::ostream &os, DcgmNs::Mig::Nvml::GpuInstanceId const &val)
 {
-    static_assert(std::is_trivially_copyable<DcgmNs::Mig::Nvml::GpuInstanceId>::value,
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::Nvml::GpuInstanceId>,
                   "DcgmNs::Mig::Nvml::GpuInstanceId should be trivially copyable");
     os << "NVML_GI(" << val.id << ")";
     return os;
 }
 std::ostream &DcgmNs::Mig::Nvml::operator<<(std::ostream &os, DcgmNs::Mig::Nvml::ComputeInstanceId const &val)
 {
-    static_assert(std::is_trivially_copyable<DcgmNs::Mig::Nvml::ComputeInstanceId>::value,
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::Nvml::ComputeInstanceId>,
                   "DcgmNs::Mig::Nvml::ComputeInstanceId should be trivially copyable");
     os << "NVML_CI(" << val.id << ")";
     return os;

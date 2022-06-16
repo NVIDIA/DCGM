@@ -86,10 +86,10 @@ private:
 
     std::unique_ptr<DcgmMetadataManager> mpMetadataManager; /* Pointer to the worker class for this module */
 
-    template <class Fn>
+    template <std::invocable Fn>
     dcgmReturn_t ProcessInTaskRunner(Fn action);
 
-    template <class Fn>
+    template <std::invocable Fn>
     dcgmReturn_t ProcessInTaskRunnerWithAttempts(int attempts, Fn action);
 };
 

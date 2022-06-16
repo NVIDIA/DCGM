@@ -43,6 +43,7 @@ enum suiteNames_enum
     NVVS_SUITE_QUICK,
     NVVS_SUITE_MEDIUM,
     NVVS_SUITE_LONG,
+    NVVS_SUITE_XLONG,
     NVVS_SUITE_CUSTOM,
 };
 

@@ -164,6 +164,9 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libMemoryBandwidth.so
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libMemoryBandwidth.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libMemoryBandwidth.so.2
+./usr/share/nvidia-validation-suite/plugins/cuda10/libMemtest.so
+./usr/share/nvidia-validation-suite/plugins/cuda10/libMemtest.so.${VERSION}
+./usr/share/nvidia-validation-suite/plugins/cuda10/libMemtest.so.2
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so.2
@@ -195,6 +198,9 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libMemoryBandwidth.so.2
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so.${VERSION}
+./usr/share/nvidia-validation-suite/plugins/cuda11/libMemtest.so.2
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.2
@@ -226,6 +232,9 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libMemoryBandwidth.so
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libMemoryBandwidth.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libMemoryBandwidth.so.2
+./usr/share/nvidia-validation-suite/plugins/cuda9/libMemtest.so
+./usr/share/nvidia-validation-suite/plugins/cuda9/libMemtest.so.${VERSION}
+./usr/share/nvidia-validation-suite/plugins/cuda9/libMemtest.so.2
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda9/libPcie.so.2

@@ -17,8 +17,8 @@
 #include <fmt/format.h>
 #include <stdint.h>
 
+#include "DcgmThread/DcgmThread.h"
 #include "DiagnosticPlugin.h"
-#include "NvvsThread.h"
 #include "gpuburn_ptx_string.h"
 
 /*
@@ -388,7 +388,7 @@ bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount)
 }
 
 /*************************************************************************/
-class GpuBurnWorker : public NvvsThread
+class GpuBurnWorker : public DcgmThread
 {
 public:
     /*************************************************************************/
@@ -906,9 +906,9 @@ size_t GpuBurnWorker::AvailMemory(int &st)
         st = -1;
         return 0;
     }
-    size_t freeMem;
-    size_t totalMem;
-    CUresult cuSt = cuMemGetInfo(&freeMem, &totalMem);
+    size_t freeMem  = 0;
+    size_t totalMem = 0;
+    CUresult cuSt   = cuMemGetInfo(&freeMem, &totalMem);
     if (cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cuMemGetInfo", cuSt, m_device->gpuId);

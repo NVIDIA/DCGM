@@ -21,6 +21,7 @@
 #include "DcgmRequest.h"
 #include "dcgm_module_structs.h"
 #include "dcgm_structs.h"
+#include <DcgmBuildInfo.hpp>
 #include <iostream>
 
 typedef struct
@@ -29,6 +30,21 @@ typedef struct
     std::unique_ptr<DcgmMessage> response; /* The reply message we waited for */
 } DcgmClientBlockingResponse_t;
 
+/* Attributes of each client connection of the DcgmClientHandler */
+class DCHConnectionAttributes
+{
+public:
+    DCHConnectionAttributes(bool requiresModuleCommands, const char *buildInfoString)
+        : m_requiresModuleCommands(requiresModuleCommands)
+        , m_buildInfo(DcgmNs::DcgmBuildInfo(buildInfoString))
+    {}
+
+    /* Boolean as to if this connection can communicate without using protobufs. We should use
+       module command messages rather than protobuf messages. This is inferred from m_buildInfo.GetVersion() */
+    bool m_requiresModuleCommands = false;
+
+    DcgmNs::DcgmBuildInfo m_buildInfo; /* Build info retrieved from the server */
+};
 
 class DcgmClientHandler
 {
@@ -77,6 +93,16 @@ public:
                                             size_t maxResponseSize,
                                             unsigned int timeoutMs = 60000);
 
+    /*****************************************************************************
+     * Find out of a given DCGM handle is capable of only communicating with
+     * module commands (without protobufs). This is expected for later 2.x
+     * releases and 3.x releases
+     *
+     * Returns: true if the host engine referenced in dcgmHandle is capable of
+     *          only using module commands.
+     *          false if not. Also false if dcgmHandle is not a known remote connection.
+     */
+    bool HandleRequiresModuleCommands(dcgmHandle_t dcgmHandle);
 
 private:
     DcgmIpc m_dcgmIpc;
@@ -96,6 +122,9 @@ private:
         Protected by m_mutex */
     std::unordered_map<dcgm_connection_id_t, std::unordered_set<dcgm_request_id_t>> m_connectionRequests;
 
+    /* A map of connectionId -> attributes for each connection */
+    std::unordered_map<dcgm_connection_id_t, DCHConnectionAttributes> m_connectionAttributes;
+
     dcgmReturn_t TryConnectingToHostEngine(char identifier[],
                                            unsigned int portNumber,
                                            dcgmHandle_t *pDcgmHandle,
@@ -113,6 +142,14 @@ private:
     static void ProcessDisconnectStatic(dcgm_connection_id_t connectionId, void *userData);
 
     void ProcessDisconnect(dcgm_connection_id_t connectionId);
+
+    /*************************************************************************/
+    /* Populate connection attributes for a newly established connection.
+     *
+     * Returns DCGM_ST_OK if OK
+     *         Other nonzero DCGM_ST_? on error.
+     */
+    dcgmReturn_t PopulateConnectionAttributes(dcgmHandle_t dcgmHandle);
 
     /*************************************************************************/
 

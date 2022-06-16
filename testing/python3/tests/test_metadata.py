@@ -435,30 +435,69 @@ def _metadata_get_aggregate_fields_approx_equals_total(handle, getForFieldFn, ge
         'sum of "%s" for all individual fields was not reasonably close to the actual total. ' % metaAttr \
         + 'Got %s, expected to be between %s and %s'\
         % (aggregateVal, startVal, endVal)
-        
+
+
+def _cpu_load(start_time, duration_sec, x):
+    while time.time() - start_time < duration_sec:
+        x*x
+
+
+def _cpu_load_star(arg1, arg2):
+    """ Convert arguments from (start_time, duration_sec), x to start_time, duration_sec, x"""
+    _cpu_load(*arg1, arg2)
+
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_introspection_enabled()
 def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
     """
     Sanity test for API that gets CPU Utilization of the hostengine process.
     """
+    from multiprocessing import cpu_count
     handle = pydcgm.DcgmHandle(handle)
     system = pydcgm.DcgmSystem(handle)
 
-    # wait up to 1 second for CPU utilization to be averaged properly (not be 0)
-    for attempt in range(100):
-        cpuUtil = system.introspect.cpuUtil.GetForHostengine()
-        assert(0 <= cpuUtil.total <= 1), cpuUtil.total
+    def generate_cpu_load(duration_sec):
+        """
+        Generate a CPU load for a given duration.
+        """
+        from multiprocessing import Pool
+        from itertools import repeat
 
-        if (0 < cpuUtil.total < 1):
-            break
-        time.sleep(0.010)
+        start_time = time.time()
+        processes = cpu_count()
+        with Pool(processes) as pool:
+            pool.starmap(_cpu_load_star, zip(repeat((start_time, duration_sec)), range(processes)))
 
-    # 0+% to 50% CPU utilization
-    assert(0.00001 < cpuUtil.total < 0.50), cpuUtil.total
+    def get_current_process_cpu_util():
+        """Return a tuple representing CPU user-time and system-time and total for the current process
+        """
+        import os
+        with open('/proc/self/stat', "rb", buffering=0) as f:
+            data = f.readline()
+        values = data[data.rfind(b')') + 2:].split()
+        utime = float(values[11]) / os.sysconf("SC_CLK_TCK")
+        stime = float(values[12]) / os.sysconf("SC_CLK_TCK")
+        return utime, stime, utime + stime
+
+    start = time.time()
+    start_cpu_util = get_current_process_cpu_util()
+    generate_cpu_load(1)
+    stop = time.time()
+    stop_cpu_util = get_current_process_cpu_util()
+    cpuUtil = system.introspect.cpuUtil.GetForHostengine()
+
+    #diff_utime = stop_cpu_util[0] - start_cpu_util[0]
+    #diff_stime = stop_cpu_util[1] - start_cpu_util[1]
+    diff_total = stop_cpu_util[2] - start_cpu_util[2]
+    diff_time = stop - start
+    overall_cpu_util = diff_total / diff_time
+    logger.debug("DCGM CPU Util: %f" % (cpuUtil.total * cpu_count()))
+    logger.debug('Stats CPU Util: %f' % overall_cpu_util)
+    assert abs(overall_cpu_util - (cpu_count() * cpuUtil.total)) < 0.05, "CPU Utilization was not within 5% of expected value"
 
     # test that user and kernel add to total (with rough float accuracy)
-    assert(abs(cpuUtil.total - (cpuUtil.user + cpuUtil.kernel)) <= 4*float_info.epsilon), \
+    assert abs(cpuUtil.total - (cpuUtil.user + cpuUtil.kernel)) <= 4*float_info.epsilon, \
            'CPU kernel and user utilization did not add up to total. Kernel: %f, User: %f, Total: %f' \
            % (cpuUtil.kernel, cpuUtil.user, cpuUtil.total)
 

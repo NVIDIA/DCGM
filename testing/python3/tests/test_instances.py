@@ -67,12 +67,12 @@ def create_fake_compute_instances(handle, parentIds, ciCount):
     return fakeCIMap
 
 def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
-    hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
-    legalGpu = False
     instanceMap = {}
     ciMap = {}
     legalInstances = []
 
+    legalGpu = False
+    hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
     for i in range(0, hierarchy.count):
         entity = hierarchy.entityList[i]
         if entity.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
@@ -84,6 +84,9 @@ def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
         elif entity.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_CI and legalGpu:
             ciMap[entity.entity.entityId] = entity.parent.entityId
             legalInstances.append(entity.parent.entityId)
+
+    if hierarchy.count == 0:
+        logger.info("There were no MIG instances configured on this host")
 
     instancesNeeded = minInstances - len(instanceMap)
     cisNeeded = minCIs - len(ciMap)

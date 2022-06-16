@@ -2040,7 +2040,7 @@ public:
 /*****************************************************************************/
 int TestCacheManager::TestTimedModeAwakeTime()
 {
-    dcgmcm_runtime_stats_t stats;
+    dcgmcm_runtime_stats_t stats {};
 
     if (m_gpus.size() < 1)
     {
@@ -2048,7 +2048,6 @@ int TestCacheManager::TestTimedModeAwakeTime()
         return 0;
     }
 
-    memset(&stats, 0, sizeof(stats));
 
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(0);
     if (nullptr == cacheManager)
@@ -2086,7 +2085,7 @@ int TestCacheManager::TestTimedModeAwakeTime()
                stats.numSleepsDone,
                stats.awakeTimeUsec,
                stats.sleepTimeUsec,
-               stats.updateCycleFinished,
+               stats.updateCycleFinished.load(std::memory_order_relaxed),
                IsDebugBuild());
     }
 
@@ -2096,7 +2095,7 @@ int TestCacheManager::TestTimedModeAwakeTime()
 /*****************************************************************************/
 int TestCacheManager::TestLockstepModeAwakeTime()
 {
-    dcgmcm_runtime_stats_t stats;
+    dcgmcm_runtime_stats_t stats {};
 
     if (m_gpus.size() < 1)
     {
@@ -2104,7 +2103,6 @@ int TestCacheManager::TestLockstepModeAwakeTime()
         return 0;
     }
 
-    memset(&stats, 0, sizeof(stats));
 
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
@@ -2143,7 +2141,7 @@ int TestCacheManager::TestLockstepModeAwakeTime()
                stats.numSleepsDone,
                stats.awakeTimeUsec,
                stats.sleepTimeUsec,
-               stats.updateCycleFinished,
+               stats.updateCycleFinished.load(std::memory_order_relaxed),
                IsDebugBuild());
     }
 
@@ -2153,7 +2151,8 @@ int TestCacheManager::TestLockstepModeAwakeTime()
 /*****************************************************************************/
 int TestCacheManager::TestUpdatePerf()
 {
-    dcgmcm_runtime_stats_t stats, statsBefore;
+    dcgmcm_runtime_stats_t stats {};
+    dcgmcm_runtime_stats_t statsBefore {};
     int i;
     timelib64_t startTime, endTime;
     dcgmReturn_t dcgmReturn;
@@ -2164,9 +2163,6 @@ int TestCacheManager::TestUpdatePerf()
         std::cout << "Skipping TestUpdatePerf() with 0 GPUs" << std::endl;
         return 0;
     }
-
-    memset(&stats, 0, sizeof(stats));
-    memset(&statsBefore, 0, sizeof(stats));
 
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
@@ -2196,9 +2192,12 @@ int TestCacheManager::TestUpdatePerf()
 
     cacheManager->GetRuntimeStats(&stats);
 
-    if (stats.updateCycleFinished < numLoops)
+    if (stats.updateCycleFinished.load(std::memory_order_relaxed) < numLoops)
     {
-        fprintf(stderr, "stats.updateCycleFinished %d < numLoops %d\n", (int)stats.updateCycleFinished, numLoops);
+        fprintf(stderr,
+                "stats.updateCycleFinished %d < numLoops %d\n",
+                (int)stats.updateCycleFinished.load(std::memory_order_relaxed),
+                numLoops);
         return 200;
     }
 
@@ -2538,9 +2537,14 @@ int TestCacheManager::TestAttachDetachWithWatches(void)
 /*****************************************************************************/
 int TestCacheManager::TestAreAllGpuIdsSameSku()
 {
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     std::vector<unsigned int> gpuIds;
     int errorCount = 0;
+
+    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    if (nullptr == cacheManager)
+    {
+        return -1;
+    }
 
     // Add 4 GPUs that are all the same part
     for (int i = 0; i < 4; i++)

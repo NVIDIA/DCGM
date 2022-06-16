@@ -515,11 +515,11 @@ class DcgmReader(object):
             try:
                 self.Reconnect()
                 report = self.fvs is not None
-                self.fvs = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.fvs, self.m_fieldGroup).values
+                self.fvs = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.fvs, self.m_fieldGroup)
                 if report:
-                    for gpuId in list(self.fvs.keys()):
+                    for gpuId in list(self.fvs.values.keys()):
                         systemDictionary[gpuId] = {} # initialize the gpu's dictionary
-                        gpuFv = self.fvs[gpuId]
+                        gpuFv = self.fvs.values[gpuId]
 
                         for fieldId in list(gpuFv.keys()):
                             for val in gpuFv[fieldId]:
@@ -528,12 +528,12 @@ class DcgmReader(object):
 
                                 if mapById == False:
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
-                                    if systemDictionary[gpuId][fieldTag] is None:
+                                    if not fieldTag in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldTag] = []
 
                                     systemDictionary[gpuId][fieldTag].append(val)
                                 else:
-                                    if systemDictionary[gpuId][fieldId] is None:
+                                    if not fieldId in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldId] = []
                                     systemDictionary[gpuId][fieldId].append(val)
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):

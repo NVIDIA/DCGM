@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+add_subdirectory(tests)
+
+find_package(Cuda REQUIRED)
 find_package(OpenMP REQUIRED)
 
-declare_nvvs_plugin(busgrind OpenMP::OpenMP_CXX)
+declare_nvvs_plugin(busgrind . OpenMP::OpenMP_CXX)
 
 set(LOCAL_NVVS_PLUGINS "")
 

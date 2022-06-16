@@ -114,8 +114,8 @@ fi
 
 mkdir cuda11
 if [[ "${TARGET}" != "powerpc64le-linux-gnu" ]]; then
-download_cuda_package "${CUDA11_URL}" cuda11 package.deb "${CUDA11_URL_CHKSUM}"
-process_cuda_package cuda11
+    download_cuda_package "${CUDA11_URL}" cuda11 package.deb "${CUDA11_URL_CHKSUM}"
+    process_cuda_package cuda11
 else
     download_cuda_package "${CUDA11_URL}" cuda11 package.rpm "${CUDA11_URL_CHKSUM}"
     process_rpm_package cuda11

@@ -16,9 +16,9 @@
 #include "HostEngineOutput.h"
 
 #include <tclap/ArgException.h>
-#include <tclap/XorHandler.h>
 
 #include <iostream>
+#include <limits>
 #include <string_view>
 
 namespace
@@ -243,32 +243,32 @@ void HostEngineOutput::failure(TCLAP::CmdLineInterface &c, TCLAP::ArgException &
 
 void HostEngineOutput::PrintShortUsage(TCLAP::CmdLineInterface &cmdLine, std::ostream &os)
 {
-    auto const &argList  = cmdLine.getArgList();
     auto const &progName = cmdLine.getProgramName();
-    auto &xorHandler     = cmdLine.getXorHandler();
-    auto const &xorList  = xorHandler.getXorList();
 
-    std::string s = progName + " ";
+    std::string s            = progName + " ";
+    std::string exclusive    = "";
+    std::string nonExclusive = "";
 
-    // first the xor
-    for (auto const &xorItem : xorList)
+    for (auto const &group : cmdLine.getArgGroups())
     {
-        s += " {";
-        for (auto const &arg : xorItem)
+        if (group->isExclusive())
         {
-            s += arg->shortID() + "|";
+            exclusive += " {";
+            for (auto const &arg : *group)
+            {
+                exclusive += arg->shortID() + "|";
+            }
+            exclusive[exclusive.length() - 1] = '}';
         }
-        s[s.length() - 1] = '}';
-    }
-
-    // then the rest
-    for (auto const &arg : argList)
-    {
-        if (!xorHandler.contains(arg))
+        else
         {
-            s += " " + arg->shortID();
+            for (auto const &arg : *group)
+            {
+                nonExclusive += " " + arg->shortID();
+            }
         }
     }
+    s += exclusive + nonExclusive;
 
     // if the program name is too long, then adjust the second line offset
     auto secondLineOffset = std::min(progName.length() + 2, 75UL / 2);
@@ -277,10 +277,6 @@ void HostEngineOutput::PrintShortUsage(TCLAP::CmdLineInterface &cmdLine, std::os
 
 void HostEngineOutput::PrintLongUsage(TCLAP::CmdLineInterface &cmdLine, std::ostream &os)
 {
-    auto const &argList = cmdLine.getArgList();
-    auto &xorHandler    = cmdLine.getXorHandler();
-    auto const &xorList = xorHandler.getXorList();
-
     [[maybe_unused]] auto makeLongId = [this](TCLAP::Arg const &arg) -> std::string {
         std::string result;
         result.reserve(m_maxWidth);
@@ -295,28 +291,41 @@ void HostEngineOutput::PrintLongUsage(TCLAP::CmdLineInterface &cmdLine, std::ost
         return result;
     };
 
+    std::unordered_map<TCLAP::ArgGroup *, size_t> exclusiveGroupsSizes;
     // first the xor
     int maxNameLength = std::numeric_limits<int>::min();
-    for (auto const &xorItem : xorList)
+    for (auto const &group : cmdLine.getArgGroups())
     {
-        for (auto const &arg : xorItem)
+        if (!group->isExclusive())
         {
+            continue;
+        }
+        size_t groupSize = 0;
+        for (auto const &arg : *group)
+        {
+            ++groupSize;
             maxNameLength = std::max<int>(maxNameLength, makeLongId(*arg).length());
         }
+        exclusiveGroupsSizes[group] = groupSize;
     }
     maxNameLength = std::min<int>(maxNameLength, m_maxWidth / 2);
 
-    for (auto const &xorItem : xorList)
+    for (auto const &group : cmdLine.getArgGroups())
     {
-        for_index(auto const &arg : xorItem)
+        if (!group->isExclusive())
         {
-            auto longId = makeLongId(*arg);
+            continue;
+        }
+        auto const groupSize = exclusiveGroupsSizes[group];
+        for_index(auto const &arg : *group)
+        {
+            auto const longId = makeLongId(*arg);
             os << WidthLimit(m_maxWidth, 2, 0, longId) << ": ";
             os << WidthLimit(m_maxWidth,
                              std::max<int>(maxNameLength - longId.length(), 0),
                              longId.length() + 4,
                              arg->getDescription());
-            if (i < xorItem.size()) // See for_index macro, which provides i index
+            if (i < groupSize)
             {
                 os << WidthLimit(m_maxWidth, 9, 0, "-- OR --");
             }
@@ -326,18 +335,34 @@ void HostEngineOutput::PrintLongUsage(TCLAP::CmdLineInterface &cmdLine, std::ost
 
     // then the rest
     maxNameLength = std::numeric_limits<int>::min();
-    for (auto const &arg : argList)
+    for (auto const &group : cmdLine.getArgGroups())
     {
-        maxNameLength = std::max<int>(maxNameLength, makeLongId(*arg).length());
+        if (group->isExclusive())
+        {
+            continue;
+        }
+        for (auto const &arg : *group)
+        {
+            maxNameLength = std::max<int>(maxNameLength, makeLongId(*arg).length());
+        }
     }
     maxNameLength = std::min<int>(maxNameLength, m_maxWidth / 2);
-    for (auto const &arg : argList)
+    for (auto const &group : cmdLine.getArgGroups())
     {
-        auto longId = makeLongId(*arg);
-        os << WidthLimit(m_maxWidth, 2, 0, longId) << ": ";
-        os << WidthLimit(
-            m_maxWidth, std::max<int>(maxNameLength - longId.length(), 0), longId.length() + 4, arg->getDescription());
-        os << "\n";
+        if (group->isExclusive())
+        {
+            continue;
+        }
+        for (auto const &arg : *group)
+        {
+            auto longId = makeLongId(*arg);
+            os << WidthLimit(m_maxWidth, 2, 0, longId) << ": ";
+            os << WidthLimit(m_maxWidth,
+                             std::max<int>(maxNameLength - longId.length(), 0),
+                             longId.length() + 4,
+                             arg->getDescription());
+            os << "\n";
+        }
     }
     os << std::endl;
 }

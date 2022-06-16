@@ -16,6 +16,7 @@
 #ifndef DCGMMUTEX_H
 #define DCGMMUTEX_H
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -155,10 +156,10 @@ private:
     /*************************************************************************/
 
     /* OS Handle to the mutex */
-    long long m_timeoutUsec; /* How long to wait in usec before timing out. 0=never timeout */
-    int m_handleInit;        /* Is handle/critSec is initialized? */
-    bool m_debugLogging;     /* Should we log verbose debug logs? true=yes */
-    long long m_lockCount;   /* Number of times this mutex has been locked. This doesn't count recursive locks */
+    long long m_timeoutUsec;       /* How long to wait in usec before timing out. 0=never timeout */
+    int m_handleInit;              /* Is handle/critSec is initialized? */
+    bool m_debugLogging;           /* Should we log verbose debug logs? true=yes */
+    std::atomic_llong m_lockCount; /* Number of times this mutex has been locked. This doesn't count recursive locks */
     std::mutex m_mutex;
 
     dcgm_mutex_locker_t m_locker; /* Information about the locker of this mutex */

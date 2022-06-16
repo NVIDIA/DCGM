@@ -13,97 +13,85 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/******************************************************************************
- *                                Device Monitor                              *
- *                                                                            *
- *                                                                            *
- * Purpose: Device Monitor class is the heart of dmon. The Dmon is a tool that*
- * creates a group of GPUs and runs the watch over them based on the fields   *
- * mentioned in the command line options. Dmon provides flexibility to use    *
- * many options like mentioning field IDs, Gpu IDs, FieldGroup Ids, Gpu group *
- * Ids, delay and count. A small description of the command line options is as*
- * below:                                                                     *
- *                                                                            *
- * Option    Long Form          Default Value                                 *
- *                                                                            *
- * -i         --gpuIds          ALL IDs (GPU/GPU-I/GPU-CI)                    *
- * -g         --group-id        All GPUs group                                *
- * -f         --field-group-id  Null                                          *
- * -e         --field-ids      Null                                           *
- * -h         --help                                                          *
- * -d         --delay          1sec                                           *
- * -c         --count          0(infinite)                                    *
- * -l         --list                                                          *
- *                                                                            *
- * When field Ids are mentioned, the dmon creates a group of FieldIds and     *
- * similarly when the Gpu Ids are mentioned, the dmon creates a group of Gpus *
- * and then runs the dmon against the Gpu group for the field Ids mentioned.  *
- *                                                                            *
- ******************************************************************************/
 
 #include "DeviceMonitor.h"
+#include "Query.h"
 #include "dcgm_structs_internal.h"
-#include "dcgmi_common.h"
 
 #include <DcgmLogging.h>
+#include <DcgmUtilities.h>
 
-#include <iomanip>
+#include <thread>
+#include <unordered_set>
 
 
-#define MAX_PRINT_HEADER_COUNT 14
-#define MILLI_SEC              1000
-#define FLOAT_VAL_PREC         3
-#define MAX_KEEP_SAMPLES       2
-#define MAX_KEEP_AGE           0.0 /* Enforce quota via MAX_KEEP_SAMPLES */
-#define DEFAULT_COUNT          0
-#define WIDTH_1                1
-#define PADDING                2
-#define WIDTH_3                3
-#define WIDTH_10               10
-#define WIDTH_15               15
-#define WIDTH_20               20
-#define WIDTH_30               30
-#define WIDTH_40               40
-#define NA                     "N/A"
-#define FORMAT_LINE            "___________________________________________________________________________________ "
+#define MAX_PRINT_HEADER_COUNT 14  /*!< Defines after how many lines a header should be printed again. */
+#define FLOAT_VAL_PREC         3   /*!< Precision of floating-point metric values */
+#define MAX_KEEP_SAMPLES       2   /*!< Defines how many samples the hostengine should keep in the Cache Manager */
+#define MAX_KEEP_AGE           0.0 /*!< Enforce quota via MAX_KEEP_SAMPLES */
+#define DEFAULT_COUNT          0 /*!< Magic number. Default value for the number of iterations that means run forever */
+#define PADDING                2U
+
+static const char cNA[] = "N/A";
 
 /*****************************************************************************/
 /* This is used by the signal handler to let the device monitor know that
-   we've received a signal from a ctrl-c..etc that we should stop */
-static std::atomic<bool> deviceMonitorShouldStop = false;
+   we've received a signal from a ctrl-c... etc that we should stop */
+static std::atomic<bool> gDeviceMonitorShouldStop = false;
 
-static std::string_view HelperGetGroupIdPrefix(dcgm_field_entity_group_t const groupId)
+template <>
+struct fmt::formatter<dcgm_field_entity_group_t> : fmt::formatter<fmt::string_view>
 {
-    switch (groupId)
+    template <typename FormatContext>
+    auto format(dcgm_field_entity_group_t entityGroupId, FormatContext &ctx)
     {
-        case DCGM_FE_GPU:
-            return "GPU";
-        case DCGM_FE_VGPU:
-            return "vGPU";
-        case DCGM_FE_SWITCH:
-            return "Switch";
-        case DCGM_FE_GPU_I:
-            return "GPU-I";
-        case DCGM_FE_GPU_CI:
-            return "GPU-CI";
-        case DCGM_FE_NONE:
-        case DCGM_FE_COUNT:
-            break;
+        fmt::string_view val = "UNKNOWN";
+        switch (entityGroupId)
+        {
+            case DCGM_FE_GPU:
+                val = "GPU";
+                break;
+            case DCGM_FE_VGPU:
+                val = "vGPU";
+                break;
+            case DCGM_FE_SWITCH:
+                val = "Switch";
+                break;
+            case DCGM_FE_GPU_I:
+                val = "GPU-I";
+                break;
+            case DCGM_FE_GPU_CI:
+                val = "GPU-CI";
+                break;
+            case DCGM_FE_NONE:
+            case DCGM_FE_COUNT:
+                break;
+        }
+
+        return fmt::formatter<fmt::string_view>::format(val, ctx);
     }
-    return "";
-}
+};
+
+template <>
+struct std::hash<dcgmi_entity_pair_t>
+{
+    size_t operator()(dcgmi_entity_pair_t const &val) const
+    {
+        return DcgmNs::Utils::Hash::CompoundHash(val.entityGroupId, val.entityId);
+    }
+};
 
 /**
  * Constructor : Initialize the members of class Device Info
  */
-DeviceInfo::DeviceInfo(std::string hostname,
-                       std::string requestedEntityIds,
-                       std::string grpIdStr,
-                       std::string fldIds,
-                       int fieldGroupId,
-                       int updateDelay,
-                       int numOfIterations,
-                       bool listOptionMentioned)
+DeviceMonitor::DeviceMonitor(std::string hostname,
+                             std::string requestedEntityIds,
+                             std::string grpIdStr,
+                             std::string fldIds,
+                             int fieldGroupId,
+                             std::chrono::milliseconds updateDelay,
+                             int numOfIterations,
+                             bool listOptionMentioned)
     : m_requestedEntityIds(std::move(requestedEntityIds))
     , m_groupIdStr(std::move(grpIdStr))
     , m_fieldIdsStr(std::move(fldIds))
@@ -115,17 +103,20 @@ DeviceInfo::DeviceInfo(std::string hostname,
     , m_list(listOptionMentioned)
     , m_widthArray()
 {
-    deviceMonitorShouldStop = false;
+    gDeviceMonitorShouldStop = false;
 
     m_hostName = std::move(hostname);
 }
 
 /**
- * This function populates the Field Details structure
- * which is used in listing the details of Long name,
- * short name and the field ids.
+ * @brief Populates fields details.
+ *
+ * Information like Long/Short names preserved for future usage.
+ * @note This function assumes that the \c DcgmFieldInit() was already called.
+ *
+ * @sa \c DcgmFieldInit()
  */
-void DeviceInfo::PopulateFieldDetails()
+void DeviceMonitor::PopulateFieldDetails()
 {
     for (unsigned short fieldId = 0; fieldId < DCGM_FI_MAX_FIELDS; fieldId++)
     {
@@ -139,27 +130,101 @@ void DeviceInfo::PopulateFieldDetails()
 }
 
 /**
- * This function formats and displays the field details for -l option.
+ * @brief Formats and displays the details for all known fields.
+ *
+ * Used to output the result of \c "-l" command line option.
  */
-void DeviceInfo::DisplayFieldDetails()
-{
-    using std::left;
-    using std::right;
-    using std::setw;
 
-    std::cout << FORMAT_LINE << "\n";
-    std::cout << setw(WIDTH_40) << "Long Name" << setw(WIDTH_20) << "Short Name" << setw(WIDTH_15) << "Field Id"
-              << "\n";
-    std::cout << FORMAT_LINE << "\n";
-    for (auto const &fieldDetail : m_fieldDetails)
+/**
+ * @brief A string view which length is strictly shorter that the \c maxLength.
+ *
+ * If the original string_view is longer than \c maxLength, then the origin will be truncated and an '...'
+ * will be added at the end.
+ */
+struct FixedSizeString
+{
+    std::string_view origin; /*!< Original string view for outputting */
+    std::size_t maxLength;   /*!< Desired max length of the result output */
+};
+
+/**
+ * @brief The formatter that implement truncation logic and adds '...' in case of too long string value.
+ */
+template <>
+struct fmt::formatter<FixedSizeString> : fmt::formatter<std::string_view>
+{
+    template <typename FormatContext>
+    auto format(FixedSizeString const &value, FormatContext &ctx)
     {
-        std::cout << setw(WIDTH_40) << left << fieldDetail.m_longName << setw(WIDTH_20) << right
-                  << fieldDetail.m_shortName << setw(WIDTH_15) << right << fieldDetail.m_fieldId << "\n";
+        if (value.origin.length() <= value.maxLength)
+        {
+            return fmt::formatter<std::string_view>::format(value.origin, ctx);
+        }
+
+        return fmt::formatter<std::string_view>::format(
+            fmt::format("{}...", value.origin.substr(0, value.maxLength - 3)), ctx);
     }
-    std::cout.flush();
+};
+
+struct TableDimensions
+{
+    std::uint16_t longNameWidth;
+    std::uint16_t shortNameWidth;
+    std::uint16_t fieldIdWidth;
+    [[nodiscard]] constexpr inline std::uint16_t GetWidth() const noexcept
+    {
+        return longNameWidth + shortNameWidth + fieldIdWidth;
+    }
+};
+
+static inline void PrintFieldsDetailHeader(TableDimensions const &dims)
+{
+    /* Outputs:
+     * __________________________________________
+     * Long Name          Short Name   Field ID
+     * __________________________________________
+     */
+    using namespace fmt::literals;
+    fmt::print("{0:_<{width}}\n"
+               "{long:<{longSize}}{short:<{shortSize}}{fieldId:<{fieldIdSize}}\n"
+               "{0:_<{width}}\n",
+               "",
+               "width"_a       = dims.GetWidth(),
+               "long"_a        = "Long Name",
+               "short"_a       = "Short Name",
+               "fieldId"_a     = "Field ID",
+               "longSize"_a    = dims.longNameWidth,
+               "shortSize"_a   = dims.shortNameWidth,
+               "fieldIdSize"_a = dims.fieldIdWidth);
 }
 
-dcgmReturn_t DeviceInfo::DoExecuteConnected()
+static inline void PrintFieldDetails(TableDimensions const &dims, FieldDetails const &value)
+{
+    using namespace fmt::literals;
+    fmt::print("{long:<{longSize}s} {short:<{shortSize}s}{fieldId:>d}\n",
+               "long"_a      = FixedSizeString { value.m_longName, dims.longNameWidth },
+               "longSize"_a  = dims.longNameWidth,
+               "short"_a     = value.m_shortName,
+               "shortSize"_a = dims.shortNameWidth,
+               "fieldId"_a   = value.m_fieldId);
+}
+
+void DeviceMonitor::DisplayFieldDetails()
+{
+    using namespace DcgmNs::Terminal;
+    auto termSize        = GetTermDimensions().value_or(TermDimensions {});
+    auto const width     = std::min<std::uint16_t>(120, termSize.cols);
+    auto const tableDims = TableDimensions { std::max<std::uint16_t>(20, width - 30), 20, 10 };
+
+    PrintFieldsDetailHeader(tableDims);
+    for (auto const &fieldDetail : m_fieldDetails)
+    {
+        PrintFieldDetails(tableDims, fieldDetail);
+    }
+    fflush(stdout);
+}
+
+dcgmReturn_t DeviceMonitor::DoExecuteConnected()
 {
     if (m_list)
     {
@@ -172,13 +237,13 @@ dcgmReturn_t DeviceInfo::DoExecuteConnected()
 }
 
 /**
- * killHandler      Handler to handle SIGINT -> Ctrl+c
- * @param sig       Integer type of the signal fired.
+ * @brief SIGINT (Ctrl-C) Signal handler
+ * @ref <a href="https://en.cppreference.com/w/c/program/signal">signal</a>
  */
 void killHandler(int sig)
 {
     signal(sig, SIG_IGN);
-    deviceMonitorShouldStop = true;
+    gDeviceMonitorShouldStop.store(true, std::memory_order_relaxed);
 }
 
 /**
@@ -186,15 +251,15 @@ void killHandler(int sig)
  * the  watched field. This ia called as a callback to dcgmGetLatestValues_v2
  * function.
  *
- * @param entityGroupId entityGroup of the entity this field value set belongs to
- * @param entityId      Entity this field value set belongs to
- * @param values        The values under watch.
- * @param numValues     Total number of values under watch.
- * @param userdata      The generic data which needs to be passed to function. The void
- *                      pointer at the end allows a pointer to be passed to this function. Here we know
- *                      that we are passing in a map, so we can cast it as such.
- *                      This pointer is also useful if we need a reference to something else inside your function.
- * @return              0 on success; 1 on failure
+ * @param[in] entityGroupId Group of the entity this field value set belongs to.
+ * @param[in] entityId      Entity this field value set belongs to.
+ * @param[in] values        The values under watch.
+ * @param[in] numValues     Total number of values under watch.
+ * @param[in] userdata      The generic data which needs to be passed to function. The void pointer at the end allows a
+ *                          pointer to be passed to this function. Here we know that we are passing in a map, so we can
+ *                          cast it as such. This pointer is also useful if we need a reference to something else inside
+ *                          your function.
+ * @return  0 on success; 1 on failure
  */
 static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                            dcgm_field_eid_t entityId,
@@ -202,79 +267,87 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                            int numValues,
                            void *userdata)
 {
-    std::string st;
-    std::stringstream strs;
     dcgmi_entity_pair_t entityKey;
 
     // Note: this is a pointer to a map and we cast it to map below.
-    std::map<dcgmi_entity_pair_t, std::vector<std::string>> &entityStats
-        = *(static_cast<std::map<dcgmi_entity_pair_t, std::vector<std::string>> *>(userdata));
+    auto &entityStats = *(DeviceMonitor::EntityStats *)userdata;
 
     entityKey.entityGroupId = entityGroupId;
     entityKey.entityId      = entityId;
 
     for (int i = 0; i < numValues; i++)
     {
-        strs.clear(); // clear any bits set
-        strs.str(std::string());
-        strs << std::fixed;
-        strs << std::setprecision(
-            FLOAT_VAL_PREC); // fixing the number of values after decimal for consistency in display.
-
         // Including a switch statement here for handling different
         // types of values (except binary blobs).
         dcgm_field_meta_p field = DcgmFieldGetById(values[i].fieldId);
         if (field == nullptr)
         {
+            SHOW_AND_LOG_ERROR << fmt::format("Unknown Field ID: {}\n", values[i].fieldId);
             return 1;
         }
 
         switch (field->fieldType)
         {
             case DCGM_FT_BINARY:
-                strs << NA;
-                entityStats[entityKey].push_back(strs.str());
+            {
+                entityStats[entityKey].emplace_back(cNA);
                 break;
+            }
             case DCGM_FT_DOUBLE:
-                if (DCGM_FP64_IS_BLANK(values[i].value.dbl))
+            {
+                try
                 {
-                    entityStats[entityKey].push_back(NA);
+                    auto const &val = values[i].value.dbl;
+                    std::string value;
+
+                    if (DCGM_FP64_IS_BLANK(val))
+                    {
+                        value = cNA;
+                    }
+                    else
+                    {
+                        value = fmt::format("{:.{}F}", val, FLOAT_VAL_PREC);
+                    }
+                    entityStats[entityKey].emplace_back(std::move(value));
                 }
-                else
+                catch (fmt::format_error const &e)
                 {
-                    strs << values[i].value.dbl;
-                    st = strs.str();
-                    entityStats[entityKey].push_back(st);
+                    SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
+                    entityStats[entityKey].emplace_back(cNA);
                 }
                 break;
+            }
             case DCGM_FT_INT64:
-                if (DCGM_INT64_IS_BLANK(values[i].value.i64))
-                {
-                    entityStats[entityKey].push_back(NA);
-                }
-                else
-                {
-                    strs << values[i].value.i64;
-                    st = strs.str();
-                    entityStats[entityKey].push_back(st);
-                }
-                break;
-            case DCGM_FT_STRING:
-                entityStats[entityKey].push_back(values[i].value.str);
-                break;
             case DCGM_FT_TIMESTAMP:
-                if (DCGM_INT64_IS_BLANK(values[i].value.i64))
+            {
+                try
                 {
-                    entityStats[entityKey].push_back(NA);
+                    auto const &val = values[i].value.i64;
+                    std::string value;
+                    if (DCGM_INT64_IS_BLANK(val))
+                    {
+                        value = cNA;
+                    }
+                    else
+                    {
+                        value = fmt::to_string(val);
+                    }
+                    entityStats[entityKey].emplace_back(std::move(value));
                 }
-                else
+                catch (fmt::format_error const &e)
                 {
-                    strs << values[i].value.i64;
-                    entityStats[entityKey].push_back(strs.str());
+                    SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
+                    entityStats[entityKey].emplace_back(cNA);
                 }
                 break;
+            }
+            case DCGM_FT_STRING:
+            {
+                entityStats[entityKey].emplace_back(values[i].value.str);
+                break;
+            }
             default:
-                std::cout << "Error in field types. " << values[i].fieldType << " Exiting." << std::endl;
+                SHOW_AND_LOG_ERROR << fmt::format("Error in field types: {}. Exiting\n", values[i].fieldType);
                 // Error, return > 0 error code.
                 return 1;
         }
@@ -284,13 +357,37 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
     return 0;
 }
 
+template <typename T>
+void PrintMetricsRow(dcgmi_entity_pair_t const &entity, std::vector<std::string> const &values, T const &widths)
+{
+    using namespace fmt::literals;
+    fmt::print("{entityPair:{colWidth}}",
+               "entityPair"_a = fmt::format("{} {}", entity.entityGroupId, entity.entityId),
+               "colWidth"_a   = widths[0]);
+
+    for (size_t i = 0; i < values.size(); i++)
+    {
+        auto const width = widths[i + 1];
+        if (width == 0)
+        {
+            /* There were to field metadata, so no room allocated in the output table for actual value */
+            fmt::print("{:{}}", "", PADDING);
+        }
+        else
+        {
+            fmt::print("{:{}s}", FixedSizeString { values[i], width }, width + PADDING);
+        }
+    }
+    fmt::print("\n");
+}
+
 /**
  * lockWatchAndUpdate : The function sets the watches on the field group
  *                      for the mentioned Gpu group.
  * @return dcgmReturn_t : result - success or error
  */
 
-dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
+dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
 {
     int running          = 0;
     int decrement        = 0;
@@ -299,14 +396,78 @@ dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
     /* Install a signal handler to catch ctrl-c */
     signal(SIGINT, &killHandler);
 
+    std::vector<dcgmi_entity_pair_t> sortedEntities;
+    auto hierarchyV2    = dcgmMigHierarchy_v2 {};
+    hierarchyV2.version = dcgmMigHierarchy_version2;
+    auto ret            = dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchyV2);
+    if (ret != DCGM_ST_OK)
+    {
+        SHOW_AND_LOG_ERROR << fmt::format(
+            "Unable to get GPU topology information. The entities in the output may be unsorted. Error: {}: {}",
+            ret,
+            errorString(ret));
+    }
+    else if (hierarchyV2.count == 0)
+    {
+        // No MIG entities are configured, so just get and sort GPUs
+
+        std::uint32_t gpus[DCGM_MAX_NUM_DEVICES] = {};
+        int count                                = 0;
+
+        ret = dcgmGetAllDevices(m_dcgmHandle, &gpus[0], &count);
+        if (ret != DCGM_ST_OK)
+        {
+            SHOW_AND_LOG_ERROR << fmt::format("Unable to get list of GPUs. Error: {}: {}", ret, errorString(ret));
+        }
+        else
+        {
+            DCGM_LOG_DEBUG << "MIG is disabled. Using just GPU entities";
+            sortedEntities.reserve(count);
+            for (int i = 0; i < count; ++i)
+            {
+                sortedEntities.push_back({ DCGM_FE_GPU, gpus[i] });
+            }
+            std::sort(begin(sortedEntities), end(sortedEntities), [](auto const &left, auto const &right) {
+                return left.entityId < right.entityId;
+            });
+        }
+    }
+    else
+    {
+        TopologicalSort(hierarchyV2);
+        std::unordered_set<decltype(dcgmi_entity_pair_t::entityId)> seenGpus;
+        sortedEntities.reserve(hierarchyV2.count);
+        seenGpus.reserve(sortedEntities.capacity());
+
+        /*
+         * The hierarchy list does not have GPUs in direct form.
+         * We need to add GPU entity into the index first time we find a child MIG entity.
+         */
+        for (size_t i = 0; i < hierarchyV2.count; ++i)
+        {
+            auto const &parent = hierarchyV2.entityList[i].parent;
+            auto const &entity = hierarchyV2.entityList[i].entity;
+
+            if (parent.entityGroupId == DCGM_FE_GPU && seenGpus.insert(parent.entityId).second)
+            {
+                sortedEntities.push_back({ parent.entityGroupId, parent.entityId });
+            }
     // set the watch on field group id for Group of gpus.
-    dcgmReturn_t result = dcgmWatchFields(
-        m_dcgmHandle, m_myGroupId, m_fieldGroupId, m_delay * MILLI_SEC, MAX_KEEP_AGE, MAX_KEEP_SAMPLES);
+            sortedEntities.push_back({ entity.entityGroupId, entity.entityId });
+        }
+    }
+
+    // set the watch on field group id for Group of gpus.
+    dcgmReturn_t result = dcgmWatchFields(m_dcgmHandle,
+                                          m_myGroupId,
+                                          m_fieldGroupId,
+                                          std::chrono::duration_cast<std::chrono::microseconds>(m_delay).count(),
+                                          MAX_KEEP_AGE,
+                                          MAX_KEEP_SAMPLES);
 
     // Check result to see if DCGM operation was successful.
     if (result != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "Error! Error setting watches. Return: " << result;
         const char *e = errorString(result);
 
         switch (result)
@@ -323,7 +484,7 @@ dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
                 break; /* Intentional fall-through. e is initialized before this switch statement */
         }
 
-        std::cout << "Error setting watches. Result: " << e << std::endl;
+        SHOW_AND_LOG_ERROR << fmt::format("Error setting watches. Result: {}: {}\n", result, e);
         return result;
     }
 
@@ -345,50 +506,52 @@ dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
         decrement = true;
     }
 
-    while (running && !deviceMonitorShouldStop)
+    std::vector<dcgmi_entity_pair_t> tmpSortedEntities;
+    while (running && !gDeviceMonitorShouldStop.load(std::memory_order_relaxed))
     {
-        m_entityStats.clear();
-        result = dcgmGetLatestValues_v2(m_dcgmHandle, m_myGroupId, m_fieldGroupId, &ListFieldValues, &m_entityStats);
+        EntityStats entityStats;
+
+        // entityStats should be preallocated before calling dcgmGetLatestValues_v2.
+        // Otherwise, reallocation may happen in the libdcgm context using wrong memory allocator.
+        entityStats.reserve(sortedEntities.empty() ? DCGM_MAX_NUM_DEVICES : sortedEntities.size());
+
+        result = dcgmGetLatestValues_v2(m_dcgmHandle, m_myGroupId, m_fieldGroupId, &ListFieldValues, &entityStats);
+
         // Check the result to see if our DCGM operation was successful.
         if (result != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d", "Error! Error getting values information. Return: %d", result);
-            std::cout << "Error getting values information."
-                         "Return: "
-                      << errorString(result) << std::endl;
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Error getting values information. Return {}: {}", result, errorString(result));
             return result;
         }
 
-        if (m_entityStats.empty())
+        if (entityStats.empty())
         {
-            std::cout << "Error: The field group or entity group is empty." << std::endl;
+            SHOW_AND_LOG_ERROR << "No data returned from the hostengine.";
             return DCGM_ST_NO_DATA; /* Propagate this to any callers */
         }
 
-        // print the map that we populated in callback of dcgmGetLatestValues
-        for (auto const &[entityPair, statsVec] : m_entityStats)
+        if (sortedEntities.empty())
         {
-            auto const groupPrefix = HelperGetGroupIdPrefix(entityPair.entityGroupId);
-
-            std::cout << std::setw(m_widthArray[0]);
-            std::cout << groupPrefix << " " << entityPair.entityId;
-
-            for (size_t i = 0; i < statsVec.size(); i++)
+            for (auto const &[entity, values] : entityStats)
             {
-                auto const width = m_widthArray[i + 1];
-                /* Check if we are overflowing the width we are assigned */
-                if (statsVec[i].length() >= width)
-                {
-                    std::cout << std::setw(0);
-                    std::cout << ' ';
-                }
-                std::cout << std::setw(width);
-                std::cout << statsVec[i];
+                PrintMetricsRow(entity, values, m_widthArray);
             }
-            std::cout << "\n";
+        }
+        else
+        {
+            for (auto const &entity : sortedEntities)
+            {
+                auto it = entityStats.find(entity);
+                if (it == entityStats.end())
+                {
+                    continue;
+                }
+                PrintMetricsRow(it->first, it->second, m_widthArray);
+            }
         }
 
-        std::cout.flush();
+        fflush(stdout);
 
         // We decrement only when count value is not default and the loop is not supposed to run forever.
         if (decrement)
@@ -400,19 +563,19 @@ dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
             }
         }
 
-        usleep(m_delay * MILLI_SEC);
+        std::this_thread::sleep_for(m_delay);
         if (printHeaderCount == MAX_PRINT_HEADER_COUNT)
         {
-            std::cout << "" << std::endl;
             PrintHeaderForOutput();
             printHeaderCount = 0;
         }
         printHeaderCount++;
     }
 
-    if (deviceMonitorShouldStop)
+    if (gDeviceMonitorShouldStop)
     {
-        std::cout << std::endl << "dmon was stopped due to receiving a signal." << std::endl;
+        fmt::print("\n\ndmon was stopped do to receiving a signal\n");
+        fflush(stdout);
     }
 
     return result;
@@ -421,48 +584,59 @@ dcgmReturn_t DeviceInfo::LockWatchAndUpdate()
 /**
  * printHeaderForOutput - Directs the header to Console output stream.
  */
-void DeviceInfo::PrintHeaderForOutput() const
+void DeviceMonitor::PrintHeaderForOutput() const
 {
-    std::cout << m_header << "\n";
-    std::cout << m_headerUnit << "\n";
-    std::cout.flush();
+    fmt::print("{}\n"
+               "{}\n",
+               m_header,
+               m_headerUnit);
+    fflush(stdout);
 }
 
 /**
- * The functions initializes the header for tabular output with alignment by
+ * The function initializes the header for tabular output with alignment by
  * setting width and using the field Ids to create header.
  *
  * @param fieldIds      The vector containing field ids.
  * @param numFields     Number of fields int the vector.
  */
-void DeviceInfo::SetHeaderForOutput(unsigned short fieldIds[], unsigned int const numFields)
+void DeviceMonitor::SetHeaderForOutput(unsigned short fieldIds[], unsigned int const numFields)
 {
-    int const entityWidth = 7;
-    std::stringstream ss;
-    std::stringstream ss_unit;
-    ss << "#";
-    ss << std::setw(entityWidth);
-    ss << "Entity";
+    fmt::memory_buffer headBuffer;
+    fmt::memory_buffer unitBuffer;
+    headBuffer.reserve(512);
+    unitBuffer.reserve(512);
 
-    ss_unit << std::setw(entityWidth + 1);
-    ss_unit << "Id";
-    m_widthArray[0] = entityWidth + 1;
-    for (unsigned int i = 0; i < numFields; i++)
+    /*
+     * #Entity sName   sName    sName
+     * ID
+     */
+    fmt::format_to(std::back_inserter(headBuffer), "{:<10}", "#Entity");
+    fmt::format_to(std::back_inserter(unitBuffer), "{:<10}", "ID");
+
+    m_widthArray[0] = 10;
+
+    for (std::uint32_t i = 0; i < numFields; ++i)
     {
-        dcgm_field_meta_p meta_p   = DcgmFieldGetById(fieldIds[i]);
-        unsigned short const width = meta_p == nullptr ? 0 : meta_p->valueFormat->width;
-        m_widthArray[i + 1]        = (width + PADDING);
-        ss << std::setw(width + (PADDING));
-        ss << ((meta_p == nullptr) ? "" : meta_p->valueFormat->shortName);
-
-        ss_unit << std::setw(width + PADDING);
-        ss_unit << ((meta_p == nullptr) ? "" : meta_p->valueFormat->unit);
+        auto const *fieldMeta   = DcgmFieldGetById(fieldIds[i]);
+        auto const *valueFormat = fieldMeta ? fieldMeta->valueFormat : nullptr;
+        auto const width        = (valueFormat ? valueFormat->width : 0U) + 6;
+        m_widthArray[i + 1]     = width;
+        fmt::format_to(std::back_inserter(headBuffer),
+                       "{:<{}}",
+                       FixedSizeString { valueFormat ? valueFormat->shortName : "", width },
+                       width + PADDING);
+        fmt::format_to(std::back_inserter(unitBuffer),
+                       "{:<{}}",
+                       FixedSizeString { valueFormat ? valueFormat->unit : "", width },
+                       width + PADDING);
     }
-    m_header     = ss.str();
-    m_headerUnit = ss_unit.str();
+
+    m_header     = fmt::to_string(headBuffer);
+    m_headerUnit = fmt::to_string(unitBuffer);
 }
 
-dcgmReturn_t DeviceInfo::CreateEntityGroupFromEntityList(void)
+dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
 {
     auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, m_requestedEntityIds);
 
@@ -484,9 +658,8 @@ dcgmReturn_t DeviceInfo::CreateEntityGroupFromEntityList(void)
     return dcgmReturn;
 }
 
-dcgmReturn_t DeviceInfo::ValidateOrCreateEntityGroup(void)
+dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()
 {
-    dcgmReturn_t dcgmReturn;
     dcgmGroupType_t groupType = DCGM_GROUP_EMPTY;
     /**
      * Check if m_requestedEntityIds is set or not. If set, we create
@@ -494,16 +667,14 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateEntityGroup(void)
      */
     if (m_requestedEntityIds != "-1")
     {
-        dcgmReturn = CreateEntityGroupFromEntityList();
-        return dcgmReturn;
+        return CreateEntityGroupFromEntityList();
     }
 
     /* If no group ID or entity list was specified, assume all GPUs to act like nvidia-smi dmon */
     if (m_groupIdStr == "-1")
     {
         std::vector<dcgmGroupEntityPair_t> entityList; /* Empty List */
-        dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &m_myGroupId, entityList);
-        return dcgmReturn;
+        return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &m_myGroupId, entityList);
     }
 
     bool const groupIdIsSpecial = dcgmi_entity_group_id_is_special(m_groupIdStr, &groupType, &m_myGroupId);
@@ -520,7 +691,7 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateEntityGroup(void)
     }
     catch (std::exception const & /*ex*/)
     {
-        std::cout << "Error: Expected a numerical groupId. Instead got '" << m_groupIdStr << "'" << std::endl;
+        SHOW_AND_LOG_ERROR << fmt::format("Expected a numerical groupId. Instead, got '{}'", m_groupIdStr);
         return DCGM_ST_BADPARAM;
     }
 
@@ -530,38 +701,35 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateEntityGroup(void)
     dcgmGroupInfo_t dcgmGroupInfo {};
     dcgmGroupInfo.version = dcgmGroupInfo_version;
 
-    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo);
-    if (DCGM_ST_OK != dcgmReturn)
+    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo); ret != DCGM_ST_OK)
     {
-        std::stringstream ss;
-        ss << "Error: Unable to retrieve information about group " << groupIdAsInt << ". Return: " << dcgmReturn << " "
-           << (dcgmReturn == DCGM_ST_NOT_CONFIGURED ? "The Group is not found" : errorString(dcgmReturn));
+        SHOW_AND_LOG_ERROR << fmt::format(
+            "Enable to retrieve information about group {}. Error: {}: {}",
+            groupIdAsInt,
+            ret,
+            (ret == DCGM_ST_NOT_CONFIGURED ? "The Group is not found" : errorString(ret)));
 
-        auto const errorString = ss.str();
-        std::cout << errorString << std::endl;
-        DCGM_LOG_ERROR << errorString;
-
-        return dcgmReturn;
+        return ret;
     }
 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DeviceInfo::ValidateOrCreateFieldGroup(void)
+dcgmReturn_t DeviceMonitor::ValidateOrCreateFieldGroup()
 {
-    dcgmReturn_t dcgmReturn;
-
     dcgmFieldGroupInfo_t fieldGroupInfo;
 
     if (m_fieldIdsStr != "-1")
     {
-        dcgmReturn = dcgmi_parse_field_id_list_string(m_fieldIdsStr, m_fieldIds, true);
-        if (dcgmReturn != DCGM_ST_OK)
-            return dcgmReturn;
+        if (auto const ret = dcgmi_parse_field_id_list_string(m_fieldIdsStr, m_fieldIds, true); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
 
-        dcgmReturn = dcgmi_create_field_group(m_dcgmHandle, &m_fieldGroupId, m_fieldIds);
-        if (dcgmReturn != DCGM_ST_OK)
-            return dcgmReturn;
+        if (auto const ret = dcgmi_create_field_group(m_dcgmHandle, &m_fieldGroupId, m_fieldIds); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
 
         SetHeaderForOutput(&m_fieldIds[0], m_fieldIds.size());
         return DCGM_ST_OK;
@@ -569,8 +737,8 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateFieldGroup(void)
 
     if (m_fieldGrpId_int == -1)
     {
-        std::cout << "Error: Either field group ID or a list of field IDs must be provided. "
-                  << "See dcgmi dmon --help for usage." << std::endl;
+        SHOW_AND_LOG_ERROR << fmt::format("Either field group ID or a list of field IDs must be provided. "
+                                          "See dcgmi dmon --help for usage.");
     }
 
     memset(&fieldGroupInfo, 0, sizeof(fieldGroupInfo));
@@ -578,17 +746,13 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateFieldGroup(void)
 
     fieldGroupInfo.fieldGroupId = static_cast<dcgmFieldGrp_t>(m_fieldGrpId_int);
 
-    dcgmReturn = dcgmFieldGroupGetInfo(m_dcgmHandle, &fieldGroupInfo);
-    if (DCGM_ST_OK != dcgmReturn)
+    if (auto const ret = dcgmFieldGroupGetInfo(m_dcgmHandle, &fieldGroupInfo); ret != DCGM_ST_OK)
     {
-        std::stringstream ss;
-        ss << "Error: Unable to retrieve information about field group " << m_fieldGrpId_int
-           << ". Return: " << dcgmReturn << " "
-           << (dcgmReturn == DCGM_ST_NOT_CONFIGURED ? "The Field Group is not found" : errorString(dcgmReturn));
-
-        auto const errorString = ss.str();
-        std::cout << errorString << std::endl;
-        DCGM_LOG_ERROR << errorString;
+        SHOW_AND_LOG_ERROR << fmt::format(
+            "Unable to retrieve information about field group {}. Error: {}: {}",
+            m_fieldGrpId_int,
+            ret,
+            (ret == DCGM_ST_NOT_CONFIGURED ? "The Field Group is not found" : errorString(ret)));
 
         return DCGM_ST_BADPARAM;
     }
@@ -605,8 +769,7 @@ dcgmReturn_t DeviceInfo::ValidateOrCreateFieldGroup(void)
     return DCGM_ST_OK;
 }
 
-
-dcgmReturn_t DeviceInfo::CreateFieldGroupAndGpuGroup(void)
+dcgmReturn_t DeviceMonitor::CreateFieldGroupAndGpuGroup()
 {
     dcgmReturn_t dcgmReturn = ValidateOrCreateEntityGroup();
     if (dcgmReturn != DCGM_ST_OK)

@@ -138,3 +138,63 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
 
     logger.debug("PIDs: %s. cudaApp PID: %d" % (str(pids), cudaApp.getpid()))
     assert cudaApp.getpid() in pids, "could not find cudaApp PID"
+
+def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
+    """
+    Test to ensure GetAllValuesAsDictSinceLastCall behaves. It was first used
+    for collectd integration to ensure it does not crash and also checks that
+    no unexpected fields are returned.
+    
+    Arguments:
+        handle: DCGM handle
+        flag:   argument for GetAllGpuValuesAsDictSinceLastCall
+        repeat: whether to repeat GetAllGpuValuesAsDictsSinceLastCall call
+    """
+    specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE, dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
+    # pylint: disable=undefined-variable
+    dr = DcgmReader(fieldIds=specificFields)
+    dr.SetHandle(handle)
+    latest = dr.GetAllGpuValuesAsDictSinceLastCall(flag)
+
+    if repeat:
+        latest = dr.GetAllGpuValuesAsDictSinceLastCall(flag)
+
+    if flag == False:
+        dcgmHandle = pydcgm.DcgmHandle(handle)
+        dcgmSystem = dcgmHandle.GetSystem()
+        fieldTags = []
+
+        for fieldId in specificFields:
+            fieldTags.append(dcgmSystem.fields.GetFieldById(fieldId).tag)
+
+    for gpuId in latest:
+        # Latest data might be less than the list, because blank values aren't
+        # included. We basically try to ensure there is no crash and we don't
+        # return something absurd.
+        assert len(latest[gpuId]) <= len(specificFields)
+
+        for key in latest[gpuId].keys():
+            if flag == False:
+                assert key in fieldTags
+            else:
+                assert key in specificFields
+                    
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+def test_dcgm_reader_all_since_last_call_false(handle):
+    util_dcgm_reader_all_since_last_call(handle, False, False)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+def test_dcgm_reader_all_since_last_call_true(handle):
+    util_dcgm_reader_all_since_last_call(handle, True, False)
+        
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+def test_dcgm_reader_all_since_last_call_false_repeat(handle):
+    util_dcgm_reader_all_since_last_call(handle, False, True)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+def test_dcgm_reader_all_since_last_call_true_repeat(handle):
+    util_dcgm_reader_all_since_last_call(handle, True, True)

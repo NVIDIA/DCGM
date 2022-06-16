@@ -70,6 +70,7 @@ public:
 
     /*****************************************************************************/
     dcgmReturn_t SetVersion6(dcgmDiagResponse_v6 *response);
+    dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
 
     /*****************************************************************************/
     dcgmReturn_t RecordTrainingMessage(const std::string &trainingMsg) const;
@@ -88,6 +89,7 @@ private:
     union
     {
         dcgmDiagResponse_v6 *v6ptr; // A pointer to the version6 struct
+        dcgmDiagResponse_v7 *v7ptr; // A pointer to the version7 struct
     } m_response;
     unsigned int m_version; // records the version of our dcgmDiagResponse_t
 

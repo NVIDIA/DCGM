@@ -57,14 +57,11 @@ private:
     static dcgmReturn_t ProcessProfileCommandLine(int argc, char const *const *argv);
     static dcgmReturn_t ProcessSettingsCommandLine(int argc, char const *const *argv);
     static dcgmReturn_t ProcessVersionInfoCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
     static unsigned int CheckGroupIdArgument(const std::string &groupId);
 
     // Helper to validate the throttle mask parameter
     static void ValidateThrottleMask(const std::string &throttleMask);
-
-#ifdef DEBUG
-    static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
-#endif
 };
 
 #endif // DCGMI_CLI_PARSER_H

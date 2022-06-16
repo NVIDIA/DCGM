@@ -88,16 +88,18 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmH
  *
  * The agent is loaded as a shared library. This mode is provided to avoid any
  * extra jitter associated with an additional autonomous agent needs to be managed. In
- * this mode, the user has to periodically call APIs such as \ref dcgmPolicyTrigger and
- * \ref dcgmUpdateAllFields which tells DCGM to wake up and perform data collection and
+ * this mode, the user has to periodically call APIs such as \c dcgmPolicyTrigger and
+ * \c dcgmUpdateAllFields which tells DCGM to wake up and perform data collection and
  * operations needed for policy management.
  *
- * @param params IN/OUT: See \ref dcgmStartEmbeddedV2Params_v1 for details.
+ * @param[in,out] params    A pointer to either \c dcgmStartEmbeddedV2Params_v1 or \c dcgmStartEmbeddedV2Params_v2.
  *
- * @return
- *         - \ref DCGM_ST_OK                if DCGM was started successfully within our process
- *         - \ref DCGM_ST_UNINITIALIZED     if DCGM has not been initialized with \ref dcgmInit yet
- *
+ * @return \c DCGM_ST_OK                if DCGM was started successfully within our process
+ * @return \c DCGM_ST_UNINITIALIZED     if DCGM has not been initialized with \c dcgmInit yet
+ * @note This function has a versioned argument that can be actually called with two different types. The behavior will
+ *       depend on the params->version value.
+ * @see dcgmStartEmbeddedV2Params_v1
+ * @see dcgmStartEmbeddedV2Params_v2
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded_v2(dcgmStartEmbeddedV2Params_v1 *params);
 

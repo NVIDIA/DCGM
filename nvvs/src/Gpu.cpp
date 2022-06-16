@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 #include "Gpu.h"
+
 #include "DcgmHandle.h"
 #include "DcgmSystem.h"
 #include "NvvsCommon.h"
+
 #include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -38,7 +42,7 @@ Gpu::Gpu(unsigned int gpuId)
     , m_status()
 {
     memset(&m_attributes, 0, sizeof(m_attributes));
-    m_attributes.version = dcgmDeviceAttributes_version2;
+    m_attributes.version = dcgmDeviceAttributes_version3;
 }
 
 /*****************************************************************************/
@@ -140,6 +144,13 @@ dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
         DCGM_LOG_ERROR << "Cannot check instances from DCGM to see if this GPU is compatible with the diagnostic: "
                        << errorString(ret);
         mv.migInvalidConfiguration = true;
+        return mv;
+    }
+    else if (hierarchy.count == 0)
+    {
+        DCGM_LOG_DEBUG << "No MIG devices are configured on GPU " << this->m_index;
+        mv.migEnabled              = false;
+        mv.migInvalidConfiguration = false;
         return mv;
     }
 

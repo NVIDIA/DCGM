@@ -37,6 +37,7 @@ import sys
 import os
 import pprint
 from sys import stdout
+import json
 
 def _run_dcgmi_command(args):
     ''' run a command then return (retcode, stdout_lines, stderr_lines) '''
@@ -206,6 +207,21 @@ def test_dcgmi_group(handle, gpuIds, instanceIds, ciIds):
             ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (0, 0)],  # remove the CI from the group
             ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # add another CI to the group
             ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # remove the CI from the group
+            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/*"],  # add all CIs for InstanceId_0
+            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],  # remove CI_0
+            # This one disabled as the run_with_injection_gpu_compute_instances decorator does not inject hierarchy for now.
+            # ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/1"],  # remove CI_1
+            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/*/0"],  # add all CI_0 for Instances 0 and 1
+            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],  # remove CI_0 for Instance 0
+            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/1/0"],  # remove CI_0 for Instance 1
+            ["group", "-g", groupId, "-a", "*"],  # add all GPUs
+            ["group", "-g", groupId, "-r", "*"],  # remove all GPUs
+            ["group", "-g", groupId, "-a", "*/*"],  # add all GPU instances
+            ["group", "-g", groupId, "-r", "*/*"],  # remove all GPU instances
+            ["group", "-g", groupId, "-a", "*/*/*"],  # add all CIs
+            ["group", "-g", groupId, "-r", "*/*/*"],  # remove all CIs
+            ["group", "-g", groupId, "-a", "*,*/*/*"],  # add all GPUs and CIs
+            ["group", "-g", groupId, "-r", "*,*/*/*"],  # remove all GPUs and CIs
             ["group", "-d", groupId, ],                     # delete the group
             ["group", "-g", "0", "-i"],                     # Default group can be fetched by ID as long as group IDs start at 0
     ])
@@ -442,7 +458,7 @@ def test_dcgmi_diag(handle, gpuIds):
     ## keep args in this order. Changing it may break the test
     _test_invalid_args([
             ["diag", "--run", "-g", "2"],           # Can't run on group that doesn't exist
-            ["diag", "--run", "4"],                 # Can't run with a test number that doesn't exist
+            ["diag", "--run", "5"],                 # Can't run with a test number that doesn't exist
             ["diag", "--run", "\"roshar stress\""], # Can't run a non-existent test name
             ["diag", "--run", "3", "--parameters", "dianarstic.test_duration=40"],
             ["diag", "--run", "3", "--parameters", "diagnostic.test_durration=40"],
@@ -476,7 +492,36 @@ def test_dcgmi_diag(handle, gpuIds):
             ["diag", "--run", "1", "-i", "roshar"], # Make sure -i is a comma-separated list of integers
             ["diag", "--run", "1", "-i", "a,b,c,d,e,f"], # Make sure -i is a comma-separated list of integers
             ["diag", "--run", "1", "-i", allGpusCsv, "--plugin-path", "./apps/nvvs/plugins"], # verifies --plugin-path no longer works (removed)
+            ["diag", "--run", "1", "--iterations", "0"], # We cannot run 0 iterations
+            ["diag", "--run", "1", "--iterations", "\-1"], # We cannot run negative iterations
     ])
+
+@test_utils.run_with_persistence_mode_on()
+@test_utils.run_with_standalone_host_engine(320)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_multiple_iterations(handle, gpuIds):
+    allGpusCsv = ",".join(map(str,gpuIds))
+    args = ["diag", "-r", "1", "-j", "-i", allGpusCsv, "--iterations", "3"]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+
+    assert retValue == 0, "Expected successful execution, but got %d" % retValue
+    rawtext = ""
+    for line in stdout_lines:
+        rawtext = rawtext + line + "\n"
+    
+    try:        
+        jsondict = json.loads(rawtext)
+        overallResult = jsondict["Overall Result"]
+        assert overallResult != None, "Didn't find a populated value for the overall result!"
+        iterationArray = jsondict["iterations"]
+        for i in range(0,2):
+            assert iterationArray[i] != None, "Didn't find a populated result for run %d" % i+1
+    except ValueError as e:
+        assert False, ("Couldn't parse json from '%s'" % rawtext)
+    
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -670,6 +715,10 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allInstancesCsv],
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allCisCsv],
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv + "," + allInstancesCsv + "," + allCisCsv],
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*"], # run the dmon for all GPUs via wildcard
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*"], # run the dmon for all GPU Instances via wildcards
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*/*"], # run the dmon for all Compute Instances via wildcards
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*,*/*,*/*/*"], # run the dmon for all entities via wildcards
         ["dmon", "-e", str(switchFieldId),"-c","1","-d","2000","-i",allSwitchesCsv] # run the dmon for devices mentioned and mentioned delay.
     ])
 
@@ -819,4 +868,67 @@ def test_dcgmi_profile(handle, gpuIds):
             ["profile", "--list", "-i", "999"], #Invalid gpuID
             ["profile", "--list", "-i", allGpusCsv + ",taco"], #Invalid gpu at end
             ["profile", "--list", "-g", "999"], #Invalid group
+    ])
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_dcgmi_test_introspect(handle, gpuIds):
+    """
+    Test "dcgmi test --introspect"
+    """
+    oneGpuIdStr = str(gpuIds[0])
+    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
+    gpuGroupIdStr = str(gpuGroupId)
+
+    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_ECC_CURRENT) #Use this field because it's watched by default in the host engine
+
+    ## keep args in this order. Changing it may break the test
+    _test_valid_args([
+           ["test", "--introspect", "--gpuid", oneGpuIdStr, "--field", fieldIdStr],
+           ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
+           ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
+    ])
+      
+    ## keep args in this order. Changing it may break the test
+    _test_invalid_args([
+            ["test", "--introspect", "--inject"], #mutually exclusive flags
+            ["test", "--introspect", "--gpuid", oneGpuIdStr], #Missing --field
+            ["test", "--introspect", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
+            ["test", "--introspect", "--gpuid", "11001001"],
+            ["test", "--introspect", "-g", "11001001"],
+            ["test", "--introspect", "--group", "11001001"],
+            ["test", "--introspect", "-g", gpuGroupIdStr, "--field", "10000000"], #Bad fieldId
+    ])
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_dcgmi_test_inject(handle, gpuIds):
+    """
+    Test "dcgmi test --inject"
+    """
+    oneGpuIdStr = str(gpuIds[0])
+    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
+    gpuGroupIdStr = str(gpuGroupId)
+
+    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_GPU_TEMP) 
+
+    ## keep args in this order. Changing it may break the test
+    _test_valid_args([
+           ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr, "-v", '45'],
+           ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr, "--value", '45'],
+    ])
+      
+    ## keep args in this order. Changing it may break the test
+    _test_invalid_args([
+            ["test", "--inject", "--introspect"], #mutually exclusive flags
+            ["test", "--inject", "-g", gpuGroupIdStr], #group ID is not supported
+            ["test", "--inject", "--gpuid", oneGpuIdStr], #Missing --field
+            ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr], #Missing --value
+            ["test", "--inject", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
+            ["test", "--inject", "--gpuid", "11001001", "--field", fieldIdStr, "--value", '45'], #Bad gpuId
+            ["test", "--inject", "-g", "11001001"],
+            ["test", "--inject", "--group", "11001001"],
+            ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", "10000000", "--value", '45'], #Bad fieldId
     ])

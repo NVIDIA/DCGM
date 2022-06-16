@@ -35,6 +35,37 @@
 #include <unistd.h>
 
 
+std::optional<UserCredentials> GetUserCredentials(char const *userName) noexcept(false)
+{
+    passwd pwInfo {};
+    passwd *result = nullptr;
+    std::vector<char> buffer;
+    size_t bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
+
+    int err = 0;
+    do
+    {
+        buffer.resize(bufferSize);
+        err = getpwnam_r(userName, &pwInfo, buffer.data(), buffer.size(), &result);
+        bufferSize *= 2;
+    } while (err == ERANGE);
+
+    if (err != 0)
+    {
+        auto const msg = fmt::format("Unable to get gid/uid for user {}", userName);
+        fmt::print(stderr, "{}. Error = ", msg, err);
+        fflush(stderr);
+        throw std::system_error(std::error_code(err, std::generic_category()), msg);
+    }
+
+    if (result != nullptr)
+    {
+        return UserCredentials { result->pw_gid, result->pw_uid, {} };
+    }
+
+    return std::nullopt;
+}
+
 /**
  * @brief Temporarily block all signals to prevent signals from being delivered to the forked process.
  * @return true if the signals were blocked successfully, false otherwise.
@@ -134,6 +165,184 @@ static int WriteAll(int fd, void const *ptr, size_t const size)
         totalWritten += lastWritten;
     }
     return 0;
+}
+
+
+namespace
+{
+/**
+ * @brief Changes current uid/euid, gid/egid to the provided \a newCredentials .uid/.gid respectively.
+ * @param[in] permanent         If permanent is required, the uid/gid will be changed irreversibly. Otherwise only
+ *                              euid/egid will be changed that will allow regain permissions back later.
+ * @param[in] newCredentials    The uid/gid of a target user to switch to.
+ * @return \c std::nullopt                    If the permanent change is requested.
+ * @return \c std::optional<UserCredentials>  UserCredentials of the user that called this method if \a permanent was
+ *                                            false.
+ * @see \c RestorePrivs()
+ * @note If the \a permanent is set to true, the function will not return previous credentials (credentials of the user
+ *       who called this method, and it will double check that the old permissions cannot be reacquired. This has an
+ *       implication that \a newCredentials should not belong to user with root privileges, as the check will fail as
+ *       root users can change their uid/gid to whatever they want.
+ * @note If the \a permanent is set to false, the credentials of the user that called this function will be returned.
+ *       One can reacquire the permissions back later calling \c RestorePrivs() function.
+ * @throws std::system_error            if underlying uid/gid functions return error codes.
+ * @throws ChangePrivilegesException    if there is some logic error that does not depend on underlying system call. For
+ *                                      example, if it's possible to regain privileges back if the \a permanent is set
+ *                                      to true.
+ */
+std::optional<UserCredentials> DropPrivs(bool permanent, UserCredentials const &newCredentials) noexcept(false)
+{
+    /*
+     * Please read this article before doing any changes to this function:
+     * https://www.oreilly.com/library/view/secure-programming-cookbook/0596003943/ch01s03.html
+     */
+    UserCredentials oldCredentials { getegid(), geteuid(), {} };
+    oldCredentials.groups.resize(_SC_NGROUPS_MAX);
+    auto const newGroupsSize = getgroups(_SC_NGROUPS_MAX, oldCredentials.groups.data());
+    oldCredentials.groups.resize(newGroupsSize);
+
+    if (oldCredentials.uid == 0 && setgroups(1, &newCredentials.gid) != 0)
+    {
+        auto const err = errno;
+        fmt::print(stderr, "Unable to change groups. errno = {}\n", err);
+        fflush(stderr);
+        throw std::system_error(std::error_code(err, std::generic_category()), "Unable to change groups");
+    }
+
+    if (setegid(newCredentials.gid) != 0)
+    {
+        auto const err = errno;
+        fmt::print(stderr, "Unable to drop root privileges. setegid returned errno = {}\n", err);
+        fflush(stderr);
+        throw std::system_error(std::error_code(err, std::generic_category()), "Dropping root privileges");
+    }
+
+    if (permanent && setgid(newCredentials.gid) != 0)
+    {
+        auto const err = errno;
+        fmt::print(stderr, "Unable to permanently drop root privileges. setgid returned errno = {}\n", err);
+        fflush(stderr);
+        throw std::system_error(std::error_code(err, std::generic_category()), "Permanently dropping root privileges");
+    }
+
+    if (newCredentials.uid != oldCredentials.uid)
+    {
+        if (permanent)
+        {
+            if (setuid(newCredentials.uid) != 0)
+            {
+                auto const err = errno;
+                fmt::print(stderr, "Unable to permanently drop root privileges. setuid returned errno = {}\n", err);
+                fflush(stderr);
+                throw std::system_error(std::error_code(err, std::generic_category()),
+                                        "Permanently dropping root privileges");
+            }
+        }
+        else if (seteuid(newCredentials.uid) != 0)
+        {
+            auto const err = errno;
+            fmt::print(stderr, "Unable to drop root privileges. seteuid returned errno = {}\n", err);
+            fflush(stderr);
+            throw std::system_error(std::error_code(err, std::generic_category()), "Dropping root privileges");
+        }
+    }
+
+    if (permanent)
+    {
+        /*
+         * Trying to reacquire root privileges. This must fail if we are permanently dropping the root privileges.
+         */
+        if (newCredentials.gid != oldCredentials.gid
+            && (setegid(oldCredentials.gid) == 0 || getegid() != newCredentials.gid))
+        {
+            throw ChangeUserException("Failed to drop root privileges. Managed to reacquire root egid.");
+        }
+
+        if (newCredentials.uid != oldCredentials.uid
+            && (seteuid(oldCredentials.uid) == 0 || geteuid() != newCredentials.uid))
+        {
+            throw ChangeUserException("Failed to drop root privileges. Managed to reacquire root euid.");
+        }
+
+        return std::nullopt;
+    }
+
+    return oldCredentials;
+}
+
+void RestorePrivs(UserCredentials const &oldCredentials) noexcept(false)
+{
+    if (geteuid() != oldCredentials.gid)
+    {
+        if (seteuid(oldCredentials.uid) != 0)
+        {
+            auto const err = errno;
+            auto const msg = fmt::format("Unable to restore euid to {}", oldCredentials.uid);
+            fmt::print(stderr, "{}\n", msg);
+            fflush(stderr);
+            throw std::system_error(std::error_code(err, std::generic_category()), msg);
+        }
+        if (geteuid() != oldCredentials.uid)
+        {
+            auto const msg
+                = fmt::format("Restoring euid to {} failed. Actual euid remains {}", oldCredentials.uid, geteuid());
+            fmt::print(stderr, "{}\n", msg);
+            fflush(stderr);
+            throw ChangeUserException(msg);
+        }
+    }
+
+    if (getegid() != oldCredentials.gid)
+    {
+        if (setegid(oldCredentials.gid) != 0)
+        {
+            auto const err = errno;
+            auto const msg = fmt::format("Unable to restore egid to {}", oldCredentials.gid);
+            fmt::print(stderr, "{}\n", msg);
+            fflush(stderr);
+            throw std::system_error(std::error_code(err, std::generic_category()), msg);
+        }
+        if (getegid() != oldCredentials.gid)
+        {
+            auto const msg
+                = fmt::format("Restoring egid to {} failed. Actual egid remains {}", oldCredentials.gid, getegid());
+            fmt::print(stderr, "{}\n", msg);
+            fflush(stderr);
+            throw ChangeUserException(msg);
+        }
+    }
+
+    if (oldCredentials.uid == 0 && !oldCredentials.groups.empty()
+        && setgroups(oldCredentials.groups.size(), oldCredentials.groups.data()) != 0)
+    {
+        auto const err = errno;
+        fmt::print(stderr, "Unable to restore groups. errno = {}\n", err);
+        fflush(stderr);
+        throw std::system_error(std::error_code(err, std::generic_category()), "Unable to restore groups");
+    }
+}
+
+} // namespace
+
+std::optional<UserCredentials> ChangeUser(ChangeUserPolicy policy,
+                                          UserCredentials const &newCredentials) noexcept(false)
+{
+    switch (policy)
+    {
+        case ChangeUserPolicy::Permanently:
+            return DropPrivs(true, newCredentials);
+        case ChangeUserPolicy::Temporarily:
+            return DropPrivs(false, newCredentials);
+        case ChangeUserPolicy::Rollback:
+            RestorePrivs(newCredentials);
+            break;
+        default:
+            fmt::print(stderr,
+                       "Unexpected privilege policy: {}\n",
+                       static_cast<std::underlying_type_t<ChangeUserPolicy>>(policy));
+            fflush(stderr);
+    }
+    return std::nullopt;
 }
 
 std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds monitorFrequency,
@@ -322,6 +531,31 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
         /* At this moment stdout/stderr is initialized in the child process,
          * so regular fmt::print(stderr, ...) can be used
          */
+
+        if (userName != nullptr)
+        {
+            try
+            {
+                if (auto const newCred = GetUserCredentials(userName); newCred.has_value())
+                {
+                    ChangeUser(ChangeUserPolicy::Permanently, *newCred);
+                }
+                else
+                {
+                    fmt::print(stderr, "Unable to find credentials for specified service account {}\n", userName);
+                    fflush(stderr);
+
+                    exit(EXIT_FAILURE);
+                }
+            }
+            catch (std::exception const &ex)
+            {
+                fmt::print(stderr, "Unable to change privileges. Ex: {}\n", ex.what());
+                fflush(stderr);
+
+                exit(EXIT_FAILURE);
+            }
+        }
 
         // Convert args to argv style char** for execvp
         std::vector<const char *> argv(args.size() + 1);

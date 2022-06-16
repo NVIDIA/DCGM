@@ -411,31 +411,33 @@ void displayError(dcgmStatus_t &statusHandle)
 // struct has a lot more useful information here that we could use but let's keep it simple.
 int violationRegistration(void *data)
 {
-    std::string errorMessage;
+    std::string errorMessage               = "Unknown policy condition.";
     dcgmPolicyCallbackResponse_t *response = (dcgmPolicyCallbackResponse_t *)data;
     switch (response->condition)
     {
         case DCGM_POLICY_COND_DBE:
-            errorMessage = "Double-bit ECC error.";
+            errorMessage = "Double-bit ECC.";
             break;
         case DCGM_POLICY_COND_PCI:
-            errorMessage = "PCIe error.";
+            errorMessage = "PCIe replays.";
             break;
         case DCGM_POLICY_COND_MAX_PAGES_RETIRED:
-            errorMessage = "Maximum number of retired pages error.";
+            errorMessage = "Maximum number of retired pages.";
             break;
         case DCGM_POLICY_COND_THERMAL:
             errorMessage = "Thermal policy violation.";
             break;
         case DCGM_POLICY_COND_POWER:
-            errorMessage = "Power policy violation..";
+            errorMessage = "Power policy violation.";
             break;
         case DCGM_POLICY_COND_NVLINK:
             errorMessage = "Nvlink policy violation";
             break;
-        default:
-            errorMessage = "Unknown error.";
+        case DCGM_POLICY_COND_XID:
+            errorMessage = "Got an XID. See https://docs.nvidia.com/deploy/xid-errors/index.html.";
             break;
+            /* Purposely omitting a default so that this will fail to compile when new DCGM_POLICY_COND_? enums are
+             * added */
     }
 
     std::cout << "Detected callback: " << errorMessage << std::endl;

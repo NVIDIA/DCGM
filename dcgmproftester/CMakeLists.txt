@@ -57,6 +57,8 @@ macro(define_dcgmproftester cuda_version)
 
     if (${cuda_version} GREATER 10)
         target_sources(${dcgmproftester_exec} PRIVATE DcgmDgemm.cpp)
+    else()
+        target_compile_options(${dcgmproftester_exec} PRIVATE -Wno-volatile)
     endif()
 
     find_package(Threads REQUIRED)

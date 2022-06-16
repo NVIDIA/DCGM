@@ -12,26 +12,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DOCKER   ?= docker
+
+# See https://docs.docker.com/buildx/working-with-buildx/ for instructions on
+# setting up a buildx builder for multi-arch
+# NOTE: To create an image for local debugging use "make local"
+
 REGISTRY ?= nvidia
 
-DCGM_VERSION   := 2.3.6
+DCGM_VERSION   := 2.4.5
+FULL_VERSION   := $(DCGM_VERSION)-1
+OUTPUT         := type=image
+PLATFORMS      := linux/amd64,linux/arm64
+DOCKERCMD      := docker buildx build
 
+.PHONY: all local
 all: ubuntu20.04 ubi8
 
+local:
+ifeq ($(shell uname -p),aarch64)
+	$(MAKE) PLATFORMS=linux/arm64 OUTPUT=type=docker DOCKERCMD='docker build'
+else
+	$(MAKE) PLATFORMS=linux/amd64 OUTPUT=type=docker DOCKERCMD='docker build'
+endif
+
 push:
-	$(DOCKER) push "$(REGISTRY)/dcgm:$(DCGM_VERSION)-ubuntu20.04"
-	$(DOCKER) push "$(REGISTRY)/dcgm:$(DCGM_VERSION)-ubi8"
+	$(MAKE) ubuntu20.04 OUTPUT=type=registry
+	$(MAKE) ubi8 OUTPUT=type=registry
 
 ubuntu20.04:
-	$(DOCKER) build --pull \
+	$(DOCKERCMD) --pull \
+		--output $(OUTPUT) \
+		--platform $(PLATFORMS) \
 		--build-arg "DCGM_VERSION=$(DCGM_VERSION)" \
-		--tag "$(REGISTRY)/dcgm:$(DCGM_VERSION)-ubuntu20.04" \
+		--build-arg "VERSION=$(FULL_VERSION)" \
+		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubuntu20.04" \
 		--file Dockerfile.ubuntu20.04 .
 
 ubi8:
-	$(DOCKER) build --pull \
+	$(DOCKERCMD) --pull \
+		--output $(OUTPUT) \
+		--platform $(PLATFORMS) \
 		--build-arg "DCGM_VERSION=$(DCGM_VERSION)" \
-		--build-arg "VERSION=$(DCGM_VERSION)" \
-		--tag "$(REGISTRY)/dcgm:$(DCGM_VERSION)-ubi8" \
+		--build-arg "VERSION=$(FULL_VERSION)" \
+		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubi8" \
 		--file Dockerfile.ubi8 .

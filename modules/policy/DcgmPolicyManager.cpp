@@ -119,6 +119,10 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
                 CheckXIDErrors(fv);
                 break;
 
+            case DCGM_FI_DEV_POWER_USAGE:
+                CheckPowerValues(fv);
+                break;
+
             case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
                 CheckPcieErrors(fv);
                 break;

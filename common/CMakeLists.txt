@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+find_package(fmt REQUIRED)
+add_subdirectory(DcgmThread)
+
 add_subdirectory(transport)
 add_subdirectory(protobuf)
 add_subdirectory(tests)
@@ -61,8 +64,6 @@ target_sources(dcgm_common PRIVATE
     DcgmStringHelpers.h
     DcgmTaskRunner.cpp
     DcgmTaskRunner.h
-    DcgmThread.cpp
-    DcgmThread.h
     DcgmUtilities.cpp
     DcgmUtilities.h
     DcgmWatcher.cpp
@@ -82,6 +83,7 @@ target_link_libraries(dcgm_common PUBLIC
     buildinfo_objects
     sdk_nvml_essentials_objects
     common_protobuf_objects
+    fmt::fmt
 )
 
 add_library(common_watch_objects STATIC)

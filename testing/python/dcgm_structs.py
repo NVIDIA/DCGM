@@ -166,7 +166,10 @@ DCGM_SM_STRESS_INDEX        = 3
 DCGM_TARGETED_STRESS_INDEX  = 4
 DCGM_TARGETED_POWER_INDEX   = 5
 DCGM_MEMORY_BANDWIDTH_INDEX = 6
-DCGM_PER_GPU_TEST_COUNT     = 7
+DCGM_MEMTEST_INDEX          = 7
+DCGM_UNUSED_TEST_INDEX      = 8
+DCGM_PER_GPU_TEST_COUNT_V7  = 9
+DCGM_PER_GPU_TEST_COUNT_V6  = 7
 
 # DCGM Diag Level One test indices
 DCGM_SWTEST_BLACKLIST            = 0
@@ -1074,6 +1077,7 @@ DCGM_POLICY_VALID_NONE = 0
 DCGM_POLICY_VALID_SV_SHORT = 1
 DCGM_POLICY_VALID_SV_MED = 2
 DCGM_POLICY_VALID_SV_LONG = 3
+DCGM_POLICY_VALID_SV_XLONG = 4
 
 DCGM_POLICY_FAILURE_NONE = 0
 
@@ -1081,6 +1085,7 @@ DCGM_DIAG_LVL_INVALID = 0
 DCGM_DIAG_LVL_SHORT   = 10
 DCGM_DIAG_LVL_MED     = 20
 DCGM_DIAG_LVL_LONG    = 30
+DCGM_DIAG_LVL_XLONG   = 40
 
 DCGM_DIAG_RESULT_PASS = 0
 DCGM_DIAG_RESULT_SKIP = 1
@@ -1430,28 +1435,28 @@ class c_dcgmDiagTestResult_v2(_PrintableStructure):
         ('info', c_char * 1024)
     ]
 
-class c_dcgmDiagResponsePerGpu_v2(_PrintableStructure):
+class c_dcgmDiagResponsePerGpu_v3(_PrintableStructure):
     _fields_ = [
         ('gpuId', c_uint),
         ('hwDiagnosticReturn', c_uint),
-        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT)
+        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT_V7)
     ]
 
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
 
-class c_dcgmDiagResponse_v6(_PrintableStructure):
+class c_dcgmDiagResponse_v7(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('gpuCount', c_uint),
         ('levelOneTestCount', c_uint),
         ('levelOneResults', c_dcgmDiagTestResult_v2 * LEVEL_ONE_MAX_RESULTS),
-        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v2 * DCGM_MAX_NUM_DEVICES),
+        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v3 * DCGM_MAX_NUM_DEVICES),
         ('systemError',     c_dcgmDiagErrorDetail_t),
         ('trainingMsg',     c_char * 1024)
     ]
 
-dcgmDiagResponse_version6 = make_dcgm_version(c_dcgmDiagResponse_v6, 6)
+dcgmDiagResponse_version7 = make_dcgm_version(c_dcgmDiagResponse_v7, 7)
 
 DCGM_AFFINITY_BITMASK_ARRAY_SIZE = 8
 

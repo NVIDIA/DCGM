@@ -28,6 +28,7 @@
 #include <climits>
 #include <csignal>
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 
@@ -53,45 +54,44 @@ struct FieldDetails
     char m_padding[4] {}; /*!< Padding for alignment */
 };
 
-class DeviceInfo : public Command
+class DeviceMonitor : public Command
 {
 public:
-    DeviceInfo(std::string hostname,
-               std::string requestedEntityIds,
-               std::string grpIdStr,
-               std::string fldIds,
-               int fieldGroupId,
-               int updateDelay,
-               int numOfIterations,
-               bool listOptionMentioned);
+    DeviceMonitor(std::string hostname,
+                  std::string requestedEntityIds,
+                  std::string grpIdStr,
+                  std::string fldIds,
+                  int fieldGroupId,
+                  std::chrono::milliseconds updateDelay,
+                  int numOfIterations,
+                  bool listOptionMentioned);
+
+    using EntityStats = std::unordered_map<dcgmi_entity_pair_t, std::vector<std::string>>;
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
 
 private:
-    std::map<dcgmi_entity_pair_t, std::vector<std::string>>
-        m_entityStats {}; /*!< map that holds the entity ID and vector of values for fields that are queried in dmon are
-                             requested. Populated in callback of dcgmGetLatestValues_v2. */
     std::string m_requestedEntityIds;          /*!< The Entity Ids requested in the options for command.*/
     std::string m_groupIdStr;                  /*!< The group Id mentioned in command. */
     std::string m_fieldIdsStr;                 /*!< The Field Ids to query for. Mentioned in the options.  */
     std::vector<unsigned short> m_fieldIds {}; /*!< The actual field IDs queried, either parsed from m_fieldIdsStr or
                                                   retrieved via m_fieldGrpId_int */
-    int m_fieldGrpId_int;          /*!< The integer converted value of FieldGroup Id mentioned in the command.*/
-    int m_delay;                   /*!< Delay after which the values to be updated.*/
-    int m_count;                   /*!< Number of times to iterate before exiting.*/
-    dcgmGpuGrp_t m_myGroupId;      /*!< Gpu group id of the group created by dmon. */
-    dcgmFieldGrp_t m_fieldGroupId; /*!< Field group id of the fieldgroup created by the dmon.*/
-    bool m_list;                   /*!< Boolean value that states if list option is mentioned in the command line.*/
+    int m_fieldGrpId_int;              /*!< The integer converted value of FieldGroup Id mentioned in the command.*/
+    std::chrono::milliseconds m_delay; /*!< Delay after which the values to be updated.*/
+    int m_count;                       /*!< Number of times to iterate before exiting.*/
+    dcgmGpuGrp_t m_myGroupId;          /*!< Gpu group id of the group created by dmon. */
+    dcgmFieldGrp_t m_fieldGroupId;     /*!< Field group id of the fieldgroup created by the dmon.*/
+    bool m_list;                       /*!< Boolean value that states if list option is mentioned in the command line.*/
     std::vector<FieldDetails> m_fieldDetails {}; /*!< Vector or the field details structure for each field. Populated
                                                     and used when list option is mentioned with command.  */
     std::string m_header;                        /*!< The header for formatting the output. */
     std::string m_headerUnit; /*!< The unit for the header values. (Eg: C(elsius) for Temperature or W(att) for Power)*/
-    std::array<unsigned short, UCHAR_MAX> m_widthArray {}; /*!< The array that holds width for each header element in
-                                                              order of their occurrence in the output. Max number of
-                                                              width that header can accommodate is 255. Each value
-                                                              stands for width for next field id in the horizontal row
-                                                              for each gpu. */
+    std::array<unsigned short, std::numeric_limits<unsigned char>::max()> m_widthArray {}; /*!< The array that holds
+                                                              width for each header element in order of their occurrence
+                                                              in the output. Max number of width that header can
+                                                              accommodate is 255. Each value stands for width for next
+                                                              field id in the horizontal row for each gpu. */
 
 
     /**********************************************************************

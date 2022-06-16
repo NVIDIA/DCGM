@@ -217,7 +217,7 @@ def check_gpu_diagnostic(handleObj, settings):
 
     if check_passive_health_checks(response, activeGpuIds) == False:
         for gpuIndex in range(response.gpuCount):
-            for testIndex in range(dcgm_structs.DCGM_PER_GPU_TEST_COUNT):
+            for testIndex in range(dcgm_structs.DCGM_PER_GPU_TEST_COUNT_V7):
                 if response.perGpuResponses[gpuIndex].results[testIndex].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
                     gpuId = response.perGpuResponses[gpuIndex].gpuId
                     mark_entity_unhealthy(g_gpus, gpuId, BR_ST_FAILED_ACTIVE_HEALTH,

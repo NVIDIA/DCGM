@@ -56,6 +56,10 @@ class DcgmFieldGroup:
                 # When we're cleaning up at the end, dcgm_agent and dcgm_structs have been unloaded and we'll 
                 # get an AttributeError: "'NoneType' object has no 'dcgmExceptionClass'" Ignore this
                 pass
+            except TypeError as te:
+                # When we're cleaning up at the end, dcgm_agent and dcgm_structs have been unloaded and we might 
+                # get a TypeError: "'NoneType' object is not callable'" Ignore this
+                pass
             self.fieldGroupId = None
 
     #Destructor

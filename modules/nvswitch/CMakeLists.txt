@@ -19,6 +19,7 @@ target_link_libraries(nvswitch_interface
     INTERFACE
         dcgm_interface
         common_interface
+        dcgm_thread_interface
         modules_interface
         module_common_interface
         sdk_nscq_interface
@@ -51,6 +52,7 @@ target_link_libraries(dcgmmodulenvswitch
         sdk_nscq_loader
         nvswitch_interface
         module_common_objects
+        dcgm_thread
         fmt::fmt
 )
 target_sources(dcgmmodulenvswitch

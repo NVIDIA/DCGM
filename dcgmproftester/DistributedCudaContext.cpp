@@ -2071,7 +2071,10 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
         goto CLEANUP;
     }
 
-    /* deviceA and deviceB now have our matricies. Run our test */
+    /* deviceA and deviceB now have our matricies. Run our test, noting we
+     * started (S\n) and have completed zero sub-parts of one (D 0 1\n).
+     */
+    Respond("S\nD 0 1\n");
 
     now       = timelib_dsecSince1970();
     startTime = timelib_dsecSince1970();

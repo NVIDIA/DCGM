@@ -15,6 +15,7 @@ set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Jsoncpp REQUIRED)
 find_package(Catch2 REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -29,6 +30,7 @@ if (BUILD_TESTING)
             dcgm_common
             Catch2::Catch2
             ${JSONCPP_STATIC_LIBS}
+            fmt::fmt
     )
 
     target_sources(

@@ -45,8 +45,10 @@ class DcgmDiag:
             self.runDiagInfo.validate = 2
         elif testNamesStr == '3':
             self.runDiagInfo.validate = 3
+        elif testNamesStr == '4':
+            self.runDiagInfo.validate = 4
         else:
-            # Make sure no number other that 1-3 were submitted
+            # Make sure no number other that 1-4 were submitted
             if testNamesStr.isdigit():
                 raise ValueError("'%s' is not a valid test name." % testNamesStr)
 

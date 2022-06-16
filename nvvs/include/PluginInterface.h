@@ -34,15 +34,15 @@ extern "C" {
 
 typedef struct
 {
-    unsigned int gpuId;
-    DcgmEntityStatus_t status;
-    dcgmDeviceAttributes_t attributes;
+    unsigned int gpuId                = 0;
+    DcgmEntityStatus_t status         = {};
+    dcgmDeviceAttributes_t attributes = {};
 } dcgmDiagPluginGpuInfo_t;
 
 typedef struct
 {
-    unsigned int numGpus;
-    dcgmDiagPluginGpuInfo_t gpus[DCGM_MAX_NUM_DEVICES];
+    unsigned int numGpus                               = 0;
+    dcgmDiagPluginGpuInfo_t gpus[DCGM_MAX_NUM_DEVICES] = {};
 } dcgmDiagPluginGpuList_t;
 
 #define DCGM_MAX_PLUGIN_DESC_LEN       128

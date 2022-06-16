@@ -42,7 +42,8 @@ private:
     /*************************************************************************/
     /* Subrequest helpers
      */
-    dcgmReturn_t ProcessRun(dcgm_diag_msg_run_t *msg);
+    dcgmReturn_t ProcessRun_v4(dcgm_diag_msg_run_v4 *msg);
+    dcgmReturn_t ProcessRun_v5(dcgm_diag_msg_run_v5 *msg);
     dcgmReturn_t ProcessStop(dcgm_diag_msg_stop_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
 

@@ -64,7 +64,35 @@ public:
         , m_runnerSemaphore(std::make_shared<Semaphore>())
         , m_stop(false)
         , m_debugLogging(false)
-    {}
+    {
+        auto *envVar = getenv("__DCGM_TASK_RUNNER_QUEUE_SIZE");
+        if (envVar != nullptr)
+        {
+            try
+            {
+                m_queueCapacity = std::min(std::stoul(envVar), 100000UL);
+            }
+            catch (...)
+            {
+                DCGM_LOG_ERROR
+                    << "Bad value of the __DCGM_TASK_RUNNER_QUEUE_SIZE environment variable. A positive integer is expected";
+            }
+        }
+
+        envVar = getenv("__DCGM_TASK_RUNNER_DEBUG");
+        if (envVar != nullptr)
+        {
+            try
+            {
+                m_debugLogging = std::stoul(envVar) == 1UL;
+            }
+            catch (...)
+            {
+                DCGM_LOG_ERROR
+                    << "Bad value of the __DCGM_TASK_RUNNER_DEBUG environment variable. A 0 or 1 numbers are expected";
+            }
+        }
+    }
 
     virtual ~TaskRunner() = default;
 
@@ -84,35 +112,78 @@ public:
         m_runnerSemaphore->SetDebugLogging(enabled);
     }
 
+    void SetQueueCapacity(size_t newCapacity)
+    {
+        m_queueCapacity.store(newCapacity, std::memory_order_relaxed);
+    }
+
     /**
      * Schedule a new task for execution.
      * This method is for simple (not deferred tasks)
      * @tparam T    A type of the final task result. Can be void. @sa `class DcgmNs::Task<void>` for details.
      *
      * @param[in] task  A task to add to the queue. Task ownership is transferred to the TaskRunner
+     * @param[in] isContinuation    The \a task is a continuation for another task that is already in the queue so the
+     *                              queue capacity should not be checked.
      *
-     * @return An instance of std::shared_future<T>. A caller may wait on this future till the task is finished.
+     * @return An optional instance of std::shared_future<T>. A caller may wait on this future till the task is
+     *         finished. The value will be \c std::nullopt if the \a task cannot be added due to the queue capacity
+     *         exhaustion.
      */
-    template <class T>
-    [[nodiscard]] auto Enqueue(Task<T> task) -> std::shared_future<T>
+    template <class T, class P>
+    [[nodiscard]] auto Enqueue(std::unique_ptr<NamedBasicTask<T, P>> task, bool isContinuation = false)
+        -> std::optional<std::shared_future<P>>
     {
         if (m_debugLogging.load(std::memory_order_relaxed))
         {
-            DCGM_LOG_DEBUG << "Enqueueing simple task '" << task.GetName() << " for the 0x"
-                           << to_hex_string((size_t)this) << " TaskRunner";
+            DCGM_LOG_DEBUG << fmt::format(
+                "Enqueueing simple task '{}' for the {:#x} TaskRunner", task->GetName(), (size_t)this);
         }
 
-        std::promise<T> prom;
+        if (!isContinuation)
+        {
+            auto queueHandleRo = m_queue.LockRO();
+            if (queueHandleRo.GetSize() > m_queueCapacity.load(std::memory_order_relaxed))
+            {
+                DCGM_LOG_ERROR << fmt::format(
+                    "Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
+                    task->GetName(),
+                    (size_t)this);
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                if (releaseResult != Semaphore::ReleaseResult::Ok)
+                {
+                    auto const msg = fmt::format(
+                        "Unable to trigger consumers for the TaskRunner {:#x} while the event queue is full",
+                        (size_t)this);
+                    DCGM_LOG_FATAL << msg;
+                    throw std::runtime_error(msg);
+                }
+                return std::nullopt;
+            }
+        }
+
+        std::promise<P> prom;
         auto result = prom.get_future().share();
 
-        task.SetPromise(std::move(prom)); /* after this prom is invalid */
+        task->SetPromise(std::move(prom)); /* after this prom is invalid */
 
+        auto queueHandle = m_queue.LockRW();
+        if (!isContinuation && queueHandle.GetSize() > m_queueCapacity.load(std::memory_order::relaxed))
         {
-            auto queueHandle = m_queue.LockRW();
-            auto taskPtr     = std::make_unique<Task<T>>(std::move(task)); /* after this task is invalid */
-            queueHandle.Enqueue(std::move(taskPtr));
+            DCGM_LOG_ERROR << fmt::format("Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
+                                          task->GetName(),
+                                          (size_t)this);
+            [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+            if (releaseResult != Semaphore::ReleaseResult::Ok)
+            {
+                auto const msg = fmt::format(
+                    "Unable to trigger consumers for the TaskRunner {:#x} while the event queue is full", (size_t)this);
+                DCGM_LOG_FATAL << msg;
+                throw std::runtime_error(msg);
+            }
+            return std::nullopt;
         }
-
+        queueHandle.Enqueue(std::move(task));
         [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
 
         return result;
@@ -125,12 +196,12 @@ public:
      *
      * @param[in] task  A deferred task to execute
      *
-     * @return An instance of std::shared_future<Y>. A caller may wait on this future till the task is finished.
-     * @note    Return type of this function is std::shared_future<Y> where Y is the unwrapped type of the final task
-     *          result. That means if a Task<shared_future<shared_future<T>> was passed as the `task` param, the result
-     *          of this method will have std::shared_future<T> type.
-     *          That is needed to allow callers to call `.get()` only once on the returned future instead of making a
-     *          chain of `.get().get().get()` calls.
+     * @return An instance of std::optional<std::shared_future<Y>>. A caller may wait on this future till the task is
+     *         finished.
+     * @note    The optional result type of this function is std::shared_future<Y> where Y is the unwrapped type of the
+     *          final task result. That means if a Task<shared_future<shared_future<T>> was passed as the `task` param,
+     *          the result of this method will have std::shared_future<T> type. That is needed to allow callers to call
+     *          `.get()` only once on the returned future instead of making a chain of `.get().get().get()` calls.
      *
      * This is mostly a helper function which allows to make chains of asynchronous tasks.
      * @code{.cpp}
@@ -139,9 +210,20 @@ public:
      *      auto fut = tr.Enqueue(make_task([&tr]() mutable {
      *          auto f1 = tr.Enqueue(make_task([]{ return LongFunctionResult(); }));
      *          auto f2 = tr.Enqueue(make_task([&tr]() mutable { return AnotherLongFuncResult(tr); }));
-     *          return tr.Enqueue(make_task([f1=std::move(f1), f2=std::move(f2)]{return f1.get() + f2.get();}));
+     *          return tr.Enqueue(make_task([f1=std::move(f1), f2=std::move(f2)]{
+     *              if (f1.has_value()) {
+     *                  if (f2.has_value()) {
+     *                      return (*f1).get() + (*f2).get();
+     *                  } else {
+     *                      return (*f1).get();
+     *                  }
+     *              } else if (f2.has_value()) {
+     *                  return (*f2).get();
+     *              }
+     *              throw std::runtime_error("Neither task was scheduled");
+     *          }));
      *      }));
-     *      printf("Result: %d", fut.get());
+     *      printf("Result: %d", fut.has_value() ? (*fut).get() : "Not executed");
      *
      *      auto AnotherLongFuncResult(TaskRunner &tr){
      *          return tr.Enqueue(make_task([]{ return SomeElseResult(); }));
@@ -149,28 +231,62 @@ public:
      * ```
      * @endcode
      */
-    template <class T>
-    auto Enqueue(Task<std::shared_future<T>> task) -> std::shared_future<UnwrapFutureNestedType_t<T>>
+    template <class T, class P>
+    auto Enqueue(std::unique_ptr<NamedBasicTask<std::shared_future<T>, P>> task)
+        -> std::optional<std::shared_future<UnwrapFutureNestedType_t<T>>>
     {
         if (m_debugLogging.load(std::memory_order_relaxed))
         {
-            DCGM_LOG_DEBUG << "Enqueueing deferred task '" << task.GetName() << " for the 0x"
-                           << to_hex_string((size_t)this) << " TaskRunner";
+            DCGM_LOG_DEBUG << fmt::format(
+                "Enqueueing deferred task '{}' for the {:#x} TaskRunner", task->GetName(), (size_t)this);
+        }
+        {
+            auto queueHandleRo = m_queue.LockRO();
+            if (queueHandleRo.GetSize() > m_queueCapacity.load(std::memory_order::relaxed))
+            {
+                DCGM_LOG_ERROR << fmt::format(
+                    "Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
+                    task->GetName(),
+                    (size_t)this);
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                if (releaseResult != Semaphore::ReleaseResult::Ok)
+                {
+                    auto const msg = fmt::format(
+                        "Unable to trigger consumers for the TaskRunner {:#x} while the event queue is full",
+                        (size_t)this);
+                    DCGM_LOG_FATAL << msg;
+                    throw std::runtime_error(msg);
+                }
+                return std::nullopt;
+            }
         }
 
         std::promise<std::shared_future<T>> contProm;
         auto contFuture = contProm.get_future().share();
 
-        task.SetPromise(std::move(contProm)); /* after this prom is invalid */
+        task->SetPromise(std::move(contProm)); /* after this prom is invalid */
+        auto taskNameCopy = task->GetName();
 
         {
             auto queueHandle = m_queue.LockRW();
-            auto taskPtr
-                = std::make_unique<Task<std::shared_future<T>>>(std::move(task)); /* after this task is invalid */
-            queueHandle.Enqueue(std::move(taskPtr));
+            if (queueHandle.GetSize() > m_queueCapacity.load(std::memory_order_relaxed))
+            {
+                DCGM_LOG_ERROR << "Unable to add task " << task->GetName() << " to the TaskRunner " << (size_t)this
+                               << " queue as the queue is full";
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                if (releaseResult != Semaphore::ReleaseResult::Ok)
+                {
+                    auto const msg = fmt::format(
+                        "Unable to trigger consumers for the TaskRunner {:#x} while the event queue is full",
+                        (size_t)this);
+                    DCGM_LOG_FATAL << msg;
+                    throw std::runtime_error(msg);
+                }
+                return std::nullopt;
+            }
+            queueHandle.Enqueue(std::move(task));
+            [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
         }
-
-        [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
 
         auto continuation = [contFuture = std::move(contFuture)]() mutable -> std::optional<T> {
             if (contFuture.get().wait_for(std::chrono::microseconds(0)) != std::future_status::ready)
@@ -183,7 +299,8 @@ public:
 
         using namespace std::literals::string_literals;
 
-        return Enqueue(make_task("Auxiliary for a deferred task '"s + task.GetName() + "'"s, std::move(continuation)));
+        return Enqueue(make_task("Auxiliary for a deferred task '"s + taskNameCopy + "'"s, std::move(continuation)),
+                       true);
     }
 
     /**
@@ -239,8 +356,15 @@ public:
         auto waitResult = Semaphore::TimedWaitResult::Ok;
         auto wakeUpTime = std::chrono::system_clock::now() + m_runInterval.load(std::memory_order_relaxed);
 
+        std::vector<std::unique_ptr<ITask>> tasks;
+        std::vector<std::unique_ptr<ITask>> deferredTasks;
+        tasks.reserve(1024);
+        deferredTasks.reserve(1024);
+
         while (waitResult == Semaphore::TimedWaitResult::Ok && !m_stop.load(std::memory_order_relaxed))
         {
+            tasks.clear();
+            deferredTasks.clear();
             waitResult = m_runnerSemaphore->WaitUntil(wakeUpTime);
             if (waitResult == Semaphore::TimedWaitResult::Destroyed)
             {
@@ -260,8 +384,7 @@ public:
             /*
              * We need to check the queue even if the semaphore has timed out.
              */
-            std::vector<std::unique_ptr<ITask>> tasks;
-            std::vector<std::unique_ptr<ITask>> deferredTasks;
+            std::queue<decltype(m_queue)::QueueItemType> tmpTasks;
             {
                 {
                     auto queueHandle = m_queue.LockRO();
@@ -280,10 +403,14 @@ public:
 
                 tasks.reserve(queueHandle.GetSize());
                 deferredTasks.reserve(queueHandle.GetSize());
-                while (!queueHandle.IsEmpty())
-                {
-                    tasks.emplace_back(queueHandle.Dequeue());
-                }
+
+                queueHandle.Swap(tmpTasks);
+            }
+
+            while (!tmpTasks.empty())
+            {
+                tasks.emplace_back(std::move(tmpTasks.front()));
+                tmpTasks.pop();
             }
 
             for (auto &task : tasks)
@@ -320,6 +447,7 @@ public:
                         break;
                 }
             }
+
             if (!deferredTasks.empty())
             {
                 auto queueHandle = m_queue.LockRW();
@@ -327,6 +455,7 @@ public:
                 {
                     queueHandle.Enqueue(std::move(task));
                 }
+                [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
             }
 
             if (oneIteration)
@@ -346,7 +475,7 @@ public:
     {
         if (m_debugLogging.load(std::memory_order_relaxed))
         {
-            DCGM_LOG_DEBUG << "The TaskRunner 0x" << to_hex_string((std::size_t)this) << " is going to stop";
+            DCGM_LOG_DEBUG << fmt::format("The TaskRunner {:#x} is going to stop", (std::size_t)this);
         }
         m_stop.store(true, std::memory_order_relaxed);
         m_runnerSemaphore->Destroy(); // Semaphore.Destroy will wake up all waiters (runner threads)
@@ -367,7 +496,13 @@ private:
     std::atomic<std::chrono::milliseconds> m_runInterval; //!< How long a worker will wait for a new task signal.
     std::shared_ptr<Semaphore> m_runnerSemaphore;         //!< Signals if there is new task in the queue.
     std::atomic_bool m_stop;                              //!< Signals that the task runner should stop its work.
+
     std::atomic_bool m_debugLogging;                      //!< If the task runner methods need to write debug logs.
+                                     //!< Can be overridden by env variable __DCGM_TASK_RUNNER_QUEUE_SIZE
+
+    std::atomic_size_t m_queueCapacity = 100; //!< How many events can be stored in the queue.
+                                              //!< Attempt to add more events will fail.
+                                              //!< Can be overridden by env variable __DCGM_TASK_RUNNER_QUEUE_SIZE
 };
 
 } // namespace DcgmNs

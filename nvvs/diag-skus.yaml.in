@@ -1107,6 +1107,17 @@ skus:
     memory_bandwidth:
       is_allowed: true
       minimum_bandwidth: 607500.0
+    pulse_test:
+      is_allowed: true
+      use_curand: true
+      test_duration: 500.0
+      duty0: 0.5
+      freq0: 50000.0
+      kernel: dgemm
+      workload: SYNCED_WAVEFORM
+      freq0: 50000
+      duty0: 0.5
+      matrix_size_mode: max_alloc
   # Tesla V100 DGX-Station 32GB
   - name: Tesla V100 DGX-Station 32GB
     id: 1db7
@@ -1284,7 +1295,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 249.0
-      temperature_max: 87.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1295,7 +1305,6 @@ skus:
       # V100S has a DGEMM performance of 7000; multiply by .75 to get 5250
       target_stress: 5250.0
       use_dgemm: true
-      temperature_max: 87.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1321,7 +1330,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 259.0
-      temperature_max: 89.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1332,7 +1340,6 @@ skus:
       # RTX 6000 and 8000 had a SGEMM performance of 13000 in dcgmproftester -t 1007; multiply by .75 to get 9750
       target_stress: 9750.0
       use_dgemm: false
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1357,7 +1364,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024
       target_power: 299.0
-      temperature_max: 89.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1365,7 +1371,6 @@ skus:
     sm_stress:
       is_allowed: true
       use_dgemm: false
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1390,7 +1395,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024
       target_power: 199.0
-      temperature_max: 89.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -1401,7 +1405,6 @@ skus:
       # dcgmproftester measured -t 1006 at 10900; multiply by .75 to get 8175
       target_stress: 8175.0
       use_dgemm: true
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1427,7 +1430,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 399.0
-      temperature_max: 89.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -1438,7 +1440,6 @@ skus:
       # proftester -t 1006 measures at 18300, multiply by .75 to get 13725
       target_stress: 13725.0
       use_dgemm: true
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1457,6 +1458,17 @@ skus:
       is_allowed: true
       # proftester -t 1005 shows ~1830000. Multiply by .75 to get 1372500
       minimum_bandwidth: 137500.0
+    pulse_test:
+      is_allowed: true
+      use_curand: true
+      test_duration: 500.0
+      duty0: 0.5
+      freq0: 50000.0
+      kernel: hmma
+      workload: SYNCED_WAVEFORM
+      freq0: 50000
+      duty0: 0.5
+      matrix_size_mode: max_alloc
   # RTX 6000/8000 passive SKUs
   - name: RTX 6000/8000 passive SKUs
     id: 1e78
@@ -1464,7 +1476,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 249.0
-      temperature_max: 89.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1476,7 +1487,6 @@ skus:
       # RTX 6000 and 8000 passive had a SGEMM performance of 12600 in dcgmproftester -t 1007; multiply by .75 to get 9450
       target_stress: 9450.0
       use_dgemm: false
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1501,7 +1511,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 299.0
-      temperature_max: 92.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -1513,7 +1522,6 @@ skus:
       # proftester -t 1006 measures at 7950, multiply by .75 to get 5963
       target_stress: 5963.0
       use_dgemm: true
-      temperature_max: 92.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1540,7 +1548,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 399.0
-      temperature_max: 85.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -1552,7 +1559,6 @@ skus:
       # proftester -t 1006 measures at ~9300, multiply by .75 to get 6975
       target_stress: 6975.0
       use_dgemm: true
-      temperature_max: 92.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1571,6 +1577,17 @@ skus:
       is_allowed: true
       # proftester -t 1005 shows ~1564000 GiB/sec. Multiply by .75 to get 1173000
       minimum_bandwidth: 1173000.0
+    pulse_test:
+      is_allowed: true
+      use_curand: true
+      test_duration: 500.0
+      duty0: 0.5
+      freq0: 50000.0
+      kernel: hmma
+      workload: SYNCED_WAVEFORM
+      freq0: 50000
+      duty0: 0.5
+      matrix_size_mode: max_alloc
   # A40
   - name: A40
     id: 2235
@@ -1578,7 +1595,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 299.0
-      temperature_max: 88.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1591,7 +1607,6 @@ skus:
       target_stress: 14250.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 88.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1617,7 +1632,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 62.0
-      temperature_max: 95.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1630,7 +1644,6 @@ skus:
       target_stress: 1687.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 95.0
     pcie:
       is_allowed: true
     memory:
@@ -1651,7 +1664,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 149.0
-      temperature_max: 90.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1664,7 +1676,6 @@ skus:
       target_stress: 6075.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 90.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1690,7 +1701,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 299.0
-      temperature_max: 95.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1703,7 +1713,6 @@ skus:
       target_stress: 12750.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 95.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1729,7 +1738,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 69.0
-      temperature_max: 85.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1742,7 +1750,6 @@ skus:
       target_stress: 2850.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 85.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1768,7 +1775,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 194.0
-      temperature_max: 92.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1781,7 +1787,6 @@ skus:
       target_stress: 7050.5
       matrix_dim: 1024.
       use_dgemm: false
-      temperature_max: 92.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1807,7 +1812,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 188.0
-      temperature_max: 105.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1820,7 +1824,6 @@ skus:
       target_stress: 5625.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 105.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1846,7 +1849,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 299.0
-      temperature_max: 93.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1859,7 +1861,6 @@ skus:
       target_stress: 11475.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 93.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1883,7 +1884,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 194.0
-      temperature_max: 82.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1896,7 +1896,6 @@ skus:
       target_stress: 15750.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 82.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1923,7 +1922,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 224.0
-      temperature_max: 91.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1936,7 +1934,6 @@ skus:
       target_stress: 8100.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 91.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -1962,7 +1959,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 400.0
-      temperature_max: 89.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -1975,7 +1971,6 @@ skus:
       target_stress: 13200.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2001,7 +1996,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 400.0
-      temperature_max: 89.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2014,7 +2008,6 @@ skus:
       target_stress: 13200.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 89.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2040,7 +2033,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 374.0
-      temperature_max: 108.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -2053,7 +2045,6 @@ skus:
       target_stress: 9975.0
       matrix_dim: 1024.0
       use_dgemm: false
-      temperature_max: 108.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2080,7 +2071,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 299.0
-      temperature_max: 89.0
       use_dgemm: true
     targeted_stress:
       is_allowed: true
@@ -2092,7 +2082,6 @@ skus:
       # dcgmproftester -t 1007 measures at 17950, multiply by .75 to get 13425
       target_stress: 13425.0
       use_dgemm: true
-      temperature_max: 92.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2118,7 +2107,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 229.0
-      temperature_max: 90.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2130,7 +2118,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~13100, multiply by .75 to get 9825
       target_stress: 9825.0
       use_dgemm: false
-      temperature_max: 90.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2156,7 +2143,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 139.0
-      temperature_max: 98.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2168,7 +2154,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~10100, multiply by .75 to get ~7500
       target_stress: 7500.0
       use_dgemm: false
-      temperature_max: 98.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2193,7 +2178,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 300.0
-      temperature_max: 88.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2205,7 +2189,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~11000, multiply by .75 to get ~8250
       target_stress: 8250.0
       use_dgemm: false
-      temperature_max: 88.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2230,7 +2213,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 230.0
-      temperature_max: 85.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2242,7 +2224,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~9450, multiply by .75 to get ~7090
       target_stress: 7090.0
       use_dgemm: false
-      temperature_max: 85.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2268,7 +2249,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 70.0
-      temperature_max: 88.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2280,7 +2260,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~2435, multiply by .75 to get ~1826
       target_stress: 1826.0
       use_dgemm: false
-      temperature_max: 88.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2304,7 +2283,6 @@ skus:
     targeted_power:
       starting_matrix_dim: 1024.0
       target_power: 499.0
-      temperature_max: 85.0
       use_dgemm: true
     targeted_stress:
       use_dgemm: true
@@ -2314,7 +2292,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~10500, multiply by .75 to get ~7875
       target_stress: 7875.0
       use_dgemm: true
-      temperature_max: 85.0
     pcie:
       h2d_d2h_single_pinned:
         min_pci_generation: 4.0
@@ -2334,7 +2311,6 @@ skus:
     targeted_power:
       starting_matrix_dim: 1024.0
       target_power: 549.0
-      temperature_max: 85.0
       use_dgemm: true
     targeted_stress:
       use_dgemm: true
@@ -2344,7 +2320,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~10500, multiply by .75 to get ~7875
       target_stress: 7875.0
       use_dgemm: true
-      temperature_max: 85.0
     pcie:
       h2d_d2h_single_pinned:
         min_pci_generation: 4.0
@@ -2366,7 +2341,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 70.0
-      temperature_max: 100.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2378,7 +2352,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~3700, multiply by .75 to get ~2775
       target_stress: 2775.0
       use_dgemm: false
-      temperature_max: 100.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
@@ -2404,7 +2377,6 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 70.0
-      temperature_max: 100.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2416,7 +2388,6 @@ skus:
       # dcgmproftester -t 1007 measures at ~3911, multiply by .75 to get ~2775
       target_stress: 2933.0
       use_dgemm: false
-      temperature_max: 100.0
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:

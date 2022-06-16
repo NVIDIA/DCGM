@@ -175,8 +175,22 @@ void Whitelist::postProcessWhitelist(std::vector<Gpu *> &gpus)
 /*****************************************************************************/
 static bool isBoolParam(const std::string &param)
 {
-    const static std::unordered_set<std::string> boolParams = { "use_dgemm", "use_doubles", "l1_is_allowed" };
+    const static std::unordered_set<std::string> boolParams = { "use_dgemm",
+                                                                "use_doubles",
+                                                                "l1_is_allowed",
+                                                                PULSE_TEST_STR_EXIT_ON_ERROR,
+                                                                PULSE_TEST_STR_SKIP_HOSTALLOC_INIT,
+                                                                PULSE_TEST_STR_USE_CURAND,
+                                                                PULSE_TEST_STR_USE_CUPTI };
     return boolParams.find(param) != boolParams.end();
+}
+
+static bool isStringParam(const std::string &param)
+{
+    const static std::unordered_set<std::string> stringParams = {
+        PULSE_TEST_STR_CHECK_MODE, PULSE_TEST_STR_WORKLOAD, PULSE_TEST_STR_KERNEL, PULSE_TEST_STR_MATRIX_SIZE_MODE
+    };
+    return stringParams.find(param) != stringParams.end();
 }
 
 /*****************************************************************************/
@@ -233,6 +247,12 @@ void Whitelist::FillMap()
                                              << " as a bool. Scalar: " << paramOrSubtest.Scalar();
                             bool paramValue = paramOrSubtest.as<bool>();
                             tp->AddString(testName, paramValue ? "True" : "False");
+                        }
+                        else if (isStringParam(testName))
+                        {
+                            DCGM_LOG_VERBOSE << "Reading " << testName
+                                             << " as a string. String: " << paramOrSubtest.as<std::string>();
+                            tp->AddString(testName, paramOrSubtest.as<std::string>());
                         }
                         else
                         {

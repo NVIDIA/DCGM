@@ -692,6 +692,49 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetEntityList(dcgm::Command *pCmd, bo
 }
 
 /*****************************************************************************/
+bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId)
+{
+    switch (entityGroupId)
+    {
+        case DCGM_FE_NONE:
+            return true;
+
+        case DCGM_FE_VGPU:
+        case DCGM_FE_GPU:
+        case DCGM_FE_GPU_I:
+        case DCGM_FE_GPU_CI:
+            return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
+
+        case DCGM_FE_SWITCH:
+            break; /* Handle below */
+
+        case DCGM_FE_COUNT:
+            return false;
+
+            /* Purposely omitting a default in case we add new entity types */
+    }
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    dcgmReturn_t dcgmReturn = GetAllEntitiesOfEntityGroup(0, entityGroupId, entities);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "GetAllEntitiesOfEntityGroup failed with " << dcgmReturn << " for eg " << entityGroupId
+                       << ", eid " << entityId;
+        return false;
+    }
+
+    for (auto entity : entities)
+    {
+        if (entity.entityId == entityId && entity.entityGroupId == entityGroupId)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::ProcessInjectFieldValue(dcgm::Command *pCmd, bool *pIsComplete)
 {
     if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_injectfieldvalue())
@@ -1439,7 +1482,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetTopologyAffinity(dcgm::Command *pC
 {
     dcgmReturn_t dcgmReturn;
     unsigned int groupId;
-    dcgmAffinity_t gpuAffinity;
+    dcgmAffinity_t gpuAffinity {};
 
     gpuAffinity.numGpus = 0;
 
@@ -1567,7 +1610,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessGetTopologyIO(dcgm::Command *pCmd, bo
 {
     unsigned int groupId;
     dcgmReturn_t dcgmReturn;
-    dcgmTopology_t gpuTopology;
+    dcgmTopology_t gpuTopology {};
 
     // always return this struct so that if we return DCGM_ST_NO_DATA that people can still
     // rely on numElements being 0 instead of uninitialized
@@ -6152,3 +6195,20 @@ void DcgmHostEngineHandler::StaticProcessDisconnect(dcgm_connection_id_t connect
 }
 
 /*****************************************************************************/
+void DcgmHostEngineHandler::SetServiceAccount(char const *serviceAccount)
+{
+    if (serviceAccount != nullptr)
+    {
+        m_serviceAccount = std::string(serviceAccount);
+    }
+    else
+    {
+        m_serviceAccount.clear();
+    }
+}
+
+
+std::string const &DcgmHostEngineHandler::GetServiceAccount() const
+{
+    return m_serviceAccount;
+}

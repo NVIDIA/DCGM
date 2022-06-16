@@ -1099,7 +1099,8 @@ long long keyedvector_bytes_used(keyedvector_p kv)
         bytesUsed += sizeof(kv->blocks[0]) * kv->maxBlocks;
 
     // space used by actual item storage (total sub-block size)
-    bytesUsed += kv->subBlockSize * kv->maxBlocks;
+    // casting these to long long to avoid coverity complains about possible overflow
+    bytesUsed += (long long)kv->subBlockSize * (long long)kv->maxBlocks;
 
     // the only thing not possible to know is the size of the user-supplied data pointer
     return bytesUsed;

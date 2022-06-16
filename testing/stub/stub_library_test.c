@@ -44,7 +44,7 @@ int main(void)
 {
     dcgmHandle_t dcgmHandle;
     dcgmOperationMode_t opMode;
-    unsigned int devices = DCGM_MAX_NUM_DEVICES;
+    unsigned int devices[DCGM_MAX_NUM_DEVICES];
     int count;
     char IP[] = "127.0.0.1";
     int ret;
@@ -89,7 +89,7 @@ int main(void)
         get = dcgmGetAllDevices;
     }
 
-    ret = get(dcgmHandle, &devices, &count);
+    ret = get(dcgmHandle, devices, &count);
     printf("dcgmGetAllDevices() returned: %d\n", ret);
 
     if (handle)
