@@ -996,7 +996,7 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
         {
             std::unordered_map<dcgm_field_eid_t, dcgmMigHierarchyInfo_v2 *> gpuInstances;
 
-        // Count GPU instances and per-GPU instance Compute instances.
+            // Count GPU instances and per-GPU instance Compute instances.
             for (auto *p = hierarchy.entityList; p < hierarchy.entityList + hierarchy.count; p++)
             {
                 if ((p->entity.entityGroupId == DCGM_FE_GPU_I) && (p->parent.entityGroupId == DCGM_FE_GPU)

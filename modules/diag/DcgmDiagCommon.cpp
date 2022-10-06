@@ -61,7 +61,7 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
                                                 std::string &error)
 {
     std::stringstream errbuf;
-    // testNames might be a simple 1, 2, or 3 for short, medium, or long. Don't both in that case
+    // testNames might be a simple 1, 2, 3, or 4 for short, medium, or long. Don't both in that case
     if (testNames.size() > 1)
     {
         std::vector<std::string> testNamesVec;

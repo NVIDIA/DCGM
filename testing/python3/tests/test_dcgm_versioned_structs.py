@@ -761,7 +761,6 @@ def test_dcgm_vgpu_config_set_validate(handle):
         versionTest = 50 #random invalid version
         ret = vtDcgmVgpuConfigSet(handle, groupId, config_values, status_handle, versionTest)
 
-
 def vtDcgmVgpuConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, versionTest):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmVgpuConfigSet")
 

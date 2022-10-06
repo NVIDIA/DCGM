@@ -143,7 +143,7 @@ Notes:
 
 ## Reporting An Issue
 
-Issues in DCGM can be reported by opening an [issue](https://github.com/NVIDIA/datacenter-gpu-manager/issues) in Github. Please include in reporting an issue:
+Issues in DCGM can be reported by opening an [issue](https://github.com/NVIDIA/DCGM/issues) in Github. Please include in reporting an issue:
 
 - A description of the problem.
 - Steps to reproduce the issue.

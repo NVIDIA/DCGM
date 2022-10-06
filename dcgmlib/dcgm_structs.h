@@ -1126,7 +1126,7 @@ typedef dcgmDeviceVgpuProcessUtilInfo_v1 dcgmDeviceVgpuProcessUtilInfo_t;
  */
 typedef struct
 {
-    unsigned int version; //!< Version number (dcgmDeviceVgpuTypeIdStaticInfo_version)
+    unsigned int version; //!< Version number (dcgmDeviceVgpuTypeInfo_version)
     union
     {
         unsigned int vgpuTypeId;
@@ -1402,7 +1402,7 @@ typedef enum dcgmPolicyConditionIdx_enum
  */
 typedef enum dcgmPolicyCondition_enum
 {
-    // these are bitwise rather than sequential
+    // These are bitwise rather than sequential.
     DCGM_POLICY_COND_DBE               = 0x1, //!< Double bit errors -- boolean in dcgmPolicyConditionParams_t
     DCGM_POLICY_COND_PCI               = 0x2, //!< PCI events/errors -- boolean in dcgmPolicyConditionParams_t
     DCGM_POLICY_COND_MAX_PAGES_RETIRED = 0x4, //!< Maximum number of retired pages -- number
@@ -2178,8 +2178,8 @@ typedef enum dcgmPerGpuTestIndices_enum
  */
 typedef struct
 {
-    unsigned int gpuId;                                     //!< ID for the GPU this information pertains
-    unsigned int hwDiagnosticReturn;                        //!< Per GPU hardware diagnostic test return code
+    unsigned int gpuId;                                        //!< ID for the GPU this information pertains
+    unsigned int hwDiagnosticReturn;                           //!< Per GPU hardware diagnostic test return code
     dcgmDiagTestResult_v2 results[DCGM_PER_GPU_TEST_COUNT_V6]; //!< Array with a result for each per-gpu test
 } dcgmDiagResponsePerGpu_v2;
 
@@ -2656,12 +2656,12 @@ typedef struct
     char configFileContents[DCGM_MAX_CONFIG_FILE_LEN]; //!< Contents of nvvs config file (likely yaml)
     char throttleMask[DCGM_THROTTLE_MASK_LEN]; //!< Throttle reasons to ignore as either integer mask or csv list of
                                                //!< reasons
-    char pluginPath[DCGM_PATH_LEN];            //!< Custom path to the diagnostic plugins
-    unsigned int trainingIterations;           //!< Number of iterations for training
-    unsigned int trainingVariance;             //!< Acceptable training variance as a percentage of the value. (0-100)
-    unsigned int trainingTolerance;            //!< Acceptable training tolerance as a percentage of the value. (0-100)
-    char goldenValuesFile[DCGM_PATH_LEN];      //!< The path where the golden values should be recorded
-    unsigned int failCheckInterval;            //!< How often the fail early checks should occur when enabled.
+    char pluginPath[DCGM_PATH_LEN];       //!< Custom path to the diagnostic plugins - No longer supported as of 2.2.9
+    unsigned int trainingIterations;      //!< Number of iterations for training
+    unsigned int trainingVariance;        //!< Acceptable training variance as a percentage of the value. (0-100)
+    unsigned int trainingTolerance;       //!< Acceptable training tolerance as a percentage of the value. (0-100)
+    char goldenValuesFile[DCGM_PATH_LEN]; //!< The path where the golden values should be recorded
+    unsigned int failCheckInterval;       //!< How often the fail early checks should occur when enabled.
 } dcgmRunDiag_v7;
 
 /**

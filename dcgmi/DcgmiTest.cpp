@@ -121,7 +121,7 @@ dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
 
     DcgmFieldsInit();
 
-    // get current time
+    // get current time in seconds since 1970
     time_t timev;
     time(&timev);
 

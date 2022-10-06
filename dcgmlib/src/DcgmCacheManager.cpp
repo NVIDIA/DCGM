@@ -2562,6 +2562,17 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
     m_driverVersion   = "";
 
     std::string version(driverVersion);
+
+    try
+    {
+        m_driverMajorVersion = stoi(version.substr(0, version.find(".")));
+    }
+    catch (std::exception const &ex)
+    {
+        /* log exception but continue, m_driverMajorVersion will be treated as old driver (<510) */
+        DCGM_LOG_WARNING << "Unable to parse driver major version. Ex: " << ex.what();
+    }
+
     version.erase(std::remove(version.begin(), version.end(), '.'), version.end());
     if (version.empty())
     {
@@ -2581,8 +2592,6 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
     {
         m_driverIsR450OrNewer = false;
     }
-
-    m_driverMajorVersion = stoi(m_driverVersion) / 100;
 
     DCGM_LOG_INFO << "Parsed driver string is " << m_driverVersion << ", IsR450OrNewer: " << m_driverIsR450OrNewer;
 }
@@ -9205,7 +9214,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 value = (long long)bar1Memory.bar1Total;
             else if (fieldMeta->fieldId == DCGM_FI_DEV_BAR1_USED)
                 value = (long long)bar1Memory.bar1Used;
-            else
+            else // DCGM_FI_DEV_BAR1_FREE
                 value = (long long)bar1Memory.bar1Free;
 
             value = value / 1024 / 1024;
@@ -9217,6 +9226,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_FB_USED:
         case DCGM_FI_DEV_FB_FREE:
         case DCGM_FI_DEV_FB_RESERVED:
+        case DCGM_FI_DEV_FB_USED_PERCENT:
 
             ReadAndCacheFBMemoryInfo(gpuId, nvmlDevice, threadCtx, watchInfo, expireTime, fieldMeta->fieldId);
             break;
@@ -10481,50 +10491,13 @@ void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
     unsigned long long nvUsed     = 0;
     unsigned long long nvReserved = 0;
     unsigned int total, free, used, reserved;
+    double usedPercent;
 
     nvmlReturn_t nvmlReturn;
 
     timelib64_t now = timelib_usecSince1970();
 
-    if (m_driverMajorVersion < DRIVER_VERSION_510)
-    {
-        nvmlMemory_t fbMemory;
-
-        switch (threadCtx->entityKey.entityGroupId)
-        {
-            case DCGM_FE_GPU:
-            {
-                nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                     : nvmlDeviceGetMemoryInfo(nvmlDevice, &fbMemory);
-                break;
-            }
-            case DCGM_FE_GPU_I: // Fall through
-            case DCGM_FE_GPU_CI:
-            {
-                // Pass NVML the NVML device for the GPU instance
-                nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
-                    gpuId,
-                    static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
-                    threadCtx->entityKey.entityId);
-                nvmlReturn = (instanceDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
-                                                         : nvmlDeviceGetMemoryInfo(instanceDevice, &fbMemory);
-                break;
-            }
-            default:
-            {
-                nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
-                break;
-            }
-        }
-
-        if (NVML_SUCCESS == nvmlReturn)
-        {
-            nvTotal = fbMemory.total;
-            nvFree  = fbMemory.free;
-            nvUsed  = fbMemory.used;
-        }
-    }
-    else
+    if (m_driverMajorVersion >= DRIVER_VERSION_510)
     {
         nvmlMemory_v2_t fbMemory;
 
@@ -10565,6 +10538,44 @@ void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
             nvReserved = fbMemory.reserved;
         }
     }
+    else
+    {
+        nvmlMemory_t fbMemory;
+
+        switch (threadCtx->entityKey.entityGroupId)
+        {
+            case DCGM_FE_GPU:
+            {
+                nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                     : nvmlDeviceGetMemoryInfo(nvmlDevice, &fbMemory);
+                break;
+            }
+            case DCGM_FE_GPU_I: // Fall through
+            case DCGM_FE_GPU_CI:
+            {
+                // Pass NVML the NVML device for the GPU instance
+                nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
+                    gpuId,
+                    static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
+                    threadCtx->entityKey.entityId);
+                nvmlReturn = (instanceDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                         : nvmlDeviceGetMemoryInfo(instanceDevice, &fbMemory);
+                break;
+            }
+            default:
+            {
+                nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+                break;
+            }
+        }
+
+        if (NVML_SUCCESS == nvmlReturn)
+        {
+            nvTotal = fbMemory.total;
+            nvFree  = fbMemory.free;
+            nvUsed  = fbMemory.used;
+        }
+    }
 
     if (watchInfo)
         watchInfo->lastStatus = nvmlReturn;
@@ -10595,6 +10606,18 @@ void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
         {
             reserved = nvReserved / (1024 * 1024);
             AppendEntityInt64(threadCtx, reserved, 0, now, expireTime);
+        }
+    }
+    else if (fieldId == DCGM_FI_DEV_FB_USED_PERCENT)
+    {
+        if (nvTotal != 0 && nvReserved != nvTotal)
+        {
+            usedPercent = (double)(nvUsed) / (nvTotal - nvReserved);
+            AppendEntityDouble(threadCtx, usedPercent, 0, now, expireTime);
+        }
+        else
+        {
+            AppendEntityDouble(threadCtx, NvmlErrorToDoubleValue(NVML_ERROR_NO_DATA), 0, now, expireTime);
         }
     }
     else
@@ -12096,7 +12119,7 @@ dcgmReturn_t DcgmCacheManager::SelectGpusByTopology(std::vector<unsigned int> &g
         // We don't have enough healthy gpus to be picky, just set the bitmap
         ConvertVectorToBitmask(gpuIds, outputGpus, numGpus);
 
-        // Set an error if there aren't enough GPUs to fulfill the request
+        // Return an error if there aren't enough GPUs to fulfill the request
         if (gpuIds.size() < numGpus)
             return DCGM_ST_INSUFFICIENT_SIZE;
     }

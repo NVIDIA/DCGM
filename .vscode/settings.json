@@ -1,5 +1,5 @@
 {
-    "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
     "C_Cpp.intelliSenseEngineFallback": "Disabled",
     "C_Cpp.intelliSenseEngine": "Default",
     "git.ignoreLimitWarning": true,
@@ -11,5 +11,6 @@
     "cmake.buildDirectory": "${workspaceRoot}/_out/build/${buildType}",
     "C_Cpp.configurationWarnings": "Disabled",
     "C_Cpp.autoAddFileAssociations": false,
-    "C_Cpp.formatting": "Disabled"
+    "C_Cpp.formatting": "Disabled", 
+    "C_Cpp.default.cppStandard": "c++20"
 }

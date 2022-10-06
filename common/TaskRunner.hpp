@@ -497,7 +497,7 @@ private:
     std::shared_ptr<Semaphore> m_runnerSemaphore;         //!< Signals if there is new task in the queue.
     std::atomic_bool m_stop;                              //!< Signals that the task runner should stop its work.
 
-    std::atomic_bool m_debugLogging;                      //!< If the task runner methods need to write debug logs.
+    std::atomic_bool m_debugLogging; //!< If the task runner methods need to write debug logs.
                                      //!< Can be overridden by env variable __DCGM_TASK_RUNNER_QUEUE_SIZE
 
     std::atomic_size_t m_queueCapacity = 100; //!< How many events can be stored in the queue.

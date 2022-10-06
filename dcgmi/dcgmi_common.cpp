@@ -629,6 +629,6 @@ namespace Terminal
         }
         return TermDimensions { w.ws_row, w.ws_col };
     }
-}
+} // namespace Terminal
 
 } // namespace DcgmNs

@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from DcgmReader import DcgmReader
-from common import dcgm_client_cli_parser as cli
 import dcgm_fields
 import time
 import logging
@@ -21,12 +19,26 @@ import argparse
 import sys
 import signal
 
-try:
-    from prometheus_client import start_http_server, Gauge
-except ImportError:
-    pass
-    logging.critical("prometheus_client not installed, please run: \"pip install prometheus_client\"")
-    sys.exit(3)
+dir_path = os.path.dirname(os.path.realpath(__file__))
+parent_dir_path = os.path.abspath(os.path.join(dir_path, os.pardir))
+sys.path.insert(0, parent_dir_path)
+
+from DcgmReader import DcgmReader
+from common import dcgm_client_cli_parser as cli
+
+if 'DCGM_TESTING_FRAMEWORK' in os.environ:
+    try:
+        from prometheus_tester_api import start_http_server, Gauge
+    except:
+        logging.critical("prometheus_tester_api missing, reinstall test framework.")
+        sys.exit(3)
+else:
+    try:
+        from prometheus_client import start_http_server, Gauge
+    except ImportError:
+        pass
+        logging.critical("prometheus_client not installed, please run: \"pip install prometheus_client\"")
+        sys.exit(3)
 
 DEFAULT_FIELDS = [
     dcgm_fields.DCGM_FI_DEV_PCI_BUSID, #Needed for plugin_instance
@@ -80,29 +92,32 @@ class DcgmPrometheus(DcgmReader):
         if not self.m_existingGauge:
             self.SetupGauges()
 
-        for fieldId in self.m_publishFieldIds:
+        for _, fieldIds in self.m_publishFields.items():
+            if fieldIds is None:
+                continue;
 
-            if fieldId in self.m_dcgmIgnoreFields:
-                continue
-
-            g = self.m_existingGauge[fieldId]
-
-            for gpuId in list(fvs.keys()):
-                gpuFv = fvs[gpuId]
-                val = gpuFv[fieldId][-1]
-
-                #Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
-                if val.isBlank:
+            for fieldId in fieldIds:
+                if fieldId in self.m_dcgmIgnoreFields:
                     continue
 
-                gpuUuid = self.m_gpuIdToUUId[gpuId]
-                gpuBusId = self.m_gpuIdToBusId[gpuId]
-                gpuUniqueId = gpuUuid if g_settings['sendUuid'] else gpuBusId
+                g = self.m_existingGauge[fieldId]
+            
+                for gpuId in list(fvs.keys()):
+                    gpuFv = fvs[gpuId]
+                    val = gpuFv[fieldId][-1]
 
-                # pylint doesn't find the labels member for Gauge, but it exists. Ignore the warning
-                g.labels(gpuId, gpuUniqueId).set(val.value) # pylint: disable=no-member
+                    #Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
+                    if val.isBlank:
+                        continue
 
-                logging.debug('Sent GPU %d %s %s = %s' % (gpuId, gpuUniqueId, self.m_fieldIdToInfo[fieldId].tag, str(val.value)))
+                    gpuUuid = self.m_gpuIdToUUId[gpuId]
+                    gpuBusId = self.m_gpuIdToBusId[gpuId]
+                    gpuUniqueId = gpuUuid if g_settings['sendUuid'] else gpuBusId
+
+                    # pylint doesn't find the labels member for Gauge, but it exists. Ignore the warning
+                    g.labels(gpuId, gpuUniqueId).set(val.value) # pylint: disable=no-member
+
+                    logging.debug('Sent GPU %d %s %s = %s' % (gpuId, gpuUniqueId, self.m_fieldIdToInfo[fieldId].tag, str(val.value)))
 
     ###############################################################################
     '''
@@ -114,14 +129,18 @@ class DcgmPrometheus(DcgmReader):
     dcgm_fields.h
     '''
     def SetupGauges(self):
-        for fieldId in self.m_publishFieldIds:
-            if fieldId in self.m_dcgmIgnoreFields:
-                continue
+        for _, fieldIds in self.m_publishFields.items():
+            if fieldIds is None:
+                continue;
 
-            uniqueIdName = 'GpuUuid' if g_settings['sendUuid'] else 'GpuBusID'
+            for fieldId in fieldIds:
+                if fieldId in self.m_dcgmIgnoreFields:
+                    continue
 
-            fieldTag = self.m_fieldIdToInfo[fieldId].tag
-            self.m_existingGauge[fieldId] = Gauge("dcgm_"+fieldTag,'DCGM_PROMETHEUS',['GpuID', uniqueIdName])
+                uniqueIdName = 'GpuUuid' if g_settings['sendUuid'] else 'GpuBusID'
+
+                fieldTag = self.m_fieldIdToInfo[fieldId].tag
+                self.m_existingGauge[fieldId] = Gauge("dcgm_"+fieldTag,'DCGM_PROMETHEUS',['GpuID', uniqueIdName])
 
     ###############################################################################
     '''
@@ -139,16 +158,21 @@ class DcgmPrometheus(DcgmReader):
         logging.info('Started prometheus client')
 
         fieldTagList = ''
-        for fieldId in self.m_publishFieldIds:
-            if fieldId in self.m_dcgmIgnoreFields:
+
+        for _, fieldIds in self.m_publishFields.items():
+            if fieldIds is None:
                 continue
+                
+            for fieldId in fieldIds:
+                if fieldId in self.m_dcgmIgnoreFields:
+                    continue
 
-            if fieldTagList == '':
-                fieldTagList = self.m_fieldIdToInfo[fieldId].tag
-            else:
-                fieldTagList = fieldTagList + ", %s" % (self.m_fieldIdToInfo[fieldId].tag)
+                if fieldTagList == '':
+                    fieldTagList = self.m_fieldIdToInfo[fieldId].tag
+                else:
+                    fieldTagList = fieldTagList + ", %s" % (self.m_fieldIdToInfo[fieldId].tag)
 
-        logging.info("Publishing fields: '%s'" % (fieldTagList))
+                logging.info("Publishing fields: '%s'" % (fieldTagList))
 
     ###############################################################################
     def LogError(self, msg):

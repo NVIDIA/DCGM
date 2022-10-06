@@ -71,13 +71,6 @@ ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
     m_testParameters                   = new TestParameters(*tp);
-
-    if (Init(gpuInfo) == false)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(d);
-    }
 }
 
 /*************************************************************************/

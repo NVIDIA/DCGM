@@ -697,6 +697,11 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_FB_RESERVED 253
 
 /**
+ * Percentage used of Frame Buffer: 'Used/(Total - Reserved)'. Range 0.0-1.0
+ */
+#define DCGM_FI_DEV_FB_USED_PERCENT 254
+
+/**
  * Current ECC mode for the device
  */
 #define DCGM_FI_DEV_ECC_CURRENT 300

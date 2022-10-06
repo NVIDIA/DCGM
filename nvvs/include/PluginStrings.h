@@ -49,6 +49,7 @@
 #define PCIE_STR_TEST_P2P_OFF             "test_p2p_off"
 #define PCIE_STR_NVSWITCH_NON_FATAL_CHECK "check_non_fatal"
 #define PCIE_STR_TEST_BROKEN_P2P          "test_broken_p2p"
+#define PCIE_STR_TEST_NVLINK_STATUS       "test_nvlink_status"
 
 /* Private parameters */
 #define PCIE_STR_IS_ALLOWED "is_allowed" /* Is the busgrind plugin allowed to run? */

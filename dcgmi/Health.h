@@ -24,6 +24,7 @@
 #define HEALTH_H_
 
 #include "Command.h"
+#include "DcgmiOutput.h"
 
 class Health : public Command
 {
@@ -36,6 +37,77 @@ public:
                             double updateInterval,
                             double maxKeepAge);
     dcgmReturn_t CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, bool json);
+
+
+    /****************************************************************************/
+    /*
+     * AppendSystemIncidents
+     * Looks at the response struct and appends the messages from incidents that
+     * occurred on the same system to facilitate display later
+     *
+     * @param response      (in)  - the health response struct
+     * @param startingIndex (in)  - the first index to check for a matching incident
+     * @param entityId      (in)  - the ID of the entity we are matching
+     * @param entityGroupId (in)  - the entity type we are matching
+     * @param system        (in)  - the system for the incident we are matching
+     * @param buf           (out) - the buffer we're appending the error messages to
+     * @param systemHealth  (out) - the overall system health from the incidents
+     *
+     * @return the number of matching incidents
+     */
+    unsigned int AppendSystemIncidents(const dcgmHealthResponse_t &response,
+                                       unsigned int startingIndex,
+                                       dcgm_field_eid_t entityId,
+                                       dcgm_field_entity_group_t entityGroupId,
+                                       dcgmHealthSystems_t system,
+                                       std::stringstream &buf,
+                                       dcgmHealthWatchResults_t &systemHealth);
+
+    /****************************************************************************/
+    /*
+     * AddErrorMessage
+     *
+     * Adds the error message piece by piece if it's longer than what fits on a line.
+     *
+     * @param outErrors (out) - the output boxer object that displays the message
+     * @param errorMsg  (in)  - the error message
+     * @param systemStr (in)  - the string representation of the string having an error
+     */
+    void AddErrorMessage(DcgmiOutputBoxer &outErrors, const std::string &errorMsg, const std::string &systemStr);
+
+    /****************************************************************************/
+    /*
+     * HandleOneEntity
+     *
+     * Reads and outputs all of the incidents related to a single entity and returns the number of incidents
+     * processed
+     *
+     * @param response      (in)  - the health response struct received from the hostengine
+     * @param startingIndex (in)  - the first incident index to inspect
+     * @param entityId      (in)  - the ID of the entity we're processing
+     * @param entityGroupId (in)  - the group ID of the entity we're processing
+     * @param out           (out) - the dcgmi output manager we're adding to
+     *
+     * @return the string to be written to stdout from dcgmi
+     */
+    unsigned int HandleOneEntity(const dcgmHealthResponse_t &response,
+                                 unsigned int startingIndex,
+                                 dcgm_field_eid_t entityId,
+                                 dcgm_field_entity_group_t entityGroupId,
+                                 DcgmiOutput &out);
+
+    /****************************************************************************/
+    /*
+     * GenerateOutputFromResponse
+     *
+     * Returns the string output based on the health response received
+     *
+     * @param response (in)  - the health response struct received from the hostengine
+     * @param out      (out) - the dcgmi output manager we're adding to
+     *
+     * @return the string to be written to stdout from dcgmi
+     */
+    std::string GenerateOutputFromResponse(const dcgmHealthResponse_t &response, DcgmiOutput &out);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

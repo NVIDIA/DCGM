@@ -189,7 +189,7 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
         {
             return;
         }
-        // Version 6
+
         // Version 6
         m_response.v6ptr->perGpuResponses[gpuIndex].results[testIndex].status = result;
         if (testIndex == DCGM_DIAGNOSTIC_INDEX)

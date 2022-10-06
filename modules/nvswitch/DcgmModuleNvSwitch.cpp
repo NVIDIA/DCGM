@@ -267,7 +267,7 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
         if (retSt == DCGM_ST_OK)
         {
             //
-            // Reset the RunOnce last run time so it will be called once the TaskRunner handles all events
+            // Reset the RunOnce last run time, so it will be called once the TaskRunner handles all events
             //
             [[maybe_unused]] auto _ = Enqueue(
                 DcgmNs::make_task("Call RunOnce after all events are processed", [this]() { TryRunOnce(true); }));

@@ -181,7 +181,7 @@ std::string DcgmRecorder::Shutdown()
 
     if (m_fieldGroupId != 0)
     {
-        // Ignore errors
+        // coverity[check_return]
         dcgmFieldGroupDestroy(m_dcgmHandle.GetHandle(), m_fieldGroupId);
         m_fieldGroupId = 0;
     }

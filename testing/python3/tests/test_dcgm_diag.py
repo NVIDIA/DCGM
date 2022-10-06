@@ -529,7 +529,7 @@ def test_dcgm_diag_stop_on_signal_standalone(handle, gpuIds):
     helper_check_diag_stop_on_interrupt_signals(handle, gpuIds[0])
 
 def helper_verify_log_file_creation(handle, gpuIds):
-    dd = helper_verify_diag_passing(handle, gpuIds, testNames="targeted stress", testIndex=dcgm_structs.DCGM_TARGETED_STRESS_INDEX, params="targeted stress.test_duration=10", useFakeGpus=True)
+    dd = helper_verify_diag_passing(handle, gpuIds, testNames="sm stress", testIndex=dcgm_structs.DCGM_SM_STRESS_INDEX, params="sm stress.test_duration=10", useFakeGpus=True)
     logname = '/tmp/tmp_test_debug_log'
     dd.SetDebugLogFile(logname)
     dd.SetDebugLevel(5)
@@ -540,13 +540,13 @@ def helper_verify_log_file_creation(handle, gpuIds):
         passedCount = 0
         errors = ""
         for gpuId in gpuIds:
-            resultType = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_TARGETED_STRESS_INDEX].result
+            resultType = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_SM_STRESS_INDEX].result
             if resultType not in [dcgm_structs.DCGM_DIAG_RESULT_SKIP, dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN]:
                 skippedAll = False
                 if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
                     passedCount = passedCount + 1
                 else:
-                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_TARGETED_STRESS_INDEX].error.msg
+                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_SM_STRESS_INDEX].error.msg
                     if len(warning):
                         errors = "%s, GPU %d failed: %s" % (errors, gpuId, warning)
 

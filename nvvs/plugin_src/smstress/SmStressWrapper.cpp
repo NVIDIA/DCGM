@@ -72,6 +72,13 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     SmPerfPlugin *spp = new SmPerfPlugin(handle, gpuInfo);
     *userData         = spp;
 
+    if (!spp->Init(gpuInfo))
+    {
+        DCGM_LOG_ERROR << "Failed to initialize devices for sm stress plugin";
+
+        return DCGM_ST_PLUGIN_EXCEPTION;
+    }
+
     return DCGM_ST_OK;
 }
 

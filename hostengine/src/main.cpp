@@ -185,11 +185,10 @@ bool termDaemonIfRunning(char const *pidfile)
     return false;
 }
 
-/* Update PID file /var/run/ accordingly */
-void update_daemon_pid_file(char const *pidfile, pid_t parentPid)
+/* Delete PID file /var/run/ accordingly */
+void delete_pidfile_if_not_running_or_exit(char const *pidfile)
 {
     pid_t pid;
-    mode_t default_umask;
 
     if (0 == read_from_pidfile(pidfile, &pid))
     {
@@ -200,9 +199,18 @@ void update_daemon_pid_file(char const *pidfile, pid_t parentPid)
         }
     }
 
+    unlink(pidfile);
+}
+
+/* Create PID file /var/run/ accordingly */
+void create_daemon_pid_file(char const *pidfile, pid_t parentPid)
+{
+    mode_t default_umask;
+
     /* write the pid of this process to the pidfile */
     default_umask = umask(0112);
-    unlink(pidfile);
+    unlink(pidfile); // Just in case
+
     if (0 != write_to_pidfile(pidfile, getpid()))
     {
         printf("Host engine failed to write to pid file %s\n", pidfile);
@@ -434,6 +442,8 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
+        delete_pidfile_if_not_running_or_exit(cmdLine.GetPidFilePath().c_str());
+
         // Create Daemon
         heDaemonize();
 
@@ -441,8 +451,6 @@ int main(int argc, char **argv)
             auto version = DcgmNs::DcgmBuildInfo().GetVersion();
             syslog(LOG_NOTICE, "nv-hostengine version %.*s daemon started", (int)version.size(), version.data());
         }
-
-        update_daemon_pid_file(cmdLine.GetPidFilePath().c_str(), parentPid);
     }
 
     /* Initialize DCGM Host Engine */
@@ -528,6 +536,7 @@ int main(int argc, char **argv)
 
     if (cmdLine.ShouldDaemonize())
     {
+        create_daemon_pid_file(cmdLine.GetPidFilePath().c_str(), parentPid);
         daemonCloseConsoleOutput(parentPid);
     }
 

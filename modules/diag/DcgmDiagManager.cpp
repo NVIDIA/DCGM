@@ -616,7 +616,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
         }
 
         auto serviceAccount = GetServiceAccount(m_coreProxy);
-        // Run command
+
         if (serviceAccount.has_value())
         {
             // traverse all parts of the filename path and check if the serviceAccount has read and execute permissions

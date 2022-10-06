@@ -621,25 +621,37 @@ dcgmReturn_t DcgmPolicyManager::WatchFields(dcgm_connection_id_t connectionId)
                                            DCGM_FI_DEV_POWER_USAGE,
                                            DCGM_FI_DEV_PCIE_REPLAY_COUNTER };
     int i;
-    unsigned int gpuId;
     dcgmReturn_t dcgmReturn;
     DcgmWatcher watcher(DcgmWatcherTypePolicyManager, connectionId);
-    int deviceCount = mpCoreProxy.GetGpuCount(0);
 
-    dcgmMutexReturn_t mutexSt = dcgm_mutex_lock_me(m_mutex);
-
-    /* Did we already watch fields for this connection? */
-    if (m_haveWatchedFields.find(connectionId) != m_haveWatchedFields.end())
+    std::vector<unsigned int> gpuIds;
+    int activeOnly = 1; /* Only request active GPUs */
+    dcgmReturn     = mpCoreProxy.GetGpuIds(activeOnly, gpuIds);
+    if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_DEBUG("%u", "Policy fields already watched for connectionId %u", connectionId);
-        if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-            dcgm_mutex_unlock(m_mutex);
-        return DCGM_ST_OK;
+        DCGM_LOG_ERROR << "Got " << dcgmReturn << " from mpCoreProxy.GetGpuIds()";
+        return dcgmReturn;
     }
 
-    PRINT_DEBUG("%u", "Watching Policy fields for connectionId %u", connectionId);
+    { /* Scoped lock */
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
-    for (gpuId = 0; gpuId < (unsigned int)deviceCount; gpuId++)
+        /* Did we already watch fields for this connection? */
+        if (m_haveWatchedFields.find(connectionId) != m_haveWatchedFields.end())
+        {
+            DCGM_LOG_DEBUG << "Policy fields already watched for connectionId " << connectionId;
+            return DCGM_ST_OK;
+        }
+
+        m_haveWatchedFields[connectionId] = 1;
+    } /* End of scoped lock */
+
+    /* Watch fields and do the update outside of the lock because it will deadlock with the callbacks
+       we get from the cache manager */
+
+    DCGM_LOG_DEBUG << "Watching Policy fields for connectionId " << connectionId;
+
+    for (auto &gpuId : gpuIds)
     {
         for (i = 0; i < numFieldIds; i++)
         {
@@ -647,23 +659,14 @@ dcgmReturn_t DcgmPolicyManager::WatchFields(dcgm_connection_id_t connectionId)
             dcgmReturn = mpCoreProxy.AddFieldWatch(DCGM_FE_GPU, gpuId, fieldIds[i], 10000000, 3600.0, 0, watcher, true);
             if (dcgmReturn != DCGM_ST_OK)
             {
-                if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-                    dcgm_mutex_unlock(m_mutex);
-                PRINT_ERROR("%d", "AddFieldWatch returned %d", (int)dcgmReturn);
+                DCGM_LOG_ERROR << "AddFieldWatch returned " << dcgmReturn;
                 return dcgmReturn;
             }
         }
     }
 
-    PRINT_DEBUG("%d", "Watched %d policy manager fields. Waiting for field update cycle", numFieldIds);
+    DCGM_LOG_DEBUG << "Watched " << numFieldIds << " policy manager fields. Waiting for field update cycle";
 
-    m_haveWatchedFields[connectionId] = 1;
-
-    if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-        dcgm_mutex_unlock(m_mutex);
-
-    /* Do the update outside of the lock because it will deadlock with the callbacks
-       we get from the cache manager */
     mpCoreProxy.UpdateAllFields(1);
 
     return DCGM_ST_OK;

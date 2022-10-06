@@ -120,12 +120,12 @@ public:
     std::vector<char> *GetMsgBytesPtr();
 
     /**
-     * This message is used to get the length of the message
+     * This method is used to get the length of the message
      */
     std::size_t GetLength();
 
     /**
-     * This message is used to get the msgType
+     * This method is used to get the msgType
      */
     unsigned int GetMsgType()
     {
@@ -133,15 +133,20 @@ public:
     };
 
     /**
-     * This message is used to set request id corresponding to the message
+     * This method is used to set request id corresponding to the message
      * @return
      */
     void SetRequestId(dcgm_request_id_t requestId);
 
     /**
-     * This message is used to get request id corresponding to the message
+     * This method is used to get request id corresponding to the message
      */
     unsigned int GetRequestId();
+
+    /**
+     * This method is used to get whether the message is an asynchronous notification or not. True=Yes. False=No.
+     */
+    bool IsAsyncNotification();
 
 private:
     dcgm_message_header_t m_messageHdr {}; /*!< Sender populates the message to be sent */

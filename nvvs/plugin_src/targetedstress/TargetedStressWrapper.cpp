@@ -76,6 +76,13 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     ConstantPerf *cp = new ConstantPerf(handle, gpuInfo);
     *userData        = cp;
 
+    if (!cp->Init(gpuInfo))
+    {
+        DCGM_LOG_ERROR << "Failed to initialize devices for targeted stress plugin";
+
+        return DCGM_ST_PLUGIN_EXCEPTION;
+    }
+
     return DCGM_ST_OK;
 }
 

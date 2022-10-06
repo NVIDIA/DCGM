@@ -141,9 +141,6 @@ public:
                                 bool testFinished = true);
 
     /*************************************************************************/
-
-private:
-    /*************************************************************************/
     /*
      * Initialize this plugin
      *
@@ -152,6 +149,7 @@ private:
      */
     bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
 
+private:
     /*************************************************************************/
     /*
      * Initialize the parts of cuda and cublas needed for this plugin to run

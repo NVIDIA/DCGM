@@ -65,7 +65,7 @@ typedef enum
     DcgmCoreReqIDCMForEachWatchedGlobalField   = 34, // DcgmCacheManager::ForEachWatchedGlobalField()
     DcgmCoreReqIDCMForEachWatchedGpuField      = 35, // DcgmCacheManager::ForEachWatchedGpuField()
     DcgmCoreReqIdLoggingGetSeverity            = 36, // DcgmLogging::getSeverity()
-    DcgmCoreReqIdSendModuleCommand             = 37, // DcgmHostEnginerHandler::ProcessModuleCommand()
+    DcgmCoreReqIdSendModuleCommand             = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
     DcgmCoreReqIdSendRawMessage                = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
     DcgmCoreReqIdNotifyRequestOfCompletion     = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
     DcgmCoreReqIdFGMPopulateFieldGroups        = 40, // FieldGroupManager::PopulateFieldGroups()

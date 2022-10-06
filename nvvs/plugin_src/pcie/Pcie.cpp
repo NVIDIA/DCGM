@@ -42,6 +42,7 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddString(PCIE_STR_TEST_P2P_ON, "True");
     tp->AddString(PCIE_STR_TEST_P2P_OFF, "True");
     tp->AddString(PCIE_STR_TEST_BROKEN_P2P, "True");
+    tp->AddString(PCIE_STR_TEST_NVLINK_STATUS, "True");
     tp->AddString(PS_LOGFILE, "stats_pcie.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
 

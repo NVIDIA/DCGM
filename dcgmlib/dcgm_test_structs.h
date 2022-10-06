@@ -71,10 +71,10 @@ typedef struct
     dcgmDeviceVgpuTypeInfo_v1
         supportedVgpuTypeInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Info related to vGPUs supported on the device
     dcgmDeviceVgpuUtilInfo_v1 vgpuUtilInfo[DCGM_MAX_VGPU_TYPES_PER_PGPU]; //!< Utilization specific to vGPU instance
-    unsigned int gpuUtil;                                                //!< GPU utilization
-    unsigned int memCopyUtil;                                            //!< Memory utilization
-    unsigned int encUtil;                                                //!< Encoder utilization
-    unsigned int decUtil;                                                //!< Decoder utilization
+    unsigned int gpuUtil;                                                 //!< GPU utilization
+    unsigned int memCopyUtil;                                             //!< Memory utilization
+    unsigned int encUtil;                                                 //!< Encoder utilization
+    unsigned int decUtil;                                                 //!< Decoder utilization
 } dcgmVgpuDeviceAttributes_v6;
 
 /**
