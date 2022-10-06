@@ -2442,3 +2442,125 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows ~415000. Multiply by .75 to get ~311250
       minimum_bandwidth: 311250
+  # Nvidia P1010
+  - name: Nvidia P1010
+    id: 2331
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 350.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 15375
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~20500, multiply by .75 to get ~15375
+      target_stress: 15375.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1639000. Multiply by .75 to get ~1230000
+      minimum_bandwidth: 1230000
+  - name: A800-20f5 80GB
+    id: 20f5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 299.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~17800. Multiply by .75 to get 13350
+      target_stress: 13350.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1295000. Multiply by .75 to get ~971000
+      minimum_bandwidth: 971000.0
+    pulse_test:
+      is_allowed: true
+      use_curand: true
+      test_duration: 500.0
+      duty0: 0.5
+      freq0: 50000.0
+      kernel: hmma
+      workload: SYNCED_WAVEFORM
+      freq0: 50000
+      duty0: 0.5
+      matrix_size_mode: max_alloc
+  - name: A100-20f6 40GB
+    id: 20f6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 249.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~16500. Multiply by .75 to get 12375
+      target_stress: 12375.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1295000. Multiply by .75 to get ~971000
+      minimum_bandwidth: 971000.0
+    pulse_test:
+      is_allowed: true
+      use_curand: true
+      test_duration: 500.0
+      duty0: 0.5
+      freq0: 50000.0
+      kernel: hmma
+      workload: SYNCED_WAVEFORM
+      freq0: 50000
+      duty0: 0.5
+      matrix_size_mode: max_alloc

@@ -269,7 +269,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
 {
     dcgmi_entity_pair_t entityKey;
 
-    // Note: this is a pointer to a map and we cast it to map below.
+    // Note: this is a pointer to a map, and we cast it to map below.
     auto &entityStats = *(DeviceMonitor::EntityStats *)userdata;
 
     entityKey.entityGroupId = entityGroupId;
@@ -452,7 +452,7 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
             {
                 sortedEntities.push_back({ parent.entityGroupId, parent.entityId });
             }
-    // set the watch on field group id for Group of gpus.
+
             sortedEntities.push_back({ entity.entityGroupId, entity.entityId });
         }
     }
@@ -490,7 +490,7 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
 
     dcgmUpdateAllFields(m_dcgmHandle, 1);
 
-    // Set the loop to running forever and set decrement check to false as there will
+    // Set the loop to running forever and set decrement check to false as there will be
     // no decrement in m_count when no m_count value is mentioned. Loop runs forever in default
     // condition.
     if (m_count == DEFAULT_COUNT)

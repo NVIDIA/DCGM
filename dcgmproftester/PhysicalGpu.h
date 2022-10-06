@@ -141,9 +141,9 @@ public:
     bool WorkerFinished(void) const; // Did last operation make a worker finish?
     bool WorkerReported(void) const; // Did last operation make a worker report?
 
-    bool AllStarted(void) const;  // Did all workers start (or fail to)?
-    bool AllFinished(void) const; // Did all workers finish?
-    bool AllReported(void) const; // Did all workers report?
+    bool AllStarted(void) const;             // Did all workers start (or fail to)?
+    bool AllFinished(void) const;            // Did all workers finish?
+    bool AllReported(void) const;            // Did all workers report?
     bool AnyWorkerRequestFailed(void) const; // Did any workers fail to start?
 
     bool IsValidated(void) const; // Did all workers pass validation?

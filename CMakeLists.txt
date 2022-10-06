@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 2.4.5)
+project(dcgm VERSION 2.4.7)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 

@@ -15,6 +15,9 @@ declare_nvvs_plugin(cudaCommon .)
 
 find_package(fmt REQUIRED)
 
+add_library(cuda_common_interface INTERFACE)
+target_include_directories(cuda_common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
 macro(cuda_common_plugin CUDA_VER)
     add_library(pluginCudaCommon_${CUDA_VER} STATIC)
     nvvs_plugin_srcs(pluginCudaCommon_${CUDA_VER})

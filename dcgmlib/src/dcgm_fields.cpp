@@ -1122,6 +1122,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FB_USED_PERCENT,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "fb_USDP",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FBUSP",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VIRTUAL_MODE,
                                              DCGM_FT_INT64,
                                              8,

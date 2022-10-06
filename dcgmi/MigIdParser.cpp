@@ -57,7 +57,7 @@ size_t std::hash<DcgmNs::NotInitialized>::operator()(DcgmNs::NotInitialized cons
 size_t std::hash<DcgmNs::Wildcarded>::operator()(DcgmNs::Wildcarded const &) const
 {
     return 0; // It does not matter for wildcards
-} // namespace std
+}
 
 namespace DcgmNs
 {

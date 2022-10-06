@@ -85,8 +85,8 @@ ELSEIF(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_CONFIG_FILE_NAME
         "${DCGM_CONFIG_PKG}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}-${CPACK_RPM_PACKAGE_ARCHITECTURE}.rpm")
 
-    set(CPACK_RPM_DCGM_PACKAGE_REQUIRES "glibc >= 2.17, libgomp")
-    set(CPACK_RPM_TESTS_PACKAGE_REQUIRES "glibc >= 2.17, libgomp")
+    set(CPACK_RPM_DCGM_PACKAGE_REQUIRES "glibc >= 2.17, libgomp.so.1()(64bit)")
+    set(CPACK_RPM_TESTS_PACKAGE_REQUIRES "glibc >= 2.17, libgomp.so.1()(64bit)")
 
     set(CPACK_RPM_CONFIG_PACKAGE_DESCRIPTION "Auxiliary definitions for NVIDIA® Datacenter GPU Management Tools")
 

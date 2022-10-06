@@ -41,6 +41,7 @@ public:
     bool test_p2p_on;
     bool test_p2p_off;
     bool test_broken_p2p;
+    bool test_nvlink_status;
 
     BusGrind *busGrind; /* Plugin handle for setting status */
 
@@ -57,6 +58,7 @@ public:
         , test_p2p_on(false)
         , test_p2p_off(false)
         , test_broken_p2p(true)
+        , test_nvlink_status(true)
         , busGrind(nullptr)
         , gpu()
         , m_dcgmRecorder(nullptr)

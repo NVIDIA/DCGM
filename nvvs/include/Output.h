@@ -77,4 +77,4 @@ protected:
     void WriteInfo(const std::vector<dcgmDiagEvent_t> &info);
 };
 
-#endif // _NVVS_NVVS_Output_H
+#endif // NVVS_NVVS_Output_H

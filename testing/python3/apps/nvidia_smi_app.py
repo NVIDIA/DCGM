@@ -60,7 +60,7 @@ class NvidiaSmiApp(app_runner.AppRunner):
             self.env["__NVML_DBG_FILE"] = self.trace_fname
             self.env["__NVML_DBG_LVL"] = test_utils.loggingLevel
         else:
-            self.trace_fname = None
+            self.trace_fname = ""
 
     def append_switch_filename(self, filename=None):
         """

@@ -813,6 +813,9 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
                          dcgm_fields.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
                          dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES]
     exceptionFieldIds.extend(g_profilingFieldIds)
+
+    baseFieldIds = [dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
+                    dcgm_fields.DCGM_FI_DEV_FB_FREE]
     
     gpuId = gpuIds[0]
     fieldIdVars = {}
@@ -870,6 +873,11 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         elif fieldValue.status != dcgm_structs.DCGM_ST_OK:
             logger.error("No value for field %s (id %d). status: %d" % (fieldIdName, fieldId, fieldValue.status))
             numErrors += 1
+
+        # check certain baseline fields for actual values
+        if fieldId in baseFieldIds:
+            fv = dcgm_field_helpers.DcgmFieldValue(fieldValue)
+            assert fieldValue.value.i64 > 0 and not fv.isBlank, "base field %d is 0 or blank" % fieldId
 
     assert numErrors == 0, "Got %d errors" % numErrors
 

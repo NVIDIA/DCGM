@@ -298,6 +298,7 @@ def test_dcgmi_config(handle, gpuIds):
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
+
     # Getting GPU power limits
     for gpuId in gpuIds:
         gpuAttrib = dcgmSystem.discovery.GetGpuAttributes(gpuId)

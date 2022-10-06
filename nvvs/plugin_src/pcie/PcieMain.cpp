@@ -1555,11 +1555,12 @@ int outputP2PLatencyMatrix(BusGrindGlobals *bgGlobals, bool p2p)
 int bg_cache_and_check_parameters(BusGrindGlobals *bgGlobals)
 {
     /* Set defaults before we parse parameters */
-    bgGlobals->test_pinned     = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_PINNED);
-    bgGlobals->test_unpinned   = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_UNPINNED);
-    bgGlobals->test_p2p_on     = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_ON);
-    bgGlobals->test_p2p_off    = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_OFF);
-    bgGlobals->test_broken_p2p = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_BROKEN_P2P);
+    bgGlobals->test_pinned        = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_PINNED);
+    bgGlobals->test_unpinned      = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_UNPINNED);
+    bgGlobals->test_p2p_on        = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_ON);
+    bgGlobals->test_p2p_off       = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_P2P_OFF);
+    bgGlobals->test_broken_p2p    = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_BROKEN_P2P);
+    bgGlobals->test_nvlink_status = bgGlobals->testParameters->GetBoolFromString(PCIE_STR_TEST_NVLINK_STATUS);
     return 0;
 }
 
@@ -1977,7 +1978,10 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
     }
     bgGlobals->m_dcgmRecorder->AddWatches(fieldIds, gpuVec, false, fieldGroupName, groupName, 300.0);
 
-    pcie_check_nvlink_status(bgGlobals, gpuInfo, handle);
+    if (bgGlobals->test_nvlink_status)
+    {
+        pcie_check_nvlink_status(bgGlobals, gpuInfo, handle);
+    }
 
     bg_record_cliques(bgGlobals);
 

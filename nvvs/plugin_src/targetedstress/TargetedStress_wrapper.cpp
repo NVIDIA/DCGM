@@ -62,13 +62,6 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_stress.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
-
-    if (Init(gpuInfo) == false)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Failed to initialize the plugin.");
-        AddError(d);
-    }
 }
 
 ConstantPerf::~ConstantPerf()

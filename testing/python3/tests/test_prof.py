@@ -618,12 +618,21 @@ def test_dcgmproftester_pcie_rx(handle, gpuIds):
 def test_dcgmproftester_pcie_tx(handle, gpuIds):
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES)
 
+def dont_test_slower_gpus(handle, gpuIds):
+    # These GPU ids don't need to be tested
+    lower_bandwidth_ids = [ 0x20f5, 0x20f6 ]
+    for gpuId in gpuIds:
+        deviceId = test_utils.get_device_id(handle, gpuId)
+        if deviceId in lower_bandwidth_ids:
+            test_utils.skip_test("Skipping the nvlink bandwidth tests for device id: '%s'" % deviceId)
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmproftester_nvlink_rx(handle, gpuIds):
+    dont_test_slower_gpus(handle, gpuIds)
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES)
 
 @test_utils.run_with_embedded_host_engine()
@@ -632,6 +641,7 @@ def test_dcgmproftester_nvlink_rx(handle, gpuIds):
 @test_utils.run_only_as_root()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmproftester_nvlink_tx(handle, gpuIds):
+    dont_test_slower_gpus(handle, gpuIds)
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES)
 
 @test_utils.run_with_embedded_host_engine()

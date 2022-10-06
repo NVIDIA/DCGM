@@ -27,6 +27,7 @@ if (BUILD_TESTING)
         PRIVATE
         DcgmiTestsMain.cpp
         DiagTests.cpp
+        HealthTests.cpp
         MigTests.cpp
         OutputTests.cpp
         MigTestsHelper.cpp

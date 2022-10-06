@@ -141,15 +141,24 @@ void DcgmClientHandler::ProcessMessage(dcgm_connection_id_t connectionId, std::u
 
     DcgmLockGuard dlg { &m_mutex };
 
-    auto itB = m_blockingReqs.find(msgHdr->requestId);
-    if (itB != m_blockingReqs.end())
+    /* Only mark requests as complete if this is a response to a request (not an async notification) */
+    if (dcgmMessage->IsAsyncNotification())
     {
-        DCGM_LOG_DEBUG << "Found blocking request for requestId " << msgHdr->requestId;
-        DcgmClientBlockingResponse_t response;
-        response.dcgmReturn = DCGM_ST_OK;
-        response.response   = std::move(dcgmMessage);
-        itB->second.set_value(std::move(response));
-        return;
+        DCGM_LOG_DEBUG << "Not marking blocking request as done for async notification msgType " << msgHdr->msgType
+                       << " requestId " << msgHdr->requestId;
+    }
+    else
+    {
+        auto itB = m_blockingReqs.find(msgHdr->requestId);
+        if (itB != m_blockingReqs.end())
+        {
+            DCGM_LOG_DEBUG << "Found blocking request for requestId " << msgHdr->requestId;
+            DcgmClientBlockingResponse_t response;
+            response.dcgmReturn = DCGM_ST_OK;
+            response.response   = std::move(dcgmMessage);
+            itB->second.set_value(std::move(response));
+            return;
+        }
     }
 
     auto itP = m_persistentReqs.find(msgHdr->requestId);

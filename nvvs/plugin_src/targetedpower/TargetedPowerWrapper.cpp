@@ -85,6 +85,13 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     ConstantPower *cp = new ConstantPower(handle, gpuInfo);
     *userData         = cp;
 
+    if (!cp->Init(gpuInfo))
+    {
+        DCGM_LOG_ERROR << "Failed to initialize devices for targeted power plugin";
+
+        return DCGM_ST_PLUGIN_EXCEPTION;
+    }
+
     return DCGM_ST_OK;
 }
 

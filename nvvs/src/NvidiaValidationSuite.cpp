@@ -1072,7 +1072,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
 
                 if (pv.IsValidTestName(testName) == false)
                 {
-                    buf << "test '" << testName << "' does not exist.";
+                    buf << "test '" << testName << "' does not match any loaded tests. Check logs for plugin failures.";
                     throw std::runtime_error(buf.str());
                 }
 

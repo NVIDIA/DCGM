@@ -180,6 +180,171 @@ dcgmReturn_t Health::SetWatches(dcgmHandle_t mDcgmHandle,
 }
 
 /*****************************************************************************/
+unsigned int Health::AppendSystemIncidents(const dcgmHealthResponse_t &response,
+                                           unsigned int startingIndex,
+                                           dcgm_field_eid_t entityId,
+                                           dcgm_field_entity_group_t entityGroupId,
+                                           dcgmHealthSystems_t system,
+                                           std::stringstream &buf,
+                                           dcgmHealthWatchResults_t &systemHealth)
+{
+    unsigned int appendedCount = 0;
+
+    for (unsigned int index = startingIndex; index < response.incidentCount; index++)
+    {
+        if (response.incidents[index].entityInfo.entityId != entityId
+            || response.incidents[index].entityInfo.entityGroupId != entityGroupId
+            || response.incidents[index].system != system)
+            break;
+
+        appendedCount++;
+        buf << ", " << response.incidents[index].error.msg;
+
+        if (response.incidents[index].health > systemHealth)
+        {
+            systemHealth = response.incidents[index].health;
+        }
+    }
+
+    return appendedCount;
+}
+
+/*****************************************************************************/
+void Health::AddErrorMessage(DcgmiOutputBoxer &outErrors, const std::string &inErrorMsg, const std::string &systemStr)
+{
+    std::string errorMsg(inErrorMsg);
+    std::replace(errorMsg.begin(), errorMsg.end(), '\n', ' ');
+
+    unsigned int p     = 0;
+    unsigned int start = 0;
+
+    // Add the error message to the stencil; if it is too large to fit into stencil,
+    // break it into parts to display.
+    if (errorMsg.length() > MAX_SIZE_OF_HEALTH_INFO)
+    {
+        while (start < errorMsg.length())
+        {
+            p += MAX_SIZE_OF_HEALTH_INFO;
+            if (p >= errorMsg.length())
+            {
+                p = errorMsg.length() - 1;
+            }
+            else if (p == errorMsg.length() - 1)
+            {
+                // NO-OP. Don't change p if we're at the end of the buffer
+            }
+            else
+            {
+                // Put pointer to last available word
+                while (errorMsg.at(p) != ' ')
+                {
+                    if (errorMsg.at(p + 1) == ' ' || errorMsg.at(p + 1) == '.' || errorMsg.at(p + 1) == ','
+                        || errorMsg.at(p + 1) == '/')
+                        break; // check if landed on end of a word
+                    p--;
+                }
+
+                // Don't print whitespace at the end of this section
+                while (errorMsg.at(p) == ' ')
+                {
+                    p--;
+                }
+            }
+
+            // Don't print whitespace at the beginning of this section
+            for (; errorMsg.at(start) == ' ' && start < errorMsg.length(); start++)
+            {}
+
+            // Don't print a new line if all that was left was whitespace
+            if (start >= errorMsg.length())
+            {
+                break;
+            }
+
+            outErrors[systemStr].addOverflow(errorMsg.substr(start, p - start + 1));
+
+            start = p + 2; // 2 characters till the start of the next word
+        }
+    }
+    else
+    {
+        outErrors[systemStr].addOverflow(errorMsg);
+    }
+}
+
+/*****************************************************************************/
+unsigned int Health::HandleOneEntity(const dcgmHealthResponse_t &response,
+                                     unsigned int startingIndex,
+                                     dcgm_field_eid_t entityId,
+                                     dcgm_field_entity_group_t entityGroupId,
+                                     DcgmiOutput &out)
+{
+    dcgmHealthWatchResults_t entityHealth = response.incidents[startingIndex].health;
+    unsigned int entityCount              = 0;
+
+    DcgmiOutputBoxer &outGroup  = out[std::string(DcgmFieldsGetEntityGroupString(entityGroupId))];
+    DcgmiOutputBoxer &outEntity = outGroup[to_string(entityId)];
+    DcgmiOutputBoxer &outErrors = outEntity["Errors"];
+
+    for (unsigned int index = startingIndex; index < response.incidentCount; index++)
+    {
+        if (response.incidents[index].entityInfo.entityId != entityId
+            || response.incidents[index].entityInfo.entityGroupId != entityGroupId)
+        {
+            break;
+        }
+
+        dcgmHealthSystems_t system            = response.incidents[index].system;
+        dcgmHealthWatchResults_t systemHealth = response.incidents[index].health;
+        std::string systemStr                 = Health::HelperSystemToString(system);
+        std::stringstream ss;
+
+        // record the initial error
+        ss << response.incidents[index].error.msg;
+
+        unsigned int matches
+            = AppendSystemIncidents(response, index + 1, entityId, entityGroupId, system, ss, systemHealth);
+
+        // Skip past all of the incidents for that system
+        index += matches;
+        entityCount += 1 + matches;
+
+        if (systemHealth > entityHealth)
+        {
+            entityHealth = systemHealth;
+        }
+
+        std::string health   = Health::HelperHealthToString(systemHealth);
+        outErrors[systemStr] = health;
+        AddErrorMessage(outErrors, ss.str(), systemStr);
+    }
+
+    outEntity = HelperHealthToString(entityHealth);
+
+    return entityCount;
+}
+
+/*****************************************************************************/
+std::string Health::GenerateOutputFromResponse(const dcgmHealthResponse_t &response, DcgmiOutput &out)
+{
+    out.addHeader("Health Monitor Report");
+
+    out[OVERALL_HEALTH_TAG] = HelperHealthToString(response.overallHealth);
+
+    unsigned int index = 0;
+    while (index < response.incidentCount)
+    {
+        dcgm_field_eid_t entityId               = response.incidents[index].entityInfo.entityId;
+        dcgm_field_entity_group_t entityGroupId = response.incidents[index].entityInfo.entityGroupId;
+
+        unsigned int entityIncidents = HandleOneEntity(response, index, entityId, entityGroupId, out);
+        index += entityIncidents;
+    }
+
+    return out.str();
+}
+
+/*****************************************************************************/
 dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, bool json)
 {
     dcgmReturn_t result = DCGM_ST_OK;
@@ -219,101 +384,7 @@ dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    out.addHeader("Health Monitor Report");
-
-    out[OVERALL_HEALTH_TAG] = HelperHealthToString(response.overallHealth);
-
-
-    for (unsigned int index = 0; index < response.incidentCount; index++)
-    {
-        dcgm_field_eid_t entityId               = response.incidents[index].entityInfo.entityId;
-        dcgm_field_entity_group_t entityGroupId = response.incidents[index].entityInfo.entityGroupId;
-        dcgmHealthWatchResults_t entityHealth   = response.incidents[index].health;
-
-        DcgmiOutputBoxer &outGroup  = out[std::string(DcgmFieldsGetEntityGroupString(entityGroupId))];
-        DcgmiOutputBoxer &outEntity = outGroup[to_string(entityHealth)];
-
-        DcgmiOutputBoxer &outErrors = outEntity["Errors"];
-
-        while (index + 1 < response.incidentCount && response.incidents[index + 1].entityInfo.entityId == entityId
-               && response.incidents[index + 1].entityInfo.entityGroupId == entityGroupId)
-        {
-            dcgmHealthSystems_t system = response.incidents[index].system;
-            std::string systemStr      = Health::HelperSystemToString(system);
-
-            dcgmHealthWatchResults_t systemHealth = response.incidents[index].health;
-
-            std::stringstream ss;
-            ss << response.incidents[index].error.msg;
-            // Get an error string with all incidents for this system
-            while (index + 1 < response.incidentCount && response.incidents[index + 1].system == system)
-            {
-                index++;
-                if (response.incidents[index].health > systemHealth)
-                {
-                    systemHealth = response.incidents[index].health;
-                }
-
-                if (systemHealth > entityHealth)
-                {
-                    entityHealth = systemHealth;
-                }
-
-                ss << ", " << response.incidents[index].error.msg;
-            }
-
-            std::string health = Health::HelperHealthToString(systemHealth);
-            // Add the error message to the stencil; if it is too large to fit into stencil,
-            // break it into parts to display.
-            std::string strHold = ss.str();
-            std::replace(strHold.begin(), strHold.end(), '\n', ' ');
-
-            unsigned int p     = 0;
-            unsigned int start = 0;
-
-            if (strHold.length() > MAX_SIZE_OF_HEALTH_INFO)
-            {
-                while (start < strHold.length())
-                {
-                    p += MAX_SIZE_OF_HEALTH_INFO;
-                    if (p >= strHold.length())
-                        p = strHold.length() - 1;
-
-                    else
-                    { // Put pointer to last available word
-                        while (strHold.at(p) != ' ')
-                        {
-                            if (p + 1 < strHold.length() && strHold.at(p + 1) == ' ')
-                                break; // check if landed on end of a word
-                            p--;
-                        }
-                        while (strHold.at(p) == ' ')
-                        {
-                            p--;
-                        }
-                    }
-                    // p is now the index of a the last digit of a GPU ID
-                    ss.str(strHold.substr(start, p - start + 1));
-
-                    outErrors[systemStr].addOverflow(ss.str());
-
-                    start = p + 2; // 2 characters till the start of the next word
-                }
-            }
-            else
-            {
-                outErrors[systemStr].addOverflow(ss.str());
-            }
-
-            outErrors[systemStr] = health;
-
-            index++;
-        }
-
-        outEntity = HelperHealthToString(entityHealth);
-    }
-
-    std::cout << out.str();
+    std::cout << GenerateOutputFromResponse(response, out);
 
     return DCGM_ST_OK;
 }

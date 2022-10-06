@@ -210,8 +210,6 @@ public:
 
     /*************************************************************************/
 
-private:
-    /*************************************************************************/
     /*
      * Initialize this plugin to run
      *
@@ -220,6 +218,7 @@ private:
      */
     bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
 
+private:
     /*************************************************************************/
     /*
      * Initialize the parts of cuda and cublas needed for this plugin to run
