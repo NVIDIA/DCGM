@@ -24,6 +24,7 @@ import string
 import json
 import dcgmvalue
 import platform
+import csv
 
 DCGM_MAX_STR_LENGTH                   =   256
 DCGM_MAX_NUM_DEVICES                  =   32 # DCGM 2.0 and newer = 32. DCGM 1.8 and older = 16
@@ -455,15 +456,15 @@ def _LoadDcgmLibrary(libDcgmPath=None):
                         dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
                     else:
                         if not libDcgmPath:
-                            dist_name, dist_version, dist_id = platform.linux_distribution(full_distribution_name=0)
+                            dist_name = get_distro()['ID']
                             dist_name = dist_name.lower()
                             if dist_name in {'ubuntu', 'debian'}:
                                 libDcgmPath = '/usr/lib/{}-linux-gnu'.format(platform.machine())
-                            elif dist_name in {'fedora', 'redhat', 'centos', 'suse'}:
+                            elif dist_name in {'fedora', 'redhat', 'centos', 'suse', 'amzn'}:
                                 libDcgmPath = '/usr/lib64'
 
                         dcgmLib = CDLL(os.path.join(libDcgmPath, "libdcgm.so.2"))
-                        
+
                 except OSError as ose:
                     _dcgmCheckReturn(DCGM_ST_LIBRARY_NOT_FOUND)
                 if dcgmLib is None:
@@ -508,6 +509,14 @@ def _dcgmErrorString(result):
     fn.restype = c_char_p # otherwise return is an int
     str = fn(result)
     return str
+
+def get_distro():
+  RELEASE_INFO={}
+  with open("/etc/os-release") as f:
+    reader = csv.reader(f, delimiter="=")
+    for row in reader:
+        RELEASE_INFO[row[0]] = row[1]
+  return RELEASE_INFO
 
 class c_dcgmConnectV2Params_v1(_PrintableStructure):
     _fields_ = [
