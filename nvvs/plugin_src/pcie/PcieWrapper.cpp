@@ -112,6 +112,12 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1;
@@ -125,6 +131,12 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL; // Previously unchecked
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL; // Previously unchecked
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL;

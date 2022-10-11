@@ -33,10 +33,10 @@ if (BUILD_TESTING)
             DcgmDiagUnitTestCommon.cpp
             ConfigFileParser_v2Tests.cpp
             DcgmValuesSinceHolderTests.cpp
-            WhitelistTests.cpp
+            AllowlistTests.cpp
             ParsingUtilityTests.cpp
             TestFrameworkTests.cpp
-            GoldenValuesCalculatorTests.cpp
+            PluginTests.cpp
             PluginLibTests.cpp
             PluginCoreFunctionalityTests.cpp
             CustomDataHolderTests.cpp

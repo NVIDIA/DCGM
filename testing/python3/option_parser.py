@@ -17,7 +17,6 @@ import utils
 import sys
 import test_utils
 import logger
-import string
 import re
 
 def parse_options():
@@ -176,6 +175,8 @@ def parse_options():
             action="store_true",
             help="Force logging even for actions that have logging disabled by default"
             )
+    parser.add_option_group(debug_group)
+
     parser.add_option(
             "--no-library-check",
             dest="no_library_check",
@@ -183,7 +184,15 @@ def parse_options():
             default=False,
             help="Skips the test which verifies that all modules are present."
             )
-    parser.add_option_group(debug_group)
+    parser.add_option(
+            "--no-root-check",
+            dest="no_root_check",
+            action="store_true",
+            default=False,
+            help="Skips the check that the test framework is being run as root."
+            )
+
+    
     (options, args) = parser.parse_args()
 
     if options.debug:
@@ -226,6 +235,7 @@ class OptionParserStub():
         self.no_env_check = False
         self.coverage = ''
         self.dvssc_testing = False
+        self.no_root_check = False
 
 
 def initialize_as_stub():

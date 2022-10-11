@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #define CATCH_IMPL
 #define CATCH_CONFIG_ALL_PARTS
 #include <catch2/catch.hpp>
 
 #include "DcgmDiagUnitTestCommon.h"
-
 
 int main(int argc, char **argv)
 {

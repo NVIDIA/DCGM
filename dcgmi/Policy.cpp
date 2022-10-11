@@ -58,10 +58,8 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Cannot get group info from remote node. Return: " << error << std::endl;
-        PRINT_ERROR("%u, %d",
-                    "Error: could not get information for group: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error(
+            "Error: could not get information for group: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
         return result;
     }
 
@@ -93,7 +91,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
         std::cout << "Errors for group:" << groupId << std::endl;
         gpuErrView.addError(stHandle);
         gpuErrView.display();
-        PRINT_ERROR("%u, %d", "Error: could not get policy for group: %u. Return: %d", groupId, result);
+        log_error("Error: could not get policy for group: {}. Return: {}", groupId, result);
         goto cleanup;
     }
     else
@@ -382,7 +380,7 @@ dcgmReturn_t Policy::SetCurrentViolationPolicy(dcgmHandle_t mNvcmHandle, unsigne
         gpuErrView.addError(stHandle);
         gpuErrView.display();
 
-        PRINT_ERROR("%u, %d", "Error: could not set policy for group: %u. Return: %d", groupId, result);
+        log_error("Error: could not set policy for group: {}. Return: {}", groupId, result);
 
         goto cleanup;
     }
@@ -417,8 +415,7 @@ dcgmReturn_t Policy::RegisterForPolicyUpdates(dcgmHandle_t mNvcmHandle, unsigned
 
         std::cout << "Error: Cannot register to receive policy violations from the remote node. Return: " << error
                   << std::endl;
-        PRINT_ERROR(
-            "%u, %d", "Error: could not register for policy updates for group: %u. Return: %d", groupId, result);
+        log_error("Error: could not register for policy updates for group: {}. Return: {}", groupId, result);
         return result;
     }
     std::cout << "Listening for violations.\n";
@@ -442,8 +439,7 @@ dcgmReturn_t Policy::UnregisterPolicyUpdates(dcgmHandle_t mNvcmHandle, unsigned 
     {
         std::cout << "Error: Cannot unregister to receive policy violations from the remote node. Return: "
                   << errorString(result) << std::endl;
-        PRINT_ERROR(
-            "%u, %d", "Error: could not unregister for policy updates for group: %u. Return: %d", groupId, result);
+        log_error("Error: could not unregister for policy updates for group: {}. Return: {}", groupId, result);
         return result;
     }
     return result;

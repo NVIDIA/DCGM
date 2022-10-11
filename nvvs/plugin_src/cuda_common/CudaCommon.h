@@ -81,7 +81,7 @@ std::string AddCudaError(Plugin *p,
 #define LOG_CUDA_ERROR_FOR_PLUGIN(plugin, callName, cuSt, gpuId, ...)                                   \
     {                                                                                                   \
         std::string pluginCommonCudaError = AddCudaError(plugin, callName, cuSt, gpuId, ##__VA_ARGS__); \
-        PRINT_ERROR("%s", "%s", pluginCommonCudaError.c_str());                                         \
+        log_error(pluginCommonCudaError);                                                               \
     }                                                                                                   \
     (void)0
 
@@ -89,7 +89,7 @@ std::string AddCudaError(Plugin *p,
 #define LOG_CUDA_ERROR(callName, cuSt, gpuId, ...)                                                    \
     {                                                                                                 \
         std::string pluginCommonCudaError = AddCudaError(this, callName, cuSt, gpuId, ##__VA_ARGS__); \
-        PRINT_ERROR("%s", "%s", pluginCommonCudaError.c_str());                                       \
+        log_error(pluginCommonCudaError);                                                             \
     }                                                                                                 \
     (void)0
 
@@ -124,7 +124,7 @@ const char *GetAdditionalCuInitDetail(CUresult cuSt);
 #define LOG_CUBLAS_ERROR_FOR_PLUGIN(plugin, callName, cubSt, gpuId, ...)                                     \
     {                                                                                                        \
         std::string pluginCommonCublasError = AddCublasError(plugin, callName, cubSt, gpuId, ##__VA_ARGS__); \
-        PRINT_ERROR("%s", "%s", pluginCommonCublasError.c_str());                                            \
+        log_error(pluginCommonCublasError);                                                                  \
     }                                                                                                        \
     (void)0
 
@@ -132,7 +132,7 @@ const char *GetAdditionalCuInitDetail(CUresult cuSt);
 #define LOG_CUBLAS_ERROR(callName, cubSt, gpuId, ...)                                                      \
     {                                                                                                      \
         std::string pluginCommonCublasError = AddCublasError(this, callName, cubSt, gpuId, ##__VA_ARGS__); \
-        PRINT_ERROR("%s", "%s", pluginCommonCublasError.c_str());                                          \
+        log_error(pluginCommonCublasError);                                                                \
     }                                                                                                      \
     (void)0
 

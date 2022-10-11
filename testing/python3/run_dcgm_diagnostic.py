@@ -37,7 +37,6 @@ from subprocess import Popen, STDOUT, PIPE, check_output
 logFile = "nvvs_diag.log"
 debugFile = "nvvs_debug.log"
 goldenValuesFile = "/tmp/golden_values.yml"
-LOAD_TOO_HIGH_TO_TRAIN = 1010101010
 PASSED_COUNT = 0
 FAILED_COUNT = 0
 WAIVED_COUNT = 0
@@ -103,7 +102,6 @@ def setupEnvironment(cmdArgs):
     print("============= TEST CONFIG ==========")
     print("TEST CYLES:   {}".format(cmdArgs.cycles))
     print("DEVICE LIST:  {}".format(cmdArgs.device_id))
-    print("TRAINING:     {}".format(not cmdArgs.notrain))
     print("====================================")
 
 
@@ -138,10 +136,9 @@ DIAG_MIG_MULTIPLE_GPU_SUGGEST = "You must run on only one GPU at a time when MIG
 class TestRunner():
 
     ################################################################################
-    def __init__(self, cycles, dcgmiDiag, notrain, verbose):
+    def __init__(self, cycles, dcgmiDiag, verbose):
         self.cycles = int(cycles)
         self.dcgmiDiag = dcgmiDiag 
-        self.notrain = notrain
         self.verbose = verbose
         self.failed_runs = 0
         self.failing_tests = {}
@@ -247,55 +244,11 @@ class TestRunner():
         return 0
 
     ################################################################################
-    def run_without_training(self):
-        self.dcgmiDiag.SetTraining(False)
+    def run(self):
         self.dcgmiDiag.SetRunMode(3)
         self.dcgmiDiag.SetConfigFile(None)
         ret = self.run_command(self.cycles)
         return ret
-
-    ################################################################################
-    def run_with_training(self):
-        retries = 0
-        maxRetries = 180
-        # Sleep for up to three minutes to see if we can train
-        while os.getloadavg()[0] > .5:
-            if retries >= maxRetries:
-                print("Skipping training! Cannot train because the load is above .5 after %d seconds\n" % maxRetries)
-                print("This is not a bug, please make sure that no other workloads are using up the system's resources")
-                return LOAD_TOO_HIGH_TO_TRAIN
-            retries += 1
-            time.sleep(1)
-
-        print("\nTraining once to generate golden values... This may take a while, please wait...\n")
-
-        self.dcgmiDiag.SetRunMode(None)
-        self.dcgmiDiag.SetTraining(True)
-
-        ret = self.run_command(1)  # Always train only once
-        return ret
-
-    ################################################################################
-    def run_with_golden_values(self):
-        print("Running tests using existing golden values from %s" % goldenValuesFile)
-        self.dcgmiDiag.SetConfig(goldenValuesFile)
-        self.dcgmiDiag.SetRunMode(3)
-        self.dcgmiDiag.SetTraining(False)
-        print("Generated golden values file: \n")
-        try:
-            with open(goldenValuesFile, 'r') as f:
-                print(f.read())
-        except IOError as e:
-            print("Error attempting to dump the golden values file '%s' : '%s'" % (goldenValuesFile, str(e)))
-            print("Attempting to continue...")
-
-        if os.path.isfile(goldenValuesFile):
-            ret = self.run_command(1)  # Run against the golden values only once
-            return ret
-        else:
-            print("Unable to find golden values file")
-            return -1
-
 
 ################################################################################
 def checkCmdLine(cmdArgs, settings):
@@ -325,7 +278,6 @@ def checkCmdLine(cmdArgs, settings):
 
     settings['dev_id'] = cmdArgs.device_id
     settings['cycles'] = cmdArgs.cycles
-    settings['notrain'] = True # Don't train until we are decided to support this feature
 
 ################################################################################
 def getGoldenValueDebugFiles():
@@ -372,7 +324,6 @@ def parseCommandLine():
     parser.add_argument("-v", "--vulcan", action="store_true", help="Deprecated flag for running in the eris environment")
     parser.add_argument("--verbose", action="store_true", help="Sets verbose mode")
     parser.add_argument("-d", "--device-id", help="Comma separated list of nvml device ids.")
-    parser.add_argument("-n", "--notrain", action="store_true", help="Disable training for golden values. Enabled by default.")
 
     args = parser.parse_args()
 
@@ -413,36 +364,13 @@ def main(cmdArgs):
                 debugFile=debugFile)
 
     # Start tests
-    run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['notrain'], settings['verbose'])
+    run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])
 
-    if settings['notrain']:
-        print("\nRunning with training mode disabled... This may take a while, please wait...\n")
-        ret = run_test.run_without_training()
-        if ret != 0:
-            print("&&&& FAILED")
-            return ret
-    else:
-        ret = run_test.run_without_training()
-        if ret != 0:
-            print("Exiting early after a failure in the initial runs of the diagnostic")
-            print("&&&& FAILED")
-            return ret
-
-        ret = run_test.run_with_training()
-        if ret == LOAD_TOO_HIGH_TO_TRAIN:
-            return 0
-        elif ret != 0:
-            getGoldenValueDebugFiles()
-            print("Exiting early after a failure while training the diagnostic")
-            print("&&&& FAILED")
-            return ret
-
-        # Disable running against the generated golden values for a time until we fix DCGM-1134
-        # ret = run_test.run_with_golden_values()
-        # if ret != 0:
-        #     getGoldenValueDebugFiles()
-        #     print("Failed when running against the generated golden values")
-        #     return ret
+    print("\nRunning with the diagnostic... This may take a while, please wait...\n")
+    ret = run_test.run()
+    if ret != 0:
+        print("&&&& FAILED")
+        return ret
 
     return ret
 

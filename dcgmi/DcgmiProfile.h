@@ -24,7 +24,7 @@ class DcgmiProfile
 public:
     DcgmiProfile()          = default;
     virtual ~DcgmiProfile() = default;
-    dcgmReturn_t RunProfileList(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, bool outputAsJson);
+    dcgmReturn_t RunProfileList(dcgmHandle_t dcgmHandle, unsigned int gpuId, bool outputAsJson);
     dcgmReturn_t RunProfileSetPause(dcgmHandle_t dcgmHandle, bool pause);
 
 private:
@@ -43,10 +43,10 @@ private:
     std::string mGpuIdsStr;
     std::string mGroupIdStr;
 
-    dcgmGpuGrp_t mGroupId;
+    unsigned int mGpuId; /* GPU ID to use for queries. Set by DcgmiProfileList() */
 
-    dcgmReturn_t ValidateOrCreateEntityGroup(void);     /* Set mGroupId based on mGpuIdsStr and mGroupIdStr */
-    dcgmReturn_t CreateEntityGroupFromEntityList(void); /* Helper called by ValidateOrCreateEntityGroup() */
+    dcgmReturn_t SetGpuId(void);               /* Set mGpuId based on mGpuIdsStr and mGroupIdStr */
+    dcgmReturn_t SetGpuIdFromEntityList(void); /* Helper called by ValidateOrCreateEntityGroup() */
 };
 
 class DcgmiProfileSetPause : public Command

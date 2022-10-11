@@ -24,9 +24,6 @@
 #include "dcgm_test_apis.h"
 #include <unordered_set>
 
-// Number of nvlink error counter types
-#define DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS NVML_NVLINK_ERROR_COUNT
-
 /* This class is implements the background health check methods
  * within the hostengine
  * It is intended to set watches, monitor them on demand, and

@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #include "DcgmDiagUnitTestCommon.h"
+#include <fmt/format.h>
 #include <stdexcept>
 #include <sys/stat.h>
+#include <system_error>
 #include <unistd.h>
 #include <vector>
 
@@ -35,12 +37,16 @@ std::string createTmpFile(const char *prefix)
     int ret = mkstemp(&pathStr[0]);
     if (ret == -1)
     {
-        throw std::runtime_error("Could not create temp file" + pathStr);
+        auto const err = errno;
+        throw std::system_error(std::error_code(err, std::generic_category()),
+                                fmt::format("Could not create temp file {}", pathStr));
     }
     ret = chmod(&pathStr[0], 0600);
     if (ret == -1)
     {
-        throw std::runtime_error("Could not chmod temp file" + pathStr);
+        auto const err = errno;
+        throw std::system_error(std::error_code(err, std::generic_category()),
+                                fmt::format("Could not chmod temp file {}", pathStr));
     }
     close(ret);
     return pathStr;

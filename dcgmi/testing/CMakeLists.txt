@@ -56,7 +56,6 @@ if (BUILD_TESTING)
             rt
             dl
     )
-    #target_include_directories(dcgmitests PRIVATE ${JSONCPP_INCLUDE_DIR})
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
         catch_discover_tests(dcgmitests EXTRA_ARGS --use-colour yes)

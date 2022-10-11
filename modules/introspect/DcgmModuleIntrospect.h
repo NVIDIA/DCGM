@@ -52,37 +52,16 @@ private:
 
     /*************************************************************************/
     /* Request Processing helper methods */
-    std::optional<dcgmReturn_t> GetMemUsageForFields(dcgmIntrospectContext_t *context,
-                                                     dcgmIntrospectFullMemory_t *memInfo,
-                                                     int waitIfNoData);
-    std::optional<dcgmReturn_t> GetExecTimeForFields(dcgmIntrospectContext_t *context,
-                                                     dcgmIntrospectFullFieldsExecTime_t *execTime,
-                                                     int waitIfNoData);
     std::optional<dcgmReturn_t> GetMemUsageForHostengine(dcgmIntrospectMemory_t *memInfo, int waitIfNoData);
     std::optional<dcgmReturn_t> GetCpuUtilizationForHostengine(dcgmIntrospectCpuUtil_t *cpuUtil, int waitIfNoData);
-
-    void CopyFieldsExecTime(dcgmIntrospectFieldsExecTime_t &execTime,
-                            const DcgmMetadataManager::ExecTimeInfo &metadataExecTime);
 
     /*************************************************************************/
     /* Subrequest helpers
      */
-    std::optional<dcgmReturn_t> ProcessMetadataFieldsExecTime(dcgm_introspect_msg_fields_exec_time_t *msg);
-    std::optional<dcgmReturn_t> ProcessMetadataFieldsMemUsage(dcgm_introspect_msg_fields_mem_usage_t *msg);
-    std::optional<dcgmReturn_t> ProcessMetadataHostEngineCpuUtil(dcgm_introspect_msg_he_cpu_util_t *msg);
-    std::optional<dcgmReturn_t> ProcessMetadataHostEngineMemUsage(dcgm_introspect_msg_he_mem_usage_t *msg);
-
-    dcgmReturn_t ProcessMetadataStateSetRunInterval(dcgm_introspect_msg_set_interval_t *msg);
-    dcgmReturn_t ProcessMetadataStateToggle(dcgm_introspect_msg_toggle_t *msg);
-    dcgmReturn_t ProcessMetadataUpdateAll(dcgm_introspect_msg_update_all_t *msg);
+    std::optional<dcgmReturn_t> ProcessMetadataHostEngineCpuUtil(dcgm_introspect_msg_he_cpu_util_v1 *msg);
+    std::optional<dcgmReturn_t> ProcessMetadataHostEngineMemUsage(dcgm_introspect_msg_he_mem_usage_v1 *msg);
 
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
-
-    /*************************************************************************/
-    /*
-     * Verify metadata gathering is enabled. Logs an error if it is not.
-     */
-    dcgmReturn_t VerifyMetadataEnabled();
 
     std::unique_ptr<DcgmMetadataManager> mpMetadataManager; /* Pointer to the worker class for this module */
 

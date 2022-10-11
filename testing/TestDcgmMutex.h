@@ -30,15 +30,13 @@ public:
 
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
-    int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus);
+    int Init(const TestDcgmModuleInitParams &initParams) override;
     int Run();
     int Cleanup();
     std::string GetTag();
 
     /*************************************************************************/
 private:
-    std::vector<test_nvcm_gpu_t> m_gpus; /* List of GPUs to run on, copied in Init() */
-
     /*************************************************************************/
     /*
      * Actual test cases. These should return a status like below

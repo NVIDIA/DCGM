@@ -22,7 +22,7 @@ TestVersioning::TestVersioning()
 TestVersioning::~TestVersioning()
 {}
 
-int TestVersioning::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestVersioning::Init(const TestDcgmModuleInitParams &initParams)
 {
     return 0;
 }

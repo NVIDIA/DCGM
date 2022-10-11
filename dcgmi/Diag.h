@@ -51,7 +51,7 @@ public:
     void HelperJsonBuildOutput(Json::Value &output,
                                dcgmDiagResponse_t &diagResult,
                                const std::vector<unsigned int> &gpuIndices);
-    bool HelperJsonAddResult(dcgmDiagResponsePerGpu_v3 &gpuResult,
+    bool HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
                              Json::Value &testEntry,
                              unsigned int gpuIndex,
                              unsigned int testIndex,
@@ -63,9 +63,9 @@ public:
 
 private:
     void HelperDisplayDeployment(dcgmDiagResponse_t &diagResult);
-    void HelperDisplayHardware(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayIntegration(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayPerformance(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayHardware(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayIntegration(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayPerformance(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
     void HelperDisplayDeploymentResult(CommandOutputController &cmdView,
                                        const std::string &nameTag,
                                        dcgmDiagTestResult_v2 &result);
@@ -73,7 +73,7 @@ private:
 
     void HelperDisplayGpuResults(std::string dataName,
                                  unsigned int testIndex,
-                                 dcgmDiagResponsePerGpu_v3 *diagResults,
+                                 dcgmDiagResponsePerGpu_v4 *diagResults,
                                  const std::vector<unsigned int> &gpuIndices);
 
     dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std::vector<unsigned int> &gpuIndices);
@@ -83,8 +83,7 @@ private:
                               const std::vector<unsigned int> &gpuIndices,
                               unsigned int testIndex,
                               CommandOutputController &cmdView,
-                              dcgmDiagResponsePerGpu_v3 *diagResults);
-    void HelperDisplayTrainingOutput(dcgmDiagResponse_t &diagResult);
+                              dcgmDiagResponsePerGpu_v4 *diagResults);
 
     /*****************************************************************************/
     /*
@@ -147,6 +146,7 @@ class StartDiag : public Command
 {
 public:
     StartDiag(const std::string &hostname,
+              const bool hostAddressWasOverridden,
               const std::string &parms,
               const std::string &configPath,
               bool jsonOutput,

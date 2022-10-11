@@ -138,11 +138,10 @@ void disableP2P(BusGrindGlobals *bgGlobals)
 
             if (cudaErrorPeerAccessNotEnabled == cudaReturn)
             {
-                PRINT_INFO("%d %d %s",
-                           "cudaDeviceDisablePeerAccess for device (%d) returned error (%d): %s \n",
-                           bgGlobals->gpu[j]->gpuId,
-                           (int)cudaReturn,
-                           cudaGetErrorString(cudaReturn));
+                log_info("cudaDeviceDisablePeerAccess for device ({}) returned error ({}): {}",
+                         bgGlobals->gpu[j]->gpuId,
+                         (int)cudaReturn,
+                         cudaGetErrorString(cudaReturn));
             }
             else if (cudaSuccess != cudaReturn)
             {
@@ -283,7 +282,7 @@ int bg_check_pci_link(BusGrindGlobals *bgGlobals, std::string subTest)
             DcgmError d { gpu->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_GENERATION, d, gpu->gpuId, linkgenValue.value.i64, minPcieLinkGen, PCIE_STR_MIN_PCI_GEN);
-            PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+            log_error(d.GetMessage());
             bgGlobals->busGrind->AddErrorForGpu(gpu->gpuId, d);
             bgGlobals->busGrind->SetResultForGpu(gpu->gpuId, NVVS_RESULT_FAIL);
             Nfailed++;
@@ -295,7 +294,7 @@ int bg_check_pci_link(BusGrindGlobals *bgGlobals, std::string subTest)
             DcgmError d { gpu->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_WIDTH, d, gpu->gpuId, widthValue.value.i64, minPcieLinkWidth, PCIE_STR_MIN_PCI_WIDTH);
-            PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+            log_error(d.GetMessage());
             bgGlobals->busGrind->AddErrorForGpu(gpu->gpuId, d);
             bgGlobals->busGrind->SetResultForGpu(gpu->gpuId, NVVS_RESULT_FAIL);
             Nfailed++;
@@ -465,7 +464,7 @@ int outputHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool pinned)
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bgGlobals->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
                 bgGlobals->busGrind->AddErrorForGpu(bgGlobals->gpu[j]->gpuId, d);
-                PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+                log_error(d.GetMessage());
                 bgGlobals->busGrind->SetResultForGpu(bgGlobals->gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 failedTests++;
             }
@@ -662,7 +661,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrindGlobals *bgGlobals, bool p
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bgGlobals->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
                 bgGlobals->busGrind->AddErrorForGpu(bgGlobals->gpu[j]->gpuId, d);
-                PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+                log_error(d.GetMessage());
                 bgGlobals->busGrind->SetResultForGpu(bgGlobals->gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 failedTests++;
             }
@@ -845,7 +844,7 @@ int outputHostDeviceLatencyMatrix(BusGrindGlobals *bgGlobals, bool pinned)
                 DcgmError d { bgGlobals->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_HIGH_LATENCY, d, labels[i], bgGlobals->gpu[j]->gpuId, latency, maxLatency);
-                PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+                log_error(d.GetMessage());
                 bgGlobals->busGrind->AddErrorForGpu(bgGlobals->gpu[j]->gpuId, d);
                 bgGlobals->busGrind->SetResultForGpu(bgGlobals->gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 Nfailures++;
@@ -1747,30 +1746,8 @@ bool bg_check_error_conditions(BusGrindGlobals *bgGlobals,
     std::vector<dcgmTimeseriesInfo_t> failureThresholds;
 
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
 
     if (bgGlobals->testParameters->GetBoolFromString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK))
@@ -1856,10 +1833,10 @@ bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginGpuList_t &gpuI
 
 void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t &gpuInfo, dcgmHandle_t handle)
 {
-    dcgmNvLinkStatus_v2 linkStatus;
+    dcgmNvLinkStatus_v3 linkStatus;
     memset(&linkStatus, 0, sizeof(linkStatus));
 
-    linkStatus.version = dcgmNvLinkStatus_version2;
+    linkStatus.version = dcgmNvLinkStatus_version3;
     dcgmReturn_t ret   = dcgmGetNvLinkLinkStatus(handle, &linkStatus);
 
     if (ret != DCGM_ST_OK)
@@ -2170,7 +2147,7 @@ int main_entry(const dcgmDiagPluginGpuList_t &gpuInfo, BusGrind *busGrind, TestP
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         const char *err_str = e.what();
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err_str);
-        PRINT_ERROR("%s", "Caught runtime_error %s", err_str);
+        log_error("Caught runtime_error {}", err_str);
         bgGlobals->busGrind->AddError(d);
         bgGlobals->busGrind->SetResult(NVVS_RESULT_FAIL);
         /* Clean up in case main wasn't able to */

@@ -61,7 +61,8 @@ def initialize_sdk(fileName):
                 "SDK binary %s is not executable! Make sure that the testing archive has been correctly extracted." \
                 % sdk_executable
     
-    return subprocess.Popen( sdk_executable, stdout=PIPE, stdin=PIPE)
+    # -f -> fast mode to shorten the test duration
+    return subprocess.Popen( [sdk_executable, '-f'], stdout=PIPE, stdin=PIPE)
     
 
 @test_utils.run_with_embedded_host_engine()

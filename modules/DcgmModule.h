@@ -21,7 +21,6 @@
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
 #include <DcgmFvBuffer.h>
-#include <DcgmProtobuf.h>
 #include <stdexcept>
 #include <string>
 

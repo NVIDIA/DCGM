@@ -1,4 +1,40 @@
+/*
+ * Copyright 1993-2022 NVIDIA Corporation.  All rights reserved.
+ *
+ * NOTICE TO USER:
+ *
+ * This source code is subject to NVIDIA ownership rights under U.S. and
+ * international Copyright laws.  Users and possessors of this source code
+ * are hereby granted a nonexclusive, royalty-free license to use this code
+ * in individual and commercial software.
+ *
+ * NVIDIA MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE
+ * CODE FOR ANY PURPOSE.  IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR
+ * IMPLIED WARRANTY OF ANY KIND.  NVIDIA DISCLAIMS ALL WARRANTIES WITH
+ * REGARD TO THIS SOURCE CODE, INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE.
+ * IN NO EVENT SHALL NVIDIA BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL,
+ * OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+ * OF USE, DATA OR PROFITS,  WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+ * OR OTHER TORTIOUS ACTION,  ARISING OUT OF OR IN CONNECTION WITH THE USE
+ * OR PERFORMANCE OF THIS SOURCE CODE.
+ *
+ * U.S. Government End Users.   This source code is a "commercial item" as
+ * that term is defined at  48 C.F.R. 2.101 (OCT 1995), consisting  of
+ * "commercial computer  software"  and "commercial computer software
+ * documentation" as such terms are  used in 48 C.F.R. 12.212 (SEPT 1995)
+ * and is provided to the U.S. Government only as a commercial end item.
+ * Consistent with 48 C.F.R.12.212 and 48 C.F.R. 227.7202-1 through
+ * 227.7202-4 (JUNE 1995), all U.S. Government End Users acquire the
+ * source code with only those rights set forth herein.
+ *
+ * Any use of this source code in individual and commercial software must
+ * include, in the user documentation and internal comments to the code,
+ * the above Disclaimer and U.S. Government End Users Notice.
+ */
+
 #include "nvml.h"
+#include "nvml_deprecated.h"
 
 NVML_ENTRY_POINT(nvmlDeviceGetClockInfo, tsapiDeviceGetClockInfo,
         (nvmlDevice_t device, nvmlClockType_t type, unsigned int* clock),
@@ -32,15 +68,7 @@ NVML_ENTRY_POINT(nvmlDeviceGetCount, tsapiDeviceGetCount,
         (unsigned int *deviceCount),
         "(%p)",
         deviceCount)
-NVML_ENTRY_POINT(nvmlDeviceGetCount_v2, tsapiDeviceGetCount_v2,
-        (unsigned int *deviceCount),
-        "(%p)",
-        deviceCount)
 NVML_ENTRY_POINT(nvmlDeviceGetHandleByIndex, tsapiDeviceGetHandleByIndex,
-        (unsigned int index, nvmlDevice_t *device),
-        "(%d, %p)",
-        index, device)
-NVML_ENTRY_POINT(nvmlDeviceGetHandleByIndex_v2, tsapiDeviceGetHandleByIndex_v2,
         (unsigned int index, nvmlDevice_t *device),
         "(%d, %p)",
         index, device)
@@ -76,6 +104,10 @@ NVML_ENTRY_POINT(nvmlDeviceGetEccMode, tsapiDeviceGetEccMode,
         (nvmlDevice_t device, nvmlEnableState_t *current, nvmlEnableState_t *pending),
         "(%p, %p, %p)",
         device, current, pending)
+NVML_ENTRY_POINT(nvmlDeviceGetDefaultEccMode, tsapiDeviceGetDefaultEccMode,
+        (nvmlDevice_t device, nvmlEnableState_t *defaultMode),
+        "(%p, %p)",
+        device, defaultMode)
 NVML_ENTRY_POINT(nvmlDeviceGetBoardId, tsapiDeviceGetBoardId,
         (nvmlDevice_t device, unsigned int *boardId),
         "(%p, %p)",
@@ -118,6 +150,14 @@ NVML_ENTRY_POINT(nvmlDeviceGetBoardPartNumber, tsapiDeviceGetBoardPartNumber,
         (nvmlDevice_t device, char * partNumber, unsigned int length),
         "(%p %p %d)",
         device, partNumber, length)
+NVML_ENTRY_POINT(nvmlDeviceGetMemoryAffinity, tsapiDeviceGetMemoryAffinity,
+        (nvmlDevice_t device, unsigned int nodeSetSize, unsigned long *nodeSet, nvmlAffinityScope_t scope),
+        "(%p, %d, %p, %d)",
+        device, nodeSetSize, nodeSet, scope)
+NVML_ENTRY_POINT(nvmlDeviceGetCpuAffinityWithinScope, tsapiDeviceGetCpuAffinityWithinScope,
+        (nvmlDevice_t device, unsigned int cpuSetSize, unsigned long *cpuSet, nvmlAffinityScope_t scope),
+        "(%p, %d, %p, %d)",
+        device, cpuSetSize, cpuSet, scope)
 NVML_ENTRY_POINT(nvmlDeviceGetCpuAffinity, tsapiDeviceGetCpuAffinity,
         (nvmlDevice_t device, unsigned int cpuSetSize, unsigned long *cpuSet),
         "(%p, %d, %p)",
@@ -186,6 +226,21 @@ NVML_ENTRY_POINT(nvmlDeviceGetPowerUsage, tsapiDeviceGetPowerUsage,
         "(%p, %p)",
         device, power)
 
+NVML_ENTRY_POINT(nvmlDeviceGetPowerMode, tsapiDeviceGetPowerMode,
+        (nvmlDevice_t device, unsigned int *powerModeId),
+        "(%p, %p)",
+        device, powerModeId)
+
+NVML_ENTRY_POINT(nvmlDeviceGetSupportedPowerModes, tsapiDeviceGetSupportedPowerModes,
+                 (nvmlDevice_t device, unsigned int *supportedPowerModes),
+                 "(%p, %p)",
+                 device, supportedPowerModes)
+
+NVML_ENTRY_POINT(nvmlDeviceSetPowerMode, tsapiDeviceSetPowerMode,
+        (nvmlDevice_t device, unsigned int powerModeId),
+        "(%p, %u)",
+        device, powerModeId)
+
 NVML_ENTRY_POINT(nvmlDeviceGetTotalEnergyConsumption, tsapiDeviceGetTotalEnergyConsumption,
         (nvmlDevice_t device, unsigned long long *energy),
         "(%p, %p)",
@@ -207,6 +262,10 @@ NVML_ENTRY_POINT(nvmlDeviceGetTemperatureThreshold, tsapiDeviceGetTemperatureThr
         (nvmlDevice_t device, nvmlTemperatureThresholds_t thresholdType, unsigned int *temp),
         "(%p, %d, %p)",
         device, thresholdType, temp)
+NVML_ENTRY_POINT(nvmlDeviceSetTemperatureThreshold, tsapiDeviceSetTemperatureThreshold,
+        (nvmlDevice_t device, nvmlTemperatureThresholds_t thresholdType, int *temp),
+        "(%p, %d, %p)",
+        device, thresholdType, temp)
 NVML_ENTRY_POINT(nvmlDeviceGetFanSpeed, tsapiDeviceGetFanSpeed,
         (nvmlDevice_t device, unsigned int *speed),
         "(%p, %p)",
@@ -215,6 +274,14 @@ NVML_ENTRY_POINT(nvmlDeviceGetFanSpeed_v2, tsapiDeviceGetFanSpeed_v2,
         (nvmlDevice_t device, unsigned int fan, unsigned int * speed),
         "(%p, %u, %p)",
          device, fan, speed)
+NVML_ENTRY_POINT(nvmlDeviceGetTargetFanSpeed, tsapiDeviceGetTargetFanSpeed,
+        (nvmlDevice_t device, unsigned int fan, unsigned int * targetSpeed),
+        "(%p, %u, %p)",
+         device, fan, targetSpeed)
+NVML_ENTRY_POINT(nvmlDeviceGetNumFans, tsapiDeviceGetNumFans,
+        (nvmlDevice_t device, unsigned int *numFans),
+        "(%p, %p)",
+        device, numFans)
 NVML_ENTRY_POINT(nvmlDeviceGetUtilizationRates, tsapiDeviceGetUtilizationRates,
         (nvmlDevice_t device, nvmlUtilization_t *utilization),
         "(%p, %p)",
@@ -332,14 +399,38 @@ NVML_ENTRY_POINT(nvmlEventSetFree, tsapiEventSetFree,
         "(%p)",
         set)
 NVML_ENTRY_POINT(nvmlDeviceGetComputeRunningProcesses, tsapiDeviceGetComputeRunningProcesses,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v1_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetComputeRunningProcesses_v2, tsapiDeviceGetComputeRunningProcesses_v2,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v2_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetComputeRunningProcesses_v3, tsapiDeviceGetComputeRunningProcesses_v3,
         (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos),
         "(%p, %p, %p)",
         device, infoCount, infos)
 NVML_ENTRY_POINT(nvmlDeviceGetGraphicsRunningProcesses, tsapiDeviceGetGraphicsRunningProcesses,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v1_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetGraphicsRunningProcesses_v2, tsapiDeviceGetGraphicsRunningProcesses_v2,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v2_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetGraphicsRunningProcesses_v3, tsapiDeviceGetGraphicsRunningProcesses_v3,
         (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos),
         "(%p, %p, %p)",
         device, infoCount, infos)
 NVML_ENTRY_POINT(nvmlDeviceGetMPSComputeRunningProcesses, tsapiDeviceGetMPSComputeRunningProcesses,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v1_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetMPSComputeRunningProcesses_v2, tsapiDeviceGetMPSComputeRunningProcesses_v2,
+        (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_v2_t *infos),
+        "(%p, %p, %p)",
+        device, infoCount, infos)
+NVML_ENTRY_POINT(nvmlDeviceGetMPSComputeRunningProcesses_v3, tsapiDeviceGetMPSComputeRunningProcesses_v3,
         (nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos),
         "(%p, %p, %p)",
         device, infoCount, infos)
@@ -381,6 +472,14 @@ NVML_ENTRY_POINT(nvmlDeviceSetGpuLockedClocks, tsapiDeviceSetGpuLockedClocks,
         "(%p, %u, %u)",
         device, minGpuClockMHz, maxGpuClockMHz)
 NVML_ENTRY_POINT(nvmlDeviceResetGpuLockedClocks, tsapiDeviceResetGpuLockedClocks,
+        (nvmlDevice_t device),
+        "(%p)",
+        device)
+NVML_ENTRY_POINT(nvmlDeviceSetMemoryLockedClocks, tsapiDeviceSetMemoryLockedClocks,
+        (nvmlDevice_t device, unsigned int minMemClockMHz, unsigned int maxMemClockMHz),
+        "(%p, %u, %u)",
+        device, minMemClockMHz, maxMemClockMHz)
+NVML_ENTRY_POINT(nvmlDeviceResetMemoryLockedClocks, tsapiDeviceResetMemoryLockedClocks,
         (nvmlDevice_t device),
         "(%p)",
         device)
@@ -447,7 +546,7 @@ NVML_ENTRY_POINT(nvmlDeviceGetCurrentClocksThrottleReasons, tsapiDeviceGetCurren
 NVML_ENTRY_POINT(nvmlDeviceGetSupportedClocksThrottleReasons, tsapiDeviceGetSupportedClocksThrottleReasons,
         (nvmlDevice_t device, unsigned long long *supportedClocksThrottleReasons),
         "(%p, %p)",
-        device, supportedClocksThrottleReasons)   
+        device, supportedClocksThrottleReasons);   
 NVML_ENTRY_POINT(nvmlDeviceGetIndex, tsapiDeviceGetIndex,
         (nvmlDevice_t device, unsigned int *index),
         "(%p, %p)",
@@ -562,6 +661,11 @@ NVML_ENTRY_POINT(nvmlDeviceGetNvLinkRemotePciInfo_v2, tsapiDeviceGetNvLinkRemote
         "(%p, %d, %p)",
         device, link, pci)
 
+NVML_ENTRY_POINT(nvmlDeviceGetNvLinkRemoteDeviceType, tsapiDeviceGetNvLinkRemoteDeviceType,
+        (nvmlDevice_t device, unsigned int link, nvmlIntNvLinkDeviceType_t *pNvLinkDeviceType),
+        "(%p, %d, %p)", 
+        device, link, pNvLinkDeviceType)
+
 NVML_ENTRY_POINT(nvmlDeviceGetNvLinkCapability, tsapiDeviceGetNvLinkCapability,
         (nvmlDevice_t device, unsigned int link, nvmlNvLinkCapability_t capability, unsigned int *capResult),
         "(%p, %d, %d, %p)",
@@ -635,7 +739,7 @@ NVML_ENTRY_POINT(nvmlVgpuTypeGetName, tsapiVgpuTypeGetName,
 NVML_ENTRY_POINT(nvmlVgpuTypeGetGpuInstanceProfileId, tsapiVgpuTypeGetGpuInstanceProfileId,
         (nvmlVgpuTypeId_t vgpuTypeId, unsigned int *gpuInstanceProfileId),
         "(%d %p)",
-        vgpuTypeId, gpuInstanceProfileId);
+        vgpuTypeId, gpuInstanceProfileId)
 
 NVML_ENTRY_POINT(nvmlVgpuTypeGetDeviceID, tsapiVgpuTypeGetDeviceID,
         (nvmlVgpuTypeId_t vgpuTypeId, unsigned long long *deviceID, unsigned long long *subsystemID),
@@ -715,12 +819,12 @@ NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseStatus, tsapiVgpuInstanceGetLicenseSt
 NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseInfo, tsapiVgpuInstanceGetLicenseInfo,
         (nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo),
         "(%d %p)",
-        vgpuInstance, licenseInfo);
+        vgpuInstance, licenseInfo)
 
 NVML_ENTRY_POINT(nvmlVgpuInstanceGetLicenseInfo_v2, tsapiVgpuInstanceGetLicenseInfo_v2,
         (nvmlVgpuInstance_t vgpuInstance, nvmlVgpuLicenseInfo_t *licenseInfo),
         "(%d %p)",
-        vgpuInstance, licenseInfo);
+        vgpuInstance, licenseInfo)
 
 NVML_ENTRY_POINT(nvmlVgpuInstanceGetType, tsapiVgpuInstanceGetType,
         (nvmlVgpuInstance_t vgpuInstance, unsigned int *vgpuTypeId),
@@ -762,7 +866,27 @@ NVML_ENTRY_POINT(nvmlVgpuInstanceGetMetadata, tsapiVgpuInstanceGetMetadata,
 NVML_ENTRY_POINT(nvmlVgpuInstanceGetGpuPciId, tsapiVgpuInstanceGetGpuPciId,
         (nvmlVgpuInstance_t vgpuInstance, char *vgpuPciId, unsigned int *length),
         "(%d, %p, %p)",
-        vgpuInstance, vgpuPciId, length);
+        vgpuInstance, vgpuPciId, length)
+
+NVML_ENTRY_POINT(nvmlVgpuTypeGetCapabilities, tsapiVgpuTypeGetCapabilities,
+        (nvmlVgpuTypeId_t vgpuTypeId, nvmlVgpuCapability_t capability, unsigned int *capResult),
+        "(%d %d %p)",
+        vgpuTypeId, capability, capResult)
+
+NVML_ENTRY_POINT(nvmlDeviceGetGspFirmwareVersion, tsapiDeviceGetGspFirmwareVersion,
+        (nvmlDevice_t device, char *version),
+        "(%p, %p)",
+        device, version)
+
+NVML_ENTRY_POINT(nvmlDeviceGetGspFirmwareMode, tsapiDeviceGetGspFirmwareMode,
+        (nvmlDevice_t device, unsigned int *isEnabled, unsigned int *defaultMode),
+        "(%p, %p, %p)",
+        device, isEnabled, defaultMode)
+
+NVML_ENTRY_POINT(nvmlVgpuInstanceGetGpuInstanceId, tsapiVgpuInstanceGetGpuInstanceId,
+        (nvmlVgpuInstance_t vgpuInstance, unsigned int *gpuInstanceId),
+        "(%d %p)",
+        vgpuInstance, gpuInstanceId)
 
 NVML_ENTRY_POINT(nvmlDeviceGetVgpuMetadata, tsapiDeviceGetVgpuMetadata,
         (nvmlDevice_t device, nvmlVgpuPgpuMetadata_t *pgpuMetadata, unsigned int *bufferSize),
@@ -790,6 +914,11 @@ NVML_ENTRY_POINT(nvmlDeviceGetGridLicensableFeatures_v2, tsapiDeviceGetGridLicen
         device, pGridLicensableFeatures)
 
 NVML_ENTRY_POINT(nvmlDeviceGetGridLicensableFeatures_v3, tsapiDeviceGetGridLicensableFeatures_v3,
+        (nvmlDevice_t device, nvmlGridLicensableFeatures_t *pGridLicensableFeatures),
+        "(%p %p)",
+        device, pGridLicensableFeatures)
+
+NVML_ENTRY_POINT(nvmlDeviceGetGridLicensableFeatures_v4, tsapiDeviceGetGridLicensableFeatures_v4,
         (nvmlDevice_t device, nvmlGridLicensableFeatures_t *pGridLicensableFeatures),
         "(%p %p)",
         device, pGridLicensableFeatures)
@@ -899,6 +1028,11 @@ NVML_ENTRY_POINT(nvmlVgpuInstanceGetAccountingStats, tsapiVgpuInstanceGetAccount
         "(%d, %d, %p)",
         vgpuInstance, pid, stats)
 
+NVML_ENTRY_POINT(nvmlVgpuInstanceClearAccountingPids, tsapiVgpuInstanceClearAccountingPids,
+        (nvmlVgpuInstance_t vgpuInstance),
+        "(%d)",
+        vgpuInstance)
+
 NVML_ENTRY_POINT(nvmlGetBlacklistDeviceCount, tsapiGetBlacklistDeviceCount,
         (unsigned int *deviceCount),
         "(%p)",
@@ -906,6 +1040,16 @@ NVML_ENTRY_POINT(nvmlGetBlacklistDeviceCount, tsapiGetBlacklistDeviceCount,
 
 NVML_ENTRY_POINT(nvmlGetBlacklistDeviceInfoByIndex, tsapiGetBlacklistDeviceInfoByIndex,
         (unsigned int index, nvmlBlacklistDeviceInfo_t *info),
+        "(%d, %p)",
+        index, info)
+
+NVML_ENTRY_POINT(nvmlGetExcludedDeviceCount, tsapiGetExcludedDeviceCount,
+        (unsigned int *deviceCount),
+        "(%p)",
+        deviceCount)
+
+NVML_ENTRY_POINT(nvmlGetExcludedDeviceInfoByIndex, tsapiGetExcludedDeviceInfoByIndex,
+        (unsigned int index, nvmlExcludedDeviceInfo_t *info),
         "(%d, %p)",
         index, info)
 
@@ -939,6 +1083,11 @@ NVML_ENTRY_POINT(nvmlDeviceGetGpuInstanceProfileInfo, tsapiDeviceGetGpuInstanceP
         "(%p, %u, %p)",
         device, profile, info)
 
+NVML_ENTRY_POINT(nvmlDeviceGetGpuInstanceProfileInfoV, tsapiDeviceGetGpuInstanceProfileInfoV,
+        (nvmlDevice_t device, unsigned int profile, nvmlGpuInstanceProfileInfo_v2_t *info),
+        "(%p, %u, %p)",
+        device, profile, info)
+
 NVML_ENTRY_POINT(nvmlDeviceGetGpuInstanceRemainingCapacity, tsapiDeviceGetGpuInstanceRemainingCapacity,
         (nvmlDevice_t device, unsigned int profileId, unsigned int *count),
         "(%p, %u, %p)",
@@ -949,10 +1098,20 @@ NVML_ENTRY_POINT(nvmlDeviceGetGpuInstancePossiblePlacements, tsapiDeviceGetGpuIn
         "(%p, %u, %p, %p)",
         device, profileId, placements, count)
 
+NVML_ENTRY_POINT(nvmlDeviceGetGpuInstancePossiblePlacements_v2, tsapiDeviceGetGpuInstancePossiblePlacements_v2,
+        (nvmlDevice_t device, unsigned int profileId, nvmlGpuInstancePlacement_t *placements, unsigned int *count),
+        "(%p, %u, %p, %p)",
+        device, profileId, placements, count)
+
 NVML_ENTRY_POINT(nvmlDeviceCreateGpuInstance, tsapiDeviceCreateGpuInstance,
         (nvmlDevice_t device, unsigned int profileId, nvmlGpuInstance_t *gpuInstance),
         "(%p, %d, %p)",
         device, profileId, gpuInstance)
+
+NVML_ENTRY_POINT(nvmlDeviceCreateGpuInstanceWithPlacement, tsapiDeviceCreateGpuInstanceWithPlacement,
+        (nvmlDevice_t device, unsigned int profileId, const nvmlGpuInstancePlacement_t *placement, nvmlGpuInstance_t *gpuInstance),
+        "(%p, %d, %p, %p)",
+        device, profileId, placement, gpuInstance)
 
 NVML_ENTRY_POINT(nvmlGpuInstanceDestroy, tsapiGpuInstanceDestroy,
         (nvmlGpuInstance_t gpuInstance),
@@ -976,6 +1135,11 @@ NVML_ENTRY_POINT(nvmlDeviceGetGpuInstanceById, tsapiDeviceGetGpuInstanceById,
 
 NVML_ENTRY_POINT(nvmlGpuInstanceGetComputeInstanceProfileInfo, tsapiGpuInstanceGetComputeInstanceProfileInfo,
         (nvmlGpuInstance_t gpuInstance, unsigned int profile, unsigned int engProfile, nvmlComputeInstanceProfileInfo_t *info),
+        "(%p, %u, %u, %p)",
+        gpuInstance, profile, engProfile, info)
+
+NVML_ENTRY_POINT(nvmlGpuInstanceGetComputeInstanceProfileInfoV, tsapiGpuInstanceGetComputeInstanceProfileInfoV,
+        (nvmlGpuInstance_t gpuInstance, unsigned int profile, unsigned int engProfile, nvmlComputeInstanceProfileInfo_v2_t *info),
         "(%p, %u, %u, %p)",
         gpuInstance, profile, engProfile, info)
 
@@ -1009,10 +1173,10 @@ NVML_ENTRY_POINT(nvmlComputeInstanceGetInfo, tsapiComputeInstanceGetInfo,
         "(%p, %p)",
         computeInstance, info)
 
-NVML_ENTRY_POINT(nvmlDeviceGetArchitecture, tsapiDeviceGetArchitecture,
-                 (nvmlDevice_t device, nvmlDeviceArchitecture_t *arch),
-                 "(%p, %p)",
-                 device, arch)
+NVML_ENTRY_POINT(nvmlComputeInstanceGetInfo_v2, tsapiComputeInstanceGetInfo_v2,
+        (nvmlComputeInstance_t computeInstance, nvmlComputeInstanceInfo_t *info),
+        "(%p, %p)",
+        computeInstance, info)
 
 NVML_ENTRY_POINT(nvmlDeviceIsMigDeviceHandle, tsapiDeviceIsMigDeviceHandle,
         (nvmlDevice_t device, unsigned int *isMigDevice),
@@ -1054,8 +1218,158 @@ NVML_ENTRY_POINT(nvmlDeviceGetAttributes, tsapiDeviceGetAttributes,
         "(%p, %p)",
         device, attributes)
 
+NVML_ENTRY_POINT(nvmlDeviceGetAttributes_v2, tsapiDeviceGetAttributes_v2,
+        (nvmlDevice_t device, nvmlDeviceAttributes_t *attributes),
+        "(%p, %p)",
+        device, attributes)
+
 NVML_ENTRY_POINT(nvmlDeviceGetRemappedRows, tsapiDeviceGetRemappedRows,
          (nvmlDevice_t device, unsigned int *corrRows, unsigned int *uncRows,
           unsigned int *isPending, unsigned int *failureOccurred),
          "(%p, %p, %p, %p, %p)",
          device, corrRows, uncRows, isPending, failureOccurred)
+
+NVML_ENTRY_POINT(nvmlDeviceGetRowRemapperHistogram, tsapiDeviceGetRowRemapperHistogram,
+        (nvmlDevice_t device, nvmlRowRemapperHistogramValues_t *values),
+        "(%p, %p)",
+        device, values)
+
+NVML_ENTRY_POINT(nvmlDeviceGetBusType, tsapiDeviceGetBusType,
+        (nvmlDevice_t device, nvmlBusType_t *type),
+        "(%p, %p)",
+        device, type)
+
+NVML_ENTRY_POINT(nvmlDeviceGetIrqNum, tsapiDeviceGetIrqNum,
+        (nvmlDevice_t device, unsigned int *irqNum),
+        "(%p, %p)",
+        device, irqNum)
+
+NVML_ENTRY_POINT(nvmlDeviceGetNumGpuCores, tsapiDeviceGetNumGpuCores,
+        (nvmlDevice_t device, unsigned int *numCores),
+        "(%p, %p)",
+        device, numCores)
+
+NVML_ENTRY_POINT(nvmlDeviceGetPowerSource, tsapiDeviceGetPowerSource,
+        (nvmlDevice_t device, nvmlPowerSource_t *powerSource),
+        "(%p, %p)",
+        device, powerSource)
+
+NVML_ENTRY_POINT(nvmlDeviceGetMemoryBusWidth, tsapiDeviceGetMemoryBusWidth,
+        (nvmlDevice_t device, unsigned int *busWidth),
+        "(%p, %p)",
+        device, busWidth)
+
+NVML_ENTRY_POINT(nvmlDeviceGetPcieLinkMaxSpeed, tsapiDeviceGetPcieLinkMaxSpeed,
+        (nvmlDevice_t device, unsigned int *maxSpeed),
+        "(%p, %p)",
+        device, maxSpeed)
+
+NVML_ENTRY_POINT(nvmlDeviceGetAdaptiveClockInfoStatus, tsapiDeviceGetAdaptiveClockInfoStatus,
+        (nvmlDevice_t device, unsigned int *adaptiveClockStatus),
+        "(%p, %p)",
+        device, adaptiveClockStatus)
+
+NVML_ENTRY_POINT(nvmlDeviceGetPcieSpeed, tsapiDeviceGetPcieSpeed,
+        (nvmlDevice_t device, unsigned int *pcieSpeed),
+        "(%p, %p)",
+        device, pcieSpeed)
+NVML_ENTRY_POINT(nvmlDeviceGetDynamicPstatesInfo, tsapiDeviceGetDynamicPstatesInfo,
+        (nvmlDevice_t device, nvmlGpuDynamicPstatesInfo_t *pDynamicPstatesInfo),
+        "(%p %p)",
+        device, pDynamicPstatesInfo)
+NVML_ENTRY_POINT(nvmlDeviceSetFanSpeed_v2, tsapiDeviceSetFanSpeed_v2,
+        (nvmlDevice_t device, unsigned int fan, unsigned int speed),
+        "(%p, %u, %u)",
+        device, fan, speed)
+
+NVML_ENTRY_POINT(nvmlDeviceSetDefaultFanSpeed_v2, tsapiDeviceSetDefaultFanSpeed_v2,
+        (nvmlDevice_t device, unsigned int fan),
+        "(%p, %u)",
+        device, fan)
+NVML_ENTRY_POINT(nvmlDeviceGetThermalSettings, tsapiDeviceGetThermalSettings,
+        (nvmlDevice_t device, unsigned int sensorIndex, nvmlGpuThermalSettings_t *pThermalSettings),
+        "(%p %u %p)",
+        device, sensorIndex, pThermalSettings)
+NVML_ENTRY_POINT(nvmlDeviceGetMinMaxClockOfPState, tsapiDeviceGetMinMaxClockOfPState,
+        (nvmlDevice_t device, nvmlClockType_t type, nvmlPstates_t pstate, unsigned int * minClockMHz, unsigned int * maxClockMHz),
+        "(%p, %u, %u, %p, %p)",
+        device, type, pstate, minClockMHz, maxClockMHz)
+
+NVML_ENTRY_POINT(nvmlDeviceGetSupportedPerformanceStates, tsapiDeviceGetSupportedPerformanceStates,
+        (nvmlDevice_t device, nvmlPstates_t *pstates, unsigned int size),
+        "(%p, %p, %u)",
+        device, pstates, size)
+
+NVML_ENTRY_POINT(nvmlDeviceGetGpcClkVfOffset, tsapiDeviceGetGpcClkVfOffset,
+        (nvmlDevice_t device, int *offset),
+        "(%p, %p)",
+        device, offset)
+
+NVML_ENTRY_POINT(nvmlDeviceSetGpcClkVfOffset, tsapiDeviceSetGpcClkVfOffset,
+        (nvmlDevice_t device, int offset),
+        "(%p, %d)",
+        device, offset)
+
+NVML_ENTRY_POINT(nvmlDeviceGetMemClkVfOffset, tsapiDeviceGetMemClkVfOffset,
+        (nvmlDevice_t device, int *offset),
+        "(%p, %p)",
+        device, offset)
+
+NVML_ENTRY_POINT(nvmlDeviceSetMemClkVfOffset, tsapiDeviceSetMemClkVfOffset,
+        (nvmlDevice_t device, int offset),
+        "(%p, %d)",
+        device, offset)
+
+NVML_ENTRY_POINT(nvmlDeviceGetMinMaxFanSpeed, tsapiDeviceGetMinMaxFanSpeed,
+        (nvmlDevice_t device, unsigned int *min, unsigned int * max),
+        "(%p, %p, %p)",
+        device, min, max)
+
+NVML_ENTRY_POINT(nvmlDeviceGetGpcClkMinMaxVfOffset, tsapiDeviceGetGpcClkMinMaxVfOffset,
+        (nvmlDevice_t device, int *minOffset, int *maxOffset),
+        "(%p, %p, %p)",
+        device, minOffset, maxOffset)
+
+NVML_ENTRY_POINT(nvmlDeviceGetMemClkMinMaxVfOffset, tsapiDeviceGetMemClkMinMaxVfOffset,
+        (nvmlDevice_t device, int *minOffset, int *maxOffset),
+        "(%p, %p, %p)",
+        device, minOffset, maxOffset)
+
+NVML_ENTRY_POINT(nvmlGpmMetricsGet, tsapiGpmMetricsGet,
+        (nvmlGpmMetricsGet_t *metricsGet),
+        "(%p)",
+        metricsGet)
+
+NVML_ENTRY_POINT(nvmlGpmSampleAlloc, tsapiGpmSampleAlloc,
+        (nvmlGpmSample_t *gpmSample),
+        "(%p)",
+        gpmSample)
+
+NVML_ENTRY_POINT(nvmlGpmSampleFree, tsapiGpmSampleFree,
+        (nvmlGpmSample_t gpmSample),
+        "(%p)",
+        gpmSample)
+
+NVML_ENTRY_POINT(nvmlGpmSampleGet, tsapiGpmSampleGet,
+        (nvmlDevice_t device, nvmlGpmSample_t gpmSample),
+        "(%p, %p)",
+        device, gpmSample)
+
+NVML_ENTRY_POINT(nvmlGpmQueryDeviceSupport, tsapiGpmQueryDeviceSupport,
+        (nvmlDevice_t device, nvmlGpmSupport_t *gpmSupport),
+        "(%p, %p)",
+        device, gpmSupport)
+
+
+NVML_ENTRY_POINT(nvmlDeviceGetCount_v2, tsapiDeviceGetCount_v2,
+        (unsigned int *deviceCount),
+        "(%p)",
+        deviceCount)
+NVML_ENTRY_POINT(nvmlDeviceGetHandleByIndex_v2, tsapiDeviceGetHandleByIndex_v2,
+        (unsigned int index, nvmlDevice_t *device),
+        "(%d, %p)",
+        index, device)
+NVML_ENTRY_POINT(nvmlDeviceGetArchitecture, tsapiDeviceGetArchitecture,
+        (nvmlDevice_t device, nvmlDeviceArchitecture_t *arch),
+        "(%p, %p)",
+        device, arch)

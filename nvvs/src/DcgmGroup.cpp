@@ -49,13 +49,13 @@ dcgmReturn_t DcgmGroup::Init(dcgmHandle_t handle, const std::string &groupNameSt
 
     if (handle == 0)
     {
-        PRINT_ERROR("", "Cannot initialize the DCGM group with an invalid DCGM handle");
+        log_error("Cannot initialize the DCGM group with an invalid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
     if (m_groupId != 0)
     {
-        PRINT_ERROR("", "Cannot initialize the DCGM group - it has already been initialized");
+        log_error("Cannot initialize the DCGM group - it has already been initialized");
         return DCGM_ST_BADPARAM;
     }
 
@@ -70,13 +70,13 @@ dcgmReturn_t DcgmGroup::Init(dcgmHandle_t handle, const std::string &groupName, 
 {
     if (handle == 0)
     {
-        PRINT_ERROR("", "Cannot initialize the DCGM group with an invalid DCGM handle");
+        log_error("Cannot initialize the DCGM group with an invalid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
     if (m_groupId != 0)
     {
-        PRINT_ERROR("", "Cannot initialize the DCGM group - it has already been initialized");
+        log_error("Cannot initialize the DCGM group - it has already been initialized");
         return DCGM_ST_BADPARAM;
     }
 
@@ -103,13 +103,13 @@ dcgmReturn_t DcgmGroup::AddGpu(unsigned int gpuId)
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot add a GPU to a group that does not have a valid DCGM handle");
+        log_error("Cannot add a GPU to a group that does not have a valid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
     if (m_groupId == 0)
     {
-        PRINT_ERROR("", "Cannot add a GPU to a group that does not exist yet");
+        log_error("Cannot add a GPU to a group that does not exist yet");
         return DCGM_ST_BADPARAM;
     }
 
@@ -146,7 +146,7 @@ dcgmReturn_t DcgmGroup::RefreshGroupInfo()
         return DCGM_ST_OK;
     else if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot refresh group information because we do not have a valid handle to DCGM");
+        log_error("Cannot refresh group information because we do not have a valid handle to DCGM");
         return DCGM_ST_BADPARAM;
     }
 
@@ -169,10 +169,9 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
     // Return an error if there aren't enough slots for the status
     if (m_info.count > maxSize)
     {
-        PRINT_INFO("%u %u",
-                   "We cannot save the config status because we received %u and have a max count of %u",
-                   m_info.count,
-                   maxSize);
+        log_info("We cannot save the config status because we received {} and have a max count of {}",
+                 m_info.count,
+                 maxSize);
         return DCGM_ST_INSUFFICIENT_SIZE;
     }
 
@@ -180,7 +179,7 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
 
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%s", "Failed to create the status in DCGM: '%s'", errorString(ret));
+        log_error("Failed to create the status in DCGM: '{}'", errorString(ret));
         return ret;
     }
 
@@ -234,13 +233,13 @@ dcgmReturn_t DcgmGroup::WatchFields(long long frequency, double keepAge)
 {
     if (m_handle == 0)
     {
-        PRINT_INFO("", "Cannot watch fields with an invalid DCGM handle.");
+        log_info("Cannot watch fields with an invalid DCGM handle.");
         return DCGM_ST_BADPARAM;
     }
 
     if (m_fieldGroup == nullptr)
     {
-        PRINT_INFO("", "Cannot watch fields without an initialized field group");
+        log_info("Cannot watch fields without an initialized field group");
         return DCGM_ST_BADPARAM;
     }
 

@@ -21,56 +21,62 @@
 
 /*****************************************************************************/
 /* Core Subrequest IDs */
-#define DCGM_CORE_SR_CLIENT_DISCONNECT             1  /* Notify modules that a client logged out */
-#define DCGM_CORE_SR_SET_LOGGING_SEVERITY          2  /* Set logging severity */
-#define DCGM_CORE_SR_GROUP_REMOVED                 3  /* Notify modules that a group was removed */
-#define DCGM_CORE_SR_FIELD_VALUES_UPDATED          4  /* Notify modules that field values were updated */
-#define DCGM_CORE_SR_LOGGING_CHANGED               5  /* Notify modules that logging severity has changed */
-#define DCGM_CORE_SR_MIG_UPDATED                   6  /* Notify modules that mig config has been updated */
-#define DCGM_CORE_SR_MIG_ENTITY_CREATE             7  /* Create a MIG entity */
-#define DCGM_CORE_SR_MIG_ENTITY_DELETE             8  /* Delete a MIG entity */
-#define DCGM_CORE_SR_GET_GPU_STATUS                9  /* Get gpu status */
-#define DCGM_CORE_SR_HOSTENGINE_VERSION            10 /* Get hostengine version info */
-#define DCGM_CORE_SR_CREATE_GROUP                  11 /* Create a group */
-#define DCGM_CORE_SR_REMOVE_ENTITY                 12 /* Remove an entity */
-#define DCGM_CORE_SR_GROUP_DESTROY                 13 /* Remove a group */
-#define DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES     14 /* Get list of entities for a given entity group */
-#define DCGM_CORE_SR_GROUP_GET_ALL_IDS             15 /* Get list of all group ids */
-#define DCGM_CORE_SR_GROUP_GET_INFO                16 /* Get info about a specified group */
-#define DCGM_CORE_SR_JOB_START_STATS               17 /* Start job stat collection */
-#define DCGM_CORE_SR_JOB_STOP_STATS                18 /* Stop job stat collection */
-#define DCGM_CORE_SR_JOB_GET_STATS                 19 /* Get job stats */
-#define DCGM_CORE_SR_JOB_REMOVE                    20 /* Remove job stat collection */
-#define DCGM_CORE_SR_JOB_REMOVE_ALL                21 /* Remove all job stat collections */
-#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES    22 /* Get the latest field values for the specified entities */
-#define DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD 23 /* Get multiples values for a given field */
-#define DCGM_CORE_SR_WATCH_FIELD_VALUE             24 /* Watch a gpu's field value */
-#define DCGM_CORE_SR_UPDATE_ALL_FIELDS             25 /* Update all fields */
-#define DCGM_CORE_SR_UNWATCH_FIELD_VALUE           26 /* Stop watching a field value */
-#define DCGM_CORE_SR_INJECT_FIELD_VALUE            27 /* Inject a field value */
-#define DCGM_CORE_SR_GET_CACHE_MANAGER_FIELD_INFO  28 /* Get info about a field from cache manager */
-#define DCGM_CORE_SR_WATCH_FIELDS                  29 /* Set watch on a group of fields */
-#define DCGM_CORE_SR_UNWATCH_FIELDS                30 /* Unwatch a group of fields */
-#define DCGM_CORE_SR_GET_TOPOLOGY                  31 /* Get topology */
-#define DCGM_CORE_SR_GET_TOPOLOGY_AFFINITY         32 /* Get topology affinity */
-#define DCGM_CORE_SR_SELECT_TOPOLOGY_GPUS          33 /* Select Gpus based on topology criteria */
-#define DCGM_CORE_SR_GET_ALL_DEVICES               34 /* Get array of device ids */
-#define DCGM_CORE_SR_GROUP_ADD_ENTITY              35 /* Add entity to group */
-#define DCGM_CORE_SR_CLIENT_LOGIN                  36 /* Set client login parameters */
-#define DCGM_CORE_SR_SET_ENTITY_LINK_STATE         37 /* Set the state of an entity's nvlink */
-#define DCGM_CORE_SR_FIELDGROUP_CREATE             38 /* Create a fieldgroup */
-#define DCGM_CORE_SR_FIELDGROUP_DESTROY            39 /* Destroy a fieldgroup */
-#define DCGM_CORE_SR_FIELDGROUP_GET_INFO           40 /* Get info about one fieldgroup */
-#define DCGM_CORE_SR_PID_GET_INFO                  41 /* Get info about one pid */
-#define DCGM_CORE_SR_GET_FIELD_SUMMARY             42 /* Get summary of a particular field */
-#define DCGM_CORE_SR_GET_NVLINK_STATUS             43 /* Get status of nvlink */
-#define DCGM_CORE_SR_CREATE_FAKE_ENTITIES          44 /* Create fake entities */
-#define DCGM_CORE_SR_WATCH_PREDEFINED_FIELDS       45 /* Watch predefined fields */
-#define DCGM_CORE_SR_MODULE_BLACKLIST              46 /* Blacklist a module */
-#define DCGM_CORE_SR_MODULE_STATUS                 47 /* Get the status of modules */
-#define DCGM_CORE_SR_HOSTENGINE_HEALTH             48 /* Get health of hostengine */
-#define DCGM_CORE_SR_FIELDGROUP_GET_ALL            49 /* Get all fieldgroup info */
-#define DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY    50 /* Get gpu instance hierarchy */
+#define DCGM_CORE_SR_CLIENT_DISCONNECT                1  /* Notify modules that a client logged out */
+#define DCGM_CORE_SR_SET_LOGGING_SEVERITY             2  /* Set logging severity */
+#define DCGM_CORE_SR_GROUP_REMOVED                    3  /* Notify modules that a group was removed */
+#define DCGM_CORE_SR_FIELD_VALUES_UPDATED             4  /* Notify modules that field values were updated */
+#define DCGM_CORE_SR_LOGGING_CHANGED                  5  /* Notify modules that logging severity has changed */
+#define DCGM_CORE_SR_MIG_UPDATED                      6  /* Notify modules that mig config has been updated */
+#define DCGM_CORE_SR_MIG_ENTITY_CREATE                7  /* Create a MIG entity */
+#define DCGM_CORE_SR_MIG_ENTITY_DELETE                8  /* Delete a MIG entity */
+#define DCGM_CORE_SR_GET_GPU_STATUS                   9  /* Get gpu status */
+#define DCGM_CORE_SR_HOSTENGINE_VERSION               10 /* Get hostengine version info */
+#define DCGM_CORE_SR_CREATE_GROUP                     11 /* Create a group */
+#define DCGM_CORE_SR_REMOVE_ENTITY                    12 /* Remove an entity */
+#define DCGM_CORE_SR_GROUP_DESTROY                    13 /* Remove a group */
+#define DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES        14 /* Get list of entities for a given entity group */
+#define DCGM_CORE_SR_GROUP_GET_ALL_IDS                15 /* Get list of all group ids */
+#define DCGM_CORE_SR_GROUP_GET_INFO                   16 /* Get info about a specified group */
+#define DCGM_CORE_SR_JOB_START_STATS                  17 /* Start job stat collection */
+#define DCGM_CORE_SR_JOB_STOP_STATS                   18 /* Stop job stat collection */
+#define DCGM_CORE_SR_JOB_GET_STATS                    19 /* Get job stats */
+#define DCGM_CORE_SR_JOB_REMOVE                       20 /* Remove job stat collection */
+#define DCGM_CORE_SR_JOB_REMOVE_ALL                   21 /* Remove all job stat collections */
+#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V1    22 /* Get the latest field values for the specified entities */
+#define DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1 23 /* Get multiples values for a given field */
+#define DCGM_CORE_SR_WATCH_FIELD_VALUE_V1             24 /* Watch a gpu's field value (DCGM 2.x) */
+#define DCGM_CORE_SR_UPDATE_ALL_FIELDS                25 /* Update all fields */
+#define DCGM_CORE_SR_UNWATCH_FIELD_VALUE              26 /* Stop watching a field value */
+#define DCGM_CORE_SR_INJECT_FIELD_VALUE               27 /* Inject a field value */
+#define DCGM_CORE_SR_GET_CACHE_MANAGER_FIELD_INFO     28 /* Get info about a field from cache manager */
+#define DCGM_CORE_SR_WATCH_FIELDS                     29 /* Set watch on a group of fields */
+#define DCGM_CORE_SR_UNWATCH_FIELDS                   30 /* Unwatch a group of fields */
+#define DCGM_CORE_SR_GET_TOPOLOGY                     31 /* Get topology */
+#define DCGM_CORE_SR_GET_TOPOLOGY_AFFINITY            32 /* Get topology affinity */
+#define DCGM_CORE_SR_SELECT_TOPOLOGY_GPUS             33 /* Select Gpus based on topology criteria */
+#define DCGM_CORE_SR_GET_ALL_DEVICES                  34 /* Get array of device ids */
+#define DCGM_CORE_SR_GROUP_ADD_ENTITY                 35 /* Add entity to group */
+#define DCGM_CORE_SR_CLIENT_LOGIN                     36 /* Set client login parameters */
+#define DCGM_CORE_SR_SET_ENTITY_LINK_STATE            37 /* Set the state of an entity's nvlink */
+#define DCGM_CORE_SR_FIELDGROUP_CREATE                38 /* Create a fieldgroup */
+#define DCGM_CORE_SR_FIELDGROUP_DESTROY               39 /* Destroy a fieldgroup */
+#define DCGM_CORE_SR_FIELDGROUP_GET_INFO              40 /* Get info about one fieldgroup */
+#define DCGM_CORE_SR_PID_GET_INFO                     41 /* Get info about one pid */
+#define DCGM_CORE_SR_GET_FIELD_SUMMARY                42 /* Get summary of a particular field */
+#define DCGM_CORE_SR_GET_NVLINK_STATUS                43 /* Get status of nvlink */
+#define DCGM_CORE_SR_CREATE_FAKE_ENTITIES             44 /* Create fake entities */
+#define DCGM_CORE_SR_WATCH_PREDEFINED_FIELDS          45 /* Watch predefined fields */
+#define DCGM_CORE_SR_MODULE_DENYLIST                  46 /* Add a module to the denylist */
+#define DCGM_CORE_SR_MODULE_STATUS                    47 /* Get the status of modules */
+#define DCGM_CORE_SR_HOSTENGINE_HEALTH                48 /* Get health of hostengine */
+#define DCGM_CORE_SR_FIELDGROUP_GET_ALL               49 /* Get all fieldgroup info */
+#define DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY       50 /* Get gpu instance hierarchy */
+#define DCGM_CORE_SR_PROF_GET_METRIC_GROUPS           51 /* Get profiling metric groups */
+#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2                    \
+    52 /* Get the latest field values for the specified entities (v2) \
+        */
+#define DCGM_CORE_SR_WATCH_FIELD_VALUE_V2             53 /* Watch a gpu's field value (DCGM 3.x+) */
+#define DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2 54 /* Get multiples values for a given field (V2) */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -294,10 +300,17 @@ typedef struct
 
 #define dcgm_core_msg_entities_get_latest_values_version1 \
     MAKE_DCGM_VERSION(dcgm_core_msg_entities_get_latest_values_v1, 1)
-#define dcgm_core_msg_entities_get_latest_values_version dcgm_core_msg_entities_get_latest_values_version1
 
-typedef dcgm_core_msg_entities_get_latest_values_v1 dcgm_core_msg_entities_get_latest_values_t;
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmEntitiesGetLatestValues_v2 ev;
+} dcgm_core_msg_entities_get_latest_values_v2;
 
+#define dcgm_core_msg_entities_get_latest_values_version2 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_entities_get_latest_values_v2, 2)
+
+/* Used by DCGM 2.x clients */
 typedef struct
 {
     dcgm_module_command_header_t header;
@@ -306,10 +319,18 @@ typedef struct
 
 #define dcgm_core_msg_get_multiple_values_for_field_version1 \
     MAKE_DCGM_VERSION(dcgm_core_msg_get_multiple_values_for_field_v1, 1)
-#define dcgm_core_msg_get_multiple_values_for_field_version dcgm_core_msg_get_multiple_values_for_field_version1
 
-typedef dcgm_core_msg_get_multiple_values_for_field_v1 dcgm_core_msg_get_multiple_values_for_field_t;
+/* Used by DCGM 3.x clients */
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmGetMultipleValuesForField_v2 fv;
+} dcgm_core_msg_get_multiple_values_for_field_v2;
 
+#define dcgm_core_msg_get_multiple_values_for_field_version2 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_get_multiple_values_for_field_v2, 2)
+
+/* Used by DCGM 2.x clients */
 typedef struct
 {
     dcgm_module_command_header_t header;
@@ -317,9 +338,15 @@ typedef struct
 } dcgm_core_msg_watch_field_value_v1;
 
 #define dcgm_core_msg_watch_field_value_version1 MAKE_DCGM_VERSION(dcgm_core_msg_watch_field_value_v1, 1)
-#define dcgm_core_msg_watch_field_value_version  dcgm_core_msg_watch_field_value_version1
 
-typedef dcgm_core_msg_watch_field_value_v1 dcgm_core_msg_watch_field_value_t;
+/* Added in 3.0 */
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmWatchFieldValue_v2 fv;
+} dcgm_core_msg_watch_field_value_v2;
+
+#define dcgm_core_msg_watch_field_value_version2 MAKE_DCGM_VERSION(dcgm_core_msg_watch_field_value_v2, 2)
 
 typedef struct
 {
@@ -353,6 +380,11 @@ typedef struct
 #define dcgm_core_msg_inject_field_value_version  dcgm_core_msg_inject_field_value_version1
 
 typedef dcgm_core_msg_inject_field_value_v1 dcgm_core_msg_inject_field_value_t;
+
+/* For now the NVML injection API has the same interface as the DCGM injection API,
+ * so we can copy these. */
+typedef dcgm_core_msg_inject_field_value_v1 dcgm_core_msg_nvml_inject_field_value_t;
+#define dcgm_core_msg_nvml_inject_field_value_version dcgm_core_msg_inject_field_value_version
 
 typedef struct
 {
@@ -435,13 +467,13 @@ typedef dcgm_core_msg_client_login_v1 dcgm_core_msg_client_login_t;
 typedef struct
 {
     dcgm_module_command_header_t header;
-    dcgmGetNvLinkStatus_v1 info;
-} dcgm_core_msg_get_nvlink_status_v1;
+    dcgmGetNvLinkStatus_v2 info;
+} dcgm_core_msg_get_nvlink_status_v2;
 
-#define dcgm_core_msg_get_nvlink_status_version1 MAKE_DCGM_VERSION(dcgm_core_msg_get_nvlink_status_v1, 1)
-#define dcgm_core_msg_get_nvlink_status_version  dcgm_core_msg_get_nvlink_status_version1
+#define dcgm_core_msg_get_nvlink_status_version2 MAKE_DCGM_VERSION(dcgm_core_msg_get_nvlink_status_v2, 2)
+#define dcgm_core_msg_get_nvlink_status_version  dcgm_core_msg_get_nvlink_status_version2
 
-typedef dcgm_core_msg_get_nvlink_status_v1 dcgm_core_msg_get_nvlink_status_t;
+typedef dcgm_core_msg_get_nvlink_status_v2 dcgm_core_msg_get_nvlink_status_t;
 
 typedef struct
 {
@@ -513,13 +545,13 @@ typedef dcgm_core_msg_watch_predefined_fields_v1 dcgm_core_msg_watch_predefined_
 typedef struct
 {
     dcgm_module_command_header_t header;
-    dcgmMsgModuleBlacklist_v1 bl;
-} dcgm_core_msg_module_blacklist_v1;
+    dcgmMsgModuleDenylist_v1 bl;
+} dcgm_core_msg_module_denylist_v1;
 
-#define dcgm_core_msg_module_blacklist_version1 MAKE_DCGM_VERSION(dcgm_core_msg_module_blacklist_v1, 1)
-#define dcgm_core_msg_module_blacklist_version  dcgm_core_msg_module_blacklist_version1
+#define dcgm_core_msg_module_denylist_version1 MAKE_DCGM_VERSION(dcgm_core_msg_module_denylist_v1, 1)
+#define dcgm_core_msg_module_denylist_version  dcgm_core_msg_module_denylist_version1
 
-typedef dcgm_core_msg_module_blacklist_v1 dcgm_core_msg_module_blacklist_t;
+typedef dcgm_core_msg_module_denylist_v1 dcgm_core_msg_module_denylist_t;
 
 typedef struct
 {
@@ -566,6 +598,33 @@ typedef struct
 
 typedef dcgm_core_msg_get_gpu_instance_hierarchy_v1 dcgm_core_msg_get_gpu_instance_hierarchy_t;
 
+/**
+ * Subrequest DCGM_CORE_SR_PROF_GET_METRIC_GROUPS
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+
+    dcgmProfGetMetricGroups_t metricGroups; /* IN/OUT user request to process */
+} dcgm_core_msg_get_metric_groups_v1;
+
+#define dcgm_core_msg_get_metric_groups_version1 MAKE_DCGM_VERSION(dcgm_core_msg_get_metric_groups_v1, 1)
+#define dcgm_core_msg_get_metric_groups_version  dcgm_core_msg_get_metric_groups_version1
+
+typedef dcgm_core_msg_get_metric_groups_v1 dcgm_core_msg_get_metric_groups_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;   /* Command header */
+    dcgmMsgNvmlCreateInjectionGpu_v1 info; /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_create_injection_gpu_v1;
+
+#define dcgm_core_msg_nvml_create_injection_gpu_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_create_injection_gpu_v1, 1)
+#define dcgm_core_msg_nvml_create_injection_gpu_version dcgm_core_msg_nvml_create_injection_gpu_version1
+
+typedef dcgm_core_msg_nvml_create_injection_gpu_v1 dcgm_core_msg_nvml_create_injection_gpu_t;
+
 DCGM_CASSERT(dcgm_core_msg_client_disconnect_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_logging_changed_version1 == (long)0x1000018, 1);
 DCGM_CASSERT(dcgm_core_msg_mig_updated_version1 == (long)0x100001c, 1);
@@ -596,17 +655,18 @@ DCGM_CASSERT(dcgm_core_msg_get_topology_affinity_version1 == (long)0x1000930, 1)
 DCGM_CASSERT(dcgm_core_msg_select_topology_gpus_version1 == (long)0x1000040, 1);
 DCGM_CASSERT(dcgm_core_msg_get_all_devices_version1 == (long)0x10000a4, 1);
 DCGM_CASSERT(dcgm_core_msg_client_login_version1 == (long)0x1000020, 1);
-DCGM_CASSERT(dcgm_core_msg_get_nvlink_status_version1 == (long)0x1000d98, 1);
+DCGM_CASSERT(dcgm_core_msg_get_nvlink_status_version2 == (long)0x20015d8, 2);
 DCGM_CASSERT(dcgm_core_msg_set_entity_nvlink_state_version1 == (long)0x1000034, 1);
 DCGM_CASSERT(dcgm_core_msg_fieldgroup_op_version1 == (long)0x1000230, 1);
 DCGM_CASSERT(dcgm_core_msg_pid_get_info_version1 == (long)0x1004550, 1);
 DCGM_CASSERT(dcgm_core_msg_get_field_summary_version1 == (long)0x1000088, 1);
 DCGM_CASSERT(dcgm_core_msg_create_fake_entities_version1 == (long)0x1002324, 1);
 DCGM_CASSERT(dcgm_core_msg_watch_predefined_fields_version1 == (long)0x1000048, 1);
-DCGM_CASSERT(dcgm_core_msg_module_blacklist_version1 == (long)0x1000020, 1);
+DCGM_CASSERT(dcgm_core_msg_module_denylist_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_module_status_version1 == (long)0x10000a4, 1);
 DCGM_CASSERT(dcgm_core_msg_hostengine_health_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_fieldgroup_get_all_version1 == (long)0x1008428, 1);
 DCGM_CASSERT(dcgm_core_msg_fieldgroup_get_all_version == (long)0x1008428, 1);
-DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version1 == (long)0x1011f28, 1);
-DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version == (long)0x1011f28, 1);
+DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version == (long)0x1011f24, 1);
+DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version1 == (long)0x1000578, 1);
+DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version == (long)0x1000578, 1);

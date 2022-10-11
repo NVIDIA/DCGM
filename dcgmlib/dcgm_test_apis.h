@@ -145,53 +145,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmUnwatchFieldValue(dcgmHandle_t pDcgmHandle,
                                                    unsigned short fieldId,
                                                    int clearCache);
 
-/**
- * Get the current amount of memory used to store the given field.
- *
- * @param pDcgmHandle                   IN: DCGM Handle
- * @param fieldId                       IN: DCGM field ID
- * @param pDcgmMetadataMemory          OUT: Total memory usage information for all field values in DCGM
- * @param waitIfNoData                  IN: if no metadata is gathered wait till this occurs (!0)
- *                                          or return DCGM_ST_NO_DATA (0)
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \ref DCGM_METADATA_STATE_DISABLED
- *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldMemoryUsage(dcgmHandle_t pDcgmHandle,
-                                                               unsigned short fieldId,
-                                                               dcgmIntrospectFullMemory_t *memoryInfo,
-                                                               int waitIfNoData);
-
-/*************************************************************************/
-/**
- * Set the interval (in milliseconds) for when the metadata manager should
- * do its collection runs.
- *
- * @param pDcgmHandle             IN: DCGM Handle
- * @param runIntervalMs          OUT: interval duration to set
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmMetadataStateSetRunInterval(dcgmHandle_t pDcgmHandle, unsigned int runIntervalMs);
-
-/*************************************************************************/
-/**
- * Get the total execution time since startup used to update a field in DCGM.
- *
- * @param pDcgmHandle                   IN: DCGM Handle
- * @param fieldId                       IN: field ID
- * @param execTime                     OUT: see \ref dcgmFieldExecTime_t
- * @param waitIfNoData                  IN: if no metadata is gathered wait till this occurs (!0)
- *                                          or return DCGM_ST_NO_DATA (0)
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \ref DCGM_METADATA_STATE_DISABLED
- *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldExecTime(dcgmHandle_t pDcgmHandle,
-                                                            unsigned short fieldId,
-                                                            dcgmIntrospectFullFieldsExecTime_t *execTime,
-                                                            int waitIfNoData);
-
 /*************************************************************************/
 /**
  * Used to set vGPU configuration for the group of one or more GPUs identified by \a groupId.

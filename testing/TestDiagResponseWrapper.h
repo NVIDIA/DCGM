@@ -31,7 +31,7 @@ public:
 
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
-    int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus) override;
+    int Init(const TestDcgmModuleInitParams &initParams) override;
     int Run() override;
     int Cleanup() override;
     std::string GetTag() override;

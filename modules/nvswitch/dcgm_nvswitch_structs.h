@@ -126,11 +126,11 @@ typedef struct
 {
     dcgm_module_command_header_t header; //!< Command header
     dcgm_field_eid_t entityId;           //!< Entity of the NvSwitch to fetch link status for
-    dcgmNvLinkStatus_v2 linkStatus;      //!< OUT: State of all of the links
-} dcgm_nvswitch_msg_get_all_link_states_v1, dcgm_nvswitch_msg_get_all_link_states_t;
+    dcgmNvLinkStatus_v3 linkStatus;      //!< OUT: State of all of the links
+} dcgm_nvswitch_msg_get_all_link_states_v2, dcgm_nvswitch_msg_get_all_link_states_t;
 
-#define dcgm_nvswitch_msg_get_all_link_states_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_all_link_states_v1, 1)
-#define dcgm_nvswitch_msg_get_all_link_states_version  dcgm_nvswitch_msg_get_all_link_states_version1
+#define dcgm_nvswitch_msg_get_all_link_states_version2 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_all_link_states_v2, 2)
+#define dcgm_nvswitch_msg_get_all_link_states_version  dcgm_nvswitch_msg_get_all_link_states_version2
 
 /*****************************************************************************/
 /**
@@ -156,11 +156,13 @@ typedef struct
  */
 typedef struct
 {
-    dcgm_module_command_header_t header; //!< Command header
+    dcgm_module_command_header_t header;     //!< Command header
+    dcgm_field_entity_group_t entityGroupId; //!< to distinguish between switch/link
+    dcgm_field_eid_t entityId;               //!< Entity of the NvSwitch to get the status of
+    DcgmEntityStatus_t entityStatus;         //!< OUT: Status of the NvSwitch
+} dcgm_nvswitch_msg_get_entity_status_v2, dcgm_nvswitch_msg_get_entity_status_t;
 
-    dcgm_field_eid_t entityId;       //!< Entity of the NvSwitch to get the status of
-    DcgmEntityStatus_t entityStatus; //!< OUT: Status of the NvSwitch
-} dcgm_nvswitch_msg_get_entity_status_v1, dcgm_nvswitch_msg_get_entity_status_t;
 
-#define dcgm_nvswitch_msg_get_entity_status_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_entity_status_v1, 1)
-#define dcgm_nvswitch_msg_get_entity_status_version  dcgm_nvswitch_msg_get_entity_status_version1
+#define dcgm_nvswitch_msg_get_entity_status_version2 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_entity_status_v2, 2)
+
+#define dcgm_nvswitch_msg_get_entity_status_version dcgm_nvswitch_msg_get_entity_status_version2

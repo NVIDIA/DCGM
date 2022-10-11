@@ -46,31 +46,85 @@ extern "C" {
 #define NSCQ_PATH(p) nscq_##p
 #endif
 
-#define _NSCQ_DEF_PATH(name, path) const char name[] = path
+#define _NSCQ_DEF_PATH(name, path) static const char name[] = path
 
 _NSCQ_DEF_PATH(nscq_nvswitch_drv_version, "/drv/nvswitch/version");
 _NSCQ_DEF_PATH(nscq_nvswitch_device_uuid_path, "/drv/nvswitch/{device}/uuid");
-_NSCQ_DEF_PATH(nscq_nvswitch_device_blacklisted, "/drv/nvswitch/blacklisted");
-_NSCQ_DEF_PATH(nscq_nvswitch_device_pcie_location, "/drv/nvswitch/pcie/location");
+_NSCQ_DEF_PATH(nscq_nvswitch_device_blacklisted, "/drv/nvswitch/{device}/blacklisted");
+_NSCQ_DEF_PATH(nscq_nvswitch_device_pcie_location, "/drv/nvswitch/{device}/pcie/location");
 
 _NSCQ_DEF_PATH(nscq_nvswitch_phys_id, "/{nvswitch}/id/phys_id");
 _NSCQ_DEF_PATH(nscq_nvswitch_uuid, "/{nvswitch}/id/uuid");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_id, "/{nvswitch}/id/nvlink");
 _NSCQ_DEF_PATH(nscq_nvswitch_firmware_version, "/{nvswitch}/version/firmware");
 _NSCQ_DEF_PATH(nscq_nvswitch_pcie_location, "/{nvswitch}/pcie/location");
 _NSCQ_DEF_PATH(nscq_nvswitch_fabric_status, "/{nvswitch}/status/fabric");
 _NSCQ_DEF_PATH(nscq_nvswitch_reset_required, "/{nvswitch}/status/reset_required");
+_NSCQ_DEF_PATH(nscq_nvswitch_temperature_current, "/{nvswitch}/status/temperature/current");
+_NSCQ_DEF_PATH(nscq_nvswitch_temperature_sensors, "/{nvswitch}/status/temperature/sensors");
+_NSCQ_DEF_PATH(nscq_nvswitch_temperature_limit_slowdown, "/{nvswitch}/status/temperature/limit_slowdown");
+_NSCQ_DEF_PATH(nscq_nvswitch_temperature_limit_shutdown, "/{nvswitch}/status/temperature/limit_shutdown");
 _NSCQ_DEF_PATH(nscq_nvswitch_error_fatal, "/{nvswitch}/status/error/fatal");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_nonfatal, "/{nvswitch}/status/error/nonfatal");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_history_nvlink, "/{nvswitch}/status/error/history/nvlink");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_history_sxid, "/{nvswitch}/status/error/history/sxid");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_history_ecc_count, "/{nvswitch}/status/error/history/ecc/count");
+_NSCQ_DEF_PATH(nscq_nvswitch_error_history_ecc_log, "/{nvswitch}/status/error/history/ecc/entry");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_throughput_counters, "/{nvswitch}/nvlink/throughput_counters");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_ports_num, "/{nvswitch}/nvlink/ports_num");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_ports_mask, "/{nvswitch}/nvlink/ports_mask");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_vcs_num, "/{nvswitch}/nvlink/vcs_num");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_clock_info, "/{nvswitch}/nvlink/clock_info");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_voltage_info, "/{nvswitch}/nvlink/voltage_info");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_current_info, "/{nvswitch}/nvlink/current_info");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_link_version, "/{nvswitch}/nvlink/{port}/link_version");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_sublink_width, "/{nvswitch}/nvlink/{port}/sublink_width");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_link_bandwidth, "/{nvswitch}/nvlink/{port}/link_bandwidth");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_remote_device_type, "/{nvswitch}/nvlink/{port}/remote_device/type");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_remote_device_pcie_location, "/{nvswitch}/nvlink/{port}/remote_device/pcie/location");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_remote_device_link, "/{nvswitch}/nvlink/{port}/remote_device/id/link");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_remote_device_nvlink, "/{nvswitch}/nvlink/{port}/remote_device/id/nvlink");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_remote_device_uuid, "/{nvswitch}/nvlink/{port}/remote_device/id/uuid");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_link_status, "/{nvswitch}/nvlink/{port}/status/link");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_reset_required,
                "/{nvswitch}/nvlink/{port}/status/reset_required");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_fatal, "/{nvswitch}/nvlink/{port}/status/error/fatal");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_nonfatal, "/{nvswitch}/nvlink/{port}/status/error/nonfatal");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_replay_count, "/{nvswitch}/nvlink/{port}/status/error/replay_count");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_recovery_count, "/{nvswitch}/nvlink/{port}/status/error/recovery_count");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_flit_err_count, "/{nvswitch}/nvlink/{port}/status/error/flit_err_count");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_lane_crc_err_count_aggregate, "/{nvswitch}/nvlink/{port}/status/error/lane_crc_err_count_aggregate");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_error_lane_ecc_err_count_aggregate, "/{nvswitch}/nvlink/{port}/status/error/lane_ecc_err_count_aggregate");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_max_correctable_flit_crc_error_rate_daily,
+               "/{nvswitch}/nvlink/{port}/status/error/max_correctable_flit_crc_error_rate/daily");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_error_max_correctable_flit_crc_error_rate_monthly,
+               "/{nvswitch}/nvlink/{port}/status/error/max_correctable_flit_crc_error_rate/monthly");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_lane_crc_err_count, "/{nvswitch}/nvlink/{port}/{lane}/status/error/crc_err_count");
 _NSCQ_DEF_PATH(nscq_nvswitch_port_lane_ecc_err_count, "/{nvswitch}/nvlink/{port}/{lane}/status/error/ecc_err_count");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_lane_max_correctable_lane_crc_error_rate_daily,
+               "/{nvswitch}/nvlink/{port}/{lane}/status/error/max_correctable_lane_crc_error_rate/daily");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_lane_max_correctable_lane_crc_error_rate_monthly,
+               "/{nvswitch}/nvlink/{port}/{lane}/status/error/max_correctable_lane_crc_error_rate/monthly");
+_NSCQ_DEF_PATH(nscq_nvswitch_port_vc_latency, "/{nvswitch}/nvlink/{port}/{vc}/latency");
+_NSCQ_DEF_PATH(nscq_nvswitch_nvlink_port_throughput_counters, "/{nvswitch}/nvlink/{port}/throughput_counters");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_raw_cmis_presence, "/{nvswitch}/cci/raw/cmis_presence");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_raw_cmis_lane_mapping, "/{nvswitch}/cci/raw/cmis_lane_mapping");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_raw_cmis_read, "/{nvswitch}/cci/raw/cmis_read");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_presence, "/{nvswitch}/cci/{osfp}/presence");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_num_osfp, "/{nvswitch}/cci/num_osfp");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_lane_mapping, "/{nvswitch}/cci/{osfp}/lane_mapping");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_cable_type, "/{nvswitch}/cci/{osfp}/cable_type");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_module_media_type, "/{nvswitch}/cci/{osfp}/module_media_type");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_vendor_name, "/{nvswitch}/cci/{osfp}/vendor_name");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_cable_length, "/{nvswitch}/cci/{osfp}/cable_length");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_part_number, "/{nvswitch}/cci/{osfp}/part_number");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_revision_number, "/{nvswitch}/cci/{osfp}/revision_number");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_serial_number, "/{nvswitch}/cci/{osfp}/serial_number");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_lane_monitor, "/{nvswitch}/cci/{osfp}/lane_monitor");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_module_monitor, "/{nvswitch}/cci/{osfp}/module_monitor");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_module_firmware_version, "/{nvswitch}/cci/{osfp}/module_firmware_version");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_signal_integrity, "/{nvswitch}/cci/{osfp}/signal_integrity");
+_NSCQ_DEF_PATH(nscq_nvswitch_cci_osfp_data_path_state, "/{nvswitch}/cci/{osfp}/data_path_state");
 
 #undef _NSCQ_DEF_PATH
 

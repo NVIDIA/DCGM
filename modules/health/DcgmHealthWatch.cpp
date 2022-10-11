@@ -35,6 +35,9 @@ const char *EntityToString(dcgm_field_entity_group_t entityGroupId)
             return "GPU Instance";
         case DCGM_FE_GPU_CI:
             return "Compute Instance";
+        case DCGM_FE_LINK:
+            return "Link";
+
         default:
             return "Unknown";
     }
@@ -43,19 +46,30 @@ const char *EntityToString(dcgm_field_entity_group_t entityGroupId)
 }
 
 // Adds a watch for the specified field that will poll every 10 seconds for the last hour's events
-#define ADD_WATCH(fieldId)                                                                                           \
-    do                                                                                                               \
-    {                                                                                                                \
-        ret = mpCoreProxy.AddFieldWatch(                                                                             \
-            entityGroupId, entityId, fieldId, updateInterval, maxKeepAge, 0, watcher, false);                        \
-        if (DCGM_ST_OK != ret)                                                                                       \
-        {                                                                                                            \
-            std::stringstream ss;                                                                                    \
-            ss << "Failed to set watch for field " << fieldId << " on " << EntityToString(entityGroupId) << entityId \
-               << " group " << entityGroupId;                                                                        \
-            PRINT_ERROR("%s", "%s", ss.str().c_str());                                                               \
-            return ret;                                                                                              \
-        }                                                                                                            \
+#define ADD_WATCH(fieldId)                                                                                \
+    do                                                                                                    \
+    {                                                                                                     \
+        bool updateOnFirstWatch = false; /* All of the callers of this call UpdateFields() right after */ \
+        bool wereFirstWatcher   = false;                                                                  \
+        ret                     = mpCoreProxy.AddFieldWatch(entityGroupId,                                \
+                                        entityId,                                     \
+                                        fieldId,                                      \
+                                        updateInterval,                               \
+                                        maxKeepAge,                                   \
+                                        0,                                            \
+                                        watcher,                                      \
+                                        false,                                        \
+                                        updateOnFirstWatch,                           \
+                                        wereFirstWatcher);                            \
+        if (DCGM_ST_OK != ret)                                                                            \
+        {                                                                                                 \
+            log_error("Failed to set watch for field {} on {} {} group {}",                               \
+                      fieldId,                                                                            \
+                      EntityToString(entityGroupId),                                                      \
+                      entityId,                                                                           \
+                      entityGroupId);                                                                     \
+            return ret;                                                                                   \
+        }                                                                                                 \
     } while (0)
 
 /*****************************************************************************/
@@ -100,6 +114,9 @@ dcgmReturn_t DcgmHealthWatch::SetNvSwitchWatches(std::vector<unsigned int> &grou
     std::vector<unsigned int>::iterator switchIter;
     unsigned int i;
 
+    bool updateOnFirstWatch = false; /* All of the callers of this call UpdateFields() right after */
+    bool wereFirstWatcher   = false;
+
     for (switchIter = groupSwitchIds.begin(); switchIter != groupSwitchIds.end(); ++switchIter)
     {
         if (systems & DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL)
@@ -113,10 +130,12 @@ dcgmReturn_t DcgmHealthWatch::SetNvSwitchWatches(std::vector<unsigned int> &grou
                                                        maxKeepAge,
                                                        0,
                                                        watcher,
-                                                       false);
+                                                       false,
+                                                       updateOnFirstWatch,
+                                                       wereFirstWatcher);
                 if (dcgmReturn != DCGM_ST_OK)
                 {
-                    PRINT_ERROR("%d", "Error %d from AddEntityFieldWatch() for NvSwitch fields", (int)dcgmReturn);
+                    log_error("Error {} from AddEntityFieldWatch() for NvSwitch fields", (int)dcgmReturn);
                     return dcgmReturn;
                 }
             }
@@ -133,10 +152,12 @@ dcgmReturn_t DcgmHealthWatch::SetNvSwitchWatches(std::vector<unsigned int> &grou
                                                        maxKeepAge,
                                                        0,
                                                        watcher,
-                                                       false);
+                                                       false,
+                                                       updateOnFirstWatch,
+                                                       wereFirstWatcher);
                 if (dcgmReturn != DCGM_ST_OK)
                 {
-                    PRINT_ERROR("%d", "Error %d from AddEntityFieldWatch() for NvSwitch fields", (int)dcgmReturn);
+                    log_error("Error {} from AddEntityFieldWatch() for NvSwitch fields", (int)dcgmReturn);
                     return dcgmReturn;
                 }
             }
@@ -163,7 +184,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
     ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
+        log_error("Got st {} from GetGroupEntities()", ret);
         return ret;
     }
 
@@ -238,12 +259,11 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                     }
                     if (DCGM_ST_OK != tmpRet)
                     {
-                        PRINT_ERROR("%d %u %u",
-                                    "Error %d from bit %u, entity group %u entityId %u",
-                                    (int)tmpRet,
-                                    bit,
-                                    entities[i].entityGroupId,
-                                    entities[i].entityId);
+                        log_error("Error {} from bit {}, entity group {} entityId {}",
+                                  (int)tmpRet,
+                                  bit,
+                                  entities[i].entityGroupId,
+                                  entities[i].entityId);
                         break; // exit on error
                     }
                 }
@@ -253,6 +273,14 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                 groupSwitchIds.push_back(entities[i].entityId);
                 break;
 
+            case DCGM_FE_LINK:
+                /**
+                 * DCGM-2836. Examine what we should do in this case. Watch
+                 * for the health status of the associated switch or GPU,
+                 * perhaps?
+                 */
+                break;
+
             default:
                 // NO-OP
                 break;
@@ -260,7 +288,17 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
     }
 
     if (groupSwitchIds.size() > 0)
+    {
         ret = SetNvSwitchWatches(groupSwitchIds, systems, watcher, updateInterval, maxKeepAge);
+    }
+
+    /* Make sure every field has updated */
+    tmpRet = mpCoreProxy.UpdateAllFields(1);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "UpdateAllFields() returned " << tmpRet;
+        ret = tmpRet;
+    }
 
     return ret;
 }
@@ -275,7 +313,7 @@ dcgmReturn_t DcgmHealthWatch::GetWatches(unsigned int groupId, dcgmHealthSystems
     ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
+        log_error("Got st {} from GetGroupEntities()", ret);
         return ret;
     }
 
@@ -378,7 +416,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     ret = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got st %d from GetGroupEntities()", ret);
+        log_error("Got st {} from GetGroupEntities()", ret);
         return ret;
     }
 
@@ -387,11 +425,11 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     if (groupWatchIter != mGroupWatchState.end())
     {
         healthSystemsMask = groupWatchIter->second;
-        PRINT_DEBUG("%X %u", "Found health systems mask %X for groupId %u", (unsigned int)healthSystemsMask, groupId);
+        log_debug("Found health systems mask {:X} for groupId {}", (unsigned int)healthSystemsMask, groupId);
     }
     else
     {
-        PRINT_DEBUG("%u", "Found NO health systems mask for groupId %u", groupId);
+        log_debug("Found NO health systems mask for groupId {}", groupId);
     }
     dcgm_mutex_unlock(m_mutex);
 
@@ -444,7 +482,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                 default:
                     // reduce the logging level as this may pollute the log file if unsupported fields are watched
                     // continuously.
-                    PRINT_DEBUG("%u", "Unhandled health bit %u", bit);
+                    log_debug("Unhandled health bit {}", bit);
                     break;
             }
         }
@@ -506,62 +544,105 @@ dcgmReturn_t DcgmHealthWatch::SetMem(dcgm_field_entity_group_t entityGroupId,
     // the sampling of 1 second is fine for the above, these however should have a longer sampling rate
     updateInterval = std::max(30000000ll, updateInterval);
 
+    bool updateOnFirstWatch = false; /* The caller calls UpdateFields() after this */
+    bool wereFirstWatcher   = false;
+
     // single and double bit retired pages
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_RETIRED_SBE, updateInterval, maxKeepAge, 0, watcher, false);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_RETIRED_SBE,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_RETIRED_SBE << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_RETIRED_SBE,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_RETIRED_DBE, updateInterval, maxKeepAge, 0, watcher, false);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_RETIRED_DBE,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_RETIRED_DBE << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_RETIRED_DBE,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_RETIRED_PENDING, updateInterval, maxKeepAge, 0, watcher, false);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_RETIRED_PENDING,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_RETIRED_PENDING << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_RETIRED_PENDING,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
     /* Note that we're subscribing for XID updates so that OnFieldValuesUpdate and eventually ProcessXidFv
        get called */
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_XID_ERRORS, updateInterval, maxKeepAge, 0, watcher, true);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_XID_ERRORS,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    true,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_XID_ERRORS << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_XID_ERRORS,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_ROW_REMAP_FAILURE, updateInterval, maxKeepAge, 0, watcher, false);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_ROW_REMAP_FAILURE,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_ROW_REMAP_FAILURE << " on "
-           << EntityToString(entityGroupId) << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_ROW_REMAP_FAILURE,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
@@ -586,14 +667,25 @@ dcgmReturn_t DcgmHealthWatch::SetInforom(dcgm_field_entity_group_t entityGroupId
     updateInterval = std::max(3600000000ll, updateInterval);
     maxKeepAge     = std::max(7200.0, maxKeepAge); /* Keep at least 2 hours of data so we can get a sample */
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_INFOROM_CONFIG_VALID, updateInterval, maxKeepAge, 0, watcher, false);
+    bool updateOnFirstWatch = false; /* The caller calls UpdateFields() after this */
+    bool wereFirstWatcher   = false;
+
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_INFOROM_CONFIG_VALID,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_INFOROM_CONFIG_VALID << " on "
-           << EntityToString(entityGroupId) << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_INFOROM_CONFIG_VALID,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
@@ -619,14 +711,25 @@ dcgmReturn_t DcgmHealthWatch::SetThermal(dcgm_field_entity_group_t entityGroupId
     /* Enforce a minimum sample rate of every 30 seconds */
     updateInterval = std::max(30000000ll, updateInterval);
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_THERMAL_VIOLATION, updateInterval, maxKeepAge, 0, watcher, false);
+    bool updateOnFirstWatch = false; /* The caller calls UpdateFields() after this */
+    bool wereFirstWatcher   = false;
+
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_THERMAL_VIOLATION,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_THERMAL_VIOLATION << " on "
-           << EntityToString(entityGroupId) << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_THERMAL_VIOLATION,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
@@ -651,25 +754,44 @@ dcgmReturn_t DcgmHealthWatch::SetPower(dcgm_field_entity_group_t entityGroupId,
     /* Enforce a minimum sample rate of every 30 seconds */
     updateInterval = std::max(30000000ll, updateInterval);
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_POWER_VIOLATION, updateInterval, maxKeepAge, 0, watcher, false);
+    bool updateOnFirstWatch = false; /* The caller calls UpdateFields() after this */
+    bool wereFirstWatcher   = false;
+
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_POWER_VIOLATION,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_POWER_VIOLATION << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_POWER_VIOLATION,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
-    ret = mpCoreProxy.AddFieldWatch(
-        entityGroupId, entityId, DCGM_FI_DEV_POWER_USAGE, updateInterval, maxKeepAge, 0, watcher, false);
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_POWER_USAGE,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
     if (DCGM_ST_OK != ret)
     {
-        std::stringstream ss;
-        ss << "Failed to set watch for field " << DCGM_FI_DEV_POWER_VIOLATION << " on " << EntityToString(entityGroupId)
-           << " " << entityId;
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_POWER_VIOLATION,
+                  EntityToString(entityGroupId),
+                  entityId);
         return ret;
     }
 
@@ -729,17 +851,17 @@ dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupI
 
     if (DCGM_ST_NO_DATA == ret)
     {
-        PRINT_DEBUG("%u", "No data for PCIe for gpuId %u", entityId);
+        log_debug("No data for PCIe for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_NOT_WATCHED == ret)
     {
-        PRINT_WARNING("%u", "PCIe not watched for gpuId %u", entityId);
+        log_warning("PCIe not watched for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_OK != ret)
     {
-        PRINT_ERROR("%d %u", "fpdcgmGetMultipleValuesForField returned %d for gpuId %u", (int)ret, entityId);
+        log_error("mpCoreProxy.GetSamples returned {} for gpuId {}", (int)ret, entityId);
         return ret;
     }
 
@@ -752,17 +874,17 @@ dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupI
         entityGroupId, entityId, fieldId, &endValue, &count, startTime, endTime, DCGM_ORDER_DESCENDING);
     if (DCGM_ST_NO_DATA == ret)
     {
-        PRINT_DEBUG("%u", "No data for PCIe for gpuId %u", entityId);
+        log_debug("No data for PCIe for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_NOT_WATCHED == ret)
     {
-        PRINT_WARNING("%u", "PCIe not watched for gpuId %u", entityId);
+        log_warning("PCIe not watched for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_OK != ret)
     {
-        PRINT_ERROR("%d %u", "fpdcgmGetMultipleValuesForField returned %d for gpuId %u", (int)ret, entityId);
+        log_error("mpCoreProxy.GetSamples returned {} for gpuId {}", (int)ret, entityId);
         return ret;
     }
 
@@ -1140,17 +1262,17 @@ dcgmReturn_t DcgmHealthWatch::MonitorInforom(dcgm_field_entity_group_t entityGro
 
     if (DCGM_ST_NO_DATA == ret)
     {
-        PRINT_DEBUG("%u", "No data for inforom for gpuId %u", entityId);
+        log_debug("No data for inforom for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_NOT_WATCHED == ret)
     {
-        PRINT_WARNING("%u", "Not watched for inforom for gpuId %u", entityId);
+        log_warning("Not watched for inforom for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
     else if (DCGM_ST_OK != ret)
     {
-        PRINT_ERROR("%d %u", "Unable to retrieve field %d from cache. gpuId %u", fieldId, entityId);
+        log_error("Unable to retrieve field {} from cache. gpuId {}", fieldId, entityId);
         return ret;
     }
 
@@ -1444,7 +1566,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
     ret = mpCoreProxy.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, entityId, linkStates);
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d %u", "Got error %d from GetEntityNvLinkLinkStatus gpuId %u", (int)ret, entityId);
+        log_error("Got error {} from GetEntityNvLinkLinkStatus gpuId {}", (int)ret, entityId);
         return ret;
     }
     for (int i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_GPU; i++)
@@ -1511,15 +1633,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
             entityGroupId, entityId, *fieldIdIter, &sample, &count, startTime, endTime, DCGM_ORDER_DESCENDING);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            PRINT_DEBUG("%d %u %u %u %lld %lld",
-                        "return %d for GetSamples eg %u, eid %u, "
-                        "fieldId %u, start %lld, end %lld",
-                        (int)dcgmReturn,
-                        entityGroupId,
-                        entityId,
-                        *fieldIdIter,
-                        startTime,
-                        endTime);
+            log_debug("return {} for GetSamples eg {}, eid {}, fieldId {}, start {}, end {}",
+                      (int)dcgmReturn,
+                      entityGroupId,
+                      entityId,
+                      *fieldIdIter,
+                      startTime,
+                      endTime);
             continue;
         }
 
@@ -1548,7 +1668,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
         dcgmReturn = mpCoreProxy.GetEntityNvLinkLinkStatus(DCGM_FE_SWITCH, entityId, linkStates);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d %u", "Got error %d from GetEntityNvLinkLinkStatus eid %u", (int)dcgmReturn, entityId);
+            log_error("Got error {} from GetEntityNvLinkLinkStatus eid {}", (int)dcgmReturn, entityId);
             return dcgmReturn;
         }
         for (int i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH; i++)
@@ -1575,12 +1695,12 @@ void DcgmHealthWatch::OnGroupRemove(unsigned int groupId)
     groupWatchIter = mGroupWatchState.find(groupId);
     if (groupWatchIter == mGroupWatchState.end())
     {
-        PRINT_DEBUG("%u", "OnGroupRemove didn't find groupId %u", groupId);
+        log_debug("OnGroupRemove didn't find groupId {}", groupId);
     }
     else
     {
         mGroupWatchState.erase(groupWatchIter);
-        PRINT_DEBUG("%u", "OnGroupRemove found and removed groupId %u", groupId);
+        log_debug("OnGroupRemove found and removed groupId {}", groupId);
     }
 
     dcgm_mutex_unlock(m_mutex);
@@ -1619,7 +1739,7 @@ void DcgmHealthWatch::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
         /* Policy only pertains to GPUs for now */
         if (fv->entityGroupId != DCGM_FE_GPU)
         {
-            PRINT_DEBUG("%u", "Ignored non-GPU eg %u", fv->entityGroupId);
+            log_debug("Ignored non-GPU eg {}", fv->entityGroupId);
             continue;
         }
 

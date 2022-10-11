@@ -92,10 +92,7 @@ dcgmReturn_t ProcessStats::EnableWatches(dcgmHandle_t mNvcmHandle,
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to enable process watches for group. Return: " << error << "." << std::endl;
-        PRINT_ERROR("%u %d",
-                    "Error starting watches for group with ID: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error("Error starting watches for group with ID: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
     }
     else
     {
@@ -117,8 +114,7 @@ dcgmReturn_t ProcessStats::DisableWatches(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get group information. Return: " << error << std::endl;
-        PRINT_ERROR(
-            "%u,%d", "Error: GroupGetInfo for GroupId: %u. Return: %d", (unsigned int)(uintptr_t)groupId, result);
+        log_error("Error: GroupGetInfo for GroupId: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -146,7 +142,7 @@ dcgmReturn_t ProcessStats::ViewProcessStats(dcgmHandle_t mNvcmHandle,
     if (result == DCGM_ST_NOT_WATCHED)
     {
         std::cout << "Error: Watches have not been enabled. Unable to get PID info." << std::endl;
-        PRINT_ERROR("%u %d", "Error getting information for process with pid: %u. Return: %d", pid, result);
+        log_error("Error getting information for process with pid: {}. Return: {}", pid, result);
         return result;
     }
 
@@ -155,7 +151,7 @@ dcgmReturn_t ProcessStats::ViewProcessStats(dcgmHandle_t mNvcmHandle,
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get information for process with PID " << pid << ". Return: " << error << "."
                   << std::endl;
-        PRINT_ERROR("%u %d", "Error getting information for process with pid: %u. Return: %d", pid, result);
+        log_error("Error getting information for process with pid: {}. Return: {}", pid, result);
         return result;
     }
 
@@ -212,10 +208,8 @@ dcgmReturn_t ProcessStats::StartJob(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t group
                             : (result == DCGM_ST_DUPLICATE_KEY) ? "This Job Id is in use. Please use another job Id"
                                                                 : errorString(result);
         std::cout << "Error: Unable to start job for group. Return: " << error << "." << std::endl;
-        PRINT_ERROR("%u %d",
-                    "Error starting job watches for group with ID: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error(
+            "Error starting job watches for group with ID: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
     }
     else
     {
@@ -245,7 +239,7 @@ dcgmReturn_t ProcessStats::StopJob(dcgmHandle_t mNvcmHandle, std::string jobId)
             std::cout << "Error: Job " << jobId << " was not found." << std::endl;
         else
             std::cout << "Error: Unable to stop job. Return: " << errorString(result) << "." << std::endl;
-        PRINT_ERROR("%d", "Error stoping job watches. Return: %d", result);
+        log_error("Error stopping job watches. Return: {}", result);
     }
 
     else
@@ -274,7 +268,7 @@ dcgmReturn_t ProcessStats::RemoveJob(dcgmHandle_t mNvcmHandle, std::string jobId
             std::cout << "Error: Job " << jobId << " was not found." << std::endl;
         else
             std::cout << "Error: Unable to remove job. Return: " << errorString(result) << "." << std::endl;
-        PRINT_ERROR("%d", "Error stoping removing job. Return: %d", result);
+        log_error("Error stopping removing job. Return: {}", result);
     }
     else
     {
@@ -293,7 +287,7 @@ dcgmReturn_t ProcessStats::RemoveAllJobs(dcgmHandle_t mNvcmHandle)
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to remove jobs. Return: " << errorString(result) << "." << std::endl;
-        PRINT_ERROR("%d", "Error removing jobs. Return: %d", result);
+        log_error("Error removing jobs. Return: {}", result);
     }
     else
     {
@@ -320,7 +314,7 @@ dcgmReturn_t ProcessStats::ViewJobStats(dcgmHandle_t mNvcmHandle, std::string jo
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to retrieve job statistics. Return: " << errorString(result) << "." << std::endl;
-        PRINT_ERROR("%d", "Error getting job stats. Return: %d", result);
+        log_error("Error getting job stats. Return: {}", result);
         return result;
     }
 

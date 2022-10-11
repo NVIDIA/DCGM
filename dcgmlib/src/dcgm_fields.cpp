@@ -17,10 +17,12 @@
 
 #include "DcgmStringHelpers.h"
 #include "MurmurHash3.h"
-#include "dcgm_fields_internal.h"
+#include "dcgm_fields_internal.hpp"
 #include "hashtable.h"
+#include <DcgmLogging.h>
 #include <dcgm_nvml.h>
 
+#include <fmt/format.h>
 #include <malloc.h>
 #include <string.h>
 
@@ -592,6 +594,26 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              getTextForEnum(DCGM_FIELD_UNIT_TEMP_C),
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvswitch_bandwidth_tx",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "SWTX",
+                                             "",
+                                             DCGM_FE_SWITCH,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvswitch_bandwidth_rx",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "SWRX",
+                                             "",
+                                             DCGM_FE_SWITCH,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_POWER_MGMT_LIMIT,
                                              DCGM_FT_DOUBLE,
                                              8,
@@ -742,6 +764,36 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MIG_GI_INFO,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "mig_gi_info",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MIGGIINFO",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MIG_CI_INFO,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "mig_ci_info",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MIGCIINFO",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MIG_ATTRIBUTES,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "mig_attributes",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MIGATT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_ECC_CURRENT,
                                              DCGM_FT_INT64,
                                              8,
@@ -1232,7 +1284,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_VGPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
                                              DCGM_FT_STRING,
                                              0,
                                              "vgpu_instance_license_state",
@@ -1312,6 +1364,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_VGPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "vgpu_instance_gpu_instance_id",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VGII",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SUPPORTED_TYPE_INFO,
                                              DCGM_FT_BINARY,
                                              0,
@@ -1319,6 +1381,56 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FS_DEVICE,
                                              0,
                                              "SPINF",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "vgpu_type_ids",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VTID",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_TYPE_INFO,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "vgpu_type_info",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VTPINF",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_TYPE_NAME,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "vgpu_type_name",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VTPNM",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_TYPE_CLASS,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "vgpu_type_class",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VTPCLS",
+                                             "",
+                                             DCGM_FE_VGPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_VGPU_TYPE_LICENSE,
+                                             DCGM_FT_BINARY,
+                                             0,
+                                             "vgpu_type_license",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "VTPLC",
                                              "",
                                              DCGM_FE_VGPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -2083,6 +2195,66 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l12",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL12",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l13",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL13",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l14",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL14",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l15",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL15",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l16",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL16",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_flit_crc_error_count_l17",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NFEL17",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6,
                                              DCGM_FT_INT64,
                                              8,
@@ -2140,6 +2312,66 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FS_DEVICE,
                                              NVML_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11,
                                              "NDEL11",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l12",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL12",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l13",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL13",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l14",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL14",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l15",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL15",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l16",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL16",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_data_crc_error_count_l17",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NDEL17",
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -2203,6 +2435,66 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l12",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL12",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l13",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL13",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l14",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL14",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l15",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL15",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l16",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL16",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_replay_error_count_l17",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NREL17",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6,
                                              DCGM_FT_INT64,
                                              8,
@@ -2263,6 +2555,66 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l12",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL12",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l13",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL13",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l14",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL14",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l15",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL15",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l16",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL16",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_recovery_error_count_l17",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NRCL17",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L6,
                                              DCGM_FT_INT64,
                                              8,
@@ -2320,6 +2672,66 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FS_DEVICE,
                                              0,
                                              "NBWL11",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L12,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l12",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL12",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L13,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l13",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL13",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L14,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l14",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL14",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L15,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l15",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL15",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L16,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l16",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL16",
+                                             getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_BANDWIDTH_L17,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_bandwidth_l17",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NBWL17",
                                              getTextForEnum(DCGM_FIELD_UNIT_BW_MBPS),
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -3063,725 +3475,375 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_SWITCH,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p00",
+                                             "nvswitch_link_bandwidth_tx",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST000",
+                                             "SWLNKTX",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P00,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p00",
+                                             "nvswitch_link_bandwidth_rx",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR000",
+                                             "SWLNKRX",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P01,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p01",
+                                             "nvswitch_link_fatal_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST001",
+                                             "SWLNKFE",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P01,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p01",
+                                             "nvswitch_link_non_fatal_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR001",
+                                             "SWLNKNF",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P02,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p02",
+                                             "nvswitch_link_recovery_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST002",
+                                             "SWLNKRC",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P02,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p02",
+                                             "nvswitch_link_replay_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR002",
+                                             "SWLNKRP",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P03,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p03",
+                                             "nvswitch_link_flit_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST003",
+                                             "SWLNKFL",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P03,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p03",
+                                             "nvswitch_link_crc_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR003",
+                                             "SWLNKCR",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P04,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p04",
+                                             "nvswitch_link_ecc_errors",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST004",
+                                             "SWLNKEC",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P04,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p04",
+                                             "nvswitch_link_latency_low_vc0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR004",
+                                             "SWVCLL0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P05,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p05",
+                                             "nvswitch_link_latency_low_vc1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST005",
+                                             "SWVCLL1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P05,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p05",
+                                             "nvswitch_link_latency_low_vc2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR005",
+                                             "SWVCLL2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P06,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p06",
+                                             "nvswitch_link_latency_low_vc",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST006",
+                                             "SWVCLL3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P06,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p06",
+                                             "nvswitch_link_latency_medium_vc0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR006",
+                                             "SWVCLM0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P07,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p07",
+                                             "nvswitch_link_latency_medium_vc1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST007",
+                                             "SWVCLM1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P07,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p07",
+                                             "nvswitch_link_latency_medium_vc2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR007",
+                                             "SWVCLM2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P08,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p08",
+                                             "nvswitch_link_latency_medium_vc3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST008",
+                                             "SWVCLM3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P08,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p08",
+                                             "nvswitch_link_latency_high_vc0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR008",
+                                             "SWVCLH0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P09,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p09",
+                                             "nvswitch_link_latency_high_vc1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST009",
+                                             "SWVCLH1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P09,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p09",
+                                             "nvswitch_link_latency_high_vc2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR009",
+                                             "SWVCLH2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P10,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p10",
+                                             "nvswitch_link_latency_high_vc3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST010",
+                                             "SWVCLH3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P10,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p10",
+                                             "nvswitch_link_latency_panic_vc0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR010",
+                                             "SWVCLP0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P11,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p11",
+                                             "nvswitch_link_latency_panic_vc1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST011",
+                                             "SWVCLP1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P11,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p11",
+                                             "nvswitch_link_latency_panic_vc2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR011",
+                                             "SWVCLP2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P12,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p12",
+                                             "nvswitch_link_latency_panic_vc3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST012",
+                                             "SWVCLP3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P12,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p12",
+                                             "nvswitch_link_latency_count_vc0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR012",
+                                             "SWVCLC0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P13,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p13",
+                                             "nvswitch_link_latency_count_vc1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST013",
+                                             "SWVCLC1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P13,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p13",
+                                             "nvswitch_link_latency_count_vc2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR013",
+                                             "SWVCLC2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P14,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p14",
+                                             "nvswitch_link_latency_count_vc3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST014",
+                                             "SWVCLC3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P14,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p14",
+                                             "nvswitch_link_crc_errors_lane0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR014",
+                                             "SWLACR0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P15,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p15",
+                                             "nvswitch_link_crc_errors_lane1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST015",
+                                             "SWLACR1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P15,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p15",
+                                             "nvswitch_link_crc_errors_lane2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR015",
+                                             "SWLACR2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P16,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p16",
+                                             "nvswitch_link_crc_errors_lane3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST016",
+                                             "SWLACR3",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P16,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p16",
+                                             "nvswitch_link_ecc_errors_lane0",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR016",
+                                             "SWLAEC0",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P17,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_0_p17",
+                                             "nvswitch_link_ecc_errors_lane1",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST017",
+                                             "SWLAEC1",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P17,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_rx_0_p17",
+                                             "nvswitch_link_ecc_errors_lane2",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "SR017",
+                                             "SWLAEC2",
                                              "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00,
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvswitch_bandwidth_tx_1_p00",
+                                             "nvswitch_link_ecc_errors_lane3",
                                              DCGM_FS_ENTITY,
                                              0,
-                                             "ST100",
+                                             "SWLAEC3",
                                              "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P00,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p00",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR100",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P01,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p01",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST101",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P01,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p01",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR101",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P02,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p02",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST102",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P02,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p02",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR102",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P03,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p03",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST103",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P03,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p03",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR103",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P04,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p04",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST104",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P04,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p04",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR104",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P05,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p05",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST105",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P05,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p05",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR105",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P06,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p06",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST106",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P06,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p06",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR106",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P07,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p07",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST107",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P07,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p07",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR107",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P08,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p08",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST108",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P08,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p08",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR108",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P09,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p09",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST109",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P09,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p09",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR109",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P10,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p10",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST110",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P10,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p10",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR110",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P11,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p11",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST111",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P11,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p11",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR111",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P12,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p12",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST112",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P12,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p12",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR112",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P13,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p13",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST113",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P13,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p13",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR113",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P14,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p14",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST114",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P14,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p14",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR114",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P15,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p15",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST115",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P15,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p15",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR115",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P16,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p16",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST116",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P16,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p16",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR116",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P17,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_tx_1_p17",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "ST117",
-                                             "",
-                                             DCGM_FE_SWITCH,
-                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
-    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P17,
-                                             DCGM_FT_INT64,
-                                             8,
-                                             "nvswitch_bandwidth_rx_1_p17",
-                                             DCGM_FS_ENTITY,
-                                             0,
-                                             "SR117",
-                                             "",
-                                             DCGM_FE_SWITCH,
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
                                              DCGM_FT_INT64,
@@ -3803,6 +3865,36 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_SWITCH,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvswitch_current_temperature",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "TMP01",
+                                             "C",
+                                             DCGM_FE_SWITCH,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvswitch_slowdown_temperature",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "TMP02",
+                                             "C",
+                                             DCGM_FE_SWITCH,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvswitch_shutdown_temperature",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "TMP03",
+                                             "C",
+                                             DCGM_FE_SWITCH,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY,
                                              DCGM_FT_INT64,
                                              0,
@@ -3954,6 +4046,95 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU_CI,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE,
+                                             DCGM_FT_DOUBLE,
+                                             0,
+                                             "tensor_dfma_active",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "TDFMA",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PIPE_INT_ACTIVE,
+                                             DCGM_FT_DOUBLE,
+                                             0,
+                                             "integer_active",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "INTAC",
+                                             "",
+                                             DCGM_FE_GPU_CI,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+
+    for (unsigned int fieldId = DCGM_FI_PROF_NVDEC0_ACTIVE; fieldId <= DCGM_FI_PROF_NVDEC7_ACTIVE; fieldId++)
+    {
+        std::string tag      = fmt::format("nvdec{}_active", fieldId - DCGM_FI_PROF_NVDEC0_ACTIVE);
+        std::string shortTag = fmt::format("NVDEC{}", fieldId - DCGM_FI_PROF_NVDEC0_ACTIVE);
+
+        DcgmFieldsPopulateOneFieldWithFormatting(fieldId,
+                                                 DCGM_FT_DOUBLE,
+                                                 0,
+                                                 tag.c_str(),
+                                                 DCGM_FS_DEVICE,
+                                                 0,
+                                                 shortTag.c_str(),
+                                                 "",
+                                                 DCGM_FE_GPU,
+                                                 getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    }
+
+    for (unsigned int fieldId = DCGM_FI_PROF_NVJPG0_ACTIVE; fieldId <= DCGM_FI_PROF_NVJPG7_ACTIVE; fieldId++)
+    {
+        std::string tag      = fmt::format("nvjpg{}_active", fieldId - DCGM_FI_PROF_NVJPG0_ACTIVE);
+        std::string shortTag = fmt::format("NVJPG{}", fieldId - DCGM_FI_PROF_NVJPG0_ACTIVE);
+
+        DcgmFieldsPopulateOneFieldWithFormatting(fieldId,
+                                                 DCGM_FT_DOUBLE,
+                                                 0,
+                                                 tag.c_str(),
+                                                 DCGM_FS_DEVICE,
+                                                 0,
+                                                 shortTag.c_str(),
+                                                 "",
+                                                 DCGM_FE_GPU,
+                                                 getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    }
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_NVOFA0_ACTIVE,
+                                             DCGM_FT_DOUBLE,
+                                             0,
+                                             "nvofa0_active",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "NVOFA0",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    for (unsigned int fieldId = DCGM_FI_PROF_NVLINK_L0_TX_BYTES; fieldId <= DCGM_FI_PROF_NVLINK_L17_RX_BYTES; fieldId++)
+    {
+        unsigned int linkId = (fieldId - DCGM_FI_PROF_NVLINK_L0_TX_BYTES) / 2;
+        bool isRx           = fieldId & 1; /* Odd fields are RX */
+
+        std::string tag      = fmt::format("nvlink_l{}_{}_bytes", linkId, (isRx ? "rx" : "tx"));
+        std::string shortTag = fmt::format("NVL{}{}", linkId, (isRx ? "R" : "T"));
+
+        DcgmFieldsPopulateOneFieldWithFormatting(fieldId,
+                                                 DCGM_FT_INT64,
+                                                 0,
+                                                 tag.c_str(),
+                                                 DCGM_FS_DEVICE,
+                                                 0,
+                                                 shortTag.c_str(),
+                                                 "",
+                                                 DCGM_FE_GPU,
+                                                 getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    }
+
     return 0;
 }
 
@@ -4014,8 +4195,8 @@ static void DcgmFieldsValueFreeCB(void *value)
 static int DcgmFieldsPopulateHashTable(void)
 {
     int st, i;
-    dcgm_field_meta_p fieldMeta = 0;
-    dcgm_field_meta_p found     = 0;
+    dcgm_field_meta_t *fieldMeta = nullptr;
+    dcgm_field_meta_p found      = nullptr;
 
     st = hashtable_init(
         &dcgmFieldsKeyToIdMap, DcgmFieldsKeyHashCB, DcgmFieldsKeyCmpCB, DcgmFieldsKeyFreeCB, DcgmFieldsValueFreeCB);
@@ -4030,9 +4211,9 @@ static int DcgmFieldsPopulateHashTable(void)
 
         /* Make sure the field tag doesn't exist already */
         found = (dcgm_field_meta_p)hashtable_get(&dcgmFieldsKeyToIdMap, fieldMeta->tag);
-        if (found)
+        if (found != nullptr)
         {
-            /* PRINT_ERROR("%s %u %u", "Found duplicate tag %s with id %u while inserting id %u", */
+            /* log_error("Found duplicate tag {} with id {} while inserting id {}", */
             /*             fieldMeta->tag, found->fieldId, fieldMeta->fieldId); */
             hashtable_close(&dcgmFieldsKeyToIdMap);
             return -1;
@@ -4042,7 +4223,7 @@ static int DcgmFieldsPopulateHashTable(void)
         st = hashtable_set(&dcgmFieldsKeyToIdMap, strdup(fieldMeta->tag), fieldMeta);
         if (st)
         {
-            /* PRINT_ERROR("%d %s", "Error %d while inserting tag %s", st, fieldMeta->tag); */
+            /* log_error( "Error {} while inserting tag {}", st, fieldMeta->tag); */
             hashtable_close(&dcgmFieldsKeyToIdMap);
             return -1;
         }
@@ -4110,7 +4291,7 @@ extern "C" DCGM_PUBLIC_API dcgm_field_meta_p DcgmFieldGetById(unsigned short fie
 }
 
 /*****************************************************************************/
-extern "C" DCGM_PUBLIC_API dcgm_field_meta_p DcgmFieldGetByTag(char *tag)
+extern "C" DCGM_PUBLIC_API dcgm_field_meta_p DcgmFieldGetByTag(const char *tag)
 {
     dcgm_field_meta_p retVal = 0;
 
@@ -4139,7 +4320,280 @@ extern "C" DCGM_PUBLIC_API const char *DcgmFieldsGetEntityGroupString(dcgm_field
             return "GPU_I";
         case DCGM_FE_GPU_CI:
             return "GPU_CI";
+        case DCGM_FE_LINK:
+            return "LINK";
     }
+}
+
+/*****************************************************************************/
+unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField)
+{
+    static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_NVLINK_L17_RX_BYTES);
+
+    isPercentageField = false;
+
+    switch (fieldId)
+    {
+        case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_GRAPHICS_UTIL;
+
+        case DCGM_FI_PROF_SM_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_SM_UTIL;
+
+        case DCGM_FI_PROF_SM_OCCUPANCY:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_SM_OCCUPANCY;
+
+        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_ANY_TENSOR_UTIL;
+
+        case DCGM_FI_PROF_DRAM_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_DRAM_BW_UTIL;
+
+        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_FP64_UTIL;
+
+        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_FP32_UTIL;
+
+        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_FP16_UTIL;
+
+        case DCGM_FI_PROF_PCIE_TX_BYTES:
+            return NVML_GPM_METRIC_PCIE_TX_PER_SEC;
+
+        case DCGM_FI_PROF_PCIE_RX_BYTES:
+            return NVML_GPM_METRIC_PCIE_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_TOTAL_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_TOTAL_RX_PER_SEC;
+
+        case DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_IMMA_TENSOR_UTIL;
+
+        case DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_HMMA_TENSOR_UTIL;
+
+        case DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_DFMA_TENSOR_UTIL;
+
+        case DCGM_FI_PROF_PIPE_INT_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_INTEGER_UTIL;
+
+        case DCGM_FI_PROF_NVDEC0_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_0_UTIL;
+
+        case DCGM_FI_PROF_NVDEC1_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_1_UTIL;
+
+        case DCGM_FI_PROF_NVDEC2_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_2_UTIL;
+
+        case DCGM_FI_PROF_NVDEC3_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_3_UTIL;
+
+        case DCGM_FI_PROF_NVDEC4_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_4_UTIL;
+
+        case DCGM_FI_PROF_NVDEC5_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_5_UTIL;
+
+        case DCGM_FI_PROF_NVDEC6_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_6_UTIL;
+
+        case DCGM_FI_PROF_NVDEC7_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVDEC_7_UTIL;
+
+        case DCGM_FI_PROF_NVJPG0_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_0_UTIL;
+
+        case DCGM_FI_PROF_NVJPG1_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_1_UTIL;
+
+        case DCGM_FI_PROF_NVJPG2_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_2_UTIL;
+
+        case DCGM_FI_PROF_NVJPG3_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_3_UTIL;
+
+        case DCGM_FI_PROF_NVJPG4_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_4_UTIL;
+
+        case DCGM_FI_PROF_NVJPG5_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_5_UTIL;
+
+        case DCGM_FI_PROF_NVJPG6_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_6_UTIL;
+
+        case DCGM_FI_PROF_NVJPG7_ACTIVE:
+            isPercentageField = true;
+            return NVML_GPM_METRIC_NVJPG_7_UTIL;
+
+        case DCGM_FI_PROF_NVLINK_L0_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L0_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L0_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L0_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L1_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L1_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L1_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L1_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L2_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L2_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L2_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L2_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L3_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L3_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L3_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L4_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L4_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L5_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L4_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L4_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L5_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L5_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L5_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L5_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L6_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L6_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L6_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L6_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L7_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L7_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L7_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L7_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L8_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L8_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L8_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L8_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L9_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L9_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L9_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L9_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L10_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L10_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L10_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L10_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L11_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L11_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L11_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L11_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L12_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L12_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L12_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L12_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L13_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L13_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L13_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L13_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L14_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L14_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L14_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L14_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L15_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L15_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L15_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L15_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L16_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L16_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L16_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L16_RX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L17_TX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L17_TX_PER_SEC;
+
+        case DCGM_FI_PROF_NVLINK_L17_RX_BYTES:
+            return NVML_GPM_METRIC_NVLINK_L17_RX_PER_SEC;
+
+        default:
+            DCGM_LOG_ERROR << "Unknown profiling fieldId " << fieldId;
+            return 0;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************/
+int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds)
+{
+    if (!dcgmFieldsInitialized)
+    {
+        DCGM_LOG_ERROR << "Called before fields were initialized";
+        return -1;
+    }
+
+    fieldIds.clear();
+
+    for (int i = 0; i < DCGM_FI_MAX_FIELDS; i++)
+    {
+        if (dcgmFieldMeta[i] != nullptr)
+        {
+            fieldIds.push_back(dcgmFieldMeta[i]->fieldId);
+        }
+    }
+
+    return 0;
 }
 
 /*****************************************************************************/

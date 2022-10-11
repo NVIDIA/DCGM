@@ -468,14 +468,14 @@ int main(int argc, char **argv)
     params.logFile  = cmdLine.GetLogFileName().c_str();
     params.severity = DcgmLogging::severityFromString(cmdLine.GetLogLevel().c_str(), DcgmLoggingSeverityUnspecified);
 
-    params.blackListCount = 0;
-    memset(params.blackList, 0, sizeof(params.blackList));
+    params.denyListCount = 0;
+    memset(params.denyList, 0, sizeof(params.denyList));
 
-    /* Blacklist any modules before anyone connects via socket */
-    for (auto moduleId : cmdLine.GetBlacklistedModules())
+    /* Modules to place on the denylist before anyone connects via socket */
+    for (auto moduleId : cmdLine.GetDenylistedModules())
     {
-        params.blackList[params.blackListCount] = moduleId;
-        params.blackListCount++;
+        params.denyList[params.denyListCount] = moduleId;
+        params.denyListCount++;
     }
 
     auto const serviceAccount = cmdLine.GetServiceAccount();

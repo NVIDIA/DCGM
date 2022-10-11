@@ -22,12 +22,6 @@
 #include <dcgm_structs.h>
 #include <timelib.h>
 
-typedef struct
-{
-    unsigned short fieldId;
-    const char *thresholdName;
-} errorType_t;
-
 class PluginCoreFunctionality
 {
 public:
@@ -82,7 +76,7 @@ private:
     /*
      * Checks the core error conditions that indicate a problem for any plugin
      */
-    nvvsPluginResult_t CheckCommonErrors(TestParameters &tp, timelib64_t endtime, nvvsPluginResult_t &result);
+    nvvsPluginResult_t CheckCommonErrors(TestParameters &tp, nvvsPluginResult_t &result);
 
     /********************************************************************/
     /*

@@ -141,11 +141,11 @@ dcgmReturn_t DcgmHandle::ConnectToDcgm(const std::string &dcgmHostname)
     if (m_lastReturn != DCGM_ST_UNINITIALIZED)
     {
         m_handle = (dcgmHandle_t)DCGM_EMBEDDED_HANDLE;
-        PRINT_DEBUG("%d", "Skipping starting of embedded host engine due to lastReturn %d.", m_lastReturn);
+        log_debug("Skipping starting of embedded host engine due to lastReturn {}.", m_lastReturn);
         return m_lastReturn;
     }
 
-    PRINT_DEBUG("", "Starting embedded host engine.");
+    log_debug("Starting embedded host engine.");
     m_lastReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_handle);
     return m_lastReturn;
 }

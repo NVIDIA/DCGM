@@ -25,7 +25,7 @@ class Module
 public:
     Module();
     virtual ~Module();
-    dcgmReturn_t RunBlacklistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId, DcgmiOutput &out);
+    dcgmReturn_t RunDenylistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId, DcgmiOutput &out);
     dcgmReturn_t RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out);
     dcgmReturn_t statusToStr(dcgmModuleStatus_t status, std::string &str);
     static dcgmReturn_t moduleIdToName(dcgmModuleId_t moduleId, std::string &str);
@@ -33,10 +33,10 @@ public:
 private:
 };
 
-class BlacklistModule : public Command
+class DenylistModule : public Command
 {
 public:
-    BlacklistModule(const std::string &hostname, const std::string &moduleName, bool json);
+    DenylistModule(const std::string &hostname, const std::string &moduleName, bool json);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

@@ -17,6 +17,8 @@
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
 
+#include <EarlyFailChecker.h>
+
 #include "SmStressPlugin.h"
 
 #include "DcgmLogging.h"
@@ -201,7 +203,7 @@ int SmPerfPlugin::CudaInit(void)
 
         if (device->cudaDeviceIdx < 0 || device->cudaDeviceIdx >= count)
         {
-            PRINT_ERROR("%d %d", "Invalid cuda device index %d >= count of %d or < 0", device->cudaDeviceIdx, count);
+            log_error("Invalid cuda device index {} >= count of {} or < 0", device->cudaDeviceIdx, count);
             return -1;
         }
 
@@ -272,8 +274,7 @@ int SmPerfPlugin::CudaInit(void)
             LOG_CUBLAS_ERROR("cublasCreate", cubSt, device->gpuId);
             return -1;
         }
-        PRINT_DEBUG(
-            "%d %p", "cublasCreate cudaDeviceIdx %d, handle %p", device->cudaDeviceIdx, (void *)device->cublasHandle);
+        log_debug("cublasCreate cudaDeviceIdx {}, handle {}", device->cudaDeviceIdx, (void *)device->cublasHandle);
         device->allocatedCublasHandle = 1;
 
         /* Allocate device memory */
@@ -520,8 +521,11 @@ bool SmPerfPlugin::RunTest()
         return false;
     }
 
+    bool failedEarly                = false;
     bool failEarly                  = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
+
+    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
 
     try /* Catch runtime errors */
     {
@@ -543,10 +547,21 @@ bool SmPerfPlugin::RunTest()
              * the main thread from sitting busy */
             for (size_t i = 0; i < m_device.size(); i++)
             {
+                if (main_should_stop || failedEarly)
+                {
+                    workerThreads[i]->Stop();
+                }
+
                 st = workerThreads[i]->Wait(1000);
                 if (st)
                 {
                     Nrunning++;
+
+                    if (efc.CheckCommonErrors(timelib_usecSince1970(), startTime, m_dcgmRecorder) == NVVS_RESULT_FAIL)
+                    {
+                        DCGM_LOG_ERROR << "Stopping execution early due to error(s) detected.";
+                        failedEarly = true;
+                    }
                 }
             }
             timeCount++;
@@ -556,7 +571,7 @@ bool SmPerfPlugin::RunTest()
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        PRINT_ERROR("%s", "Caught exception %s", e.what());
+        log_error("Caught exception {}", e.what());
         AddError(d);
         SetResult(NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
@@ -776,7 +791,6 @@ void SmPerfWorker::run(void)
         maxOpsSoFar = (long long)(elapsed * opsPerSec);
         NopsBefore  = Nops;
 
-        // If we're training, don't check maxOpsSoFar or we can't train past the target
         for (int i = 0; i < opsPerResync && Nops < maxOpsSoFar; i++)
         {
             st = DoOneMatrixMultiplication(&floatAlpha, &doubleAlpha, &floatBeta, &doubleBeta);
@@ -819,7 +833,7 @@ void SmPerfWorker::run(void)
             if (!result)
             {
                 // Stop the test because a failure occurred
-                PRINT_DEBUG("%d", "Test failure detected for GPU %d. Stopping test early.", m_device->gpuId);
+                log_debug("Test failure detected for GPU {}. Stopping test early.", m_device->gpuId);
                 break;
             }
             lastFailureCheckTime = now;
@@ -827,5 +841,5 @@ void SmPerfWorker::run(void)
     }
 
     m_stopTime = timelib_usecSince1970();
-    PRINT_DEBUG("%d %lld", "SmPerfWorker deviceIndex %d finished at %lld", m_device->gpuId, (long long)m_stopTime);
+    log_debug("SmPerfWorker deviceIndex {} finished at {}", m_device->gpuId, (long long)m_stopTime);
 }

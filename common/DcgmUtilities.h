@@ -428,7 +428,7 @@ private:
  *
  * @return: pid of the child process.
  *          If the returned pid is < 0, then there was an error creating the child process or outfp was NULL.
- *          Errors are logged using the PRINT_ERROR macro.
+ *          Errors are logged using the log_error.
  *
  * Notes:
  * - It is caller's responsibility to close the file descriptors associated with infp, outfp, errfp (if non-null

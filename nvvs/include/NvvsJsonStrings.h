@@ -31,7 +31,6 @@
 #define NVVS_GPU_IDS       "gpu_ids"
 #define NVVS_NAME          "DCGM GPU Diagnostic"
 #define NVVS_GLOBAL_WARN   "Warning"
-#define NVVS_TRAINING_MSG  "Training Result"
 #define NVVS_ERROR_ID      "error_id"
 #define NVVS_ITERATIONS    "iterations"
 #define NVVS_RESULT        "Overall Result"

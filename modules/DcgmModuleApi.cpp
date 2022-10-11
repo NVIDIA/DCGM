@@ -16,7 +16,6 @@
 
 
 #include "DcgmLogging.h"
-#include "DcgmProtobuf.h"
 #include "DcgmRequest.h"
 #include "dcgm_module_structs.h"
 #include "dcgm_test_apis.h" /* DCGM_EMBEDDED_HANDLE */
@@ -42,12 +41,12 @@ DCGM_PUBLIC_API dcgmReturn_t dcgmModuleSendBlockingFixedRequest(dcgmHandle_t pDc
 
     if (moduleCommand->length < sizeof(*moduleCommand))
     {
-        PRINT_ERROR("%u", "Bad module param length %u", moduleCommand->length);
+        log_error("Bad module param length {}", moduleCommand->length);
         return DCGM_ST_BADPARAM;
     }
     if (moduleCommand->moduleId >= DcgmModuleIdCount)
     {
-        PRINT_ERROR("%u", "Bad module ID %u", moduleCommand->moduleId);
+        log_error("Bad module ID {}", moduleCommand->moduleId);
         return DCGM_ST_BADPARAM;
     }
 

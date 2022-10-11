@@ -15,7 +15,6 @@
  */
 #include "TestHealthMonitor.h"
 #include "dcgm_test_apis.h"
-#include <Defer.hpp>
 #include <TimeLib.hpp>
 
 #include <ctime>
@@ -24,19 +23,39 @@
 #include <stddef.h>
 #include <string.h>
 
-using DcgmNs::Defer;
 using DcgmNs::Timelib::Now;
 using DcgmNs::Timelib::ToLegacyTimestamp;
 using namespace std::chrono_literals;
 
 TestHealthMonitor::TestHealthMonitor()
-{}
+{
+    m_gpuGroup = 0;
+}
+
 TestHealthMonitor::~TestHealthMonitor()
 {}
 
-int TestHealthMonitor::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestHealthMonitor::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
+    m_gpus = initParams.fakeGpuIds;
+
+    dcgmReturn_t dcgmReturn = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, "healthgroup", &m_gpuGroup);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmGroupCreate returned %d", (int)dcgmReturn);
+        return -1;
+    }
+
+    for (auto &gpuId : m_gpus)
+    {
+        dcgmReturn = dcgmGroupAddEntity(m_dcgmHandle, m_gpuGroup, DCGM_FE_GPU, gpuId);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            fprintf(stderr, "dcgmGroupAddEntity returned %d for gpuId %u", (int)dcgmReturn, gpuId);
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -143,6 +162,12 @@ int TestHealthMonitor::Run()
 
 int TestHealthMonitor::Cleanup()
 {
+    if (m_gpuGroup != 0)
+    {
+        dcgmGroupDestroy(m_dcgmHandle, m_gpuGroup);
+        m_gpuGroup = 0;
+    }
+
     return 0;
 }
 
@@ -153,30 +178,17 @@ std::string TestHealthMonitor::GetTag()
 
 int TestHealthMonitor::TestHMSet()
 {
-    dcgmGpuGrp_t groupId           = 0;
     dcgmReturn_t result            = DCGM_ST_OK;
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM);
     dcgmHealthSystems_t oldSystems;
 
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
-
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, dcgmHealthSystems_t(0));
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    result = dcgmHealthSet(m_dcgmHandle, groupId, dcgmHealthSystems_t(0));
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmHealthGet(m_dcgmHandle, groupId, &oldSystems);
+    result = dcgmHealthGet(m_dcgmHandle, m_gpuGroup, &oldSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -188,13 +200,13 @@ int TestHealthMonitor::TestHMSet()
         return result;
     }
 
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    result = dcgmHealthGet(m_dcgmHandle, groupId, &oldSystems);
+    result = dcgmHealthGet(m_dcgmHandle, m_gpuGroup, &oldSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -210,31 +222,17 @@ int TestHealthMonitor::TestHMSet()
 
 int TestHealthMonitor::TestHMCheckMemDbe()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
     dcgmGroupInfo_t groupInfo;
 
-    Defer defer([&groupId, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
-
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM);
     response.version               = dcgmHealthResponse_version;
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        fprintf(stderr, "dcgmEngineGroupCreate failed with %d\n", (int)result);
-        return result;
-    }
-
     memset(&groupInfo, 0, sizeof(groupInfo));
     groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
@@ -248,7 +246,7 @@ int TestHealthMonitor::TestHMCheckMemDbe()
         return result;
     }
 
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineHealthSet failed with %d\n", (int)result);
@@ -271,7 +269,7 @@ int TestHealthMonitor::TestHMCheckMemDbe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -289,7 +287,7 @@ int TestHealthMonitor::TestHMCheckMemDbe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -316,33 +314,19 @@ int TestHealthMonitor::TestHMCheckMemDbe()
 
 int TestHealthMonitor::TestHMCheckMemSbe()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
     dcgmGroupInfo_t groupInfo;
-
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM);
     response.version               = dcgmHealthResponse_version;
 
     auto now = Now();
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        fprintf(stderr, "dcgmEngineGroupCreate failed with %d\n", (int)result);
-        return result;
-    }
-
     memset(&groupInfo, 0, sizeof(groupInfo));
     groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
@@ -356,7 +340,7 @@ int TestHealthMonitor::TestHMCheckMemSbe()
         return result;
     }
 
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineHealthSet failed with %d\n", (int)result);
@@ -377,7 +361,7 @@ int TestHealthMonitor::TestHMCheckMemSbe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -396,7 +380,7 @@ int TestHealthMonitor::TestHMCheckMemSbe()
     }
 
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -426,36 +410,17 @@ int TestHealthMonitor::TestHMCheckMemSbe()
 
 int TestHealthMonitor::TestHMCheckPCIe()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
-    unsigned int gpuId = m_gpus[0].gpuId;
-
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
+    unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_PCIE);
     response.version               = dcgmHealthResponse_version;
 
     auto now = Now();
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmGroupAddDevice(m_dcgmHandle, groupId, gpuId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -474,7 +439,7 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         return result;
@@ -489,7 +454,7 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -511,34 +476,15 @@ int TestHealthMonitor::TestHMCheckPCIe()
 
 int TestHealthMonitor::TestHMCheckInforom()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
-    unsigned int gpuId = m_gpus[0].gpuId;
-
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
+    unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_INFOROM);
     response.version               = dcgmHealthResponse_version;
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmGroupAddDevice(m_dcgmHandle, groupId, gpuId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -557,7 +503,7 @@ int TestHealthMonitor::TestHMCheckInforom()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         return result;
@@ -579,36 +525,17 @@ int TestHealthMonitor::TestHMCheckInforom()
 
 int TestHealthMonitor::TestHMCheckThermal()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
-    unsigned int gpuId = m_gpus[0].gpuId;
-
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
+    unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_THERMAL);
     response.version               = dcgmHealthResponse_version;
 
     auto now = Now();
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmGroupAddDevice(m_dcgmHandle, groupId, gpuId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -627,7 +554,7 @@ int TestHealthMonitor::TestHMCheckThermal()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA && result != DCGM_ST_STALE_DATA)
     {
         return result;
@@ -642,7 +569,7 @@ int TestHealthMonitor::TestHMCheckThermal()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -664,36 +591,17 @@ int TestHealthMonitor::TestHMCheckThermal()
 
 int TestHealthMonitor::TestHMCheckPower()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
-    unsigned int gpuId = m_gpus[0].gpuId;
-
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
+    unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_POWER);
     response.version               = dcgmHealthResponse_version;
 
     auto now = Now();
 
-    // Create a group that consists of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmGroupAddDevice(m_dcgmHandle, groupId, gpuId);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -712,7 +620,7 @@ int TestHealthMonitor::TestHMCheckPower()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA && result != DCGM_ST_STALE_DATA)
     {
         return result;
@@ -727,7 +635,7 @@ int TestHealthMonitor::TestHMCheckPower()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -749,7 +657,6 @@ int TestHealthMonitor::TestHMCheckPower()
 
 int TestHealthMonitor::TestHMCheckNVLink()
 {
-    dcgmGpuGrp_t groupId          = 0;
     dcgmReturn_t result           = DCGM_ST_OK;
     dcgmHealthResponse_t response = {};
     dcgmInjectFieldValue_t fv;
@@ -758,25 +665,12 @@ int TestHealthMonitor::TestHMCheckNVLink()
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_NVLINK);
     response.version               = dcgmHealthResponse_version;
 
-    Defer defer([&, this] {
-        if (groupId)
-            dcgmGroupDestroy(m_dcgmHandle, groupId);
-    });
-
     auto now = Now();
-
-    // Create a group consisting of all GPUs
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Cannot create group 'TEST1': '%s'\n", errorString(result));
-        return result;
-    }
 
     // Get the group Info
     memset(&groupInfo, 0, sizeof(groupInfo));
     groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
@@ -794,35 +688,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     // Save the first GPU Id in the list
     gpuId = groupInfo.entityList[0].entityId;
 
-    // Destroy the group and create a new group with the first GPU in the list
-    if (groupId)
-    {
-        result = dcgmGroupDestroy(m_dcgmHandle, groupId);
-        if (result != DCGM_ST_OK)
-        {
-            fprintf(stderr, "dcgmEngineGroupDestroy  failed with %d\n", (int)result);
-            return result;
-        }
-        groupId = 0;
-    }
-
-    // Create an empty group
-    result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, (char *)"TEST1", &groupId);
-    if (result != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Cannot create group 'TEST1': '%s'\n", errorString(result));
-        return result;
-    }
-
-    // Add saved gpudId to the empty group
-    result = dcgmGroupAddDevice(m_dcgmHandle, groupId, gpuId);
-    if (result != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Cannot add device %u to group '%s'\n", gpuId, errorString(result));
-        return result;
-    }
-
-    result = dcgmHealthSet(m_dcgmHandle, groupId, newSystems);
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "Unable to set NVLINK health watch: '%s'\n", errorString(result));
@@ -843,7 +709,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "Unable to check the health watches for this system: '%s'\n", errorString(result));
@@ -870,7 +736,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     }
 
     fv.value.i64 = 1;
-    fv.ts        = ToLegacyTimestamp(now);
+    fv.ts        = ToLegacyTimestamp(now + 2s);
 
     result = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
     if (result != DCGM_ST_OK)
@@ -881,7 +747,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
     if (result != DCGM_ST_OK)
     {
         fprintf(

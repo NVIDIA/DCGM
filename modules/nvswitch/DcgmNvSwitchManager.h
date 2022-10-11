@@ -49,6 +49,7 @@ public:
     using uuid_p         = nscq_uuid_t *;
     using label_t        = nscq_label_t;
     using link_id_t      = uint8_t;
+    using lane_vc_id_t   = uint8_t;
     using nvlink_state_t = nscq_nvlink_state_t;
 
     /*************************************************************************/
@@ -241,9 +242,14 @@ protected:
     /*************************************************************************/
     /**
      * Returns a pointer to the internal NvSwitch object by looking up its
-     * physical ID (entityId). Returns nullptr on error
+     * physical ID (entityId). Returns nullptr on error.
+     *
+     * For links (entityGroupId==DCGM_FE_LINK),
+     *
+     * @return  Pointer to the internal NvSwitch object on success
+     *          nullptr on error
      */
-    dcgm_nvswitch_info_t *GetNvSwitchObject(dcgm_field_eid_t entityId);
+    dcgm_nvswitch_info_t *GetNvSwitchObject(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
     /*************************************************************************/
     /**
@@ -295,5 +301,85 @@ protected:
      * Read fatal errors for all switches
      */
     dcgmReturn_t ReadNvSwitchFatalErrorsAllSwitches();
+
+    /*************************************************************************/
+    /**
+     * Helper to buffer blank values for all affected entities of a fieldId
+     */
+    void BufferBlankValueForAllEntities(unsigned short fieldId,
+                                        DcgmFvBuffer &buf,
+                                        const std::vector<dcgm_field_update_info_t> &entities);
+
+    /*************************************************************************/
+    /**
+     * Update Switch Int32 fields (generally temperatures).
+     */
+    dcgmReturn_t UpdateSwitchInt32Fields(unsigned short fieldId,
+                                         DcgmFvBuffer &buf,
+                                         const std::vector<dcgm_field_update_info_t> &entities,
+                                         timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Switch Throughput fields.
+     */
+    dcgmReturn_t UpdateSwitchThroughputFields(unsigned short fieldId,
+                                              DcgmFvBuffer &buf,
+                                              const std::vector<dcgm_field_update_info_t> &entities,
+                                              timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Switch Error Vector fields.
+     */
+    dcgmReturn_t UpdateSwitchErrorVectorFields(unsigned short fieldId,
+                                               DcgmFvBuffer &buf,
+                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                               timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Link Uint64 fields (generally error counters).
+     */
+    dcgmReturn_t UpdateLinkUint64Fields(unsigned short fieldId,
+                                        DcgmFvBuffer &buf,
+                                        const std::vector<dcgm_field_update_info_t> &entities,
+                                        timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Link Throughput fields.
+     */
+    dcgmReturn_t UpdateLinkThroughputFields(unsigned short fieldId,
+                                            DcgmFvBuffer &buf,
+                                            const std::vector<dcgm_field_update_info_t> &entities,
+                                            timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Link Error Vector fields.
+     */
+    dcgmReturn_t UpdateLinkErrorVectorFields(unsigned short fieldId,
+                                             DcgmFvBuffer &buf,
+                                             const std::vector<dcgm_field_update_info_t> &entities,
+                                             timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Lane CRC and ECC fields.
+     */
+    dcgmReturn_t UpdateLaneUint64Fields(unsigned short fieldId,
+                                        DcgmFvBuffer &buf,
+                                        const std::vector<dcgm_field_update_info_t> &entities,
+                                        timelib64_t now);
+
+    /*************************************************************************/
+    /**
+     * Update Lane latency fields.
+     */
+    dcgmReturn_t UpdateLaneLatencyFields(unsigned short fieldId,
+                                         DcgmFvBuffer &buf,
+                                         const std::vector<dcgm_field_update_info_t> &entities,
+                                         timelib64_t now);
 };
 } // namespace DcgmNs

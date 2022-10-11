@@ -1322,7 +1322,7 @@ skus:
       # Spec sheet says 900000, multiply by .75 to 675000
       minimum_bandwidth: 675000
   # RTX 8000 and 6000 (Quadro)
-  # This whitelist covers both because they use the same PCI Device Id, so the settings are the
+  # This allowlist covers both because they use the same PCI Device Id, so the settings are the
   # lowest value between the two
   - name: RTX 8000 and 6000 (Quadro)
     id: 1e30

@@ -54,7 +54,7 @@ dcgmReturn_t FieldGroup::RunGroupListAll(dcgmHandle_t dcgmHandle, bool json)
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot retrieve field group list. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error: could not retrieve field group lists. Return: %d", result);
+        log_error("Error: could not retrieve field group lists. Return: {}", result);
         return result;
     }
 
@@ -74,10 +74,9 @@ dcgmReturn_t FieldGroup::RunGroupListAll(dcgmHandle_t dcgmHandle, bool json)
             result = RunGroupInfo(dcgmHandle, json);
             if (DCGM_ST_OK != result)
             {
-                PRINT_ERROR("%u %d",
-                            "Error in displaying field group info with fielg group ID: %u. Return: %d",
-                            m_fieldGroupId,
-                            (int)result);
+                log_error("Error in displaying field group info with fielg group ID: {}. Return: {}",
+                          m_fieldGroupId,
+                          (int)result);
                 return result;
             }
         }
@@ -96,7 +95,7 @@ dcgmReturn_t FieldGroup::RunGroupCreate(dcgmHandle_t dcgmHandle)
     result = HelperFieldIdStringParse(m_fieldIdsStr, fieldIds);
     if (DCGM_ST_OK != result)
     {
-        PRINT_ERROR("%d", "Error: parsing for field IDs failed. Return: %d", result);
+        log_error("Error: parsing for field IDs failed. Return: {}", result);
         return result;
     }
 
@@ -106,10 +105,7 @@ dcgmReturn_t FieldGroup::RunGroupCreate(dcgmHandle_t dcgmHandle)
     {
         std::cout << "Error: Cannot create field group " << m_fieldGroupName << ". Return: " << errorString(result)
                   << std::endl;
-        PRINT_ERROR("%s %d",
-                    "Error: could not create group with name: %s. Return: %d",
-                    (char *)m_fieldGroupName.c_str(),
-                    result);
+        log_error("Error: could not create group with name: {}. Return: {}", m_fieldGroupName, result);
         return result;
     }
 
@@ -130,7 +126,7 @@ dcgmReturn_t FieldGroup::RunGroupDestroy(dcgmHandle_t dcgmHandle)
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Cannot destroy field group " << m_fieldGroupId << ". Return: " << error << "."
                   << std::endl;
-        PRINT_ERROR("%u %d", "Error in destroying field group with ID: %d. Return: %d", m_fieldGroupId, result);
+        log_error("Error in destroying field group with ID: {}. Return: {}", m_fieldGroupId, result);
         return result;
     }
 
@@ -159,8 +155,7 @@ dcgmReturn_t FieldGroup::RunGroupInfo(dcgmHandle_t dcgmHandle, bool json)
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Field Group is not found" : errorString(result);
         std::cout << "Error: Unable to retrieve information about field group " << m_fieldGroupId
                   << ". Return: " << error << "." << std::endl;
-        PRINT_ERROR(
-            "%u %d", "Error retrieving info on field group with ID: %u. Return: %d", (int)m_fieldGroupId, result);
+        log_error("Error retrieving info on field group with ID: {}. Return: {}", (int)m_fieldGroupId, result);
         return result;
     }
 

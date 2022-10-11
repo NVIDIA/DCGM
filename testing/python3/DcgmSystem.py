@@ -49,7 +49,7 @@ class DcgmSystemDiscovery:
     '''
     Get some basic GPU attributes for a given GPU ID.
 
-    Returns a dcgm_structs.c_dcgmDeviceAttributes_v1() object for the given GPU
+    Returns a dcgm_structs.c_dcgmDeviceAttributes_v3() object for the given GPU
     '''
     def GetGpuAttributes(self, gpuId):
         return dcgm_agent.dcgmGetDeviceAttributes(self._dcgmHandle.handle, gpuId)
@@ -81,7 +81,7 @@ class DcgmSystemDiscovery:
     '''
     Get the status of all of the NvLink links in the system.
 
-    Returns a dcgm_structs.c_dcgmNvLinkStatus_v2 object.
+    Returns a dcgm_structs.c_dcgmNvLinkStatus_v3 object.
     '''
     def GetNvLinkLinkStatus(self):
         return dcgm_agent.dcgmGetNvLinkLinkStatus(self._dcgmHandle.handle)
@@ -103,29 +103,11 @@ class DcgmSystemIntrospect:
     
     def __init__(self, dcgmHandle):
         self._handle = dcgmHandle
-        self.state = DcgmSystemIntrospectState(dcgmHandle)
         self.memory = DcgmSystemIntrospectMemory(dcgmHandle)
-        self.execTime = DcgmSystemIntrospectExecTime(dcgmHandle)
         self.cpuUtil = DcgmSystemIntrospectCpuUtil(dcgmHandle)
         
     def UpdateAll(self, waitForUpdate=True):
         dcgm_agent.dcgmIntrospectUpdateAll(self._handle.handle, waitForUpdate)
-        
-class DcgmSystemIntrospectState:
-    '''
-    Class to access the state of DCGM introspection gathering
-    '''
-    
-    def __init__(self, dcgmHandle):
-        self._dcgmHandle = dcgmHandle
-    
-    '''
-    Toggle the state of dcgm introspection data collection
-    
-    enabledState: any property of dcgm_structs.DCGM_INTROSPECT_STATE
-    '''
-    def toggle(self, enabledState):
-        dcgm_agent.dcgmIntrospectToggleState(self._dcgmHandle.handle, enabledState)
 
 class DcgmSystemIntrospectMemory:
     '''
@@ -133,44 +115,7 @@ class DcgmSystemIntrospectMemory:
     '''
     
     def __init__(self, dcgmHandle):
-        self._dcgmHandle = dcgmHandle;
-        
-    def GetForFieldGroup(self, fieldGroup, waitIfNoData=True):
-        '''
-        Get the current amount of memory used to store a field group that DCGM is watching.
-        
-        fieldGroup:        DcgmFieldGroup() instance
-        waitIfNoData:      wait for metadata to be updated if it's not available
-                      
-        Returns a dcgm_structs.c_dcgmIntrospectFullMemory_v1 object
-        Raises an exception for DCGM_ST_NOT_WATCHED if the field group is not watched.
-        Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
-        '''
-        introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-        introspectContext.version = dcgm_structs.dcgmIntrospectContext_version1
-        introspectContext.introspectLvl = dcgm_structs.DCGM_INTROSPECT_LVL.FIELD_GROUP
-        introspectContext.fieldGroupId = fieldGroup.fieldGroupId
-        
-        return dcgm_agent.dcgmIntrospectGetFieldsMemoryUsage(self._dcgmHandle.handle, 
-                                                             introspectContext, 
-                                                             waitIfNoData)
-
-    def GetForAllFields(self, waitIfNoData=True):
-        '''
-        Get the current amount of memory used to store all fields that DCGM is watching.
-        
-        waitIfNoData: wait for metadata to be updated if it's not available.
-                      
-        Returns a dcgm_structs.c_dcgmIntrospectFullMemory_v1 object
-        Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
-        '''
-        introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-        introspectContext.version = dcgm_structs.dcgmIntrospectContext_version1
-        introspectContext.introspectLvl = dcgm_structs.DCGM_INTROSPECT_LVL.ALL_FIELDS
-        
-        return dcgm_agent.dcgmIntrospectGetFieldsMemoryUsage(self._dcgmHandle.handle, 
-                                                             introspectContext, 
-                                                             waitIfNoData)
+        self._dcgmHandle = dcgmHandle
     
     def GetForHostengine(self, waitIfNoData=True):
         '''
@@ -184,55 +129,6 @@ class DcgmSystemIntrospectMemory:
         Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
         '''
         return dcgm_agent.dcgmIntrospectGetHostengineMemoryUsage(self._dcgmHandle.handle, waitIfNoData)
-        
-    
-class DcgmSystemIntrospectExecTime:
-    '''
-    Class to access information about the execution time of DCGM itself
-    '''
-    
-    def __init__(self, dcgmHandle):
-        self._dcgmHandle = dcgmHandle;
-        
-    def GetForFieldGroup(self, fieldGroup, waitIfNoData=True):
-        '''
-        Get the total execution time since startup that was used for updating a 
-        field group that DCGM is watching.
-        
-        fieldGroup:        DcgmFieldGroup() instance
-        waitIfNoData:      wait for metadata to be updated if it's not available
-                      
-        Returns a dcgm_structs.c_dcgmIntrospectFullFieldsExecTime_v2 object
-        Raises an exception for DCGM_ST_NOT_WATCHED if the field group is not watched.
-        Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
-        '''
-        introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-        introspectContext.version = dcgm_structs.dcgmIntrospectContext_version1
-        introspectContext.introspectLvl = dcgm_structs.DCGM_INTROSPECT_LVL.FIELD_GROUP
-        introspectContext.fieldGroupId = fieldGroup.fieldGroupId
-        
-        return dcgm_agent.dcgmIntrospectGetFieldsExecTime(self._dcgmHandle.handle, 
-                                                          introspectContext, 
-                                                          waitIfNoData)
-
-    def GetForAllFields(self, waitIfNoData=True):
-        '''
-        Get the total execution time since startup that was used for updating 
-        all fields that DCGM is watching.
-        
-        waitIfNoData:      wait for metadata to be updated if it's not available
-                      
-        Returns a dcgm_structs.c_dcgmIntrospectFullFieldsExecTime_v2 object
-        Raises an exception for DCGM_ST_NOT_WATCHED if the field group is not watched.
-        Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
-        '''
-        introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-        introspectContext.version = dcgm_structs.dcgmIntrospectContext_version1
-        introspectContext.introspectLvl = dcgm_structs.DCGM_INTROSPECT_LVL.ALL_FIELDS
-        
-        return dcgm_agent.dcgmIntrospectGetFieldsExecTime(self._dcgmHandle.handle, 
-                                                          introspectContext, 
-                                                          waitIfNoData)
 
 class DcgmSystemIntrospectCpuUtil:
     '''
@@ -289,15 +185,15 @@ class DcgmSystemModules:
         self._dcgmHandle = dcgmHandle
     
     '''
-    Blacklist a module from being loaded by DCGM.
+    Denylist a module from being loaded by DCGM.
 
-    moduleId a dcgm_structs.dcgmModuleId* ID of the module to blacklist
+    moduleId a dcgm_structs.dcgmModuleId* ID of the module to denylist
 
     Returns: Nothing.
     Raises a DCGM_ST_IN_USE exception if the module was already loaded
     '''
-    def Blacklist(self, moduleId):
-        dcgm_agent.dcgmModuleBlacklist(self._dcgmHandle.handle, moduleId)
+    def Denylist(self, moduleId):
+        dcgm_agent.dcgmModuleDenylist(self._dcgmHandle.handle, moduleId)
 
     '''
     Get the statuses of all of the modules in DCGM

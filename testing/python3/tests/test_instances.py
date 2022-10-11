@@ -118,7 +118,7 @@ def helper_test_inject_instance_fields(handle, gpuIds):
 
     dcgm_internal_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
                                        2, 5, isInt=True, verifyInsertion=True,
-                                       entityType=dcgm_fields.DCGM_FE_GPU)
+                                       entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
 
     # Read the values to make sure they were stored properly
     entities = [dcgm_structs.c_dcgmGroupEntityPair_t(), dcgm_structs.c_dcgmGroupEntityPair_t(),
@@ -144,7 +144,7 @@ def helper_test_inject_instance_fields(handle, gpuIds):
                 v.value.i64, v.entityId, v.entityGroupId)
 
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_inject_instance_fields_standalone(handle, gpuIds):
@@ -240,7 +240,7 @@ def helper_test_health_check_instances(handle, gpuIds):
     # Inject one error per system
     dcgm_internal_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
                                        2, 5, isInt=True, verifyInsertion=True,
-                                       entityType=dcgm_fields.DCGM_FE_GPU)
+                                       entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
 
     responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
     assert (responseV4.incidentCount == 1), "Should have 1 total incidents but found %d" % responseV4.incidentCount

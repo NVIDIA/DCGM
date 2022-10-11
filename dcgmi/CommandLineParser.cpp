@@ -1402,7 +1402,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "Run the diagnostic iteratively and generate a configuration file of golden values based on those results.",
         cmd,
         false);
-    TCLAP::SwitchArg forceTrain("", "force", "Ignore warnings and train the diagnostic.", cmd, false);
 
     TCLAP::ValueArg<std::string> throttleMask(
         "",
@@ -1419,45 +1418,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "",
         cmd);
 
-    TCLAP::ValueArg<unsigned int> trainingIterations("",
-                                                     "training-iterations",
-                                                     "The number of iterations to use "
-                                                     "while training the diagnostic. The default is 4.",
-                                                     false,
-                                                     4,
-                                                     "training iterations",
-                                                     cmd);
-    TCLAP::ValueArg<unsigned int> trainingVariance("",
-                                                   "training-variance",
-                                                   "The coefficient of variance "
-                                                   "as a percentage required to trust the data. The default is 5",
-                                                   false,
-                                                   5,
-                                                   "training variance",
-                                                   cmd);
-    TCLAP::ValueArg<unsigned int> trainingTolerance("",
-                                                    "training-tolerance",
-                                                    "The percentage the golden value "
-                                                    "should be scaled to allow some tolerance when running the "
-                                                    "diagnostic later. For example, if the calculated golden "
-                                                    "value for a minimum bandwidth were 9000 and the tolerance "
-                                                    "were set to 5, then the minimum bandwidth written to the "
-                                                    "configuration file would be 8550, 95% of 9000. The "
-                                                    "default value is 5.",
-                                                    false,
-                                                    5,
-                                                    "training tolerance",
-                                                    cmd);
-    TCLAP::ValueArg<std::string> goldenValuesFile("",
-                                                  "golden-values-filename",
-                                                  "Specify the relative path where "
-                                                  "the DCGM GPU diagnostic should save the golden values file "
-                                                  "produced in training mode. The path will be appended to /tmp "
-                                                  "and will need to be copied elsewhere",
-                                                  false,
-                                                  "",
-                                                  "path to golden values file",
-                                                  cmd);
     TCLAP::SwitchArg failEarly(
         "",
         "fail-early",
@@ -1507,26 +1467,17 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &statsPath);
     helpOutput.addToGroup("1", &json);
     helpOutput.addToGroup("1", &training);
-    helpOutput.addToGroup("1", &forceTrain);
     helpOutput.addToGroup("1", &throttleMask);
-    helpOutput.addToGroup("1", &trainingIterations);
-    helpOutput.addToGroup("1", &trainingVariance);
-    helpOutput.addToGroup("1", &trainingTolerance);
-    helpOutput.addToGroup("1", &goldenValuesFile);
     helpOutput.addToGroup("1", &failEarly);
     helpOutput.addToGroup("1", &failCheckInterval);
     helpOutput.addToGroup("1", &iterations);
 
     cmd.parse(argc, argv);
 
-    if (training.isSet() && startDiag.isSet())
+    if (training.isSet())
     {
-        throw TCLAP::CmdLineParseException("Specifying training and a run option (-r) are mutually exclusive.");
-    }
-
-    if (!training.isSet() && !startDiag.isSet())
-    {
-        throw TCLAP::CmdLineParseException("The run option (-r) must always be set unless training mode is being run.");
+        throw TCLAP::CmdLineParseException(
+            "Specifying training is no longer supported and this code has been removed.");
     }
 
     // Check for negative (invalid) inputs
@@ -1579,34 +1530,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     // This will throw an exception if an error occurs
     ValidateThrottleMask(throttleMask.getValue());
 
-    if (!training.isSet())
-    {
-        if (forceTrain.isSet())
-        {
-            throw TCLAP::CmdLineParseException("--force is only valid with --train");
-        }
-
-        if (trainingIterations.isSet())
-        {
-            throw TCLAP::CmdLineParseException("training-iterations is only valid with --train");
-        }
-
-        if (trainingVariance.isSet())
-        {
-            throw TCLAP::CmdLineParseException("training-variance is only valid with --train");
-        }
-
-        if (trainingTolerance.isSet())
-        {
-            throw TCLAP::CmdLineParseException("training-tolerance is only valid with --train");
-        }
-
-        if (goldenValuesFile.isSet())
-        {
-            throw TCLAP::CmdLineParseException("golden-values-filename is only valid with --train");
-        }
-    }
-
     if (failCheckInterval.isSet() && !failEarly.isSet())
     {
         throw TCLAP::CmdLineParseException("The --fail-early option must be enabled", "check-interval");
@@ -1616,9 +1539,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     {
         throw TCLAP::CmdLineParseException("Interval value must be between 1 and 300", "check-interval");
     }
-
-    bool trainVal      = training.getValue();
-    bool forceTrainVal = forceTrain.getValue();
 
     std::string runValue;
     if (startDiag.isSet())
@@ -1652,12 +1572,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 statsPath.getValue(),
                                                 severityInt,
                                                 throttleMask.getValue(),
-                                                trainVal,
-                                                forceTrainVal,
-                                                trainingIterations.getValue(),
-                                                trainingVariance.getValue(),
-                                                trainingTolerance.getValue(),
-                                                goldenValuesFile.getValue(),
                                                 groupId.getValue(),
                                                 failEarly.getValue(),
                                                 failCheckInterval.getValue(),
@@ -1668,7 +1582,11 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException(error);
     }
 
-    return StartDiag { hostAddress.getValue(), parms.getValue(), config.getValue(), json.getValue(), drd,
+    bool hostAddressWasOverridden = hostAddress.isSet();
+
+    return StartDiag { hostAddress.getValue(), hostAddressWasOverridden,
+                       parms.getValue(),       config.getValue(),
+                       json.getValue(),        drd,
                        iterations.getValue(),  argv[0] }
         .Execute();
 }
@@ -1908,121 +1826,39 @@ dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char cons
     // args are displayed in reverse order to this list
     TCLAP::SwitchArg show("s",
                           "show",
-                          "Show introspection info for the given target(s).  "
-                          "Must be accompanied by at least one of --hostengine, --all-fields, or --field-group.",
+                          "Show introspection info for the host engine.  "
+                          "Must be accompanied by --hostengine.",
                           false);
-    TCLAP::SwitchArg enable("e", "enable", "Enable introspection and start recording information.", false);
-    TCLAP::SwitchArg disable("d", "disable", "Disable introspection and stop recording information.", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN");
 
     std::vector<TCLAP::Arg *> cmdXors;
-    cmdXors.push_back(&enable);
-    cmdXors.push_back(&disable);
     cmdXors.push_back(&show);
 
     TCLAP::SwitchArg hostengineTarget(
         "H", "hostengine", "Specify the hostengine process as a target to retrieve introspection stats for.", false);
-    TCLAP::SwitchArg allFieldsTarget(
-        "F",
-        "all-fields",
-        "Specify an aggregation of all watched fields as a target to retrieve introspection stats for.",
-        false);
-    TCLAP::SwitchArg allFieldGroupsTarget(
-        "",
-        "all-field-groups",
-        "Specify an aggregation of all field groups as a target to retrieve introspection stats for.",
-        false);
-
-    std::stringstream fgDescr;
-    fgDescr
-        << "Specify a field group ID as a target to retrieve introspection stats for. Use \"all\" to specify all field groups.";
-
-    TCLAP::MultiArg<string> fieldGroupTarget("f", "field-group", fgDescr.str(), false, "");
 
     cmd.xorAdd(cmdXors);
     cmd.add(&hostAddress);
     cmd.add(&hostengineTarget);
-    cmd.add(&allFieldsTarget);
-    cmd.add(&fieldGroupTarget);
-    cmd.add(&allFieldGroupsTarget);
 
     // Set help output information
     helpOutput.addDescription("introspect -- Used to access info about DCGM itself.");
 
-    helpOutput.addToGroup("enable", &hostAddress);
-    helpOutput.addToGroup("enable", &enable);
-
-    helpOutput.addToGroup("disable", &hostAddress);
-    helpOutput.addToGroup("disable", &disable);
-
     helpOutput.addToGroup("summary", &hostAddress);
     helpOutput.addToGroup("summary", &show);
     helpOutput.addToGroup("summary", &hostengineTarget);
-    helpOutput.addToGroup("summary", &allFieldsTarget);
-    helpOutput.addToGroup("summary", &fieldGroupTarget);
-    helpOutput.addToGroup("summary", &allFieldGroupsTarget);
 
     cmd.parse(argc, argv);
 
-    if (enable.isSet())
+    if (show.isSet())
     {
-        result = ToggleIntrospect(hostAddress.getValue(), true).Execute();
-    }
-    else if (disable.isSet())
-    {
-        result = ToggleIntrospect(hostAddress.getValue(), false).Execute();
-    }
-    else if (show.isSet())
-    {
-        if (!hostengineTarget.isSet() && !allFieldsTarget.isSet() && !fieldGroupTarget.isSet()
-            && !allFieldGroupsTarget.isSet())
+        if (!hostengineTarget.isSet())
         {
-            throw TCLAP::CmdLineParseException("No target specified to show introspection stats for. "
+            throw TCLAP::CmdLineParseException("--hostengine must be provided with --show. "
                                                "See \"dcgmi introspect --help\"");
         }
 
-        auto const &fgIds = fieldGroupTarget.getValue();
-        std::vector<dcgmFieldGrp_t> fgTargets;
-        bool showAllFieldGroups = allFieldGroupsTarget.getValue();
-
-        // validate field group arguments
-        if (fieldGroupTarget.isSet() && !fgIds.empty())
-        {
-            if (std::find(fgIds.begin(), fgIds.end(), "all") != fgIds.end() && fgIds.size() > 1)
-            {
-                throw TCLAP::CmdLineParseException("Cannot specify other field groups when \"all\" field groups are "
-                                                   "specified");
-            }
-
-            if (fgIds[0] == "all")
-            {
-                showAllFieldGroups = true;
-            }
-            else
-            {
-                // parse the given field collections
-                for (auto const &fgId : fgIds)
-                {
-                    bool success          = false;
-                    auto const parsedFgId = strTo<unsigned long long>(fgId, &success);
-                    if (!success)
-                    {
-                        std::stringstream ss;
-                        ss << "Unable to parse provided Field Group Id: " << fgId;
-                        throw TCLAP::CmdLineParseException(ss.str());
-                    }
-
-                    fgTargets.push_back(static_cast<dcgmFieldGrp_t>(parsedFgId));
-                }
-            }
-        }
-
-        result = DisplayIntrospectSummary(hostAddress.getValue(),
-                                          hostengineTarget.getValue(),
-                                          allFieldsTarget.getValue(),
-                                          showAllFieldGroups,
-                                          fgTargets)
-                     .Execute();
+        result = DisplayIntrospectSummary(hostAddress.getValue(), hostengineTarget.getValue()).Execute();
     }
 
     return result;
@@ -2347,11 +2183,11 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
     TCLAP::SwitchArg list("l", "list", "List modules on hostengine", false);
-    TCLAP::ValueArg<std::string> blacklist("", "blacklist", "Blacklist provided module", false, "", "Name");
+    TCLAP::ValueArg<std::string> denylist("", "denylist", "Denylist provided module", false, "", "Name");
 
     std::vector<TCLAP::Arg *> xors;
     xors.push_back(&list);
-    xors.push_back(&blacklist);
+    xors.push_back(&denylist);
     cmd.xorAdd(xors);
 
     cmd.parse(argc, argv);
@@ -2360,11 +2196,11 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
     {
         result = ListModule { hostAddress.getValue(), json.getValue() }.Execute();
     }
-    else if (blacklist.isSet())
+    else if (denylist.isSet())
     {
-        result = BlacklistModule { hostAddress.getValue(), blacklist.getValue(), json.getValue() }.Execute();
+        result = DenylistModule { hostAddress.getValue(), denylist.getValue(), json.getValue() }.Execute();
     }
-    // No else clause since xors ensures one of list or blacklist is always set
+    // No else clause since xors ensures one of list or denylist is always set
 
     return result;
 }

@@ -41,8 +41,8 @@ def helper_validate_action(groupObj):
         response = groupObj.action.Validate(validation)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version7, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version7, response.version)
+        assert response.version == dcgm_structs.dcgmDiagResponse_version8, "Version mismatch. Expected %d. got %d" % \
+                                                                           (dcgm_structs.dcgmDiagResponse_version8, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -83,8 +83,8 @@ def helper_validate_run_diag(groupObj):
         response = groupObj.action.RunDiagnostic(diagLevel)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version7, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version7, response.version)
+        assert response.version == dcgm_structs.dcgmDiagResponse_version8, "Version mismatch. Expected %d. got %d" % \
+                                                                           (dcgm_structs.dcgmDiagResponse_version8, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()

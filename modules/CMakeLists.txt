@@ -18,7 +18,6 @@ add_library(modules_interface INTERFACE)
 target_link_libraries(modules_interface
   INTERFACE
     dcgm_interface
-    common_protobuf_interface
     module_common_interface
     module_common_interface
 )

@@ -27,7 +27,7 @@
 
 #define DCGM_ENV_LOG_PREFIX "__DCGM_DBG"
 
-/* Environmental variable to bypass the white list */
+/* Environmental variable to bypass the allow list */
 #define DCGM_ENV_WL_BYPASS "__DCGM_WL_BYPASS"
 
 #define DCGM_MODE_EMBEDDED_HE   0 /* Mode when Host Engine is Embedded. ISV Agent Use Case */

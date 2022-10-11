@@ -60,8 +60,9 @@ typedef struct
 /**
  * The following defines are used to recognize type of DCGM messages
  */
-#define DCGM_MSG_PROTO_REQUEST  0x0100 /* A Google protobuf-based request */
-#define DCGM_MSG_PROTO_RESPONSE 0x0200 /* A Google protobuf-based response to a request */
+#define DCGM_MSG_PROTO_REQUEST 0x0100 /* A Google protobuf-based request (Not supported in DCGM 3.0 and newer) */
+#define DCGM_MSG_PROTO_RESPONSE \
+    0x0200 /* A Google protobuf-based response to a request (Not supported in DCGM 3.0 and newer) */
 #define DCGM_MSG_MODULE_COMMAND 0x0300 /* A module command message */
 #define DCGM_MSG_POLICY_NOTIFY  0x0400 /* Async notification of a policy violation */
 #define DCGM_MSG_REQUEST_NOTIFY 0x0500 /* Notify an async request that it will receive no further updates */

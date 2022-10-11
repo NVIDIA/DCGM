@@ -158,6 +158,9 @@ function run_cmake() {
     if [[ ${vmware} -eq 1 ]]; then
         CMAKE_COMMON_ARGS+="-DVMWARE=1 "
     fi
+    if ( command -v ninja >/dev/null ); then
+        CMAKE_COMMON_ARGS+="-G Ninja "
+    fi
     CMAKE_COMMON_ARGS+="-DCMAKE_TOOLCHAIN_FILE=${DIR}/cmake/${TARGET}-toolchain.cmake ${BUILD_TESTING} ${cmake_install_prefix:-}"
     CMAKE_ARGS="${CMAKE_COMMON_ARGS} ${DIR} $@"
 

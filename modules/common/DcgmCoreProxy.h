@@ -41,89 +41,9 @@ public:
     dcgmReturn_t GetGpuIds(int activeOnly, std::vector<unsigned int> &gpuIds);
 
     /**
-     * @param[in]  dcgmFieldId - field to check
-     * @param[out] isWatched - boolean whether the field is watched
-     */
-    dcgmReturn_t IsGlobalFieldWatched(unsigned short dcgmFieldId, bool *isWatched);
-
-    /**
-     * @param[in]  dcgmFieldId - field to check
-     * @param[out] isWatched - boolean whether the field is watched
-     */
-    dcgmReturn_t IsGpuFieldWatchedOnAnyGpu(unsigned short dcgmFieldId, bool *isWatched);
-
-    /**
-     * @param[in] gpuId - gpu to query
-     * @param[in] fieldId - field to query
-     * @param[out] bytesUsed - bytes used by gpu
-     */
-    dcgmReturn_t GetGpuFieldBytesUsed(unsigned int gpuId, unsigned short fieldId, long long *bytesUsed);
-
-    /**
-     * @param[in] fieldId - field to query
-     * @param[out] bytesUsed - bytes used globally
-     */
-    dcgmReturn_t GetGlobalFieldBytesUsed(unsigned short fieldId, long long *bytesUsed);
-
-    /**
-     * @param[in] gpuId - gpu to query
-     * @param[in] fieldId - field to query
-     * @param[out] bytesUsed - total usec by gpu
-     */
-    dcgmReturn_t GetGpuFieldExecTimeUsec(unsigned int gpuId, unsigned short fieldId, long long *totalUsec);
-
-    /**
-     * @param[in] fieldId - field to query
-     * @param[out] bytesUsed - total usec used globally
-     */
-    dcgmReturn_t GetGlobalFieldExecTimeUsec(unsigned short fieldId, long long *totalUsec);
-
-    /**
-     * @param[in] gpuId - gpu to query
-     * @param[in] fieldId - field to query
-     * @param[out] fetchCount - gpu fetch count
-     */
-    dcgmReturn_t GetGpuFieldFetchCount(unsigned int gpuId, unsigned short fieldId, long long *fetchCount);
-
-    /**
-     * @param[in] fieldId - field to query
-     * @param[out] fetchCount - total fetch count
-     */
-    dcgmReturn_t GetGlobalFieldFetchCount(unsigned short fieldId, long long *fetchCount);
-
-    /**
-     * @param[in] fieldId - field to query
-     * @param[out] freqUsec - frequency
-     */
-    dcgmReturn_t GetFieldWatchFreq(unsigned int gpuId, unsigned short fieldId, timelib64_t *freqUsec);
-
-
-    /**
      * @param[in] gpuIds - the list of GPU ids to check
      */
     bool AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds);
-
-    /**
-     * @param[in] fieldIds - the list of field ids to check
-     */
-    bool AnyGlobalFieldsWatched(std::vector<unsigned short> *fieldIds);
-
-    /**
-     * @param[in] fieldIds - the list of field ids to check
-     */
-    bool AnyFieldsWatched(std::vector<unsigned short> *fieldIds);
-
-    /**
-     * @param[in] GpuId - Gpu to query
-     * @param[in] FieldIds - the list of field ids to check
-     */
-    bool AnyGpuFieldsWatched(unsigned int gpuId, std::vector<unsigned short> *fieldIds);
-
-    /**
-     * @param[in] GpuId - Gpu to query
-     * @param[in] FieldIds - the list of field ids to check
-     */
-    bool AnyGpuFieldsWatchedAnywhere(std::vector<unsigned short> *fieldIds);
 
     /**
      * @param[in] activeOnly - if true, get a count of only the active GPUs, otherwise count all visible GPUs
@@ -201,6 +121,15 @@ public:
      * @param[in] maxKeepSamples - the maximum number of samples to keep in the cache at a time
      * @param[in] watcher - the object tracking who is watching this field
      * @param[in] subscribeForUpdates - boolean for whether or not the watcher is subscribing for updates.
+     * @param[in] updateOnFirstWatch  - Whether we should do an UpdateAllFields(true) if we were
+     *                                  the first watcher or not. Pass true if you want to guarantee
+     *                                  there is a value in the cache after this call. Pass false if you
+     *                                  don't care or plan to batch together a bunch of watches before
+     *                                  an UpdateAllFields() at the end
+     * @param[out] wereFirstWatcher - Whether we were the first watcher (true) or not (false). If so,
+     *                                you will need to call UpdateAllFields(true) for a value to be
+     *                                present in the cache.
+     *
      */
     dcgmReturn_t AddFieldWatch(dcgm_field_entity_group_t entityGroupId,
                                dcgm_field_eid_t entityId,
@@ -209,7 +138,9 @@ public:
                                double maxSampleAge,
                                int maxKeepSamples,
                                DcgmWatcher watcher,
-                               bool subscribeForUpdates);
+                               bool subscribeForUpdates,
+                               bool updateOnFirstWatch,
+                               bool &wereFirstWatcher);
 
     /**
      * @param[in]  entityGroupId - which entity group we are dealing with
@@ -338,29 +269,6 @@ public:
 
     DcgmLoggingSeverity_t GetLoggerSeverity(dcgm_connection_id_t connectionId,
                                             loggerCategory_t logger = BASE_LOGGER) const;
-
-    /**
-     * @param[out] watchInfo - array of relevant global watch information from cache manager
-     * @param[in] fields - optional array of fields to query
-     */
-    dcgmReturn_t PopulateGlobalWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                         std::vector<unsigned short> *fieldIds = nullptr);
-
-    /**
-     * @param[out] watchInfo - array of relevant gpu watch information from cache manager
-     * @param[in] gpuId - gpu to query
-     * @param[in] fields - optionl array of fields to query
-     */
-    dcgmReturn_t PopulateGpuWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                      unsigned int gpuId,
-                                      std::vector<unsigned short> *fieldIds = nullptr);
-
-    /**
-     * @param[out] watchInfo - array of relevant watch information from cache manager
-     * @param[in] fields - optional array of fields to query
-     */
-    dcgmReturn_t PopulateWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                   std::vector<unsigned short> *fieldIds = nullptr);
 
     /**
      * Returns DCGM entity id for the compute instance with given NVML indices.

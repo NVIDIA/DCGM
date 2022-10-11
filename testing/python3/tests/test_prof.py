@@ -14,7 +14,7 @@
 import pydcgm
 import dcgm_structs
 import dcgm_agent
-from dcgm_structs import dcgmExceptionClass
+from dcgm_structs import DCGM_ST_NOT_SUPPORTED, dcgmExceptionClass
 import test_utils
 import logger
 import os
@@ -144,8 +144,16 @@ def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
 
     logger.info("Single pass field IDs: " + str(fieldIds))
 
-    watchFields = dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
-    assert watchFields.version == dcgm_structs.dcgmProfWatchFields_version1
+    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group", fieldIds)
+
+    dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+
+    #Throws an exception on error
+    dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+    
+    #Cleanup
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
+    dcgmGroup.Delete()
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -174,11 +182,15 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
     entityPairList = [dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId)]
 
     for fieldId in fieldIds:
+        fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_%d" % fieldId, [fieldId, ])
+
         # If there are only one unsupported SKUs in the group, WatchFields should return an error.
         # If at least one GPU in the group is supported, WatchFields will be successful.
         # The described logic is used to skip unsupported or fake SKUs.
-        if dcgmGroup.profiling.WatchFields([fieldId, ], watchFreq, maxKeepAge,
-                                           maxKeepSamples) == dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED:
+        try:
+            dcgmGroup.samples.WatchFields(fieldGroup, watchFreq, maxKeepAge, maxKeepSamples)
+        except:
+            fieldGroup.Delete()
             test_utils.skip_test_supported("DCP")
 
         # Sending a request to the profiling manager guarantees that an update cycle has happened since 
@@ -190,7 +202,7 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
         assert (cmfi.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED) != 0, "gpuId %u, fieldId %u not watched" % (gpuId, fieldId)
         assert cmfi.numSamples > 0
         assert cmfi.numWatchers == 1, "numWatchers %d" % cmfi.numWatchers
-        assert cmfi.monitorFrequencyUsec == watchFreq, "monitorFrequencyUsec %u != watchFreq %u" % (cmfi.monitorFrequencyUsec, watchFreq)
+        assert cmfi.monitorIntervalUsec == watchFreq, "monitorIntervalUsec %u != watchFreq %u" % (cmfi.monitorIntervalUsec, watchFreq)
         assert cmfi.lastStatus == dcgm_structs.DCGM_ST_OK, "lastStatus %u != DCGM_ST_OK" % (cmfi.lastStatus)
 
         fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entityPairList, [fieldId, ], 0)
@@ -200,7 +212,8 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
             assert(fieldValue.status == dcgm_structs.DCGM_ST_OK), "idx %d status was %d" % (i, fieldValue.status)
             assert(fieldValue.ts != 0), "idx %d timestamp was 0" % (i)
 
-        dcgmGroup.profiling.UnwatchFields()
+        dcgmGroup.samples.UnwatchFields(fieldGroup)
+        fieldGroup.Delete()
 
         #Validate watch flags after unwatch
         cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
@@ -232,8 +245,11 @@ def test_dcgm_prof_watch_multipass(handle, gpuIds):
 
         logger.info("Positive testing multipass fieldIds %s" % str(fieldIds))
 
-        dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
-        dcgmGroup.profiling.UnwatchFields()
+        fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_%d" % i, fieldIds)
+
+        dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+        dcgmGroup.samples.UnwatchFields(fieldGroup)
+        fieldGroup.Delete()
 
     if len(mpFieldIds) <= DLG_MAX_METRIC_GROUPS:
         test_utils.skip_test("Skipping multipass failure test since there are %d <= %d multipass groups." %
@@ -246,24 +262,13 @@ def test_dcgm_prof_watch_multipass(handle, gpuIds):
 
         logger.info("Negative testing multipass fieldIds %s" % str(fieldIds))
 
-        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_MULTI_PASS)):
-            dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
-            dcgmGroup.profiling.UnwatchFields()
+        fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_%d" % i, fieldIds)
 
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_MULTI_PASS)):    
+            dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+            dcgmGroup.samples.UnwatchFields(fieldGroup)
 
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-def test_dcgm_prof_unwatch_fields_sanity(handle, gpuIds):
-    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
-    dcgmSystem = dcgmHandle.GetSystem()
-    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
-
-    helper_check_profiling_environment(dcgmGroup)
-
-    unwatchFields = dcgmGroup.profiling.UnwatchFields()
-    assert unwatchFields.version == dcgm_structs.dcgmProfUnwatchFields_version1
+        fieldGroup.Delete()
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -286,23 +291,29 @@ def test_dcgm_prof_watch_fields_multi_user(handle, gpuIds):
     fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
     assert fieldIds is not None
 
-    # Take ownership of the profiling watches
-    dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_0", fieldIds)
+    fieldGroup2 = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_2", fieldIds)
 
-    dcgmGroup2.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+    # Take ownership of the profiling watches
+    dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+
+    dcgmGroup2.samples.WatchFields(fieldGroup2, 1000000, 3600.0, 0)
 
     # Release the watches
-    dcgmGroup2.profiling.UnwatchFields()
-    dcgmGroup.profiling.UnwatchFields()
+    dcgmGroup2.samples.UnwatchFields(fieldGroup2)
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
 
     # Now dcgmHandle2 owns the watches
-    dcgmGroup2.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+    dcgmGroup2.samples.WatchFields(fieldGroup2, 1000000, 3600.0, 0)
 
     # connection 1 should not fail to acquire the watches
-    dcgmGroup.profiling.WatchFields(fieldIds, 1000000, 3600.0, 0)
+    dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
 
-    dcgmGroup2.profiling.UnwatchFields()
-    dcgmGroup.profiling.UnwatchFields()
+    dcgmGroup2.samples.UnwatchFields(fieldGroup2)
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
+
+    fieldGroup.Delete()
+    fieldGroup2.Delete()
 
     dcgmHandle.Shutdown()
     dcgmHandle2.Shutdown()
@@ -360,8 +371,10 @@ def test_dcgm_prof_initial_valid_record(handle, gpuIds):
     fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
     assert fieldIds is not None
 
+    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_0", fieldIds)
+
     #Set watches using a large interval so we don't get a record for 10 seconds in the bug case
-    dcgmGroup.profiling.WatchFields(fieldIds, 10000000, 3600.0, 0)
+    dcgmGroup.samples.WatchFields(fieldGroup, 10000000, 3600.0, 0)
 
     gpuId = gpuIds[0]
 
@@ -377,6 +390,10 @@ def test_dcgm_prof_initial_valid_record(handle, gpuIds):
         #0 timestamp
         assert(fieldValue.ts != 0), "idx %d timestamp was 0" % i
 
+    #Cleanup
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
+    fieldGroup.Delete()
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -386,7 +403,15 @@ def test_dcgm_prof_multi_pause_resume(handle, gpuIds):
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
-    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)    
+
+    #GPM-enabled GPUs don't support pause/resume
+    if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
+             dcgmSystem.profiling.Pause()
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
+             dcgmSystem.profiling.Resume()
+        return
 
     helper_check_profiling_environment(dcgmGroup)
 
@@ -418,6 +443,14 @@ def test_dcgm_prof_pause_resume_values(handle, gpuIds):
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
 
+    #GPM-enabled GPUs don't support pause/resume
+    if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
+             dcgmSystem.profiling.Pause()
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
+             dcgmSystem.profiling.Resume()
+        return
+
     helper_check_profiling_environment(dcgmGroup)
 
     fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
@@ -429,7 +462,8 @@ def test_dcgm_prof_pause_resume_values(handle, gpuIds):
     #Start paused. All the other tests start unpaused
     dcgmSystem.profiling.Pause()
 
-    dcgmGroup.profiling.WatchFields(fieldIds, watchIntervalUsec, 60.0, 0)
+    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_0", fieldIds)
+    dcgmGroup.samples.WatchFields(fieldGroup, watchIntervalUsec, 60.0, 0)
 
     gpuId = gpuIds[0]
 
@@ -470,6 +504,9 @@ def test_dcgm_prof_pause_resume_values(handle, gpuIds):
     #This shouldn't fail
     dcgmSystem.profiling.Resume()
 
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
+    fieldGroup.Delete()
+
 def helper_test_dpt_field_id(handle, gpuIds, fieldId, extraArgs = None):
     '''
     Test that we can retrieve a valid FV for a profiling field immediately after watching
@@ -488,6 +525,32 @@ def helper_test_dpt_field_id(handle, gpuIds, fieldId, extraArgs = None):
     useGpuIds = [gpuIds[0], ]
 
     args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate", "-d", "15.0", "-r", "1.0", "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+
+    if extraArgs is not None:
+        args.extend(extraArgs)
+
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
+    app.wait()
+
+def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, extraArgs = None):
+    '''
+    Test that we can retrieve a valid FV for a profiling field immediately after watching
+    '''
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    helper_check_profiling_environment(dcgmGroup)
+
+    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+
+    supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
+
+    # Just test the first GPU of our SKU. Other tests will cover multiple SKUs
+    useGpuIds = [gpuIds[0], ]
+
+    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate,fast", "-d", "15.0", "-r", "1.0", "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
 
     if extraArgs is not None:
         args.extend(extraArgs)
@@ -609,14 +672,14 @@ def test_dcgmproftester_fp16_active(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_pcie_rx(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, ["--percent-tolerance", "20.0"])
+    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, ["--percent-tolerance", "20.0"])
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_pcie_tx(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES)
+    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES)
 
 def dont_test_slower_gpus(handle, gpuIds):
     # These GPU ids don't need to be tested

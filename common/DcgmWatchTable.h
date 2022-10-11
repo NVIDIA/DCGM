@@ -108,11 +108,11 @@ struct dcgm_watch_info_t
 typedef struct
 {
     unsigned short fieldId;
-    timelib64_t monitorFrequencyUsec; /* How often this field should be sampled */
-    long long execTimeUsec;           /* Cumulative time spent updating this
-                                         field since the cache manager started */
-    long long fetchCount;             /* Number of times that this field has been
-                                         fetched from the driver */
+    timelib64_t monitorIntervalUsec; /* How often this field should be sampled */
+    long long execTimeUsec;          /* Cumulative time spent updating this
+                                        field since the cache manager started */
+    long long fetchCount;            /* Number of times that this field has been
+                                        fetched from the driver */
     long long bytesUsed;
     int scope;
 } dcgmCoreWatchInfo_v1;
@@ -121,6 +121,8 @@ typedef struct
 
 #define dcgmCoreWatchInfo_version dcgmCoreWatchInfo_version1
 typedef dcgmCoreWatchInfo_v1 dcgmCoreWatchInfo_t;
+
+typedef std::unordered_map<int, std::vector<unsigned short>> dcgmPostWatchInfo_t;
 
 class DcgmWatchTable
 {
@@ -157,8 +159,7 @@ public:
      *
      * @return DCGM_ST_* indicating status
      */
-    dcgmReturn_t RemoveConnectionWatches(dcgm_connection_id_t connectionId,
-                                         std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo);
+    dcgmReturn_t RemoveConnectionWatches(dcgm_connection_id_t connectionId, dcgmPostWatchInfo_t *postWatchInfo);
 
     /*****************************************************************************/
     /**
@@ -172,8 +173,27 @@ public:
      *
      * @return DCGM_ST_* indicating status
      */
-    dcgmReturn_t RemoveWatches(DcgmWatcher watcher,
-                               std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo);
+    dcgmReturn_t RemoveWatches(DcgmWatcher watcher, dcgmPostWatchInfo_t *postWatchInfo);
+
+    /*****************************************************************************/
+    /**
+     * Remove a watch on a specific entity key for a watcher
+     *
+     * @param entityGroupId[in]  - Entity group to unwatch
+     * @param entityId[in]       - Entity id to unwatch
+     * @param fieldId[in]        - Field id to unwatch
+     * @param watcher[in]        - the watcher whose watches should be removed
+     * @param postWatchInfo[out] - a map of gpuId to fields that may need
+     *                             NVML update calls now that watches have
+     *                             been altered.
+     *
+     * @return DCGM_ST_* indicating status
+     */
+    dcgmReturn_t RemoveWatcher(dcgm_field_entity_group_t entityGroupId,
+                               dcgm_field_eid_t entityId,
+                               unsigned int fieldId,
+                               DcgmWatcher watcher,
+                               dcgmPostWatchInfo_t *postWatchInfo);
 
     /*****************************************************************************/
     /**
@@ -244,6 +264,18 @@ public:
 
     /*****************************************************************************/
     /**
+     * Get the maximum update interval in usec across all watches contained in this
+     * watch table
+     *
+     * @param minUpdateInterval[out] : Minimum update inteval in the watch table. 0 = no entries in the watch table.
+     * @param maxUpdateInterval[out] : Maximum update inteval in the watch table. 0 = no entries in the watch table.
+     *
+     * @return maximum watch age in usec. 0 if there are no watches.
+     */
+    void GetMinAndMaxUpdateInterval(timelib64_t &minUpdateInterval, timelib64_t &maxUpdateInterval);
+
+    /*****************************************************************************/
+    /**
      * Gets whether or not the specified watch has subscribers, if it exists
      *
      * @param entityGroupId[in] - the entity group id for the watch
@@ -256,7 +288,6 @@ public:
     bool GetIsSubscribed(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId, unsigned short fieldId);
 
 private:
-    DcgmMutex m_mutex;
     // Track per-entity watches of fields
     std::unordered_map<dcgm_entity_key_t, dcgm_watch_info_t> m_entityWatchHashTable;
 
@@ -295,7 +326,7 @@ private:
      */
     dcgmReturn_t RemoveWatcher(dcgm_watch_info_t &watchInfo,
                                const dcgm_watcher_info_t &watcher,
-                               std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo);
+                               dcgmPostWatchInfo_t *postWatchInfo);
 
     /*****************************************************************************/
     /**

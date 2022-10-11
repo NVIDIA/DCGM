@@ -215,12 +215,6 @@ SCENARIO("NVVS correctly processes command line arguments")
         CHECK(nvvsCommon.jsonOutput == false);
         CHECK(nvvsCommon.dcgmHostname == "");
         CHECK(nvvsCommon.fromDcgm == false);
-        CHECK(nvvsCommon.training == false);
-        CHECK(nvvsCommon.forceTraining == false);
-        CHECK(nvvsCommon.trainingIterations == 4);
-        CHECK(nvvsCommon.trainingVariancePcnt == 0.05);
-        CHECK(nvvsCommon.trainingTolerancePcnt == 0.05);
-        CHECK(nvvsCommon.goldenValuesFile == "/tmp/golden_values.yml");
         CHECK(nvvsCommon.m_statsPath == "./");
         CLEANUP();
     }
@@ -262,16 +256,6 @@ SCENARIO("NVVS correctly processes command line arguments")
         add_argument("--dcgmHostname");
         add_argument("host");
         add_argument("-z");
-        add_argument("--train");
-        add_argument("--force");
-        add_argument("--training-iterations");
-        add_argument("5");
-        add_argument("--training-variance");
-        add_argument("6");
-        add_argument("--training-tolerance");
-        add_argument("7");
-        add_argument("--golden-values-filename");
-        add_argument("goldenvalues");
         add_argument("--throttle-mask");
         add_argument("--fail-early");
         add_argument("--check-interval");
@@ -292,12 +276,6 @@ SCENARIO("NVVS correctly processes command line arguments")
         CHECK(nvvsCommon.jsonOutput == true);
         CHECK(nvvsCommon.dcgmHostname == "host");
         CHECK(nvvsCommon.fromDcgm == true);
-        CHECK(nvvsCommon.training == true);
-        CHECK(nvvsCommon.forceTraining == true);
-        CHECK(nvvsCommon.trainingIterations == 5);
-        CHECK(nvvsCommon.trainingVariancePcnt == 0.06);
-        CHECK(nvvsCommon.trainingTolerancePcnt == 0.07);
-        CHECK(nvvsCommon.goldenValuesFile == "goldenvalues");
         CHECK(nvvsCommon.m_statsPath == statsDir);
 
         rmdir(statsDir);

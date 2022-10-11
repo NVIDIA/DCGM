@@ -44,14 +44,13 @@ target_sources(nvvs_without_main_objects
         DcgmRecorder.cpp
         DcgmSystem.cpp
         DcgmValuesSinceHolder.cpp
-        GoldenValueCalculator.cpp
+        EarlyFailChecker.cpp
         Gpu.cpp
         GpuSet.cpp
         JsonOutput.cpp
         NvidiaValidationSuite.cpp
         NvvsCommon.cpp
         NvvsDeviceList.cpp
-        NvvsSystemChecker.cpp
         Output.cpp
         ParameterValidator.cpp
         ParsingUtility.cpp
@@ -59,7 +58,7 @@ target_sources(nvvs_without_main_objects
         Test.cpp
         TestFramework.cpp
         TestParameters.cpp
-        Whitelist.cpp
+        Allowlist.cpp
         PluginLib.cpp
         PluginCoreFunctionality.cpp
         CustomStatHolder.cpp

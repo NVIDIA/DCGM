@@ -77,20 +77,20 @@ dcgmReturn_t DcgmConfigManager::HelperSetEccMode(unsigned int gpuId,
 
     if (DCGM_INT32_IS_BLANK(setConfig->eccMode))
     {
-        PRINT_DEBUG("", "ECC mode was blank");
+        log_debug("ECC mode was blank");
         return DCGM_ST_OK;
     }
 
     /* Is ECC even supported by the hardware? */
     if (DCGM_INT32_IS_BLANK(currentConfig->eccMode))
     {
-        PRINT_DEBUG("%u", "ECC mode was blank for gpuId %u", gpuId);
+        log_debug("ECC mode was blank for gpuId {}", gpuId);
         return DCGM_ST_OK;
     }
 
     if (currentConfig->eccMode == setConfig->eccMode)
     {
-        PRINT_DEBUG("%u %u", "ECC mode %u already matches for gpuId %u.", setConfig->eccMode, gpuId);
+        log_debug("ECC mode {} already matches for gpuId {}.", setConfig->eccMode, gpuId);
         return DCGM_ST_OK;
     }
 
@@ -102,8 +102,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetEccMode(unsigned int gpuId,
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_ECC_PENDING, &valueToSet);
     if (dcgmRet != DCGM_ST_OK)
     {
-        PRINT_ERROR(
-            "%d %u %u", "Got error %d while setting ECC to %u for gpuId %u", dcgmRet, setConfig->eccMode, gpuId);
+        log_error("Got error {} while setting ECC to {} for gpuId {}", dcgmRet, setConfig->eccMode, gpuId);
         return dcgmRet;
     }
 
@@ -118,7 +117,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPowerLimit(unsigned int gpuId, dcgmConf
 
     if (DCGM_INT32_IS_BLANK(setConfig->powerLimit.val))
     {
-        PRINT_DEBUG("%u", "Power limit was blank for gpuId %u", gpuId);
+        log_debug("Power limit was blank for gpuId {}", gpuId);
         return DCGM_ST_OK;
     }
 
@@ -129,7 +128,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPowerLimit(unsigned int gpuId, dcgmConf
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, &value);
     if (DCGM_ST_OK != dcgmRet)
     {
-        PRINT_ERROR("%d %d", "Error in setting power limit for GPU ID: %d Error: %d", gpuId, (int)dcgmRet);
+        log_error("Error in setting power limit for GPU ID: {} Error: {}", gpuId, (int)dcgmRet);
         return dcgmRet;
     }
 
@@ -149,7 +148,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
 
     if (DCGM_INT32_IS_BLANK(targetMemClock) && DCGM_INT32_IS_BLANK(targetSmClock))
     {
-        PRINT_DEBUG("%u", "Both memClock and smClock were blank for gpuId %u", gpuId);
+        log_debug("Both memClock and smClock were blank for gpuId {}", gpuId);
         /* Ignore the clock settings if both clock values are BLANK */
         return DCGM_ST_OK;
     }
@@ -168,12 +167,11 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
         dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, &value);
         if (DCGM_ST_OK != dcgmRet)
         {
-            PRINT_ERROR("%d %d %d %d",
-                        "Can't set fixed clocks %d,%d for GPU Id %d. Error: %d",
-                        targetMemClock,
-                        targetSmClock,
-                        gpuId,
-                        dcgmRet);
+            log_error("Can't set fixed clocks {}, {} for GPU Id {}. Error: {}",
+                      targetMemClock,
+                      targetSmClock,
+                      gpuId,
+                      dcgmRet);
             return dcgmRet;
         }
 
@@ -184,12 +182,12 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
         if (dcgmRet == DCGM_ST_NOT_SUPPORTED)
         {
             /* Not an error for >= Pascal. NVML returns NotSupported */
-            PRINT_DEBUG("%d", "Got NOT_SUPPORTED when setting auto boost for gpuId %d", gpuId);
+            log_debug("Got NOT_SUPPORTED when setting auto boost for gpuId {}", gpuId);
             /* Return success below */
         }
         else if (DCGM_ST_OK != dcgmRet)
         {
-            PRINT_ERROR("%d %d", "Can't set Auto-boost for GPU Id %d. Error: %d", gpuId, dcgmRet);
+            log_error("Can't set Auto-boost for GPU Id {}. Error: {}", gpuId, dcgmRet);
             return dcgmRet;
         }
 
@@ -203,12 +201,8 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
     dcgmRet        = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, &value);
     if (DCGM_ST_OK != dcgmRet)
     {
-        PRINT_ERROR("%d %d %d %d",
-                    "Can't set fixed clocks %d,%d for GPU Id %d. Error: %d",
-                    targetMemClock,
-                    targetSmClock,
-                    gpuId,
-                    dcgmRet);
+        log_error(
+            "Can't set fixed clocks {}, {} for GPU Id {}. Error: {}", targetMemClock, targetSmClock, gpuId, dcgmRet);
         return dcgmRet;
     }
 
@@ -219,12 +213,12 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
     if (dcgmRet == DCGM_ST_NOT_SUPPORTED)
     {
         /* Not an error for >= Pascal. NVML returns NotSupported */
-        PRINT_DEBUG("%d", "Got NOT_SUPPORTED when setting auto boost for gpuId %d", gpuId);
+        log_debug("Got NOT_SUPPORTED when setting auto boost for gpuId {}", gpuId);
         /* Return success below */
     }
     else if (DCGM_ST_OK != dcgmRet)
     {
-        PRINT_ERROR("%d %d", "Can't set Auto-boost for GPU Id %d. Error: %d", gpuId, dcgmRet);
+        log_error("Can't set Auto-boost for GPU Id {}. Error: {}", gpuId, dcgmRet);
         return dcgmRet;
     }
 
@@ -238,7 +232,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
 
     if (DCGM_INT32_IS_BLANK(config->computeMode))
     {
-        PRINT_DEBUG("", "compute mode was blank");
+        log_debug("compute mode was blank");
         return DCGM_ST_OK;
     }
 
@@ -249,7 +243,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_COMPUTE_MODE, &value);
     if (DCGM_ST_OK != dcgmRet)
     {
-        PRINT_ERROR("%d %d", "Failed to set compute mode for GPU ID: %d Error: %d", gpuId, dcgmRet);
+        log_error("Failed to set compute mode for GPU ID: {} Error: {}", gpuId, dcgmRet);
         return dcgmRet;
     }
 
@@ -305,7 +299,7 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
     dcgmConfig_t *targetConfig = HelperGetTargetConfig(gpuId);
     if (targetConfig == setConfig)
     {
-        PRINT_WARNING("", "Caller tried to set targetConfig to identical setConfig.");
+        log_warning("Caller tried to set targetConfig to identical setConfig.");
         return;
     }
 
@@ -351,7 +345,7 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
         }
 
         default:
-            PRINT_ERROR("%u", "Unhandled fieldId %u", fieldId);
+            log_error("Unhandled fieldId {}", fieldId);
             // Should never happen
             break;
     }
@@ -382,7 +376,7 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
 
     if (!RunningAsRoot())
     {
-        PRINT_DEBUG("", "SetConfig not supported for non-root");
+        log_debug("SetConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
@@ -391,7 +385,7 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
     dcgmRet = GetCurrentConfigGpu(gpuId, &currentConfig);
     if (dcgmRet != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d %u", "Error %d from GetCurrentConfigGpu() of gpuId %u", dcgmRet, gpuId);
+        log_error("Error {} from GetCurrentConfigGpu() of gpuId {}", dcgmRet, gpuId);
         return dcgmRet;
     }
 
@@ -414,7 +408,7 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
     /* Check if GPU reset is needed after GPU reset */
     if (isResetNeeded)
     {
-        PRINT_INFO("%d", "Reset Needed for GPU ID: %d", gpuId);
+        log_info("Reset Needed for GPU ID: {}", gpuId);
 
         /* Best effort to enforce the config */
         HelperEnforceConfig(gpuId, statusList);
@@ -497,7 +491,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
     dcgmReturn = mpCoreProxy.GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got error %d from GetMultipleLatestLiveSamples()", dcgmReturn);
+        log_error("Got error {} from GetMultipleLatestLiveSamples()", dcgmReturn);
         return dcgmReturn;
     }
 
@@ -509,8 +503,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
     {
         if (fv->status != DCGM_ST_OK)
         {
-            PRINT_DEBUG(
-                "%u %u %d", "Ignoring gpuId %u fieldId %u with status %d", fv->entityId, fv->fieldId, fv->status);
+            log_debug("Ignoring gpuId {} fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
             continue;
         }
 
@@ -538,7 +531,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
                 break;
 
             default:
-                PRINT_ERROR("%u", "Unexpected fieldId %u", fv->fieldId);
+                log_error("Unexpected fieldId {}", fv->fieldId);
                 break;
         }
     }
@@ -565,7 +558,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
 
     if (!RunningAsRoot())
     {
-        PRINT_DEBUG("", "GetCurrentConfig not supported for non-root");
+        log_debug("GetCurrentConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
@@ -575,7 +568,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     if (dcgmReturn != DCGM_ST_OK)
     {
         /* Implies Invalid group ID */
-        PRINT_ERROR("%d", "Config Get Err: Cannot get group Info from group Id:%d", groupId);
+        log_error("Config Get Err: Cannot get group Info from group id : {}", groupId);
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
@@ -584,7 +577,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     if (!gpuIds.size())
     {
         /* Implies group is not configured */
-        PRINT_ERROR("%d", "Config Get Err: No GPUs configured for the group id : %d", groupId);
+        log_error("Config Get Err: No GPUs configured for the group id : {}", groupId);
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
@@ -627,7 +620,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
 
     if (!RunningAsRoot())
     {
-        PRINT_DEBUG("", "GetTargetConfig not supported for non-root");
+        log_debug("GetTargetConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
@@ -635,7 +628,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     dcgmReturn = mpCoreProxy.GetGroupGpuIds(0, groupId, gpuIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetAllGroupIds", (int)dcgmReturn);
+        log_error("Error {} from GetAllGroupIds", (int)dcgmReturn);
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
         return dcgmReturn;
     }
@@ -647,7 +640,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     if (!gpuIds.size())
     {
         /* Implies group is not configured */
-        PRINT_ERROR("%d", "Config Get Err: No GPUs configured for the group id : %d", groupId);
+        log_error("Config Get Err: No GPUs configured for the group id : {}", groupId);
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
@@ -662,7 +655,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
 
         if (!activeConfig)
         {
-            PRINT_ERROR("%u", "Unexpected NULL config for gpuId %u. OOM?", gpuId);
+            log_error("Unexpected NULL config for gpuId {}. OOM?", gpuId);
             statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_MEMORY);
             multiRetCode = DCGM_ST_MEMORY;
             continue;
@@ -696,7 +689,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     dcgmReturn = GetCurrentConfigGpu(gpuId, &currentConfig);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%u %d", "Unable to get the current configuration for gpuId %u. st %d", gpuId, dcgmReturn);
+        log_error("Unable to get the current configuration for gpuId {}. st {}", gpuId, dcgmReturn);
         statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
         return DCGM_ST_GENERIC_ERROR;
     }
@@ -713,7 +706,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
 
     if (isResetNeeded)
     {
-        PRINT_WARNING("%d %d", "For GPU ID %d, reset can't be performed: %d", gpuId, dcgmReturn);
+        log_warning("For GPU ID {}, reset can't be performed: {}", gpuId, dcgmReturn);
 
         multiPropertyRetCode++;
         statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, DCGM_ST_RESET_REQUIRED);
@@ -760,7 +753,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
 
     if (!RunningAsRoot())
     {
-        PRINT_DEBUG("", "EnforceConfig not supported for non-root");
+        log_debug("EnforceConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
@@ -778,7 +771,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
     dcgmRet = HelperEnforceConfig(gpuId, statusList);
     if (DCGM_ST_OK != dcgmRet)
     {
-        PRINT_ERROR("%d %d", "Failed to enforce configuration for the GPU Id: %d. Error: %d", gpuId, dcgmRet);
+        log_error("Failed to enforce configuration for the GPU Id: {}. Error: {}", gpuId, dcgmRet);
         return dcgmRet;
     }
 
@@ -793,14 +786,14 @@ dcgmReturn_t DcgmConfigManager::SetSyncBoost(unsigned int gpuIdList[],
 {
     if (DCGM_INT32_IS_BLANK(setConfig->perfState.syncBoost))
     {
-        PRINT_DEBUG("", "syncBoost was blank");
+        log_debug("syncBoost was blank");
         return DCGM_ST_OK;
     }
 
     if (count <= 1)
     {
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYNC_BOOST, DCGM_ST_BADPARAM);
-        PRINT_ERROR("", "Error: At least two GPUs needed to set sync boost");
+        log_error("Error: At least two GPUs needed to set sync boost");
         return DCGM_ST_BADPARAM;
     }
 
@@ -825,7 +818,7 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
     dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_DEBUG("%d %u", "GetGroupEntities returned %d for groupId %u", dcgmReturn, groupId);
+        log_debug("GetGroupEntities returned {} for groupId {}", dcgmReturn, groupId);
         return dcgmReturn;
     }
 
@@ -843,7 +836,7 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
     if (!gpuIds.size())
     {
         /* Implies group is not configured */
-        PRINT_ERROR("%d", "Config Set Err: No gpus configured for the group id : %d", groupId);
+        log_error("Config Set Err: No gpus configured for the group id : {}", groupId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -859,10 +852,7 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
         {
             setConfig->powerLimit.type = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
             setConfig->powerLimit.val /= gpuIds.size();
-            PRINT_DEBUG("%d %u",
-                        "Divided our group power limit by %d. is now %u",
-                        (int)gpuIds.size(),
-                        setConfig->powerLimit.val);
+            log_debug("Divided our group power limit by {}. is now {}", (int)gpuIds.size(), setConfig->powerLimit.val);
         }
     }
 
@@ -873,7 +863,7 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
         dcgmReturn         = SetConfigGpu(gpuId, setConfig, statusList);
         if (DCGM_ST_OK != dcgmReturn)
         {
-            PRINT_ERROR("%d %u", "SetConfig failed with %d for gpuId %u", dcgmReturn, gpuId);
+            log_error("SetConfig failed with {} for gpuId {}", dcgmReturn, gpuId);
             grpRetCode++;
         }
     }
@@ -904,7 +894,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
     dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupGpuIds()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupGpuIds()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -921,7 +911,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
     if (!gpuIds.size())
     {
         /* Implies group is not configured */
-        PRINT_ERROR("%d", "Config Enforce Err: No GPUs configured for the group id : %d", groupId);
+        log_error("Config Enforce Err: No GPUs configured for the group id : {}", groupId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 

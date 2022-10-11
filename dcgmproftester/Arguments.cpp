@@ -15,7 +15,7 @@
 #include "Arguments.h"
 
 #include "DcgmLogging.h"
-#include "dcgm_fields_internal.h"
+#include "dcgm_fields_internal.hpp"
 
 #include <map>
 #include <string>

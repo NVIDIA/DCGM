@@ -32,7 +32,7 @@ DcgmMutex::DcgmMutex(int timeoutMs)
     , m_locker()
 {
     if (m_debugLogging)
-        PRINT_DEBUG("%p", "Mutex %p allocated", (void *)this);
+        log_debug("Mutex {} allocated", (void *)this);
 }
 
 /*****************************************************************************/
@@ -80,18 +80,17 @@ dcgmMutexReturn_t DcgmMutex::Unlock(const char *file, int line)
 
     if (m_locker.ownerTid == std::thread::id())
     {
-        PRINT_ERROR("%s %d", "%s[%d] passed in an unlocked mutex to Unlock\n", file, line);
+        log_error("{}[{}] passed in an unlocked mutex to Unlock", file, line);
         return DCGM_MUTEX_ST_NOTLOCKED;
     }
     else if (m_locker.ownerTid != myTid)
     {
-        PRINT_ERROR("%s %d %zu %s %d",
-                    "%s[%d] passed in locked by tid %zu %s[%d]\n",
-                    file,
-                    line,
-                    std::hash<std::thread::id> {}(m_locker.ownerTid),
-                    m_locker.file,
-                    m_locker.line);
+        log_error("{}[{}] passed in locked by tid {} {}[{}]",
+                  file,
+                  line,
+                  std::hash<std::thread::id> {}(m_locker.ownerTid),
+                  m_locker.file,
+                  m_locker.line);
         return DCGM_MUTEX_ST_LOCKEDBYOTHER;
     }
 
@@ -102,12 +101,8 @@ dcgmMutexReturn_t DcgmMutex::Unlock(const char *file, int line)
 
     if (m_debugLogging)
     {
-        PRINT_DEBUG("%p %zu %s %d",
-                    "Mutex %p unlocked by tid %zu from %s[%d]",
-                    (void *)this,
-                    std::hash<std::thread::id> {}(myTid),
-                    file,
-                    line);
+        log_debug(
+            "Mutex {} unlocked by tid {} from {}[{}]", (void *)this, std::hash<std::thread::id> {}(myTid), file, line);
     }
     return DCGM_MUTEX_ST_OK;
 }
@@ -124,12 +119,7 @@ dcgmMutexReturn_t DcgmMutex::Lock(int complainMe, const char *file, int line)
     {
         if (complainMe)
         {
-            PRINT_ERROR("%s %d %s %d",
-                        "%s[%d] mutex already locked by me from %s[%d]\n",
-                        file,
-                        line,
-                        m_locker.file,
-                        m_locker.line);
+            log_error("{}[{}] mutex already locked by me from {}[{}]", file, line, m_locker.file, m_locker.line);
         }
         return DCGM_MUTEX_ST_LOCKEDBYME;
     }
@@ -179,22 +169,21 @@ dcgmMutexReturn_t DcgmMutex::Lock(int complainMe, const char *file, int line)
         {
             timelib64_t now = timelib_usecSince1970();
             diff            = now - m_locker.whenLockedUsec;
-            PRINT_ERROR("%zu %s %d %zu %s %d %lld",
-                        "Mutex timeout by tid %zu %s[%d] owned by tid "
-                        "%zu %s[%d] for %lld usec\n",
-                        std::hash<std::thread::id> {}(myTid),
-                        file,
-                        line,
-                        std::hash<std::thread::id> {}(m_locker.ownerTid),
-                        m_locker.file,
-                        m_locker.line,
-                        (long long)diff);
+            log_error("Mutex timeout by tid {} {}[{}] owned by tid "
+                      "{} {}[{}] for {} usec",
+                      std::hash<std::thread::id> {}(myTid),
+                      file,
+                      line,
+                      std::hash<std::thread::id> {}(m_locker.ownerTid),
+                      m_locker.file,
+                      m_locker.line,
+                      (long long)diff);
             return retSt;
         }
 
         // coverity[dead_error_begin] unreachable code to avoid compiler warnings
         default:
-            PRINT_ERROR("%d", "Unexpected retSt %d\n", (int)retSt);
+            log_error("Unexpected retSt {}", (int)retSt);
             return retSt;
     }
 
@@ -210,13 +199,12 @@ dcgmMutexReturn_t DcgmMutex::Lock(int complainMe, const char *file, int line)
 
     if (m_debugLogging)
     {
-        PRINT_DEBUG("%p %zu %s %d %lld",
-                    "Mutex %p locked by tid %zu %s[%d] lockCount %lld\n",
-                    (void *)this,
-                    std::hash<decltype(m_locker.ownerTid)> {}(m_locker.ownerTid),
-                    m_locker.file,
-                    m_locker.line,
-                    m_lockCount.load(std::memory_order_relaxed));
+        log_debug("Mutex {} locked by tid {} {}[{}] lockCount {}",
+                  (void *)this,
+                  std::hash<decltype(m_locker.ownerTid)> {}(m_locker.ownerTid),
+                  m_locker.file,
+                  m_locker.line,
+                  m_lockCount.load(std::memory_order_relaxed));
     }
 
     return DCGM_MUTEX_ST_OK;
@@ -242,7 +230,7 @@ dcgmMutexReturn_t DcgmMutex::CondWait(std::condition_variable &cv,
     lockSt = Lock(0, __FILE__, __LINE__);
     if (lockSt != DCGM_MUTEX_ST_OK && lockSt != DCGM_MUTEX_ST_LOCKEDBYME)
     {
-        PRINT_ERROR("%p %d", "CondWait of mutex %p call to Lock() returned unexpected %d", (void *)this, lockSt);
+        log_error("CondWait of mutex {} call to Lock() returned unexpected {}", (void *)this, lockSt);
         return DCGM_MUTEX_ST_ERROR;
     }
 

@@ -17,11 +17,6 @@
 
 from ctypes import *
 from ctypes.util import find_library
-import sys
-import os
-import threading
-import string
-#import cuda
 import dcgm_structs
 from dcgm_fields import _PrintableStructure
 
@@ -121,7 +116,7 @@ class c_dcgm_cm_field_info_watcher_t(dcgm_structs._PrintableStructure):
     _fields_ = [
         ('watcherType', c_uint),
         ('connectionId', dcgm_connection_id_t),
-        ('monitorFrequencyUsec', c_int64),
+        ('monitorIntervalUsec', c_int64),
         ('maxAgeUsec', c_int64)
     ]
 
@@ -134,7 +129,7 @@ class dcgmCacheManagerFieldInfo_v3(dcgm_structs._PrintableStructure):
         ('lastStatus', c_int16),
         ('oldestTimestamp', c_int64),
         ('newestTimestamp', c_int64),
-        ('monitorFrequencyUsec', c_int64),
+        ('monitorIntervalUsec', c_int64),
         ('maxAgeUsec', c_int64),
         ('execTimeUsec', c_int64),
         ('fetchCount', c_int64),

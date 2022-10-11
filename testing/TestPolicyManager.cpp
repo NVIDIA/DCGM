@@ -28,7 +28,7 @@ TestPolicyManager::TestPolicyManager()
 TestPolicyManager::~TestPolicyManager()
 {}
 
-int TestPolicyManager::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestPolicyManager::Init(const TestDcgmModuleInitParams &initParams)
 {
     return 0;
 }

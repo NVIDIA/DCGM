@@ -52,12 +52,13 @@ process_rpm_package() {
 
 process_cuda_package(){
 # Once unpacked listing file is in /etc/apt/sources.list.d/*.list
-#   format is: deb file:///var/cuda-repo-10-0-local-10.0.130-410.48 /
-# cat *.list | sed -e 's/^deb file:\/\/\///' | sed -e 's/\s*\/$//'
+#   old format is: deb file:///var/cuda-repo-10-0-local-10.0.130-410.48 /
+#   new format: deb [signature related info] file:///var/cuda-repo-10-0-local-10.0.130-410.48 /
+# we need to support both as Cuda <11.8 use the former and >=11.8 use the latter.
     local dir=${1}; shift
     pushd ${dir}
     dpkg -x package.deb .
-    local subdir=$(cat etc/apt/sources.list.d/*.list | sed -e 's/^deb file:\/\/\///' | sed -e 's/\s*\/$//')
+    local subdir=$(cat etc/apt/sources.list.d/*.list | sed -r -e 's!^deb\s+(\[.*\]\s+)?file:\/\/\/!!' | sed -r -e 's/\s*\/$//')
     cd ${subdir}
     for cuda_file in ${PARTS_TO_UNPACK[@]}; do
         find . -iname "${cuda_file}*" -exec dpkg -x {} ${PREFIX} \;
@@ -67,34 +68,22 @@ process_cuda_package(){
 
 case ${TARGET} in
     x86_64-linux-gnu)
-        CUDA9_URL=https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda-repo-ubuntu1604-9-2-local_9.2.148-1_amd64
-        CUDA9_URL_CHKSUM=2cc5e9c9eda82de89ceddd3dfd91df15ac8330e3660242cd2b232e8f2cde0a8a3541f92219e71bf43d09595a95a94df9ab07d0a7591aa9244e6f11303fc4389d
-
-        CUDA9PATCH_URL=https://developer.nvidia.com/compute/cuda/9.2/Prod2/patches/1/cuda-repo-ubuntu1604-9-2-148-local-patch-1_1.0-1_amd64
-        CUDA9PATCH_URL_CHKSUM=4e161caed4b78e2a91bb7587e3889bdbfecaed8a1d6a6ac13eb3db71493f9f0cb15e5166ac248d1e20090f8b93213f4a47a8edc5490c304fd7c130d5247420e8
-
         CUDA10_URL=https://developer.nvidia.com/compute/cuda/10.0/Prod/local_installers/cuda-repo-ubuntu1804-10-0-local-10.0.130-410.48_1.0-1_amd64
         CUDA10_URL_CHKSUM=65bc98980ecdb275dcd55304425cbb6ed5a8afe0505e778caa4333bf4ab9d3310639bc69c302e32207e624a7217e684318f0ddc4f121b56c0c2c845f6ccae5d6
 
-        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.4.2/local_installers/cuda-repo-ubuntu2004-11-4-local_11.4.2-470.57.02-1_amd64.deb
-        CUDA11_URL_CHKSUM=4f8db6a8c027979faaaee405be135b9cac411507cda86f39035bf5d5b30873cf5ac0e510c24248b9b1e46a0a0f9226241b676a5a56d5c26c7c115a1eb01180e7
+        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda-repo-ubuntu2004-11-8-local_11.8.0-520.61.05-1_amd64.deb
+        CUDA11_URL_CHKSUM=9bed302b7fdeebbc2c7e73392f86ac895b20566de8992f494201c732aca33209d2f7fdad81749cb361b4e8b7001601c6789ea42316bc8074a5cf31651143d0dd
         ;;
     powerpc64le-linux-gnu)
-        CUDA9_URL=https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda-repo-ubuntu1604-9-2-local_9.2.148-1_ppc64el
-        CUDA9_URL_CHKSUM=f0678f0b162bdd28a77ea2c58f7da0081246a0e99d25f19b1dbc4d6aa494100eae69901560be71c26fc1389d6af7040adedc4a043912eef2623806471b8c530e
-
-        CUDA9PATCH_URL=https://developer.nvidia.com/compute/cuda/9.2/Prod2/patches/1/cuda-repo-ubuntu1604-9-2-148-local-patch-1_1.0-1_ppc64el
-        CUDA9PATCH_URL_CHKSUM=928dd070074d49bd44417663842224c1b72c0d9922f8e62f161518511ff0ff3efdaf4a2d3aa6dd950ea8597c5d26aa5295f632ea07a9e65f3d2267f8c03555c5
-
         CUDA10_URL=https://developer.nvidia.com/compute/cuda/10.0/Prod/local_installers/cuda-repo-ubuntu1804-10-0-local-10.0.130-410.48_1.0-1_ppc64el
         CUDA10_URL_CHKSUM=950be9a5022907774739c52c5a25779253e9b8bad8bc7e05db91e02afcbe0d6c68c2bf32dffaa79b12b9fbfb93dd0e14cd56269e13f01915d0106645efd6451c
 
-        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.4.2/local_installers/cuda-repo-rhel8-11-4-local-11.4.2_470.57.02-1.ppc64le.rpm
-        CUDA11_URL_CHKSUM=0592136d947ad4f12dbbe087258573c1677ecb6f1f5fd9242644faf6a05895c1ff22d44feeaf3993ea782250db1e2103b2b047a41de20ff8d3d075ba8c62df53
+        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda-repo-rhel8-11-8-local-11.8.0_520.61.05-1.ppc64le.rpm
+        CUDA11_URL_CHKSUM=9138b6123ac4526d95896d86d542269d6d1229601dc280a81c9db8010b78034285454d31d32f56824a2d236634a97b71b4440d176420cd3b1880ff7d04627ee5
         ;;
     aarch64-linux-gnu)
-        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.4.2/local_installers/cuda-repo-ubuntu2004-11-4-local_11.4.2-470.57.02-1_arm64.deb
-        CUDA11_URL_CHKSUM=4c7955942410aaab7a3be20de8608d0119076aade17c2accf8cee5237496c115abb02a24beac6b3cf73502c7fc93d353bb6e5130876ad52576b43971515dbb9a
+        CUDA11_URL=https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda-repo-ubuntu2004-11-8-local_11.8.0-520.61.05-1_arm64.deb
+        CUDA11_URL_CHKSUM=f0c5288e6a51d82852dac1edf70fda8d994c84cbf5491fa12f097fcdec6b294918bbd388a94a386e9d92cd2e51926a982c59e01494189187ef8d656e244bda4a
         ;;
     *)
         die "Unknown architecture"
@@ -102,13 +91,9 @@ case ${TARGET} in
 esac
 
 if [[ "${TARGET}" != "aarch64-linux-gnu" ]]; then
-    mkdir cuda{9,9patch,10}
-    download_cuda_package "${CUDA9_URL}" cuda9 package.deb "${CUDA9_URL_CHKSUM}"
-    download_cuda_package "${CUDA9PATCH_URL}" cuda9patch package.deb "${CUDA9PATCH_URL_CHKSUM}"
+    mkdir cuda10
     download_cuda_package "${CUDA10_URL}" cuda10 package.deb "${CUDA10_URL_CHKSUM}"
 
-    process_cuda_package cuda9
-    process_cuda_package cuda9patch
     process_cuda_package cuda10
 fi
 

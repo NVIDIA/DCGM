@@ -42,7 +42,7 @@ struct HostEngineCommandLine::Impl
                                                   instance from running */
     std::string m_serviceAccount;            /*!< Service account that will be used for unprivileged processes */
 
-    std::set<dcgmModuleId_t> m_blacklistModules; /*!< Modules to blacklist */
+    std::set<dcgmModuleId_t> m_denylistModules; /*!< Modules to add to the denylist */
 
     std::uint16_t m_hostEnginePort; /*!< Host engine port number */
 
@@ -107,9 +107,9 @@ std::string const &HostEngineCommandLine::GetLogFileName() const
     return m_pimpl->m_logFileName;
 }
 
-std::set<dcgmModuleId_t> const &HostEngineCommandLine::GetBlacklistedModules() const
+std::set<dcgmModuleId_t> const &HostEngineCommandLine::GetDenylistedModules() const
 {
-    return m_pimpl->m_blacklistModules;
+    return m_pimpl->m_denylistModules;
 }
 
 std::string const &HostEngineCommandLine::GetServiceAccount() const
@@ -121,7 +121,7 @@ namespace
 {
 using namespace std::string_literals;
 
-std::set<dcgmModuleId_t> ParseBlacklist(std::string const &value)
+std::set<dcgmModuleId_t> ParseDenylist(std::string const &value)
 {
     std::set<dcgmModuleId_t> result;
     auto tokens = dcgmTokenizeString(value, ",");
@@ -143,12 +143,12 @@ std::string ParseBindIp(std::string const &value)
     return value;
 }
 
-class BlacklistModulesConstraint : public TCLAP::Constraint<std::string>
+class DenylistModulesConstraint : public TCLAP::Constraint<std::string>
 {
 public:
     std::string description() const override
     {
-        return "Validate that --blacklist-modules has proper format and values"s;
+        return "Validate that --denylist-modules has proper format and values"s;
     }
 
     std::string shortID() const override
@@ -422,17 +422,18 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                       cmdLine,
                                       /*default*/ false);
 
-        auto blacklistConstraint = BlacklistModulesConstraint {};
+        auto denylistConstraint = DenylistModulesConstraint {};
 
-        auto blacklistArg
+        auto denylistArg
             = ValueArg<std::string>("",
-                                    "blacklist-modules",
-                                    "Blacklist DCGM modules from being run by the hostengine."
+                                    "denylist-modules",
+                                    "DCGM modules that should be added to the Denylist so they aren't run "
+                                    "by the hostengine."
                                     "\nPass a comma-separated list of module IDs like 1,2,3."
                                     "\nModule IDs are available in dcgm_structs.h as DcgmModuleId constants.",
                                     /*req*/ false,
                                     /*default*/ "",
-                                    &blacklistConstraint,
+                                    &denylistConstraint,
                                     cmdLine);
         auto serviceAccount = ValueArg<std::string>("",
                                                     "service-account",
@@ -450,7 +451,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
         impl->m_hostEngineBindInterfaceIp = ParseBindIp(bindIpArg.getValue());
         impl->m_logFileName               = logFileArg.getValue();
         impl->m_pidFilePath               = pidFileArg.getValue();
-        impl->m_blacklistModules          = ParseBlacklist(blacklistArg.getValue());
+        impl->m_denylistModules           = ParseDenylist(denylistArg.getValue());
         impl->m_hostEnginePort            = portArg.getValue();
         impl->m_isHostEngineConnTCP       = not domainSockArg.isSet();
         impl->m_isTermHostEngine          = termArg.getValue();

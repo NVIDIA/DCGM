@@ -41,6 +41,7 @@
 #include "DcgmGroupManager.h"
 #include <dcgm_nvml.h>
 
+
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
 DcgmModuleCore DcgmHostEngineHandler::mModuleCoreObj;
 
@@ -92,7 +93,7 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
 
     if (gpuIds.size() > DCGM_MAX_NUM_DEVICES)
     {
-        PRINT_ERROR("%d", "Too many GPU ids: %d. Truncating.", (int)gpuIds.size());
+        log_error("Too many GPU ids: {}. Truncating.", (int)gpuIds.size());
     }
 
     msg.header.length     = sizeof(msg);
@@ -115,12 +116,12 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
     dcgmReturn = ProcessModuleCommand(&msg.header);
     if (dcgmReturn == DCGM_ST_MODULE_NOT_LOADED)
     {
-        PRINT_DEBUG("", "RemoveUnhealthyGpus not filtering due to health module not being loaded.");
+        log_debug("RemoveUnhealthyGpus not filtering due to health module not being loaded.");
         return;
     }
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "ProcessModuleCommand failed with %d", dcgmReturn);
+        log_error("ProcessModuleCommand failed with {}", dcgmReturn);
         return;
     }
 
@@ -152,37 +153,6 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessSelectGpusByTopology(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret = DCGM_ST_OK;
-    uint64_t inputGpus;
-    uint64_t outputGpus = 0;
-    uint32_t numGpus;
-    uint64_t hints;
-
-    dcgm::SchedulerHintRequest shr = pCmd->arg(0).schedulerhintrequest();
-
-    // coverity[uninit_use_in_call]
-    if (shr.version() != dcgmTopoSchedHint_version1)
-    {
-        PRINT_ERROR("", "Incorrect version for getting a topology-based gpu scheduler hint.");
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    // coverity[uninit_use_in_call]
-    numGpus   = shr.numgpus();
-    inputGpus = shr.inputgpuids();
-    hints     = shr.hintflags();
-
-    ret = HelperSelectGpusByTopology(numGpus, inputGpus, hints, outputGpus);
-
-    pCmd->mutable_arg(0)->set_i64(outputGpus);
-
-    return ret;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperSelectGpusByTopology(uint32_t numGpus,
                                                                uint64_t inputGpus,
                                                                uint64_t hints,
@@ -202,393 +172,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperSelectGpusByTopology(uint32_t numGpus,
     }
 
     return ret;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessClientLogin(dcgm::Command *pCmd,
-                                                       bool *pIsComplete,
-                                                       dcgm_connection_id_t connectionId)
-{
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_clientlogin())
-    {
-        PRINT_ERROR("", "CLIENT_LOGIN missing args or clientlogin");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::ClientLogin *clientLogin = &pCmd->arg(0).clientlogin();
-
-    bool persistAfterDisconnect = false;
-    if (!clientLogin->has_persistafterdisconnect())
-    {
-        DCGM_LOG_DEBUG << "connectionId " << connectionId << " Missing persistafterdisconnect";
-        persistAfterDisconnect = false;
-    }
-    else
-    {
-        persistAfterDisconnect = (bool)clientLogin->persistafterdisconnect();
-        DCGM_LOG_DEBUG << "persistAfterDisconnect " << persistAfterDisconnect << " for connectionId " << connectionId;
-    }
-
-    if (persistAfterDisconnect)
-    {
-        SetPersistAfterDisconnect(connectionId);
-    }
-
-    pCmd->set_status(DCGM_ST_OK);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGroupCreate(dcgm::Command *pCmd,
-                                                       bool *pIsComplete,
-                                                       dcgm_connection_id_t connectionId)
-
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_grpinfo())
-    {
-        PRINT_ERROR("", "Group create info argument is not set");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgm::GroupInfo *pDcgmGrpInfo = pCmd->mutable_arg(0)->mutable_grpinfo();
-    unsigned int groupId;
-    dcgmReturn_t dcgmRet;
-
-    /* If group name is not specified as meta data then return error to the caller */
-    if (!pDcgmGrpInfo->has_groupname() || !pDcgmGrpInfo->has_grouptype())
-    {
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgmRet = mpGroupManager->AddNewGroup(
-        connectionId, pDcgmGrpInfo->groupname(), (dcgmGroupType_t)pDcgmGrpInfo->grouptype(), &groupId);
-    if (DCGM_ST_OK != dcgmRet)
-    {
-        pCmd->set_status(dcgmRet);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-
-    pDcgmGrpInfo->set_groupid(groupId);
-    pCmd->set_status(DCGM_ST_OK);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessAddRemoveGroup(dcgm::Command *pCmd,
-                                                          bool *pIsComplete,
-                                                          dcgm_connection_id_t connectionId)
-
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_grpinfo())
-    {
-        PRINT_ERROR("", "Group add/remove device : Argument is not set");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::GroupInfo *pDcgmGrpInfo = &(pCmd->arg(0).grpinfo());
-    unsigned int groupId;
-    dcgmReturn_t dcgmRet;
-
-    /* If group name is not specified as meta data then return error to the caller */
-    if (!pDcgmGrpInfo->has_groupid() || (0 == pDcgmGrpInfo->entity_size()))
-    {
-        PRINT_ERROR("", "Group add/remove device: Group ID or GPU IDs not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Verify group id is valid */
-    groupId = pDcgmGrpInfo->groupid();
-    int ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if ((unsigned int)groupId == mpGroupManager->GetAllGpusGroup()
-        || (unsigned int)groupId == mpGroupManager->GetAllNvSwitchesGroup())
-    {
-        pCmd->set_status(DCGM_ST_NOT_CONFIGURED);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    for (int i = 0; i < pDcgmGrpInfo->entity_size(); ++i)
-    {
-        if (pCmd->cmdtype() == dcgm::GROUP_ADD_DEVICE)
-        {
-            dcgmRet
-                = mpGroupManager->AddEntityToGroup(groupId,
-                                                   (dcgm_field_entity_group_t)pDcgmGrpInfo->entity(i).entitygroupid(),
-                                                   (dcgm_field_eid_t)pDcgmGrpInfo->entity(i).entityid());
-            if (DCGM_ST_OK != dcgmRet)
-            {
-                PRINT_ERROR("%d", "AddEntityToGroup returned %d", (int)dcgmRet);
-                pCmd->set_status(dcgmRet);
-                *pIsComplete = true;
-                return DCGM_ST_OK;
-            }
-        }
-        else
-        {
-            dcgmRet = mpGroupManager->RemoveEntityFromGroup(
-                connectionId,
-                groupId,
-                (dcgm_field_entity_group_t)pDcgmGrpInfo->entity(i).entitygroupid(),
-                (dcgm_field_eid_t)pDcgmGrpInfo->entity(i).entityid());
-            if (DCGM_ST_OK != dcgmRet)
-            {
-                PRINT_ERROR("%d", "RemoveEntityFromGroup returned %d", (int)dcgmRet);
-                pCmd->set_status(dcgmRet);
-                *pIsComplete = true;
-                return DCGM_ST_OK;
-            }
-        }
-    }
-
-    *pIsComplete = true;
-    pCmd->set_status(DCGM_ST_OK);
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGroupDestroy(dcgm::Command *pCmd,
-                                                        bool *pIsComplete,
-                                                        dcgm_connection_id_t connectionId)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_grpinfo())
-    {
-        PRINT_ERROR("", "Group destroy info argument is not set");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::GroupInfo *pDcgmGrpInfo = &(pCmd->arg(0).grpinfo());
-    dcgmReturn_t dcgmRet;
-    unsigned int groupId;
-
-    /* If group id is not specified return error to the caller */
-    if (!pDcgmGrpInfo->has_groupid())
-    {
-        PRINT_ERROR("", "Group destroy: Group ID is not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    groupId = pDcgmGrpInfo->groupid();
-    /* Verify group id is valid */
-    int ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    // Check if were delting the default group
-    if ((unsigned int)groupId == mpGroupManager->GetAllGpusGroup()
-        || (unsigned int)groupId == mpGroupManager->GetAllNvSwitchesGroup())
-    {
-        pCmd->set_status(DCGM_ST_NOT_CONFIGURED);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-    }
-    else
-    {
-        dcgmRet = mpGroupManager->RemoveGroup(connectionId, groupId);
-        if (DCGM_ST_OK != dcgmRet)
-        {
-            PRINT_ERROR("", "Group destroy: Can't delete the group");
-            pCmd->set_status(dcgmRet);
-            *pIsComplete = true;
-        }
-        else
-        {
-            pCmd->set_status(DCGM_ST_OK);
-            *pIsComplete = true;
-        }
-    }
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGroupInfo(dcgm::Command *pCmd,
-                                                     bool *pIsComplete,
-                                                     dcgm_connection_id_t connectionId)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_grpinfo())
-    {
-        PRINT_ERROR("", "Group Get Info info argument is not set");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgm::GroupInfo *pDcgmGrpInfo = pCmd->mutable_arg(0)->mutable_grpinfo();
-    dcgmReturn_t ret              = DCGM_ST_OK;
-    unsigned int groupId;
-    std::vector<dcgmGroupEntityPair_t> entities;
-
-    /* If group id is not specified return error to the caller */
-    if (!pDcgmGrpInfo->has_groupid())
-    {
-        PRINT_ERROR("", "Group Get Info: Group ID is not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-    groupId = pDcgmGrpInfo->groupid();
-    /* Verify group id is valid */
-    ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    pDcgmGrpInfo->set_groupname(mpGroupManager->GetGroupName(connectionId, groupId));
-
-    ret = mpGroupManager->GetGroupEntities(groupId, entities);
-    if (ret != DCGM_ST_OK)
-    {
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        pCmd->set_status(ret);
-        *pIsComplete = true;
-    }
-    else
-    {
-        for (auto &entitie : entities)
-        {
-            dcgm::EntityIdPair *eidPair = pDcgmGrpInfo->add_entity();
-            eidPair->set_entitygroupid((unsigned int)entitie.entityGroupId);
-            eidPair->set_entityid((unsigned int)entitie.entityId);
-        }
-
-        pCmd->set_status(DCGM_ST_OK);
-        *pIsComplete = true;
-    }
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGroupGetallIds(dcgm::Command *pCmd,
-                                                          bool *pIsComplete,
-                                                          dcgm_connection_id_t connectionId)
-
-{
-    if (pCmd->opmode() != dcgm::OPERATION_SYSTEM)
-    {
-        PRINT_ERROR("", "Error: Get All Group Ids expected to be processed as a system command");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    unsigned int groupIdList[DCGM_MAX_NUM_GROUPS + 1];
-    unsigned int count = 0;
-    unsigned int index = 0;
-    int ret;
-    dcgm::FieldMultiValues *pListGrpIds;
-
-    /* Allocated list of group Ids to be returned back to the client */
-    pListGrpIds = new dcgm::FieldMultiValues;
-
-    /* Set the allocated values to the protobuf message */
-    pCmd->add_arg()->set_allocated_fieldmultivalues(pListGrpIds);
-
-    /* Invoke method to get all the groups from the system */
-    ret = mpGroupManager->GetAllGroupIds(connectionId, groupIdList, &count);
-    if (ret < 0)
-    {
-        PRINT_ERROR("%d", "Group Get All Ids returned error : %d", ret);
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Go through the list of group Ids and update the protobuf message */
-    for (index = 0; index < count; index++)
-    {
-        /* Workaround for bug 1700109: don't show internal group IDs to users */
-        if (groupIdList[index] == mpGroupManager->GetAllGpusGroup()
-            || groupIdList[index] == mpGroupManager->GetAllNvSwitchesGroup())
-        {
-            continue;
-        }
-
-        dcgm::Value *pDcgmValue = pListGrpIds->add_vals();
-        pDcgmValue->set_i64(groupIdList[index]);
-    }
-
-    pCmd->set_status(DCGM_ST_OK);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessDiscoverDevices(dcgm::Command *pCmd, bool *pIsComplete)
-
-{
-    dcgm::FieldMultiValues *pListGpuIds;
-    int onlySupported = 0; /* Default to returning old GPUs for old clients */
-
-    if (pCmd->opmode() != dcgm::OPERATION_SYSTEM)
-    {
-        PRINT_WARNING("Wrong opmode for device discovering: %d",
-                      "DISCOVER_DEVICES is only allowed for opmode dcgm::OPERATION_SYSTEM. Found opmode: %d",
-                      static_cast<int>(pCmd->opmode()));
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Did the client provide arguments? */
-    if (pCmd->arg_size() != 0)
-    {
-        if (pCmd->arg(0).has_i32())
-        {
-            onlySupported = pCmd->arg(0).i32();
-        }
-        /* Clear out the parameters received from the client */
-        pCmd->clear_arg();
-    }
-
-    pListGpuIds = new dcgm::FieldMultiValues;
-    pCmd->add_arg()->set_allocated_fieldmultivalues(pListGpuIds);
-
-    PRINT_DEBUG("%d", "DISCOVER_DEVICES onlySupported %d", onlySupported);
-
-    int ret = DcgmHostEngineHandler::Instance()->GetDcgmGpuIds(pListGpuIds, onlySupported);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -634,64 +217,6 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetEntityList(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgm::EntityList *entityList;
-    int onlySupported                       = 1;
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_NONE;
-    std::vector<dcgmGroupEntityPair_t> entities;
-    std::vector<dcgmGroupEntityPair_t>::iterator entityIter;
-
-    /* Did the client provide arguments? */
-    if ((pCmd->arg_size() < 1) || !pCmd->arg(0).has_entitylist())
-    {
-        PRINT_ERROR("", "GET_ENTITY_LIST was malformed.");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    entityList = pCmd->mutable_arg(0)->mutable_entitylist();
-
-    if (entityList->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)entityList->entitygroupid();
-    }
-    else
-    {
-        PRINT_DEBUG("", "GET_ENTITY_LIST had no entitygroupid");
-    }
-
-    if (entityList->has_onlysupported())
-    {
-        onlySupported = (dcgm_field_entity_group_t)entityList->onlysupported();
-    }
-    else
-    {
-        PRINT_DEBUG("", "GET_ENTITY_LIST had no onlysupported");
-    }
-
-    dcgmReturn_t dcgmReturn = GetAllEntitiesOfEntityGroup(onlySupported, entityGroupId, entities);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        pCmd->set_status(dcgmReturn);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    for (entityIter = entities.begin(); entityIter != entities.end(); ++entityIter)
-    {
-        dcgm::EntityIdPair *entityPair = entityList->add_entity();
-        entityPair->set_entitygroupid((*entityIter).entityGroupId);
-        entityPair->set_entityid((*entityIter).entityId);
-    }
-
-    pCmd->set_status(dcgmReturn);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
 bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId)
 {
     switch (entityGroupId)
@@ -704,6 +229,37 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
         case DCGM_FE_GPU_I:
         case DCGM_FE_GPU_CI:
             return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
+
+        case DCGM_FE_LINK:
+            dcgm_link_t link;
+
+            link.parsed.switchId = 0;
+            link.raw             = entityId;
+
+            switch (link.parsed.type)
+            {
+                case DCGM_FE_GPU:
+                    return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
+
+                case DCGM_FE_SWITCH:
+                    /**
+                     * Should probably compare against actual count
+                     */
+                    if (link.parsed.index >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+                    {
+                        return false;
+                    }
+
+                    entityGroupId = DCGM_FE_SWITCH;
+                    entityId      = link.parsed.switchId;
+
+                    break;
+
+                default:
+                    return false;
+            }
+
+            break;
 
         case DCGM_FE_SWITCH:
             break; /* Handle below */
@@ -735,587 +291,6 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessInjectFieldValue(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_injectfieldvalue())
-    {
-        /* Since this is a set command. This should never happen.
-           DCGMI must populate the command with the configuration */
-        DCGM_LOG_ERROR << "INJECT_FIELD_VALUE parameters must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgm::InjectFieldValue *pInjectFieldValue = pCmd->mutable_arg(0)->mutable_injectfieldvalue();
-    dcgm_field_entity_group_t entityGroupId;
-    dcgm_field_eid_t entityId;
-
-
-    if (!pCmd->has_id())
-    {
-        entityId = 0; /* Can be true for global fields */
-    }
-    else
-    {
-        entityId = pCmd->id();
-    }
-
-    /* Handle when it's passed via the message vs the command */
-    if (pInjectFieldValue->has_entityid())
-    {
-        entityId = pInjectFieldValue->entityid();
-    }
-
-    if (!pCmd->has_entitygroupid())
-    {
-        entityGroupId = DCGM_FE_GPU; /* Support old clients that won't set entityGroupId */
-    }
-    else
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pCmd->entitygroupid();
-    }
-
-    /* Handle when it's passed via the message vs the command */
-    if (pInjectFieldValue->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pInjectFieldValue->entitygroupid();
-    }
-
-    int ret = DcgmHostEngineHandler::Instance()->InjectFieldValue(entityGroupId, entityId, pInjectFieldValue);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetFieldLatestValue(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if ((pCmd->arg_size() == 0) && pCmd->has_id())
-    {
-        DCGM_LOG_ERROR << "Requested Field value and id must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    auto *pFieldValue = (dcgm::FieldValue *)&(pCmd->arg(0).fieldvalue());
-    dcgm_field_entity_group_t entityGroupId;
-
-    /* Stay compatible with old protocols that don't provide entityGroupId */
-    entityGroupId = DCGM_FE_GPU;
-    if (pCmd->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pCmd->entitygroupid();
-    }
-
-    int ret = DcgmHostEngineHandler::Instance()->GetFieldValue(
-        entityGroupId, pCmd->id(), pFieldValue->fieldid(), pFieldValue);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetFieldMultipleValues(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_fieldmultivalues())
-    {
-        DCGM_LOG_ERROR << "Requested Field multi value must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgm::FieldMultiValues *pFieldMultiValues = pCmd->mutable_arg(0)->mutable_fieldmultivalues();
-    int ret;
-
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_NONE;
-    if (pCmd->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pCmd->entitygroupid();
-    }
-    else
-    {
-        PRINT_WARNING("", "entityGroupId missing. Probably old client.");
-    }
-
-    ret = DcgmHostEngineHandler::Instance()->GetFieldMultipleValues(entityGroupId, pCmd->id(), pFieldMultiValues);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessWatchFieldValue(dcgm::Command *pCmd,
-                                                           bool *pIsComplete,
-                                                           DcgmWatcher &dcgmWatcher)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_watchfieldvalue())
-    {
-        /* Since this is a set command. This should never happen.
-           DCGMI must populate the command with the configuration */
-        DCGM_LOG_ERROR << "WATCH_FIELD_VALUE parameters must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::WatchFieldValue *pWatchFieldValue = &(pCmd->arg(0).watchfieldvalue());
-    int ret;
-
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_NONE;
-    if (pCmd->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pCmd->entitygroupid();
-    }
-    else
-    {
-        PRINT_WARNING("", "entityGroupId missing. Probably old client.");
-    }
-
-    ret = DcgmHostEngineHandler::Instance()->WatchFieldValue(entityGroupId, pCmd->id(), pWatchFieldValue, dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessUnwatchFieldValue(dcgm::Command *pCmd,
-                                                             bool *pIsComplete,
-                                                             DcgmWatcher &dcgmWatcher)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_unwatchfieldvalue())
-    {
-        /* Since this is a set command. This should never happen.
-           DCGMI must populate the command with the configuration */
-        DCGM_LOG_ERROR << "UNWATCH_FIELD_VALUE parameters must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::UnwatchFieldValue *pUnwatchFieldValue = &(pCmd->arg(0).unwatchfieldvalue());
-    int ret;
-
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_NONE;
-    if (pCmd->has_entitygroupid())
-    {
-        entityGroupId = (dcgm_field_entity_group_t)pCmd->entitygroupid();
-    }
-    else
-    {
-        PRINT_WARNING("", "entityGroupId missing. Probably old client.");
-    }
-
-    ret = DcgmHostEngineHandler::Instance()->UnwatchFieldValue(
-        entityGroupId, pCmd->id(), pUnwatchFieldValue, dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessUpdateAllFields(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_updateallfields())
-    {
-        /* Since this is a set command. This should never happen.
-           DCGMI must populate the command with the configuration */
-        DCGM_LOG_ERROR << "UPDATE_ALL_FIELDS parameters must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    const dcgm::UpdateAllFields *pUpdateAllFields = &(pCmd->arg(0).updateallfields());
-
-    int ret = DcgmHostEngineHandler::Instance()->UpdateAllFields(pUpdateAllFields);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessCacheManagerFieldInfo(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if ((pCmd->arg_size() == 0) || !pCmd->arg(0).has_cachemanagerfieldinfo())
-    {
-        /* Since this is a set command. This should never happen.
-           DCGMI must populate the command with the configuration */
-        DCGM_LOG_ERROR << "CACHE_MANAGER_FIELD_INFO parameters must be set by the client";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    dcgmCacheManagerFieldInfo_t fieldInfo = {};
-    std::string inFieldInfoStr            = pCmd->arg(0).cachemanagerfieldinfo();
-
-    if (inFieldInfoStr.size() != sizeof(fieldInfo))
-    {
-        PRINT_ERROR("%d %d",
-                    "Got CACHE_MANAGER_FIELD_INFO size %d. Expected %d",
-                    (int)inFieldInfoStr.size(),
-                    (int)sizeof(fieldInfo));
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Copy to a temp buffer so we aren't overwriting the string's c_str() */
-    memcpy(&fieldInfo, (dcgmCacheManagerFieldInfo_t *)inFieldInfoStr.c_str(), sizeof(dcgmCacheManagerFieldInfo_t));
-
-    int ret = DcgmHostEngineHandler::Instance()->GetCacheManagerFieldInfo(&fieldInfo);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    /* Set the memory contents from the temp buffer */
-    pCmd->mutable_arg(0)->set_cachemanagerfieldinfo(&fieldInfo, sizeof(fieldInfo));
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessWatchFields(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher)
-{
-    unsigned int groupId;
-    dcgm::WatchFields *pWatchFields;
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "Config Get Err: Group ID not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    groupId = pCmd->id();
-    /* Verify group id is valid */
-    int ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_watchfields())
-    {
-        PRINT_ERROR("", "WATCH_FIELDS parameters must be set by the client");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_BADPARAM;
-    }
-
-    pWatchFields = pCmd->mutable_arg(0)->mutable_watchfields();
-
-    if (pWatchFields->version() != dcgmWatchFields_version)
-    {
-        PRINT_ERROR("%d %d",
-                    "WATCH_FIELDS version mismatch read %d != expected %d",
-                    pWatchFields->version(),
-                    dcgmWatchFields_version);
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if (!pWatchFields->has_fieldgroupid() || !pWatchFields->has_maxkeepage() || !pWatchFields->has_maxkeepsamples()
-        || !pWatchFields->has_updatefreq())
-    {
-        PRINT_ERROR("", "WATCH_FIELDS missing field");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    ret = WatchFieldGroup(groupId,
-                          (dcgmGpuGrp_t)pWatchFields->fieldgroupid(),
-                          pWatchFields->updatefreq(),
-                          pWatchFields->maxkeepage(),
-                          pWatchFields->maxkeepsamples(),
-                          dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessUnwatchFields(dcgm::Command *pCmd,
-                                                         bool *pIsComplete,
-                                                         DcgmWatcher &dcgmWatcher)
-{
-    unsigned int groupId;
-    dcgm::UnwatchFields *pUnwatchFields;
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "UNWATCH_FIELDS: Group ID not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    groupId = pCmd->id();
-    /* Verify group id is valid */
-    int ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_unwatchfields())
-    {
-        PRINT_ERROR("", "UNWATCH_FIELDS parameters must be set by the client");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_BADPARAM;
-    }
-
-    pUnwatchFields = pCmd->mutable_arg(0)->mutable_unwatchfields();
-
-    /* redundant check for fieldgroupid, but keeping it here in case we have optional fields in the future */
-    if (!pUnwatchFields->has_fieldgroupid())
-    {
-        PRINT_ERROR("", "WATCH_FIELDS missing field");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    ret = UnwatchFieldGroup(groupId, (dcgmGpuGrp_t)pUnwatchFields->fieldgroupid(), dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    pCmd->clear_arg(); // Clear arg as it's not needed anymore
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetPidInfo(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-
-    if (pCmd->opmode() != dcgm::OPERATION_GROUP_ENTITIES)
-    {
-        PRINT_ERROR("", "GET_PID_INFORMATION only works on groupIds");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "Config Get Err: Group ID not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-    // No group Id verification needed as its handled in GetProcessInfo
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from GET_PID_INFORMATION");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    ret = GetProcessInfo(pCmd->id(), (dcgmPidInfo_t *)pCmd->arg(0).blob().c_str());
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessFieldGroupCreate(dcgm::Command *pCmd,
-                                                            bool *pIsComplete,
-                                                            DcgmWatcher &dcgmWatcher)
-{
-    dcgmReturn_t ret;
-    dcgmFieldGroupInfo_t *fieldGrpInfo;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from FIELD_GROUP_CREATE");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    fieldGrpInfo = (dcgmFieldGroupInfo_t *)pCmd->arg(0).blob().c_str();
-    if (fieldGrpInfo->version != dcgmFieldGroupInfo_version)
-    {
-        PRINT_ERROR(
-            "%d %d", "FIELD_GROUP_CREATE version mismatch %d != %d", fieldGrpInfo->version, dcgmFieldGroupInfo_version);
-
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if (fieldGrpInfo->numFieldIds > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
-    {
-        DCGM_LOG_ERROR << "Invalid numFieldIds " << fieldGrpInfo->numFieldIds << " > "
-                       << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    std::vector<unsigned short> fieldIds(fieldGrpInfo->fieldIds, fieldGrpInfo->fieldIds + fieldGrpInfo->numFieldIds);
-    /* This call will set fieldGrpInfo->fieldGroupId */
-    ret = mpFieldGroupManager->AddFieldGroup(
-        fieldGrpInfo->fieldGroupName, fieldIds, &fieldGrpInfo->fieldGroupId, dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessFieldGroupDestroy(dcgm::Command *pCmd,
-                                                             bool *pIsComplete,
-                                                             DcgmWatcher &dcgmWatcher)
-{
-    dcgmReturn_t ret;
-    dcgmFieldGroupInfo_t *fieldGrpInfo;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from FIELD_GROUP_DESTROY");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    fieldGrpInfo = (dcgmFieldGroupInfo_t *)pCmd->arg(0).blob().c_str();
-    if (fieldGrpInfo->version != dcgmFieldGroupInfo_version)
-    {
-        PRINT_ERROR("%d %d",
-                    "FIELD_GROUP_DESTROY version mismatch %d != %d",
-                    fieldGrpInfo->version,
-                    dcgmFieldGroupInfo_version);
-
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Note: passing user-created flag */
-    ret = mpFieldGroupManager->RemoveFieldGroup(fieldGrpInfo->fieldGroupId, dcgmWatcher);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessFieldGroupGetOne(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    dcgmFieldGroupInfo_t *fieldGrpInfo;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from FIELD_GROUP_GET_ONE");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    fieldGrpInfo = (dcgmFieldGroupInfo_t *)pCmd->arg(0).blob().c_str();
-    if (fieldGrpInfo->version != dcgmFieldGroupInfo_version)
-    {
-        PRINT_ERROR("%d %d",
-                    "FIELD_GROUP_GET_ONE version mismatch %d != %d",
-                    fieldGrpInfo->version,
-                    dcgmFieldGroupInfo_version);
-
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    ret = mpFieldGroupManager->PopulateFieldGroupInfo(fieldGrpInfo);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessFieldGroupGetAll(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    dcgmAllFieldGroup_t *allFieldGrpInfo;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from FIELD_GROUP_GET_ALL");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    allFieldGrpInfo = (dcgmAllFieldGroup_t *)pCmd->arg(0).blob().c_str();
-    if (allFieldGrpInfo->version != dcgmAllFieldGroup_version)
-    {
-        PRINT_ERROR("%d %d",
-                    "FIELD_GROUP_GET_ALL version mismatch %d != %d",
-                    allFieldGrpInfo->version,
-                    dcgmAllFieldGroup_version);
-
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    ret = mpFieldGroupManager->PopulateFieldGroupGetAll(allFieldGrpInfo);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessWatchPredefined(dcgm::Command *pCmd,
-                                                           bool *pIsComplete,
-                                                           DcgmWatcher &dcgmWatcher)
-{
-    dcgmReturn_t ret;
-    dcgmWatchPredefined_t *watchPredef;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from WATCH_PREDEFINED");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-    }
-
-    watchPredef = (dcgmWatchPredefined_t *)pCmd->arg(0).blob().c_str();
-
-    ret = HelperWatchPredefined(watchPredef, dcgmWatcher);
-
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperWatchPredefined(dcgmWatchPredefined_t *watchPredef, DcgmWatcher &dcgmWatcher)
 {
     dcgmReturn_t ret;
@@ -1364,153 +339,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperWatchPredefined(dcgmWatchPredefined_t 
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessJobStartStats(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    std::string jobId;
-    unsigned int groupId;
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "JOB_START Group ID not specified");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    groupId = pCmd->id();
-
-    /* Verify group id is valid */
-    ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-    if (DCGM_ST_OK != ret)
-    {
-        pCmd->set_status(ret);
-        PRINT_ERROR("", "JOB_START Error: Bad group id parameter");
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Get Job key */
-    if ((pCmd->arg_size() < 1) || !(pCmd->arg(0).has_str()))
-    {
-        PRINT_ERROR("", "JOB_START Error: Job id is not provided");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    jobId = pCmd->arg(0).str();
-    ret   = JobStartStats(jobId, groupId);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessJobStopStats(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    std::string jobId;
-
-    /* Get Job key */
-    if ((pCmd->arg_size() < 1) || !(pCmd->arg(0).has_str()))
-    {
-        PRINT_ERROR("", "JOB_START Error: Job id is not provided");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    jobId = pCmd->arg(0).str();
-    ret   = JobStopStats(jobId);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessJobRemove(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    std::string jobId;
-
-    /* Get Job key */
-    if ((pCmd->arg_size() < 1) || !(pCmd->arg(0).has_str()))
-    {
-        PRINT_ERROR("", "JOB_REMOVE Error: Job id is not provided");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    jobId = pCmd->arg(0).str();
-    ret   = JobRemove(jobId);
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessJobGetInfo(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    std::string jobId;
-
-    /* Get Job key */
-    if ((pCmd->arg_size() < 1) || !(pCmd->arg(0).has_str()) || !(pCmd->arg(1).has_blob()))
-    {
-        PRINT_ERROR("", "JOB_START Error: Job id or output struct is not provided");
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    jobId = pCmd->arg(0).str();
-    ret   = JobGetStats(jobId, (dcgmJobInfo_t *)pCmd->arg(1).blob().c_str());
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetTopologyAffinity(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t dcgmReturn;
-    unsigned int groupId;
-    dcgmAffinity_t gpuAffinity {};
-
-    gpuAffinity.numGpus = 0;
-
-    if (pCmd->opmode() != dcgm::OPERATION_GROUP_ENTITIES)
-    {
-        PRINT_ERROR("", "GET_TOPOLOGY_INFO_AFFINITY only works on groupIds");
-        finalizeCmd(pCmd, DCGM_ST_BADPARAM, pIsComplete, (void *)&gpuAffinity, sizeof(gpuAffinity));
-        return DCGM_ST_OK;
-    }
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "Get affinity Err: Group ID not specified");
-        finalizeCmd(pCmd, DCGM_ST_BADPARAM, pIsComplete, (void *)&gpuAffinity, sizeof(gpuAffinity));
-        return DCGM_ST_OK;
-    }
-    {
-        groupId = pCmd->id();
-    }
-
-    dcgmReturn = HelperGetTopologyAffinity(groupId, gpuAffinity);
-
-    finalizeCmd(pCmd, dcgmReturn, pIsComplete, (void *)&gpuAffinity, sizeof(gpuAffinity));
-
-    return DCGM_ST_OK;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int groupId, dcgmAffinity_t &gpuAffinity)
 {
     dcgmReturn_t dcgmReturn;
@@ -1522,14 +350,14 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
     dcgmReturn = mpGroupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("", "Error: Bad group id parameter");
+        log_error("Error: Bad group id parameter");
         return dcgmReturn;
     }
 
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -1546,7 +374,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
 
     if (dcgmGpuIds.empty())
     {
-        PRINT_DEBUG("%d", "No GPUs in group %d", groupId);
+        log_debug("No GPUs in group {}", groupId);
         return DCGM_ST_NO_DATA;
     }
 
@@ -1606,41 +434,6 @@ dcgmReturn_t DcgmHostEngineHandler::GetCachedOrLiveValueForEntity(dcgmGroupEntit
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetTopologyIO(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    unsigned int groupId;
-    dcgmReturn_t dcgmReturn;
-    dcgmTopology_t gpuTopology {};
-
-    // always return this struct so that if we return DCGM_ST_NO_DATA that people can still
-    // rely on numElements being 0 instead of uninitialized
-    gpuTopology.version     = dcgmTopology_version;
-    gpuTopology.numElements = 0;
-
-    if (pCmd->opmode() != dcgm::OPERATION_GROUP_ENTITIES)
-    {
-        PRINT_ERROR("", "GET_TOPOLOGY_INFO_IO only works on groupIds");
-        finalizeCmd(pCmd, DCGM_ST_BADPARAM, pIsComplete, (void *)&gpuTopology, sizeof(dcgmTopology_t));
-        return DCGM_ST_OK;
-    }
-
-    /* Get Group ID from protobuf message*/
-    if (!pCmd->has_id())
-    {
-        PRINT_ERROR("", "Get topology Err: Group ID not specified");
-        finalizeCmd(pCmd, DCGM_ST_BADPARAM, pIsComplete, (void *)&gpuTopology, sizeof(dcgmTopology_t));
-        return DCGM_ST_OK;
-    }
-    {
-        groupId = pCmd->id();
-    }
-
-    dcgmReturn = HelperGetTopologyIO(groupId, gpuTopology);
-
-    finalizeCmd(pCmd, dcgmReturn, pIsComplete, (void *)&gpuTopology, sizeof(dcgmTopology_t));
-    return DCGM_ST_OK;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dcgmTopology_t &gpuTopology)
 {
     dcgmReturn_t dcgmReturn;
@@ -1653,14 +446,14 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
     dcgmReturn = mpGroupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("", "Error: Bad group id parameter");
+        log_error("Error: Bad group id parameter");
         return dcgmReturn;
     }
 
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -1677,7 +470,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
 
     if (dcgmGpuIds.empty())
     {
-        PRINT_DEBUG("%d", "No GPUs in group %d", groupId);
+        log_debug("No GPUs in group {}", groupId);
         return DCGM_ST_NO_DATA;
     }
 
@@ -1757,32 +550,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessCreateFakeEntities(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from CREATE_FAKE_ENTITIES");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    auto *createFakeEntities = (dcgmCreateFakeEntities_t *)pCmd->arg(0).blob().c_str();
-
-    if (createFakeEntities->version != dcgmCreateFakeEntities_version)
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    dcgmReturn_t ret = HelperCreateFakeEntities(createFakeEntities);
-
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperCreateFakeEntities(dcgmCreateFakeEntities_t *createFakeEntities)
 {
     if (!createFakeEntities)
@@ -1852,9 +619,11 @@ dcgmReturn_t DcgmHostEngineHandler::HelperCreateFakeEntities(dcgmCreateFakeEntit
                 break;
             }
 
+            case DCGM_FE_LINK: /* RSH -- fake link not supported */
+
             default:
-                DCGM_LOG_ERROR << "CREATE_FAKE_ENTITIES got unhandled eg %u"
-                               << createFakeEntities->entityList[i].entity.entityGroupId;
+                log_error("CREATE_FAKE_ENTITIES got unhandled eg {}",
+                          createFakeEntities->entityList[i].entity.entityGroupId);
                 return DCGM_ST_NOT_SUPPORTED;
         }
     }
@@ -1863,250 +632,13 @@ dcgmReturn_t DcgmHostEngineHandler::HelperCreateFakeEntities(dcgmCreateFakeEntit
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetNvLinkLinkStatus(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret = DCGM_ST_OK;
-    dcgmReturn_t cacheRet;
-    dcgmReturn_t nvSwitchRet;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from GET_NVLINK_LINK_STATUS");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    /* Only v2 is supported by tsapiGetNvLinkLinkStatus() */
-    dcgmNvLinkStatus_v2 nvLinkStatus2;
-
-    if (pCmd->arg(0).blob().size() != sizeof(dcgmNvLinkStatus_v2))
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    /* Make a local copy of the request so we're not messing with protobuf memory */
-    memcpy(&nvLinkStatus2, pCmd->arg(0).blob().c_str(), sizeof(nvLinkStatus2));
-    if (nvLinkStatus2.version != dcgmNvLinkStatus_version2)
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    /* Get GPU NvLink states */
-    cacheRet = mpCacheManager->PopulateNvLinkLinkStatus(nvLinkStatus2);
-
-    dcgm_nvswitch_msg_get_all_link_states_t nvsMsg {};
-    nvsMsg.header.length     = sizeof(nvsMsg);
-    nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
-    nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES;
-    nvsMsg.header.version    = dcgm_nvswitch_msg_get_all_link_states_version;
-    nvSwitchRet              = ProcessModuleCommand(&nvsMsg.header);
-    if (nvSwitchRet == DCGM_ST_MODULE_NOT_LOADED)
-    {
-        DCGM_LOG_WARNING << "Not populating NvSwitches since the module couldn't be loaded.";
-    }
-    else if (nvSwitchRet != DCGM_ST_OK)
-    {
-        DCGM_LOG_ERROR << "Got status " << nvSwitchRet << " from DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES";
-        ret = nvSwitchRet;
-    }
-    else
-    {
-        nvLinkStatus2.numNvSwitches = nvsMsg.linkStatus.numNvSwitches;
-        memcpy(nvLinkStatus2.nvSwitches, nvsMsg.linkStatus.nvSwitches, sizeof(nvLinkStatus2.nvSwitches));
-        DCGM_LOG_DEBUG << "Got " << nvsMsg.linkStatus.numNvSwitches << " NvSwitches";
-    }
-
-    /* Set the response blob */
-    pCmd->mutable_arg(0)->set_blob(&nvLinkStatus2, sizeof(nvLinkStatus2));
-
-    /* Return cache errors if NvSwitch didn't already return one */
-    if (ret == DCGM_ST_OK)
-    {
-        ret = cacheRet;
-    }
-
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetGpuInstanceHierarchy(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from GET_GPU_INSTANCE_HIERARCHY");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    if (pCmd->arg(0).blob().size() == sizeof(dcgmMigHierarchy_v1))
-    {
-        dcgmMigHierarchy_v1 migHierarchy;
-        memcpy(&migHierarchy, pCmd->arg(0).blob().c_str(), sizeof(migHierarchy));
-
-        if (migHierarchy.version != dcgmMigHierarchy_version1)
-        {
-            pCmd->set_status(DCGM_ST_VER_MISMATCH);
-            *pIsComplete = true;
-            return DCGM_ST_VER_MISMATCH;
-        }
-
-        ret = mpCacheManager->PopulateMigHierarchy(migHierarchy);
-        pCmd->mutable_arg(0)->set_blob(&migHierarchy, sizeof(migHierarchy));
-        pCmd->set_status(ret);
-        *pIsComplete = true;
-
-        return DCGM_ST_OK;
-    }
-    else if (pCmd->arg(0).blob().size() == sizeof(dcgmMigHierarchy_v2))
-    {
-        dcgmMigHierarchy_v2 migHierarchy;
-        memcpy(&migHierarchy, pCmd->arg(0).blob().c_str(), sizeof(migHierarchy));
-        if (migHierarchy.version != dcgmMigHierarchy_version2)
-        {
-            pCmd->set_status(DCGM_ST_VER_MISMATCH);
-            *pIsComplete = true;
-            return DCGM_ST_VER_MISMATCH;
-        }
-
-        ret = mpCacheManager->PopulateMigHierarchy(migHierarchy);
-        pCmd->mutable_arg(0)->set_blob(&migHierarchy, sizeof(migHierarchy));
-        pCmd->set_status(ret);
-        *pIsComplete = true;
-
-        return DCGM_ST_OK;
-    }
-
-    return DCGM_ST_GENERIC_ERROR;
-}
-
-dcgmReturn_t DcgmHostEngineHandler::ProcessIsHostengineHealthy(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        DCGM_LOG_ERROR << "Binary blob missing from IS_HOSTENGINE_HEALTHY";
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    dcgmHostengineHealth_v1 heHealth;
-    memcpy(&heHealth, pCmd->arg(0).blob().c_str(), sizeof(heHealth));
-
-    if (heHealth.version != dcgmHostengineHealth_version1)
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    heHealth.overallHealth = m_hostengineHealth;
-    ret                    = DCGM_ST_OK;
-    pCmd->mutable_arg(0)->set_blob(&heHealth, sizeof(heHealth));
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return ret;
-}
-
 unsigned int DcgmHostEngineHandler::GetHostEngineHealth() const
 {
     return m_hostengineHealth;
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessSetNvLinkLinkStatus(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from SET_NVLINK_LINK_STATUS");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    dcgmSetNvLinkLinkState_v1 linkState;
-
-    if (pCmd->arg(0).blob().size() != sizeof(linkState))
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-    /* Make a local copy of the request so we're not messing with protobuf memory */
-    memcpy(&linkState, pCmd->arg(0).blob().c_str(), sizeof(linkState));
-
-    if (linkState.version != dcgmSetNvLinkLinkState_version1)
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    /* Dispatch this to the appropriate module */
-    if (linkState.entityGroupId == DCGM_FE_SWITCH)
-    {
-        dcgm_nvswitch_msg_set_link_state_t nvsMsg {};
-        nvsMsg.header.length     = sizeof(nvsMsg);
-        nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
-        nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_SET_LINK_STATE;
-        nvsMsg.header.version    = dcgm_nvswitch_msg_set_link_state_version;
-        nvsMsg.entityId          = linkState.entityId;
-        nvsMsg.portIndex         = linkState.linkId;
-        nvsMsg.linkState         = linkState.linkState;
-        ret                      = ProcessModuleCommand(&nvsMsg.header);
-    }
-    else
-    {
-        ret = mpCacheManager->SetEntityNvLinkLinkState(
-            linkState.entityGroupId, linkState.entityId, linkState.linkId, linkState.linkState);
-    }
-
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessModuleBlacklist(dcgm::Command *pCmd)
-{
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from MODULE_BLACKLIST");
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    dcgmModuleBlacklist_v1 msg;
-
-    if (pCmd->arg(0).blob().size() != sizeof(msg))
-    {
-        PRINT_ERROR("", "MODULE_BLACKLIST size mismatch");
-        return DCGM_ST_VER_MISMATCH;
-    }
-    /* Make a local copy of the request so we're not messing with protobuf memory */
-    memcpy(&msg, pCmd->arg(0).blob().c_str(), sizeof(msg));
-
-    if (msg.version != dcgmModuleBlacklist_version1)
-    {
-        PRINT_ERROR("%X %X", "MODULE_BLACKLIST version mismatch x%X != x%X", msg.version, dcgmModuleBlacklist_version1);
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    return HelperModuleBlacklist(msg.moduleId);
-}
-
-dcgmReturn_t DcgmHostEngineHandler::HelperModuleBlacklist(dcgmModuleId_t moduleId)
+dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId)
 {
     if (moduleId <= DcgmModuleIdCore || moduleId >= DcgmModuleIdCount)
     {
@@ -2121,67 +653,37 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleBlacklist(dcgmModuleId_t moduleI
     switch (m_modules[moduleId].status)
     {
         case DcgmModuleStatusNotLoaded:
-            break; /* Will blacklist below */
+            break; /* Will be added to the denylist below */
 
-        case DcgmModuleStatusBlacklisted:
+        case DcgmModuleStatusDenylisted:
             Unlock();
-            DCGM_LOG_DEBUG << "Module ID " << moduleId << " is already blacklisted.";
+            DCGM_LOG_DEBUG << "Module ID " << moduleId << " is already on the denylist.";
             return DCGM_ST_OK;
 
         case DcgmModuleStatusFailed:
-            DCGM_LOG_DEBUG << "Module ID " << moduleId << " already failed to load. Setting to blacklisted.";
+            DCGM_LOG_DEBUG << "Module ID " << moduleId << " already failed to load. Adding to the denylist.";
             break;
 
         case DcgmModuleStatusLoaded:
             Unlock();
-            DCGM_LOG_WARNING << "Could not blacklist module " << moduleId << " that was already loaded.";
+            DCGM_LOG_WARNING << "Could not add module " << moduleId << " to the denylist as it was already loaded.";
             return DCGM_ST_IN_USE;
 
         case DcgmModuleStatusUnloaded:
-            DCGM_LOG_DEBUG << "Module ID " << moduleId << " has been unloaded. Setting to blacklisted.";
+            DCGM_LOG_DEBUG << "Module ID " << moduleId << " has been unloaded. Adding to the denylist.";
             break;
 
             /* Not adding a default case here so adding future states will cause a compiler error */
     }
 
-    DCGM_LOG_INFO << "Blacklisting module " << moduleId;
-    m_modules[moduleId].status = DcgmModuleStatusBlacklisted;
+    DCGM_LOG_INFO << "Module " << moduleId << " added to the denylist";
+    m_modules[moduleId].status = DcgmModuleStatusDenylisted;
 
     Unlock();
     return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessModuleGetStatuses(dcgm::Command *pCmd)
-{
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        DCGM_LOG_ERROR << "Binary blob missing from MODULE_GET_STATUSES";
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    dcgmModuleGetStatuses_v1 msg;
-
-    if (pCmd->arg(0).blob().size() != sizeof(msg))
-    {
-        DCGM_LOG_ERROR << "MODULE_GET_STATUSES size mismatch";
-        return DCGM_ST_VER_MISMATCH;
-    }
-    /* Make a local copy of the request so we're not messing with protobuf memory */
-    memcpy(&msg, pCmd->arg(0).blob().c_str(), sizeof(msg));
-
-    dcgmReturn_t ret = HelperModuleStatus(msg);
-
-    if (DCGM_ST_OK != ret)
-    {
-        return ret;
-    }
-
-    /* Set the response blob */
-    pCmd->mutable_arg(0)->set_blob(&msg, sizeof(msg));
-    return DCGM_ST_OK;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperModuleStatus(dcgmModuleGetStatuses_v1 &msg)
 {
     if (msg.version != dcgmModuleGetStatuses_version)
@@ -2206,174 +708,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleStatus(dcgmModuleGetStatuses_v1 
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetMultipleLatestValues(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret;
-    dcgmGetMultipleLatestValues_t msg;
-    std::vector<dcgmGroupEntityPair_t> entities;
-    std::vector<unsigned short> fieldIds;
-
-    *pIsComplete = true; /* Just set this once */
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        DCGM_LOG_ERROR << "Payload missing from from GET_MULTIPLE_LATEST_VALUES";
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    if (pCmd->arg(0).blob().size() != sizeof(msg))
-    {
-        DCGM_LOG_ERROR << "Protobuf had an invalid dcgmGetMultipleLatestValues_t size of " << pCmd->arg(0).blob().size()
-                       << " != " << sizeof(msg) << ".";
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Make a copy of the message since we're going to modify it */
-    memcpy(&msg, pCmd->arg(0).blob().c_str(), pCmd->arg(0).blob().size());
-    if (msg.version != dcgmGetMultipleLatestValues_version || msg.entitiesCount > DCGM_GROUP_MAX_ENTITIES
-        || msg.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
-    {
-        DCGM_LOG_ERROR << "dcgmGetMultipleLatestValues_t had a bad parameter. version " << msg.version
-                       << ", entitiesCount " << msg.entitiesCount << ", fieldIdCount " << msg.fieldIdCount;
-        pCmd->set_status(DCGM_ST_BADPARAM);
-        *pIsComplete = true;
-        return DCGM_ST_OK;
-    }
-
-    /* Convert the entity group to a list of entities */
-    if (msg.entitiesCount == 0)
-    {
-        unsigned int groupId = (uintptr_t)msg.groupId;
-
-        /* If this is a special group ID, convert it to a real one */
-        ret = mpGroupManager->verifyAndUpdateGroupId(&groupId);
-        if (ret != DCGM_ST_OK)
-        {
-            PRINT_ERROR("%d %p", "Got st %d from verifyAndUpdateGroupId. groupId %p", ret, (void *)msg.groupId);
-            pCmd->set_status(DCGM_ST_OK);
-            return ret;
-        }
-
-        ret = mpGroupManager->GetGroupEntities(groupId, entities);
-        if (ret != DCGM_ST_OK)
-        {
-            PRINT_ERROR("%d %p", "Got st %d from GetGroupEntities. groupId %p", ret, (void *)msg.groupId);
-            pCmd->set_status(DCGM_ST_OK);
-            return ret;
-        }
-    }
-    else
-    {
-        /* Use the list from the message */
-        entities.insert(entities.end(), &msg.entities[0], &msg.entities[msg.entitiesCount]);
-    }
-
-    /* Convert the fieldGroupId to a list of field IDs */
-    if (msg.fieldIdCount == 0)
-    {
-        ret = mpFieldGroupManager->GetFieldGroupFields(msg.fieldGroupId, fieldIds);
-        if (ret != DCGM_ST_OK)
-        {
-            PRINT_ERROR("%d %p", "Got st %d from GetFieldGroupFields. fieldGroupId %p", ret, (void *)msg.fieldGroupId);
-            pCmd->set_status(DCGM_ST_OK);
-            return ret;
-        }
-    }
-    else
-    {
-        /* Use the list from the message */
-        fieldIds.insert(fieldIds.end(), &msg.fieldIds[0], &msg.fieldIds[msg.fieldIdCount]);
-    }
-
-    /* Create the fvBuffer after we know how many field IDs we'll be retrieving */
-    size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
-    DcgmFvBuffer fvBuffer(initialCapacity);
-
-    /* Make a batch request to the cache manager to fill a fvBuffer with all of the values */
-    if ((msg.flags & DCGM_FV_FLAG_LIVE_DATA) != 0)
-    {
-        ret = mpCacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
-    }
-    else
-    {
-        ret = mpCacheManager->GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
-    }
-    if (ret != DCGM_ST_OK)
-    {
-        pCmd->set_status(ret);
-        return ret;
-    }
-
-    const char *fvBufferBytes = fvBuffer.GetBuffer();
-    size_t bufferSize         = 0;
-    size_t elementCount       = 0;
-
-    fvBuffer.GetSize(&bufferSize, &elementCount);
-
-    if ((fvBufferBytes == nullptr) || (bufferSize == 0))
-    {
-        PRINT_ERROR("%p %d", "Unexpected fvBuffer %p, fvBufferBytes %d", (void *)fvBufferBytes, (int)bufferSize);
-        ret = DCGM_ST_GENERIC_ERROR;
-        pCmd->set_status(ret);
-        return ret;
-    }
-
-    /* Set pCmd->blob with the contents of the FV buffer */
-    pCmd->mutable_arg(0)->set_blob(fvBufferBytes, bufferSize);
-    pCmd->set_status(ret);
-    return ret;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessGetFieldSummary(dcgm::Command *pCmd, bool *pIsComplete)
-{
-    dcgmReturn_t ret = DCGM_ST_OK;
-
-    if (pCmd->arg_size() < 1 || !pCmd->arg(0).has_blob())
-    {
-        PRINT_ERROR("", "Binary blob missing from GET_FIELD_SUMMARY");
-        pCmd->set_status(DCGM_ST_GENERIC_ERROR);
-        *pIsComplete = true;
-        return ret;
-    }
-
-    dcgmFieldSummaryRequest_v1 fieldSummary;
-
-    if (pCmd->arg(0).blob().size() != sizeof(fieldSummary))
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return ret;
-    }
-
-    // Make a local copy of the request to avoid stomping on memory
-    memcpy(&fieldSummary, pCmd->arg(0).blob().c_str(), sizeof(fieldSummary));
-
-    if (fieldSummary.version != dcgmFieldSummaryRequest_version1)
-    {
-        pCmd->set_status(DCGM_ST_VER_MISMATCH);
-        *pIsComplete = true;
-        return ret;
-    }
-
-    ret = HelperGetFieldSummary(fieldSummary);
-
-    if (ret == DCGM_ST_OK)
-    {
-        /* Set the response blob */
-        pCmd->mutable_arg(0)->set_blob(&fieldSummary, sizeof(fieldSummary));
-    }
-
-    pCmd->set_status(ret);
-    *pIsComplete = true;
-
-    return ret;
-}
-
 dcgmReturn_t DcgmHostEngineHandler::HelperGetFieldSummary(dcgmFieldSummaryRequest_t &fieldSummary)
 {
     dcgmReturn_t ret;
@@ -2469,293 +803,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetFieldSummary(dcgmFieldSummaryReques
 }
 
 /*****************************************************************************/
-int DcgmHostEngineHandler::ProcessRequest(dcgm::Command *pCmd,
-                                          bool *pIsComplete,
-                                          dcgm_connection_id_t connectionId,
-                                          dcgm_request_id_t requestId)
-{
-    int ret = 0;
-
-    DCGM_LOG_DEBUG << "Processing request of type " << pCmd->cmdtype() << " for connectionId " << connectionId;
-
-    /* Only allow connectionId to be set if we're actually going to clean up requests */
-    if (GetPersistAfterDisconnect(connectionId))
-    {
-        connectionId = DCGM_CONNECTION_ID_NONE;
-    }
-    DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
-
-    switch (pCmd->cmdtype())
-    {
-        case dcgm::CLIENT_LOGIN:
-        {
-            ret = ProcessClientLogin(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::GROUP_CREATE:
-        {
-            ret = ProcessGroupCreate(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::GROUP_ADD_DEVICE: /* fall-through is intentional */
-        case dcgm::GROUP_REMOVE_DEVICE:
-        {
-            ret = ProcessAddRemoveGroup(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::GROUP_DESTROY:
-        {
-            ret = ProcessGroupDestroy(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::GROUP_INFO:
-        {
-            ret = ProcessGroupInfo(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::GROUP_GETALL_IDS:
-        {
-            ret = ProcessGroupGetallIds(pCmd, pIsComplete, connectionId);
-            break;
-        }
-
-        case dcgm::DISCOVER_DEVICES:
-        {
-            ret = ProcessDiscoverDevices(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_ENTITY_LIST:
-        {
-            ret = ProcessGetEntityList(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::INJECT_FIELD_VALUE:
-        {
-            ret = ProcessInjectFieldValue(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_FIELD_LATEST_VALUE:
-
-            ret = ProcessGetFieldLatestValue(pCmd, pIsComplete);
-            break;
-
-        case dcgm::GET_FIELD_MULTIPLE_VALUES:
-        {
-            ret = ProcessGetFieldMultipleValues(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::WATCH_FIELD_VALUE:
-        {
-            ret = ProcessWatchFieldValue(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::UNWATCH_FIELD_VALUE:
-        {
-            ret = ProcessUnwatchFieldValue(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::UPDATE_ALL_FIELDS:
-        {
-            ret = ProcessUpdateAllFields(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::CACHE_MANAGER_FIELD_INFO:
-        {
-            ret = ProcessCacheManagerFieldInfo(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::WATCH_FIELDS:
-        {
-            ret = ProcessWatchFields(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::UNWATCH_FIELDS:
-        {
-            ret = ProcessUnwatchFields(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::GET_PID_INFORMATION:
-        {
-            ret = ProcessGetPidInfo(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::FIELD_GROUP_CREATE:
-        {
-            ret = ProcessFieldGroupCreate(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::FIELD_GROUP_DESTROY:
-        {
-            ret = ProcessFieldGroupDestroy(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::FIELD_GROUP_GET_ONE:
-        {
-            ret = ProcessFieldGroupGetOne(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::FIELD_GROUP_GET_ALL:
-        {
-            ret = ProcessFieldGroupGetAll(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::WATCH_PREDEFINED:
-        {
-            ret = ProcessWatchPredefined(pCmd, pIsComplete, dcgmWatcher);
-            break;
-        }
-
-        case dcgm::JOB_START_STATS:
-        {
-            ret = ProcessJobStartStats(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::JOB_STOP_STATS:
-        {
-            ret = ProcessJobStopStats(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::JOB_REMOVE:
-        {
-            ret = ProcessJobRemove(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::JOB_REMOVE_ALL:
-        {
-            dcgmReturn_t ret = JobRemoveAll();
-            pCmd->set_status(ret);
-            *pIsComplete = true;
-            break;
-        }
-
-        case dcgm::JOB_GET_INFO:
-        {
-            ret = ProcessJobGetInfo(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_TOPOLOGY_INFO_AFFINITY:
-        {
-            ret = ProcessGetTopologyAffinity(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_TOPOLOGY_INFO_IO:
-        {
-            ret = ProcessGetTopologyIO(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::SELECT_GPUS_BY_TOPOLOGY:
-        {
-            ret = ProcessSelectGpusByTopology(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_FIELD_SUMMARY:
-        {
-            ret = ProcessGetFieldSummary(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::CREATE_FAKE_ENTITIES:
-        {
-            ret = ProcessCreateFakeEntities(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_GPU_INSTANCE_HIERARCHY:
-        {
-            ret = ProcessGetGpuInstanceHierarchy(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::IS_HOSTENGINE_HEALTHY:
-        {
-            ret = ProcessIsHostengineHealthy(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_NVLINK_LINK_STATUS:
-        {
-            ret = ProcessGetNvLinkLinkStatus(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::GET_MULTIPLE_LATEST_VALUES:
-        {
-            ret = ProcessGetMultipleLatestValues(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::SET_NVLINK_LINK_STATUS:
-        {
-            ret = ProcessSetNvLinkLinkStatus(pCmd, pIsComplete);
-            break;
-        }
-
-        case dcgm::MODULE_BLACKLIST:
-        {
-            dcgmReturn_t ret = ProcessModuleBlacklist(pCmd);
-            pCmd->set_status(ret);
-            *pIsComplete = true;
-            break;
-        }
-
-        case dcgm::MODULE_GET_STATUSES:
-        {
-            dcgmReturn_t ret = ProcessModuleGetStatuses(pCmd);
-            pCmd->set_status(ret);
-            *pIsComplete = true;
-            break;
-        }
-
-        default:
-            // Unknown command
-            PRINT_ERROR("", "Unknown command.");
-            pCmd->set_status(DCGM_ST_BADPARAM);
-            break;
-    }
-
-    return ret;
-}
-
-/*****************************************************************************/
-void DcgmHostEngineHandler::finalizeCmd(dcgm::Command *pCmd,
-                                        dcgmReturn_t cmdStatus,
-                                        bool *&pIsComplete,
-                                        void *returnArg,
-                                        size_t returnArgSize)
-{
-    pCmd->add_arg()->set_blob(returnArg, returnArgSize);
-    pCmd->set_status(cmdStatus);
-    *pIsComplete = true;
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int msgType,
                                                                    dcgm_request_id_t requestId,
                                                                    void *msgData,
@@ -2767,7 +814,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
     /* Embedded client */
     if (requestId == DCGM_REQUEST_ID_NONE)
     {
-        PRINT_ERROR("", "Can't SendRawMessageToEmbeddedClient() with 0 requestId");
+        log_error("Can't SendRawMessageToEmbeddedClient() with 0 requestId");
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -2776,7 +823,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
     requestIt = m_watchedRequests.find(requestId);
     if (requestIt == m_watchedRequests.end())
     {
-        PRINT_ERROR("%u", "SendRawMessageToEmbeddedClient unable to find requestId %u", requestId);
+        log_error("SendRawMessageToEmbeddedClient unable to find requestId {}", requestId);
         Unlock();
         return DCGM_ST_BADPARAM;
     }
@@ -2851,7 +898,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommand(dcgm_module_command_hea
     if (static_cast<std::underlying_type_t<dcgmModuleId_t>>(moduleCommand->moduleId)
         >= static_cast<std::underlying_type_t<dcgmModuleId_t>>(DcgmModuleIdCount))
     {
-        PRINT_ERROR("%u", "Invalid module id: %u", moduleCommand->moduleId);
+        log_error("Invalid module id: {}", moduleCommand->moduleId);
         return DCGM_ST_BADPARAM;
     }
 
@@ -2913,53 +960,6 @@ void DcgmHostEngineHandler::OnConnectionRemove(dcgm_connection_id_t connectionId
 }
 
 /*****************************************************************************/
-int DcgmHostEngineHandler::HandleCommands(std::vector<dcgm::Command *> *pVecCmdsToProcess,
-                                          dcgm_connection_id_t connectionId,
-                                          dcgm_request_id_t requestId)
-{
-    std::vector<dcgm::Command *>::iterator cmdIterator;
-    dcgm::Command *pCmd;
-    bool isComplete = false;
-
-    for (cmdIterator = pVecCmdsToProcess->begin(); cmdIterator != pVecCmdsToProcess->end(); ++cmdIterator)
-    {
-        pCmd = *(cmdIterator);
-        (void)ProcessRequest(pCmd, &isComplete, connectionId, requestId);
-        /* Give the caller our timestamp */
-        pCmd->set_timestamp(timelib_usecSince1970());
-    }
-
-    return 0;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::ProcessProtobufMessage(dcgm_connection_id_t connectionId,
-                                                           std::unique_ptr<DcgmMessage> message)
-{
-    dcgmReturn_t retSt = DCGM_ST_OK;
-    DcgmProtobuf protoObj;                /* Protobuf object to send or recv the message */
-    std::vector<dcgm::Command *> vecCmds; /* To store reference to commands inside the protobuf message */
-
-    auto msgBytes  = message->GetMsgBytesPtr();
-    auto msgHeader = message->GetMessageHdr();
-
-    retSt = protoObj.ParseRecvdMessage(msgBytes->data(), msgBytes->size(), &vecCmds);
-    if (retSt != DCGM_ST_OK)
-    {
-        DCGM_LOG_ERROR << "ParseRecvdMessage returned " << retSt << " for connectionId " << connectionId;
-        return retSt;
-    }
-
-    HandleCommands(&vecCmds, connectionId, msgHeader->requestId);
-
-    protoObj.GetEncodedMessage(*msgBytes);
-
-    message->UpdateMsgHdr(DCGM_MSG_PROTO_RESPONSE, msgHeader->requestId, DCGM_ST_OK, msgBytes->size());
-
-    return m_dcgmIpc.SendMessage(connectionId, std::move(message), false);
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t connectionId,
                                                             std::unique_ptr<DcgmMessage> message)
 {
@@ -2996,15 +996,25 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
     {
         switch (moduleCommand->subCommand)
         {
-            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES:
-                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_t));
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2:
+                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v2));
                 moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_t);
+                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v2);
                 break;
-            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD:
-                msgBytes->resize(sizeof(dcgm_core_msg_get_multiple_values_for_field_t));
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V1:
+                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v1));
                 moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_get_multiple_values_for_field_t);
+                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v1);
+                break;
+            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
+                msgBytes->resize(sizeof(dcgm_core_msg_get_multiple_values_for_field_v1));
+                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
+                moduleCommand->length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v1);
+                break;
+            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2:
+                msgBytes->resize(sizeof(dcgm_core_msg_get_multiple_values_for_field_v2));
+                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
+                moduleCommand->length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v2);
                 break;
             default:
                 /* No need to resize */
@@ -3035,7 +1045,7 @@ void DcgmHostEngineHandler::ProcessMessage(dcgm_connection_id_t connectionId, st
     {
         case DCGM_MSG_PROTO_REQUEST:
         case DCGM_MSG_PROTO_RESPONSE:
-            ProcessProtobufMessage(connectionId, std::move(message));
+            DCGM_LOG_ERROR << "Got unhandled protobuf message from connectionId " << connectionId;
             break;
 
         case DCGM_MSG_MODULE_COMMAND:
@@ -3078,7 +1088,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn = mpFieldGroupManager->AddFieldGroup("DCGM_INTERNAL_30SEC", fieldIds, &mFieldGroup30Sec, watcher);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "AddFieldGroup returned %d", (int)dcgmReturn);
+        log_error("AddFieldGroup returned {}", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -3086,18 +1096,23 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn = WatchFieldGroup(mpGroupManager->GetAllGpusGroup(), mFieldGroup30Sec, 30000000, 14400.0, 480, watcher);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "WatchFieldGroup returned %d", (int)dcgmReturn);
+        log_error("WatchFieldGroup returned {}", (int)dcgmReturn);
         return dcgmReturn;
     }
 
     fieldIds.clear();
     /* Needed as it is the static info related to GPU attribute associated with vGPU */
     fieldIds.push_back(DCGM_FI_DEV_SUPPORTED_TYPE_INFO);
+    fieldIds.push_back(DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_INFO);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_NAME);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_CLASS);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_LICENSE);
 
     dcgmReturn = mpFieldGroupManager->AddFieldGroup("DCGM_INTERNAL_HOURLY", fieldIds, &mFieldGroupHourly, watcher);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "AddFieldGroup returned %d", (int)dcgmReturn);
+        log_error("AddFieldGroup returned {}", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -3105,7 +1120,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn = WatchFieldGroupAllGpus(mFieldGroupHourly, 3600000000, 14400.0, 4, 0, watcher);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "WatchFieldGroupAllGpus returned %d", (int)dcgmReturn);
+        log_error("WatchFieldGroupAllGpus returned {}", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -3154,7 +1169,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn = mpFieldGroupManager->AddFieldGroup("DCGM_INTERNAL_JOB", fieldIds, &mFieldGroupPidAndJobStats, watcher);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "AddFieldGroup returned %d", (int)dcgmReturn);
+        log_error("AddFieldGroup returned {}", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -3219,13 +1234,13 @@ void DcgmHostEngineHandler::OnFvUpdates(DcgmFvBuffer *fvBuffer,
         destinationModuleId = watcherToModuleMap[watcherTypes[i]];
         if (destinationModuleId == DcgmModuleIdCore)
         {
-            PRINT_ERROR("%u", "Unhandled watcherType %u can't be dispatched to a module.", watcherTypes[i]);
+            log_error("Unhandled watcherType {} can't be dispatched to a module.", watcherTypes[i]);
             continue;
         }
 
         if (m_modules[destinationModuleId].ptr == nullptr)
         {
-            PRINT_DEBUG("%u", "Skipping FV update for moduleId %u that is not loaded.", destinationModuleId);
+            log_debug("Skipping FV update for moduleId {} that is not loaded.", destinationModuleId);
             continue;
         }
 
@@ -3279,6 +1294,33 @@ static void nvHostEngineMigCallback(unsigned int gpuId, void *userData)
     hostEngineHandler->OnMigUpdates(gpuId);
 }
 
+void DcgmHostEngineHandler::ShutdownNvml()
+{
+    if (m_usingInjectionNvml)
+    {
+    }
+    else
+    {
+        if (NVML_SUCCESS != nvmlShutdown())
+        {
+            /* we used to throw an exception here, which would crash the host engine on shutdown.
+               Just log an error and continue our shutdown. */
+            log_error("Error: Failed to ShutDown NVML");
+        }
+    }
+}
+
+void DcgmHostEngineHandler::LoadNvml()
+{
+    if (m_usingInjectionNvml == false)
+    {
+        if (NVML_SUCCESS != nvmlInit_v2())
+        {
+            throw std::runtime_error("Error: Failed to initialize NVML");
+        }
+    }
+}
+
 /*****************************************************************************
  Constructor for DCGM Host Engine Handler
  *****************************************************************************/
@@ -3286,6 +1328,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     : m_communicator()
     , m_dcgmIpc(DCGM_HE_NUM_WORKERS)
     , m_hostengineHealth(0)
+    , m_usingInjectionNvml(false)
 {
     int ret;
     dcgmReturn_t dcgmRet;
@@ -3310,40 +1353,37 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     m_modules[DcgmModuleIdCore].ptr    = &mModuleCoreObj;
     m_modules[DcgmModuleIdCore].msgCB  = mModuleCoreObj.GetMessageProcessingCallback();
     /* Set module filenames */
-    m_modules[DcgmModuleIdNvSwitch].filename   = "libdcgmmodulenvswitch.so.2";
-    m_modules[DcgmModuleIdVGPU].filename       = "libdcgmmodulevgpu.so.2";
-    m_modules[DcgmModuleIdIntrospect].filename = "libdcgmmoduleintrospect.so.2";
-    m_modules[DcgmModuleIdHealth].filename     = "libdcgmmodulehealth.so.2";
-    m_modules[DcgmModuleIdPolicy].filename     = "libdcgmmodulepolicy.so.2";
-    m_modules[DcgmModuleIdConfig].filename     = "libdcgmmoduleconfig.so.2";
-    m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.2";
-    m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.2";
+    m_modules[DcgmModuleIdNvSwitch].filename   = "libdcgmmodulenvswitch.so.3";
+    m_modules[DcgmModuleIdVGPU].filename       = "libdcgmmodulevgpu.so.3";
+    m_modules[DcgmModuleIdIntrospect].filename = "libdcgmmoduleintrospect.so.3";
+    m_modules[DcgmModuleIdHealth].filename     = "libdcgmmodulehealth.so.3";
+    m_modules[DcgmModuleIdPolicy].filename     = "libdcgmmodulepolicy.so.3";
+    m_modules[DcgmModuleIdConfig].filename     = "libdcgmmoduleconfig.so.3";
+    m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.3";
+    m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.3";
 
-    /* Apply the blacklist that was requested before we possibly load any modules */
-    for (unsigned int i = 0; i < params.blackListCount; i++)
+    /* Apply the denylist that was requested before we possibly load any modules */
+    for (unsigned int i = 0; i < params.denyListCount; i++)
     {
-        if (params.blackList[i] == DcgmModuleIdCore)
+        if (params.denyList[i] == DcgmModuleIdCore)
         {
-            DCGM_LOG_DEBUG << "Ignored blacklist request for core module.";
+            DCGM_LOG_DEBUG << "Ignored denylist request for core module.";
             continue;
         }
 
-        if (params.blackList[i] >= DcgmModuleIdCount)
+        if (params.denyList[i] >= DcgmModuleIdCount)
         {
             throw std::runtime_error("Out of range module ID given.");
         }
 
-        DCGM_LOG_INFO << "Module " << params.blackList[i] << " was blacklisted at start-up.";
-        m_modules[params.blackList[i]].status = DcgmModuleStatusBlacklisted;
+        DCGM_LOG_INFO << "Module " << params.denyList[i] << " was added to the denylist at start-up.";
+        m_modules[params.denyList[i]].status = DcgmModuleStatusDenylisted;
     }
 
     /* Make sure we can catch any signal sent to threads by DcgmThread */
     DcgmThread::InstallSignalHandler();
 
-    if (NVML_SUCCESS != nvmlInit_v2())
-    {
-        throw std::runtime_error("Error: Failed to initialize NVML");
-    }
+    LoadNvml();
 
     char driverVersion[80];
     nvmlSystemGetDriverVersion(driverVersion, 80);
@@ -3534,21 +1574,13 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
 
     // DcgmFieldsTerm(); //Not doing this for now due to bug 1787570, comment 1
 
-    /* Shutdown protobuf library at HostEngine side */
-    google::protobuf::ShutdownProtobufLibrary();
-
     /* Remove all the connections. Keep it after modules referencing the connections */
     deleteNotNull(mpGroupManager);
 
     /* Remove lingering tracked rquests */
     RemoveAllTrackedRequests();
 
-    if (NVML_SUCCESS != nvmlShutdown())
-    {
-        /* we used to throw an exception here, which would crash the host engine on shutdown.
-           Just log an error and continue our shutdown. */
-        PRINT_ERROR("", "Error: Failed to ShutDown NVML");
-    }
+    ShutdownNvml();
 }
 
 dcgmReturn_t DcgmHostEngineHandler::SendModuleMessage(dcgmModuleId_t id, dcgm_module_command_header_t *moduleCommand)
@@ -3571,7 +1603,7 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
 {
     if (moduleId <= DcgmModuleIdCore || moduleId >= DcgmModuleIdCount)
     {
-        PRINT_ERROR("%u", "Invalid moduleId %u", moduleId);
+        log_error("Invalid moduleId {}", moduleId);
         return DCGM_ST_BADPARAM;
     }
 
@@ -3581,11 +1613,10 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
         return DCGM_ST_OK;
     }
 
-    if (m_modules[moduleId].status == DcgmModuleStatusBlacklisted
-        || m_modules[moduleId].status == DcgmModuleStatusFailed
+    if (m_modules[moduleId].status == DcgmModuleStatusDenylisted || m_modules[moduleId].status == DcgmModuleStatusFailed
         || m_modules[moduleId].status == DcgmModuleStatusUnloaded)
     {
-        PRINT_WARNING("%u %u", "Skipping loading of module %u in status %u", moduleId, m_modules[moduleId].status);
+        log_warning("Skipping loading of module {} in status {}", moduleId, m_modules[moduleId].status);
         return DCGM_ST_MODULE_NOT_LOADED;
     }
 
@@ -3604,7 +1635,7 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     {
         m_modules[moduleId].status = DcgmModuleStatusFailed;
         Unlock();
-        PRINT_ERROR("%u", "Failed to load module %u - no filename", moduleId);
+        log_error("Failed to load module {} - no filename", moduleId);
         return DCGM_ST_MODULE_NOT_LOADED;
     }
 
@@ -3621,11 +1652,8 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     {
         m_modules[moduleId].status = DcgmModuleStatusFailed;
         Unlock();
-        PRINT_ERROR("%u %s %s",
-                    "Failed to load module %u - dlopen(%s) returned: %s",
-                    moduleId,
-                    m_modules[moduleId].filename,
-                    dlerror());
+        log_error(
+            "Failed to load module {} - dlopen({}) returned: {}", moduleId, m_modules[moduleId].filename, dlerror());
         return DCGM_ST_MODULE_NOT_LOADED;
     }
 
@@ -3637,9 +1665,8 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     if ((m_modules[moduleId].allocCB == nullptr) || (m_modules[moduleId].freeCB == nullptr)
         || (m_modules[moduleId].msgCB == nullptr))
     {
-        PRINT_ERROR(
-            "%p %p %s",
-            "dcgm_alloc_module_instance (%p), dcgm_free_module_instance (%p), or dcgm_module_process_message (%p) was missing from %s",
+        log_error(
+            "dcgm_alloc_module_instance ({}), dcgm_free_module_instance ({}), or dcgm_module_process_message ({}) was missing from {}",
             (void *)m_modules[moduleId].allocCB,
             (void *)m_modules[moduleId].freeCB,
             (void *)m_modules[moduleId].msgCB,
@@ -3659,7 +1686,7 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     }
     catch (const std::runtime_error &e)
     {
-        PRINT_ERROR("", "Caught std::runtime error from allocCB()");
+        log_error("Caught std::runtime error from allocCB()");
         /* m_modules[moduleId].ptr will remain null, which is handled below */
     }
 
@@ -3668,12 +1695,12 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
         m_modules[moduleId].status = DcgmModuleStatusFailed;
         dlclose(m_modules[moduleId].dlopenPtr);
         m_modules[moduleId].dlopenPtr = nullptr;
-        PRINT_ERROR("%u", "Failed to load module %u", moduleId);
+        log_error("Failed to load module {}", moduleId);
     }
     else
     {
         m_modules[moduleId].status = DcgmModuleStatusLoaded;
-        PRINT_INFO("%u", "Loaded module %u", moduleId);
+        log_info("Loaded module {}", moduleId);
     }
 
     Unlock();
@@ -3747,222 +1774,6 @@ DcgmHostEngineHandler *DcgmHostEngineHandler::Instance()
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::WatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                    dcgm_field_eid_t entityId,
-                                                    const dcgm::WatchFieldValue *watchFieldValue,
-                                                    const DcgmWatcher &watcher)
-{
-    if ((watchFieldValue == nullptr) || !watchFieldValue->has_fieldid() || !watchFieldValue->has_maxkeepage()
-        || !watchFieldValue->has_updatefreq())
-    {
-        PRINT_ERROR("", "Bad parameter in WatchFieldValue");
-        return DCGM_ST_BADPARAM;
-    }
-
-    return (dcgmReturn_t)mpCacheManager->AddFieldWatch(entityGroupId,
-                                                       entityId,
-                                                       (unsigned short)watchFieldValue->fieldid(),
-                                                       (timelib64_t)watchFieldValue->updatefreq(),
-                                                       watchFieldValue->maxkeepage(),
-                                                       watchFieldValue->maxkeepsamples(),
-                                                       watcher,
-                                                       false);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::WatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                    dcgm_field_eid_t entityId,
-                                                    unsigned short dcgmFieldId,
-                                                    timelib64_t monitorFrequencyUsec,
-                                                    double maxSampleAge,
-                                                    int maxKeepSamples,
-                                                    const DcgmWatcher &watcher)
-{
-    return (dcgmReturn_t)mpCacheManager->AddFieldWatch(
-        entityGroupId, entityId, dcgmFieldId, monitorFrequencyUsec, maxSampleAge, maxKeepSamples, watcher, false);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                      dcgm_field_eid_t entityId,
-                                                      const dcgm::UnwatchFieldValue *unwatchFieldValue,
-                                                      const DcgmWatcher &watcher)
-{
-    int clearCache;
-
-    if ((unwatchFieldValue == nullptr) || !unwatchFieldValue->has_fieldid())
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    clearCache = 0;
-    if (unwatchFieldValue->has_clearcache())
-    {
-        clearCache = unwatchFieldValue->clearcache();
-    }
-
-    return (dcgmReturn_t)mpCacheManager->RemoveFieldWatch(
-        entityGroupId, entityId, (unsigned short)unwatchFieldValue->fieldid(), clearCache, watcher);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                      dcgm_field_eid_t entityId,
-                                                      unsigned short dcgmFieldId,
-                                                      int clearCache,
-                                                      const DcgmWatcher &watcher)
-{
-    return (dcgmReturn_t)mpCacheManager->RemoveFieldWatch(entityGroupId, entityId, dcgmFieldId, clearCache, watcher);
-}
-
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::UpdateAllFields(const dcgm::UpdateAllFields *updateAllFields)
-{
-    int waitForUpdate;
-
-    if (updateAllFields == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    waitForUpdate = 0;
-    if (updateAllFields->has_waitforupdate())
-    {
-        waitForUpdate = updateAllFields->waitforupdate();
-    }
-
-    return (dcgmReturn_t)mpCacheManager->UpdateAllFields(waitForUpdate);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::InjectFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                     dcgm_field_eid_t entityId,
-                                                     dcgm::InjectFieldValue *injectFieldValue)
-{
-    dcgmcm_sample_t sample       = {};
-    dcgm::FieldValue *fieldValue = nullptr;
-    dcgm::Value *value           = nullptr;
-    std::string tempStr;
-    dcgm_field_meta_p fieldMeta = nullptr;
-
-    if (!injectFieldValue->has_fieldvalue())
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (injectFieldValue->version() != dcgmInjectFieldValue_version)
-    {
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    if (!injectFieldValue->has_version())
-    {
-        return DCGM_ST_BADPARAM;
-    }
-    fieldValue = injectFieldValue->mutable_fieldvalue();
-
-    if (!fieldValue->has_fieldtype() || !fieldValue->has_val() || !fieldValue->has_fieldid())
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    fieldMeta = DcgmFieldGetById(fieldValue->fieldid());
-    if (fieldMeta == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (fieldValue->has_ts())
-    {
-        sample.timestamp = fieldValue->ts();
-    }
-
-    value = fieldValue->mutable_val();
-
-    switch (fieldValue->fieldtype())
-    {
-        case dcgm::INT64:
-            if (!value->has_i64())
-            {
-                return DCGM_ST_BADPARAM;
-            }
-            if (fieldMeta->fieldType != DCGM_FT_INT64)
-            {
-                return DCGM_ST_BADPARAM;
-            }
-            sample.val.i64 = value->i64();
-            break;
-
-        case dcgm::DBL:
-            if (!value->has_dbl())
-            {
-                return DCGM_ST_BADPARAM;
-            }
-            if (fieldMeta->fieldType != DCGM_FT_DOUBLE)
-            {
-                return DCGM_ST_BADPARAM;
-            }
-
-            sample.val.d = value->dbl();
-            break;
-
-        case dcgm::STR:
-            if (!value->has_str())
-            {
-                return DCGM_ST_BADPARAM;
-            }
-            if (fieldMeta->fieldType != DCGM_FT_STRING)
-            {
-                return DCGM_ST_BADPARAM;
-            }
-
-            tempStr             = value->str();
-            sample.val.str      = (char *)tempStr.c_str();
-            sample.val2.ptrSize = (long long)strlen(sample.val.str) + 1;
-            /* Note: sample.val.str is only valid as long as tempStr doesn't change */
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-    return mpCacheManager->InjectSamples(entityGroupId, entityId, fieldValue->fieldid(), &sample, 1);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::GetDcgmGpuIds(dcgm::FieldMultiValues *pDcgmFieldMultiValues, int onlySupported)
-{
-    unsigned int i;
-    std::vector<unsigned int> gpuIds;
-    dcgmReturn_t dcgmReturn;
-
-    dcgmReturn = mpCacheManager->GetGpuIds(onlySupported, gpuIds);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        PRINT_ERROR("%d", "Can't find devices at host engine. got error %d", (int)dcgmReturn);
-        pDcgmFieldMultiValues->set_status(DCGM_ST_INIT_ERROR);
-        return dcgmReturn;
-    }
-
-    PRINT_DEBUG("%d %d", "Got %d gpus from the cache manager. onlySupported %d", (int)gpuIds.size(), onlySupported);
-
-    pDcgmFieldMultiValues->set_fieldtype(DCGM_FT_INT64);
-
-    for (i = 0; i < gpuIds.size(); i++)
-    {
-        int gpuId;
-
-        gpuId                   = gpuIds[i];
-        dcgm::Value *pDcgmValue = pDcgmFieldMultiValues->add_vals();
-        pDcgmValue->set_i64(gpuId);
-    }
-
-    pDcgmFieldMultiValues->set_status(DCGM_ST_OK);
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::GetDcgmGpuIds(std::vector<unsigned int> &gpuIds, int onlySupported)
 {
     return (dcgmReturn_t)mpCacheManager->GetGpuIds(onlySupported, gpuIds);
@@ -3976,252 +1787,12 @@ dcgmReturn_t DcgmHostEngineHandler::GetDcgmGpuArch(dcgm_field_eid_t entityId, dc
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::GetFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                                  dcgm_field_eid_t entityId,
-                                                  unsigned int fieldId,
-                                                  dcgm::FieldValue *pDcgmFieldValue)
-{
-    dcgmcm_sample_t sample;
-    dcgm_field_meta_p pFieldMetaData;
-    dcgmReturn_t ret;
-
-    /* Get Meta data corresponding to the fieldID */
-    pFieldMetaData = DcgmFieldGetById(fieldId);
-    if (nullptr == pFieldMetaData)
-    {
-        pDcgmFieldValue->set_status(DCGM_ST_UNKNOWN_FIELD);
-        mpCacheManager->FreeSamples(&sample, 1, (unsigned short)fieldId);
-        return DCGM_ST_UNKNOWN_FIELD;
-    }
-
-    if (pFieldMetaData->scope == DCGM_FS_GLOBAL && entityGroupId != DCGM_FE_NONE)
-    {
-        PRINT_WARNING("", "Fixing entityGroupId to be NONE");
-        entityGroupId = DCGM_FE_NONE;
-    }
-
-    /* Get Latest sample from cache manager */
-    ret = mpCacheManager->GetLatestSample(entityGroupId, entityId, fieldId, &sample, nullptr);
-    if (ret != 0)
-    {
-        pDcgmFieldValue->set_status(ret);
-        // reduce the logging level as this may pollute the log file when there is continuous filed watch
-        PRINT_DEBUG("%u %u %u %d",
-                    "Get latest Sample for field ID %u on eg %u, eid %u failed with error %d",
-                    fieldId,
-                    entityGroupId,
-                    entityId,
-                    ret);
-        return ret;
-    }
-
-    pDcgmFieldValue->set_version(dcgmFieldValue_version1);
-    pDcgmFieldValue->set_ts(sample.timestamp);
-
-    pDcgmFieldValue->set_fieldid(fieldId);
-    pDcgmFieldValue->set_fieldtype(pFieldMetaData->fieldType);
-    dcgm::Value *pDcgmVal = pDcgmFieldValue->mutable_val();
-
-    /* Update pcmd based on the field type */
-    switch (pFieldMetaData->fieldType)
-    {
-        case DCGM_FT_DOUBLE:
-            pDcgmVal->set_dbl(sample.val.d);
-            break;
-
-        case DCGM_FT_STRING:
-            pDcgmVal->set_str(sample.val.str);
-            break;
-
-        case DCGM_FT_INT64: /* Fall-through is intentional */
-        case DCGM_FT_TIMESTAMP:
-            pDcgmVal->set_i64(sample.val.i64);
-            break;
-
-        case DCGM_FT_BINARY:
-            pDcgmVal->set_blob(sample.val.blob, sample.val2.ptrSize);
-            break;
-
-        default:
-            DCGM_LOG_ERROR << "Update code to support additional Field Types";
-            mpCacheManager->FreeSamples(&sample, 1, (unsigned short)fieldId);
-            return DCGM_ST_GENERIC_ERROR;
-    }
-
-    pDcgmFieldValue->set_status(DCGM_ST_OK);
-    mpCacheManager->FreeSamples(&sample, 1, (unsigned short)fieldId);
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::GetLatestSample(dcgm_field_entity_group_t entityGroupId,
                                                     dcgm_field_eid_t entityId,
                                                     unsigned short dcgmFieldId,
                                                     dcgmcm_sample_p sample)
 {
     return (dcgmReturn_t)mpCacheManager->GetLatestSample(entityGroupId, entityId, dcgmFieldId, sample, nullptr);
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::GetFieldMultipleValues(dcgm_field_entity_group_t entityGroupId,
-                                                           dcgm_field_eid_t entityId,
-                                                           dcgm::FieldMultiValues *pFieldMultiValues)
-{
-    dcgmReturn_t dcgmSt;
-    int i;
-    int fieldId                  = 0;
-    dcgm_field_meta_p fieldMeta  = nullptr;
-    int MsampleBuffer            = 0; /* Allocated count of sampleBuffer[] */
-    int NsampleBuffer            = 0; /* Number of values in sampleBuffer[] that are valid */
-    dcgmcm_sample_p sampleBuffer = nullptr;
-    dcgmReturn_t retSt           = DCGM_ST_OK;
-    timelib64_t startTs          = 0;
-    timelib64_t endTs            = 0;
-    dcgmOrder_t order;
-    dcgm::Value *pAddValue = nullptr;
-
-    if (pFieldMultiValues == nullptr)
-    {
-        DCGM_LOG_ERROR << "pFieldMultiValues was null";
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (!pFieldMultiValues->has_fieldid() || !pFieldMultiValues->has_orderflag() || !pFieldMultiValues->has_maxcount())
-    {
-        pFieldMultiValues->set_status(DCGM_ST_BADPARAM);
-        return DCGM_ST_BADPARAM;
-    }
-
-    fieldId = pFieldMultiValues->fieldid();
-
-    /* Get Meta data corresponding to the fieldID */
-    fieldMeta = DcgmFieldGetById(fieldId);
-    if (fieldMeta == nullptr)
-    {
-        pFieldMultiValues->set_status(DCGM_ST_UNKNOWN_FIELD);
-        return DCGM_ST_UNKNOWN_FIELD;
-    }
-
-    if (fieldMeta->scope == DCGM_FS_GLOBAL && entityGroupId != DCGM_FE_NONE)
-    {
-        PRINT_WARNING("", "Fixing entityGroupId to be NONE");
-        entityGroupId = DCGM_FE_NONE;
-    }
-
-    pFieldMultiValues->set_version(dcgmGetMultipleValuesForFieldResponse_version1);
-    pFieldMultiValues->set_fieldtype(fieldMeta->fieldType);
-
-    if (pFieldMultiValues->has_startts())
-    {
-        startTs = (timelib64_t)pFieldMultiValues->startts();
-    }
-    if (pFieldMultiValues->has_endts())
-    {
-        endTs = (timelib64_t)pFieldMultiValues->endts();
-    }
-    order = (dcgmOrder_t)pFieldMultiValues->orderflag();
-
-    MsampleBuffer = pFieldMultiValues->maxcount();
-    if (MsampleBuffer < 1)
-    {
-        pFieldMultiValues->set_status(DCGM_ST_BADPARAM);
-        return DCGM_ST_BADPARAM;
-    }
-
-    /* We are allocated the entire buffer of samples. Set a reasonable limit */
-    if (MsampleBuffer > 10000)
-    {
-        MsampleBuffer = 10000;
-    }
-
-    sampleBuffer = (dcgmcm_sample_p)malloc(MsampleBuffer * sizeof(sampleBuffer[0]));
-    if (sampleBuffer == nullptr)
-    {
-        PRINT_ERROR("%lu", "failed malloc for %lu bytes", MsampleBuffer * sizeof(sampleBuffer[0]));
-        pFieldMultiValues->set_status(DCGM_ST_MEMORY);
-        return DCGM_ST_MEMORY;
-    }
-    /* GOTO CLEANUP BELOW THIS POINT */
-
-    NsampleBuffer = MsampleBuffer;
-    dcgmSt        = mpCacheManager->GetSamples(
-        entityGroupId, entityId, fieldId, sampleBuffer, &NsampleBuffer, startTs, endTs, order);
-    if (dcgmSt != DCGM_ST_OK)
-    {
-        retSt = dcgmSt;
-        pFieldMultiValues->set_status(retSt);
-        goto CLEANUP;
-    }
-    /* NsampleBuffer now contains the number of valid records returned from our query */
-
-    /* There shouldn't be any elements in here but let's just be sure */
-    pFieldMultiValues->clear_vals();
-
-    /* Add each of the samples to the return type */
-    for (i = 0; i < NsampleBuffer; i++)
-    {
-        pAddValue = pFieldMultiValues->add_vals();
-
-        pAddValue->set_timestamp(sampleBuffer[i].timestamp);
-
-        switch (fieldMeta->fieldType)
-        {
-            case DCGM_FT_DOUBLE:
-                pAddValue->set_dbl(sampleBuffer[i].val.d);
-                break;
-
-            case DCGM_FT_STRING:
-                pAddValue->set_str(sampleBuffer[i].val.str);
-                break;
-
-            case DCGM_FT_INT64: /* Fall-through is intentional */
-            case DCGM_FT_TIMESTAMP:
-                pAddValue->set_i64(sampleBuffer[i].val.i64);
-                break;
-
-            case DCGM_FT_BINARY:
-                pAddValue->set_blob(sampleBuffer[i].val.blob, sampleBuffer[i].val2.ptrSize);
-                break;
-
-            default:
-                DCGM_LOG_ERROR << "Update code to support additional Field Types";
-                retSt = DCGM_ST_GENERIC_ERROR;
-                goto CLEANUP;
-        }
-    }
-
-    pFieldMultiValues->set_maxcount(pFieldMultiValues->vals_size());
-    pFieldMultiValues->set_status(retSt);
-
-CLEANUP:
-    if (sampleBuffer != nullptr)
-    {
-        if (NsampleBuffer != 0)
-        {
-            mpCacheManager->FreeSamples(sampleBuffer, NsampleBuffer, (unsigned short)fieldId);
-        }
-        free(sampleBuffer);
-        sampleBuffer = nullptr;
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::GetValuesForFields(dcgm_field_entity_group_t entityGroupId,
-                                                       dcgm_field_eid_t entityId,
-                                                       unsigned int fieldIds[],
-                                                       unsigned int count,
-                                                       dcgm::FieldValue values[])
-{
-    unsigned int index;
-
-    for (index = 0; index < count; ++index)
-    {
-        (void)GetFieldValue(entityGroupId, entityId, fieldIds[index], &values[index]);
-    }
-
-    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -4452,13 +2023,13 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     /* Sanity check the incoming parameters */
     if (pidInfo->pid == 0)
     {
-        PRINT_WARNING("", "No PID provided in request");
+        log_warning("No PID provided in request");
         return DCGM_ST_BADPARAM;
     }
 
     if (pidInfo->version != dcgmPidInfo_version)
     {
-        PRINT_WARNING("%d %d", "Version mismatch. expected %d. Got %d", dcgmPidInfo_version, pidInfo->version);
+        log_warning("Version mismatch. expected {}. Got {}", dcgmPidInfo_version, pidInfo->version);
         return DCGM_ST_VER_MISMATCH;
     }
 
@@ -4467,7 +2038,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     dcgmReturn = mpGroupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("", "Error: Bad group id parameter");
+        log_error("Error: Bad group id parameter");
         return dcgmReturn;
     }
 
@@ -4475,7 +2046,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -4519,16 +2090,13 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         dcgmReturn = mpCacheManager->GetLatestProcessInfo(singleInfo->gpuId, pidInfo->pid, &accountingInfo);
         if (dcgmReturn == DCGM_ST_NO_DATA)
         {
-            PRINT_DEBUG("%u %u", "Pid %u did not run on gpuId %u", pidInfo->pid, singleInfo->gpuId);
+            log_debug("Pid {} did not run on gpuId {}", pidInfo->pid, singleInfo->gpuId);
             continue;
         }
 
         if (dcgmReturn == DCGM_ST_NOT_WATCHED)
         {
-            PRINT_DEBUG("%u %u",
-                        "Fields are not watched. Cannot get info for pid %u on GPU %u",
-                        pidInfo->pid,
-                        singleInfo->gpuId);
+            log_debug("Fields are not watched. Cannot get info for pid {} on GPU {}", pidInfo->pid, singleInfo->gpuId);
             continue;
         }
 
@@ -4575,7 +2143,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         else
         {
             /* No energy counter. Integrate power usage */
-            PRINT_DEBUG("", "No energy counter. Using power_usage");
+            log_debug("No energy counter. Using power_usage");
             summaryTypes[0] = DcgmcmSummaryTypeIntegral;
             mpCacheManager->GetFp64SummaryData(DCGM_FE_GPU,
                                                singleInfo->gpuId,
@@ -4677,7 +2245,8 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
                                                 &singleInfo->numXidCriticalErrors,
                                                 startTime,
                                                 endTime,
-                                                DCGM_ORDER_ASCENDING);
+                                                DCGM_ORDER_ASCENDING,
+                                                nullptr);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -4950,7 +2519,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         }
 
 
-        PRINT_DEBUG("%u", "Pid %u ran on no GPUs", pidInfo->pid);
+        log_debug("Pid {} ran on no GPUs", pidInfo->pid);
         return DCGM_ST_NO_DATA;
     }
 
@@ -4979,7 +2548,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobStartStats(std::string const &jobId, unsi
     else
     {
         Unlock();
-        PRINT_ERROR("%s", "Duplicate JobId as input : %s", jobId.c_str());
+        log_error("Duplicate JobId as input : {}", jobId.c_str());
         /* Implies that the entry corresponding to the job id already exists */
         return DCGM_ST_DUPLICATE_KEY;
     }
@@ -4999,7 +2568,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobStopStats(std::string const &jobId)
     if (it == mJobIdMap.end())
     {
         Unlock();
-        PRINT_ERROR("%s", "Can't find entry corresponding to the Job Id : %s", jobId.c_str());
+        log_error("Can't find entry corresponding to the Job Id : {}", jobId.c_str());
         return DCGM_ST_NO_DATA;
     }
 
@@ -5034,11 +2603,11 @@ dcgmReturn_t DcgmHostEngineHandler::HelperHealthCheck(unsigned int groupId,
     {
         if (dcgmReturn == DCGM_ST_MODULE_NOT_LOADED)
         {
-            PRINT_DEBUG("", "Health check skipped due to module not being loaded.");
+            log_debug("Health check skipped due to module not being loaded.");
         }
         else
         {
-            PRINT_ERROR("%d", "Health check failed with %d", (int)dcgmReturn);
+            log_error("Health check failed with {}", (int)dcgmReturn);
         }
         return dcgmReturn;
     }
@@ -5074,7 +2643,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
 
     if (pJobInfo->version != dcgmJobInfo_version)
     {
-        PRINT_WARNING("%d %d", "Version mismatch. expected %d. Got %d", dcgmJobInfo_version, pJobInfo->version);
+        log_warning("Version mismatch. expected {}. Got {}", dcgmJobInfo_version, pJobInfo->version);
         return DCGM_ST_VER_MISMATCH;
     }
 
@@ -5084,7 +2653,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     if (it == mJobIdMap.end())
     {
         Unlock();
-        PRINT_ERROR("%s", "Can't find entry corresponding to the Job Id : %s", jobId.c_str());
+        log_error("Can't find entry corresponding to the Job Id : {}", jobId.c_str());
         return DCGM_ST_NO_DATA;
     }
 
@@ -5104,10 +2673,8 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
 
     if (startTime > endTime)
     {
-        PRINT_ERROR("%llu %llu",
-                    "Get job stats. Start time is greater than end time. start time: %llu end time: %llu",
-                    startTime,
-                    endTime);
+        log_error(
+            "Get job stats. Start time is greater than end time. start time: {} end time: {}", startTime, endTime);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -5115,7 +2682,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -5205,7 +2772,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         else
         {
             /* No energy counter. Integrate power usage */
-            PRINT_DEBUG("", "No energy counter. Using power_usage");
+            log_debug("No energy counter. Using power_usage");
 
             if (!DCGM_FP64_IS_BLANK(doubleVals[0]))
             {
@@ -5416,7 +2983,8 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
                                                 &singleInfo->numXidCriticalErrors,
                                                 startTime,
                                                 endTime,
-                                                DCGM_ORDER_ASCENDING);
+                                                DCGM_ORDER_ASCENDING,
+                                                nullptr);
         if (dcgmReturn != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Got " << dcgmReturn << " from GetSamples()";
@@ -5745,14 +3313,14 @@ dcgmReturn_t DcgmHostEngineHandler::JobRemove(std::string const &jobId)
     if (it == mJobIdMap.end())
     {
         Unlock();
-        PRINT_ERROR("%s", "JobRemove: Can't find jobId : %s", jobId.c_str());
+        log_error("JobRemove: Can't find jobId : {}", jobId);
         return DCGM_ST_NO_DATA;
     }
 
     mJobIdMap.erase(it);
     Unlock();
 
-    PRINT_DEBUG("%s", "JobRemove: Removed jobId %s", jobId.c_str());
+    log_debug("JobRemove: Removed jobId {}", jobId);
     return DCGM_ST_OK;
 }
 
@@ -5766,7 +3334,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobRemoveAll()
     mJobIdMap.clear();
     Unlock();
 
-    PRINT_DEBUG("", "JobRemoveAll: Removed all jobs");
+    log_debug("JobRemoveAll: Removed all jobs");
     return DCGM_ST_OK;
 }
 
@@ -5787,7 +3355,7 @@ static void helper_get_prof_field_ids(std::vector<unsigned short> &fieldIds, std
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
                                                     dcgmFieldGrp_t fieldGroupId,
-                                                    timelib64_t monitorFrequencyUsec,
+                                                    timelib64_t monitorIntervalUsec,
                                                     double maxSampleAge,
                                                     int maxKeepSamples,
                                                     DcgmWatcher const &watcher)
@@ -5803,18 +3371,23 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
     dcgmReturn = mpFieldGroupManager->GetFieldGroupFields(fieldGroupId, fieldIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got %d from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
+        log_error("Got {} from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
-    PRINT_DEBUG("%d %d", "Got %d entities and %d fields", (int)entities.size(), (int)fieldIds.size());
+    log_debug("Got {} entities and {} fields", (int)entities.size(), (int)fieldIds.size());
+
+    bool wasFirstWatcher    = false;
+    bool updateOnFirstWatch = false; /* Don't have the cache manager update after every watch. Instead,
+                                        we will set shouldUpdateAllFields and UpdateAllFields at the end */
+    bool shouldUpdateAllFields = false;
 
     for (i = 0; i < (int)entities.size(); i++)
     {
@@ -5823,22 +3396,38 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
             dcgmReturn = mpCacheManager->AddFieldWatch(entities[i].entityGroupId,
                                                        entities[i].entityId,
                                                        fieldIds[j],
-                                                       monitorFrequencyUsec,
+                                                       monitorIntervalUsec,
                                                        maxSampleAge,
                                                        maxKeepSamples,
                                                        watcher,
-                                                       false);
+                                                       false,
+                                                       updateOnFirstWatch,
+                                                       wasFirstWatcher);
             if (dcgmReturn != DCGM_ST_OK)
             {
-                PRINT_ERROR("%u %u %d %d",
-                            "AddFieldWatch(%u, %u, %d) returned %d",
-                            entities[i].entityGroupId,
-                            entities[i].entityId,
-                            (int)fieldIds[j],
-                            (int)dcgmReturn);
+                log_error("AddFieldWatch({}, {}, {}) returned {}",
+                          entities[i].entityGroupId,
+                          entities[i].entityId,
+                          (int)fieldIds[j],
+                          (int)dcgmReturn);
                 retSt = dcgmReturn;
                 goto GETOUT;
             }
+
+            if (wasFirstWatcher)
+            {
+                shouldUpdateAllFields = true;
+            }
+        }
+    }
+
+    if (shouldUpdateAllFields)
+    {
+        dcgmReturn = mpCacheManager->UpdateAllFields(true);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got dcgmReturn " << dcgmReturn << " from UpdateAllFields()";
+            return dcgmReturn;
         }
     }
 
@@ -5856,11 +3445,19 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
 
     if (profFieldIds.size() > DCGM_ARRAY_CAPACITY(msg.watchFields.fieldIds))
     {
-        PRINT_ERROR(
-            "%d", "Too many prof field IDs %d for request DCGM_PROFILING_SR_WATCH_FIELDS", (int)profFieldIds.size());
+        log_error("Too many prof field IDs {} for request DCGM_PROFILING_SR_WATCH_FIELDS", (int)profFieldIds.size());
 
         retSt = DCGM_ST_GENERIC_ERROR;
         goto GETOUT;
+    }
+
+    /* Do we need to forward on a profiling watch request to the profiling module */
+    mpCacheManager->GetProfModuleServicedEntities(entities);
+
+    if (entities.size() < 1)
+    {
+        DCGM_LOG_DEBUG << "No entities were serviced by the profiling module";
+        return DCGM_ST_OK;
     }
 
     msg.header.length           = sizeof(msg);
@@ -5872,14 +3469,14 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
     msg.watchFields.groupId     = (dcgmGpuGrp_t)groupId;
     msg.watchFields.numFieldIds = profFieldIds.size();
     memcpy(&msg.watchFields.fieldIds[0], &profFieldIds[0], profFieldIds.size() * sizeof(msg.watchFields.fieldIds[0]));
-    msg.watchFields.updateFreq     = monitorFrequencyUsec;
+    msg.watchFields.updateFreq     = monitorIntervalUsec;
     msg.watchFields.maxKeepAge     = maxSampleAge;
     msg.watchFields.maxKeepSamples = maxKeepSamples;
 
     dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "DCGM_PROFILING_SR_WATCH_FIELDS failed with %d", dcgmReturn);
+        log_error("DCGM_PROFILING_SR_WATCH_FIELDS failed with {}", dcgmReturn);
         retSt = dcgmReturn;
         goto GETOUT;
     }
@@ -5910,18 +3507,18 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
     dcgmReturn = mpFieldGroupManager->GetFieldGroupFields(fieldGroupId, fieldIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got %d from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
+        log_error("Got {} from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
-    PRINT_DEBUG("%d %d", "Got %d entities and %d fields", (int)entities.size(), (int)fieldIds.size());
+    log_debug("Got {} entities and {} fields", (int)entities.size(), (int)fieldIds.size());
 
     for (i = 0; i < (int)entities.size(); i++)
     {
@@ -5931,12 +3528,11 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
                 entities[i].entityGroupId, entities[i].entityId, fieldIds[j], 0, watcher);
             if (dcgmReturn != DCGM_ST_OK)
             {
-                PRINT_ERROR("%u %u %d %d",
-                            "RemoveFieldWatch(%u, %u, %d) returned %d",
-                            entities[i].entityGroupId,
-                            entities[i].entityId,
-                            (int)fieldIds[j],
-                            (int)dcgmReturn);
+                log_error("RemoveFieldWatch({}, {}, {}) returned {}",
+                          entities[i].entityGroupId,
+                          entities[i].entityId,
+                          (int)fieldIds[j],
+                          (int)dcgmReturn);
                 retSt = dcgmReturn;
                 /* Keep going so we don't leave watches active */
             }
@@ -5949,6 +3545,15 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     if (profFieldIds.empty())
     {
         return retSt; /* No prof fields. Just return */
+    }
+
+    /* Do we need to forward on a profiling unwatch request to the profiling module? */
+    mpCacheManager->GetProfModuleServicedEntities(entities);
+
+    if (entities.empty())
+    {
+        DCGM_LOG_DEBUG << "No entities were serviced by the profiling module";
+        return DCGM_ST_OK;
     }
 
     dcgm_profiling_msg_unwatch_fields_t msg;
@@ -5965,7 +3570,7 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "DCGM_PROFILING_SR_UNWATCH_FIELDS failed with %d", dcgmReturn);
+        log_error("DCGM_PROFILING_SR_UNWATCH_FIELDS failed with {}", dcgmReturn);
         retSt = dcgmReturn;
     }
 
@@ -5974,7 +3579,7 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
 
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroupAllGpus(dcgmFieldGrp_t fieldGroupId,
-                                                           timelib64_t monitorFrequencyUsec,
+                                                           timelib64_t monitorIntervalUsec,
                                                            double maxSampleAge,
                                                            int maxKeepSamples,
                                                            int activeOnly,
@@ -5996,12 +3601,17 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroupAllGpus(dcgmFieldGrp_t fieldG
     dcgmReturn = mpFieldGroupManager->GetFieldGroupFields(fieldGroupId, fieldIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got %d from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
+        log_error("Got {} from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
 
-    PRINT_DEBUG("%d %d", "Got %d gpus and %d fields", (int)gpuIds.size(), (int)fieldIds.size());
+    log_debug("Got {} gpus and {} fields", (int)gpuIds.size(), (int)fieldIds.size());
+
+    bool wasFirstWatcher    = false;
+    bool updateOnFirstWatch = false; /* Don't have the cache manager update after every watch. Instead,
+                                        we will set shouldUpdateAllFields and UpdateAllFields at the end */
+    bool shouldUpdateAllFields = false;
 
     for (i = 0; i < (int)gpuIds.size(); i++)
     {
@@ -6010,17 +3620,33 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroupAllGpus(dcgmFieldGrp_t fieldG
             dcgmReturn = mpCacheManager->AddFieldWatch(DCGM_FE_GPU,
                                                        gpuIds[i],
                                                        fieldIds[j],
-                                                       monitorFrequencyUsec,
+                                                       monitorIntervalUsec,
                                                        maxSampleAge,
                                                        maxKeepSamples,
                                                        watcher,
-                                                       false);
+                                                       false,
+                                                       updateOnFirstWatch,
+                                                       wasFirstWatcher);
             if (dcgmReturn != DCGM_ST_OK)
             {
-                PRINT_ERROR(
-                    "%d %d %d", "AddFieldWatch(%d, %d) returned %d", (int)gpuIds[i], (int)fieldIds[j], (int)dcgmReturn);
+                log_error("AddFieldWatch({}, {}) returned {}", (int)gpuIds[i], (int)fieldIds[j], (int)dcgmReturn);
                 return DCGM_ST_GENERIC_ERROR;
             }
+
+            if (wasFirstWatcher)
+            {
+                shouldUpdateAllFields = true;
+            }
+        }
+    }
+
+    if (shouldUpdateAllFields)
+    {
+        dcgmReturn = mpCacheManager->UpdateAllFields(1);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got dcgmReturn " << dcgmReturn << " from UpdateAllFields()";
+            return dcgmReturn;
         }
     }
 
@@ -6071,12 +3697,12 @@ void DcgmHostEngineHandler::NotifyRequestOfCompletion(dcgm_connection_id_t conne
         watchedRequests_t::iterator it = m_watchedRequests.find(requestId);
         if (it == m_watchedRequests.end())
         {
-            PRINT_ERROR("%u", "Unable to find requestId %u", requestId);
+            log_error("Unable to find requestId {}", requestId);
         }
         else
         {
             m_watchedRequests.erase(it);
-            PRINT_DEBUG("%u", "Removed requestId %u", requestId);
+            log_debug("Removed requestId {}", requestId);
         }
         Unlock();
         return;
@@ -6092,7 +3718,7 @@ void DcgmHostEngineHandler::NotifyRequestOfCompletion(dcgm_connection_id_t conne
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::RemoveAllTrackedRequests()
 {
-    PRINT_DEBUG("", "Entering RemoveAllTrackedRequests");
+    log_debug("Entering RemoveAllTrackedRequests");
 
     Lock();
     m_watchedRequests.clear();
@@ -6161,7 +3787,7 @@ void DcgmHostEngineHandler::Cleanup()
 DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_group_t entityGroupId,
                                                           dcgm_field_eid_t entityId)
 {
-    if (entityGroupId == DCGM_FE_SWITCH)
+    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK))
     {
         dcgm_nvswitch_msg_get_entity_status_t nvsMsg {};
         nvsMsg.header.length     = sizeof(nvsMsg);
@@ -6169,6 +3795,7 @@ DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_grou
         nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ENTITY_STATUS;
         nvsMsg.header.version    = dcgm_nvswitch_msg_get_entity_status_version;
         nvsMsg.entityId          = entityId;
+        nvsMsg.entityGroupId     = entityGroupId;
         dcgmReturn_t dcgmReturn  = ProcessModuleCommand(&nvsMsg.header);
         if (dcgmReturn == DCGM_ST_OK)
         {

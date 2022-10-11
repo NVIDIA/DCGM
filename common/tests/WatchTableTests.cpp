@@ -131,6 +131,12 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
                 == true);
     }
 
+    timelib64_t minUpdateInterval = 0;
+    timelib64_t maxUpdateInterval = 0;
+    wt.GetMinAndMaxUpdateInterval(minUpdateInterval, maxUpdateInterval);
+    REQUIRE(minUpdateInterval == 1);
+    REQUIRE(maxUpdateInterval == 1000000);
+
     std::vector<dcgm_field_update_info_t> toUpdate;
     timelib64_t now                = timelib_usecSince1970();
     timelib64_t earliestNextUpdate = 0;
@@ -160,8 +166,9 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     earliestNextUpdate = 0;
     REQUIRE(wt.GetFieldsToUpdate(DcgmModuleIdCore, now, toUpdate, earliestNextUpdate) == DCGM_ST_OK);
     REQUIRE(toUpdate.size() == 8);
-    unsigned int gpuTempCount = 0;
-    unsigned int memTempCount = 0;
+    unsigned int gpuTempCount  = 0;
+    unsigned int memTempCount  = 0;
+    unsigned int grActiveCount = 0;
     for (size_t i = 0; i < toUpdate.size(); i++)
     {
         if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_GPU_TEMP)
@@ -172,8 +179,14 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
         {
             memTempCount++;
         }
+        else if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+        {
+            grActiveCount++;
+        }
     }
     CHECK(gpuTempCount == 4);
     CHECK(memTempCount == 4);
-    CHECK(earliestNextUpdate == now + 10);
+    CHECK(grActiveCount
+          == 0); /* This is expected because the section before this already updated the profiling fields */
+    CHECK(earliestNextUpdate == now + 1); /* Expects, DCGM_FI_PROF_GR_ENGINE_ACTIVE, which updates every usec */
 }

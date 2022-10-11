@@ -166,7 +166,7 @@ int timeseries_insert_int64(timeseries_p ts, timelib64_t timestamp, long long va
 }
 
 /*****************************************************************************/
-int timeseries_insert_string(timeseries_p ts, timelib64_t timestamp, char *value)
+int timeseries_insert_string(timeseries_p ts, timelib64_t timestamp, const char *value)
 {
     int retSt;
     timeseries_entry_t entry;

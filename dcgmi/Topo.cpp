@@ -47,14 +47,14 @@ dcgmReturn_t Topo::DisplayGPUTopology(dcgmHandle_t mNvcmHandle, unsigned int req
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
         std::cout << "Getting topology is not supported for GPU " << requestedGPUId << std::endl;
-        PRINT_INFO("%u", "Getting topology is not supported for GPU: %u", requestedGPUId);
+        log_info("Getting topology is not supported for GPU: {}", requestedGPUId);
         return result;
     }
     else if (result != DCGM_ST_OK)
     {
         std::cout << "Error: unable to get topology for GPU " << requestedGPUId << ". Return: " << errorString(result)
                   << "." << std::endl;
-        PRINT_ERROR("%u %d", "Error gettting topology for gpu: %u. Return: %d", requestedGPUId, result);
+        log_error("Error getting topology for gpu: {}. Return: {}", requestedGPUId, result);
         return result;
     }
 
@@ -158,10 +158,7 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get group information. Return: " << error << std::endl;
-        PRINT_ERROR("%u,%d",
-                    "Error: GroupGetInfo for GroupId: %u. Return: %d",
-                    (unsigned int)(uintptr_t)requestedGroupId,
-                    result);
+        log_error("Error: GroupGetInfo for GroupId: {}. Return: {}", (unsigned int)(uintptr_t)requestedGroupId, result);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -170,18 +167,15 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
         std::cout << "Getting topology is not supported for group " << requestedGroupId << std::endl;
-        PRINT_INFO("%u",
-                   "Getting topology is not supported for this configuration of group %u",
-                   (unsigned int)(uintptr_t)requestedGroupId);
+        log_info("Getting topology is not supported for this configuration of group {}",
+                 (unsigned int)(uintptr_t)requestedGroupId);
         return result;
     }
     else if (result != DCGM_ST_OK)
     {
         std::cout << "Error: unable to get topology for Group. Return: " << errorString(result) << "." << std::endl;
-        PRINT_ERROR("%u %d",
-                    "Error gettting topology for group: %u. Return: %d",
-                    (unsigned int)(uintptr_t)requestedGroupId,
-                    result);
+        log_error(
+            "Error getting topology for group: {}. Return: {}", (unsigned int)(uintptr_t)requestedGroupId, result);
         return result;
     }
 

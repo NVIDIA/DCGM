@@ -373,7 +373,7 @@ public:
         m_debugLog.store(enabled, std::memory_order_relaxed);
         if (enabled)
         {
-            PRINT_INFO("", "Debug logging is enabled for the Semaphore at %p", (void *)this);
+            log_info("Debug logging is enabled for the Semaphore at {}", (void *)this);
         }
     }
 

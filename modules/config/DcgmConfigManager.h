@@ -21,7 +21,6 @@
 #define DCGMCONFIGMANAGER_H
 
 #include "DcgmMutex.h"
-#include "DcgmProtobuf.h"
 #include "DcgmSettings.h"
 #include "dcgm_agent.h"
 #include "dcgm_config_structs.h"

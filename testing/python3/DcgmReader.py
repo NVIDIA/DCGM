@@ -63,6 +63,8 @@ def entity_group_id_to_string(entityGroupId):
         return 'GPU INSTANCE'
     elif entityGroupId == dcgm_fields.DCGM_FE_GPU_CI:
         return 'COMPUTE INSTANCE'
+    elif entityGroupId == dcgm_fields.DCGM_FE_LINK:
+        return 'LINK'
     else:
         return ''
 
@@ -186,7 +188,7 @@ class DcgmReader(object):
             self.m_publishFields = fieldIntervalMap
         else:
             self.m_publishFields[self.m_updateFreq] = fieldIds
-
+            
         self.m_requestedGpuIds = gpuIds
         self.m_requestedEntities = entities
 
@@ -405,7 +407,7 @@ class DcgmReader(object):
             for fieldId in fieldIds:
                 if fieldId not in allFieldIds:
                     allFieldIds += [fieldId]
-
+                    
                 self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(fieldId)
                 if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] == None:
                     self.LogError("Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
@@ -438,7 +440,7 @@ class DcgmReader(object):
                 self.Reconnect()
 
                 # The first call just clears the collection set.
-
+                
                 if not self.m_requestedEntities:
                     self.dfvc = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.dfvc, self.m_fieldGroup)
                     self.CustomDataHandler(self.dfvc.values)
@@ -530,7 +532,7 @@ class DcgmReader(object):
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
                                     if not fieldTag in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldTag] = []
-
+                                
                                     systemDictionary[gpuId][fieldTag].append(val)
                                 else:
                                     if not fieldId in systemDictionary[gpuId]:

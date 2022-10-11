@@ -47,7 +47,7 @@ if (BUILD_TESTING)
             Catch2::Catch2
             testing_cuda_stubs
             testing_dcgm_cublas_stubs
-            pluginCudaCommon_11
+            cuda_common_interface
     )
     target_link_libraries(diagnostictests PUBLIC nvvs_interface)
     target_link_libraries(diagnostictests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)

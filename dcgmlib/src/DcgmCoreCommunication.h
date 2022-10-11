@@ -102,54 +102,17 @@ private:
     dcgmReturn_t ProcessGetGroupEntities(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessAreAllTheSameSku(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetGroupGpuIds(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessAnyGlobalFieldsWatched(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessAnyFieldsWatched(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessAnyGpuFieldsWatched(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessAnyGpuFieldsWatchedAnywhere(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessIsGlobalFieldWatched(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessIsGpuFieldWatchedOnAnyGpu(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetFieldBytesUsed(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetGlobalFieldBytesUsed(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetGpuFieldExecTimeUsec(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetGlobalFieldExecTimeUsec(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetGpuFieldFetchCount(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessGetGlobalFieldFetchCount(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetFieldWatchFreq(dcgm_module_command_header_t *header);
-#if 0
-    dcgmReturn_t ProcessForEachWatchedGlobalField(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessForEachWatchedGpuField(dcgm_module_command_header_t *header);
-#endif
     dcgmReturn_t ProcessLoggingGetSeverity(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessSendModuleCommand(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessSendRawMessageToClient(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessNotifyRequestOfCompletion(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessPopulateFieldGroupGetAll(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetFieldGroupGetFields(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessPopulateGlobalWatchInfo(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessPopulateGpuWatchInfo(dcgm_module_command_header_t *header);
-    dcgmReturn_t ProcessPopulateWatchInfo(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigInstanceEntityId(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigUtilization(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigIndicesForEntity(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetServiceAccount(dcgm_module_command_header_t *header);
 };
-
-#if 0
-void DcgmCoreCommunication::ProcessForEachWatchedGlobalField(dcgm_module_command_header_t *header)
-{
-    if (header == nullptr)
-    {
-        return;
-    }
-}
-
-void DcgmCoreCommunication::ProcessForEachWatchedGpuField(dcgm_module_command_header_t *header)
-{
-    if (header == nullptr)
-    {
-        return;
-    }
-}
-#endif
 
 #endif

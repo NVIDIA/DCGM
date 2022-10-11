@@ -46,12 +46,7 @@ NvvsCommon::NvvsCommon()
     , jsonOutput(false)
     , fromDcgm(false)
     , dcgmHostname()
-    , training(false)
-    , forceTraining(false)
     , throttleIgnoreMask(DCGM_INT64_BLANK)
-    , trainingIterations(0)
-    , trainingVariancePcnt(.0)
-    , trainingTolerancePcnt(.0)
     , failEarly(false)
     , failCheckInterval(5)
 
@@ -82,12 +77,7 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , jsonOutput(other.jsonOutput)
     , fromDcgm(other.fromDcgm)
     , dcgmHostname(other.dcgmHostname)
-    , training(other.training)
-    , forceTraining(other.forceTraining)
     , throttleIgnoreMask(other.throttleIgnoreMask)
-    , trainingIterations(other.trainingIterations)
-    , trainingVariancePcnt(other.trainingVariancePcnt)
-    , trainingTolerancePcnt(other.trainingTolerancePcnt)
     , failEarly(other.failEarly)
     , failCheckInterval(other.failCheckInterval)
 {
@@ -118,8 +108,6 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     jsonOutput             = other.jsonOutput;
     fromDcgm               = other.fromDcgm;
     dcgmHostname           = other.dcgmHostname;
-    training               = other.training;
-    forceTraining          = other.forceTraining;
     throttleIgnoreMask     = other.throttleIgnoreMask;
     failEarly              = other.failEarly;
     failCheckInterval      = other.failCheckInterval;
@@ -151,8 +139,6 @@ void NvvsCommon::Init()
     jsonOutput         = false;
     fromDcgm           = false;
     dcgmHostname       = "";
-    training           = false;
-    forceTraining      = false;
     throttleIgnoreMask = DCGM_INT64_BLANK;
     failEarly          = false;
     failCheckInterval  = 5;
@@ -175,14 +161,14 @@ void NvvsCommon::SetStatsPath(const std::string &statsPath)
         if (st != 0 || !(status.st_mode & S_IFDIR)) // not a dir
         {
             buf << "Error: statspath '" << statsPath << "' is not a directory.";
-            PRINT_ERROR("%s", "%s", buf.str().c_str());
+            log_error(buf.str());
             throw std::runtime_error(buf.str());
         }
     }
     else
     {
         buf << "Error: cannot access statspath '" << statsPath << "': " << strerror(errno);
-        PRINT_ERROR("%s", "%s", buf.str().c_str());
+        log_error(buf.str());
         throw std::runtime_error(buf.str());
     }
 

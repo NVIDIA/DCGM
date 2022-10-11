@@ -138,7 +138,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStopEmbedded(dcgmHandle_t pDcgmHandle);
  *         - \ref DCGM_ST_INIT_ERROR           if DCGM encountered an error while initializing the remote client library
  *         - \ref DCGM_ST_UNINITIALIZED        if DCGM has not been initialized with \ref dcgmInit
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmConnect(char *ipAddress, dcgmHandle_t *pDcgmHandle);
+dcgmReturn_t DCGM_PUBLIC_API dcgmConnect(const char *ipAddress, dcgmHandle_t *pDcgmHandle);
 
 /**
  * This method is used to connect to a stand-alone host engine process. Remote host engines are started
@@ -403,7 +403,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuInstanceHierarchy(dcgmHandle_t dcgmHandle
  *        - \ref DCGM_ST_NOT_SUPPORTED     if the given entityGroup does not support enumeration.
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v2 *linkStatus);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v3 *linkStatus);
 
 /** @} */
 
@@ -442,7 +442,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dc
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGroupCreate(dcgmHandle_t pDcgmHandle,
                                              dcgmGroupType_t type,
-                                             char *groupName,
+                                             const char *groupName,
                                              dcgmGpuGrp_t *pDcgmGrpId);
 
 /**
@@ -595,7 +595,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGroupGetAllIds(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmFieldGroupCreate(dcgmHandle_t dcgmHandle,
                                                   int numFieldIds,
                                                   unsigned short *fieldIds,
-                                                  char *fieldGroupName,
+                                                  const char *fieldGroupName,
                                                   dcgmFieldGrp_t *dcgmFieldGroupId);
 
 /**
@@ -1729,45 +1729,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGroupTopology(dcgmHandle_t pDcgmHandle,
  */
 /***************************************************************************************************/
 
-/**
- * Toggle the state of introspection metadata gathering in DCGM.  Metadata gathering will increase the memory usage
- * of DCGM so that it can store the metadata it gathers.
- *
- * @param pDcgmHandle                   IN: DCGM Handle
- * @param enabledState                  IN: The state to set gathering of introspection data to
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             enabledState is an invalid state for metadata gathering
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectToggleState(dcgmHandle_t pDcgmHandle, dcgmIntrospectState_t enabledState);
-
-/*************************************************************************/
-/**
- * Get the current amount of memory used to store the given field collection.
- *
- * @param pDcgmHandle                   IN: DCGM Handle
- * @param context                       IN: see \ref dcgmIntrospectContext_t.  This identifies the level of fields to do
- *                                          introspection for (ex: all fields, field groups) context->version must be
- *                                          set to dcgmIntrospectContext_version prior to this call.
- * @param memoryInfo                IN/OUT: see \ref dcgmIntrospectFullMemory_t. memoryInfo->version must be set to
- *                                          dcgmIntrospectFullMemory_version prior to this call.
- * @param waitIfNoData                  IN: if no metadata has been gathered, should this call block until data has been
- *                                          gathered (1), or should this call just return DCGM_ST_NO_DATA (0).
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \a DCGM_INTROSPECT_STATE_DISABLED
- *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
- *        - \ref DCGM_ST_VER_MISMATCH         if context->version or memoryInfo->version is 0 or invalid.
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldsMemoryUsage(dcgmHandle_t pDcgmHandle,
-                                                                dcgmIntrospectContext_t *context,
-                                                                dcgmIntrospectFullMemory_t *memoryInfo,
-                                                                int waitIfNoData);
-
-
 /*************************************************************************/
 /**
  * Retrieve the total amount of memory that the hostengine process is currently using.
@@ -1792,31 +1753,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetHostengineMemoryUsage(dcgmHandle_t
 
 /*************************************************************************/
 /**
- * Get introspection info relating to execution time needed to update the fields
- * identified by \a context.
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param context            IN: see \ref dcgmIntrospectContext_t.  This identifies the level of fields to do
- *                               introspection for (ex: all fields, field group ) context->version must be set to
- *                               dcgmIntrospectContext_version prior to this call.
- * @param execTime       IN/OUT: see \ref dcgmIntrospectFullFieldsExecTime_t. execTime->version must be set to
- *                               dcgmIntrospectFullFieldsExecTime_version prior to this call.
- * @param waitIfNoData       IN: if no metadata is gathered, wait until data has been gathered (1) or return
- *                               DCGM_ST_NO_DATA (0)
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_NOT_CONFIGURED       if metadata gathering state is \a DCGM_INTROSPECT_STATE_DISABLED
- *        - \ref DCGM_ST_NO_DATA              if \a waitIfNoData is false and metadata has not been gathered yet
- *        - \ref DCGM_ST_VER_MISMATCH         if context->version or execTime->version is 0 or invalid.
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldsExecTime(dcgmHandle_t pDcgmHandle,
-                                                             dcgmIntrospectContext_t *context,
-                                                             dcgmIntrospectFullFieldsExecTime_t *execTime,
-                                                             int waitIfNoData);
-
-/*************************************************************************/
-/**
  * Retrieve the CPU utilization of the DCGM hostengine process.
  *
  * @param pDcgmHandle        IN: DCGM Handle
@@ -1834,22 +1770,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldsExecTime(dcgmHandle_t pDcgmH
 dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetHostengineCpuUtilization(dcgmHandle_t pDcgmHandle,
                                                                        dcgmIntrospectCpuUtil_t *cpuUtil,
                                                                        int waitIfNoData);
-
-/*************************************************************************/
-/**
- * This method is used to manually tell the the introspection module to update
- * all DCGM introspection data. This is normally performed automatically on an
- * interval of 1 second.
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param waitForUpdate      IN: Whether or not to wait for the update loop to complete before returning to the caller
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             if \a waitForUpdate is invalid
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectUpdateAll(dcgmHandle_t pDcgmHandle, int waitForUpdate);
 
 /** @} */ // Closing for DCGMAPI_METADATA
 
@@ -1898,23 +1818,23 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmSelectGpusByTopology(dcgmHandle_t pDcgmHandle,
 
 /*************************************************************************/
 /**
- * Set a module to be blacklisted. This module will be prevented from being loaded
+ * Add a module to the denylist. This module will be prevented from being loaded
  * if it hasn't been loaded already. Modules are lazy-loaded as they are used by
  * DCGM APIs, so it's important to call this API soon after the host engine has been started.
- * You can also pass --blacklist-modules to the nv-hostengine binary to make sure modules
- * get blacklisted immediately after the host engine starts up.
+ * You can also pass --denylist-modules to the nv-hostengine binary to make sure modules
+ * get add to the denylist immediately after the host engine starts up.
  *
  * @param pDcgmHandle        IN: DCGM Handle
- * @param moduleId           IN: ID of the module to blacklist. Use \ref dcgmModuleGetStatuses to get a list of valid
+ * @param moduleId           IN: ID of the module to denylist. Use \ref dcgmModuleGetStatuses to get a list of valid
  *                               module IDs.
  *
  * @return
- *        - \ref DCGM_ST_OK         if the module has been blacklisted.
- *        - \ref DCGM_ST_IN_USE     if the module has already been loaded and cannot be blacklisted.
+ *        - \ref DCGM_ST_OK         if the module has been add to the denylist.
+ *        - \ref DCGM_ST_IN_USE     if the module has already been loaded and cannot add to the denylist.
  *        - \ref DCGM_ST_BADPARAM   if a parameter is missing or bad.
  *
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmModuleBlacklist(dcgmHandle_t pDcgmHandle, dcgmModuleId_t moduleId);
+dcgmReturn_t DCGM_PUBLIC_API dcgmModuleDenylist(dcgmHandle_t pDcgmHandle, dcgmModuleId_t moduleId);
 
 /*************************************************************************/
 /**
@@ -2067,7 +1987,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmProfResume(dcgmHandle_t pDcgmHandle);
  *        - \ref DCGM_ST_OK
  *
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgmMigHierarchy_v1 *hierarchy);
+dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgmMigHierarchy_v2 *hierarchy);
 
 #ifdef __cplusplus
 }

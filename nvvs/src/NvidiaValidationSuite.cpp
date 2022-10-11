@@ -49,7 +49,7 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , m_gpuVect()
     , testVect()
     , tpVect()
-    , whitelist(0)
+    , m_allowlist(0)
     , fwcfg()
     , parser(nullptr)
     , m_tf(nullptr)
@@ -62,7 +62,6 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , initTimer(0)
     , restoreSigAction {}
     , initWaitTime(120)
-    , m_sysCheck()
     , m_pv()
 {
     // init globals
@@ -82,7 +81,7 @@ NvidiaValidationSuite::~NvidiaValidationSuite()
         delete (*it);
     }
     delete m_tf;
-    delete whitelist;
+    delete m_allowlist;
     delete parser;
 
     dcgmShutdown();
@@ -147,7 +146,7 @@ void NvidiaValidationSuite::CheckDriverVersion()
         std::stringstream exceptionSs;
         exceptionSs << "Detected driver major version " << i_version << " is not between the required versions "
                     << MIN_MAJOR_VERSION << " and " << MAX_MAJOR_VERSION << ".";
-        PRINT_ERROR("%s", "Cannot run on incompatible driver version '%s'", deviceAttr.identifiers.driverVersion);
+        log_error("Cannot run on incompatible driver version '{}'", deviceAttr.identifiers.driverVersion);
         throw std::runtime_error(exceptionSs.str());
     }
 }
@@ -421,16 +420,6 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return errorString;
     }
 
-    if (nvvsCommon.training && !nvvsCommon.forceTraining)
-    {
-        std::string sysError = m_sysCheck.CheckSystemInterference();
-
-        if (sysError.size())
-        {
-            PRINT_WARNING("%s", "%s", sysError.c_str());
-        }
-    }
-
     // construct the test framework now that we have the GPU and test objects
     // Only pass gpuSets[0] because there is always only 1 group of GPUs. This will
     // be refactored in a separate check-in.
@@ -457,41 +446,11 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return "";
     }
 
-    if (nvvsCommon.training)
-    {
-        unsigned int iterations = nvvsCommon.trainingIterations;
-        for (unsigned int i = 0; i < iterations; i++)
-        {
-            for (size_t setIndex = 0; setIndex < gpuSets.size(); setIndex++)
-            {
-                if (i == 0)
-                    fillTestVectors(NVVS_SUITE_LONG, Test::NVVS_CLASS_SOFTWARE, gpuSets[setIndex].get());
+    CheckGpuSetTests(gpuSets);
 
-                fillTestVectors(NVVS_SUITE_LONG, Test::NVVS_CLASS_HARDWARE, gpuSets[setIndex].get());
-                fillTestVectors(NVVS_SUITE_LONG, Test::NVVS_CLASS_INTEGRATION, gpuSets[setIndex].get());
-                fillTestVectors(NVVS_SUITE_LONG, Test::NVVS_CLASS_PERFORMANCE, gpuSets[setIndex].get());
-            }
-
-            m_tf->go(gpuSets);
-
-            float pcnt = static_cast<float>(i + 1) / static_cast<float>(iterations);
-            if (nvvsCommon.jsonOutput == false)
-            {
-                std::cout << "Completed iteration " << i + 1 << " of " << iterations << " : training is "
-                          << static_cast<int>(pcnt * 100) << "% complete." << std::endl;
-            }
-        }
-
-        m_tf->CalculateAndSaveGoldenValues();
-    }
-    else
-    {
-        CheckGpuSetTests(gpuSets);
-
-        // Execute the tests... let the TF catch all exceptions and decide
-        // whether to throw them higher.
-        m_tf->go(gpuSets);
-    }
+    // Execute the tests... let the TF catch all exceptions and decide
+    // whether to throw them higher.
+    m_tf->go(gpuSets);
 
     return "";
 }
@@ -539,7 +498,7 @@ bool NvidiaValidationSuite::HasGenericSupport(const std::string &gpuBrand, uint6
 /*****************************************************************************/
 void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 {
-    bool isWhitelisted;
+    bool isAllowlisted;
     std::vector<unsigned int> gpuIds;
     dcgmReturn_t ret = dcgmSystem.GetAllSupportedDevices(gpuIds);
     std::stringstream buf;
@@ -550,7 +509,7 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
         throw std::runtime_error(buf.str());
     }
 
-    whitelist = new Whitelist(*parser);
+    m_allowlist = new Allowlist(*parser);
 
     for (size_t i = 0; i < gpuIds.size(); i++)
     {
@@ -562,94 +521,89 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
         }
 
         /* Find out if this device is supported, which is any of the following:
-           1. On the NVVS whitelist explicitly
+           1. On the NVVS allowlist explicitly
            2. A Kepler or newer Tesla part
            3. a Maxwell or newer part of any other brand (Quadro, GeForce, Titan, Grid)
         */
 
-        if (whitelist->isWhitelisted(gpu->getDevicePciDeviceId()))
+        if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId()))
         {
-            isWhitelisted = true;
+            isAllowlisted = true;
         }
-        else if (whitelist->isWhitelisted(gpu->getDevicePciDeviceId(), gpu->getDevicePciSubsystemId()))
+        else if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId(), gpu->getDevicePciSubsystemId()))
         {
-            isWhitelisted = true;
+            isAllowlisted = true;
             gpu->setUseSsid(true);
         }
         else
         {
-            isWhitelisted = false;
+            isAllowlisted = false;
         }
         std::string gpuBrand = gpu->getDeviceBrandAsString();
         uint64_t gpuArch     = gpu->getDeviceArchitecture();
 
         if (!nvvsCommon.fakegpusString.empty())
         {
-            PRINT_DEBUG("%s", "attempting to use fake gpus: %s", nvvsCommon.fakegpusString.c_str());
+            log_debug("attempting to use fake gpus: {}", nvvsCommon.fakegpusString.c_str());
             DcgmEntityStatus_t status;
             dcgmSystem.GetGpuStatus(gpuIds[i], &status);
             gpu->setDeviceEntityStatus(status);
 
-            PRINT_DEBUG("%d %d", "status of gpu %d is %d", gpuIds[i], status);
+            log_debug("status of gpu {} is {}", gpuIds[i], status);
             /* TODO: check return */
             /* How to determine if gpu is fake? */
             if (status == DcgmEntityStatusFake)
             {
-                PRINT_DEBUG("%u %s %u",
-                            "dcgmIndex %u, brand %s, arch %u is supported (only supporting fake gpus)",
-                            gpuIds[i],
-                            gpuBrand.c_str(),
-                            static_cast<unsigned int>(gpuArch));
+                log_debug("dcgmIndex {}, brand {}, arch {} is supported (only supporting fake gpus)",
+                          gpuIds[i],
+                          gpuBrand.c_str(),
+                          static_cast<unsigned int>(gpuArch));
                 gpu->setDeviceIsSupported(true);
             }
             else
             {
-                PRINT_DEBUG("%u %s %u",
-                            "dcgmIndex %u, brand %s, arch %u is not supported (only supporting fake gpus)",
-                            gpuIds[i],
-                            gpuBrand.c_str(),
-                            static_cast<unsigned int>(gpuArch));
+                log_debug("dcgmIndex {}, brand {}, arch {} is not supported (only supporting fake gpus)",
+                          gpuIds[i],
+                          gpuBrand.c_str(),
+                          static_cast<unsigned int>(gpuArch));
             }
         }
-        else if (isWhitelisted)
+        else if (isAllowlisted)
         {
-            PRINT_DEBUG("%u", "dcgmIndex %u is directly whitelisted.", gpuIds[i]);
+            log_debug("dcgmIndex {} is directly on the allowlist.", gpuIds[i]);
             gpu->setDeviceIsSupported(true);
         }
         else if (HasGenericSupport(gpuBrand, gpuArch))
         {
-            PRINT_DEBUG("%u %s %u",
-                        "dcgmIndex %u, brand %s, arch %u is supported",
-                        gpuIds[i],
-                        gpuBrand.c_str(),
-                        static_cast<unsigned int>(gpuArch));
+            log_debug("dcgmIndex {}, brand {}, arch {} is supported",
+                      gpuIds[i],
+                      gpuBrand.c_str(),
+                      static_cast<unsigned int>(gpuArch));
             gpu->setDeviceIsSupported(true);
         }
         else
         {
-            PRINT_DEBUG("%u %s %u",
-                        "dcgmIndex %u, brand %s, arch %u is NOT supported",
-                        gpuIds[i],
-                        gpuBrand.c_str(),
-                        static_cast<unsigned int>(gpuArch));
+            log_debug("dcgmIndex {}, brand {}, arch {} is NOT supported",
+                      gpuIds[i],
+                      gpuBrand.c_str(),
+                      static_cast<unsigned int>(gpuArch));
             gpu->setDeviceIsSupported(false);
         }
 
         if (gpu->getDeviceIsSupported())
         {
+            DCGM_LOG_INFO << "Device " << gpuIds[i] << ", serial " << gpu->getDeviceSerial()
+                          << ", added to supported list";
             m_gpuVect.push_back(gpu.release());
         }
         else
         {
-            std::stringstream ss;
-            ss << "\t"
-               << "[" << gpu->getDevicePciBusId() << "] -- " << gpu->getDeviceName() << " -- Not Supported";
-            PRINT_INFO("%s", "%s", ss.str().c_str());
+            log_info("\t[{}] -- {} -- Not Supported", gpu->getDevicePciBusId(), gpu->getDeviceName());
         }
     }
 
-    /* Allow the whitelist to adjust itself now that GPUs have been read in */
-    whitelist->postProcessWhitelist(m_gpuVect);
+    /* Allow the allowlist to adjust itself now that GPUs have been read in */
+    m_allowlist->PostProcessAllowlist(m_gpuVect);
 }
 
 /*****************************************************************************/
@@ -684,7 +638,7 @@ void NvidiaValidationSuite::InitializeAndCheckGpuObjs(std::vector<std::unique_pt
         { // nothing matched
             std::ostringstream ss;
             ss << "Unable to match GPU set '" << gpuSets[i]->name << "' to any GPU(s) on the system.";
-            PRINT_ERROR("%s", "%s", ss.str().c_str());
+            log_error(ss.str());
             throw std::runtime_error(ss.str());
         }
 
@@ -697,10 +651,11 @@ void NvidiaValidationSuite::InitializeAndCheckGpuObjs(std::vector<std::unique_pt
             if (firstName != (*gpuIt)->getDeviceName())
             {
                 std::ostringstream ss;
-                ss << "NVVS does not support running on non-homogeneous GPUs during a single run. ";
+                ss << "NVVS does not support running on non-homogeneous GPUs during a single run: " << firstName
+                   << " != " << (*gpuIt)->getDeviceName() << ".";
                 ss << "Please use the -i option to specify a list of identical GPUs. ";
                 ss << "Run nvvs -g to list the GPUs on the system. Run nvvs --help for additional usage info. ";
-                PRINT_ERROR("%s", "%s", ss.str().c_str());
+                log_error(ss.str());
                 throw std::runtime_error(ss.str());
             }
         }
@@ -805,7 +760,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             tpVect.push_back(tp); // purely for accounting when we go to cleanup
 
 
-                            whitelist->getDefaultsByDeviceId(
+                            m_allowlist->getDefaultsByDeviceId(
                                 compareRequestedName, gpuSets[i]->gpuObjs[0]->getDeviceId(), tp);
 
                             if (nvvsCommon.parms.size() > 0)
@@ -829,7 +784,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                 std::stringstream ss;
                 ss << "Error: requested test \"" << requestedTestName << "\" was not found among possible test choices."
                    << std::endl;
-                PRINT_ERROR("%s", "%s", ss.str().c_str());
+                log_error(ss.str());
                 throw std::runtime_error(ss.str());
             }
         }
@@ -845,7 +800,7 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
     switch (testClass)
     {
         case Test::NVVS_CLASS_SOFTWARE:
-            testNames.push_back("Blacklist");
+            testNames.push_back("Denylist");
             testNames.push_back("NVML Library");
             testNames.push_back("CUDA Main Library");
             /* Now that we link statically against cuda from the plugins, there's no need for this check. Furthermore,
@@ -927,7 +882,7 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                 */
 
                 // pull just the first GPU device ID since they are all meant to be the same at this point
-                whitelist->getDefaultsByDeviceId(*it, set->gpuObjs[0]->getDeviceId(), tp);
+                m_allowlist->getDefaultsByDeviceId(*it, set->gpuObjs[0]->getDeviceId(), tp);
 
                 if (nvvsCommon.parms.size() > 0)
                     overrideParameters(tp, *it);
@@ -1239,50 +1194,6 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
                                      "Specify that this was launched by dcgmi diag and not from invoking nvvs directly",
                                      cmd,
                                      false);
-        TCLAP::SwitchArg trainArg(
-            "", "train", "Train NVVS to generate golden values for this system's configuration.", cmd, false);
-        TCLAP::SwitchArg forceTrainArg(
-            "", "force", "Train NVVS for golden values despite warnings to the contrary", cmd, false);
-        TCLAP::ValueArg<unsigned int> trainingIterations("",
-                                                         "training-iterations",
-                                                         "The number of iterations to "
-                                                         "use while training the diagnostic. The default is "
-                                                         "4.",
-                                                         false,
-                                                         4,
-                                                         "training iterations",
-                                                         cmd);
-        TCLAP::ValueArg<unsigned int> trainingVariance("",
-                                                       "training-variance",
-                                                       "The amount of variance - after "
-                                                       "normalizing the data - required to trust the data. "
-                                                       "The default is 5",
-                                                       false,
-                                                       5,
-                                                       "training variance",
-                                                       cmd);
-        TCLAP::ValueArg<unsigned int> trainingTolerance("",
-                                                        "training-tolerance",
-                                                        "The percentage the golden "
-                                                        "value should be scaled to allow some tolerance when "
-                                                        "running the diagnostic later. For example, if the "
-                                                        "calculated golden value for a minimum bandwidth were "
-                                                        "9000 and the tolerance were set to 5, then the "
-                                                        "minimum bandwidth written to the configuration file "
-                                                        "would be 8550, 95% of 9000. The default value is 5.",
-                                                        false,
-                                                        5,
-                                                        "training tolerance",
-                                                        cmd);
-        TCLAP::ValueArg<std::string> goldenValuesFile("",
-                                                      "golden-values-filename",
-                                                      "Specify the path where the "
-                                                      "DCGM GPU diagnostic should save the golden values file "
-                                                      "produced in training mode.",
-                                                      false,
-                                                      "/tmp/golden_values.yml",
-                                                      "path to golden values file",
-                                                      cmd);
 
         TCLAP::ValueArg<std::string> throttleMask(
             "",
@@ -1329,26 +1240,20 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             configFile = configFileArg;
         }
 
-        listGpus                         = listGpusArg.getValue();
-        listTests                        = listTestsArg.getValue();
-        nvvsCommon.verbose               = verboseArg.getValue();
-        nvvsCommon.pluginPath            = pluginPathArg.getValue();
-        nvvsCommon.parse                 = parseArg.getValue();
-        nvvsCommon.quietMode             = quietModeArg.getValue();
-        nvvsCommon.configless            = configLessArg.getValue();
-        nvvsCommon.fakegpusString        = fakeGpusArg.getValue();
-        nvvsCommon.statsOnlyOnFail       = statsOnFailArg.getValue();
-        nvvsCommon.indexString           = indexArg.getValue();
-        nvvsCommon.parmsString           = parms.getValue();
-        nvvsCommon.jsonOutput            = jsonArg.getValue();
-        nvvsCommon.dcgmHostname          = dcgmHost.getValue();
-        nvvsCommon.fromDcgm              = fromDcgmArg.getValue();
-        nvvsCommon.training              = trainArg.getValue();
-        nvvsCommon.forceTraining         = forceTrainArg.getValue();
-        nvvsCommon.trainingIterations    = trainingIterations.getValue();
-        nvvsCommon.trainingVariancePcnt  = trainingVariance.getValue() / 100.0;
-        nvvsCommon.trainingTolerancePcnt = trainingTolerance.getValue() / 100.0;
-        nvvsCommon.goldenValuesFile      = goldenValuesFile.getValue();
+        listGpus                   = listGpusArg.getValue();
+        listTests                  = listTestsArg.getValue();
+        nvvsCommon.verbose         = verboseArg.getValue();
+        nvvsCommon.pluginPath      = pluginPathArg.getValue();
+        nvvsCommon.parse           = parseArg.getValue();
+        nvvsCommon.quietMode       = quietModeArg.getValue();
+        nvvsCommon.configless      = configLessArg.getValue();
+        nvvsCommon.fakegpusString  = fakeGpusArg.getValue();
+        nvvsCommon.statsOnlyOnFail = statsOnFailArg.getValue();
+        nvvsCommon.indexString     = indexArg.getValue();
+        nvvsCommon.parmsString     = parms.getValue();
+        nvvsCommon.jsonOutput      = jsonArg.getValue();
+        nvvsCommon.dcgmHostname    = dcgmHost.getValue();
+        nvvsCommon.fromDcgm        = fromDcgmArg.getValue();
         nvvsCommon.SetStatsPath(statsPathArg.getValue());
 
         this->initWaitTime = initializationWaitTime.getValue();

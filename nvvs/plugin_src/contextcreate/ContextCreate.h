@@ -33,8 +33,8 @@
 class ContextCreateDevice : public PluginDevice
 {
 public:
-    CUdevice cuDevice;
-    CUcontext cuContext;
+    CUdevice cuDevice {};
+    CUcontext cuContext {};
 
     ContextCreateDevice(unsigned int ndi, const char *pciBusId, Plugin *p, DcgmHandle &handle)
         : PluginDevice(ndi, pciBusId, p)

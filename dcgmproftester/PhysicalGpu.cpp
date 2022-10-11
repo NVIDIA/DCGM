@@ -22,7 +22,7 @@
 #include "Entity.h"
 #include "Reporter.h"
 #include "dcgm_fields.h"
-#include "dcgm_fields_internal.h"
+#include "dcgm_fields_internal.hpp"
 #include "timelib.h"
 #include "vector_types.h"
 #include <cublas_proxy.hpp>
@@ -109,6 +109,10 @@ void PhysicalGpu::ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, ValueT
 
                 case DCGM_FE_GPU_CI:
                     info_reporter << "CI: ";
+                    break;
+
+                case DCGM_FE_LINK:
+                    info_reporter << "LI: ";
                     break;
             }
         }
@@ -2519,7 +2523,8 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     peerPciBusId = std::string(peerDeviceAttr.identifiers.pciBusId);
     nvLinks      = maxNumLinks;
 
-    DCGM_LOG_INFO << "The best peer of gpuId %u is gpuId " << bestGpuId << ", numLinks " << nvLinks << ".";
+    DCGM_LOG_INFO << "The best peer of gpuId " << m_gpuId << " is gpuId " << bestGpuId << ", numLinks " << nvLinks
+                  << ".";
 
     return DCGM_ST_OK;
 }

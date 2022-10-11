@@ -43,7 +43,7 @@ bool ContextCreate::GpusAreNonExclusive()
     {
         std::string err = m_dcgmHandle.RetToString(ret);
         m_plugin->AddInfo(err);
-        PRINT_DEBUG("%s", "%s", err.c_str());
+        log_debug(err);
         return false;
     }
 
@@ -54,7 +54,7 @@ bool ContextCreate::GpusAreNonExclusive()
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in prohibited mode, so we must skip this test.";
             m_plugin->AddInfo(err.str());
-            PRINT_DEBUG("%s", "%s", err.str().c_str());
+            log_debug(err.str());
             return false;
         }
         else if (current[i].computeMode == DCGM_CONFIG_COMPUTEMODE_EXCLUSIVE_PROCESS)
@@ -62,7 +62,7 @@ bool ContextCreate::GpusAreNonExclusive()
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in exclusive mode, so we must skip this test.";
             m_plugin->AddInfo(err.str());
-            PRINT_DEBUG("%s", "%s", err.str().c_str());
+            log_debug(err.str());
             return false;
         }
     }
@@ -151,7 +151,7 @@ int ContextCreate::CanCreateContext()
         {
             err << "GPU " << m_device[i]->gpuId << " is in prohibted mode; skipping test.";
             m_plugin->AddInfo(err.str());
-            PRINT_DEBUG("%s", "%s", err.str().c_str());
+            log_debug(err.str());
             created |= CTX_SKIP;
         }
         else
@@ -161,7 +161,7 @@ int ContextCreate::CanCreateContext()
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, m_device[i]->gpuId, errStr);
             m_plugin->AddErrorForGpu(m_device[i]->gpuId, d);
-            PRINT_DEBUG("%s", "%s", error.c_str());
+            log_debug(error);
             created |= CTX_FAIL;
         }
     }
@@ -175,7 +175,7 @@ int ContextCreate::Run(const dcgmDiagPluginGpuList_t &gpuList)
 
     if (error.size() != 0)
     {
-        PRINT_ERROR("%s", "%s", error.c_str());
+        log_error(error);
         return CONTEXT_CREATE_FAIL;
     }
 

@@ -26,7 +26,7 @@ extern const std::string NVVS_1_3_JSON = R""(
                 "category": "Deployment",
                 "tests": [
                     {
-                        "name": "Blacklist",
+                        "name": "Denylist",
                         "results": [
                             { "gpu_ids": "0,1,2,3", "status": "PASS" }
                         ]
@@ -214,7 +214,7 @@ extern const std::string PER_GPU_JSON = R""(
                 "category": "Deployment",
                 "tests": [
                     {
-                        "name": "Blacklist",
+                        "name": "Denylist",
                         "results": [
                             { "gpu_ids": "0,1,2,3", "status": "PASS" }
                         ]

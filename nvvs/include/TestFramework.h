@@ -58,8 +58,6 @@ public:
         return testGroup;
     }
 
-    void CalculateAndSaveGoldenValues();
-
     void LoadPlugins();
 
     int GetPluginIndex(Test::testClasses_enum classNum, const std::string &pluginName);
@@ -87,21 +85,18 @@ protected:
     mode_t m_nvvsBinaryMode;
     uid_t m_nvvsOwnerUid;
     gid_t m_nvvsOwnerGid;
-    // Recorded metrics from each test run - used only in training mode
-    GoldenValueCalculator m_goldenValues;
     unsigned int m_validGpuId;
 
     // new plugin loading
     std::vector<std::unique_ptr<PluginLib>> m_plugins;
     std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfo;
+    std::vector<std::string> m_skipLibraryList;
 
     // methods
     std::string GetTestDisplayName(dcgmPerGpuTestIndices_t index);
     void insertIntoTestGroup(std::string, Test *);
     void goList(Test::testClasses_enum suite, std::vector<Test *> testsList, std::vector<Gpu *> gpuList);
     void LoadLibrary(const char *libPath, const char *libName);
-    void ReportTrainingError(Test *test);
-    void EvaluateTestTraining(Test *test);
     void GetAndOutputHeader(Test::testClasses_enum classNum);
     void StartStatWatches(DcgmRecorder &dcgmRecorder, int pluginIndex, std::vector<Gpu *> gpuList);
     void EndStatWatches(DcgmRecorder &dcgmRecorder,
@@ -134,6 +129,12 @@ protected:
      * Returns true if the plugin has the same permissions and owner as the NVVS binary
      */
     bool PluginPermissionsMatch(const std::string &pluginDir, const std::string &plugin);
+
+    /********************************************************************/
+    /*
+     * Initializes the values that should be in the skipped libraries list
+     */
+    void InitSkippedLibraries();
 
     /***************************PROTECTED********************************/
 protected:

@@ -43,44 +43,44 @@ def test_dcgm_modules_get_statuses(handle):
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_in_use_introspection(handle):
     '''
-    Make sure that the introspection module cannot be blacklisted after it's loaded
+    Make sure that the introspection module cannot be added to denylist after it's loaded
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     moduleId = dcgm_structs.DcgmModuleIdIntrospect
 
     #Lazy load the introspection module
-    dcgmSystem.introspect.state.toggle(dcgm_structs.DCGM_INTROSPECT_STATE.ENABLED)
+    bytesUsed = dcgmSystem.introspect.memory.GetForHostengine().bytesUsed
 
     #Make sure the module was loaded
     ms = dcgmSystem.modules.GetStatuses()
     assert ms.statuses[moduleId].status == dcgm_structs.DcgmModuleStatusLoaded, "%d != %d" % (ms.statuses[moduleId].status, dcgm_structs.DcgmModuleStatusLoaded)
     
-    #Make sure we can't blacklist the module after it's loaded
+    #Make sure we can't add the module to the denylist after it's loaded
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmSystem.modules.Blacklist(moduleId)
+        dcgmSystem.modules.Denylist(moduleId)
 
 
 @test_utils.run_with_embedded_host_engine()
-def test_dcgm_modules_blacklist_introspection(handle):
+def test_dcgm_modules_denylist_introspection(handle):
     '''
-    Make sure that the introspection module can be blacklisted
+    Make sure that the introspection module can be added to the denylist
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     moduleId = dcgm_structs.DcgmModuleIdIntrospect
     
-    dcgmSystem.modules.Blacklist(moduleId)
+    dcgmSystem.modules.Denylist(moduleId)
 
-    #Try to lazy load the blacklisted introspection module
+    #Try to lazy load the introspection module which is on the denylist
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
-        dcgmSystem.introspect.state.toggle(dcgm_structs.DCGM_INTROSPECT_STATE.ENABLED)
+        bytesUsed = dcgmSystem.introspect.memory.GetForHostengine().bytesUsed
 
 
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_in_use_health(handle):
     '''
-    Make sure that the health module cannot be blacklisted after it's loaded
+    Make sure that the health module cannot be added to the denylist after it's loaded
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -94,24 +94,24 @@ def test_dcgm_modules_in_use_health(handle):
     ms = dcgmSystem.modules.GetStatuses()
     assert ms.statuses[moduleId].status == dcgm_structs.DcgmModuleStatusLoaded, "%d != %d" % (ms.statuses[moduleId].status, dcgm_structs.DcgmModuleStatusLoaded)
     
-    #Make sure we can't blacklist the module after it's loaded
+    #Make sure we can't add the module to the denylist after it's loaded
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
-        dcgmSystem.modules.Blacklist(moduleId)
+        dcgmSystem.modules.Denylist(moduleId)
 
 
 @test_utils.run_with_embedded_host_engine()
-def test_dcgm_modules_blacklist_health(handle):
+def test_dcgm_modules_denylist_health(handle):
     '''
-    Make sure that the health module can be blacklisted
+    Make sure that the health module can be added to the denylist
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetDefaultGroup()
     moduleId = dcgm_structs.DcgmModuleIdHealth
     
-    dcgmSystem.modules.Blacklist(moduleId)
+    dcgmSystem.modules.Denylist(moduleId)
 
-    #Try to lazy load the blacklisted introspection module
+    #Try to lazy load the introspection module which is on the denylist
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
@@ -137,7 +137,6 @@ def test_dcgm_library_existence():
     # Only check for the older proxy libraries if we aren't on aarch64
     if lib_path[-8:] != 'aarch64/':
         name_to_found['libdcgm_cublas_proxy10.so'] = False
-        name_to_found['libdcgm_cublas_proxy9.so'] = False
 
     file_list = os.listdir(lib_path)
     for filename in file_list:

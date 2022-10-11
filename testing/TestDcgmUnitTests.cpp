@@ -25,7 +25,6 @@
 #include "TestHealthMonitor.h"
 #include "TestKeyedVector.h"
 #include "TestPolicyManager.h"
-#include "TestProtobuf.h"
 #include "TestStatCollection.h"
 #include "TestTopology.h"
 #include "TestVersioning.h"
@@ -48,10 +47,9 @@ public:
     /*************************************************************************/
     TestDcgmUnitTests()
     {
-        m_embeddedStarted = false;
-        m_runAllModules   = false;
-        m_gpus.clear();
-        m_moduleArgs.clear();
+        m_embeddedStarted  = false;
+        m_runAllModules    = false;
+        m_moduleInitParams = {};
         m_onlyModulesToRun.clear();
         m_dcgmHandle        = (dcgmHandle_t) nullptr;
         m_startRemoteServer = false;
@@ -85,11 +83,6 @@ public:
         m_modules[moduleTag] = module;
 
         module = (TestDcgmModule *)(new TestFieldGroups());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestProtobuf());
         module->SetDcgmHandle(m_dcgmHandle);
         moduleTag            = module->GetTag();
         m_modules[moduleTag] = module;
@@ -153,7 +146,7 @@ public:
         std::string moduleTag;
         TestDcgmModule *module;
 
-        PRINT_DEBUG("%d", "Unloading %d modules", (int)m_modules.size());
+        log_debug("Unloading {} modules", (int)m_modules.size());
 
         for (moduleIt = m_modules.begin(); moduleIt != m_modules.end(); moduleIt++)
         {
@@ -173,9 +166,6 @@ public:
     void Cleanup()
     {
         UnloadModules();
-
-        m_gpus.clear();
-        m_moduleArgs.clear();
         dcgmShutdown();
     }
 
@@ -213,19 +203,57 @@ public:
             return -1;
         }
 
-        /* Embedded Mode */
-        if (DCGM_ST_OK != dcgmStartEmbedded(DCGM_OPERATION_MODE_MANUAL, &m_dcgmHandle))
+        st = RestartHostEngine();
+        if (st)
         {
-            fprintf(stderr, "DCGM could not start the host engine");
+            fprintf(stderr, "RestartHostEngine() returned %d\n", st);
             return -1;
         }
-        m_embeddedStarted = true;
 
         /* Load all of the modules */
         st = LoadModules();
         if (st)
         {
             fprintf(stderr, "LoadModules() returned %d\n", st);
+            return -1;
+        }
+
+        return 0;
+    }
+
+    /*************************************************************************/
+    int RestartHostEngine()
+    {
+        dcgmReturn_t dcgmReturn;
+
+        /* Stop the embedded HE if it's already running */
+        if (m_embeddedStarted)
+        {
+            dcgmReturn = dcgmStopEmbedded(m_dcgmHandle);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                fprintf(stderr, "Got %d from dcgmStopEmbedded(). Continuing.", dcgmReturn);
+            }
+
+            m_embeddedStarted = false;
+        }
+
+        /* Embedded Mode */
+        dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_MANUAL, &m_dcgmHandle);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            fprintf(stderr, "dcgmStartEmbedded() returned %d", dcgmReturn);
+            return -1;
+        }
+
+        m_embeddedStarted = true;
+
+        /* Discover all devices and recreate injected GPUs now that we've
+           (re)started the host engine */
+        int st = FindAllGpus();
+        if (st != 0)
+        {
+            fprintf(stderr, "FindAllGpus() returned %d", st);
             return -1;
         }
 
@@ -266,7 +294,7 @@ public:
                 m_runAllModules = true;
             }
 
-            m_moduleArgs.push_back(std::string(argv[i]));
+            m_moduleInitParams.moduleArgs.push_back(std::string(argv[i]));
         }
 
         return 0;
@@ -275,48 +303,59 @@ public:
     /*************************************************************************/
     int FindAllGpus()
     {
-        test_nvcm_gpu_t gpu;
         std::vector<unsigned int> gpuIds;
-        std::vector<unsigned int>::iterator gpuIt;
         dcgmReturn_t dcgmReturn;
 
-        /* Create a cache manager to get the GPU count */
-        std::unique_ptr<DcgmCacheManager> cacheManager;
-        try
-        {
-            cacheManager = std::make_unique<DcgmCacheManager>();
-        }
-        catch (std::exception &e)
-        {
-            fprintf(stderr, "Got exception from DcgmCacheManager(): %s\n", e.what());
-            return -1;
-        }
+        m_moduleInitParams.fakeGpuIds.clear();
+        m_moduleInitParams.liveGpuIds.clear();
 
-        dcgmReturn = cacheManager->Init(1, 3600.0);
+        int numDevices = DCGM_MAX_NUM_DEVICES;
+        gpuIds.resize(numDevices);
+        dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIds.data(), &numDevices);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            fprintf(stderr, "Failed to init cache manager. dcgmReturn %d", dcgmReturn);
+            fprintf(stderr, "Got unexpected dcgmReturn %d from dcgmGetAllDevices()", dcgmReturn);
             return -1;
         }
-
-        dcgmReturn = cacheManager->GetGpuIds(1, gpuIds);
+        gpuIds.resize(numDevices);
 
         if (gpuIds.size() < 1)
         {
             fprintf(stderr,
-                    "No GPUs found. If you are testing on non-whitelisted GPUs, "
+                    "No GPUs found. If you are testing on GPUs not on the allowlist, "
                     "set %s=1 in your environment",
                     DCGM_ENV_WL_BYPASS);
             return -1;
         }
 
-        for (gpuIt = gpuIds.begin(); gpuIt != gpuIds.end(); gpuIt++)
+        for (auto &gpuId : gpuIds)
         {
             /* Success. Record device */
-            gpu.gpuId     = *gpuIt;
-            gpu.nvmlIndex = cacheManager->GpuIdToNvmlIndex(gpu.gpuId);
-            printf("Using nvmlIndex %u. GpuId %u\n", gpu.nvmlIndex, gpu.gpuId);
-            m_gpus.push_back(gpu);
+            printf("Using GpuId %u\n", gpuId);
+            m_moduleInitParams.liveGpuIds.push_back(gpuId);
+        }
+
+        /* Create two fake GPUs to test with as well */
+        dcgmCreateFakeEntities_t cfe {};
+        cfe.version     = dcgmCreateFakeEntities_version;
+        cfe.numToCreate = 2;
+        for (int i = 0; i < cfe.numToCreate; i++)
+        {
+            cfe.entityList[i].entity.entityGroupId = DCGM_FE_GPU;
+        }
+
+        dcgmReturn = dcgmCreateFakeEntities(m_dcgmHandle, &cfe);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            fprintf(stderr, "dcgmCreateFakeEntities() returned unexpected dcgmReturn %d", dcgmReturn);
+            return -1;
+        }
+
+        for (int i = 0; i < cfe.numToCreate; i++)
+        {
+            unsigned int gpuId = cfe.entityList[i].entity.entityId;
+            printf("Using FAKE GpuId %u\n", gpuId);
+            m_moduleInitParams.fakeGpuIds.push_back(gpuId);
         }
 
         return 0;
@@ -326,8 +365,16 @@ public:
     int RunOneModule(TestDcgmModule *module)
     {
         int st, runSt;
+        TestDcgmModuleConfig config;
 
-        st = module->Init(m_moduleArgs, m_gpus);
+        module->GetConfig(config);
+
+        if (config.restartEngineBefore)
+        {
+            RestartHostEngine();
+        }
+
+        st = module->Init(m_moduleInitParams);
         if (st)
         {
             fprintf(stderr, "Module init for %s failed with %d\n", module->GetTag().c_str(), st);
@@ -339,6 +386,11 @@ public:
 
         /* Clean-up unconditionally before dealing with the run status */
         module->Cleanup();
+
+        if (config.restartEngineAfter)
+        {
+            RestartHostEngine();
+        }
 
         if (runSt > 0)
         {
@@ -452,10 +504,6 @@ public:
                 return -1;
         }
 
-        st = FindAllGpus();
-        if (st)
-            return -1;
-
         st = RunModules();
         if (st)
             return -1;
@@ -466,12 +514,12 @@ public:
     /*************************************************************************/
 
 private:
-    dcgmHandle_t m_dcgmHandle;             /* Handle to our host engine. Only valid if m_embeddedStarted == 1 */
-    bool m_embeddedStarted;                /* Has an embedded host engine been started? 1=yes. 0=no */
-    bool m_startRemoteServer;              /* Has a TCP/IP serverbeen started? 1=yes. 0=no (pass -r to the program) */
-    bool m_runAllModules;                  /* Should we run all modules discovered, even non-default modules? */
-    std::vector<test_nvcm_gpu_t> m_gpus;   /* GPUs to run on */
-    std::vector<std::string> m_moduleArgs; /* ARGV[] array of args to pass to plugins */
+    dcgmHandle_t m_dcgmHandle; /* Handle to our host engine. Only valid if m_embeddedStarted == 1 */
+    bool m_embeddedStarted;    /* Has an embedded host engine been started? 1=yes. 0=no */
+    bool m_startRemoteServer;  /* Has a TCP/IP serverbeen started? 1=yes. 0=no (pass -r to the program) */
+    bool m_runAllModules;      /* Should we run all modules discovered, even non-default modules? */
+
+    TestDcgmModuleInitParams m_moduleInitParams;       /* Parameters passed to each module's Init() method */
     std::map<std::string, TestDcgmModule *> m_modules; /* Test modules to run, indexed by each
                                                          module's GetTag() */
     std::map<std::string, int> m_onlyModulesToRun;     /* Map of 'moduletag'=>0 of modules we are supposed to run.

@@ -1130,6 +1130,7 @@ def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False)
         return wrapper
     return decorator
 
+
 class RunClientInitShutdown:
     """
     This class is used as part of a "with" clause to initialize and shutdown the client API
@@ -1388,7 +1389,7 @@ def run_only_with_live_nvswitches():
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(entityIdList) < 1:
-                logger.warning("Skipping test that requires live GPUs. None were found")
+                logger.warning("Skipping test that requires live NV Switches. None were found")
             else:
                 kwds['switchIds'] = entityIdList
                 fn(*args, **kwds)
@@ -1420,25 +1421,6 @@ def run_with_injection_nvswitches(switchCount=1):
             kwds['switchIds'] = switchIds
             fn(*args, **kwds)
             return
-        return wrapper
-    return decorator
-
-def run_with_introspection_enabled(runIntervalMs=10):
-    """
-    Run this test with metadata gathering enabled ("Metadata" API calls can be made).
-    The run interval for the metadata manager is artificially fast since this helps in testing.
-    """
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            if 'handle' not in kwargs:
-                raise Exception("Not connected to remote or embedded host engine. Use approriate decorator")
-            handle = pydcgm.DcgmHandle(handle=kwargs['handle'])
-            system = handle.GetSystem()
-
-            system.introspect.state.toggle(dcgm_structs.DCGM_INTROSPECT_STATE.ENABLED)
-            dcgm_agent_internal.dcgmMetadataStateSetRunInterval(kwargs['handle'], runIntervalMs)
-            return fn(*args, **kwargs)
         return wrapper
     return decorator
 
@@ -1749,29 +1731,29 @@ def get_device_names(gpu_ids, handle=None):
         yield (str(attributes.identifiers.deviceName).lower(), gpuId)
 
 
-def skip_blacklisted_gpus(blacklist=None):
+def skip_denylisted_gpus(denylist=None):
     """
-    This decorator gets gpuIds list and excludes GPUs which names are blacklisted
-    :type blacklist: [string]
+    This decorator gets gpuIds list and excludes GPUs which names are on the denylist
+    :type denylist: [string]
     :return: decorated function
     """
-    if blacklist is None:
-        blacklist = {}
+    if denylist is None:
+        denylist = {}
     else:
-        blacklist = {b.lower() for b in blacklist}
+        denylist = {b.lower() for b in denylist}
 
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            if (blacklist is not None) and ('gpuIds' in kwargs):
+            if (denylist is not None) and ('gpuIds' in kwargs):
                 gpu_ids = kwargs['gpuIds']
                 passed_ids = []
                 for gpuName, gpuId in get_device_names(gpu_ids=gpu_ids, handle=kwargs.get('handle', None)):
-                    if gpuName not in blacklist:
+                    if gpuName not in denylist:
                         passed_ids.append(gpuId)
                     else:
                         logger.info(
-                            "GPU %s (id: %d) was blacklisted from participating in the test." % (gpuName, gpuId))
+                            "GPU %s (id: %d) is on the denylist; it can't participate in the test." % (gpuName, gpuId))
                 kwargs['gpuIds'] = passed_ids
 
             fn(*args, **kwargs)
@@ -2093,3 +2075,21 @@ def with_service_account(serviceAccountName):
 
         return wrapper
     return decorator
+
+
+def gpu_supports_gpm(handle, gpuId):
+    """
+    Returns true if the given gpuId supports GPU Performance Monitoring (GPM). false if not
+    """
+    entityPairList = [dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId), ]
+    flags = dcgm_structs.DCGM_FV_FLAG_LIVE_DATA
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, ]
+    fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entityPairList, fieldIds, flags)
+    assert fieldValues[0].status == 0
+    computeCapability = fieldValues[0].value.i64
+
+    if computeCapability == 0x090000:
+        return True
+    else:
+        return False
+

@@ -1,0 +1,925 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
+#include <cublas_proxy.hpp>
+#include <cuda.h>
+
+#if (CUDA_VERSION_USED >= 11)
+#include "DcgmDgemm.hpp"
+#endif
+
+#include <DcgmLogging.h>
+#include <fmt/format.h>
+#include <timelib.h>
+
+using namespace Dcgm;
+
+/*****************************************************************************/
+/* Attributes of a cuda device
+ * Note that it's OK to copy this structure since everything is attributes
+ * and handles that are managed by cuda
+ */
+typedef struct
+{
+    CUdevice m_device { 0 };              //!< Cuda ordinal of the device to use
+    CUcontext m_context { nullptr };      //!< Cuda context
+    CUfunction m_cuFuncWaitNs {};         //!< Pointer to waitNs() CUDA kernel
+    CUmodule m_module { nullptr };        //!< .PTX file that belongs to m_context
+    int m_maxThreadsPerMultiProcessor {}; //!< threads per multiprocessor
+    int m_multiProcessorCount {};         //!< multiprocessors
+    int m_sharedMemPerMultiprocessor {};  //!< shared mem per multiprocessor
+    int m_computeCapabilityMajor {};      //!< compute capability major num.
+    int m_computeCapabilityMinor {};      //!< compute capability minor num.
+    int m_computeCapability {};           //!< combined compute capability
+    int m_memoryBusWidth {};              //!< memory bus bandwidth
+    int m_maxMemoryClockMhz {};           //!< max. memory clock rate (MHz)
+    double m_maxMemBandwidth {};          //!< max. memory bandwidth
+    int m_eccSupport {};                  //!< ECC support enabled.
+} CudaWorkerDevice_t;
+
+/*****************************************************************************/
+/* Base class for all field workers. This is here so we can do initialization
+ * and cleanup of cuda/cublas resources with RAII.
+ * We also put common methods used by multiple worker types like RunSleepKernel()
+ * here */
+class FieldWorkerBase
+{
+public:
+    /* Attributes for the device we're running our workload on */
+    CudaWorkerDevice_t m_cudaDevice;
+
+    double m_achievedLoad = 0.0; /* Currently-achieved workload */
+    unsigned int m_fieldId;      /* FieldId this worker represents */
+
+    /*****************************************************************************/
+    /* Constructor */
+    FieldWorkerBase(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
+        : m_cudaDevice(cudaDevice)
+        , m_fieldId(fieldId)
+    {}
+
+    /*************************************************************************/
+    /* Destructor */
+    virtual ~FieldWorkerBase() = default;
+
+    /*************************************************************************/
+    unsigned int GetFieldId()
+    {
+        return m_fieldId;
+    }
+
+    /*************************************************************************/
+    /* Get the current load of the worker. This is supposed to be close loadTarget
+       since that's what we're targetting */
+    double GetAchievedLoad()
+    {
+        return m_achievedLoad;
+    }
+
+    /*************************************************************************/
+    /* Pure virtual function to do a single duty cycle of a given cuda workload */
+    virtual void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) = 0;
+
+    /*************************************************************************/
+    dcgmReturn_t RunSleepKernel(unsigned int numSms, unsigned int threadsPerSm, unsigned int runForUsec)
+    {
+        CUresult cuSt;
+        dim3 blockDim; /* Defaults to 1,1,1 */
+        dim3 gridDim;  /* Defaults to 1,1,1 */
+        void *kernelParams[2];
+        unsigned int sharedMemBytes = 0;
+
+        if (numSms < 1 || ((int)numSms > m_cudaDevice.m_multiProcessorCount))
+        {
+            DCGM_LOG_ERROR << "numSms " << numSms << " must be 1 <= X <= " << m_cudaDevice.m_multiProcessorCount;
+            return DCGM_ST_BADPARAM;
+        }
+
+        gridDim.x = numSms;
+
+        /* blockDim.x has a limit of 1024. m_maxThreadsPerMultiProcessor is 2048 on
+        current hardware. So if we're > 1024, just divide by 2 and double the
+        number of blocks we launch.
+        */
+        if (threadsPerSm > 1024)
+        {
+            blockDim.x = threadsPerSm / 2;
+            gridDim.x *= 2;
+        }
+        else
+            blockDim.x = threadsPerSm;
+
+        uint64_t *d_a   = NULL;
+        kernelParams[0] = &d_a;
+
+        uint32_t waitInNs = runForUsec * 1000;
+        kernelParams[1]   = &waitInNs;
+
+        cuSt = cuLaunchKernel(m_cudaDevice.m_cuFuncWaitNs,
+                              gridDim.x,
+                              gridDim.y,
+                              gridDim.z,
+                              blockDim.x,
+                              blockDim.y,
+                              blockDim.z,
+                              sharedMemBytes,
+                              NULL,
+                              kernelParams,
+                              NULL);
+        if (cuSt)
+        {
+            DCGM_LOG_ERROR << "cuLaunchKernel returned " << cuSt;
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        return DCGM_ST_OK;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerGrActivity : public FieldWorkerBase
+{
+public:
+    FieldWorkerGrActivity(CudaWorkerDevice_t cudaDevice)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+    {}
+    ~FieldWorkerGrActivity() = default;
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        unsigned int runKernelUsec = 1000 * (unsigned int)((double)dutyCycleLengthMs.count() * loadTarget);
+
+        if (runKernelUsec > 0)
+        {
+            RunSleepKernel(1, 1, runKernelUsec);
+        }
+        /*
+         * Kernel launch was asynch and nearly instant.
+         * Sleep for a second and then wait for the kernel to finish.
+         */
+        usleep(1000 * dutyCycleLengthMs.count());
+
+        if (runKernelUsec > 0)
+        {
+            /* Wait for this kernel to finish. This call should be instant but guarantees the kernel has finished */
+            cuCtxSynchronize();
+        }
+
+        m_achievedLoad = loadTarget;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerSmActivity : public FieldWorkerBase
+{
+    double m_achievedLoad = 0.0;
+
+public:
+    FieldWorkerSmActivity(CudaWorkerDevice_t cudaDevice)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_ACTIVE)
+    {}
+
+    ~FieldWorkerSmActivity() = default;
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        unsigned int numSms = (unsigned int)(loadTarget * m_cudaDevice.m_multiProcessorCount);
+        if (numSms < 1)
+        {
+            usleep(1000 * dutyCycleLengthMs.count());
+            return;
+        }
+
+        if ((int)numSms > m_cudaDevice.m_multiProcessorCount)
+            numSms = m_cudaDevice.m_multiProcessorCount;
+        RunSleepKernel(numSms, 1, dutyCycleLengthMs.count() * 1000);
+
+        /* Wait for this kernel to finish. This will block for dutyCycleLengthMs until the kernel finishes */
+        cuCtxSynchronize();
+
+        m_achievedLoad = loadTarget;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerSmOccupancy : public FieldWorkerBase
+{
+public:
+    FieldWorkerSmOccupancy(CudaWorkerDevice_t cudaDevice)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_OCCUPANCY)
+    {}
+
+    ~FieldWorkerSmOccupancy() = default;
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        unsigned int numSms       = m_cudaDevice.m_multiProcessorCount;
+        unsigned int threadsPerSm = (unsigned int)(loadTarget * m_cudaDevice.m_maxThreadsPerMultiProcessor);
+        if ((int)threadsPerSm > m_cudaDevice.m_maxThreadsPerMultiProcessor)
+            threadsPerSm = m_cudaDevice.m_maxThreadsPerMultiProcessor;
+
+        if (threadsPerSm < 1)
+        {
+            usleep(1000 * dutyCycleLengthMs.count());
+            return;
+        }
+
+        RunSleepKernel(numSms, threadsPerSm, dutyCycleLengthMs.count() * 1000);
+
+        /* Wait for this kernel to finish. This will block for m_dutyCycleLengthMs until the kernel finishes */
+        cuCtxSynchronize();
+
+        m_achievedLoad = loadTarget;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerPciRxTxBytes : public FieldWorkerBase
+{
+    /* Allocate 100 MB of FB and pinned memory */
+    const size_t m_bufferSize = 100 * 1024 * 1024;
+    void *m_hostMem           = nullptr;
+    CUdeviceptr m_deviceMem   = (CUdeviceptr) nullptr;
+
+public:
+    FieldWorkerPciRxTxBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, fieldId)
+    {
+        CUresult cuSt;
+
+        DCGM_LOG_DEBUG << "Allocating host mem";
+
+        cuSt = cuMemAllocHost(&m_hostMem, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAllocHost returned {}", cuSt);
+            throw std::runtime_error(s);
+        }
+
+        DCGM_LOG_DEBUG << "Clearing host mem";
+        memset(m_hostMem, 0, m_bufferSize);
+
+        DCGM_LOG_DEBUG << "Allocating device mem";
+        cuSt = cuMemAlloc(&m_deviceMem, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            throw std::runtime_error(s);
+        }
+        DCGM_LOG_DEBUG << "Clearing device mem";
+        cuMemsetD32(m_deviceMem, 0, m_bufferSize);
+    }
+
+    ~FieldWorkerPciRxTxBytes()
+    {
+        if (m_hostMem != nullptr)
+        {
+            cuMemFreeHost(m_hostMem);
+            m_hostMem = nullptr;
+        }
+
+        if (m_deviceMem != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceMem);
+            m_deviceMem = (CUdeviceptr) nullptr;
+        }
+    }
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        CUresult cuSt;
+        size_t totalBytesTransferred = 0;
+
+        double dutyCycleSecs = (double)dutyCycleLengthMs.count() / 1000.0;
+
+        double now       = timelib_dsecSince1970();
+        double startTime = now;
+        double endTime   = now + dutyCycleSecs;
+        unsigned int i;
+        unsigned int copiesPerIteration = 100; /* How many cuda memcpy*()s to do between timer checks */
+
+        /* This has always been full bandwidth all the time since dcgmproftester was created
+           That's why you'll see no references to loadTarget */
+
+        for (; now < endTime; now = timelib_dsecSince1970())
+        {
+            for (i = 0; i < copiesPerIteration; i++)
+            {
+                if (m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
+                {
+                    cuSt = cuMemcpyHtoD(m_deviceMem, m_hostMem, m_bufferSize);
+                }
+                else /* DCGM_FI_PROF_PCIE_TX_BYTES */
+                {
+                    cuSt = cuMemcpyDtoH(m_hostMem, m_deviceMem, m_bufferSize);
+                }
+
+                totalBytesTransferred += m_bufferSize;
+
+                if (cuSt)
+                {
+                    DCGM_LOG_ERROR << "cuMemcpy returned " << cuSt;
+                    return;
+                }
+            }
+        }
+
+        m_achievedLoad = ((double)totalBytesTransferred) / (now - startTime);
+        DCGM_LOG_VERBOSE << "m_achievedLoad " << m_achievedLoad << ", now " << now << ", startTime " << startTime;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerDramUtil : public FieldWorkerBase
+{
+    /* Allocate 100 MB of FB and pinned memory */
+    const size_t m_bufferSize = 100 * 1024 * 1024;
+    CUdeviceptr m_deviceMem   = (CUdeviceptr) nullptr;
+    CUdeviceptr m_deviceMem2  = (CUdeviceptr) nullptr;
+
+public:
+    FieldWorkerDramUtil(CudaWorkerDevice_t cudaDevice)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_DRAM_ACTIVE)
+    {
+        CUresult cuSt;
+
+        DCGM_LOG_DEBUG << "Allocating device mem";
+        cuSt = cuMemAlloc(&m_deviceMem, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            throw std::runtime_error(s);
+        }
+        cuSt = cuMemAlloc(&m_deviceMem2, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            throw std::runtime_error(s);
+        }
+
+        DCGM_LOG_DEBUG << "Clearing device mem";
+        cuMemsetD32(m_deviceMem, 0, m_bufferSize);
+        cuMemsetD32(m_deviceMem2, 0, m_bufferSize);
+    }
+
+    ~FieldWorkerDramUtil()
+    {
+        if (m_deviceMem != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceMem);
+            m_deviceMem = (CUdeviceptr) nullptr;
+        }
+
+        if (m_deviceMem2 != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceMem2);
+            m_deviceMem2 = (CUdeviceptr) nullptr;
+        }
+    }
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        CUresult cuSt;
+        size_t totalBytesTransferred = 0;
+
+        double dutyCycleSecs = (double)dutyCycleLengthMs.count() / 1000.0;
+
+        double now       = timelib_dsecSince1970();
+        double startTime = now;
+        double endTime   = now + dutyCycleSecs;
+        unsigned int i;
+        unsigned int copiesPerIteration = 100; /* How many cuda memcpy*()s to do between timer checks */
+
+        /* This has always been full bandwidth all the time since dcgmproftester was created
+           That's why you'll see no references to loadTarget */
+
+        for (; now < endTime; now = timelib_dsecSince1970())
+        {
+            for (i = 0; i < copiesPerIteration; i++)
+            {
+                cuSt = cuMemcpy(m_deviceMem, m_deviceMem2, m_bufferSize);
+                if (cuSt)
+                {
+                    DCGM_LOG_ERROR << "cuMemcpy returned " << cuSt;
+                    return;
+                }
+                totalBytesTransferred += (m_bufferSize * 2);
+            }
+        }
+
+        m_achievedLoad = (double)totalBytesTransferred / (now - startTime);
+        DCGM_LOG_VERBOSE << "m_achievedLoad " << m_achievedLoad << ", now " << now << ", startTime " << startTime;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerNvLinkRwBytes : public FieldWorkerBase
+{
+    std::string m_peerBusId;
+
+    /* Allocate 100 MB of FB and pinned memory */
+    const size_t m_bufferSize = 100 * 1024 * 1024;
+    CUdeviceptr m_deviceMem0  = (CUdeviceptr) nullptr;
+    CUdeviceptr m_deviceMem1  = (CUdeviceptr) nullptr;
+    CUcontext m_deviceCtx1    = (CUcontext) nullptr;
+
+public:
+    FieldWorkerNvLinkRwBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId, std::string peerBusId)
+        : FieldWorkerBase(cudaDevice, fieldId)
+    {
+        m_peerBusId = peerBusId;
+        CUresult cuSt;
+        CUdevice peerCuDevice = 0;
+
+        /* Find the corresponding cuda device to our peer DCGM device */
+        cuSt = cuDeviceGetByPCIBusId(&peerCuDevice, m_peerBusId.c_str());
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuDeviceGetByPCIBusId returned {} for busId {}", cuSt, m_peerBusId);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        /* Create a context on the other GPU */
+
+        cuSt = cuCtxCreate(&m_deviceCtx1, CU_CTX_SCHED_BLOCKING_SYNC, peerCuDevice);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuCtxCreate returned {}", cuSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        cuCtxSetCurrent(m_cudaDevice.m_context);
+
+        DCGM_LOG_DEBUG << "Allocating device 0 mem";
+        cuSt = cuMemAlloc(&m_deviceMem0, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+        DCGM_LOG_DEBUG << "Clearing device 0 mem";
+        cuMemsetD32(m_deviceMem0, 0, m_bufferSize);
+
+        cuCtxSetCurrent(m_deviceCtx1);
+
+        DCGM_LOG_DEBUG << "Allocating device 1 mem";
+        cuSt = cuMemAlloc(&m_deviceMem1, m_bufferSize);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        DCGM_LOG_DEBUG << "Clearing device 1 mem";
+        cuMemsetD32(m_deviceMem1, 0, m_bufferSize);
+
+        cuCtxSetCurrent(m_cudaDevice.m_context);
+
+        cuSt = cuCtxEnablePeerAccess(m_deviceCtx1, 0);
+        if (cuSt)
+        {
+            std::string s = fmt::format("cuCtxEnablePeerAccess returned {}", cuSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+    }
+
+    ~FieldWorkerNvLinkRwBytes()
+    {
+        if (m_deviceMem0 != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceMem0);
+            m_deviceMem0 = (CUdeviceptr) nullptr;
+        }
+
+        if (m_deviceMem1 != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceMem1);
+            m_deviceMem1 = (CUdeviceptr) nullptr;
+        }
+
+        if (m_deviceCtx1 != (CUcontext) nullptr)
+        {
+            cuCtxDestroy(m_deviceCtx1);
+            m_deviceCtx1 = (CUcontext) nullptr;
+        }
+    }
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        CUresult cuSt;
+        size_t totalBytesTransferred = 0;
+
+        double dutyCycleSecs = (double)dutyCycleLengthMs.count() / 1000.0;
+
+        double now       = timelib_dsecSince1970();
+        double startTime = now;
+        double endTime   = now + dutyCycleSecs;
+        unsigned int i;
+        unsigned int copiesPerIteration = 100; /* How many cuda memcpy*()s to do between timer checks */
+
+        /* This has always been full bandwidth all the time since dcgmproftester was created
+           That's why you'll see no references to loadTarget */
+
+        for (; now < endTime; now = timelib_dsecSince1970())
+        {
+            for (i = 0; i < copiesPerIteration; i++)
+            {
+                if (m_fieldId == DCGM_FI_PROF_NVLINK_RX_BYTES)
+                {
+                    cuSt = cuMemcpyDtoD(m_deviceMem0, m_deviceMem1, m_bufferSize);
+                }
+                else /* DCGM_FI_PROF_NVLINK_TX_BYTES */
+                {
+                    cuSt = cuMemcpyDtoD(m_deviceMem1, m_deviceMem0, m_bufferSize);
+                }
+
+                if (cuSt)
+                {
+                    DCGM_LOG_ERROR << "cuMemcpy returned " << cuSt;
+                    return;
+                }
+                totalBytesTransferred += m_bufferSize;
+            }
+        }
+
+        m_achievedLoad = (double)totalBytesTransferred / (now - startTime);
+        DCGM_LOG_VERBOSE << "m_achievedLoad " << m_achievedLoad << ", now " << now << ", startTime " << startTime;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerTensorActivity : public FieldWorkerBase
+{
+    const size_t m_defaultArrayDim = 4096; /* Default array dimension for our square matricies */
+    size_t m_arrayDim;                     /* Actual array dim after the constuctor */
+    CUdeviceptr m_deviceA         = (CUdeviceptr) nullptr;
+    CUdeviceptr m_deviceB         = (CUdeviceptr) nullptr;
+    CUdeviceptr m_deviceC         = (CUdeviceptr) nullptr;
+    void *m_hostA                 = nullptr;
+    void *m_hostB                 = nullptr;
+    cublasHandle_t m_cublasHandle = nullptr;
+
+#if (CUDA_VERSION_USED >= 11)
+    cublasLtHandle_t m_cublasLtHandle = nullptr;
+#endif
+
+    double m_flopsPerOp = 0.0; /* How many flops are in a single matrix multiply? */
+
+public:
+    FieldWorkerTensorActivity(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, fieldId)
+    {
+        m_arrayDim = m_defaultArrayDim;
+
+        size_t valueSize = 0;
+        switch (m_fieldId)
+        {
+            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+                valueSize = sizeof(float);
+                break;
+            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+                valueSize = sizeof(double);
+                break;
+            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+                valueSize = sizeof(unsigned short);
+                break;
+            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+                m_arrayDim *= 2; /* Needed to saturate V100, A100 on cuda 11.1 */
+                valueSize = sizeof(unsigned short);
+                break;
+            default:
+                std::string s = fmt::format("fieldId {} is unhandled.", m_fieldId);
+                DCGM_LOG_ERROR << s;
+                throw std::runtime_error(s);
+        }
+
+        m_flopsPerOp         = 2.0 * (double)m_arrayDim * (double)m_arrayDim * (double)m_arrayDim;
+        size_t arrayCount    = m_arrayDim * m_arrayDim;
+        size_t arrayByteSize = valueSize * arrayCount;
+
+        cublasStatus_t cubSt = CublasProxy::CublasCreate(&m_cublasHandle);
+#if (CUDA_VERSION_USED >= 11)
+        auto cubLtSt = CublasProxy::CublasLtCreate(&m_cublasLtHandle);
+#endif
+
+        if (cubSt != CUBLAS_STATUS_SUCCESS)
+        {
+            std::string s = fmt::format("cublasCreate returned {}.", cubSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+#if (CUDA_VERSION_USED >= 11)
+        if (cubLtSt != CUBLAS_STATUS_SUCCESS)
+        {
+            std::string s = fmt::format("cublasLtCreate returned {}.", cubLtSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+#endif
+
+        CUresult cuSt, cuSt2, cuSt3;
+        cuSt  = cuMemAlloc(&m_deviceA, arrayByteSize);
+        cuSt2 = cuMemAlloc(&m_deviceB, arrayByteSize);
+        cuSt3 = cuMemAlloc(&m_deviceC, arrayByteSize);
+        if (cuSt || cuSt2 || cuSt3)
+        {
+            std::string s = fmt::format("cuMemAlloc returned  {} {} {} for {}", cuSt, cuSt2, cuSt3, arrayByteSize);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        m_hostA = malloc(arrayByteSize);
+        m_hostB = malloc(arrayByteSize);
+        if (!m_hostA || !m_hostB)
+        {
+            std::string s = fmt::format("Unable to allocate {} bytes x2", arrayByteSize);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        switch (m_fieldId)
+        {
+            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            {
+                float *floatHostA = (float *)m_hostA;
+                float *floatHostB = (float *)m_hostB;
+                for (size_t i = 0; i < arrayCount; i++)
+                {
+                    floatHostA[i] = (float)rand() / 100.0;
+                    floatHostB[i] = (float)rand() / 100.0;
+                }
+                break;
+            }
+
+            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            {
+                double *doubleHostA = (double *)m_hostA;
+                double *doubleHostB = (double *)m_hostB;
+
+                for (size_t i = 0; i < arrayCount; i++)
+                {
+                    doubleHostA[i] = (double)rand() / 100.0;
+                    doubleHostB[i] = (double)rand() / 100.0;
+                }
+                break;
+            }
+
+            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            {
+                __half *halfHostA = (__half *)m_hostA;
+                __half *halfHostB = (__half *)m_hostB;
+                __half_raw rawA, rawB;
+
+                for (size_t i = 0; i < arrayCount; i++)
+                {
+                    rawA.x = rand() % 65536;
+                    rawB.x = rand() % 65536;
+
+                    halfHostA[i] = rawA;
+                    halfHostB[i] = rawB;
+                }
+                break;
+            }
+
+            default:
+                std::string s = fmt::format("fieldId {} is unhandled.", m_fieldId);
+                DCGM_LOG_ERROR << s;
+                throw std::runtime_error(s);
+        }
+
+        /* Just zero the output array */
+        cuMemsetD32(m_deviceC, 0, arrayByteSize);
+
+        /* Copy A and B to the device */
+        cuSt  = cuMemcpyHtoD(m_deviceA, m_hostA, arrayByteSize);
+        cuSt2 = cuMemcpyHtoD(m_deviceB, m_hostB, arrayByteSize);
+        if (cuSt || cuSt2)
+        {
+            std::string s = fmt::format("cuMemcpyHtoD failed {} {}.", cuSt, cuSt2);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+
+        /* Should we enable tensor cores? */
+        if (m_fieldId == DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)
+        {
+            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_TENSOR_OP_MATH);
+        }
+        else
+        {
+#if (CUDA_VERSION_USED < 11)
+            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_DEFAULT_MATH);
+#else
+            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_PEDANTIC_MATH);
+#endif
+        }
+        if (cubSt != CUBLAS_STATUS_SUCCESS)
+        {
+            std::string s = fmt::format("cublasSetMathMode failed {}.", cubSt);
+            DCGM_LOG_ERROR << s;
+            throw std::runtime_error(s);
+        }
+    }
+
+    ~FieldWorkerTensorActivity()
+    {
+        /* Wait for any kernels to finish */
+        cuCtxSynchronize();
+
+        if (m_deviceA != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceA);
+        }
+
+        if (m_deviceB != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceB);
+        }
+
+        if (m_deviceC != (CUdeviceptr) nullptr)
+        {
+            cuMemFree(m_deviceC);
+        }
+
+        if (m_hostA != nullptr)
+        {
+            free(m_hostA);
+        }
+        if (m_hostB != nullptr)
+        {
+            free(m_hostB);
+        }
+
+        if (m_cublasHandle != nullptr)
+        {
+            CublasProxy::CublasDestroy(m_cublasHandle);
+        }
+
+#if (CUDA_VERSION_USED >= 11)
+        if (m_cublasLtHandle != nullptr)
+        {
+            CublasProxy::CublasLtDestroy(m_cublasLtHandle);
+        }
+#endif
+    }
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        cublasStatus_t cubSt {};
+#if (CUDA_VERSION_USED >= 11)
+        cublasStatus_t cubLtSt {};
+#endif
+
+        double alpha     = 1.01 + ((double)(rand() % 100) / 10.0);
+        double beta      = 1.01 + ((double)(rand() % 100) / 10.0);
+        float floatAlpha = (float)alpha;
+        float floatBeta  = (float)beta;
+
+        /* Used https://en.wikipedia.org/wiki/Half-precision_floating-point_format
+        to make these constants, as the cuda functions are device-side only */
+        __half_raw oneAsHalf;
+        oneAsHalf.x      = 0x3C00; /* 1.0 */
+        __half fp16Alpha = oneAsHalf;
+        __half fp16Beta  = oneAsHalf;
+
+        size_t opsInDutyCycle = 0;
+
+        double dutyCycleSecs = (double)dutyCycleLengthMs.count() / 1000.0;
+
+        double now       = timelib_dsecSince1970();
+        double startTime = now;
+        double endTime   = now + dutyCycleSecs;
+        unsigned int i;
+        unsigned int opsPerDutyCycle = 100; /* How many gemms to do between timer checks */
+
+        /* This has always been full bandwidth all the time since dcgmproftester was created
+           That's why you'll see no references to loadTarget */
+
+        for (; now < endTime; now = timelib_dsecSince1970())
+        {
+            for (i = 0; i < opsPerDutyCycle; i++)
+            {
+                switch (m_fieldId)
+                {
+                    case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+                        cubSt = CublasProxy::CublasSgemm(m_cublasHandle,
+                                                         CUBLAS_OP_N,
+                                                         CUBLAS_OP_N,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         &floatAlpha,
+                                                         (float *)m_deviceA,
+                                                         m_arrayDim,
+                                                         (float *)m_deviceB,
+                                                         m_arrayDim,
+                                                         &floatBeta,
+                                                         (float *)m_deviceC,
+                                                         m_arrayDim);
+                        break;
+
+                    case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+#if (CUDA_VERSION_USED >= 11)
+                        cubLtSt = DcgmNs::DcgmDgemm(m_cublasLtHandle,
+                                                    CUBLAS_OP_N,
+                                                    CUBLAS_OP_N,
+                                                    m_arrayDim,
+                                                    m_arrayDim,
+                                                    m_arrayDim,
+                                                    &alpha,
+                                                    (double *)m_deviceA,
+                                                    m_arrayDim,
+                                                    (double *)m_deviceB,
+                                                    m_arrayDim,
+                                                    &beta,
+                                                    (double *)m_deviceC,
+                                                    m_arrayDim);
+#else
+                        cubSt = CublasProxy::CublasDgemm(m_cublasHandle,
+                                                         CUBLAS_OP_N,
+                                                         CUBLAS_OP_N,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         &alpha,
+                                                         (double *)m_deviceA,
+                                                         m_arrayDim,
+                                                         (double *)m_deviceB,
+                                                         m_arrayDim,
+                                                         &beta,
+                                                         (double *)m_deviceC,
+                                                         m_arrayDim);
+#endif
+                        break;
+
+                    case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+                    case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+                        cubSt = CublasProxy::CublasHgemm(m_cublasHandle,
+                                                         CUBLAS_OP_N,
+                                                         CUBLAS_OP_N,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         m_arrayDim,
+                                                         &fp16Alpha,
+                                                         (__half *)m_deviceA,
+                                                         m_arrayDim,
+                                                         (__half *)m_deviceB,
+                                                         m_arrayDim,
+                                                         &fp16Beta,
+                                                         (__half *)m_deviceC,
+                                                         m_arrayDim);
+                        break;
+
+                    default:
+                        DCGM_LOG_ERROR << "Shouldn't get here.";
+                        return;
+                }
+
+                if (cubSt != CUBLAS_STATUS_SUCCESS)
+                {
+                    DCGM_LOG_ERROR << "cublas gemm returned " << cubSt;
+                    return;
+                }
+
+#if (CUDA_VERSION_USED >= 11)
+                if (cubLtSt != CUBLAS_STATUS_SUCCESS)
+                {
+                    DCGM_LOG_ERROR << "cublasLt gemm returned " << cubLtSt;
+                    return;
+                }
+#endif
+
+                opsInDutyCycle++;
+
+                /* Wait for any kernels to finish */
+                cuCtxSynchronize();
+            }
+        }
+
+        m_achievedLoad = (double)opsInDutyCycle * m_flopsPerOp / (now - startTime);
+        DCGM_LOG_VERBOSE << "m_achievedLoad " << m_achievedLoad << ", now " << now << ", startTime " << startTime;
+    }
+};
+
+/*****************************************************************************/

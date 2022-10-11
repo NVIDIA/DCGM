@@ -19,8 +19,9 @@
 #include "TargetedPower_wrapper.h"
 #include <stdexcept>
 
-#include "DcgmThread/DcgmThread.h"
-#include "PluginStrings.h"
+#include <DcgmThread/DcgmThread.h>
+#include <EarlyFailChecker.h>
+#include <PluginStrings.h>
 
 /*************************************************************************/
 ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
@@ -186,7 +187,7 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmGetDeviceAttributes");
                 AddErrorForGpu(gpuId, d);
-                PRINT_ERROR("%s", "Can't get the enforced power limit: %s", d.GetMessage().c_str());
+                log_error("Can't get the enforced power limit: {}", d.GetMessage());
                 return false;
             }
         }
@@ -245,7 +246,7 @@ int ConstantPower::CudaInit()
     m_hostC = malloc(arrayByteSize);
     if (!m_hostA || !m_hostB || !m_hostC)
     {
-        PRINT_ERROR("%d", "Error allocating %d bytes x 3 on the host (malloc)", (int)arrayByteSize);
+        log_error("Error allocating {} bytes x 3 on the host (malloc)", (int)arrayByteSize);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC_HOST, d, arrayByteSize);
         AddError(d);
@@ -686,8 +687,11 @@ bool ConstantPower::RunTest()
         return false;
     }
 
+    bool failedEarly                = false;
     bool failEarly                  = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
+
+    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
 
     try /* Catch runtime errors */
     {
@@ -704,7 +708,7 @@ bool ConstantPower::RunTest()
         }
 
         /* Wait for all workers to finish */
-        while (Nrunning > 0)
+        while (Nrunning > 0 && failedEarly == false)
         {
             Nrunning = 0;
             /* Just go in a round-robin loop around our workers until
@@ -723,6 +727,12 @@ bool ConstantPower::RunTest()
                 if (st)
                 {
                     Nrunning++;
+
+                    if (efc.CheckCommonErrors(timelib_usecSince1970(), startTime, m_dcgmRecorder) == NVVS_RESULT_FAIL)
+                    {
+                        DCGM_LOG_ERROR << "Stopping execution early due to error(s) detected.";
+                        failedEarly = true;
+                    }
                 }
             }
             timeCount++;
@@ -730,7 +740,7 @@ bool ConstantPower::RunTest()
     }
     catch (const std::runtime_error &e)
     {
-        PRINT_ERROR("%s", "Caught runtime_error %s", e.what());
+        log_error("Caught runtime_error {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
@@ -772,7 +782,7 @@ bool ConstantPower::RunTest()
         workerThreads[i] = NULL;
     }
 
-    PRINT_DEBUG("%lld", "Workers stopped. Earliest stop time: %lld", (long long)earliestStopTime);
+    log_debug("Workers stopped. Earliest stop time: {}", (long long)earliestStopTime);
 
     /* Don't check pass/fail if early stop was requested */
     if (main_should_stop)
@@ -830,10 +840,8 @@ double ConstantPowerWorker::ReadPower()
     {
         // We do not add a warning or stop the test because we want to allow some tolerance for when we cannot
         // read the power. Instead we log the error and return -1 as the power value
-        PRINT_ERROR("%d %s",
-                    "Could not retrieve power reading for GPU %d. DcgmRecorder returned: %s",
-                    m_device->gpuId,
-                    errorString(st));
+        log_error(
+            "Could not retrieve power reading for GPU {}. DcgmRecorder returned: {}", m_device->gpuId, errorString(st));
         return -1.0;
     }
 
@@ -869,7 +877,7 @@ int ConstantPowerWorker::RecalcMatrixDim(int currentMatrixDim, double power)
     if (pctDiff < 0.0)
     {
         m_device->minMatrixDim = std::max(currentMatrixDim, m_device->minMatrixDim);
-        PRINT_DEBUG("%d %d", "device %u, minMatrixDim: %d\n", m_device->gpuId, currentMatrixDim);
+        log_debug("device {}, minMatrixDim: {}", m_device->gpuId, currentMatrixDim);
     }
 
     /* Ramp up */
@@ -1050,12 +1058,11 @@ void ConstantPowerWorker::run()
         if (now - lastPrintTime > m_printInterval)
         {
             power = ReadPower();
-            PRINT_DEBUG("%d %f %d %d",
-                        "DeviceIdx %d, Power %.2f W. dim: %d. minDim: %d\n",
-                        m_device->gpuId,
-                        power,
-                        matrixDim,
-                        m_device->minMatrixDim);
+            log_debug("DeviceIdx {}, Power {:.2} W. dim: {}. minDim: {}",
+                      m_device->gpuId,
+                      power,
+                      matrixDim,
+                      m_device->minMatrixDim);
             lastPrintTime = now;
         }
         /* Time to check for failure? */
@@ -1067,13 +1074,12 @@ void ConstantPowerWorker::run()
             if (!result)
             {
                 // Stop the test because a failure occurred
-                PRINT_DEBUG("%d", "Test failure detected for GPU %d. Stopping test early.", m_device->gpuId);
+                log_debug("Test failure detected for GPU {}. Stopping test early.", m_device->gpuId);
                 break;
             }
             lastFailureCheckTime = now;
         }
     }
     m_stopTime = timelib_usecSince1970();
-    PRINT_DEBUG(
-        "%d %lld", "ConstantPowerWorker deviceIndex %d finished at %lld", m_device->gpuId, (long long)m_stopTime);
+    log_debug("ConstantPowerWorker deviceIndex {} finished at {}", m_device->gpuId, (long long)m_stopTime);
 }

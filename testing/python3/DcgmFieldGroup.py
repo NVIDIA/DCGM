@@ -32,17 +32,24 @@ class DcgmFieldGroup:
         self.name = name
         self.fieldIds = fieldIds
         self._dcgmHandle = dcgmHandle
+        self.wasCreated = False
+
+        #If the user passed in an ID, the field group already exists. Fetch live info
         if fieldGroupId is not None:
             self.fieldGroupId = fieldGroupId
+            fieldGroupInfo = dcgm_agent.dcgmFieldGroupGetInfo(self._dcgmHandle.handle, self.fieldGroupId)
+            self.name = fieldGroupInfo.fieldGroupName
+            self.fieldIds = fieldGroupInfo.fieldIds
         else:
             self.fieldGroupId = None #Assign here so the destructor doesn't fail if the call below fails
             self.fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(self._dcgmHandle.handle, fieldIds, name)
+            self.wasCreated = True
 
     '''
     Remove this field group from DCGM. This object can no longer be passed to other APIs after this call.
     '''
     def Delete(self):
-        if self.fieldGroupId is not None:
+        if self.wasCreated and self.fieldGroupId is not None:
             try:
                 try:
                     dcgm_agent.dcgmFieldGroupDestroy(self._dcgmHandle.handle, self.fieldGroupId)
@@ -61,6 +68,7 @@ class DcgmFieldGroup:
                 # get a TypeError: "'NoneType' object is not callable'" Ignore this
                 pass
             self.fieldGroupId = None
+            self._dcgmHandle = None
 
     #Destructor
     def __del__(self):

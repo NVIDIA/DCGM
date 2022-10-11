@@ -6,7 +6,7 @@
 #include <atomic>
 #include <mutex>
 
-static void *g_nvmlLib                                      = 0;
+static void *g_nvmlLib                                     = 0;
 static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 0;
 
 // The following defines the hooking mechanism that calls the hooked function
@@ -92,45 +92,40 @@ static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
     std::lock_guard<std::mutex> guard(dcgmLibLock);
 
 #ifdef _UNIX
-    g_nvmlLib = nvmlLoaderLoadLibrary("libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
+    const char *nvmlPaths[] =
+    {
+        //
+        // for Ubuntu we support /usr/lib{,32,64}/nvidia-current/...
+        // However, we add these paths to ldconfig so this is not needed
+        // If user messes with ldconfig after the installer sets things up it's up to them to fix apps
+        //
+        "libnvidia-ml.so.1",
+        // For x64 .run and other installs
+        "/usr/lib64/libnvidia-ml.so.1",
+        // For RPM Fusion (64 bit)
+        "/usr/lib64/nvidia/libnvidia-ml.so.1",
+        // For some 32 bit and some 64 bit .run and other installs
+        "/usr/lib/libnvidia-ml.so.1",
+        // For some 32 bit .run and other installs
+        "/usr/lib32/libnvidia-ml.so.1",
+        // For RPM Fusion (32 bit)
+        "/usr/lib/nvidia/libnvidia-ml.so.1",
+        nullptr
+    };
 
-    //
-    // for Ubuntu we support /usr/lib{,32,64}/nvidia-current/...
-    // However, we add these paths to ldconfig so this is not needed
-    // If user messes with ldconfig after the installer sets things up it's up to them to fix apps
-    //
+    const char **paths = nvmlPaths;
 
-    // For x64 .run and other installs
-    g_nvmlLib = nvmlLoaderLoadLibrary("/usr/lib64/libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
-
-    // For RPM Fusion (64 bit)
-    g_nvmlLib = nvmlLoaderLoadLibrary("/usr/lib64/nvidia/libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
-
-    // For some 32 bit and some 64 bit .run and other installs
-    g_nvmlLib = nvmlLoaderLoadLibrary("/usr/lib/libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
-
-    // For some 32 bit .run and other installs
-    g_nvmlLib = nvmlLoaderLoadLibrary("/usr/lib32/libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
-
-    // For RPM Fusion (32 bit)
-    g_nvmlLib = nvmlLoaderLoadLibrary("/usr/lib/nvidia/libnvidia-ml.so.1");
-    if (g_nvmlLib)
-        goto success;
+    for (unsigned int i = 0; paths[i] != nullptr; i++)
+    {
+        g_nvmlLib = nvmlLoaderLoadLibrary(paths[i]);
+        if (g_nvmlLib)
+        {
+            return NVML_SUCCESS;
+        }
+    }
 
     return NVML_ERROR_LIBRARY_NOT_FOUND;
 
-success:
-    return NVML_SUCCESS;
 #endif // _UNIX
 
 #ifdef _WINDOWS

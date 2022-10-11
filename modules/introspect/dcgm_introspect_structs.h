@@ -20,64 +20,15 @@
 
 /*****************************************************************************/
 /* Introspect Subrequest IDs */
-#define DCGM_INTROSPECT_SR_STATE_TOGGLE           1
-#define DCGM_INTROSPECT_SR_STATE_SET_RUN_INTERVAL 2
-#define DCGM_INTROSPECT_SR_UPDATE_ALL             3
-#define DCGM_INTROSPECT_SR_HOSTENGINE_MEM_USAGE   4
-#define DCGM_INTROSPECT_SR_HOSTENGINE_CPU_UTIL    5
-#define DCGM_INTROSPECT_SR_FIELDS_MEM_USAGE       6
-#define DCGM_INTROSPECT_SR_FIELDS_EXEC_TIME       7
-#define DCGM_INTROSPECT_SR_COUNT                  8 /* Keep as last entry and 1 greater */
+/* 1-3 are deprecated */
+#define DCGM_INTROSPECT_SR_HOSTENGINE_MEM_USAGE 4
+#define DCGM_INTROSPECT_SR_HOSTENGINE_CPU_UTIL  5
+/* 6-7 are deprecated */
+#define DCGM_INTROSPECT_SR_COUNT 8 /* Keep as last entry and 1 greater */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
 /*****************************************************************************/
-
-/**
- * Subrequest DCGM_INTROSPECT_SR_STATE_TOGGLE
- */
-typedef struct dcgm_introspect_msg_toggle_v1
-{
-    dcgm_module_command_header_t header; /* Command header */
-
-    dcgmIntrospectState_t enabledStatus; /* State to set */
-} dcgm_introspect_msg_toggle_v1;
-
-#define dcgm_introspect_msg_toggle_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_toggle_v1, 1)
-#define dcgm_introspect_msg_toggle_version  dcgm_introspect_msg_toggle_version1
-
-typedef dcgm_introspect_msg_toggle_v1 dcgm_introspect_msg_toggle_t;
-
-
-/**
- * Subrequest DCGM_INTROSPECT_SR_STATE_SET_RUN_INTERVAL
- */
-typedef struct dcgm_introspect_msg_set_interval_v1
-{
-    dcgm_module_command_header_t header; /* Command header */
-
-    unsigned int runIntervalMs; /* How often the introspect thread should sample in ms */
-} dcgm_introspect_msg_set_interval_v1;
-
-#define dcgm_introspect_msg_set_interval_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_set_interval_v1, 1)
-#define dcgm_introspect_msg_set_interval_version  dcgm_introspect_msg_set_interval_version1
-
-typedef dcgm_introspect_msg_set_interval_v1 dcgm_introspect_msg_set_interval_t;
-
-/**
- * Subrequest DCGM_INTROSPECT_SR_UPDATE_ALL
- */
-typedef struct dcgm_introspect_msg_update_all_v1
-{
-    dcgm_module_command_header_t header; /* Command header */
-
-    int waitForUpdate; /* Should this request return immediately (0) or wait for the update to finish (1) */
-} dcgm_introspect_msg_update_all_v1;
-
-#define dcgm_introspect_msg_update_all_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_update_all_v1, 1)
-#define dcgm_introspect_msg_update_all_version  dcgm_introspect_msg_update_all_version1
-
-typedef dcgm_introspect_msg_update_all_v1 dcgm_introspect_msg_update_all_t;
 
 /**
  * Subrequest DCGM_INTROSPECT_SR_HOSTENGINE_MEM_USAGE
@@ -92,9 +43,6 @@ typedef struct dcgm_introspect_msg_he_mem_usage_v1
 } dcgm_introspect_msg_he_mem_usage_v1;
 
 #define dcgm_introspect_msg_he_mem_usage_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_he_mem_usage_v1, 1)
-#define dcgm_introspect_msg_he_mem_usage_version  dcgm_introspect_msg_he_mem_usage_version1
-
-typedef dcgm_introspect_msg_he_mem_usage_v1 dcgm_introspect_msg_he_mem_usage_t;
 
 /**
  * Subrequest DCGM_INTROSPECT_SR_HOSTENGINE_CPU_UTIL
@@ -109,43 +57,6 @@ typedef struct dcgm_introspect_msg_he_cpu_util_v1
 } dcgm_introspect_msg_he_cpu_util_v1;
 
 #define dcgm_introspect_msg_he_cpu_util_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_he_cpu_util_v1, 1)
-#define dcgm_introspect_msg_he_cpu_util_version  dcgm_introspect_msg_he_cpu_util_version1
-
-typedef dcgm_introspect_msg_he_cpu_util_v1 dcgm_introspect_msg_he_cpu_util_t;
-
-/**
- * Subrequest DCGM_INTROSPECT_SR_FIELDS_MEM_USAGE
- */
-typedef struct dcgm_introspect_msg_fields_mem_usage_v1
-{
-    dcgm_module_command_header_t header;   /* Command header */
-    dcgmIntrospectContext_t context;       /* Info about the nature of this request */
-    dcgmIntrospectFullMemory_t memoryInfo; /* Info about field memory usage */
-    int waitIfNoData; /* Should this request return immediately (0) or wait for data to be present if there is none (1)
-                       */
-} dcgm_introspect_msg_fields_mem_usage_v1;
-
-#define dcgm_introspect_msg_fields_mem_usage_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_fields_mem_usage_v1, 1)
-#define dcgm_introspect_msg_fields_mem_usage_version  dcgm_introspect_msg_fields_mem_usage_version1
-
-typedef dcgm_introspect_msg_fields_mem_usage_v1 dcgm_introspect_msg_fields_mem_usage_t;
-
-/**
- * Subrequest DCGM_INTROSPECT_SR_FIELDS_EXEC_TIME
- */
-typedef struct dcgm_introspect_msg_fields_exec_time_v1
-{
-    dcgm_module_command_header_t header;         /* Command header */
-    dcgmIntrospectContext_t context;             /* Info about the nature of this request */
-    dcgmIntrospectFullFieldsExecTime_t execTime; /* Info about field execution time */
-    int waitIfNoData; /* Should this request return immediately (0) or wait for data to be present if there is none (1)
-                       */
-} dcgm_introspect_msg_fields_exec_time_v1;
-
-#define dcgm_introspect_msg_fields_exec_time_version1 MAKE_DCGM_VERSION(dcgm_introspect_msg_fields_exec_time_v1, 1)
-#define dcgm_introspect_msg_fields_exec_time_version  dcgm_introspect_msg_fields_exec_time_version1
-
-typedef dcgm_introspect_msg_fields_exec_time_v1 dcgm_introspect_msg_fields_exec_time_t;
 
 /*****************************************************************************/
 

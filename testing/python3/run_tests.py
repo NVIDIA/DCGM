@@ -114,13 +114,13 @@ def run_tests():
             with test_utils.RunStandaloneHostEngine() as handle:
                 dcgmGpuCount = test_utils.log_gpu_information(handle)
                 if dcgmGpuCount < 1:
-                    logger.error("No DCGM-whitelisted GPUs found. Skipping tests.")
+                    logger.error("No GPUs on DCGM's GPU allowlist found. Skipping tests.")
                     return
         else:
             with test_utils.RunEmbeddedHostEngine() as handle:
                 dcgmGpuCount = test_utils.log_gpu_information(handle)
                 if dcgmGpuCount < 1:
-                    logger.error("No DCGM-whitelisted GPUs found. Skipping tests.")
+                    logger.error("No GPUs on DCGM's GPU allowlist found. Skipping tests.")
                     return
 
         # Persistence mode is required

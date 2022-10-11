@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <dcgm_fields_internal.h>
+#include <dcgm_fields_internal.hpp>
 
 #include "DcgmLogging.h"
 #include "DcgmUtilities.h"
@@ -21,14 +21,12 @@
 
 /*****************************************************************************/
 DcgmWatchTable::DcgmWatchTable()
-    : m_mutex(0)
-    , m_entityWatchHashTable()
+    : m_entityWatchHashTable()
 {}
 
 /*****************************************************************************/
 void DcgmWatchTable::ClearWatches()
 {
-    DcgmLockGuard dlg(&m_mutex);
     m_entityWatchHashTable.clear();
 }
 
@@ -36,7 +34,6 @@ void DcgmWatchTable::ClearWatches()
 dcgmReturn_t DcgmWatchTable::ClearEntityWatches(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
-    DcgmLockGuard dlg(&m_mutex);
 
     DcgmNs::Utils::EraseIf(m_entityWatchHashTable, [&](auto const &pair) {
         return pair.first.entityGroupId == entityGroupId && pair.first.entityId == entityId;
@@ -46,12 +43,32 @@ dcgmReturn_t DcgmWatchTable::ClearEntityWatches(dcgm_field_entity_group_t entity
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmWatchTable::RemoveConnectionWatches(
-    dcgm_connection_id_t connectionId,
-    std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo)
+dcgmReturn_t DcgmWatchTable::RemoveWatcher(dcgm_field_entity_group_t entityGroupId,
+                                           dcgm_field_eid_t entityId,
+                                           unsigned int fieldId,
+                                           DcgmWatcher watcher,
+                                           dcgmPostWatchInfo_t *postWatchInfo)
 {
-    DcgmLockGuard dlg(&m_mutex);
+    dcgm_watcher_info_t watcherInfo;
+    watcherInfo.watcher = std::move(watcher);
 
+    dcgm_entity_key_t entityKey { entityId, (unsigned short)fieldId, entityGroupId };
+
+    auto watchInfo = m_entityWatchHashTable.find(entityKey);
+    if (watchInfo == m_entityWatchHashTable.end())
+    {
+        DCGM_LOG_WARNING << "Got RemoveWatcher for unknown eg " << entityGroupId << ", eid " << entityId << ", fieldId "
+                         << fieldId;
+        return DCGM_ST_NOT_WATCHED;
+    }
+
+    return RemoveWatcher((*watchInfo).second, watcherInfo, postWatchInfo);
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmWatchTable::RemoveConnectionWatches(dcgm_connection_id_t connectionId,
+                                                     dcgmPostWatchInfo_t *postWatchInfo)
+{
     size_t totalWatchersRemoved = 0;
 
     for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
@@ -99,12 +116,10 @@ dcgmReturn_t DcgmWatchTable::RemoveConnectionWatches(
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmWatchTable::RemoveWatches(DcgmWatcher watcher,
-                                           std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo)
+dcgmReturn_t DcgmWatchTable::RemoveWatches(DcgmWatcher watcher, dcgmPostWatchInfo_t *postWatchInfo)
 {
     dcgm_watcher_info_t watcherInfo;
     watcherInfo.watcher = std::move(watcher);
-    DcgmLockGuard dlg(&m_mutex);
 
     for ([[maybe_unused]] auto &[_, watchInfo] : m_entityWatchHashTable)
     {
@@ -116,12 +131,31 @@ dcgmReturn_t DcgmWatchTable::RemoveWatches(DcgmWatcher watcher,
 }
 
 /*****************************************************************************/
+void DcgmWatchTable::GetMinAndMaxUpdateInterval(timelib64_t &minUpdateInterval, timelib64_t &maxUpdateInterval)
+{
+    timelib64_t minInterval = DCGM_INT64_BLANK;
+    timelib64_t maxInterval = 0;
+
+    for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
+    {
+        maxInterval = std::max(watchInfo.updateIntervalUsec, maxInterval);
+        minInterval = std::min(watchInfo.updateIntervalUsec, minInterval);
+    }
+
+    minUpdateInterval = DCGM_INT64_IS_BLANK(minInterval) ? 0 : minInterval;
+    maxUpdateInterval = maxInterval;
+
+    DCGM_LOG_DEBUG << "GetMaxUpdateInterval returning min " << minUpdateInterval << ", max " << maxUpdateInterval;
+}
+
+/*****************************************************************************/
 bool DcgmWatchTable::IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t currentModule)
 {
     switch (currentModule)
     {
         case DcgmModuleIdCore:
-            return fieldId >= DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00;
+            /* Ignore NvSwitch fields but keep the rest, including profiling fields */
+            return fieldId >= DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdNvSwitch:
             return fieldId < DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 || fieldId >= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdProfiling:
@@ -136,7 +170,7 @@ const int GLOBAL_WATCH_ENTITY_INDEX = -1;
 /*****************************************************************************/
 dcgmReturn_t DcgmWatchTable::RemoveWatcher(dcgm_watch_info_t &watchInfo,
                                            const dcgm_watcher_info_t &watcher,
-                                           std::unordered_map<int, std::vector<unsigned short>> *postWatchInfo)
+                                           dcgmPostWatchInfo_t *postWatchInfo)
 {
     for (auto it = watchInfo.watchers.begin(); it != watchInfo.watchers.end(); it++)
     {
@@ -168,8 +202,9 @@ dcgmReturn_t DcgmWatchTable::RemoveWatcher(dcgm_watch_info_t &watchInfo,
         }
     }
 
-    DCGM_LOG_DEBUG << "RemoveWatcher() type " << watcher.watcher.watcherType << ", connectionId %u was not a watcher"
-                   << watcher.watcher.connectionId;
+    log_debug("RemoveWatcher() type {}, connectionId {} was not a watcher",
+              watcher.watcher.watcherType,
+              watcher.watcher.connectionId);
 
     return DCGM_ST_NOT_WATCHED;
 }
@@ -245,7 +280,6 @@ dcgmReturn_t DcgmWatchTable::GetFieldsToUpdate(dcgmModuleId_t currentModule,
     dcgm_field_meta_p fieldMeta = 0;
 
     earliestNextUpdate = 0;
-    DcgmLockGuard dlg(&m_mutex);
 
     /* Walk the hash table of watch objects, looking for any that have expired */
     for (auto &[watchkey, watchInfo] : m_entityWatchHashTable)
@@ -308,7 +342,6 @@ bool DcgmWatchTable::AddWatcher(dcgm_field_entity_group_t entityGroupId,
                                 timelib64_t maxAgeUsec,
                                 bool isSubscribed)
 {
-    DcgmLockGuard dlg(&m_mutex);
     dcgm_entity_key_t key { entityId, fieldId, entityGroupId };
     dcgm_watcher_info_t watcherInfo;
     watcherInfo.watcher            = watcher;
@@ -366,7 +399,6 @@ timelib64_t DcgmWatchTable::GetUpdateIntervalUsec(dcgm_field_entity_group_t enti
                                                   unsigned short fieldId)
 {
     dcgm_entity_key_t key { entityId, fieldId, entityGroupId };
-    DcgmLockGuard dlg(&m_mutex);
     dcgm_watch_info_t &watchInfo = m_entityWatchHashTable[key];
     return watchInfo.updateIntervalUsec;
 }
@@ -377,7 +409,6 @@ timelib64_t DcgmWatchTable::GetMaxAgeUsec(dcgm_field_entity_group_t entityGroupI
                                           unsigned short fieldId)
 {
     dcgm_entity_key_t key { entityId, fieldId, entityGroupId };
-    DcgmLockGuard dlg(&m_mutex);
     dcgm_watch_info_t &watchInfo = m_entityWatchHashTable[key];
     return watchInfo.maxAgeUsec;
 }
@@ -388,7 +419,6 @@ bool DcgmWatchTable::GetIsSubscribed(dcgm_field_entity_group_t entityGroupId,
                                      unsigned short fieldId)
 {
     dcgm_entity_key_t key { entityId, fieldId, entityGroupId };
-    DcgmLockGuard dlg(&m_mutex);
     dcgm_watch_info_t &watchInfo = m_entityWatchHashTable[key];
     return watchInfo.hasSubscribedWatchers;
 }

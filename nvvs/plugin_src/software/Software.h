@@ -68,9 +68,9 @@ private:
     // methods
     bool checkPermissions();
     bool checkLibraries(libraryCheck_t libs);
-    bool checkBlacklist();
+    bool checkDenylist();
     bool findLib(std::string, std::string &error);
-    int checkDriverPathBlacklist(std::string, std::vector<std::string> const &);
+    int checkDriverPathDenylist(std::string, std::vector<std::string> const &);
     int retrieveDeviceCount(unsigned int *count);
     int checkPersistenceMode();
     int checkForGraphicsProcesses();

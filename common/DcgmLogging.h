@@ -24,6 +24,10 @@
 // before syslog if we don't want those overwritten by plog
 #include <plog/Log.h>
 
+#include <fmt/core.h>
+#include <source_location>
+#include <type_traits>
+
 #include <atomic>
 #include <cstdio>
 #include <dcgm_structs.h>
@@ -93,9 +97,9 @@ extern HostengineAppender hostengineAppender;
 namespace
 {
 template <class... Args>
-void SyslogAdapter(int priority, char const *format, Args &&...args)
+void SyslogAdapter(int priority, fmt::format_string<Args...> format, Args &&...args)
 {
-    syslog(priority, format, std::forward<Args>(args)...);
+    syslog(priority, "%s", fmt::format(format, std::forward<Args>(args)...).c_str());
 }
 } // namespace
 
@@ -103,24 +107,24 @@ void SyslogAdapter(int priority, char const *format, Args &&...args)
  * SYSLOG_* macros assume the following calling convention:
  * SYSLOG_CRITICAL(format [, string, format, arguments])
  */
-#define SYSLOG_CRITICAL(...)              \
-    PRINT_CRITICAL(nullptr, __VA_ARGS__); \
+#define SYSLOG_CRITICAL(...) \
+    log_fatal(__VA_ARGS__);  \
     SyslogAdapter(PLOG_CRIT, __VA_ARGS__);
 
-#define SYSLOG_ERROR(...)              \
-    PRINT_ERROR(nullptr, __VA_ARGS__); \
+#define SYSLOG_ERROR(...)   \
+    log_error(__VA_ARGS__); \
     SyslogAdapter(PLOG_ERR, __VA_ARGS__);
 
-#define SYSLOG_WARNING(...)              \
-    PRINT_WARNING(nullptr, __VA_ARGS__); \
+#define SYSLOG_WARNING(...)   \
+    log_warning(__VA_ARGS__); \
     SyslogAdapter(PLOG_WARNING, __VA_ARGS__);
 
-#define SYSLOG_NOTICE(...)            \
-    PRINT_INFO(nullptr, __VA_ARGS__); \
+#define SYSLOG_NOTICE(...) \
+    log_info(__VA_ARGS__); \
     SyslogAdapter(PLOG_NOTICE, __VA_ARGS__);
 
-#define SYSLOG_INFO(...)              \
-    PRINT_INFO(nullptr, __VA_ARGS__); \
+#define SYSLOG_INFO(...)   \
+    log_info(__VA_ARGS__); \
     SyslogAdapter(PLOG_INFO, __VA_ARGS__);
 
 #define DCGM_MAX_LOG_ROTATE 5
@@ -181,91 +185,219 @@ DCGM_CASSERT(DcgmLoggingSeverityVerbose == (DcgmLoggingSeverity_t)plog::verbose,
 #define IF_DCGM_LOG_SYSLOG_ERROR    IF_PLOG_(SYSLOG_LOGGER, plog::error)
 #define IF_DCGM_LOG_SYSLOG_CRITICAL IF_PLOG_(SYSLOG_LOGGER, plog::fatal)
 
+namespace details
+{
+
+/**
+ * This is similar to fmt::basic_format_string except for the additional source location member
+ * Every time this struct is instantiated, it will store the source location of the caller.
+ * This structure keeps statically checked formatting string.
+ */
+template <class... TArgs>
+struct basic_format_string
+{
+    fmt::format_string<TArgs...> fmt;
+    std::source_location loc;
+
+    template <class T>
+    consteval basic_format_string(T const &arg, std::source_location loc = std::source_location::current())
+        : fmt(arg)
+        , loc(loc)
+    {}
+};
+
+/*
+ * This is a helper structure that allows converting from TFrom pointer to TTo pointer preserving constness.
+ * pointer_cast<void*, char*>::type == void*
+ * pointer_cast<void*, const char*>::type == const void*
+ */
+template <class TTo, class TFrom>
+    requires std::is_pointer_v<TFrom> && std::is_pointer_v<TTo>
+struct pointer_cast
+{
+    template <class T>
+    struct helper;
+    template <class T>
+        requires std::is_const_v<std::remove_pointer_t<T>>
+    struct helper<T>
+    {
+        using type = std::add_pointer_t<std::add_const_t<std::remove_pointer_t<TTo>>>;
+    };
+    template <class T>
+        requires(!std::is_const_v<std::remove_pointer_t<T>>)
+    struct helper<T>
+    {
+        using type = TTo;
+    };
+
+    using type = typename helper<TFrom>::type;
+};
+
+template <class TTo, class TFrom>
+using pointer_cast_t = typename pointer_cast<TTo, TFrom>::type;
+
+/*
+ * Similar to std::type_identity but with special treatment of pointers.
+ * libfmt does not allow to format non-void pointers, so our implementation casts any pointer to void* or void const*
+ * depending on the constness of the original pointer.
+ * This allows us to call logging functions with log_info("{}", ptr) instead of log_info("{}", (void const*)ptr) where
+ * ptr may be either a non-void pointer of a function pointer.
+ * Without such modification, our macros in entry_point.h would fail to compile.
+ * The type_identity is used to establish non-deduced context:
+ * https://en.cppreference.com/w/cpp/language/template_argument_deduction#Non-deduced_contexts
+ */
+template <class T>
+struct type_identity;
+
+template <class T>
+    requires(!std::is_pointer_v<std::remove_reference_t<T>> || std::is_convertible_v<T, fmt::string_view>)
+struct type_identity<T>
+{
+    using type = T;
+};
+
+template <class T>
+    requires(std::is_pointer_v<std::remove_reference_t<T>> && !std::is_convertible_v<T, fmt::string_view>)
+struct type_identity<T>
+{
+    using type = pointer_cast_t<void *, std::remove_reference_t<T>>;
+};
+
+template <class T>
+using type_identity_t = typename type_identity<T>::type;
+
+/*
+ * Similar to fmt::format_string but with special treatment of pointers.
+ */
+template <class... TArgs>
+using format_string = basic_format_string<type_identity_t<TArgs>...>;
+
+template <loggerCategory_t TLogger, plog::Severity TSeverity, class... TArgs>
+inline void log(format_string<TArgs...> format, TArgs &&...args)
+{
+    // This is mostly unrolled PLOG_ macro invocation with modifications to use source_location
+    // instead of __LINE__, __FILE__, etc. macros.
+    // The args types should be in agreement with the format_string types, so we have to use
+    // type_identity to convert the types accordingly.
+    if (plog::get<TLogger>() && plog::get<TLogger>()->checkSeverity(TSeverity))
+    {
+        (*plog::get<TLogger>()) += plog::Record(TSeverity,
+                                                format.loc.function_name(),
+                                                format.loc.line(),
+                                                format.loc.file_name(),
+                                                reinterpret_cast<void *>(0),
+                                                TLogger)
+                                       .ref()
+                                   << fmt::format(format.fmt, type_identity_t<TArgs>(args)...);
+    }
+}
+
+template <class... TArgs>
+constexpr auto log_helper_create_format(format_string<TArgs...> format, TArgs &&...)
+{
+    return format;
+}
+
+} // namespace details
+
 namespace
 {
-template <class... Args>
-void OldLoggerAdapter(char *outBuffer, size_t bufSize, char const * /*unused*/, char const *format, Args &&...args)
+template <class... TArgs>
+inline void log_info(details::format_string<TArgs...> format, TArgs &&...args)
 {
-    snprintf(outBuffer, bufSize, format, std::forward<Args>(args)...);
+    details::log<BASE_LOGGER, plog::info>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_info(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_info(format, std::forward<T>(msg));
+}
+
+template <class... TArgs>
+inline void log_debug(details::format_string<TArgs...> format, TArgs &&...args)
+{
+    details::log<BASE_LOGGER, plog::debug>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_debug(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_debug(format, std::forward<T>(msg));
+}
+
+template <class... TArgs>
+inline void log_error(details::format_string<TArgs...> format, TArgs &&...args)
+{
+    details::log<BASE_LOGGER, plog::error>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_error(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_error(format, std::forward<T>(msg));
+}
+
+template <class... TArgs>
+inline void log_warning(details::format_string<TArgs...> format, TArgs &&...args)
+{
+    details::log<BASE_LOGGER, plog::warning>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_warning(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_warning(format, std::forward<T>(msg));
+}
+
+template <class... TArgs>
+inline void log_fatal(details::format_string<TArgs...> format, TArgs &&...args)
+{
+    details::log<BASE_LOGGER, plog::fatal>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_fatal(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_fatal(format, std::forward<T>(msg));
 }
 } // namespace
 
-
-/**
- * PRINT_* macros assume the following calling convention:
- * PRINT_CRITICAL("", format [, string, format, arguments])
- */
 #undef PRINT_CRITICAL
-#define PRINT_CRITICAL(...)                                                              \
-    {                                                                                    \
-        IF_PLOG_(BASE_LOGGER, plog::fatal)                                               \
-        {                                                                                \
-            char _dcgm_logging_buf[4096];                                                \
-            OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
-            DCGM_LOG_FATAL << _dcgm_logging_buf;                                         \
-        }                                                                                \
-    }
-
 #undef PRINT_ERROR
-#define PRINT_ERROR(...)                                                                 \
-    {                                                                                    \
-        IF_PLOG_(BASE_LOGGER, plog::error)                                               \
-        {                                                                                \
-            char _dcgm_logging_buf[4096];                                                \
-            OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
-            DCGM_LOG_ERROR << _dcgm_logging_buf;                                         \
-        }                                                                                \
-    }
-
 #undef PRINT_WARNING
-#define PRINT_WARNING(...)                                                               \
-    {                                                                                    \
-        IF_PLOG_(BASE_LOGGER, plog::warning)                                             \
-        {                                                                                \
-            char _dcgm_logging_buf[4096];                                                \
-            OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
-            DCGM_LOG_WARNING << _dcgm_logging_buf;                                       \
-        }                                                                                \
-    }
-
 #undef PRINT_INFO
-#define PRINT_INFO(...)                                                                  \
-    {                                                                                    \
-        IF_PLOG_(BASE_LOGGER, plog::info)                                                \
-        {                                                                                \
-            char _dcgm_logging_buf[4096];                                                \
-            OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
-            DCGM_LOG_INFO << _dcgm_logging_buf;                                          \
-        }                                                                                \
-    }
-
-// NVML logging.h defines a PRINT_INFO2 ... which seems unnecessary
 #undef PRINT_INFO2
-
 #undef PRINT_DEBUG
-#define PRINT_DEBUG(...)                                                                 \
-    {                                                                                    \
-        IF_PLOG_(BASE_LOGGER, plog::debug)                                               \
-        {                                                                                \
-            char _dcgm_logging_buf[1024];                                                \
-            OldLoggerAdapter(_dcgm_logging_buf, sizeof(_dcgm_logging_buf), __VA_ARGS__); \
-            DCGM_LOG_DEBUG << _dcgm_logging_buf;                                         \
-        }                                                                                \
-    }
 
 /**
  * @brief Helper function to handle command line arguments and environment variables
  *
  * @param arg[in]           If not empty, arg's value will be returned from the function.
- * @param defaultValue[in]  If neiher arg nor env variable value is set, this value will
- *                          be retured from the function.
+ * @param defaultValue[in]  If neither arg nor env variable value is set, this value will
+ *                          be returned from the function.
  * @param envPrefix[in]     Env variable prefix
  * @param envSuffix[in]     Env variable suffix
  * @return
  *      - arg if arg is not empty
  *      - defaultValue if env variable is not set or empty
  *      - value of the env variable with name envPrefix_envSuffix
- * @note Env variable value is limited by max filename path length. If the value exeedes
+ * @note Env variable value is limited by max filename path length. If the value exceeds
  *       this limit, the defaultValue will be returned.
  */
 std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,

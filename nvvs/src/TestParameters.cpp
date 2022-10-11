@@ -199,7 +199,7 @@ int TestParameters::AddString(std::string key, std::string value)
 {
     if (m_globalParameters.find(key) != m_globalParameters.end())
     {
-        PRINT_WARNING("%s %s", "Tried to add parameter %s => %s, but it already exists", key.c_str(), value.c_str());
+        log_warning("Tried to add parameter {} => {}, but it already exists", key.c_str(), value.c_str());
         return TP_ST_ALREADYEXISTS;
     }
 
@@ -232,12 +232,10 @@ int TestParameters::AddSubTestString(std::string subTest, std::string key, std::
         it = outerIt->second.find(key);
         if (it != outerIt->second.end())
         {
-            PRINT_WARNING("%s %s %s",
-                          "Tried to add subtest %s parameter %s => %s, "
-                          "but it already exists",
-                          subTest.c_str(),
-                          key.c_str(),
-                          value.c_str());
+            log_warning("Tried to add subtest {} parameter {} => {}, but it already exists",
+                        subTest.c_str(),
+                        key.c_str(),
+                        value.c_str());
             return TP_ST_ALREADYEXISTS;
         }
     }
@@ -258,11 +256,10 @@ int TestParameters::AddSubTestDouble(std::string subTest, std::string key, doubl
         it = outerIt->second.find(key);
         if (it != outerIt->second.end())
         {
-            PRINT_WARNING("%s %s %f",
-                          "Tried to add subtest %s parameter %s => %f, but it already exists",
-                          subTest.c_str(),
-                          key.c_str(),
-                          value);
+            log_warning("Tried to add subtest {} parameter {} => {}, but it already exists",
+                        subTest.c_str(),
+                        key.c_str(),
+                        value);
             return TP_ST_ALREADYEXISTS;
         }
     }
@@ -278,7 +275,7 @@ int TestParameters::SetString(std::string key, std::string value, bool silent)
     {
         if (silent == false)
         {
-            PRINT_WARNING("%s %s", "Tried to set unknown parameter %s to %s", key.c_str(), value.c_str());
+            log_warning("Tried to set unknown parameter {} to {}", key.c_str(), value.c_str());
         }
         return TP_ST_NOTFOUND;
     }
@@ -293,7 +290,7 @@ int TestParameters::SetDouble(std::string key, double value)
 {
     if (m_globalParameters.find(key) == m_globalParameters.end())
     {
-        PRINT_WARNING("%s %f", "Tried to set unknown parameter %s to %f", key.c_str(), value);
+        log_warning("Tried to set unknown parameter {} to {}", key.c_str(), value);
         return TP_ST_NOTFOUND;
     }
 
@@ -344,8 +341,7 @@ int TestParameters::SetSubTestDouble(std::string subTest, std::string key, doubl
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt == m_subTestParameters.end())
     {
-        PRINT_WARNING(
-            "%s %s %f", "Tried to set unknown subtest %s's parameter %s to %f", subTest.c_str(), key.c_str(), value);
+        log_warning("Tried to set unknown subtest {}'s parameter {} to {}", subTest.c_str(), key.c_str(), value);
         return TP_ST_NOTFOUND;
     }
 

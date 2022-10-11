@@ -52,9 +52,7 @@ dcgmReturn_t Gpu::Init()
 
     if (ret != DCGM_ST_OK)
     {
-        std::stringstream buf;
-        buf << "Unable to get GPU " << m_index << "'s information: " << dcgmHandle.RetToString(ret);
-        PRINT_ERROR("%s", "%s", buf.str().c_str());
+        log_error("Unable to get GPU {}'s information: {}", m_index, dcgmHandle.RetToString(ret));
         return ret;
     }
 
@@ -62,9 +60,7 @@ dcgmReturn_t Gpu::Init()
     ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
-        std::stringstream buf;
-        buf << "Unable to get GPU " << m_index << "'s compute capability: " << dcgmHandle.RetToString(ret);
-        PRINT_ERROR("%s", "%s", buf.str().c_str());
+        log_error("Unable to get GPU {}'s compute capability: {}", m_index, dcgmHandle.RetToString(ret));
         return ret;
     }
 
@@ -74,13 +70,21 @@ dcgmReturn_t Gpu::Init()
     ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_GPU_MAX_OP_TEMP, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
-        std::stringstream buf;
-        buf << "Unable to get GPU " << m_index << "'s max operating temperature: " << dcgmHandle.RetToString(ret);
-        PRINT_ERROR("%s", "%s", buf.str().c_str());
+        log_error("Unable to get GPU {}'s max operating temperature: {}", m_index, dcgmHandle.RetToString(ret));
         return ret;
     }
 
     m_maxGpuOpTemp = value.value.i64;
+
+    value = {};
+    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_SERIAL, DCGM_FV_FLAG_LIVE_DATA, value);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Unable to get GPU {}'s serial: {}", m_index, dcgmHandle.RetToString(ret));
+        return ret;
+    }
+
+    m_serial = value.value.str;
 
     std::stringstream ss;
     unsigned int deviceId = m_attributes.identifiers.pciDeviceId >> 16;
@@ -111,8 +115,7 @@ void Gpu::PopulateMaxMemoryClock(void)
     ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_MAX_MEM_CLOCK, DCGM_FV_FLAG_LIVE_DATA, fv);
     if (ret != DCGM_ST_OK || fv.status != DCGM_ST_OK)
     {
-        PRINT_DEBUG(
-            "%d %d %u", "Got error %d or status %d from GetGpuLatestValue for gpuId %u", ret, fv.status, m_index);
+        log_debug("Got error {} or status {} from GetGpuLatestValue for gpuId {}", ret, fv.status, m_index);
         m_maxMemoryClock = DCGM_INT32_BLANK;
     }
     else

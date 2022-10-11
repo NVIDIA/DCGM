@@ -86,7 +86,7 @@ public:
         }
 
         /* Initialize the runtime implicitly so we can grab its context */
-        PRINT_DEBUG("%d", "Attaching to cuda device index %d", (int)cuDevice);
+        log_debug("Attaching to cuda device index {}", (int)cuDevice);
         cudaSetDevice(cuDevice);
         cudaFree(0);
 
@@ -166,8 +166,6 @@ public:
      * @param supportsDoubles - if no string is set, then whether or not cublasDgemm() is supported
      */
     int32_t SetPrecisionFromString(bool supportsDoubles);
-
-    /*************************************************************************/
 
 private:
     /*************************************************************************/

@@ -134,13 +134,13 @@ def helper_dcgm_health_check_pcie(handle, gpuIds):
     assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_embedded(handle, gpuIds):
     helper_dcgm_health_check_pcie(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
     helper_dcgm_health_check_pcie(handle, gpuIds)
 
@@ -198,7 +198,7 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_dbe(handle, gpuIds):
     helper_test_dcgm_health_check_mem_dbe(handle, gpuIds)
 
@@ -393,16 +393,16 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
     # Make sure we've set the monitor frequency to less than 35 seconds - that will make us around 
     # half or less of the 60 seconds we give the data before calling it stale.
     cmFieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING)
-    assert cmFieldInfo.monitorFrequencyUsec < 35000000
+    assert cmFieldInfo.monitorIntervalUsec < 35000000
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_standalone(handle, gpuIds):
     helper_test_dcgm_health_check_mem(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_embedded(handle, gpuIds):
     helper_test_dcgm_health_check_mem(handle, gpuIds)
     
@@ -431,7 +431,7 @@ def test_dcgm_standalone_health_set_thermal(handle):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
     """
     Verifies that a check error occurs when an error is injected
@@ -627,7 +627,7 @@ def test_dcgm_health_check_sanity_nvswitch_fatal_standalone(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_power(handle, gpuIds):
     """
     Verifies that a check error occurs when an error is injected
@@ -667,12 +667,12 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_nvlink(handle, gpuIds):
     helper_health_check_nvlink_error_counters(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_health_check_nvlink(handle, gpuIds):
     helper_health_check_nvlink_error_counters(handle, gpuIds)
 
@@ -782,12 +782,12 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_fatal(handle, gpuIds):
     helper_nvlink_check_fatal_errors(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_fatal(handle, gpuIds):
     helper_nvlink_check_fatal_errors(handle, gpuIds)
 
@@ -828,12 +828,12 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
@@ -1163,7 +1163,7 @@ def helper_health_set_version2(handle, gpuIds):
     for gpuId in gpuIds:
         cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
         assert cmfi.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED, "x%X" % cmfi.flags
-        assert cmfi.monitorFrequencyUsec == watchInterval, "%d != %d" % (cmfi.monitorFrequencyUsec, watchInterval)
+        assert cmfi.monitorIntervalUsec == watchInterval, "%d != %d" % (cmfi.monitorIntervalUsec, watchInterval)
         assert cmfi.maxAgeUsec == maxKeepAgeUsec, "%d != %d" % (cmfi.maxAgeUsec, maxKeepAgeUsec)
 
 @test_utils.run_with_standalone_host_engine(120)

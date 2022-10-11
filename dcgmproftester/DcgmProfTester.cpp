@@ -22,7 +22,7 @@
 #include "PhysicalGpu.h"
 #include "Reporter.h"
 #include "dcgm_fields.h"
-#include "dcgm_fields_internal.h"
+#include "dcgm_fields_internal.hpp"
 #include "dcgm_structs.h"
 #include "timelib.h"
 #include "vector_types.h"
@@ -604,23 +604,31 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
             entity.entityId      = gpuInstance.m_gpuId;
         }
 
-        dcgmFieldValue_v2 value {};
 
-        dcgmReturn_t dcgmReturn
-            = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+        /* Don't set CUDA_VISIBLE_DEVICES for NvLink bandwidth since the child will also need to be able to
+           see our peer GPU. Worry not since the child process will fall back to PCI BusId, which works for
+           non-MIG. NvLink is mutually exclusive with MIG, so we're good. */
 
-        if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
+        if (testFieldId != DCGM_FI_PROF_NVLINK_RX_BYTES && testFieldId != DCGM_FI_PROF_NVLINK_TX_BYTES)
         {
-            AbortOtherChildren(gpuInstance.m_gpuId);
+            dcgmFieldValue_v2 value {};
 
-            DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
-                           << "] to CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
-                           << value.status;
+            dcgmReturn_t dcgmReturn
+                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
 
-            return DCGM_ST_GENERIC_ERROR;
+            if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
+            {
+                AbortOtherChildren(gpuInstance.m_gpuId);
+
+                DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
+                               << "] to CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
+                               << value.status;
+
+                return DCGM_ST_GENERIC_ERROR;
+            }
+
+            cudaVisibleDevices = value.value.str;
         }
-
-        cudaVisibleDevices = value.value.str;
 
         worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);
 

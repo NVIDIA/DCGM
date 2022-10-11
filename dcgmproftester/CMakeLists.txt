@@ -34,6 +34,7 @@ macro(define_dcgmproftester cuda_version)
     )
     target_include_directories(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
     target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)
+    target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_common)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cublas_proxy${cuda_version})
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_STATIC_LIBS})
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_LIBS})
@@ -44,6 +45,8 @@ macro(define_dcgmproftester cuda_version)
         DcgmProfTester.h
         DistributedCudaContext.cpp
         DistributedCudaContext.h
+        CudaWorkerThread.cpp
+        CudaWorkerThread.hpp
         Entity.h
         Entity.cpp
         PhysicalGpu.cpp

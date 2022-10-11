@@ -76,9 +76,9 @@ while True:
             lastUpdateSec = (nowTs - watchInfo.newestTimestamp) / 1000000.0
 
             if fieldId not in watchIntervalByFieldId:
-                watchIntervalByFieldId[fieldId] = watchInfo.monitorFrequencyUsec
+                watchIntervalByFieldId[fieldId] = watchInfo.monitorIntervalUsec
             else:
-                watchIntervalByFieldId[fieldId] = max(watchInfo.monitorFrequencyUsec, watchIntervalByFieldId[fieldId])
+                watchIntervalByFieldId[fieldId] = max(watchInfo.monitorIntervalUsec, watchIntervalByFieldId[fieldId])
 
             #print("gpuId %d, fieldId %d (%s). lastUpdate: %f s, execTime %d, fetchCount %d, perUpdate: %d" % 
             #      (gpuId, fieldId, g_fieldTags[fieldId], lastUpdateSec, 

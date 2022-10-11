@@ -19,6 +19,7 @@
 #include "timelib.h"
 #include <CudaCommon.h>
 #include <assert.h>
+#include <cmath>
 #include <cuda.h>
 #include <dcgm_structs.h>
 #include <string.h>
@@ -78,7 +79,7 @@ int L1TagCuda::AllocDeviceMem(int size, CUdeviceptr *ptr)
         DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, size, m_gpuIndex);
         m_plugin->AddErrorForGpu(m_gpuIndex, d);
-        PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+        log_error(d.GetMessage());
         return 1;
     }
 
@@ -112,7 +113,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
 
     majorCC = cudaComputeVal.value.i64 >> 16; // major version is bits 16-31
     minorCC = cudaComputeVal.value.i64 & 0xF; // minor version is bits 0-15
-    PRINT_INFO("%d %d", "Got compute capability arch = %d %d\n", majorCC, minorCC);
+    log_info("Got compute capability arch = {} {}", majorCC, minorCC);
 
     uint32_t l1KBPerSM = std::round(m_testParameters->GetDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM));
 
@@ -131,8 +132,8 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
     }
     else
     {
-        // If we've whitelisted an L1 Cache size per SM, then the test should be run.
-        // Since that value is in KB, shift it bitwise
+        // If we've added a GPU to the allowlist for an L1 Cache size per SM, then the test
+        // should be run. Since that value is in KB, shift it bitwise.
         l1PerSMBytes = l1KBPerSM << 10;
     }
 
@@ -273,10 +274,10 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     m_kernelParams.errorLogLen   = m_errorLogLen;
     m_kernelParams.iterations    = m_innerIterations;
 
-    PRINT_INFO("%u", "L1tag #processor = %u\n", numBlocks);
-    PRINT_INFO("%d %d", "Compute cap=%d.%d\n", cuMajor, cuMinor);
-    PRINT_INFO("%u %u", "Threads = %u, %u max\n", numThreads, maxThreads);
-    PRINT_INFO("%d", "L1 Size = %d\n", l1Size);
+    log_info("L1tag #processor = {}", numBlocks);
+    log_info("Compute cap={}.{}", cuMajor, cuMinor);
+    log_info("Threads = {}, {} max", numThreads, maxThreads);
+    log_info("L1 Size = {}", l1Size);
 
     double durationMs = 0.0;
 
@@ -416,7 +417,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
         totalNumErrors += hostMiscompareCount;
         if (hostMiscompareCount > 0)
         {
-            PRINT_ERROR("%lu %lu", "CudaL1Tag found %lu miscompare(s) on loop %lu\n", hostMiscompareCount, loop);
+            log_error("CudaL1Tag found {} miscompare(s) on loop {}", hostMiscompareCount, loop);
 
             cuRes = cuMemcpyDtoH(m_hostErrorLog, m_devErrorLog, sizeof(L1TagError) * m_errorLogLen);
             if (CUDA_SUCCESS != cuRes)
@@ -431,11 +432,10 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 
             if (hostMiscompareCount > m_errorLogLen)
             {
-                PRINT_WARNING("%lu %u",
-                              "%lu miscompares, but error log only contains %u entries. "
-                              "Some failing SMID/TPCs may not be reported.\n",
-                              hostMiscompareCount,
-                              m_errorLogLen);
+                log_warning("{} miscompares, but error log only contains {} entries. "
+                            "Some failing SMID/TPCs may not be reported.",
+                            hostMiscompareCount,
+                            m_errorLogLen);
             }
 
             for (uint32_t i = 0; i < hostMiscompareCount && i < m_errorLogLen; i++)
@@ -443,26 +443,25 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
                 L1TagError &error = m_hostErrorLog[i];
                 if (m_dumpMiscompares)
                 {
-                    PRINT_ERROR("%u %s %04X %04X %lu %d %d %d %d",
-                                "Iteration  : %u\n"
-                                "TestStage  : %s\n"
-                                "DecodedOff : 0x%04X\n"
-                                "ExpectedOff: 0x%04X\n"
-                                "Iteration  : %lu\n"
-                                "InnerLoop  : %d\n"
-                                "Smid       : %d\n"
-                                "Warpid     : %d\n"
-                                "Laneid     : %d\n"
-                                "\n",
-                                i,
-                                (error.testStage == PreLoad) ? "PreLoad" : "RandomLoad",
-                                error.decodedOff,
-                                error.expectedOff,
-                                error.iteration,
-                                error.innerLoop,
-                                error.smid,
-                                error.warpid,
-                                error.laneid);
+                    log_error("Iteration  : {}\n"
+                              "TestStage  : {}\n"
+                              "DecodedOff : 0x{:04X}\n"
+                              "ExpectedOff: 0x{:04X}\n"
+                              "Iteration  : {}\n"
+                              "InnerLoop  : {}\n"
+                              "Smid       : {}\n"
+                              "Warpid     : {}\n"
+                              "Laneid     : {}\n"
+                              "\n",
+                              i,
+                              (error.testStage == PreLoad) ? "PreLoad" : "RandomLoad",
+                              error.decodedOff,
+                              error.expectedOff,
+                              error.iteration,
+                              error.innerLoop,
+                              error.smid,
+                              error.warpid,
+                              error.laneid);
                 }
             }
             retVal = NVVS_RESULT_FAIL;
@@ -470,27 +469,23 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
         }
     }
 
-    PRINT_INFO("%f", "Complete  durationMs = %f\n", durationMs);
+    log_info("Complete  durationMs = {}", durationMs);
 
     // Kernel runtime and error prints useful for debugging
     // Guard against divide-by-zero errors (that shouldn't occur)
     durationSec = durationMs / 1000.0;
     if (totalNumErrors && durationMs)
     {
-        PRINT_INFO("%lu %f",
-                   "L1tag TotalErrors: %lu\n"
-                   "L1tag Errors/s   : %f\n",
-                   totalNumErrors,
-                   static_cast<double>(totalNumErrors) / durationSec);
+        log_info("L1tag TotalErrors: {}; L1tag Errors/s: {}",
+                 totalNumErrors,
+                 static_cast<double>(totalNumErrors) / durationSec);
     }
 
     if (kernLaunchCount && durationMs)
     {
-        PRINT_INFO("%f %f",
-                   "L1tag Total Kernel Runtime: %fms\n"
-                   "L1tag Avg Kernel Runtime: %fms\n",
-                   durationMs,
-                   durationMs / kernLaunchCount);
+        log_info("L1tag Total Kernel Runtime: {}ms; L1tag Avg Kernel Runtime: {}ms",
+                 durationMs,
+                 durationMs / kernLaunchCount);
     }
 
     retVal = NVVS_RESULT_PASS;

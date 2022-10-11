@@ -51,8 +51,8 @@ extern "C" {
 #define NSCQ_API_VERSION_CODE_PATCH(code) (((code) >> 0u) & 0xFFFu)
 
 #define NSCQ_API_VERSION_CODE \
-    NSCQ_API_VERSION(1, 2, 0)
-#define NSCQ_API_VERSION_DEVEL "g1747f35"
+    NSCQ_API_VERSION(2, 0, 0)
+#define NSCQ_API_VERSION_DEVEL "g322905c"
 
 extern const uint32_t nscq_api_version;
 extern const char nscq_api_version_devel[];
@@ -70,6 +70,7 @@ extern const char nscq_api_version_devel[];
 #define NSCQ_RC_ERROR_UNEXPECTED_VALUE       (-5)
 #define NSCQ_RC_ERROR_UNSUPPORTED_DRV        (-6)
 #define NSCQ_RC_ERROR_DRV                    (-7)
+#define NSCQ_RC_ERROR_TIMEOUT                (-8)
 #define NSCQ_RC_ERROR_EXT                    (-127)
 #define NSCQ_RC_ERROR_UNSPECIFIED            (-128)
 
@@ -132,6 +133,11 @@ typedef struct {
 
 typedef int8_t nscq_nvlink_state_t;
 
+#define NSCQ_NVLINK_DEVICE_TYPE_GPU        (1)
+#define NSCQ_NVLINK_DEVICE_TYPE_SWITCH     (2)
+
+typedef uint8_t nscq_device_type_t;
+
 typedef struct {
     int16_t driver;
     int16_t device;
@@ -165,7 +171,7 @@ typedef struct {
 typedef struct {
     uint8_t protocol_version;
     uint8_t link_width;
-    uint32_t bandwidth; // Mibps
+    uint32_t bandwidth;
 } nscq_link_caps_t;
 
 typedef struct {
@@ -178,6 +184,130 @@ typedef struct
     uint32_t error_value;
     uint64_t time;
 } nscq_error_t;
+
+typedef struct
+{
+    uint32_t last_updated;
+    uint32_t errors_per_minute;
+} nscq_link_max_correctable_error_rate;
+
+typedef struct
+{
+    uint8_t  instance;
+    uint32_t error;
+    uint32_t timestamp;
+    uint64_t count;
+} nscq_link_error_t;
+
+typedef struct
+{
+    uint64_t uncorrected_total;
+    uint64_t corrected_total;
+    uint32_t error_count;
+} nscq_ecc_error_count_t;
+
+typedef struct
+{
+    uint32_t sxid;
+    uint8_t  link_id;
+    uint32_t timestamp;
+    uint8_t  address_valid;
+    uint32_t address;
+    uint32_t corrected_count;
+    uint32_t uncorrected_count;
+} nscq_ecc_error_entry_t;
+
+typedef struct
+{
+    uint32_t sxid;
+    uint32_t timestamp;
+} nscq_sxid_error_entry_t;
+
+typedef struct
+{
+    uint64_t low;
+    uint64_t medium;
+    uint64_t high;
+    uint64_t panic;
+    uint64_t count;
+} nscq_vc_latency_t;
+
+typedef struct
+{
+    uint32_t freq_khz;
+    uint32_t vcofreq_khz;
+} nscq_nvlink_clock_info_t;
+
+typedef struct
+{
+    uint32_t voltage_mvolt;
+} nscq_nvlink_voltage_info_t;
+
+typedef struct
+{
+    uint32_t iddq;
+    uint32_t iddq_rev;
+    uint32_t iddq_dvdd;
+} nscq_nvlink_current_info_t;
+
+typedef struct {
+    uint32_t cages_mask;
+    uint32_t modules_mask;
+} nscq_cci_raw_cmis_presence_t;
+
+typedef struct {
+    uint64_t link_mask;
+    uint64_t encoded_value;
+} nscq_cci_raw_cmis_lane_mapping_t;
+
+#define NSCQ_OSFP_MAX_LANE 8
+typedef struct {
+    // port[i] indicates nvswitch_port that occupies osfp lane i
+    // Port value starts from 0. 0xFF value indicates no port.
+    uint8_t port[NSCQ_OSFP_MAX_LANE];
+} nscq_cci_osfp_lane_mapping_t;
+
+#define NSCQ_OSFP_STR_SZ 16
+typedef struct {
+    uint8_t data[NSCQ_OSFP_STR_SZ];
+} nscq_cci_osfp_str_t;
+
+typedef struct {
+    uint32_t tx_power[NSCQ_OSFP_MAX_LANE];
+    uint32_t rx_power[NSCQ_OSFP_MAX_LANE];
+    uint32_t tx_bias[NSCQ_OSFP_MAX_LANE];
+} nscq_cci_osfp_lane_monitor_t;
+
+typedef struct {
+    int16_t temperature;
+    uint32_t supply_volt;
+} nscq_cci_osfp_module_monitor_t;
+
+typedef struct {
+    uint8_t major_rev;
+    uint8_t minor_rev;
+} nscq_cci_osfp_module_firmware_version_t;
+
+typedef struct {
+   uint8_t tx_input_eq[NSCQ_OSFP_MAX_LANE]; // CMIS Table 6-4 code
+   uint8_t rx_output_pre_cursor[NSCQ_OSFP_MAX_LANE]; //CMIS Table 6-5
+   uint8_t rx_output_post_cursor[NSCQ_OSFP_MAX_LANE]; //CMIS Table 6-5
+} nscq_cci_osfp_signal_integrity_t;
+
+typedef struct {
+   uint8_t state[NSCQ_OSFP_MAX_LANE];
+} nscq_cci_osfp_data_path_state_t;
+
+#define NSCQ_CMIS_MAX_READ 128
+typedef struct {
+    uint8_t data[NSCQ_CMIS_MAX_READ];
+} nscq_cci_raw_cmis_read_t;
+
+#define NSCQ_TEMP_MAX_SENSOR 16
+typedef struct {
+   int32_t sensors[NSCQ_TEMP_MAX_SENSOR];
+   uint8_t num_sensor;
+} nscq_temperature_sensors_t;
 
 _NSCQ_RESULT_TYPE(nscq_session_t, session);
 _NSCQ_RESULT_TYPE(nscq_observer_t, observer);
@@ -193,11 +323,43 @@ nscq_rc_t nscq_session_mount(nscq_session_t, const nscq_uuid_t*, uint32_t);
 void nscq_session_unmount(nscq_session_t, const nscq_uuid_t*);
 
 nscq_rc_t nscq_session_path_observe(nscq_session_t, const char*, nscq_fn_t, void*, uint32_t);
+
+#define NSCQ_SESSION_PATH_REGISTER_OBSERVER_WATCH (0x1u)
+
+enum {
+    NSCQ_SESSION_PATH_OBSERVE_FLAG_NONE = 0,
+    NSCQ_SESSION_PATH_OBSERVE_FLAG_INPUT,
+};
+
+#define NSCQ_SESSION_PATH_OBSERVE_FLAG_MASK (0x3FFFFFFF)
+#define NSCQ_SESSION_PATH_OBSERVE_FLAG_INPUT_TYPE_SHIFT 30
+#define NSCQ_SESSION_PATH_OBSERVE_FLAG_TYPE(flag) (flag >> NSCQ_SESSION_PATH_OBSERVE_FLAG_INPUT_TYPE_SHIFT)
+
+// Input
+// 31-30: input type
+//
+// CMIS input
+// 29-25: osfp (0-31)
+// 24-23: bank (0-3)
+// 22-15: page (0-255)
+// 14-7:  byte offset (0-255)
+// 6-0:   byte length (1-128)
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_PACK(osfp, bank, page, offset, length) \
+   ((NSCQ_SESSION_PATH_OBSERVE_FLAG_INPUT << NSCQ_SESSION_PATH_OBSERVE_FLAG_INPUT_TYPE_SHIFT) | \
+    ((osfp & 0x1F) << 25) | ((bank & 0x3) << 23) | ((page & 0xFF) << 15) | ((offset & 0xFF) << 7) | ((length - 1) & 0x7F))
+
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_OSFP(input)    ((input >> 25) & 0x1F)
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_BANK(input)    ((input >> 23) & 0x3)
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_PAGE(input)    ((input >> 15) & 0xFF)
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_OFFSET(input)  ((input >> 7) & 0xFF)
+#define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_LENGTH(input)  ((input & 0x7F) + 1)
+
 nscq_observer_result_t nscq_session_path_register_observer(nscq_session_t, const char*, nscq_fn_t,
                                                            void*, uint32_t);
 void nscq_observer_deregister(nscq_observer_t);
 nscq_rc_t nscq_observer_observe(nscq_observer_t, uint32_t);
 nscq_rc_t nscq_session_observe(nscq_session_t, uint32_t);
+nscq_rc_t nscq_session_watch(nscq_session_t, uint32_t, uint32_t);
 
 #ifdef __cplusplus
 }

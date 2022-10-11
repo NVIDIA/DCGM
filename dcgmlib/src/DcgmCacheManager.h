@@ -17,14 +17,16 @@
 
 #include "DcgmDiscovery.h"
 #include "DcgmFvBuffer.h"
+#include "DcgmGpmManager.hpp"
 #include "DcgmGpuInstance.h"
 #include "DcgmMigManager.h"
 #include "DcgmMutex.h"
 #include "DcgmSettings.h"
+#include "DcgmTopology.hpp"
 #include "DcgmWatchTable.h"
 #include "DcgmWatcher.h"
 #include "dcgm_fields.h"
-#include "dcgm_fields_internal.h"
+#include "dcgm_fields_internal.hpp"
 #include "dcgm_structs.h"
 #include "hashtable.h"
 #include "timelib.h"
@@ -87,23 +89,13 @@ typedef struct dcgmcm_sample_t /* This is made to look similar to timeseries_val
 /* Details for a single watcher of a field. Each fieldId has a vector of these */
 typedef struct dcgm_watch_watcher_info_t
 {
-    DcgmWatcher watcher;              /* Who owns this watch? */
-    timelib64_t monitorFrequencyUsec; /* How often this field should be sampled */
-    timelib64_t maxAgeUsec;           /* Maximum time to cache samples of this
-                                           field. If 0, the class default is used */
-    int isSubscribed;                 /* Does this watcher want live updates
-                                           when this field value updates? */
+    DcgmWatcher watcher;             /* Who owns this watch? */
+    timelib64_t monitorIntervalUsec; /* How often this field should be sampled */
+    timelib64_t maxAgeUsec;          /* Maximum time to cache samples of this
+                                          field. If 0, the class default is used */
+    int isSubscribed;                /* Does this watcher want live updates
+                                          when this field value updates? */
 } dcgm_watch_watcher_info_t, *dcgm_watch_watcher_info_p;
-
-/*****************************************************************************/
-/* Unique key for a given fieldEntityGroup + entityId + fieldId combination */
-typedef struct dcgmcm_entity_key_t
-{
-    dcgm_field_eid_t entityId;    /* Entity ID of this watch */
-    unsigned short fieldId;       /* Field ID of this watch */
-    unsigned short entityGroupId; /* DCGM_FE_? #define of the entity group this
-                                           belongs to */
-} dcgmcm_entity_key_t;            /* 8 bytes */
 
 /*****************************************************************************/
 /*
@@ -116,18 +108,21 @@ typedef struct dcgmcm_entity_key_t
  */
 typedef struct dcgmcm_watch_info_t
 {
-    dcgmcm_entity_key_t watchKey;                    /* Key information for this watch */
+    dcgm_entity_key_t watchKey;                      /* Key information for this watch */
     short isWatched;                                 /* Is this field being watched. 1=yes. 0=no */
     short hasSubscribedWatchers;                     /* Does this field have any watchers that
                                            have subscribed for notifications?. This
                                            should be the logical OR of
                                            watchers[0-n].isSubscribed */
+    bool pushedByModule;                             /* Are the samples for this watch pushed by another module
+                                                        calling AppendSamples()? If so, we won't update it in
+                                                        the cache manager's update loop */
     nvmlReturn_t lastStatus;                         /* Last status returned from querying this
                                            value. See NVML_? values in nvml.h */
     timelib64_t lastQueriedUsec;                     /* Last time we updated this value. Used for
                                            determining if we should request an update
                                            of this field or not */
-    timelib64_t monitorFrequencyUsec;                /* How often this field should be sampled */
+    timelib64_t monitorIntervalUsec;                 /* How often this field should be sampled */
     timelib64_t maxAgeUsec;                          /* Maximum time to cache samples of this
                                            field. If 0, the class default is used */
     timelib64_t execTimeUsec;                        /* Cumulative time spent updating this
@@ -136,7 +131,7 @@ typedef struct dcgmcm_watch_info_t
                                            fetched from the driver */
     timeseries_p timeSeries;                         /* Time-series of values for this watch */
     std::vector<dcgm_watch_watcher_info_t> watchers; /* Info for each watcher of this
-                                                       field. monitorFrequencyUsec and
+                                                       field. monitorIntervalUsec and
                                                        maxAgeUsec come from this array */
     /* The two fields will only potentially be different for GPU instances and compute instances.
        In many cases, the data is only obtainable at the GPU level for now, and these fields note
@@ -328,7 +323,7 @@ using dcgmcm_runtime_stats_p = dcgmcm_runtime_stats_t *;
 typedef struct dcgmcm_update_thread_t
 {
     /* Information about the entity currently being worked on */
-    dcgmcm_entity_key_t entityKey; /* Key information for the current entity */
+    dcgm_entity_key_t entityKey;   /* Key information for the current entity */
     dcgmcm_watch_info_p watchInfo; /* Optional cached pointer to the watch object for this entity.
                                       If provided, any updates will be cached here */
 
@@ -427,35 +422,6 @@ public:
     void run(void);
 };
 
-class DcgmGpuConnectionPair
-{
-public:
-    unsigned int gpu1;
-    unsigned int gpu2;
-
-    DcgmGpuConnectionPair(unsigned int g1, unsigned int g2)
-        : gpu1(g1)
-        , gpu2(g2)
-    {}
-
-    bool operator==(const DcgmGpuConnectionPair &other) const
-    {
-        return ((other.gpu1 == this->gpu1 && other.gpu2 == this->gpu2)
-                || (other.gpu2 == this->gpu1 && other.gpu1 == this->gpu2));
-    }
-
-    bool CanConnect(const DcgmGpuConnectionPair &other) const
-    {
-        return ((this->gpu1 == other.gpu1) || (this->gpu1 == other.gpu2) || (this->gpu2 == other.gpu1)
-                || (this->gpu2 == other.gpu2));
-    }
-
-    bool operator<(const DcgmGpuConnectionPair &other) const
-    {
-        return this->gpu1 < other.gpu1;
-    }
-};
-
 /*****************************************************************************/
 /* Cache manager main class */
 class DcgmCacheManager : public DcgmThread
@@ -546,7 +512,7 @@ public:
      *
      * activeOnly: If set to 1, will not count GPUs that are inaccessible for any
      *             reason. Reasons include (but are not limited to):
-     *                 - not being whitelisted
+     *                 - not on the allowlist
      *                 - being blocked by cgroups
      *                 - fallen off bus
      *
@@ -560,7 +526,7 @@ public:
      *
      * activeOnly: If set to 1, will not count GPUs that are inaccessible for any
      *             reason. Reasons include (but are not limited to):
-     *                 - not being whitelisted
+     *                 - not on the allowlist
      *                 - being blocked by cgroups
      *                 - fallen off bus
      * gpuIds: Vector of unsigned ints to fill with GPU IDs.
@@ -576,7 +542,7 @@ public:
      *
      * activeOnly     IN: If set to 1, will not count GPUs that are inaccessible for any
      *                    reason. Reasons include (but are not limited to):
-     *                    - not being whitelisted
+     *                    - not on the allowlist
      *                    - being blocked by cgroups
      *                    - fallen off bus
      * entityGroupId IN: Which entity group to fetch the entities of
@@ -636,7 +602,7 @@ public:
 
     /*************************************************************************/
     /*
-     * Get the list of GPUs that were blacklisted by the driver
+     * Get the list of GPUs that were excluded by the driver
      *
      * Note: This will only work on r400 or newer drivers. Otherwise, an empty
      *       list will always be returned.
@@ -644,7 +610,7 @@ public:
      * Returns: 0 on success
      *          DCGM_ST_? #define on error.
      */
-    dcgmReturn_t GetGpuBlacklist(std::vector<nvmlBlacklistDeviceInfo_t> &blacklist);
+    dcgmReturn_t GetGpuExcludeList(std::vector<nvmlExcludedDeviceInfo_t> &excludeList);
 
     /*************************************************************************/
     /*
@@ -693,7 +659,7 @@ public:
     /*************************************************************************/
     /*
      * Add watching of a field by this class. Samples will be gathered every
-     * monitorFrequencyUsec usec. Samples will only be kept for a maximum of
+     * monitorIntervalUsec usec. Samples will only be kept for a maximum of
      * maxSampleAge seconds before being discarded.
      *
      * If a field is already watched the resulting monitor frequency and
@@ -703,7 +669,7 @@ public:
      * entityGroupId        IN: Which entity group this watch pertains to
      * entityId             IN: Which entity ID this watch pertains to
      * dcgmFieldId          IN: Which DCGM field to add the watch for
-     * monitorFrequencyUsec IN: How often in usec to gather samples for this field.
+     * monitorIntervalUsec IN: How often in usec to gather samples for this field.
      *                          0=use default from DcgmField metadata
      * maxSampleAge         IN: How long to keep samples for in seconds.
      *                          0.0 = use default from DcgmField metadata
@@ -712,6 +678,14 @@ public:
      * watcher              IN: Who is watching this field? Used for tracking purposes
      * subscribeForUpdates  IN: Whether watcher wants to receive notification callbacks
      *                          whenever this field value updates
+     * updateOnFirstWatch   IN: Whether we should do an UpdateAllFields(true) if we were
+     *                          the first watcher or not. Pass true if you want to guarantee
+     *                          there is a value in the cache after this call. Pass false if you
+     *                          don't care or plan to batch together a bunch of watches before
+     *                          an UpdateAllFields() at the end
+     * wereFirstWatcher    OUT: Whether we were the first watcher (true) or not (false). If so,
+     *                          you will need to call UpdateAllFields(true) for a value to be
+     *                          present in the cache.
      *
      * Returns 0 on success
      *        <0 on error. See DCGM_ST_? #defines
@@ -720,18 +694,20 @@ public:
     dcgmReturn_t AddFieldWatch(dcgm_field_entity_group_t entityGroupId,
                                dcgm_field_eid_t entityId,
                                unsigned short dcgmFieldId,
-                               timelib64_t monitorFrequencyUsec,
+                               timelib64_t monitorIntervalUsec,
                                double maxSampleAge,
                                int maxKeepSamples,
                                DcgmWatcher watcher,
-                               bool subscribeForUpdates);
+                               bool subscribeForUpdates,
+                               bool updateOnFirstWatch,
+                               bool &wereFirstWatcher);
 
     /*************************************************************************/
     /*
      * Update the caching frquency, maxSampleAge and maxKeepSamples for a given field
      * into watchInfo.
      *
-     * monitorFrequencyUsec IN: How often in usec to gather samples for this field.
+     * monitorIntervalUsec IN: How often in usec to gather samples for this field.
      *                          0=use default from DcgmField metadata
      * maxSampleAge         IN: How long to keep samples for in seconds.
      *                          0.0 = use default from DcgmField metadata
@@ -745,99 +721,10 @@ public:
      *
      */
     dcgmReturn_t UpdateFieldWatch(dcgmcm_watch_info_p watchInfo,
-                                  timelib64_t updatedMonitorFrequencyUsec,
+                                  timelib64_t updatedmonitorIntervalUsec,
                                   double maxSampleAge,
                                   int maxKeepSamples,
                                   DcgmWatcher watcher);
-
-    /*************************************************************************/
-    /*
-     * Get the frequency that a field is watched at.
-     *
-     * gpuId        IN: Which GPU the watch pertains to. This is ignored if the field is not a GPU field.
-     * fieldId      IN: Which DCGM field the watch is for
-     * freqUsec    OUT: How often in usec to gather samples for this field.
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    dcgmReturn_t GetFieldWatchFreq(unsigned int gpuId, unsigned short fieldId, timelib64_t *freqUsec);
-
-    /*************************************************************************/
-    /*
-     * Check if a GPU field is being watched.
-     *
-     * gpuId        IN: Which GPU the watch pertains to.
-     * dcgmFieldId  IN: Which DCGM field the watch is for
-     * isWatched   OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    dcgmReturn_t IsGpuFieldWatched(unsigned int gpuId, unsigned short dcgmFieldId, bool *isWatched);
-
-    /*************************************************************************/
-    /*
-     * Check if the given field is watched on any GPU.
-     *
-     * dcgmFieldId  IN: Which DCGM field the watch is for
-     * isWatched   OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    dcgmReturn_t IsGpuFieldWatchedOnAnyGpu(unsigned short fieldId, bool *isWatched);
-
-    /*************************************************************************/
-    /*
-     * Check if a global field is being watched.
-     *
-     * dcgmFieldId  IN: Which DCGM field the watch is for
-     * isWatched   OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    dcgmReturn_t IsGlobalFieldWatched(unsigned short dcgmFieldId, bool *isWatched);
-
-    /*************************************************************************/
-    /*
-     * Check if any of the given fields are watched.
-     *
-     * dcgmFieldIds  IN: Which DCGM fields to check. NULL means all fields.
-     * isWatched    OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    bool AnyGlobalFieldsWatched(std::vector<unsigned short> *fieldIds);
-
-    /*************************************************************************/
-    /*
-     * Check if any of the given fields are watched on the given GPU.
-     *
-     * gpuId         IN: the GPU to check for field watches
-     * dcgmFieldIds  IN: Which DCGM fields to check. NULL means all fields.
-     * isWatched    OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    bool AnyGpuFieldsWatched(unsigned int gpuId, std::vector<unsigned short> *fieldIds);
-
-    /*************************************************************************/
-    /*
-     * Check if any of the given fields are watched on any GPU.
-     *
-     * dcgmFieldIds  IN: Which DCGM fields to check. NULL means all fields.
-     * isWatched    OUT: If the field is currently watched
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     */
-    bool AnyGpuFieldsWatchedAnywhere(std::vector<unsigned short> *fieldIds);
-
-    bool AnyFieldsWatched(std::vector<unsigned short> *fieldIds);
 
     /*************************************************************************/
     /*
@@ -1013,7 +900,8 @@ public:
      * entityId      IN: The entity to get the value for
      * dcgmFieldId  IN: Which DCGM field to get the value for
      * samples     OUT: Where to place samples. Capacity of this memory should
-     *                  be provided in Msamples
+     *                  be provided in Msamples. Can be nullptr if fvBuffer is
+     *                  provided.
      * Msamples     IO: When called, is the capacity that samples can hold.
      *                  When returning, Msamples contains the number of samples
      *                  actually stored in samples[]
@@ -1028,6 +916,8 @@ public:
      *                       startTime
      *                  DCGM_ORDER_DESCENDING = decreasing timestamps, starting from
      *                       endTime
+     * fvBuffer    OUT: Optional fvBuffer to write the samples to. Can be nullptr
+     *                  if samples[] is provided
      *
      * Returns 0 on success
      *        <0 on error. See DCGM_ST_? #defines
@@ -1039,7 +929,8 @@ public:
                             int *Msamples,
                             timelib64_t startTime,
                             timelib64_t endTime,
-                            dcgmOrder_t order);
+                            dcgmOrder_t order,
+                            DcgmFvBuffer *fvBuffer);
 
 
     /*************************************************************************/
@@ -1189,17 +1080,10 @@ public:
 
     /*************************************************************************/
     /*
-     * Populate a dcgmNvLinkStatus_v2 response with the NvLink link states
+     * Populate a dcgmNvLinkStatus_v3 response with the NvLink link states
      * of every GPU and NvSwitch in the system
      */
-    dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v2 &nvLinkStatus);
-
-    /*************************************************************************/
-    /*
-     * Populate a dcgmMigHierarchy_v1 response with pairings of GPUs, GPU Instances,
-     * and compute instances to display the hierarchy
-     */
-    dcgmReturn_t PopulateMigHierarchy(dcgmMigHierarchy_v1 &migHierarchy);
+    dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v3 &nvLinkStatus);
 
     /*************************************************************************/
     /*
@@ -1250,18 +1134,11 @@ public:
     unsigned int NvmlIndexToGpuId(int nvmlIndex);
 
     /*************************************************************************/
-    /* Convert a NVML return code to an appropriate null value */
-    static char *NvmlErrorToStringValue(nvmlReturn_t nvmlReturn);
-    static long long NvmlErrorToInt64Value(nvmlReturn_t nvmlReturn);
-    static int NvmlErrorToInt32Value(nvmlReturn_t nvmlReturn);
-    static double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn);
-
-    /*************************************************************************/
     /*
-     * Returns whether or not a GPU is whitelisted to run DCGM
+     * Returns whether or not a GPU is on the allowlist to run DCGM
      *
      */
-    int IsGpuWhitelisted(unsigned int gpuId);
+    int IsGpuAllowlisted(unsigned int gpuId);
 
     /*************************************************************************/
     /*
@@ -1358,62 +1235,6 @@ public:
 
     /*************************************************************************/
     /*
-     * Return the approximate amount of memory, in bytes, used to store the given field ID.
-     * This number is not meant to be precise but is meant to give a general idea
-     * of the memory usage.
-     *
-     * This number will always be smaller than what is actually taken up.
-     */
-    dcgmReturn_t GetGpuFieldBytesUsed(unsigned int gpuId, unsigned short dcgmFieldId, long long *bytesUsed);
-
-    /*************************************************************************/
-    /*
-     * Return the approximate amount of memory, in bytes, used to store the given field ID.
-     * This number is not meant to be precise but is meant to give a general idea
-     * of the memory usage.
-     *
-     * This number will always be smaller than what is actually taken up.
-     */
-    dcgmReturn_t GetGlobalFieldBytesUsed(unsigned short dcgmFieldId, long long *bytesUsed);
-
-    /*************************************************************************/
-    /*
-     * Get the total amount of time, in usec, that the cache manager has spent retrieving
-     * the given field on the given GPU since it started.
-     *
-     * totalUsec       OUT: the total time in usec
-     */
-    dcgmReturn_t GetGpuFieldExecTimeUsec(unsigned int gpuId, unsigned short dcgmFieldId, long long *totalUsec);
-
-    /*************************************************************************/
-    /*
-     * Get the total amount of time, in usec, that the cache manager has spent retrieving
-     * the given field since it started.
-     *
-     * totalUsec       OUT: the total time in usec
-     */
-    dcgmReturn_t GetGlobalFieldExecTimeUsec(unsigned short dcgmFieldId, long long *totalUsec);
-
-    /*************************************************************************/
-    /*
-     * Get the total amount of times that the cache manager has fetched a new value
-     * for this field on this gpu.
-     *
-     * fetchCount       OUT: the fetch count
-     */
-    dcgmReturn_t GetGpuFieldFetchCount(unsigned int gpuId, unsigned short dcgmFieldId, long long *fetchCount);
-
-    /*************************************************************************/
-    /*
-     * Get the total amount of times that the cache manager has fetched a new value
-     * for this field.
-     *
-     * fetchCount       OUT: the fetch count
-     */
-    dcgmReturn_t GetGlobalFieldFetchCount(unsigned short dcgmFieldId, long long *fetchCount);
-
-    /*************************************************************************/
-    /*
      * Get runtime stats for the cache manager
      *
      * stats   OUT: Runtime stats of the cache manager
@@ -1451,12 +1272,6 @@ public:
 
     /*************************************************************************/
     /*
-     * Get the affinity information from NVML for this box
-     */
-    dcgmReturn_t PopulateTopologyAffinity(dcgmAffinity_t &affinity);
-
-    /*************************************************************************/
-    /*
      * Get and store the affinity information from NVML for this box
      */
     dcgmReturn_t CacheTopologyAffinity(dcgmcm_update_thread_t *threadCtx, timelib64_t now, timelib64_t expireTime);
@@ -1473,44 +1288,12 @@ public:
 
     /*************************************************************************/
     /*
-     * Set a bit in the bitmask for each gpu in the gpuIds vector
-     */
-    void ConvertVectorToBitmask(std::vector<unsigned int> &gpuIds, uint64_t &outputGpus, uint32_t numGpus);
-
-    /*************************************************************************/
-    /*
      * Fill the passed in affinity struct with the affinity information for this node.
      *
      * Returns 0 if OK
      *         DCGM_ST_* on module error
      */
     dcgmReturn_t PopulateCpuAffinity(dcgmAffinity_t &affinity);
-
-    /*************************************************************************/
-    /*
-     * Add each GPU to a vector with every other GPU that shares it's cpu affinity.
-     * Mose of the time there will be one or two groups.
-     */
-    void CreateGroupsFromCpuAffinities(dcgmAffinity_t &affinity,
-                                       std::vector<std::vector<unsigned int>> &affinityGroups,
-                                       std::vector<unsigned int> &gpuIds);
-
-    /*************************************************************************/
-    /*
-     * Add the index (into affinityGroups) of each group large enough to meet this request
-     */
-    void PopulatePotentialCpuMatches(std::vector<std::vector<unsigned int>> &affinityGroups,
-                                     std::vector<size_t> &potentialCpuMatches,
-                                     uint32_t numGpus);
-
-    /*************************************************************************/
-    /*
-     * Create a list of gpus from the groups to fulfill the request. This is only done if
-     * no individual group of gpus (based on cpu affinity) could fulfill the request.
-     */
-    dcgmReturn_t CombineAffinityGroups(std::vector<std::vector<unsigned int>> &affinityGroups,
-                                       std::vector<unsigned int> &combinedGpuList,
-                                       int remaining);
 
     /*************************************************************************/
     /*
@@ -1521,77 +1304,6 @@ public:
      *         NULL on error
      */
     dcgmTopology_t *GetNvLinkTopologyInformation();
-
-    /*************************************************************************/
-    /*
-     * Choose the first grouping that has an ideal match based on NvLink topology.
-     * This is only done if we have more than one group of GPUs that is ideal based
-     * on CPU affinity.
-     */
-    void MatchByIO(std::vector<std::vector<unsigned int>> &affinityGroups,
-                   dcgmTopology_t *topPtr,
-                   std::vector<size_t> &potentialCpuMatches,
-                   uint32_t numGpus,
-                   uint64_t &outputGpus);
-
-    /*************************************************************************/
-    /*
-     * Record the number of connections this topology has between GPUs at each level, 0-3.
-     * 0 is the fastest and 3 is the slowest.
-     */
-    unsigned int SetIOConnectionLevels(std::vector<unsigned int> &affinityGroup,
-                                       dcgmTopology_t *topPtr,
-                                       std::map<unsigned int, std::vector<DcgmGpuConnectionPair>> &connectionLevel);
-
-    unsigned int RecordBestPath(std::vector<unsigned int> &bestPath,
-                                std::map<unsigned int, std::vector<DcgmGpuConnectionPair>> &connectionLevel,
-                                uint32_t numGpus,
-                                unsigned int highestLevel);
-
-    /*************************************************************************/
-    /*
-     * Translate each path bitmap into the number of NvLinks that connect the two paths.
-     */
-    unsigned int NvLinkScore(dcgmGpuTopologyLevel_t path);
-
-    /*************************************************************************/
-    /*
-     * Determines whether or not connections has numGpus total gpus that can all be linked together.
-     * If there are, outputGpus is set with the gpus from the connection.
-     *
-     * Returns true if there are numGpus in the pairs inside connections that can be linked together.
-     */
-    bool HasStrongConnection(std::vector<DcgmGpuConnectionPair> &connections, uint32_t numGpus, uint64_t &outputGpus);
-
-    /*************************************************************************/
-    /*
-     * Get the number of active NvLinks to NvSwitches per GPU.
-     *
-     * gpuCounts is a vector of size >= numGpus to populate with the
-     * gpu->NvSwitch counts for each GPU.
-     *
-     * Will return 0 <= numNvLinks
-     * Returns DCGM_ST_OK if gpuCounts are populated
-     */
-    dcgmReturn_t GetActiveNvSwitchNvLinkCountsForAllGpus(std::vector<unsigned int> &gpuCounts);
-
-    /*************************************************************************/
-    /*
-     * Set topology_np to a pointer to a struct populated with the NvLink topology information
-     *
-     * Returns 0 if ok
-     *         DCGM_ST_* on module error
-     */
-    dcgmReturn_t PopulateTopologyNvLink(dcgmTopology_t **topology_pp, unsigned int &topologySize);
-
-    /*************************************************************************/
-    /*
-     * Check if the affinity bitmasks for the gpus at index1 and index2 match each other.
-     *
-     * Returns true if the gpus have the same CPU affinity
-     *         false if not
-     */
-    bool AffinityBitmasksMatch(dcgmAffinity_t &affinity, unsigned int index1, unsigned int index2);
 
     /*************************************************************************/
     /*
@@ -1718,43 +1430,6 @@ public:
      */
     bool IsMigEnabledAnywhere();
 
-    /*************************************************************************/
-    /**
-     * Populate vector with global field watch info
-     *
-     * @param watchInfo[out] - vector of dcgm_core_watch_info_t
-     *
-     * @returns DCGM_ST_OK and populated watchInfo on success
-     *          watchInfo is empty on failure
-     */
-    dcgmReturn_t PopulateGlobalWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                         std::vector<unsigned short> *fieldIds = nullptr);
-
-    /*************************************************************************/
-    /**
-     * Populate vector with gpu field watch info
-     *
-     * @param watchInfo[out] - vector of dcgm_core_watch_info_t
-     *
-     * @returns DCGM_ST_OK and populated watchInfo
-     *          watchInfo is empty on failure
-     */
-    dcgmReturn_t PopulateGpuWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                      unsigned int gpuId,
-                                      std::vector<unsigned short> *fieldIds = nullptr);
-
-    /*************************************************************************/
-    /**
-     * Populate vector with gpu field watch info
-     *
-     * @param watchInfo[out] - vector of dcgm_core_watch_info_t
-     * @returns DCGM_ST_OK and populated watchInfo
-     *          watchInfo is empty on failure
-     *
-     */
-    dcgmReturn_t PopulateWatchInfo(std::vector<dcgmCoreWatchInfo_t> &watchInfo,
-                                   std::vector<unsigned short> *fieldIds = nullptr);
-
     /**
      * Notifies subscribers (if any) that MIG has been reconfigured
      * (public for unit tests)
@@ -1814,6 +1489,7 @@ public:
                                                  size_t *usedGpcs);
     std::optional<unsigned int> GetGpuIdForEntity(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
+    /*************************************************************************/
     /**
      * For the given entityId and entityGroupId looks for corresponding GpuInstance and/or ComputeInstance
      * @param[in]  entityPair           EntityId and EntityGroupId for the lookup
@@ -1829,6 +1505,67 @@ public:
                                         unsigned int *gpuId,
                                         DcgmNs::Mig::GpuInstanceId *instanceId,
                                         DcgmNs::Mig::ComputeInstanceId *computeInstanceId) const;
+    /*************************************************************************/
+    /**
+     *
+     * Filter a list of entities to only include those that should be serviced
+     * by perfworks for DCP metrics. It's assumed that the rest are handled
+     * by NVML GPM or not at all.
+     *
+     * @param entities[in,out] Array of entities to filter. Only entities that
+     *                         should be serviced by perfworks will remain after
+     *                         this call.
+     */
+    void GetProfModuleServicedEntities(std::vector<dcgmGroupEntityPair_t> &entities);
+
+    /*************************************************************************/
+    /**
+     * Function to return whether the given entity supports GPU Performance Monitoring (GPM)
+     *
+     * If is this true, then the entity's profiling metrics are serviced by the
+     * cache manager rather than the profiling module.
+     *
+     * @return true if the entity supports GPM. false if not.
+     */
+    bool EntitySupportsGpm(const dcgm_entity_key_t &entityKey);
+
+    /*************************************************************************/
+
+    /*************************************************************************/
+    /*
+     * Helper functions to append values to our internal data structure
+     *
+     * Note that threadCtx has entries that should be set before this call:
+     * - entityKey MUST be set to the key information for this update
+     * - fvBuffer can be set if you want this value to be buffered. This is useful
+     *       for capturing updates and sending them to other subsystems or clients
+     * - watchInfo can be set if you want this value to be cached
+     *
+     * Returns 0 on success
+     *         DCGM_ST_? #define on error
+     *
+     */
+    dcgmReturn_t AppendEntityString(dcgmcm_update_thread_t *threadCtx,
+                                    const char *value,
+                                    timelib64_t timestamp,
+                                    timelib64_t oldestKeepTimestamp);
+    dcgmReturn_t AppendEntityDouble(dcgmcm_update_thread_t *threadCtx,
+                                    double value1,
+                                    double value2,
+                                    timelib64_t timestamp,
+                                    timelib64_t oldestKeepTimestamp);
+    dcgmReturn_t AppendEntityInt64(dcgmcm_update_thread_t *threadCtx,
+                                   long long value1,
+                                   long long value2,
+                                   timelib64_t timestamp,
+                                   timelib64_t oldestKeepTimestamp);
+    dcgmReturn_t AppendEntityBlob(dcgmcm_update_thread_t *threadCtx,
+                                  void *value,
+                                  int valueSize,
+                                  timelib64_t timestamp,
+                                  timelib64_t oldestKeepTimestamp);
+
+    nvmlDevice_t GetNvmlDeviceFromEntityId(dcgm_field_eid_t entityId) const;
 
 private:
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
@@ -1842,6 +1579,9 @@ private:
     std::atomic_bool
         m_driverIsR450OrNewer; /* Is the driver r450.00 or newer? This is the driver version of nvml_11.0.h APIs */
 
+    std::atomic_bool
+        m_driverIsR520OrNewer; /* Is the driver r450.00 or newer? This is the driver version of nvml_11.0.h APIs */
+
     unsigned int m_driverMajorVersion;                          /* Major driver version, eg. 470, 510, etc */
     unsigned int m_numGpus;                                     /* Number of entries in m_gpus[] that are valid */
     unsigned int m_numInstances;                                // Number of total GPU instances created
@@ -1852,7 +1592,7 @@ private:
                            of initializations, we don't want to double initialize or we won't be able
                            to detach and attach to GPUs correctly. */
 
-    std::vector<nvmlBlacklistDeviceInfo_t> m_gpuBlacklist; /* Array of GPUs that have been blacklisted by the driver */
+    std::vector<nvmlExcludedDeviceInfo_t> m_gpuExcludeList; /* Array of GPUs that have been excluded by the driver */
 
     DcgmMutex *m_mutex;                     /* Lock used for protecting data structures within this class */
     unsigned int m_inDriverCount;           // Count of threads currently in driver calls
@@ -1865,7 +1605,7 @@ private:
 
     /* Track per-entity watches of fields. Use GetEntityWatchInfo() method to get a
        pointer to an element of this.
-       Is a hash of dcgmcm_entity_key_t -> entity_watch_table_t */
+       Is a hash of dcgm_entity_key_t -> entity_watch_table_t */
     hashtable_t *m_entityWatchHashTable;
 
     /* Cache of which PIDs we have already saved to the cache with which start times
@@ -1896,11 +1636,23 @@ private:
 
     std::vector<dcgmcmEventSubscription_t> m_subscriptions[DcgmcmEventTypeSize]; // Stored callbacks
 
+    DcgmGpmManager m_gpmManager; // Interfaces with NVML GPU Performance Monitoring (GPM) APIs
+
     DcgmMigManager m_migManager; // Tracks MIG information for quick lookup
                                  // Tracks the timestamp of a user request that we delay mig reconfig processing
     timelib64_t m_delayedMigReconfigProcessingTimestamp;
 
     DcgmMutex *m_nvmlTopoMutex; /* NVML topology APIs aren't thread safe. Make sure only one thread is using them */
+
+    bool m_forceProfMetricsThroughGpm; /* Should we force profiling metrics through GPM? True=yes. False=no. This
+                                          is useful for using the GPM simulator in NVML to test end-to-end with
+                                          control values */
+
+    /*************************************************************************/
+    /*
+     * Build vector of gpu info for topology functions.
+     */
+    std::vector<dcgm_topology_helper_t> GetTopologyHelper(bool includeLinkStatus = false);
 
     /*************************************************************************/
     /*
@@ -1958,7 +1710,7 @@ private:
     /*
      * Helper functions for adding or removing watch info classes
      */
-    dcgmcm_watch_info_p AllocWatchInfo(dcgmcm_entity_key_t entityKey);
+    dcgmcm_watch_info_p AllocWatchInfo(dcgm_entity_key_t entityKey);
     void FreeWatchInfo(dcgmcm_watch_info_p watchInfo);
 
     /*************************************************************************/
@@ -2024,7 +1776,7 @@ private:
      *           0 on error
      *
      */
-    void EntityIdToWatchKey(dcgmcm_entity_key_t *watchKey,
+    void EntityIdToWatchKey(dcgm_entity_key_t *watchKey,
                             dcgm_field_entity_group_t entityGroupId,
                             dcgm_field_eid_t entityId,
                             unsigned int fieldId);
@@ -2130,27 +1882,18 @@ private:
 
     /*************************************************************************/
     /*
-     * Cache or buffer the latest value for a watched vGPU field
-     *
-     * Returns 0 if OK
-     *        <0 DCGM_ST_? on module error
-     */
-    dcgmReturn_t BufferOrCacheLatestVgpuValue(dcgmcm_update_thread_t *threadCtx,
-                                              nvmlVgpuInstance_t vgpuId,
-                                              dcgm_field_meta_p fieldMeta);
-
-    /*************************************************************************/
-    /*
      * Helper method to add entity field watches
      */
     dcgmReturn_t AddEntityFieldWatch(dcgm_field_entity_group_t fieldEntityGroup,
                                      unsigned int entityId,
                                      unsigned short dcgmFieldId,
-                                     timelib64_t monitorFrequencyUsec,
+                                     timelib64_t monitorIntervalUsec,
                                      double maxSampleAge,
                                      int maxKeepSamples,
                                      DcgmWatcher watcher,
-                                     bool subscribeForUpdates);
+                                     bool subscribeForUpdates,
+                                     bool updateOnFirstWatch,
+                                     bool &wereFirstWatcher);
 
     /*************************************************************************/
     /*
@@ -2199,11 +1942,13 @@ private:
      * Helper method to add global watches
      */
     dcgmReturn_t AddGlobalFieldWatch(unsigned short dcgmFieldId,
-                                     timelib64_t monitorFrequencyUsec,
+                                     timelib64_t monitorIntervalUsec,
                                      double maxSampleAge,
                                      int maxKeepSamples,
                                      DcgmWatcher watcher,
-                                     bool subscribeForUpdates);
+                                     bool subscribeForUpdates,
+                                     bool updateOnFirstWatch,
+                                     bool &wereFirstWatcher);
 
     /*************************************************************************/
     /*
@@ -2219,40 +1964,6 @@ private:
      *
      */
     bool IsModulePushedFieldId(unsigned int fieldId);
-
-    /*************************************************************************/
-    /*
-     * Helper functions to append values to our internal data structure
-     *
-     * Note that threadCtx has entries that should be set before this call:
-     * - entityKey MUST be set to the key information for this update
-     * - fvBuffer can be set if you want this value to be buffered. This is useful
-     *       for capturing updates and sending them to other subsystems or clients
-     * - watchInfo can be set if you want this value to be cached
-     *
-     * Returns 0 on success
-     *         DCGM_ST_? #define on error
-     *
-     */
-    dcgmReturn_t AppendEntityString(dcgmcm_update_thread_t *threadCtx,
-                                    char *value,
-                                    timelib64_t timestamp,
-                                    timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityDouble(dcgmcm_update_thread_t *threadCtx,
-                                    double value1,
-                                    double value2,
-                                    timelib64_t timestamp,
-                                    timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityInt64(dcgmcm_update_thread_t *threadCtx,
-                                   long long value1,
-                                   long long value2,
-                                   timelib64_t timestamp,
-                                   timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityBlob(dcgmcm_update_thread_t *threadCtx,
-                                  void *value,
-                                  int valueSize,
-                                  timelib64_t timestamp,
-                                  timelib64_t oldestKeepTimestamp);
 
     dcgmReturn_t AppendDeviceSupportedClocks(dcgmcm_update_thread_t *threadCtx,
                                              nvmlDevice_t nvmlDevice,
@@ -2271,6 +1982,12 @@ private:
                                           nvmlDevice_t nvmlDevice,
                                           unsigned int scopeId,
                                           timelib64_t expireTime);
+
+    void ReadAndCacheNvLinkData(dcgmcm_update_thread_t *threadCtx,
+                                nvmlNvLinkErrorCounter_t fieldId,
+                                nvmlDevice_t nvmlDevice,
+                                unsigned int scopeId,
+                                timelib64_t expireTime);
 
     /*************************************************************************/
     /*
@@ -2350,26 +2067,10 @@ private:
 
     /*************************************************************************/
     /*
-     * Read the GPU blacklist from the driver an cache it into m_gpuBlacklist
+     * Read the GPU exclusion list from the driver an cache it into m_gpuExclusionList
      *
      */
-    dcgmReturn_t ReadAndCacheGpuBlacklist(void);
-
-    /*************************************************************************/
-    /*
-     * Helpers to fetch the information of active FBC sessions on the given device/vGPU instance
-     *
-     */
-    dcgmReturn_t GetDeviceFBCSessionsInfo(nvmlDevice_t nvmlDevice,
-                                          dcgmcm_update_thread_t *threadCtx,
-                                          dcgmcm_watch_info_p watchInfo,
-                                          timelib64_t now,
-                                          timelib64_t expireTime);
-    dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(nvmlVgpuInstance_t vgpuId,
-                                                dcgmcm_update_thread_t *threadCtx,
-                                                dcgmcm_watch_info_p watchInfo,
-                                                timelib64_t now,
-                                                timelib64_t expireTime);
+    dcgmReturn_t ReadAndCacheGpuExclusionList(void);
 
     /*************************************************************************/
     /*
@@ -2471,22 +2172,6 @@ private:
                                      nvmlEventData_t &eventData,
                                      nvmlReturn_t nvmlReturn,
                                      timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Get the number of active NvLinks to NvSwitches per GPU using NVML
-     *
-     * Helper for GetActiveNvSwitchNvLinkCountsForAllGpus
-     */
-    dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNVML(std::vector<unsigned int> &gpuCounts);
-
-    /*************************************************************************/
-    /**
-     * Get the number of active NvLinks to NvSwitches per GPU using NSCQ
-     *
-     * Helper for GetActiveNvSwitchNvLinkCountsForAllGpus
-     */
-    dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNSCQ(std::vector<unsigned int> &gpuCounts);
 
     /*************************************************************************/
     /**

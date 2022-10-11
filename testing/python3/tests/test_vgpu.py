@@ -408,7 +408,7 @@ def test_dcgm_vgpu_config_power_enforce_standalone(handle, gpuIds):
 
     #Make sure that the power management limit is updating fast enough to look at
     fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT)
-    sleepTime = 1.2 * (fieldInfo.monitorFrequencyUsec / 1000000.0)
+    sleepTime = 1.2 * (fieldInfo.monitorIntervalUsec / 1000000.0)
 
     ## Get Min and Max Power limit on the group
     attributes = systemObj.discovery.GetGpuAttributes(gpuId)

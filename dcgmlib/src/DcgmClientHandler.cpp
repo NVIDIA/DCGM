@@ -17,7 +17,6 @@
 #include "DcgmClientHandler.h"
 #include "DcgmLogging.h"
 #include "DcgmMutex.h"
-#include "DcgmProtobuf.h"
 #include "DcgmProtocol.h"
 #include "DcgmRequest.h"
 #include "DcgmSettings.h"
@@ -274,13 +273,11 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
             break;
         }
 
-        PRINT_DEBUG(
-            "%li", "failed connecting to hostengine, still going to try for %li more ms", timeoutMs - (start - now));
+        log_debug("failed connecting to hostengine, still going to try for {} more ms", timeoutMs - (start - now));
         usleep(WAIT_MS * 1000);
     }
 
-    PRINT_DEBUG(
-        "%d %li", "finished %d connection attempts to hostengine in about %li ms", attempt, (now - start) / 1000);
+    log_debug("finished {} connection attempts to hostengine in about {} ms", attempt, (now - start) / 1000);
 
     if (connected)
     {
@@ -290,7 +287,7 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
     }
     else
     {
-        PRINT_ERROR("", "failed to connect to hostengine");
+        log_error("failed to connect to hostengine");
         return DCGM_ST_CONNECTION_NOT_VALID;
     }
 }
@@ -476,90 +473,6 @@ dcgmReturn_t DcgmClientHandler::ExchangeModuleCommandAsync(dcgmHandle_t dcgmHand
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmClientHandler::ExchangeMsgAsync(dcgmHandle_t dcgmHandle,
-                                                 DcgmProtobuf *pEncodedObj,
-                                                 DcgmProtobuf *pDecodeObj,
-                                                 std::vector<dcgm::Command *> *pRecvdCmds,
-                                                 std::unique_ptr<DcgmRequest> request,
-                                                 unsigned int timeoutMs)
-{
-    dcgmReturn_t dcgmReturn;
-    std::unique_ptr<DcgmMessage> dcgmSendMsg = std::make_unique<DcgmMessage>();
-    dcgm_request_id_t requestId;
-
-    if (!dcgmHandle)
-    {
-        PRINT_ERROR("", "Bad parameter");
-        return DCGM_ST_BADPARAM;
-    }
-
-    dcgm_connection_id_t connectionId = (dcgm_connection_id_t)dcgmHandle;
-
-    /* Get the protobuf encoded message */
-    auto msgBytes = dcgmSendMsg->GetMsgBytesPtr();
-    pEncodedObj->GetEncodedMessage(*msgBytes);
-
-    // Get Next Request ID
-    requestId = GetNextRequestId();
-
-    /* Add a blocking request for the initial response. Also add a persistent part
-       for subsequent notifications */
-    auto requestFut = AddBlockingRequest(connectionId, requestId);
-
-    if (request != nullptr)
-    {
-        request->SetRequestId(requestId);
-        AddPersistentRequest(connectionId, std::move(request));
-    }
-
-    /* Update Encoded Message with a header to be sent over socket */
-    dcgmSendMsg->UpdateMsgHdr(DCGM_MSG_PROTO_REQUEST, requestId, DCGM_ST_OK, msgBytes->size());
-
-    // Send the Message
-    dcgmReturn = m_dcgmIpc.SendMessage(connectionId, std::move(dcgmSendMsg), true);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        RemovePersistentRequest(connectionId, requestId);
-        RemoveBlockingRequest(connectionId, requestId, dcgmReturn);
-        return dcgmReturn;
-    }
-
-    auto futStatus = requestFut.wait_for(std::chrono::milliseconds(timeoutMs));
-    if (futStatus != std::future_status::ready)
-    {
-        DCGM_LOG_ERROR << "connectionId " << connectionId << " requestId " << requestId << " timed out after "
-                       << timeoutMs << " ms.";
-        RemoveBlockingRequest(connectionId, requestId, std::nullopt);
-        RemovePersistentRequest(connectionId, requestId);
-        return DCGM_ST_TIMEOUT;
-    }
-
-    auto response = requestFut.get();
-    RemoveBlockingRequest(connectionId, requestId, std::nullopt);
-
-    if (response.dcgmReturn != DCGM_ST_OK)
-    {
-        RemovePersistentRequest(connectionId, requestId);
-        DCGM_LOG_ERROR << "connectionId " << connectionId << " requestId " << requestId << " returned "
-                       << errorString(response.dcgmReturn);
-        return response.dcgmReturn;
-    }
-
-    DCGM_LOG_DEBUG << "Request Wait completed for connectionId " << connectionId << " request ID: " << requestId;
-
-    // Initialize Decoder object
-    msgBytes = response.response->GetMsgBytesPtr();
-    if (0 != pDecodeObj->ParseRecvdMessage((char *)msgBytes->data(), msgBytes->size(), pRecvdCmds))
-    {
-        DCGM_LOG_ERROR << "Failed to decode the recvd message for command";
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    /* If the request was persistent, it still exists in m_persistentReqs */
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmClientHandler::PopulateConnectionAttributes(dcgmHandle_t dcgmHandle)
 {
     dcgm_core_msg_hostengine_version_t msg = {};
@@ -588,36 +501,10 @@ dcgmReturn_t DcgmClientHandler::PopulateConnectionAttributes(dcgmHandle_t dcgmHa
     auto [attributesIt, wasInserted]
         = m_connectionAttributes.emplace(connectionId, DCHConnectionAttributes(false, msg.version.rawBuildInfoString));
 
-    /* Right now, 2.4.0 and above support sending only module commands */
-    if (attributesIt->second.m_buildInfo.GetVersion() >= std::string_view("2.4.0"))
-    {
-        attributesIt->second.m_requiresModuleCommands = true;
-    }
-
     DCGM_LOG_DEBUG << "connectionId " << connectionId << " returned version "
-                   << attributesIt->second.m_buildInfo.GetVersion()
-                   << " requiresModuleCommands = " << attributesIt->second.m_requiresModuleCommands;
+                   << attributesIt->second.m_buildInfo.GetVersion();
 
     return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-bool DcgmClientHandler::HandleRequiresModuleCommands(dcgmHandle_t dcgmHandle)
-{
-    dcgm_connection_id_t connectionId = (dcgm_connection_id_t)dcgmHandle;
-
-    DcgmLockGuard dlg(&m_mutex);
-
-    auto it = m_connectionAttributes.find(connectionId);
-    if (it == m_connectionAttributes.end())
-    {
-        DCGM_LOG_WARNING << "connectionId " << connectionId << " was unknown";
-        return true; /* Use the new protocol if the connection is unknown */
-    }
-
-    DCGM_LOG_VERBOSE << "connectionId " << connectionId << " has requiresModuleCommands "
-                     << it->second.m_requiresModuleCommands;
-    return it->second.m_requiresModuleCommands;
 }
 
 /*****************************************************************************/

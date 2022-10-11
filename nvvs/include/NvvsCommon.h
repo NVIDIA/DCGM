@@ -114,18 +114,12 @@ public:
     std::string parmsString;           /* unparsed subtest parameters */
     std::map<std::string, std::map<std::string, std::string>> parms; /* test parameters to set from the command line */
     bool jsonOutput;                                                 /* Produce json output as documented below */
-    bool fromDcgm;                   // Note that this run was initiated by DCGM to avoid the deprecation warning
-    std::string dcgmHostname;        /* Host name where DCGM is running */
-    bool training;                   // Run NVVS in training mode to generate golden values for this configuration
-    bool forceTraining;              // Generate golden values despite warnings.
-    uint64_t throttleIgnoreMask;     // Mask of throttling reasons to ignore.
-    unsigned int trainingIterations; // Number of iterations of each test to perform when training.
-    double trainingVariancePcnt;     // Variance allowed as a percentage of the mean in training mode.
-    double trainingTolerancePcnt;    // Percentage of tolerance towards meeting the golden value in training mode.
-    std::string goldenValuesFile;    // Filename where golden values should be saved
-    bool failEarly;             // enable failure checks throughout test rather than at the end so we stop test sooner
-    uint64_t failCheckInterval; /* how often failure checks should occur when running tests (in seconds). Only
-                                       applies if failEarly is enabled. */
+    bool fromDcgm;               // Note that this run was initiated by DCGM to avoid the deprecation warning
+    std::string dcgmHostname;    /* Host name where DCGM is running */
+    uint64_t throttleIgnoreMask; // Mask of throttling reasons to ignore.
+    bool failEarly;              // enable failure checks throughout test rather than at the end so we stop test sooner
+    uint64_t failCheckInterval;  /* how often failure checks should occur when running tests (in seconds). Only
+                                        applies if failEarly is enabled. */
     Gpu *m_gpus[DCGM_MAX_NUM_DEVICES]; // Pointers to the gpu objects that are active for this run
 };
 

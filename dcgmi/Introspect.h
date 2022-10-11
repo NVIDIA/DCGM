@@ -32,13 +32,7 @@ public:
     Introspect();
     virtual ~Introspect();
 
-    dcgmReturn_t EnableIntrospect(dcgmHandle_t handle);
-    dcgmReturn_t DisableIntrospect(dcgmHandle_t handle);
-    dcgmReturn_t DisplayStats(dcgmHandle_t handle,
-                              bool forHostengine,
-                              bool forAllFields,
-                              bool forAllFieldGroups,
-                              std::vector<dcgmFieldGrp_t> forFieldGroups);
+    dcgmReturn_t DisplayStats(dcgmHandle_t handle, bool forHostengine);
 
 private:
     string readableMemory(long long bytes);
@@ -49,32 +43,12 @@ private:
 };
 
 /**
- * Toggle whether Introspection is enabled
- */
-class ToggleIntrospect : public Command
-{
-public:
-    ToggleIntrospect(string hostname, bool enabled);
-
-protected:
-    dcgmReturn_t DoExecuteConnected() override;
-
-private:
-    Introspect introspectObj;
-    bool enabled;
-};
-
-/**
  * Display a summary of introspection information
  */
 class DisplayIntrospectSummary : public Command
 {
 public:
-    DisplayIntrospectSummary(string hostname,
-                             bool forHostengine,
-                             bool forAllFields,
-                             bool forAllFieldGroups,
-                             std::vector<dcgmFieldGrp_t> forFieldGroups);
+    DisplayIntrospectSummary(string hostname, bool forHostengine);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -82,9 +56,6 @@ protected:
 private:
     Introspect introspectObj;
     bool forHostengine;
-    bool forAllFields;
-    bool forAllFieldGroups;
-    std::vector<dcgmFieldGrp_t> forFieldGroups;
 };
 
 

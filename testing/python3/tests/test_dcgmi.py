@@ -88,7 +88,7 @@ def _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
 def _assert_invalid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
     assert retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value, \
            'Invalid test - Function returned error code: %s . Args used: "%s"' \
-           % (retValue, ', '.join(args[1:]))
+           % (retValue, ', '.join(args[0:]))
             
     assert len(_lines_with_errors(stderr_lines + stdout_lines)) >= 1, \
             'Function did not display error message for args "%s". Returned: %s\nstdout: %s\nstderr: %s' \
@@ -307,9 +307,20 @@ def test_dcgmi_config(handle, gpuIds):
 
     groupId = str(_create_dcgmi_group())
 
-    ## keep args in this order. Changing it may break the test
+    ## Keep args in order in all dcgmi command sequence arrays below.
+
+    ## This is the list of dcgmi command arguments that are valid as root
+    ## and non-root, and effect setup for additional tests. We use a list in
+    ## case we want to add more than one.
+    setupArgsTestList = [
+        ["group", "-g", groupId, "-a", str(gpuIds[0])],        # add gpu to group
+    ]
+
+    _test_valid_args(setupArgsTestList)
+
+    ## This is the list of dcgmi command arguments that are valid as root,
+    ## and invalid as non-root.
     validArgsTestList = [
-            ["group", "-g", groupId, "-a", str(gpuIds[0])],        # add gpu to group
             ["config", "--get", "-g", groupId],                    # get default group configuration
             ["config", "--get", "-g", "0"],                        # get default group configuration by ID. This will work as long as group IDs start at 0
             ["config", "-g", groupId, "--set", "-P", dft_pwr],     # set default power limit
@@ -330,7 +341,7 @@ def test_dcgmi_config(handle, gpuIds):
     else:
         _test_invalid_args(validArgsTestList)
 
-    ## keep args in this order. Changing it may break the test
+    ## This is the list of invalid dcgmi command arguments.
     _test_invalid_args([
             ["config", "--get", "-g", "9999"],                 # Can't get config of group that doesn't exist
             ["config", "--get", "-g", "9999", "--verbose"],    # Can't get config of group that doesn't exist
@@ -472,9 +483,7 @@ def test_dcgmi_diag(handle, gpuIds):
             ["diag", "--run", "3", "--parameters", "and.i'd.like.to.take.a=minute=just.sit=right=there"],
             ["diag", "--run", "3", "--parameters", "i'll tell you=how.I.became the=prince of .a town called"],
             ["diag", "--run", "3", "--parameters", "Bel-Air"],
-            ["diag", "--run", "sm stress", "--train"],
-            ["diag", "--run", "1", "--force"],
-            ["diag", "--run", "2", "--training-variance", "10"],
+            ["diag", "--train"], # ensure that training is no longer supported
             ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early 10"], # verifies --fail-early does not accept parameters
             ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval -1"], # no negative numbers allowed
             ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval 350"], # no numbers > 300 allowed
@@ -590,12 +599,14 @@ def test_dcgmi_field_groups(handle):
     _test_valid_args([
         ["fieldgroup", "-l"],
         ["fieldgroup", "-i", "-g", "1"],                    # show internal field group
-        ["fieldgroup", "-c", "my_group", "-f", "1,2,3"]     # Add a field group
+        ["fieldgroup", "-c", "my_group", "-f", "1,2,3"],    # Add a field group
     ])
 
     _test_invalid_args([
-        ["introspect", "-d", "-g", "1"],                    # Delete internal group. Bad
-        ["introspect", "-i", "-g", "100000"],               # Info for invalid group
+        ["fieldgroup", "-c", "my_group", "-f", "1,2,3"],      # Add a duplicate group
+        ["fieldgroup", "-c", "bad_fieldids", "-f", "999999"], # Pass bad fieldIds 
+        ["introspect", "-d", "-g", "1"],                      # Delete internal group. Bad
+        ["introspect", "-i", "-g", "100000"],                 # Info for invalid group
     ])
 
 @test_utils.run_with_standalone_host_engine()
@@ -606,44 +617,13 @@ def test_dcgmi_introspect(handle):
     """
     
     _test_valid_args([
-        ["introspect", "--enable"],
         ["introspect", "--show", "--hostengine"],           # show hostengine
         ["introspect", "-s", "-H"],                         # short form
-        ["introspect", "--show", "--all-fields"],           # show all fields
-        ["introspect", "--show", "-F"],                     # short form
-        ["introspect", "--show", "-f", "all"],              # show all field groups
-        ["introspect", "--show", "--field-group", "all"],   # long form
-        ["introspect", "--show", "-H", "-F", "-f", "all"],  # show everything
-        ["introspect", "--disable"],
     ])
     
     _test_invalid_args([
-        ["introspect", "--show", "-H"],         # all "show" commands should fail since introspection is disabled
-        ["introspect", "--show", "-F"],
-        ["introspect", "--show", "-f", "all"],
+        ["introspect", "--show"],         # "show" without "--hostengine" should fail
     ])
-    
-    # turn on introspection again to test more invalid args
-    _test_valid_args([["introspect", "--enable"]])
-    
-@test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
-def test_dcgmi_introspect_enable_disable(handle):
-    """
-    Test that the dcgmi commands for enabling/disabling introspection actually 
-    do as they say
-    """
-    _run_dcgmi_command(["introspect", "--enable"])
-    
-    dcgmHandle = pydcgm.DcgmHandle(handle)
-    system = pydcgm.DcgmSystem(dcgmHandle)
-    
-    # throws exception if it's not enabled
-    mem = system.introspect.memory.GetForHostengine()
-    
-    _run_dcgmi_command(["introspect", "--disable"])
-    with test_utils.assert_raises(dcgmExceptionClass(DCGM_ST_NOT_CONFIGURED)):
-        mem = system.introspect.memory.GetForHostengine()
     
 @test_utils.run_with_standalone_host_engine(320)
 @test_utils.run_with_initialized_client()
@@ -668,7 +648,7 @@ def test_dcgmi_nvlink(handle, gpuIds):
 def helper_make_switch_string(switchId):
     return "nvswitch:" + str(switchId)
 
-@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_nvswitches(2)
@@ -691,7 +671,7 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
     #Same for switches but predicate each one with nvswitch
     allSwitchesCsv = ",".join(map(helper_make_switch_string,switchIds))
 
-    switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P00
+    switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT
 
     #Inject a value for a field for each switch so we can retrieve it
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -702,8 +682,8 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
     field.ts = int((time.time()-5) * 1000000.0) #5 seconds ago
     field.value.i64 = 0
     for switchId in switchIds:
-        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH, 
-                                                             switchId, field)
+        linkId = (dcgm_fields.DCGM_FE_SWITCH << 0) | (switchId << 16) | (1 << 8)
+        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_LINK, linkId, field)
 
     _test_valid_args([
         ["dmon", "-e", "150,155","-c","1"],                          # run the dmon for default gpu group.
@@ -778,7 +758,7 @@ def test_dcgmi_nvlink_nvswitches(handle, gpuIds, switchIds):
     #Same for switches but predicate each one with nvswitch
     allSwitchesCsv = ",".join(map(helper_make_switch_string,switchIds))
 
-    switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P00
+    switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX
 
     #Inject a value for a field for each switch so we can retrieve it
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -814,15 +794,15 @@ def test_dcgmi_modules(handle, gpuIds):
     ## keep args in this order. Changing it may break the test
     _test_valid_args([
            ["modules", "--list"],
-           ["modules", "--blacklist", "5"],
-           ["modules", "--blacklist", "policy"],
+           ["modules", "--denylist", "5"],
+           ["modules", "--denylist", "policy"],
     ])
       
     ## keep args in this order. Changing it may break the test
     _test_invalid_args([
             ["modules", "--list", "4"],
-            ["modules", "--blacklist", "20"],
-            ["modules", "--blacklist", "notamodule"],
+            ["modules", "--denylist", "20"],
+            ["modules", "--denylist", "notamodule"],
     ])
 
 @test_utils.run_with_standalone_host_engine(20)
@@ -848,18 +828,12 @@ def test_dcgmi_profile(handle, gpuIds):
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED) as e:
         test_utils.skip_test("The profiling module could not be loaded")
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED) as e:
-        test_utils.skip_test("The profling module is not supported")
+        test_utils.skip_test("The profiling module is not supported")
 
     ## keep args in this order. Changing it may break the test
     _test_valid_args([
            ["profile", "--list", "-i", allGpusCsv],
            ["profile", "--list", "-g", str(dcgmGroup.GetId().value)],
-           ["profile", "--pause"], #Pause followed by resume
-           ["profile", "--resume"],
-           ["profile", "--pause"], #Double pause and double resume should be fine
-           ["profile", "--pause"],
-           ["profile", "--resume"],
-           ["profile", "--resume"],
     ])
       
     ## keep args in this order. Changing it may break the test
@@ -870,6 +844,44 @@ def test_dcgmi_profile(handle, gpuIds):
             ["profile", "--list", "-i", allGpusCsv + ",taco"], #Invalid gpu at end
             ["profile", "--list", "-g", "999"], #Invalid group
     ])
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgmi_profile_affected_by_gpm(handle, gpuIds):
+    """
+    Test DCGMI "profile" subcommands that are affected by if GPM works or not
+    """
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    #See if these GPUs even support profiling. This will bail out for non-Tesla or Pascal or older SKUs
+    try:
+        supportedMetrics = dcgmGroup.profiling.GetSupportedMetricGroups()
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED) as e:
+        test_utils.skip_test("Profiling is not supported for gpuIds %s" % str(gpuIds))
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED) as e:
+        test_utils.skip_test("The profiling module could not be loaded")
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED) as e:
+        test_utils.skip_test("The profiling module is not supported")
+
+    ## keep args in this order. Changing it may break the test
+    pauseResumeArgs = [
+        ["profile", "--pause"], #Pause followed by resume
+        ["profile", "--resume"],
+        ["profile", "--pause"], #Double pause and double resume should be fine
+        ["profile", "--pause"],
+        ["profile", "--resume"],
+        ["profile", "--resume"],
+    ]
+
+    #GPM GPUs don't support pause/resume since monitoring and profiling aren't mutually exclusive anymore
+    if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
+        _test_invalid_args(pauseResumeArgs)
+    else:
+        _test_valid_args(pauseResumeArgs)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()

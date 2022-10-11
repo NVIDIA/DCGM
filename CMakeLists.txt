@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 2.4.7)
+project(dcgm VERSION 3.0.4)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -119,7 +120,7 @@ if (NOT ANY_SANITIZER)
     add_link_options(-static-libstdc++)
 endif()
 
-add_link_options(-Wl,--exclude-libs,libstdc++ -Wl,--exclude-libs,libprotobuf)
+add_link_options(-Wl,--exclude-libs,libstdc++)
 
 include(GNUInstallDirs)
 
@@ -301,20 +302,23 @@ if (EXISTS ${DCGM_PRIVATE_DIR})
     add_subdirectory(${DCGM_PRIVATE_DIR})
 endif()
 
+set(DCGM_INSTALL_TARGETS
+    dcgm
+    dcgmi
+    nv-hostengine
+    dcgmmoduleconfig
+    dcgmmodulediag
+    dcgmmodulehealth
+    dcgmmoduleintrospect
+    dcgmmodulenvswitch
+    dcgmmodulepolicy
+    ${DCGM_CUBLAS_PROXY}
+    ${DCGMPROFTESTER}
+)
 
 install(
     TARGETS
-        dcgm
-        dcgmi
-        nv-hostengine
-        dcgmmoduleconfig
-        dcgmmodulediag
-        dcgmmodulehealth
-        dcgmmoduleintrospect
-        dcgmmodulenvswitch
-        dcgmmodulepolicy
-        ${DCGM_CUBLAS_PROXY}
-        ${DCGMPROFTESTER}
+        ${DCGM_INSTALL_TARGETS}
     ARCHIVE DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests
     LIBRARY DESTINATION ${DCGM_TESTS_APP_DIR}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -348,17 +352,7 @@ install(TARGETS nvvs RUNTIME DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/ CO
 
 install(
     TARGETS
-        dcgm
-        dcgmi
-        nv-hostengine
-        dcgmmoduleconfig
-        dcgmmodulediag
-        dcgmmodulehealth
-        dcgmmoduleintrospect
-        dcgmmodulenvswitch
-        dcgmmodulepolicy
-        ${DCGM_CUBLAS_PROXY}
-        ${DCGMPROFTESTER}
+        ${DCGM_INSTALL_TARGETS}
     EXPORT dcgm-export
     ARCHIVE DESTINATION ${DCGM_LIB_INSTALL_PREFIX} COMPONENT DCGM
     LIBRARY DESTINATION ${DCGM_LIB_INSTALL_PREFIX}
@@ -422,6 +416,9 @@ if (DEFINED DCGM_PACKAGING_ENGINE)
     endif()
 endif()
 
+if (VMWARE)
+    set(CPACK_VMWARE ${VMWARE} CACHE BOOL "Indicate if the VMWare build was initiated" FORCE)
+endif()
 set(CPACK_GENERATOR "DEB;RPM;TGZ")
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/packaging.cmake")
 

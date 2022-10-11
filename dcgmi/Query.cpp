@@ -110,7 +110,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
         if (DCGM_ST_OK != result)
         {
             std::cout << "Error: Cannot get GPU list from remote node. Return: " << errorString(result) << std::endl;
-            PRINT_ERROR("%d", "Cannot get GPU list from remote node. Return: %d", result);
+            log_error("Cannot get GPU list from remote node. Return: {}", result);
             return result;
         }
 
@@ -128,8 +128,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
             {
                 out[entityId][c_info].setOrAppend("Error: Cannot get device attributes for GPU.");
                 out[entityId][c_info].setOrAppend(std::string("Return: ") + errorString(result));
-                PRINT_ERROR(
-                    "%d %d", "Error getting device attributes with GPU ID: %d. Return: %d", entityIds[i], result);
+                log_error("Error getting device attributes with GPU ID: {}. Return: {}", entityIds[i], result);
             }
             else
             {
@@ -158,7 +157,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
         {
             std::cout << "Error: Cannot get NvSwitch list from remote node. Return: " << errorString(result)
                       << std::endl;
-            PRINT_ERROR("%d", "Cannot get NvSwitch list from remote node. Return: %d", result);
+            log_error("Cannot get NvSwitch list from remote node. Return: {}", result);
             return result;
         }
 
@@ -266,7 +265,7 @@ dcgmReturn_t Query::DisplayGroupInfo(dcgmHandle_t mNvcmHandle,
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Cannot get group info from remote node. Return: " << error << std::endl;
-        PRINT_ERROR("%d %d", "Error getting group info with Group ID: %d. Return: %d", requestedGroupId, result);
+        log_error("Error getting group info with Group ID: {}. Return: {}", requestedGroupId, result);
         return result;
     }
 
@@ -337,10 +336,9 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
         if (result != DCGM_ST_OK)
         {
             std::cout << "Error: Unable to get GPU info. Return: " << errorString(result) << std::endl;
-            PRINT_ERROR("%d %d",
-                        "Error getting device attributes with GPU ID: %d. Return: %d",
-                        stNvcmGroupInfo.entityList[i].entityId,
-                        result);
+            log_error("Error getting device attributes with GPU ID: {}. Return: {}",
+                      stNvcmGroupInfo.entityList[i].entityId,
+                      result);
             return result;
         }
     }
@@ -539,7 +537,7 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
 
             default:
                 // Should never run
-                PRINT_ERROR("", "Unexpected Error.");
+                log_error("Unexpected Error.");
                 break;
         }
     }
@@ -769,7 +767,7 @@ dcgmReturn_t Query::HelperGetEntityList(dcgmHandle_t dcgmHandle,
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot get devices from remote node. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error discovering devices from remote node. Return: %d", result);
+        log_error("Error discovering devices from remote node. Return: {}", result);
         return result;
     }
 
@@ -803,7 +801,7 @@ dcgmReturn_t Query::HelperValidInput(std::string const &attributes)
     {
         std::cout
             << "Error: Invalid input. Please include only one of each valid tag.\n Example:./dcgmi discovery --gpuid 1 -i apt\n";
-        PRINT_ERROR("%s", "Error parsing for attributes. Invalid input detected: %s", attributes.c_str());
+        log_error("Error parsing for attributes. Invalid input detected: {}", attributes);
         return DCGM_ST_BADPARAM;
     }
 
@@ -819,7 +817,7 @@ dcgmReturn_t Query::HelperValidInput(std::string const &attributes)
                 {
                     std::cout
                         << "Error: Invalid input. Please include only one of each tag.\n Example:./dcgmi discovery --gpuid 1 -i apt\n";
-                    PRINT_ERROR("%s", "Error parsing for attributes. Invalid input detected: %s", attributes.c_str());
+                    log_error("Error parsing for attributes. Invalid input detected: {}", attributes);
                     return DCGM_ST_BADPARAM;
                 }
                 else
@@ -835,7 +833,7 @@ dcgmReturn_t Query::HelperValidInput(std::string const &attributes)
     {
         std::cout
             << "Invalid input. Please include only valid tags.\n Example:./dcgmi discovery --gpuid 1 -i a \n Type ./dcgmi discovery -h for more help.\n";
-        PRINT_ERROR("%s", "Error parsing for attributes. Invalid input detected: %s", attributes.c_str());
+        log_error("Error parsing for attributes. Invalid input detected: {}", attributes);
         return DCGM_ST_BADPARAM;
     }
 

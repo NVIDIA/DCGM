@@ -61,7 +61,7 @@
         dcgmJobRemoveAll;
         dcgmJobStartStats;
         dcgmJobStopStats;
-        dcgmModuleBlacklist;
+        dcgmModuleDenylist;
         dcgmModuleGetStatuses;
         dcgmPolicyGet;
         dcgmPolicyRegister;

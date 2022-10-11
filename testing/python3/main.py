@@ -72,7 +72,7 @@ def _summarize_tests():
                 print("\n=========================== " + logFile + " ===========================\n")
                 with open(logFilePath, "r", encoding="utf-8-sig") as f:
                     print(f.read())
-    
+
     logger.info("\n========== TEST SUMMARY ==========\n")
     logger.info("Passed: {}".format(tests_ok_count))
     logger.info("Failed: {}".format(tests_fail_count))
@@ -107,8 +107,11 @@ def _run_burn_in_tests():
         if "__DCGM_DBG_FILE" in env: del env["__DCGM_DBG_FILE"]
         if "__NVML_DBG_FILE" in env: del env["__NVML_DBG_FILE"]
 
-        burn = Popen([sys.executable, file_name, "-t", "3"], stdout=None, stderr=None, env = env)
-        
+        if option_parser.options.dvssc_testing:
+            burn = Popen([sys.executable, file_name, "-t", "3", "--dvssc-testing"], stdout=None, stderr=None, env = env)
+        else:
+            burn = Popen([sys.executable, file_name, "-t", "3"], stdout=None, stderr=None, env = env)
+
         if burn.pid == None:
             assert False, "Failed to launch Burn-in Tests"
         burn.wait()
@@ -124,7 +127,7 @@ class TestFrameworkSetup(object):
         if utils.is_mps_server_running():
             print('DCGM Testing framework is not interoperable with MPS server. Please disable MPS server.')
             sys.exit(1)
-        
+
         # Various setup steps
         option_parser.parse_options()
         utils.verify_user_file_permissions()
@@ -145,9 +148,9 @@ class TestFrameworkSetup(object):
 
             if logger.log_dir:
                 logger.close()
-            
+
         option_parser.validate()
-        
+
         if not test_utils.is_framework_compatible():
             logger.fatal("The test framework and dcgm versions are incompatible. Exiting Test Framework.")
             sys.exit(1)
@@ -189,9 +192,17 @@ class TestFrameworkSetup(object):
         del os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE']
         pass
 
+def do_root_check_possibly_exit():
+    if not option_parser.options.no_root_check:
+        if not utils.is_root():
+            logger.warning("The test framework must be run as root to function properly. Switch to root by running 'sudo su'.")
+            sys.exit(1)
+
 def main():
 
     with TestFrameworkSetup():
+
+        do_root_check_possibly_exit()
 
         if not option_parser.options.no_env_check:
             if not test_utils.is_test_environment_sane():

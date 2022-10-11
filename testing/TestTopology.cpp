@@ -23,9 +23,9 @@ TestTopology::TestTopology()
 TestTopology::~TestTopology()
 {}
 
-int TestTopology::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestTopology::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
+    m_gpus = initParams.liveGpuIds;
     return 0;
 }
 
@@ -87,8 +87,8 @@ int TestTopology::TestTopologyDevice()
     if (result != DCGM_ST_OK)
         return -1;
 
-    result = dcgmGetDeviceTopology(m_dcgmHandle, m_gpus[0].gpuId, &topologyInfo);
-    if (result == DCGM_ST_NOT_SUPPORTED && groupIdInfo.count < 2)
+    result = dcgmGetDeviceTopology(m_dcgmHandle, m_gpus[0], &topologyInfo);
+    if (result == DCGM_ST_NOT_SUPPORTED && m_gpus.size() < 2)
     {
         printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo.count);
         return 0;
@@ -102,7 +102,7 @@ int TestTopology::TestTopologyDevice()
     // the GPU should have *some* affinity
     if (topologyInfo.cpuAffinityMask[0] == 0)
     {
-        fprintf(stderr, "CPU affinity mask of gpuId %u == 0\n", m_gpus[0].gpuId);
+        fprintf(stderr, "CPU affinity mask of gpuId %u == 0\n", m_gpus[0]);
         return 1;
     }
 
@@ -113,7 +113,7 @@ int TestTopology::TestTopologyDevice()
                 "topologyInfo.numGpus %u != m_gpus.size() - 1 %u for gpuId %u\n",
                 topologyInfo.numGpus,
                 (unsigned int)m_gpus.size() - 1,
-                m_gpus[0].gpuId);
+                m_gpus[0]);
         return 1;
     }
 
@@ -140,7 +140,7 @@ int TestTopology::TestTopologyGroup()
     // not a lot to be tested here without a priori knowledge of the system so
     // just make sure the command runs for now.
     result = dcgmGetGroupTopology(m_dcgmHandle, groupId, &groupInfo);
-    if (result == DCGM_ST_NOT_SUPPORTED && groupIdInfo.count < 2)
+    if (result == DCGM_ST_NOT_SUPPORTED && m_gpus.size() < 2)
     {
         printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo.count);
         return 0;

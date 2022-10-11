@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "DcgmModuleCore.h"
+#include "../profiling/dcgm_profiling_structs.h"
 #include "DcgmLogging.h"
 #include "nvswitch/dcgm_nvswitch_structs.h"
 #include <DcgmGroupManager.h>
@@ -104,16 +105,27 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_JOB_REMOVE_ALL:
                 dcgmReturn = ProcessJobRemoveAll(*(dcgm_core_msg_job_cmd_t *)moduleCommand);
                 break;
-            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES:
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V1:
                 dcgmReturn
-                    = ProcessEntitiesGetLatestValues(*(dcgm_core_msg_entities_get_latest_values_t *)moduleCommand);
+                    = ProcessEntitiesGetLatestValuesV1(*(dcgm_core_msg_entities_get_latest_values_v1 *)moduleCommand);
                 break;
-            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD:
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2:
                 dcgmReturn
-                    = ProcessGetMultipleValuesForField(*(dcgm_core_msg_get_multiple_values_for_field_t *)moduleCommand);
+                    = ProcessEntitiesGetLatestValuesV2(*(dcgm_core_msg_entities_get_latest_values_v2 *)moduleCommand);
                 break;
-            case DCGM_CORE_SR_WATCH_FIELD_VALUE:
-                dcgmReturn = ProcessWatchFieldValue(*(dcgm_core_msg_watch_field_value_t *)moduleCommand);
+            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
+                dcgmReturn = ProcessGetMultipleValuesForFieldV1(
+                    *(dcgm_core_msg_get_multiple_values_for_field_v1 *)moduleCommand);
+                break;
+            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2:
+                dcgmReturn = ProcessGetMultipleValuesForFieldV2(
+                    *(dcgm_core_msg_get_multiple_values_for_field_v2 *)moduleCommand);
+                break;
+            case DCGM_CORE_SR_WATCH_FIELD_VALUE_V1:
+                dcgmReturn = ProcessWatchFieldValueV1(*(dcgm_core_msg_watch_field_value_v1 *)moduleCommand);
+                break;
+            case DCGM_CORE_SR_WATCH_FIELD_VALUE_V2:
+                dcgmReturn = ProcessWatchFieldValueV2(*(dcgm_core_msg_watch_field_value_v2 *)moduleCommand);
                 break;
             case DCGM_CORE_SR_UPDATE_ALL_FIELDS:
                 dcgmReturn = ProcessUpdateAllFields(*(dcgm_core_msg_update_all_fields_t *)moduleCommand);
@@ -172,8 +184,8 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_WATCH_PREDEFINED_FIELDS:
                 dcgmReturn = ProcessWatchPredefinedFields(*(dcgm_core_msg_watch_predefined_fields_t *)moduleCommand);
                 break;
-            case DCGM_CORE_SR_MODULE_BLACKLIST:
-                dcgmReturn = ProcessModuleBlacklist(*(dcgm_core_msg_module_blacklist_t *)moduleCommand);
+            case DCGM_CORE_SR_MODULE_DENYLIST:
+                dcgmReturn = ProcessModuleDenylist(*(dcgm_core_msg_module_denylist_t *)moduleCommand);
                 break;
             case DCGM_CORE_SR_MODULE_STATUS:
                 dcgmReturn = ProcessModuleStatus(*(dcgm_core_msg_module_status_t *)moduleCommand);
@@ -188,6 +200,10 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn
                     = ProcessGetGpuInstanceHierarchy(*(dcgm_core_msg_get_gpu_instance_hierarchy_t *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_PROF_GET_METRIC_GROUPS:
+                dcgmReturn = ProcessProfGetMetricGroups(*(dcgm_core_msg_get_metric_groups_t *)moduleCommand);
+                break;
+
             default:
                 DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
                 return DCGM_ST_FUNCTION_NOT_FOUND;
@@ -589,9 +605,9 @@ dcgmReturn_t DcgmModuleCore::ProcessHostengineVersion(dcgm_core_msg_hostengine_v
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValues(dcgm_core_msg_entities_get_latest_values_t &msg)
+dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_entities_get_latest_values_v1 &msg)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_entities_get_latest_values_version);
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_entities_get_latest_values_version1);
     if (DCGM_ST_OK != ret)
     {
         DCGM_LOG_ERROR << "Version mismatch";
@@ -599,7 +615,7 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValues(dcgm_core_msg_entiti
     }
 
     /* initialize length of response to handle failure cases */
-    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_t) - SAMPLES_BUFFER_SIZE;
+    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_v1) - SAMPLES_BUFFER_SIZE_V1;
 
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned short> fieldIds;
@@ -701,35 +717,24 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValues(dcgm_core_msg_entiti
         DCGM_LOG_ERROR << "Buffer size too small, consider smaller request: " << msg.ev.bufferSize << ">"
                        << sizeof(msg.ev.buffer);
         msg.ev.bufferSize = sizeof(msg.ev.buffer);
+        msg.ev.cmdRet     = DCGM_ST_INSUFFICIENT_SIZE;
+        return DCGM_ST_OK;
     }
 
     /* Set pCmd->blob with the contents of the FV buffer */
     memcpy(&msg.ev.buffer, fvBufferBytes, (size_t)msg.ev.bufferSize);
 
     /* calculate actual message size to avoid transferring extra data */
-    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_t) - SAMPLES_BUFFER_SIZE + msg.ev.bufferSize;
-    msg.ev.cmdRet     = DCGM_ST_OK;
+    msg.header.length
+        = sizeof(dcgm_core_msg_entities_get_latest_values_v1) - SAMPLES_BUFFER_SIZE_V1 + msg.ev.bufferSize;
+    msg.ev.cmdRet = DCGM_ST_OK;
 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_multiple_values_for_field_t &msg)
+dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_entities_get_latest_values_v2 &msg)
 {
-    dcgmReturn_t ret;
-    int i;
-    int fieldId                  = 0;
-    dcgm_field_meta_p fieldMeta  = nullptr;
-    int MsampleBuffer            = 0; /* Allocated count of sampleBuffer[] */
-    int NsampleBuffer            = 0; /* Number of values in sampleBuffer[] that are valid */
-    dcgmcm_sample_p sampleBuffer = nullptr;
-    timelib64_t startTs          = 0;
-    timelib64_t endTs            = 0;
-    const char *fvBufferBytes    = nullptr;
-    size_t elementCount          = 0;
-    dcgmOrder_t order;
-    DcgmFvBuffer fvBuffer(0);
-
-    ret = CheckVersion(&msg.header, dcgm_core_msg_get_multiple_values_for_field_version);
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_entities_get_latest_values_version2);
     if (DCGM_ST_OK != ret)
     {
         DCGM_LOG_ERROR << "Version mismatch";
@@ -737,7 +742,146 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
     }
 
     /* initialize length of response to handle failure cases */
-    msg.header.length = sizeof(dcgm_core_msg_get_multiple_values_for_field_t) - SAMPLES_BUFFER_SIZE;
+    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_v2) - SAMPLES_BUFFER_SIZE_V2;
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    std::vector<unsigned short> fieldIds;
+
+    /* Convert the entity group to a list of entities */
+    if (msg.ev.entitiesCount == 0)
+    {
+        unsigned int groupId = msg.ev.groupId;
+
+        /* If this is a special group ID, convert it to a real one */
+        ret = m_groupManager->verifyAndUpdateGroupId(&groupId);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from verifyAndUpdateGroupId. groupId " << msg.ev.groupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+
+        ret = m_groupManager->GetGroupEntities(groupId, entities);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES)
+    {
+        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES;
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        /* Use the list from the message */
+        entities.insert(entities.end(), &msg.ev.entities[0], &msg.ev.entities[msg.ev.entitiesCount]);
+    }
+
+    /* Convert the fieldGroupId to a list of field IDs */
+    if (msg.ev.fieldIdCount == 0)
+    {
+        DcgmFieldGroupManager *mpFieldGroupManager = DcgmHostEngineHandler::Instance()->GetFieldGroupManager();
+
+        ret = mpFieldGroupManager->GetFieldGroupFields(msg.ev.fieldGroupId, fieldIds);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from GetFieldGroupFields. fieldGroupId " << msg.ev.fieldGroupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        DCGM_LOG_ERROR << "Invalid fieldId count: " << msg.ev.fieldIdCount
+                       << " > MAX:" << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        /* Use the list from the message */
+        fieldIds.insert(fieldIds.end(), &msg.ev.fieldIdList[0], &msg.ev.fieldIdList[msg.ev.fieldIdCount]);
+    }
+
+    /* Create the fvBuffer after we know how many field IDs we'll be retrieving */
+    size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
+    DcgmFvBuffer fvBuffer(initialCapacity);
+
+    /* Make a batch request to the cache manager to fill a fvBuffer with all of the values */
+    if ((msg.ev.flags & DCGM_FV_FLAG_LIVE_DATA) != 0)
+    {
+        ret = m_cacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
+    }
+    else
+    {
+        ret = m_cacheManager->GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
+    }
+    if (ret != DCGM_ST_OK)
+    {
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    const char *fvBufferBytes = fvBuffer.GetBuffer();
+    size_t elementCount       = 0;
+
+    fvBuffer.GetSize((size_t *)&msg.ev.bufferSize, &elementCount);
+
+    if ((fvBufferBytes == nullptr) || (msg.ev.bufferSize == 0))
+    {
+        DCGM_LOG_ERROR << "Unexpected fvBuffer " << (void *)fvBufferBytes << ", fvBufferBytes " << msg.ev.bufferSize;
+        ret           = DCGM_ST_GENERIC_ERROR;
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.ev.bufferSize > sizeof(msg.ev.buffer))
+    {
+        DCGM_LOG_ERROR << "Buffer size too small, consider smaller request: " << msg.ev.bufferSize << ">"
+                       << sizeof(msg.ev.buffer);
+        msg.ev.bufferSize = sizeof(msg.ev.buffer);
+        msg.ev.cmdRet     = DCGM_ST_INSUFFICIENT_SIZE;
+        return DCGM_ST_OK;
+    }
+
+    /* Set pCmd->blob with the contents of the FV buffer */
+    memcpy(&msg.ev.buffer, fvBufferBytes, (size_t)msg.ev.bufferSize);
+
+    /* calculate actual message size to avoid transferring extra data */
+    msg.header.length
+        = sizeof(dcgm_core_msg_entities_get_latest_values_v2) - SAMPLES_BUFFER_SIZE_V2 + msg.ev.bufferSize;
+    msg.ev.cmdRet = DCGM_ST_OK;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForFieldV1(dcgm_core_msg_get_multiple_values_for_field_v1 &msg)
+{
+    dcgmReturn_t ret;
+    int fieldId                 = 0;
+    dcgm_field_meta_p fieldMeta = nullptr;
+    int MsampleBuffer           = 0; /* Allocated count of sampleBuffer[] */
+    int NsampleBuffer           = 0; /* Number of values in sampleBuffer[] that are valid */
+    timelib64_t startTs         = 0;
+    timelib64_t endTs           = 0;
+    const char *fvBufferBytes   = nullptr;
+    size_t elementCount         = 0;
+    dcgmOrder_t order;
+    DcgmFvBuffer fvBuffer(0);
+
+    ret = CheckVersion(&msg.header, dcgm_core_msg_get_multiple_values_for_field_version1);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    /* initialize length of response to handle failure cases */
+    msg.header.length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v1) - SAMPLES_BUFFER_SIZE_V1;
 
     fieldId = msg.fv.fieldId;
 
@@ -783,62 +927,15 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
         return DCGM_ST_OK;
     }
 
-    sampleBuffer = (dcgmcm_sample_p)malloc(MsampleBuffer * sizeof(sampleBuffer[0]));
-    if (sampleBuffer == nullptr)
-    {
-        DCGM_LOG_ERROR << "failed malloc for " << MsampleBuffer * sizeof(sampleBuffer[0]) << " bytes";
-        msg.fv.cmdRet = DCGM_ST_MEMORY;
-        return DCGM_ST_OK;
-    }
-    /* GOTO CLEANUP BELOW THIS POINT */
-
     NsampleBuffer = MsampleBuffer;
     ret           = m_cacheManager->GetSamples(
-        entityGroupId, entityId, fieldId, sampleBuffer, &NsampleBuffer, startTs, endTs, order);
+        entityGroupId, entityId, fieldId, nullptr, &NsampleBuffer, startTs, endTs, order, &fvBuffer);
     if (ret != DCGM_ST_OK)
     {
         msg.fv.cmdRet = ret;
-        goto CLEANUP;
+        return DCGM_ST_OK;
     }
     /* NsampleBuffer now contains the number of valid records returned from our query */
-
-    /* Add each of the samples to the return type */
-    for (i = 0; i < NsampleBuffer; i++)
-    {
-        switch (fieldMeta->fieldType)
-        {
-            case DCGM_FT_DOUBLE:
-                fvBuffer.AddDoubleValue(
-                    entityGroupId, entityId, fieldId, sampleBuffer[i].val.d, sampleBuffer[i].timestamp, DCGM_ST_OK);
-                break;
-
-            case DCGM_FT_STRING:
-                fvBuffer.AddStringValue(
-                    entityGroupId, entityId, fieldId, sampleBuffer[i].val.str, sampleBuffer[i].timestamp, DCGM_ST_OK);
-                break;
-
-            case DCGM_FT_INT64: /* Fall-through is intentional */
-            case DCGM_FT_TIMESTAMP:
-                fvBuffer.AddInt64Value(
-                    entityGroupId, entityId, fieldId, sampleBuffer[i].val.i64, sampleBuffer[i].timestamp, DCGM_ST_OK);
-                break;
-
-            case DCGM_FT_BINARY:
-                fvBuffer.AddBlobValue(entityGroupId,
-                                      entityId,
-                                      fieldId,
-                                      sampleBuffer[i].val.blob,
-                                      sampleBuffer[i].val2.ptrSize,
-                                      sampleBuffer[i].timestamp,
-                                      DCGM_ST_OK);
-                break;
-
-            default:
-                DCGM_LOG_ERROR << "Update code to support additional Field Types";
-                fvBuffer.AddInt64Value(entityGroupId, entityId, fieldId, 0, 0, DCGM_ST_GENERIC_ERROR);
-                goto CLEANUP;
-        }
-    }
 
     fvBufferBytes = fvBuffer.GetBuffer();
     fvBuffer.GetSize((size_t *)&msg.fv.bufferSize, &elementCount);
@@ -846,9 +943,8 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
     if ((fvBufferBytes == nullptr) || (msg.fv.bufferSize == 0))
     {
         DCGM_LOG_ERROR << "Unexpected fvBuffer " << (void *)fvBufferBytes << ", fvBufferBytes " << msg.fv.bufferSize;
-        ret           = DCGM_ST_GENERIC_ERROR;
-        msg.fv.cmdRet = ret;
-        goto CLEANUP;
+        msg.fv.cmdRet = DCGM_ST_GENERIC_ERROR;
+        return DCGM_ST_OK;
     }
 
     if (msg.fv.bufferSize > sizeof(msg.fv.buffer))
@@ -861,27 +957,156 @@ dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForField(dcgm_core_msg_get_
     memcpy(&msg.fv.buffer, fvBufferBytes, (size_t)msg.fv.bufferSize);
 
     /* calculate actual message size to avoid transferring extra data */
-    msg.header.length = sizeof(dcgm_core_msg_get_multiple_values_for_field_t) - SAMPLES_BUFFER_SIZE + msg.fv.bufferSize;
-    msg.fv.count      = i;
-    msg.fv.cmdRet     = DCGM_ST_OK;
-
-CLEANUP:
-    if (sampleBuffer != nullptr)
-    {
-        if (NsampleBuffer != 0)
-        {
-            m_cacheManager->FreeSamples(sampleBuffer, NsampleBuffer, (unsigned short)fieldId);
-        }
-        free(sampleBuffer);
-        sampleBuffer = nullptr;
-    }
+    msg.header.length
+        = sizeof(dcgm_core_msg_get_multiple_values_for_field_v1) - SAMPLES_BUFFER_SIZE_V1 + msg.fv.bufferSize;
+    msg.fv.count  = elementCount;
+    msg.fv.cmdRet = DCGM_ST_OK;
 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessWatchFieldValue(dcgm_core_msg_watch_field_value_t &msg)
+dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForFieldV2(dcgm_core_msg_get_multiple_values_for_field_v2 &msg)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_watch_field_value_version);
+    dcgmReturn_t ret;
+    int fieldId                 = 0;
+    dcgm_field_meta_p fieldMeta = nullptr;
+    int MsampleBuffer           = 0; /* Allocated count of sampleBuffer[] */
+    int NsampleBuffer           = 0; /* Number of values in sampleBuffer[] that are valid */
+    timelib64_t startTs         = 0;
+    timelib64_t endTs           = 0;
+    const char *fvBufferBytes   = nullptr;
+    size_t elementCount         = 0;
+    dcgmOrder_t order;
+    DcgmFvBuffer fvBuffer(0);
+
+    ret = CheckVersion(&msg.header, dcgm_core_msg_get_multiple_values_for_field_version2);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    /* initialize length of response to handle failure cases */
+    msg.header.length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v2) - SAMPLES_BUFFER_SIZE_V2;
+
+    fieldId = msg.fv.fieldId;
+
+    /* Get Meta data corresponding to the fieldID */
+    fieldMeta = DcgmFieldGetById(fieldId);
+    if (fieldMeta == nullptr)
+    {
+        msg.fv.cmdRet = DCGM_ST_UNKNOWN_FIELD;
+        return DCGM_ST_OK;
+    }
+
+    dcgm_field_entity_group_t entityGroupId = (dcgm_field_entity_group_t)msg.fv.entityGroupId;
+    dcgm_field_eid_t entityId               = msg.fv.entityId;
+
+    if (fieldMeta->scope == DCGM_FS_GLOBAL && entityGroupId != DCGM_FE_NONE)
+    {
+        DCGM_LOG_WARNING << "Fixing entityGroupId to be NONE";
+        entityGroupId = DCGM_FE_NONE;
+    }
+
+    size_t maxReasonableFvCount = sizeof(msg.fv.buffer) / DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE;
+    if (msg.fv.count > maxReasonableFvCount)
+    {
+        DCGM_LOG_WARNING << "msg.fv.count " << msg.fv.count << " > " << maxReasonableFvCount << ". Clamping value.";
+        msg.fv.count = maxReasonableFvCount;
+    }
+
+    if (msg.fv.startTs != 0)
+    {
+        startTs = (timelib64_t)msg.fv.startTs;
+    }
+    if (msg.fv.endTs != 0)
+    {
+        endTs = (timelib64_t)msg.fv.endTs;
+    }
+    order = (dcgmOrder_t)msg.fv.order;
+
+    MsampleBuffer = msg.fv.count;
+    if (MsampleBuffer < 1)
+    {
+        DCGM_LOG_ERROR << "Message sample buffer count less than 1";
+        msg.fv.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    NsampleBuffer = MsampleBuffer;
+    ret           = m_cacheManager->GetSamples(
+        entityGroupId, entityId, fieldId, nullptr, &NsampleBuffer, startTs, endTs, order, &fvBuffer);
+    if (ret != DCGM_ST_OK)
+    {
+        msg.fv.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+    /* NsampleBuffer now contains the number of valid records returned from our query */
+
+    fvBufferBytes = fvBuffer.GetBuffer();
+    fvBuffer.GetSize((size_t *)&msg.fv.bufferSize, &elementCount);
+
+    if ((fvBufferBytes == nullptr) || (msg.fv.bufferSize == 0))
+    {
+        DCGM_LOG_ERROR << "Unexpected fvBuffer " << (void *)fvBufferBytes << ", fvBufferBytes " << msg.fv.bufferSize;
+        ret           = DCGM_ST_GENERIC_ERROR;
+        msg.fv.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.fv.bufferSize > sizeof(msg.fv.buffer))
+    {
+        DCGM_LOG_ERROR << "Buffer size too small, consider smaller request: " << msg.fv.bufferSize << ">"
+                       << sizeof(msg.fv.buffer);
+        msg.fv.bufferSize = sizeof(msg.fv.buffer);
+    }
+
+    memcpy(&msg.fv.buffer, fvBufferBytes, (size_t)msg.fv.bufferSize);
+
+    /* calculate actual message size to avoid transferring extra data */
+    msg.header.length
+        = sizeof(dcgm_core_msg_get_multiple_values_for_field_v2) - SAMPLES_BUFFER_SIZE_V2 + msg.fv.bufferSize;
+    msg.fv.count  = elementCount;
+    msg.fv.cmdRet = DCGM_ST_OK;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessWatchFieldValueV1(dcgm_core_msg_watch_field_value_v1 &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_watch_field_value_version1);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    dcgm_connection_id_t connectionId = msg.header.connectionId;
+    if (DcgmHostEngineHandler::Instance()->GetPersistAfterDisconnect(msg.header.connectionId))
+    {
+        connectionId = DCGM_CONNECTION_ID_NONE;
+    }
+
+    DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
+    bool wereFirstWatcher = false;
+
+    msg.fv.cmdRet = m_cacheManager->AddFieldWatch((dcgm_field_entity_group_t)msg.fv.entityGroupId,
+                                                  msg.fv.gpuId,
+                                                  msg.fv.fieldId,
+                                                  (timelib64_t)msg.fv.updateFreq,
+                                                  msg.fv.maxKeepAge,
+                                                  msg.fv.maxKeepSamples,
+                                                  dcgmWatcher,
+                                                  false,
+                                                  true, /* Default to updating if first watcher */
+                                                  wereFirstWatcher);
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessWatchFieldValueV2(dcgm_core_msg_watch_field_value_v2 &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_watch_field_value_version2);
     if (DCGM_ST_OK != ret)
     {
         DCGM_LOG_ERROR << "Version mismatch";
@@ -896,15 +1121,20 @@ dcgmReturn_t DcgmModuleCore::ProcessWatchFieldValue(dcgm_core_msg_watch_field_va
 
     DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
 
+    bool wereFirstWatcher = false;
+
     msg.fv.cmdRet = m_cacheManager->AddFieldWatch((dcgm_field_entity_group_t)msg.fv.entityGroupId,
-                                                  msg.fv.gpuId,
+                                                  msg.fv.entityId,
                                                   msg.fv.fieldId,
                                                   (timelib64_t)msg.fv.updateFreq,
                                                   msg.fv.maxKeepAge,
                                                   msg.fv.maxKeepSamples,
                                                   dcgmWatcher,
-                                                  false);
+                                                  false,
+                                                  msg.fv.updateOnFirstWatcher ? true : false,
+                                                  wereFirstWatcher);
 
+    msg.fv.wereFirstWatcher = wereFirstWatcher ? 1 : 0;
     return DCGM_ST_OK;
 }
 
@@ -1291,7 +1521,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
         return ret;
     }
 
-    if (msg.info.ls.version != dcgmNvLinkStatus_version2)
+    if (msg.info.ls.version != dcgmNvLinkStatus_version3)
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
@@ -1394,7 +1624,7 @@ dcgmReturn_t DcgmModuleCore::ProcessPidGetInfo(dcgm_core_msg_pid_get_info_t &msg
 
     if (msg.info.pidInfo.version != dcgmPidInfo_version)
     {
-        PRINT_ERROR("%d %d", "PidGetInfo version mismatch %d != %d", msg.info.pidInfo.version, dcgmPidInfo_version);
+        log_error("PidGetInfo version mismatch {} != {}", msg.info.pidInfo.version, dcgmPidInfo_version);
 
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
         return DCGM_ST_OK;
@@ -1419,10 +1649,9 @@ dcgmReturn_t DcgmModuleCore::ProcessGetFieldSummary(dcgm_core_msg_get_field_summ
 
     if (msg.info.fsr.version != dcgmFieldSummaryRequest_version1)
     {
-        PRINT_ERROR("%d %d",
-                    "dcgmFieldSummaryRequest version mismatch %d != %d",
-                    msg.info.fsr.version,
-                    dcgmFieldSummaryRequest_version1);
+        log_error("dcgmFieldSummaryRequest version mismatch {} != {}",
+                  msg.info.fsr.version,
+                  dcgmFieldSummaryRequest_version1);
 
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
         return DCGM_ST_OK;
@@ -1445,10 +1674,8 @@ dcgmReturn_t DcgmModuleCore::ProcessCreateFakeEntities(dcgm_core_msg_create_fake
 
     if (msg.info.fe.version != dcgmCreateFakeEntities_version)
     {
-        PRINT_ERROR("%d %d",
-                    "dcgmCreateFakeEntities version mismatch %d != %d",
-                    msg.info.fe.version,
-                    dcgmCreateFakeEntities_version);
+        log_error(
+            "dcgmCreateFakeEntities version mismatch {} != {}", msg.info.fe.version, dcgmCreateFakeEntities_version);
 
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
         return DCGM_ST_OK;
@@ -1482,9 +1709,9 @@ dcgmReturn_t DcgmModuleCore::ProcessWatchPredefinedFields(dcgm_core_msg_watch_pr
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessModuleBlacklist(dcgm_core_msg_module_blacklist_t &msg)
+dcgmReturn_t DcgmModuleCore::ProcessModuleDenylist(dcgm_core_msg_module_denylist_t &msg)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_module_blacklist_version);
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_module_denylist_version);
 
     if (ret != DCGM_ST_OK)
     {
@@ -1492,7 +1719,7 @@ dcgmReturn_t DcgmModuleCore::ProcessModuleBlacklist(dcgm_core_msg_module_blackli
         return ret;
     }
 
-    msg.bl.cmdRet = DcgmHostEngineHandler::Instance()->HelperModuleBlacklist((dcgmModuleId_t)msg.bl.moduleId);
+    msg.bl.cmdRet = DcgmHostEngineHandler::Instance()->HelperModuleDenylist((dcgmModuleId_t)msg.bl.moduleId);
 
     return DCGM_ST_OK;
 }
@@ -1562,34 +1789,83 @@ dcgmReturn_t DcgmModuleCore::ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gp
         return ret;
     }
 
-    if (!msg.info.v2)
+    if (msg.info.data.version != dcgmMigHierarchy_version2)
     {
-        if (msg.info.mh.v1.version != dcgmMigHierarchy_version1)
-        {
-            DCGM_LOG_ERROR << "Struct version1 mismatch";
-            msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
-            return DCGM_ST_OK;
-        }
-
-        msg.info.cmdRet = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v1);
-
-        return DCGM_ST_OK;
-    }
-    else
-    {
-        if (msg.info.mh.v2.version != dcgmMigHierarchy_version2)
-        {
-            DCGM_LOG_ERROR << "Struct version2 mismatch";
-            msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
-            return DCGM_ST_OK;
-        }
-
-        msg.info.cmdRet = m_cacheManager->PopulateMigHierarchy(msg.info.mh.v2);
-
+        DCGM_LOG_ERROR << "Struct version2 mismatch";
+        msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
         return DCGM_ST_OK;
     }
 
-    return DCGM_ST_GENERIC_ERROR;
+    msg.info.cmdRet = m_cacheManager->PopulateMigHierarchy(msg.info.data);
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric_groups_t &msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg.header, dcgm_core_msg_get_metric_groups_version);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return dcgmReturn; /* Logging handled by caller (DcgmModuleCore::ProcessMessage) */
+    }
+
+    dcgm_entity_key_t entityKey;
+    entityKey.entityId      = msg.metricGroups.gpuId;
+    entityKey.entityGroupId = DCGM_FE_GPU;
+    entityKey.fieldId       = DCGM_FI_PROF_GR_ENGINE_ACTIVE; /* Any profiling field will do */
+
+    bool isGpmGpu = m_cacheManager->EntitySupportsGpm(entityKey);
+    if (!isGpmGpu)
+    {
+        /* Route this request to the profiling module */
+        DCGM_LOG_DEBUG << "gpuId " << entityKey.entityId << " was not a GPM GPU";
+
+        dcgm_profiling_msg_get_mgs_t profMsg;
+
+        /* Is not GPM GPU. RPC to the profiling module */
+        profMsg.header.length       = sizeof(profMsg);
+        profMsg.header.moduleId     = DcgmModuleIdProfiling;
+        profMsg.header.subCommand   = DCGM_PROFILING_SR_GET_MGS;
+        profMsg.header.connectionId = msg.header.connectionId;
+        profMsg.header.requestId    = msg.header.requestId;
+        profMsg.header.version      = dcgm_profiling_msg_get_mgs_version;
+        profMsg.metricGroups        = msg.metricGroups;
+
+        dcgmReturn = DcgmHostEngineHandler::Instance()->ProcessModuleCommand(&profMsg.header);
+
+        msg.metricGroups = profMsg.metricGroups;
+        return dcgmReturn;
+    }
+
+    /* This is a GPM field. Populate the struct here. If we need NVML information in the future to
+       populate this request, then we should forward it to m_cacheManager->m_gpmManager. */
+
+    msg.metricGroups.numMetricGroups = 2;
+
+    dcgmProfMetricGroupInfo_v2 *mg = &msg.metricGroups.metricGroups[0]; /* Shortcut pointer */
+    mg->majorId                    = 0;
+    mg->minorId                    = 0;
+    mg->numFieldIds                = 0;
+
+    for (unsigned int fieldId = DCGM_FI_PROF_FIRST_ID; fieldId <= DCGM_FI_PROF_NVOFA0_ACTIVE; fieldId++)
+    {
+        mg->fieldIds[mg->numFieldIds] = fieldId;
+        mg->numFieldIds++;
+    }
+
+    mg              = &msg.metricGroups.metricGroups[1]; /* Shortcut pointer */
+    mg->majorId     = 1;
+    mg->minorId     = 0;
+    mg->numFieldIds = 0;
+
+    for (unsigned int fieldId = DCGM_FI_PROF_NVLINK_L0_TX_BYTES; fieldId <= DCGM_FI_PROF_NVLINK_L17_RX_BYTES; fieldId++)
+    {
+        mg->fieldIds[mg->numFieldIds] = fieldId;
+        mg->numFieldIds++;
+    }
+
+    return DCGM_ST_OK;
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessSetLoggingSeverity(dcgm_core_msg_set_severity_t &msg)

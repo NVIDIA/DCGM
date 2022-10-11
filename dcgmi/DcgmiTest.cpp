@@ -192,7 +192,7 @@ void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo)
     cmdView.display();
 
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Monitor Interval (ms)");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.monitorFrequencyUsec / 1000);
+    cmdView.addDisplayParameter(DATA_INFO_TAG, fieldInfo.monitorIntervalUsec / 1000);
     cmdView.display();
 
     cmdView.addDisplayParameter(DATA_NAME_TAG, "Max Age (sec)");
@@ -289,10 +289,8 @@ dcgmReturn_t DcgmiTest::HelperParseForFieldId(std::string const &str, unsigned s
     dcgmReturn = dcgmFieldGroupGetInfo(dcgmHandle, &fieldGroupInfo);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d %llu",
-                    "dcgmFieldGroupGetInfo returned %d for fieldGrpId %llu",
-                    (int)dcgmReturn,
-                    (unsigned long long)fieldGroupId);
+        log_error(
+            "dcgmFieldGroupGetInfo returned {} for fieldGrpId {}", (int)dcgmReturn, (unsigned long long)fieldGroupId);
         return dcgmReturn;
     }
 

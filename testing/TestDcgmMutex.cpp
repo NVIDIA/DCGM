@@ -39,9 +39,8 @@ int TestDcgmMutex::Cleanup(void)
 }
 
 /*****************************************************************************/
-int TestDcgmMutex::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestDcgmMutex::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
     return 0;
 }
 
