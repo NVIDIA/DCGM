@@ -16,7 +16,6 @@
 #ifndef DCGMPOLICYREQUEST_H
 #define DCGMPOLICYREQUEST_H
 
-#include "DcgmProtobuf.h"
 #include "DcgmRequest.h"
 #include "dcgm_structs.h"
 #include <iostream>

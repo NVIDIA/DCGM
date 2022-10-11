@@ -30,7 +30,7 @@ extern "C" {
 #define FAIL_EARLY          "fail_early"
 #define FAIL_CHECK_INTERVAL "fail_check_interval"
 
-#define DCGM_MAX_PLUGIN_FIELD_IDS 32
+#define DCGM_MAX_PLUGIN_FIELD_IDS 96
 
 typedef struct
 {

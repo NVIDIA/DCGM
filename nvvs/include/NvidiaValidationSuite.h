@@ -23,15 +23,14 @@
 
 #pragma once
 
+#include "Allowlist.h"
 #include "ConfigFileParser_v2.h"
 #include "Gpu.h"
 #include "NvvsCommon.h"
-#include "NvvsSystemChecker.h"
 #include "ParameterValidator.h"
 #include "Test.h"
 #include "TestFramework.h"
 #include "TestParameters.h"
-#include "Whitelist.h"
 #include <algorithm>
 #include <iostream>
 #include <iterator>
@@ -103,7 +102,7 @@ protected:
     std::vector<Gpu *> m_gpuVect;
     std::vector<Test *> testVect;
     std::vector<TestParameters *> tpVect;
-    Whitelist *whitelist;
+    Allowlist *m_allowlist;
     FrameworkConfig fwcfg;
 
     // classes
@@ -121,7 +120,6 @@ protected:
     timer_t initTimer;
     struct sigaction restoreSigAction;
     unsigned int initWaitTime;
-    NvvsSystemChecker m_sysCheck;
     ParameterValidator m_pv;
 
     /***************************PROTECTED********************************/

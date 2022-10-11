@@ -24,8 +24,8 @@
 /*****************************************************************************/
 void Output::header(const std::string &headerString)
 {
-    // This output is only for regular stdout, not training or 'parse' mode (which is deprecated)
-    if (!nvvsCommon.parse && !nvvsCommon.training)
+    // This output is only for regular stdout, not 'parse' mode (which is deprecated)
+    if (!nvvsCommon.parse)
         m_out << "\t" << headerString << std::endl;
 }
 
@@ -71,9 +71,6 @@ std::string Output::fill(fillType_enum type)
 /*****************************************************************************/
 void Output::prep(const std::string &testString)
 {
-    if (nvvsCommon.training)
-        return; // Training mode doesn't want this output
-
     std::stringstream ss;
 
     ss << fill(NVVS_FILL_PREFACE) << testString << fill(NVVS_FILL_DELIMITER1);
@@ -100,11 +97,6 @@ void Output::Result(nvvsPluginResult_t overallResult,
                     const std::vector<dcgmDiagEvent_t> &errors,
                     const std::vector<dcgmDiagEvent_t> &info)
 {
-    if (nvvsCommon.training)
-    {
-        return; // Training mode doesn't want this output
-    }
-
     std::string resultString = resultEnumToString(overallResult);
 
     m_out << resultString << std::endl;
@@ -152,8 +144,8 @@ void Output::updatePluginProgress(unsigned int progress, bool clear)
     static bool display                   = false;
     static unsigned int previousStrLength = 0;
 
-    // This output is only for regular stdout, not training or 'parse' mode (which is deprecated)
-    if (!nvvsCommon.parse && !nvvsCommon.training)
+    // This output is only for regular stdout, not 'parse' mode (which is deprecated)
+    if (!nvvsCommon.parse)
     {
         std::stringstream ss;
         ss << progress;
@@ -184,8 +176,8 @@ void Output::updatePluginProgress(unsigned int progress, bool clear)
 
 void Output::print()
 {
-    // This output is only for regular stdout, not training or 'parse' mode (which is deprecated)
-    if (nvvsCommon.parse || nvvsCommon.training)
+    // This output is only for regular stdout, not 'parse' mode (which is deprecated)
+    if (nvvsCommon.parse)
         return;
 
     if (globalInfo.size() > 0)
@@ -231,9 +223,4 @@ std::string Output::RemoveNewlines(const std::string &str)
 void Output::addInfoStatement(const std::string &info)
 {
     this->globalInfo.push_back(RemoveNewlines(info));
-}
-
-void Output::AddTrainingResult(const std::string &trainingOut)
-{
-    m_out << trainingOut;
 }

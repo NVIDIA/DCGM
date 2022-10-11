@@ -45,7 +45,7 @@ dcgmReturn_t DcgmPolicyManager::Init(void)
     int deviceCount = mpCoreProxy.GetGpuCount(0);
     if (deviceCount < 0)
     {
-        PRINT_ERROR("%d", "GetGpuCount returned %d", deviceCount);
+        log_error("GetGpuCount returned {}", deviceCount);
         return DCGM_ST_INIT_ERROR;
     }
 
@@ -82,14 +82,14 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
         /* Policy only pertains to GPUs for now */
         if (fv->entityGroupId != DCGM_FE_GPU)
         {
-            PRINT_DEBUG("%u", "Ignored non-GPU eg %u", fv->entityGroupId);
+            log_debug("Ignored non-GPU eg {}", fv->entityGroupId);
             continue;
         }
 
         /* Does this GPU have an active policy? */
         if (!m_gpus[fv->entityId].policiesHaveBeenSet)
         {
-            PRINT_DEBUG("%u", "Ignored gpuId %u without policies set", fv->entityId);
+            log_debug("Ignored gpuId {} without policies set", fv->entityId);
             continue;
         }
 
@@ -130,7 +130,7 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
             default:
                 /* This is partially expected since the cache manager will broadcast
                    any FVs that updated during the same loop as FVs we care about */
-                PRINT_DEBUG("%u", "Ignoring unhandled field %u", fv->fieldId);
+                log_debug("Ignoring unhandled field {}", fv->fieldId);
                 break;
         }
     }
@@ -145,7 +145,7 @@ void DcgmPolicyManager::SetViolation(DcgmViolationPolicyAlert_t alertType,
                                      int64_t timestamp,
                                      dcgmPolicyCallbackResponse_t *response)
 {
-    PRINT_DEBUG("%u %u", "Setting a violation of type %u for gpuId %u", alertType, gpuId);
+    log_debug("Setting a violation of type {} for gpuId {}", alertType, gpuId);
 
     dcgm_msg_policy_notify_t notify;
 
@@ -164,21 +164,19 @@ void DcgmPolicyManager::SetViolation(DcgmViolationPolicyAlert_t alertType,
 
         if (timestamp - watcherIt->lastSentTimestamp[alertType] < minimumSignalTimeDiff)
         {
-            PRINT_DEBUG("%u %lld",
-                        "Not violating type %u due to timestamp difference being < %lld",
-                        alertType,
-                        (long long)minimumSignalTimeDiff);
+            log_debug("Not violating type {} due to timestamp difference being < {}",
+                      alertType,
+                      (long long)minimumSignalTimeDiff);
             continue;
         }
 
         /* OK. We're going to signal this watcher */
-        PRINT_DEBUG("%u %u %u %u %lld",
-                    "Notifying alertType %u, gpuId %u, connectionId %u, requestId %u, ts %lld",
-                    alertType,
-                    gpuId,
-                    watcherIt->connectionId,
-                    watcherIt->requestId,
-                    (long long)timestamp);
+        log_debug("Notifying alertType {}, gpuId {}, connectionId {}, requestId {}, ts {}",
+                  alertType,
+                  gpuId,
+                  watcherIt->connectionId,
+                  watcherIt->requestId,
+                  (long long)timestamp);
 
         notify.begin = 1;
         mpCoreProxy.SendRawMessageToClient(
@@ -210,7 +208,7 @@ dcgmReturn_t DcgmPolicyManager::UnregisterForPolicy(dcgm_policy_msg_unregister_t
     dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u %d", "Error: Bad group id parameter: %u, ret %d", groupId, dcgmReturn);
+        log_error("Error: Bad group id parameter: {}, ret {}", groupId, dcgmReturn);
         return dcgmReturn;
     }
 
@@ -223,23 +221,21 @@ dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG(
-            "%u %u %d", "Skipping gpuId %u ECC fieldId %u with status %d", fv->entityId, fv->fieldId, fv->status);
+        log_debug("Skipping gpuId {} ECC fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_DBE))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u ECC fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} ECC fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
     unsigned int errorCount = fv->value.i64;
-    PRINT_DEBUG("%u %u", "CheckEccErrors gpuId %u, errorCount %u", fv->entityId, errorCount);
+    log_debug("CheckEccErrors gpuId {}, errorCount {}", fv->entityId, errorCount);
 
     if (errorCount > 0) // violation has occurred
     {
@@ -254,7 +250,7 @@ dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.dbe = dbeResponse;
 
-        PRINT_ERROR("%u %u", "gpuId %u has > 0 ECC double-bit errors: %u", fv->entityId, errorCount);
+        log_error("gpuId {} has > 0 ECC double-bit errors: {}", fv->entityId, errorCount);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_ECC_DBE, fv->entityId, fv->timestamp, &callbackResponse);
     }
 
@@ -266,18 +262,16 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG(
-            "%u %u %d", "Skipping gpuId %u PCIe fieldId %u with status %d", fv->entityId, fv->fieldId, fv->status);
+        log_debug("Skipping gpuId {} PCIe fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_PCI))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u PCIe fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} PCIe fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -294,10 +288,8 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.pci = pciResponse;
 
-        PRINT_ERROR("%u %u",
-                    "gpuId %u has > 0 PCIe replays: %u. This may be causing throughput issues.",
-                    fv->entityId,
-                    errorCount);
+        log_error(
+            "gpuId {} has > 0 PCIe replays: {}. This may be causing throughput issues.", fv->entityId, errorCount);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_PCIE, fv->entityId, fv->timestamp, &callbackResponse);
     }
 
@@ -309,21 +301,16 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG("%u %u %d",
-                    "Skipping gpuId %u retired pages fieldId %u with status %d",
-                    fv->entityId,
-                    fv->fieldId,
-                    fv->status);
+        log_debug("Skipping gpuId {} retired pages fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_MAX_PAGES_RETIRED))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u retired pages fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} retired pages fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -343,17 +330,17 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
         {
             if (dcgmReturn == DCGM_ST_NOT_SUPPORTED)
             {
-                PRINT_DEBUG("", "Retired SBE pages not supported");
+                log_debug("Retired SBE pages not supported");
                 return DCGM_ST_OK;
             }
 
-            PRINT_WARNING("%d", "Get latest sample of SBE pending retired pages failed with error %d", (int)dcgmReturn);
+            log_warning("Get latest sample of SBE pending retired pages failed with error {}", (int)dcgmReturn);
             return DCGM_ST_GENERIC_ERROR;
         }
 
         if (DCGM_INT64_NOT_SUPPORTED == sample.val.i64)
         {
-            PRINT_DEBUG("", "Retired SBE pages not supported");
+            log_debug("Retired SBE pages not supported");
             return DCGM_ST_OK; /* Retired SBE pages not supported */
         }
 
@@ -368,13 +355,13 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
         dcgmReturn = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, fv->entityId, DCGM_FI_DEV_RETIRED_DBE, &sample, 0);
         if (dcgmReturn)
         {
-            PRINT_WARNING("%d", "Get latest sample of DBE pending retired pages failed with error %d", (int)dcgmReturn);
+            log_warning("Get latest sample of DBE pending retired pages failed with error {}", (int)dcgmReturn);
             return DCGM_ST_GENERIC_ERROR;
         }
 
         if (DCGM_INT64_NOT_SUPPORTED == sample.val.i64)
         {
-            PRINT_DEBUG("", "Retired DBE pages not supported");
+            log_debug("Retired DBE pages not supported");
             return DCGM_ST_OK; /* Retired DBE pages not supported */
         }
 
@@ -402,11 +389,10 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.mpr = mprResponse;
 
-        PRINT_ERROR("%u %u %u",
-                    "gpuId %u exceeds the max retired pages count: %u > maximum allowed %u.",
-                    fv->entityId,
-                    pageCountDbe + pageCountSbe,
-                    maxRetiredPages);
+        log_error("gpuId {} exceeds the max retired pages count: {} > maximum allowed {}.",
+                  fv->entityId,
+                  pageCountDbe + pageCountSbe,
+                  maxRetiredPages);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_MAX_RETIRED_PAGES, fv->entityId, fv->timestamp, &callbackResponse);
     }
 
@@ -418,21 +404,16 @@ dcgmReturn_t DcgmPolicyManager::CheckThermalValues(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG("%u %u %d",
-                    "Skipping gpuId %u temperature fieldId %u with status %d",
-                    fv->entityId,
-                    fv->fieldId,
-                    fv->status);
+        log_debug("Skipping gpuId {} temperature fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_THERMAL))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u temperature fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} temperature fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -451,11 +432,7 @@ dcgmReturn_t DcgmPolicyManager::CheckThermalValues(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.thermal = thermalResponse;
 
-        PRINT_ERROR("%u %u %u",
-                    "gpuId %u has violated thermal settings: %u > max allowed temp %u.",
-                    fv->entityId,
-                    gpuTemp,
-                    maxTemp);
+        log_error("gpuId {} has violated thermal settings: {} > max allowed temp {}.", fv->entityId, gpuTemp, maxTemp);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_THERMAL, fv->entityId, fv->timestamp, &callbackResponse);
     }
 
@@ -467,18 +444,16 @@ dcgmReturn_t DcgmPolicyManager::CheckPowerValues(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG(
-            "%u %u %d", "Skipping gpuId %u power fieldId %u with status %d", fv->entityId, fv->fieldId, fv->status);
+        log_debug("Skipping gpuId {} power fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_POWER))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u power fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} power fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -497,8 +472,7 @@ dcgmReturn_t DcgmPolicyManager::CheckPowerValues(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.power = powerResponse;
 
-        PRINT_ERROR(
-            "%u %u %u", "gpuId %u has violated power settings: %u > max allowed %u", fv->entityId, gpuPower, maxPower);
+        log_error("gpuId {} has violated power settings: {} > max allowed {}", fv->entityId, gpuPower, maxPower);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_POWER, fv->entityId, fv->timestamp, &callbackResponse);
     }
 
@@ -510,21 +484,16 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG("%u %u %d",
-                    "Skipping gpuId %u NvLink counter fieldId %u with status %d",
-                    fv->entityId,
-                    fv->fieldId,
-                    fv->status);
+        log_debug("Skipping gpuId {} NvLink counter fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_NVLINK))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u NvLink counter fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} NvLink counter fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -541,11 +510,10 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.val.nvlink = nvlinkResponse;
 
-        PRINT_ERROR("%u %s %lld",
-                    "gpuId %u has > 0 Nvlink %s: %lld. This may be causing throughput issues.",
-                    fv->entityId,
-                    ConvertNVLinkCounterTypeToString(fv->fieldId),
-                    (long long)fv->value.i64);
+        log_error("gpuId {} has > 0 Nvlink {}: {}. This may be causing throughput issues.",
+                  fv->entityId,
+                  ConvertNVLinkCounterTypeToString(fv->fieldId),
+                  (long long)fv->value.i64);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_NVLINK, fv->entityId, fv->timestamp, &callbackResponse);
     }
     return DCGM_ST_OK;
@@ -556,18 +524,16 @@ dcgmReturn_t DcgmPolicyManager::CheckXIDErrors(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
-        PRINT_DEBUG(
-            "%u %u %d", "Skipping gpuId %u XID fieldId %u with status %d", fv->entityId, fv->fieldId, fv->status);
+        log_debug("Skipping gpuId {} XID fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_XID))
     {
-        PRINT_DEBUG("%u %u %X",
-                    "Skipping gpuId %u XID fieldId %u with condition mask x%X",
-                    fv->entityId,
-                    fv->fieldId,
-                    m_gpus[fv->entityId].currentPolicies.condition);
+        log_debug("Skipping gpuId {} XID fieldId {} with condition mask x{:X}",
+                  fv->entityId,
+                  fv->fieldId,
+                  m_gpus[fv->entityId].currentPolicies.condition);
         return DCGM_ST_OK;
     }
 
@@ -581,7 +547,7 @@ dcgmReturn_t DcgmPolicyManager::CheckXIDErrors(dcgmBufferedFv_t *fv)
 
     callbackResponse.val.xid = xidResponse;
 
-    PRINT_ERROR("%u %d", "gpuId %u has XID error: %d.", fv->entityId, (int)fv->value.i64);
+    log_error("gpuId {} has XID error: {}.", fv->entityId, (int)fv->value.i64);
     SetViolation(DCGM_VIOLATION_POLICY_FAIL_XID, fv->entityId, fv->timestamp, &callbackResponse);
     return DCGM_ST_OK;
 }
@@ -651,12 +617,24 @@ dcgmReturn_t DcgmPolicyManager::WatchFields(dcgm_connection_id_t connectionId)
 
     DCGM_LOG_DEBUG << "Watching Policy fields for connectionId " << connectionId;
 
+    bool updateOnFirstWatch = false; /* We call UpdateFields() at the end of the function */
+    bool wereFirstWatcher   = false;
+
     for (auto &gpuId : gpuIds)
     {
         for (i = 0; i < numFieldIds; i++)
         {
             /* Keep an hour of data at 10-second intervals */
-            dcgmReturn = mpCoreProxy.AddFieldWatch(DCGM_FE_GPU, gpuId, fieldIds[i], 10000000, 3600.0, 0, watcher, true);
+            dcgmReturn = mpCoreProxy.AddFieldWatch(DCGM_FE_GPU,
+                                                   gpuId,
+                                                   fieldIds[i],
+                                                   10000000,
+                                                   3600.0,
+                                                   0,
+                                                   watcher,
+                                                   true,
+                                                   updateOnFirstWatch,
+                                                   wereFirstWatcher);
             if (dcgmReturn != DCGM_ST_OK)
             {
                 DCGM_LOG_ERROR << "AddFieldWatch returned " << dcgmReturn;
@@ -681,7 +659,7 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
 
     if (!msg->condition)
     {
-        PRINT_ERROR("", "0 condition for policy");
+        log_error("0 condition for policy");
         return DCGM_ST_BADPARAM;
     }
 
@@ -689,14 +667,14 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
     dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u %d", "Error: Bad group id parameter: %u, ret %d", groupId, dcgmReturn);
+        log_error("Error: Bad group id parameter: {}, ret {}", groupId, dcgmReturn);
         return dcgmReturn;
     }
 
     dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -716,12 +694,11 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
 
         m_gpus[entities[i].entityId].watchers.push_back(newWatcher);
 
-        PRINT_DEBUG("%X %u %u %u",
-                    "Added policy condition x%X, gpuId %u, connectionId %u, requestId %u",
-                    newWatcher.conditions,
-                    entities[i].entityId,
-                    newWatcher.connectionId,
-                    newWatcher.requestId);
+        log_debug("Added policy condition x{:X}, gpuId {}, connectionId {}, requestId {}",
+                  newWatcher.conditions,
+                  entities[i].entityId,
+                  newWatcher.connectionId,
+                  newWatcher.requestId);
     }
 
     dcgm_mutex_unlock(m_mutex);
@@ -746,21 +723,21 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
     dcgmReturn_t dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter %u", groupId);
+        log_error("Error: Bad group id parameter {}", groupId);
         return dcgmReturn;
     }
 
     dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
     if (!entities.size())
     {
         /* Implies group is not configured */
-        PRINT_ERROR("%u", "Group not set for group ID %u for SET_CURRENT_VIOL_POLICY", groupId);
+        log_error("Group not set for group ID {} for SET_CURRENT_VIOL_POLICY", groupId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -778,11 +755,10 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
 
         memcpy(&m_gpus[gpuId].currentPolicies, &msg->policy, sizeof(m_gpus[gpuId].currentPolicies));
 
-        PRINT_DEBUG("%u %X %u",
-                    "connectionId %u set policy mask x%X for gpuId %u",
-                    msg->header.connectionId,
-                    msg->policy.condition,
-                    gpuId);
+        log_debug("connectionId {} set policy mask x{:X} for gpuId {}",
+                  msg->header.connectionId,
+                  msg->policy.condition,
+                  gpuId);
     }
 
     dcgm_mutex_unlock(m_mutex);
@@ -804,21 +780,21 @@ dcgmReturn_t DcgmPolicyManager::ProcessGetPolicies(dcgm_policy_msg_get_policies_
     dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter %u", groupId);
+        log_error("Error: Bad group id parameter {}", groupId);
         return dcgmReturn;
     }
 
     dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Error %d from GetGroupEntities()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
     if (!entities.size())
     {
         /* Implies group is not configured */
-        PRINT_DEBUG("%u", "No entities in group %u", groupId);
+        log_debug("No entities in group {}", groupId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -865,8 +841,7 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
 
             /* Matches connection ID. .erase will return our new iterator */
             seenRequestIds.insert(watcherIt->requestId);
-            PRINT_DEBUG(
-                "%u %u %d", "Saw connectionId %u request Id %u on gpuId %d", connectionId, watcherIt->requestId, i);
+            log_debug("Saw connectionId {} request Id {} on gpuId {}", connectionId, watcherIt->requestId, i);
             watcherIt = m_gpus[i].watchers.erase(watcherIt);
         }
     }
@@ -878,7 +853,7 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
     std::set<dcgm_request_id_t>::iterator requestIt;
     for (requestIt = seenRequestIds.begin(); requestIt != seenRequestIds.end(); ++requestIt)
     {
-        PRINT_DEBUG("%u %u", "Notifying connectionId %u, requestId %u of completion.", connectionId, *requestIt);
+        log_debug("Notifying connectionId {}, requestId {} of completion.", connectionId, *requestIt);
         mpCoreProxy.NotifyRequestOfCompletion(connectionId, *requestIt);
     }
 }
@@ -894,7 +869,7 @@ void DcgmPolicyManager::OnClientDisconnect(dcgm_connection_id_t connectionId)
     it = m_haveWatchedFields.find(connectionId);
     if (it != m_haveWatchedFields.end())
     {
-        PRINT_DEBUG("%u", "Removed m_haveWatchedFields for connectionId %u", connectionId);
+        log_debug("Removed m_haveWatchedFields for connectionId {}", connectionId);
         m_haveWatchedFields.erase(it);
     }
 

@@ -40,8 +40,8 @@
 #define MODULE_PROFILING_NAME  "Profiling"
 
 // Commands
-#define BLACKLIST_MODULE "Blacklist Module"
-#define LIST_MODULES     "List Modules"
+#define DENYLIST_MODULE "Denylist Module"
+#define LIST_MODULES    "List Modules"
 
 // Misc. strings
 #define FAILURE     "Failure"
@@ -85,7 +85,7 @@ std::string usage()
 dcgmReturn_t Module::moduleIdToName(dcgmModuleId_t moduleId, std::string &str)
 {
     // If adding a case here, you very likely also need to add one in the
-    // BlacklistModule::Execute method below
+    // DenylistModule::Execute method below
     switch (moduleId)
     {
         case DcgmModuleIdCore:
@@ -130,8 +130,8 @@ dcgmReturn_t Module::statusToStr(dcgmModuleStatus_t status, std::string &str)
         case DcgmModuleStatusNotLoaded:
             str = "Not loaded";
             return DCGM_ST_OK;
-        case DcgmModuleStatusBlacklisted:
-            str = "Blacklisted";
+        case DcgmModuleStatusDenylisted:
+            str = "Denylisted";
             return DCGM_ST_OK;
         case DcgmModuleStatusFailed:
             str = "Failed to load";
@@ -155,7 +155,7 @@ Module::Module()
 Module::~Module()
 {}
 
-dcgmReturn_t Module::RunBlacklistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId, DcgmiOutput &out)
+dcgmReturn_t Module::RunDenylistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t moduleId, DcgmiOutput &out)
 {
     dcgmReturn_t st;
     std::string moduleStr;
@@ -168,17 +168,17 @@ dcgmReturn_t Module::RunBlacklistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t 
         return st;
     }
 
-    st = dcgmModuleBlacklist(dcgmHandle, moduleId);
+    st = dcgmModuleDenylist(dcgmHandle, moduleId);
     if (st)
     {
         out.addHeader(STATUS ": " FAILURE);
-        out.addHeader("Could not blacklist module " + moduleStr);
+        out.addHeader("Could not add module to the denylist " + moduleStr);
         out[RETURN] = errorString(st);
         return st;
     }
 
     out.addHeader(STATUS ": " SUCCESS);
-    out.addHeader("Successfully blacklisted module " + moduleStr);
+    out.addHeader("Successfully added module to the denylist " + moduleStr);
 
     return DCGM_ST_OK;
 }
@@ -223,7 +223,7 @@ dcgmReturn_t Module::RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out)
 }
 
 /*****************************************************************************/
-BlacklistModule::BlacklistModule(const std::string &hostname, const std::string &moduleName, bool json)
+DenylistModule::DenylistModule(const std::string &hostname, const std::string &moduleName, bool json)
     : mModuleName(moduleName)
 {
     m_hostName = hostname;
@@ -232,7 +232,7 @@ BlacklistModule::BlacklistModule(const std::string &hostname, const std::string 
 
 
 /*****************************************************************************/
-dcgmReturn_t BlacklistModule::DoExecuteConnected()
+dcgmReturn_t DenylistModule::DoExecuteConnected()
 {
     unsigned int moduleId;
     std::istringstream ss(mModuleName);
@@ -290,20 +290,20 @@ dcgmReturn_t BlacklistModule::DoExecuteConnected()
         throw TCLAP::CmdLineParseException(usage());
     }
 
-    out.addHeader(BLACKLIST_MODULE);
+    out.addHeader(DENYLIST_MODULE);
 
-    auto const st = mModuleObj.RunBlacklistModule(m_dcgmHandle, (dcgmModuleId_t)moduleId, out);
+    auto const st = mModuleObj.RunDenylistModule(m_dcgmHandle, (dcgmModuleId_t)moduleId, out);
     std::cout << out.str();
     return st;
 }
 
-dcgmReturn_t BlacklistModule::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
+dcgmReturn_t DenylistModule::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
 {
     DcgmiOutputTree outTree(30, 50);
     DcgmiOutputJson outJson;
     DcgmiOutput &out = m_json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
 
-    out.addHeader(BLACKLIST_MODULE);
+    out.addHeader(DENYLIST_MODULE);
 
     out.addHeader(STATUS ": " FAILURE);
     out.addHeader("Error: Unable to connect to host engine.");

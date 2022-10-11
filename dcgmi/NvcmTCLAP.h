@@ -92,11 +92,6 @@ public:
          * WARNING: do not name options in for other subcommands similarly or they will be hidden as well.
          */
         m_hiddenArgs.insert("train");
-        m_hiddenArgs.insert("force");
-        m_hiddenArgs.insert("training-iterations");
-        m_hiddenArgs.insert("training-variance");
-        m_hiddenArgs.insert("training-tolerance");
-        m_hiddenArgs.insert("golden-values-filename");
     }
 
     void addToGroup(std::string groupName, TCLAP::Arg *arg)

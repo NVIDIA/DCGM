@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <catch2/catch.hpp>
 
 #include <Pcie.h>
@@ -29,12 +44,14 @@ TEST_CASE("Pcie: pcie_gpu_id_in_list")
 /*
  * Spoof this dcgmlib function so we can control program execution
  */
-dcgmReturn_t dcgmGetNvLinkLinkStatus(dcgmHandle_t handle, dcgmNvLinkStatus_v2 *linkStatus)
+dcgmReturn_t dcgmGetNvLinkLinkStatus(dcgmHandle_t handle, dcgmNvLinkStatus_v3 *linkStatus)
 {
     memset(linkStatus, 0, sizeof(*linkStatus));
-    linkStatus->numGpus                    = 1;
+    linkStatus->numGpus                    = 2;
     linkStatus->gpus[0].entityId           = 0;
     linkStatus->gpus[0].linkState[0]       = DcgmNvLinkLinkStateUp;
+    linkStatus->gpus[1].entityId           = 1;
+    linkStatus->gpus[1].linkState[0]       = DcgmNvLinkLinkStateUp;
     linkStatus->numNvSwitches              = 1;
     linkStatus->nvSwitches[0].entityId     = 0;
     linkStatus->nvSwitches[0].linkState[0] = DcgmNvLinkLinkStateUp;

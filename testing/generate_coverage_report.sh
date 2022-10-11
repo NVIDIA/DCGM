@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 set -euxo pipefail
 
 ################################################################################
@@ -58,10 +73,9 @@ sed -i -e 's/,-1$/,0/g' "$COVERAGE_LCOV_DIR/ctest.info" "$COVERAGE_LCOV_DIR/pyth
 # Combine coverage with baseline from the first step
 $LCOV -o "$COVERAGE_LCOV_DIR/combined.info" -a "$COVERAGE_LCOV_DIR/base.info" \
     -a "$COVERAGE_LCOV_DIR/ctest.info" -a  "$COVERAGE_LCOV_DIR/python.info"
-# Get rid of files we don't care about (vendored code, generated protobuf code)
+# Get rid of files we don't care about (vendored code)
 $LCOV -o "$COVERAGE_LCOV_DIR/pass2.info" -e "$COVERAGE_LCOV_DIR/combined.info" '/workspaces/*'
 $LCOV -o "$COVERAGE_LCOV_DIR/pass3.info" -r "$COVERAGE_LCOV_DIR/pass2.info" '*/sdk/*'
-$LCOV -o "$COVERAGE_LCOV_DIR/pass4.info" -r "$COVERAGE_LCOV_DIR/pass3.info" '*/_out/*/protobuf/*'
-$LCOV -o "$COVERAGE_LCOV_DIR/dcgm_coverage.info" -r "$COVERAGE_LCOV_DIR/pass4.info" '*/dcgm_private/PerfWorks/*'
+$LCOV -o "$COVERAGE_LCOV_DIR/dcgm_coverage.info" -r "$COVERAGE_LCOV_DIR/pass3.info" '*/dcgm_private/PerfWorks/*'
 
 genhtml --rc lcov_branch_coverage=1 --rc genhtml_hi_limit=70 --rc genhtml_med_limit=70 -o "$COVERAGE_REPORT_DIR" "$COVERAGE_LCOV_DIR/dcgm_coverage.info"

@@ -21,7 +21,7 @@ class DcgmDiag:
         dcgm_structs.dcgmRunDiag_version: 5
     }
 
-    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, train=False, forceTrain=False, 
+    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, 
                  version=dcgm_structs.dcgmRunDiag_version):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
@@ -71,11 +71,6 @@ class DcgmDiag:
 
             for param in params:
                 self.AddParameter(param)
-
-        if train == True:
-            self.runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_TRAIN
-            if forceTrain == True:
-                self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_FORCE_TRAIN
 
         if gpuIds:
             first = True

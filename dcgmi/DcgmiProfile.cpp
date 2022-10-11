@@ -30,7 +30,7 @@
 #define COLUMN_FIELD_TAG "Field Tag"
 
 /*****************************************************************************/
-dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, bool outputAsJson)
+dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, unsigned int gpuId, bool outputAsJson)
 {
     dcgmProfGetMetricGroups_t gmg;
     DcgmiOutputColumns outColumns;
@@ -39,17 +39,10 @@ dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t 
 
     memset(&gmg, 0, sizeof(gmg));
     gmg.version = dcgmProfGetMetricGroups_version;
-    gmg.groupId = groupId;
+    gmg.gpuId   = gpuId;
 
     dcgmReturn_t dcgmReturn = dcgmProfGetSupportedMetricGroups(dcgmHandle, &gmg);
-    if (dcgmReturn == DCGM_ST_GROUP_INCOMPATIBLE)
-    {
-        std::cout << "Error: the GPUs provided (or not provided) are not the same SKU. "
-                  << "Please use the -i [gpuId] option to specify which GPU you would like to use. "
-                  << "Note that only Tesla V100 and T4 GPUs are supported at this time." << std::endl;
-        return dcgmReturn;
-    }
-    else if (dcgmReturn != DCGM_ST_OK)
+    if (dcgmReturn != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to Get supported metric groups: " << errorString(dcgmReturn) << "." << std::endl;
         return dcgmReturn;
@@ -65,7 +58,7 @@ dcgmReturn_t DcgmiProfile::RunProfileList(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t 
 
     for (unsigned int i = 0; i < gmg.numMetricGroups; i++)
     {
-        dcgmProfMetricGroupInfo_t *mgInfo = &gmg.metricGroups[i];
+        dcgmProfMetricGroupInfo_v2 *mgInfo = &gmg.metricGroups[i];
         for (unsigned int j = 0; j < mgInfo->numFieldIds; j++)
         {
             std::string fieldTag;
@@ -131,14 +124,14 @@ DcgmiProfileList::DcgmiProfileList(std::string hostname,
                                    bool outputAsJson)
     : mGpuIdsStr(std::move(gpuIdsStr))
     , mGroupIdStr(std::move(groupIdStr))
-    , mGroupId(0)
+    , mGpuId(0)
 {
     m_hostName = std::move(hostname);
     m_json     = outputAsJson;
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmiProfileList::CreateEntityGroupFromEntityList()
+dcgmReturn_t DcgmiProfileList::SetGpuIdFromEntityList()
 {
     auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, mGpuIdsStr);
 
@@ -155,76 +148,112 @@ dcgmReturn_t DcgmiProfileList::CreateEntityGroupFromEntityList()
 
     std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
 
-    /* Create a group based on this list of entities */
-    dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &mGroupId, entityList);
-    return dcgmReturn;
+    /* Find the first GPU ID in our entity list */
+    for (auto &entity : entityList)
+    {
+        if (entity.entityGroupId == DCGM_FE_GPU)
+        {
+            DCGM_LOG_DEBUG << "Using gpuId " << entity.entityId;
+            mGpuId = entity.entityId;
+            return DCGM_ST_OK;
+        }
+    }
+
+    std::cout << "Error: No GPUs found in the provided entity list." << std::endl;
+    return DCGM_ST_BADPARAM;
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmiProfileList::ValidateOrCreateEntityGroup(void)
+dcgmReturn_t DcgmiProfileList::SetGpuId(void)
 {
     dcgmReturn_t dcgmReturn;
-    dcgmGroupType_t groupType = DCGM_GROUP_EMPTY;
     /**
-     * Check if m_requestedEntityIds is set or not. If set, we create
-     * a group including the devices mentioned with flag.
+     * Check if m_requestedEntityIds is set or not. If set, we use the first GPU ID we
+     * find in the entity list.
      */
     if (mGpuIdsStr != "-1")
     {
-        dcgmReturn = CreateEntityGroupFromEntityList();
+        dcgmReturn = SetGpuIdFromEntityList();
         return dcgmReturn;
     }
 
-    /* If no group ID or entity list was specified, assume all GPUs to act like nvidia-smi dmon */
+    /* If no group ID or entity list was specified, Get the first GPU in the system to act like nvidia-smi dmon */
     if (mGroupIdStr == "-1")
     {
-        std::vector<dcgmGroupEntityPair_t> entityList; /* Empty List */
-        dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &mGroupId, entityList);
-        return dcgmReturn;
-    }
+        unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
+        int count  = 0;
+        dcgmReturn = dcgmGetAllSupportedDevices(m_dcgmHandle, gpuIdList, &count);
 
-    bool groupIdIsSpecial = dcgmi_entity_group_id_is_special(mGroupIdStr, &groupType, &mGroupId);
-    if (groupIdIsSpecial)
-    {
-        /* m_myGroupId was already set to the correct group ID of the special group */
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            std::cout << "Error: dcgmGetAllSupportedDevices() returned " << errorString(dcgmReturn) << std::endl;
+            return dcgmReturn;
+        }
+        else if (count < 1)
+        {
+            std::cout << "Error: dcgmGetAllSupportedDevices() returned 0 devices" << std::endl;
+            return DCGM_ST_NOT_SUPPORTED;
+        }
+        mGpuId = gpuIdList[0];
         return DCGM_ST_OK;
     }
 
-    int groupIdAsInt = atoi(mGroupIdStr.c_str());
-    if (!groupIdAsInt && mGroupIdStr.at(0) != '0')
+    /* Get the first GPU ID of the provided groupId */
+
+    dcgmGroupType_t groupType = DCGM_GROUP_DEFAULT;
+    dcgmGpuGrp_t groupId      = 0;
+
+    /* Parse any special group ID strings and populate groupId */
+    bool groupIdIsSpecial = dcgmi_entity_group_id_is_special(mGroupIdStr, &groupType, &groupId);
+    if (!groupIdIsSpecial)
     {
-        std::cout << "Error: Expected a numerical groupId. Instead got '" << mGroupIdStr << "'" << std::endl;
-        return DCGM_ST_BADPARAM;
+        int groupIdAsInt = atoi(mGroupIdStr.c_str());
+        if (!groupIdAsInt && mGroupIdStr.at(0) != '0')
+        {
+            std::cout << "Error: Expected a numerical groupId. Instead got '" << mGroupIdStr << "'" << std::endl;
+            return DCGM_ST_BADPARAM;
+        }
+
+        groupId = (dcgmGpuGrp_t)(intptr_t)groupIdAsInt;
     }
 
-    mGroupId = (dcgmGpuGrp_t)(intptr_t)groupIdAsInt;
+    /* Try to get a handle to the group the user specified so we can get a GPU ID from it */
+    dcgmGroupInfo_t groupInfo;
+    groupInfo.version = dcgmGroupInfo_version;
 
-    /* Try to get a handle to the group the user specified */
-    dcgmGroupInfo_t stNvcmGroupInfo;
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-
-    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, mGroupId, &stNvcmGroupInfo);
+    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
     if (DCGM_ST_OK != dcgmReturn)
     {
         std::string error = (dcgmReturn == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(dcgmReturn);
-        std::cout << "Error: Unable to retrieve information about group " << groupIdAsInt << ". Return: " << error
-                  << "." << std::endl;
-        PRINT_ERROR("%d", "Error! retrieving info on group. Return: %d", dcgmReturn);
+        std::cout << "Error: Unable to retrieve information about group " << groupId << ". Return: " << error << "."
+                  << std::endl;
+        DCGM_LOG_ERROR << "Error! retrieving info on group. Return: " << dcgmReturn;
         return dcgmReturn;
     }
 
-    return DCGM_ST_OK;
+    for (size_t i = 0; i < groupInfo.count; i++)
+    {
+        if (groupInfo.entityList[i].entityGroupId == DCGM_FE_GPU)
+        {
+            mGpuId = groupInfo.entityList[i].entityId;
+            DCGM_LOG_DEBUG << "Using gpuId " << mGpuId;
+            return DCGM_ST_OK;
+        }
+    }
+
+    std::cout << "There were no GPUs in group " << mGroupIdStr << std::endl;
+    return DCGM_ST_BADPARAM;
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmiProfileList::DoExecuteConnected()
 {
-    /* Set mGroupId */
-    auto const dcgmReturn = ValidateOrCreateEntityGroup();
+    /* Set mGpuId */
+    auto const dcgmReturn = SetGpuId();
     if (dcgmReturn != DCGM_ST_OK)
         return dcgmReturn;
 
-    return mProfileObj.RunProfileList(m_dcgmHandle, mGroupId, m_json);
+    return mProfileObj.RunProfileList(m_dcgmHandle, mGpuId, m_json);
 }
 
 /*****************************************************************************/

@@ -21,11 +21,23 @@
 #include <vector>
 
 /*****************************************************************************/
-typedef struct test_nvcm_gpu_t
+/* Parameters passed to each DcgmModule's Init() virtual method */
+class TestDcgmModuleInitParams
 {
-    unsigned int gpuId;     /* NVCM GPU id. use DcgmSettings to convert to nvmlIndex */
-    unsigned int nvmlIndex; /* NVML index */
-} test_nvcm_gpu_t, *test_nvcm_gpu_p;
+public:
+    std::vector<std::string> moduleArgs;  /* String arguments passed on the command line to all modules */
+    std::vector<unsigned int> liveGpuIds; /* GPU IDs of live GPUs in the system */
+    std::vector<unsigned int> fakeGpuIds; /* GPU IDs of fake GPUs in the system that have been added */
+};
+
+/*****************************************************************************/
+/* Per-Module configuration options returned from TestDcgmModule::GetConfig() */
+class TestDcgmModuleConfig
+{
+public:
+    bool restartEngineBefore; /* Should we restart the host engine before this module runs to reset state? */
+    bool restartEngineAfter;  /* Should we restart the host engine after this module runs to reset state? */
+};
 
 /*****************************************************************************/
 /*
@@ -66,7 +78,7 @@ public:
      * Returns 0 on success
      *        !0 on error
      */
-    virtual int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus) = 0;
+    virtual int Init(const TestDcgmModuleInitParams &initParams) = 0;
 
     /*************************************************************************/
     /*
@@ -103,6 +115,19 @@ public:
     virtual bool IncludeInDefaultList(void)
     {
         return true;
+    }
+
+    /*************************************************************************/
+    /*
+     * Get extended config options for this module that affect module execution.
+     *
+     * This is an optional method. Providing it overrides the options for a given
+     * module.
+     */
+    virtual void GetConfig(TestDcgmModuleConfig &config)
+    {
+        config.restartEngineBefore = false;
+        config.restartEngineAfter  = false;
     }
 
     /*****************************************************************************/

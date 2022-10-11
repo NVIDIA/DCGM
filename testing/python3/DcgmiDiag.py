@@ -37,7 +37,6 @@ DIAG_DBE_WARNING = "ecc_dbe_volatile_total"
 DIAG_ECC_MODE_WARNING = "Skipping test because ECC is not enabled on this GPU"
 DIAG_INFOROM_WARNING = "nvmlDeviceValidateInforom for nvml device"
 DIAG_THERMAL_WARNING = "Thermal violations totaling "
-DIAG_VARY_WARNING    = "The results of training DCGM GPU Diagnostic cannot be trusted because they vary too much from run to run"
 
 DIAG_THROTTLE_SUGGEST = "A GPU's clocks are being throttled due to a cooling issue. Please make sure your GPUs are properly cooled."
 DIAG_DBE_SUGGEST = "This GPU needs to be drained and reset to clear the non-recoverable double bit errors."
@@ -141,7 +140,7 @@ class FailedTestInfo():
 class DcgmiDiag:
 
     ################################################################################
-    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, train=False, forceTrain=False, 
+    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True,  
                  dcgmiPrefix='', runMode=0, configFile='', debugLevel=0, debugFile=''):
         #gpuList is expected to be a string. Convert it if it was provided
         self.gpuList = None
@@ -154,8 +153,6 @@ class DcgmiDiag:
         self.testNamesStr = testNamesStr
         self.paramsStr = paramsStr
         self.verbose = verbose
-        self.train = train
-        self.forceTrain = forceTrain
         self.dcgmiPrefix = dcgmiPrefix
         self.runMode = runMode
         self.configFile = configFile
@@ -190,30 +187,23 @@ class DcgmiDiag:
 
         cmd.append("diag")
 
-        if self.train:
-            # Ignore run options if we are training
-            cmd.append('--train')
-            
-            if self.forceTrain:
-                cmd.append('--force')
-        else:
-            if self.runMode == 0:
-                # Use the test names string if a run mode was not specified
-                cmd.append('-r')
+        if self.runMode == 0:
+            # Use the test names string if a run mode was not specified
+            cmd.append('-r')
 
-                if self.testNamesStr:
-                    cmd.append(self.testNamesStr)
-                else:
-                    # default to running level 3 tests
-                    cmd.append('3')
+            if self.testNamesStr:
+                cmd.append(self.testNamesStr)
             else:
-                # If the runMode has been specified, then use that over the test names string
-                cmd.append('-r')
-                cmd.append(str(self.runMode))
+                # default to running level 3 tests
+                cmd.append('3')
+        else:
+            # If the runMode has been specified, then use that over the test names string
+            cmd.append('-r')
+            cmd.append(str(self.runMode))
 
-            if self.paramsStr:
-                cmd.append('-p')
-                cmd.append(self.paramsStr)
+        if self.paramsStr:
+            cmd.append('-p')
+            cmd.append(self.paramsStr)
 
         if self.debugFile:
             cmd.append('--debugLogFile')
@@ -359,20 +349,14 @@ class DcgmiDiag:
         return False
     
     ################################################################################
-    def RunDcgmiDiag(self, training, config_file, runMode=0):
-        oldTrain = self.train
+    def RunDcgmiDiag(self, config_file, runMode=0):
         oldConfig = self.configFile
         oldRunMode = self.runMode
 
         if config_file:
-            self.train = False
             self.configFile = config_file
-        elif training:
-            self.train = True
-            self.configFile = ''
         else:
             self.configFile = ''
-            self.train = False
 
         if runMode:
             self.runMode = runMode
@@ -380,40 +364,23 @@ class DcgmiDiag:
         cmd = self.BuildDcgmiCommand()
         self.failed_list, self.diagRet = self.__RunDcgmiDiag__(cmd)
 
-        self.train = oldTrain
         self.configFile = oldConfig
         self.runMode = oldRunMode
 
         return self.DidIFail()
 
     ################################################################################
-    def RunWithTraining(self):
-        return self.RunDcgmiDiag(True, None)
-
-    ################################################################################
-    def RunWithoutTraining(self):
-        return self.RunDcgmiDiag(False, None)
-
-    ################################################################################
-    def RunAgainstGoldenValues(self, goldenValuesFile):
-        return self.RunDcgmiDiag(False, goldenValuesFile)
-
-    ################################################################################
     def RunAtLevel(self, runMode, configFile=None):
         if runMode < 1 or runMode > 3:
             return dcgm_structs.DCGM_ST_BADPARAM
 
-        return self.RunDcgmiDiag(False, configFile, runMode)
+        return self.RunDcgmiDiag(configFile, runMode)
 
     ################################################################################
     def Run(self):
         cmd = self.BuildDcgmiCommand()
         self.failed_list, self.diagRet = self.__RunDcgmiDiag__(cmd)
         return self.DidIFail()
-
-    ################################################################################
-    def SetTraining(self, train):
-        self.train = train
 
     ################################################################################
     def SetConfigFile(self, config_file):

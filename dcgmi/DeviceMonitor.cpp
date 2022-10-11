@@ -63,6 +63,9 @@ struct fmt::formatter<dcgm_field_entity_group_t> : fmt::formatter<fmt::string_vi
             case DCGM_FE_GPU_CI:
                 val = "GPU-CI";
                 break;
+            case DCGM_FE_LINK:
+                val = "LINK";
+                break;
             case DCGM_FE_NONE:
             case DCGM_FE_COUNT:
                 break;
@@ -407,32 +410,9 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
             ret,
             errorString(ret));
     }
-    else if (hierarchyV2.count == 0)
-    {
-        // No MIG entities are configured, so just get and sort GPUs
 
-        std::uint32_t gpus[DCGM_MAX_NUM_DEVICES] = {};
-        int count                                = 0;
-
-        ret = dcgmGetAllDevices(m_dcgmHandle, &gpus[0], &count);
-        if (ret != DCGM_ST_OK)
-        {
-            SHOW_AND_LOG_ERROR << fmt::format("Unable to get list of GPUs. Error: {}: {}", ret, errorString(ret));
-        }
-        else
-        {
-            DCGM_LOG_DEBUG << "MIG is disabled. Using just GPU entities";
-            sortedEntities.reserve(count);
-            for (int i = 0; i < count; ++i)
-            {
-                sortedEntities.push_back({ DCGM_FE_GPU, gpus[i] });
-            }
-            std::sort(begin(sortedEntities), end(sortedEntities), [](auto const &left, auto const &right) {
-                return left.entityId < right.entityId;
-            });
-        }
-    }
-    else
+    /* Only MIG hiearchies are sorted */
+    if (hierarchyV2.count > 0)
     {
         TopologicalSort(hierarchyV2);
         std::unordered_set<decltype(dcgmi_entity_pair_t::entityId)> seenGpus;

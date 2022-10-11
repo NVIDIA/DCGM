@@ -46,7 +46,7 @@ dcgmReturn_t DcgmModuleHealth::ProcessSetSystems(dcgm_health_msg_set_systems_t *
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter %u", groupId);
+        log_error("Error: Bad group id parameter {}", groupId);
         return dcgmReturn;
     }
 
@@ -57,7 +57,7 @@ dcgmReturn_t DcgmModuleHealth::ProcessSetSystems(dcgm_health_msg_set_systems_t *
                                            msg->healthSet.maxKeepAge);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("", "Set Health Watches Err: Unable to set watches");
+        log_error("Set Health Watches Err: Unable to set watches");
     }
 
     return dcgmReturn;
@@ -79,14 +79,14 @@ dcgmReturn_t DcgmModuleHealth::ProcessGetSystems(dcgm_health_msg_get_systems_t *
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter: %u", groupId);
+        log_error("Error: Bad group id parameter: {}", groupId);
         return dcgmReturn;
     }
 
     dcgmReturn = mpHealthWatch->GetWatches(groupId, &msg->systems);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%d", "GetWatches failed with %d", dcgmReturn);
+        log_error("GetWatches failed with {}", dcgmReturn);
     }
 
     return dcgmReturn;
@@ -108,7 +108,7 @@ dcgmReturn_t DcgmModuleHealth::ProcessCheckV4(dcgm_health_msg_check_v4 *msg)
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter: %u", dcgmReturn);
+        log_error("Error: Bad group id parameter: {}", dcgmReturn);
         return dcgmReturn;
     }
 

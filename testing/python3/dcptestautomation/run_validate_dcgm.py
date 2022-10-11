@@ -530,7 +530,7 @@ def main(cmdArgs):
         ro.prot_thread_gpu[i].join()
 
     #Copy the dcgm data in csv file
-    cmd = '{executable} python2 parse_dcgm_single_metric.py -f dcgmLogs_{0}.txt -m {1} -i {2}'.format(metrics, \
+    cmd = '{executable} parse_dcgm_single_metric.py -f dcgmLogs_{0}.txt -m {1} -i {2}'.format(metrics, \
             metrics, gpuid_list, executable=sys.executable)
     ret = util.executeBashCmd(cmd, True)
 

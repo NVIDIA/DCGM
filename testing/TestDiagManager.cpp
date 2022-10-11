@@ -33,7 +33,7 @@ TestDiagManager::TestDiagManager()
 TestDiagManager::~TestDiagManager()
 {}
 
-int TestDiagManager::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestDiagManager::Init(const TestDcgmModuleInitParams &initParams)
 {
     g_coreCallbacks.postfunc = PostRequestToCore;
     g_coreCallbacks.version  = dcgmCoreCallbacks_version;
@@ -307,47 +307,6 @@ int TestDiagManager::TestCreateNvvsCommand()
     }
 
     cmdArgs.clear();
-    memset(&drd, 0, sizeof(drd));
-    drd.validate           = DCGM_POLICY_VALID_SV_LONG;
-    drd.flags              = DCGM_RUN_FLAGS_TRAIN | DCGM_RUN_FLAGS_FORCE_TRAIN;
-    drd.trainingIterations = 3;
-    drd.trainingVariance   = 2;
-    drd.trainingTolerance  = 15;
-    drd.version            = dcgmRunDiag_version7;
-    snprintf(drd.goldenValuesFile, sizeof(drd.goldenValuesFile), "goodasgold.yml");
-    result = am.CreateNvvsCommand(cmdArgs, &drd);
-    if (result == DCGM_ST_OK)
-    {
-        static const char *expected[] = { "--train",
-                                          "--force",
-                                          "--training-iterations",
-                                          "3",
-                                          "--training-variance",
-                                          "2",
-                                          "--training-tolerance",
-                                          "15",
-                                          "--golden-values-filename",
-                                          "/tmp/goodasgold.yml" };
-
-        // We don't need to test 0 (nvvs path), 1 (-j), 2 (-z), or 3 (--specifiedtest)
-        if (cmdArgs.size() < 16)
-        {
-            fprintf(stderr, "Not enough arguments populated in cmdArgs!\n");
-        }
-
-        for (int i = 0; i < 10; i++)
-        {
-            if (cmdArgs[i + 3] != expected[i])
-            {
-                fprintf(stderr,
-                        "Expected '%s' at position %d, but found '%s'\n",
-                        expected[i],
-                        i + 4,
-                        cmdArgs[i + 4].c_str());
-                return -1;
-            }
-        }
-    }
 
     return result;
 }
@@ -359,32 +318,10 @@ int TestDiagManager::TestPopulateRunDiag()
 
     drd.version = dcgmRunDiag_version7;
 
-    static const std::string goldenFilename("/tmp/custom.yml");
     std::string error;
 
     // Basic test, nothing should get populated
-    dcgm_diag_common_populate_run_diag(drd,
-                                       "1",
-                                       "",
-                                       "",
-                                       "",
-                                       "",
-                                       false,
-                                       false,
-                                       "",
-                                       "",
-                                       0,
-                                       "",
-                                       true,
-                                       true,
-                                       10,
-                                       7,
-                                       12,
-                                       goldenFilename,
-                                       1,
-                                       true,
-                                       3,
-                                       error);
+    dcgm_diag_common_populate_run_diag(drd, "1", "", "", "", "", false, false, "", "", 0, "", 1, true, 3, error);
     if (strlen(drd.testNames[0]) != 0)
     {
         fprintf(stderr, "Expected testNames to be empty but found '%s'\n", drd.testNames[0]);
@@ -439,45 +376,6 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (!(drd.flags & DCGM_RUN_FLAGS_TRAIN))
-    {
-        fprintf(stderr, "Expected train flag to be set but it is unset.\n");
-        return -1;
-    }
-
-    if (!(drd.flags & DCGM_RUN_FLAGS_FORCE_TRAIN))
-    {
-        fprintf(stderr, "Expected force train flag to be set but it is unset.\n");
-        return -1;
-    }
-
-    if (drd.trainingIterations != 10)
-    {
-        fprintf(stderr, "Expected training iterations to be set to 10, but found %u.\n", drd.trainingIterations);
-        return -1;
-    }
-
-    if (drd.trainingVariance != 7)
-    {
-        fprintf(stderr, "Expected training variance to be set to 7, but found %u.\n", drd.trainingVariance);
-        return -1;
-    }
-
-    if (drd.trainingTolerance != 12)
-    {
-        fprintf(stderr, "Expected training tolerance to be set to 12, but found %u.\n", drd.trainingTolerance);
-        return -1;
-    }
-
-    if (goldenFilename != drd.goldenValuesFile)
-    {
-        fprintf(stderr,
-                "Expected the golden values file to be set to '%s', but found '%s',\n",
-                goldenFilename.c_str(),
-                drd.goldenValuesFile);
-        return -1;
-    }
-
     if (drd.groupId != (dcgmGpuGrp_t)1)
     {
         fprintf(stderr, "Expected groupid to be 1, but found %llu.\n", (unsigned long long)drd.groupId);
@@ -516,12 +414,6 @@ int TestDiagManager::TestPopulateRunDiag()
         statsPath,
         3,
         throttleMask,
-        false,
-        false,
-        0,
-        0,
-        0,
-        "",
         0,
         false,
         3,
@@ -607,42 +499,6 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (drd.flags & DCGM_RUN_FLAGS_TRAIN)
-    {
-        fprintf(stderr, "Expected train flag to be unset but it is set.\n");
-        return -1;
-    }
-
-    if (drd.flags & DCGM_RUN_FLAGS_FORCE_TRAIN)
-    {
-        fprintf(stderr, "Expected force train flag to be unset but it is set.\n");
-        return -1;
-    }
-
-    if (drd.trainingIterations != 0)
-    {
-        fprintf(stderr, "Expected training iterations to be set to 0, but found %u.\n", drd.trainingIterations);
-        return -1;
-    }
-
-    if (drd.trainingVariance != 0)
-    {
-        fprintf(stderr, "Expected training variance to be set to 0, but found %u.\n", drd.trainingVariance);
-        return -1;
-    }
-
-    if (drd.trainingTolerance != 0)
-    {
-        fprintf(stderr, "Expected training tolerance to be set to 0, but found %u.\n", drd.trainingTolerance);
-        return -1;
-    }
-
-    if (drd.goldenValuesFile[0] != '\0')
-    {
-        fprintf(stderr, "Expected the golden values file to be empty, but found '%s',\n", drd.goldenValuesFile);
-        return -1;
-    }
-
     if (drd.flags & DCGM_RUN_FLAGS_FAIL_EARLY)
     {
         fprintf(stderr, "Expected fail early flag to be unset, but it is set.\n");
@@ -668,12 +524,6 @@ int TestDiagManager::TestPopulateRunDiag()
                                        statsPath,
                                        3,
                                        "",
-                                       false,
-                                       false,
-                                       0,
-                                       0,
-                                       0,
-                                       "",
                                        0,
                                        false,
                                        0,
@@ -698,7 +548,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
     std::string rawJsonOutput(
         "{ \"DCGM GPU Diagnostic\" : { \"test_categories\" : [ { \"category\" : \"Deployment\", \"tests\" : [ ");
     rawJsonOutput
-        += "{ \"name\" : \"Blacklist\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
+        += "{ \"name\" : \"Denylist\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
     rawJsonOutput
         += "{ \"name\" : \"NVML Library\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
     rawJsonOutput
@@ -732,7 +582,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
     dcgmDiagResponse_t response;
     response.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion7(&response);
+    drw.SetVersion8(&response);
 
     dcgmReturn_t ret = am.FillResponseStructure(rawJsonOutput, drw, 0, DCGM_ST_OK);
 
@@ -863,7 +713,7 @@ int TestDiagManager::TestFillResponseStructure()
     dcgmDiagResponse_t response;
     response.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion7(&response);
+    drw.SetVersion8(&response);
 
     dcgmReturn_t ret = am.FillResponseStructure(NVVS_1_3_JSON, drw, 0, DCGM_ST_OK);
     if (response.gpuCount != 4)
@@ -954,7 +804,7 @@ int TestDiagManager::TestFillResponseStructure()
     }
 
     const char *testNames[]
-        = { "Blacklist",        "NVML Library", "CUDA Main Library",         "CUDA SDK Library",   "Permissions",
+        = { "Denylist",         "NVML Library", "CUDA Main Library",         "CUDA SDK Library",   "Permissions",
             "Persistence Mode", "Environment",  "Page Retirement/Row Remap", "Graphics Processes", "Inforom" };
 
     for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
@@ -976,34 +826,11 @@ int TestDiagManager::TestFillResponseStructure()
         }
     }
 
-    std::string trainingMsg("Successfully trained the diagnostic. The golden values file is here \
-                             /tmp/golden_values.yml\n");
-    std::string trainingJson("{\"DCGM GPU Diagnostic\" : { \"Training Result\" : \"");
-    trainingJson += trainingMsg;
-    trainingJson += "\", \"version\" : \"1.3\" } }";
-    dcgmDiagResponse_t trainingResponse;
-    trainingResponse.version = dcgmDiagResponse_version;
-    DcgmDiagResponseWrapper trainingDrw;
-    trainingDrw.SetVersion7(&trainingResponse);
-
-    ret = am.FillResponseStructure(trainingJson, trainingDrw, 0, DCGM_ST_OK);
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Expected successful parsing, but failed!\n");
-        return -1;
-    }
-
-    if (trainingResponse.trainingMsg != trainingMsg)
-    {
-        fprintf(stderr, "Expected msg '%s', but found '%s'\n", trainingMsg.c_str(), trainingResponse.trainingMsg);
-        return -1;
-    }
-
     /* Version 1.7 (v5), 2.0 (v6) / Per GPU JSON */
     dcgmDiagResponse_t perGpuResponse;
     perGpuResponse.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper perGpuDrw;
-    perGpuDrw.SetVersion7(&perGpuResponse);
+    perGpuDrw.SetVersion8(&perGpuResponse);
 
     fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
 

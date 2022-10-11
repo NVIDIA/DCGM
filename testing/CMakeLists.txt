@@ -29,7 +29,6 @@ target_link_libraries(testdcgmunittests
         dcgm_common
         dcgm_logging
         dcgm_mutex
-        common_protobuf_objects
         sdk_nvml_essentials_objects
         sdk_nvml_loader
         dcgm
@@ -70,8 +69,6 @@ target_sources(testdcgmunittests
         TestDcgmValue.cpp
         TestDcgmValue.h
         TestPolicyManager.h
-        TestProtobuf.cpp
-        TestProtobuf.h
         TestStatCollection.cpp
         TestStatCollection.h
         TestTopology.cpp
@@ -98,43 +95,7 @@ install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.sh DESTINAT
 install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.awk DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
 
 # Install python bindings
-set(DCGM_BINDINGS_PYTHON2_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR})
 set(DCGM_BINDINGS_PYTHON3_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR}/python3)
-
-install(
-    FILES 
-        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/__init__.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/dcgm_client_cli_parser.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/python/common/dcgm_client_main.py
-    DESTINATION
-        ${DCGM_BINDINGS_PYTHON2_INSTALL_DIR}/common
-    COMPONENT DCGM)
-
-install(
-    FILES
-        python/dcgm_agent.py
-        python/dcgm_fields.py
-        python/dcgm_structs.py
-        python/dcgmvalue.py
-        python/DcgmDiag.py
-        python/DcgmGroup.py
-        python/DcgmHandle.py
-        python/DcgmJsonReader.py
-        python/DcgmReader.py
-        python/DcgmStatus.py
-        python/DcgmSystem.py
-        python/DcgmFieldGroup.py
-        python/pydcgm.py
-        python/dcgm_field_helpers.py
-        python/dcgm_errors.py
-        python/dcgm_collectd_plugin.py
-        python/dcgm_fluentd.py
-        python/dcgm_prometheus.py
-        python/dcgm_telegraf.py
-        python/blacklist_recommendations.py
-    DESTINATION
-        ${DCGM_BINDINGS_PYTHON2_INSTALL_DIR}
-    COMPONENT DCGM)
 
 install(
     FILES
@@ -167,7 +128,7 @@ install(
         python3/dcgm_fluentd.py
         python3/dcgm_prometheus.py
         python3/dcgm_telegraf.py
-        python3/blacklist_recommendations.py
+        python3/denylist_recommendations.py
     DESTINATION
         ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}
     COMPONENT DCGM)

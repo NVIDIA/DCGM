@@ -52,6 +52,7 @@ target_sources(
 
 add_library(sdk_nvml_loader STATIC)
 target_link_libraries(sdk_nvml_loader PUBLIC sdk_nvml_interface)
+
 target_sources(
     sdk_nvml_loader
     PRIVATE

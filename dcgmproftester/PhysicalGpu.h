@@ -358,7 +358,7 @@ private:
     /* last worker to start current part */
     std::shared_ptr<DistributedCudaContext> m_lastWorker { nullptr };
 
-    TickHandlerType m_tickHandler; /* Tick handler. */
+    TickHandlerType m_tickHandler {}; /* Tick handler. */
 
     bool m_exitRequested { false }; /* whether early exit is requested */
     bool m_valid { true };          /* Whether the test passes. */

@@ -60,7 +60,7 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
             }
             else
             {
-                PRINT_ERROR("", "Ignoring unexpected duplicate ACK");
+                log_error("Ignoring unexpected duplicate ACK");
             }
             Unlock();
             return DCGM_ST_OK;
@@ -79,14 +79,14 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
                 break; /* Code handled below */
             else
             {
-                PRINT_DEBUG("%p", "Request %p ignoring notification before the initial request was ACKed", this);
+                log_debug("Request {} ignoring notification before the initial request was ACKed", (void *)this);
             }
             Unlock();
 #endif
             return DCGM_ST_OK;
 
         default:
-            PRINT_ERROR("%u", "Unexpected msgType %u received.", header->msgType);
+            log_error("Unexpected msgType {} received.", header->msgType);
             Unlock();
             return DCGM_ST_OK; /* Returning an error here doesn't affect anything we want to affect */
     }

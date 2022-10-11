@@ -48,36 +48,17 @@ typedef enum
     DcgmCoreReqIdGMGetGroupEntities             = 17, // DcgmGroupManager::GetGroupEntities()
     DcgmCoreReqIdGMAreAllTheSameSku             = 18, // DcgmGroupManager::AreAllTheSameSku()
     DcgmCoreReqIdGMGetGroupGpuIds               = 19, // DcgmGroupManager::GetGroupGpuIds()
-    // deprecated: DcgmCoreReqIdGMAllSupportPolicyManagement
-    DcgmCoreReqIdCMAnyGlobalFieldsWatched      = 21, // DcgmCacheManager::AnyGlobalFieldsWatched()
-    DcgmCoreReqIdCMAnyFieldsWatched            = 22, // DcgmCacheManager::AnyFieldsWatched()
-    DcgmCoreReqIdCMAnyGpuFieldsWatched         = 23, // DcgmCacheManager::AnyGpuFieldsWatched()
-    DcgmCoreReqIdCMAnyGpuFieldsWatchedAnywhere = 24, // DcgmCacheManager::AnyGpuFieldsWatched()
-    DcgmCoreReqIdCMIsGlobalFieldWatched        = 25, // DcgmCacheManager::IsGlobalFieldWatched()
-    DcgmCoreReqIdCMIsGpuFieldWatched           = 26, // DcgmCacheManager::IsGpuFieldWatched()
-    DcgmCoreReqIDCMGetGpuFieldBytesUsed        = 27, // DcgmCacheManager::GetGpuFieldBytesUsed()
-    DcgmCoreReqIDCMGetGlobalFieldBytesUsed     = 28, // DcgmCacheManager::GetGlobalFieldBytesUsed()
-    DcgmCoreReqIDCMGetGpuFieldExecTimeUsec     = 29, // DcgmCacheManager::GetGpuFieldExecTimeUsec()
-    DcgmCoreReqIDCMGetGlobalFieldExecTimeUsec  = 30, // DcgmCacheManager::GetGlobalFieldExecTimeUsec()
-    DcgmCoreReqIDCMGetGpuFieldFetchCount       = 31, // DcgmCacheManager::GetGpuFieldFetchCount()
-    DcgmCoreReqIDCMGetGlobalFieldFetchCount    = 32, // DcgmCacheManager::GetGlobalFieldFetchCount()
-    DcgmCoreReqIDCMGetFieldWatchFreq           = 33, // DcgmCacheManager::GetFieldWatchFreq()
-    DcgmCoreReqIDCMForEachWatchedGlobalField   = 34, // DcgmCacheManager::ForEachWatchedGlobalField()
-    DcgmCoreReqIDCMForEachWatchedGpuField      = 35, // DcgmCacheManager::ForEachWatchedGpuField()
-    DcgmCoreReqIdLoggingGetSeverity            = 36, // DcgmLogging::getSeverity()
-    DcgmCoreReqIdSendModuleCommand             = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
-    DcgmCoreReqIdSendRawMessage                = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
-    DcgmCoreReqIdNotifyRequestOfCompletion     = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
-    DcgmCoreReqIdFGMPopulateFieldGroups        = 40, // FieldGroupManager::PopulateFieldGroups()
-    DcgmCoreReqIdFGMGetFieldGroupFields        = 41, // FieldGroupManager::GetFieldGroupFields()
-    DcgmCoreReqIdCMPopulateGlobalWatchInfo     = 42, // DcgmCacheManager::PopulateGlobalWatchInfo()
-    DcgmCoreReqIdCMPopulateGpuWatchInfo        = 43, // DcgmCacheManager::PopulateGpuWatchInfo()
-    DcgmCoreReqIdCMPopulateWatchInfo           = 44, // DcgmCacheManager::PopulateGpuInfo()
-    DcgmCoreReqIdGetMigInstanceEntityId        = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
-    DcgmCoreReqIdGetMigUtilization             = 46, // DcgmCacheManager::GetMigUtilization()
-    DcgmCoreReqMigIndicesForEntity             = 47, // DcgmCacheManager::GetMigIndicesForEntity()
-    DcgmCoreReqGetServiceAccount               = 48, // DcgmHostEngineHandler::GetServiceAccount()
-    DcgmCoreReqIdCount                               // Always keep this one last
+    DcgmCoreReqIdLoggingGetSeverity             = 36, // DcgmLogging::getSeverity()
+    DcgmCoreReqIdSendModuleCommand              = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
+    DcgmCoreReqIdSendRawMessage                 = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
+    DcgmCoreReqIdNotifyRequestOfCompletion      = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
+    DcgmCoreReqIdFGMPopulateFieldGroups         = 40, // FieldGroupManager::PopulateFieldGroups()
+    DcgmCoreReqIdFGMGetFieldGroupFields         = 41, // FieldGroupManager::GetFieldGroupFields()
+    DcgmCoreReqIdGetMigInstanceEntityId         = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
+    DcgmCoreReqIdGetMigUtilization              = 46, // DcgmCacheManager::GetMigUtilization()
+    DcgmCoreReqMigIndicesForEntity              = 47, // DcgmCacheManager::GetMigIndicesForEntity()
+    DcgmCoreReqGetServiceAccount                = 48, // DcgmHostEngineHandler::GetServiceAccount()
+    DcgmCoreReqIdCount                                // Always keep this one last
 } dcgmCoreReqCmd_t;
 
 /* Callback functions for allocating and freeing DcgmModules. These are found
@@ -149,13 +130,6 @@ typedef struct
     size_t numFieldIds;                          // !< The number of field ids specified
 } dcgmCoreGetFieldGroupFieldsResponse_t;
 
-typedef struct
-{
-    dcgmReturn_t ret;
-    dcgmCoreWatchInfo_t fields[DCGM_FI_MAX_FIELDS];
-    size_t numFields;
-} dcgmCorePopulateWatchInfoResponse_t;
-
 /*
  * Basic parameters for group manager requests
  */
@@ -204,7 +178,7 @@ typedef struct
 } dcgmCoreFieldListQueryParams_t;
 
 /**
- * This struct holds all of the parameters necessary to call AddFieldWatch()
+ * This struct holds all of the request parameters necessary to call AddFieldWatch()
  */
 typedef struct
 {
@@ -217,7 +191,19 @@ typedef struct
     DcgmWatcherType_t watcherType;           // !< identifier for who is watching
     dcgm_connection_id_t connectionId;       // !< connection id of the client watching
     bool subscribeForUpdates;                // !< flag for whether or not updates are subribed to
-} dcgmCoreAddFieldWatchParams_t;
+    bool updateOnFirstWatch;                 // !< Whether we should do an UpdateAllFields(true) if we were
+                                             // !< the first watcher or not. Pass true if you want to guarantee
+                                             // !< there is a value in the cache after this call. Pass false if you
+                                             // !< don't care or plan to batch together a bunch of watches before
+                                             // !<  an UpdateAllFields() at the end
+} dcgmCoreAddFieldWatchReqParams_v1;
+
+typedef struct
+{
+    bool wereFirstWatcher; // !< Whether we were the first watcher (true) or not (false). If so,
+                           // !< you will need to call UpdateAllFields(true) for a value to be
+                           // !< present in the cache.
+} dcgmCoreAddFieldWatchRespParams_v1;
 
 /**
  * This struct holds all of the parameters necessary to call GetInt64SummaryData()
@@ -283,15 +269,6 @@ typedef struct
     DcgmWatcherType_t watcherType;           // !< identifier for who is watching
     dcgm_connection_id_t connectionId;       // !< connection id of the client watching
 } dcgmCoreRemoveFieldWatchParams_t;
-
-typedef struct
-{
-    dcgmReturn_t (*functors[DCGM_GROUP_MAX_ENTITIES])(unsigned short);
-    size_t numFunctors;
-    unsigned short *fieldIds; // !< List of the field ids we want samples for
-    size_t numFieldIds;       // !< The number of field ids specified
-    unsigned int gpuId;       // !< Gpu to query
-} dcgmCoreForEachRequest_t;
 
 /**
  * This struct holds all of the parameters necessary to call AppendSamples()
@@ -383,15 +360,15 @@ typedef struct
     int numSamples;          // !< The number of samples stored at that address.
 } dcgmCoreGetSamplesResponse_t;
 
-#define SAMPLES_BUFFER_SIZE 16384
+#define SAMPLES_BUFFER_SIZE_V1 16384
 
 typedef struct
 {
-    dcgmReturn_t ret;                 // !< The status of the function call
-    char buffer[SAMPLES_BUFFER_SIZE]; // !< The buffer we're copying the raw data into
-    size_t bufferSize;                // !< The length of data written into buffer
-    unsigned char dataDidNotFit;      // !< 0 if the data all fit, 1 otherwise
-} dcgmCoreGetMultipleLatestSamplesResponse_t;
+    dcgmReturn_t ret;                    // !< The status of the function call
+    char buffer[SAMPLES_BUFFER_SIZE_V1]; // !< The buffer we're copying the raw data into
+    size_t bufferSize;                   // !< The length of data written into buffer
+    unsigned char dataDidNotFit;         // !< 0 if the data all fit, 1 otherwise
+} dcgmCoreGetMultipleLatestSamplesResponse_v1;
 
 typedef struct
 {
@@ -403,17 +380,6 @@ typedef struct
 #define dcgmCoreBasicQuery_version1 MAKE_DCGM_VERSION(dcgmCoreBasicQuery_v1, 1)
 #define dcgmCoreBasicQuery_version  dcgmCoreBasicQuery_version1
 typedef dcgmCoreBasicQuery_v1 dcgmCoreBasicQuery_t;
-
-typedef struct
-{
-    dcgm_module_command_header_t header; // Command header
-    dcgmCoreForEachRequest_t request;
-    dcgmCoreBasicResponse_t response;
-} dcgmCoreForEach_v1;
-
-#define dcgmCoreForEach_version1 MAKE_DCGM_VERSION(dcgmCoreForEach_v1, 1)
-#define dcgmCoreForEach_version  dcgmCoreForEach_version1
-typedef dcgmCoreForEach_v1 dcgmCoreForEach_t;
 
 typedef struct
 {
@@ -469,39 +435,6 @@ typedef struct
 #define dcgmCoreGetFieldGroupFields_version1 MAKE_DCGM_VERSION(dcgmCoreGetFieldGroupFields_v1, 1)
 #define dcgmCoreGetFieldGroupFields_version  dcgmCoreGetFieldGroupFields_version1
 typedef dcgmCoreGetFieldGroupFields_v1 dcgmCoreGetFieldGroupFields_t;
-
-typedef struct
-{
-    dcgm_module_command_header_t header; // Command header
-    dcgmCoreFieldListQueryParams_t request;
-    dcgmCorePopulateWatchInfoResponse_t response;
-} dcgmCorePopulateGlobalWatchInfo_v1;
-
-#define dcgmCorePopulateGlobalWatchInfo_version1 MAKE_DCGM_VERSION(dcgmCorePopulateGlobalWatchInfo_v1, 1)
-#define dcgmCorePopulateGlobalWatchInfo_version  dcgmCorePopulateGlobalWatchInfo_version1
-typedef dcgmCorePopulateGlobalWatchInfo_v1 dcgmCorePopulateGlobalWatchInfo_t;
-
-typedef struct
-{
-    dcgm_module_command_header_t header; // Command header
-    dcgmCoreFieldListQueryParams_t request;
-    dcgmCorePopulateWatchInfoResponse_t response;
-} dcgmCorePopulateGpuWatchInfo_v1;
-
-#define dcgmCorePopulateGpuWatchInfo_version1 MAKE_DCGM_VERSION(dcgmCorePopulateGpuWatchInfo_v1, 1)
-#define dcgmCorePopulateGpuWatchInfo_version  dcgmCorePopulateGpuWatchInfo_version1
-typedef dcgmCorePopulateGpuWatchInfo_v1 dcgmCorePopulateGpuWatchInfo_t;
-
-typedef struct
-{
-    dcgm_module_command_header_t header; // Command header
-    dcgmCoreFieldListQueryParams_t request;
-    dcgmCorePopulateWatchInfoResponse_t response;
-} dcgmCorePopulateWatchInfo_v1;
-
-#define dcgmCorePopulateWatchInfo_version1 MAKE_DCGM_VERSION(dcgmCorePopulateWatchInfo_v1, 1)
-#define dcgmCorePopulateWatchInfo_version  dcgmCorePopulateWatchInfo_version1
-typedef dcgmCorePopulateWatchInfo_v1 dcgmCorePopulateWatchInfo_t;
 
 typedef struct
 {
@@ -605,14 +538,13 @@ typedef dcgmCoreGetEntityNvLinkLinkStatus_v1 dcgmCoreGetEntityNvLinkLinkStatus_t
 
 typedef struct
 {
-    dcgm_module_command_header_t header;   // Command header
-    dcgmCoreAddFieldWatchParams_t request; // parameters for setting the field watch
-    dcgmReturn_t ret;                      // Success or DCGM_ST_* error code
-} dcgmCoreAddFieldWatch_v1;
+    dcgm_module_command_header_t header;         // Command header
+    dcgmCoreAddFieldWatchReqParams_v1 request;   // parameters for setting the field watch
+    dcgmCoreAddFieldWatchRespParams_v1 response; // Output parameters from setting the field watch
+    dcgmReturn_t ret;                            // Success or DCGM_ST_* error code
+} dcgmCoreAddFieldWatch_v2;
 
-#define dcgmCoreAddFieldWatch_version1 MAKE_DCGM_VERSION(dcgmCoreAddFieldWatch_v1, 1)
-#define dcgmCoreAddFieldWatch_version  dcgmCoreAddFieldWatch_version1
-typedef dcgmCoreAddFieldWatch_v1 dcgmCoreAddFieldWatch_t;
+#define dcgmCoreAddFieldWatch_version2 MAKE_DCGM_VERSION(dcgmCoreAddFieldWatch_v2, 2)
 
 typedef struct
 {
@@ -651,7 +583,7 @@ typedef struct
 {
     dcgm_module_command_header_t header; // Command header
     dcgmCoreGetMultipleLatestLiveSamplesParams_t request;
-    dcgmCoreGetMultipleLatestSamplesResponse_t response;
+    dcgmCoreGetMultipleLatestSamplesResponse_v1 response;
 } dcgmCoreGetMultipleLatestLiveSamples_v1;
 
 #define dcgmCoreGetMultipleLatestLiveSamples_version1 MAKE_DCGM_VERSION(dcgmCoreGetMultipleLatestLiveSamples_v1, 1)

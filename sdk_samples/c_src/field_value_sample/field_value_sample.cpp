@@ -30,6 +30,19 @@
 int list_field_values_since(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userData);
 int list_field_values(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userData);
 
+/* Helper to look at args to see if we should run in fast mode (from the dcgm test framework) */
+bool should_run_in_fast_mode(int argc, char **argv)
+{
+    for (int i = 0; i < argc; i++)
+    {
+        if (argv[i][0] == '-' && argv[i][1] == 'f')
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 int main(int argc, char **argv)
 {
@@ -50,7 +63,15 @@ int main(int argc, char **argv)
     std::map<unsigned int, dcgmFieldValue_v1> field_val_map;
     std::map<unsigned int, std::vector<dcgmFieldValue_v1>> field_val_vec_map;
     long long next_since_timestamp = 0;
+    long long loopIntervalUsec     = 1000000; /* How long should we sleep after each loop iteration */
+    int i;
+    int numLoops;
 
+    if (should_run_in_fast_mode(argc, argv))
+    {
+        max_loop_run_sec = 2;
+        loopIntervalUsec = 100000;
+    }
 
     // In our case we do not know whether to run in standalone or embedded so we
     // will get the user to set the mode. This will also allow us to see the
@@ -223,7 +244,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    result = dcgmWatchFields(dcgmHandle, myGroupId, fieldGroupId, 1000000, 3600.0, 3600);
+    result = dcgmWatchFields(dcgmHandle, myGroupId, fieldGroupId, loopIntervalUsec, 3600.0, 3600);
 
     // Check result to see if DCGM operation was successful.
     if (result != DCGM_ST_OK)
@@ -252,9 +273,9 @@ int main(int argc, char **argv)
     // information using the userDate void pointer parameter in this function by
     // passing our testString through. More information on this can be seen in
     // the function below.
-    int i;
-    i = 0;
-    while (i < max_loop_run_sec)
+    numLoops = ((long long)max_loop_run_sec * 1000000) / loopIntervalUsec;
+    i        = 0;
+    for (i = 0; i < numLoops; i++)
     {
         result = dcgmGetLatestValues(dcgmHandle, myGroupId, fieldGroupId, &list_field_values, &field_val_map);
 
@@ -271,15 +292,21 @@ int main(int argc, char **argv)
             std::cout << "getValues information successfully stored.\n";
         }
 
-        usleep(1000000);
-        i++;
+        usleep(loopIntervalUsec);
     }
 
     i = 0;
     long long since_timestamp;
     since_timestamp = static_cast<long long>(time(NULL));
 
-    while (i < 3)
+    /* For this test, we're going to show that dcgmGetValuesSince() will read all
+       of the values since the last time you read any, using next_since_timestamp as
+       a cursor. To prove this, we'll sleep for 3x as long and do 1/3rd of the iterations */
+
+    numLoops /= 3;
+    loopIntervalUsec *= 3;
+
+    for (i = 0; i < numLoops; i++)
     {
         result = dcgmGetValuesSince(dcgmHandle,
                                     myGroupId,
@@ -302,8 +329,7 @@ int main(int argc, char **argv)
             std::cout << "\n\nGetValuesSince information successfully stored.\n";
         }
 
-        usleep(5 * 1000000);
-        i++;
+        usleep(loopIntervalUsec);
     }
 
     std::cout << "Clearing the map" << std::endl;

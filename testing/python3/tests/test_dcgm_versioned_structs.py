@@ -90,7 +90,7 @@ def test_dcgm_connect_validate(handle, gpuIds):
         
 def vtDcgmGetDeviceAttributes(dcgm_handle, gpuId, versionTest):
     fn = dcgmFP("dcgmGetDeviceAttributes")
-    device_values = dcgm_structs.c_dcgmDeviceAttributes_v1()
+    device_values = dcgm_structs.c_dcgmDeviceAttributes_deprecated_v1()
     device_values.version = dcgm_structs.make_dcgm_version(device_values, 1)
     logger.debug("Structure version: %d" % device_values.version)
 
@@ -354,7 +354,7 @@ def test_dcgm_health_check_validate(handle):
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v7()
+    response = dcgm_structs.c_dcgmDiagResponse_v8()
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
@@ -370,7 +370,7 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     return response
 
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v7()
+    response = dcgm_structs.c_dcgmDiagResponse_v8()
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct
@@ -385,7 +385,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     return response
 
 def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v7()
+    response = dcgm_structs.c_dcgmDiagResponse_v8()
     response.version = versionTest
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
@@ -602,83 +602,6 @@ def test_dcgm_introspect_get_hostengine_cpu_utilization_validate(handle):
         versionTest = 50 #random number version
         ret = vtDcgmIntrospectGetHostengineCpuUtilization(handle, versionTest, waitIfNoData)
 
-
-def vtDcgmIntrospectGetFieldsExecTime(dcgm_handle, introspectContext, versionTest, waitIfNoData=True):
-    fn = dcgmFP("dcgmIntrospectGetFieldsExecTime")
-
-    
-    execTime = dcgm_structs.c_dcgmIntrospectFieldsExecTime_v1()
-    execTime.version = dcgm_structs.make_dcgm_version(execTime, 1)
-    logger.debug("Structure version: %d" % execTime.version)
-    
-
-    fullExecTime = dcgm_structs.c_dcgmIntrospectFullFieldsExecTime_v2()
-    fullExecTime.version = dcgm_structs.make_dcgm_version(fullExecTime, 2)
-    logger.debug("Structure version: %d" % fullExecTime.version)
-
-    fullExecTime.version = versionTest
-    execTime.version = versionTest
-
-    introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-    introspectContext.version = dcgm_structs.make_dcgm_version(introspectContext, 1)
-    logger.debug("Structure version: %d" % introspectContext.version)
-
-    introspectContext.version = versionTest
-
-    ret = fn(dcgm_handle, byref(introspectContext), byref(execTime), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return execTime
-
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_introspect_get_fields_exec_time_validate(handle):
-    
-    """
-    Validates structure version
-    """
-    introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-    waitIfNoData = True
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetFieldsExecTime(handle, introspectContext, versionTest, waitIfNoData)
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetFieldsExecTime(handle, introspectContext, versionTest, waitIfNoData)
-
-def vtDcgmIntrospectGetFieldsMemoryUsage(dcgm_handle, introspectContext, versionTest, waitIfNoData=True):
-    fn = dcgmFP("dcgmIntrospectGetFieldsMemoryUsage")
-    
-    memInfo = dcgm_structs.c_dcgmIntrospectFullMemory_v1()
-    memInfo.version = dcgm_structs.make_dcgm_version(memInfo, 1)
-    logger.debug("Structure version: %d" % memInfo.version)
-
-    memInfo.version = versionTest
-    
-    introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-    introspectContext.version = versionTest
-
-    ret = fn(dcgm_handle, byref(introspectContext), byref(memInfo), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return memInfo
-
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_introspect_get_fields_memory_usage_validate(handle):
-    
-    """
-    Validates structure version
-    """
-    introspectContext = dcgm_structs.c_dcgmIntrospectContext_v1()
-    waitIfNoData = True
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetFieldsMemoryUsage(handle, introspectContext, versionTest, waitIfNoData)
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetFieldsMemoryUsage(handle, introspectContext, versionTest, waitIfNoData)
-
 ########### dcgm_agent_internal.py ###########
 
 def vtDcgmGetVgpuDeviceAttributes(dcgm_handle, gpuId, versionTest):
@@ -801,59 +724,3 @@ def test_dcgm_vgpu_config_get_validate(handle):
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
         versionTest = 50 #random number version
         ret = vtDcgmVgpuConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
-
-
-def vtDcgmIntrospectGetFieldExecTime(dcgm_handle, fieldId, versionTest, waitIfNoData=True):
-    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmIntrospectGetFieldExecTime")
-    
-    execTime = dcgm_structs.c_dcgmIntrospectFullFieldsExecTime_v2()
-    execTime.version = versionTest
-    
-    ret = fn(dcgm_handle, fieldId, byref(execTime), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return execTime
-
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_introspect_get_field_exec_time_validate(handle):
-    
-    """
-    Validates structure version
-    """
-    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
-    waitIfNoData = True
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetFieldExecTime(handle, fieldId, versionTest, waitIfNoData)
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetFieldExecTime(handle, fieldId, versionTest, waitIfNoData)
-
-
-def vtDcgmIntrospectGetFieldMemoryUsage(dcgm_handle, fieldId, versionTest, waitIfNoData=True):
-    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmIntrospectGetFieldMemoryUsage")
-    
-    memInfo = dcgm_structs.c_dcgmIntrospectFullMemory_v1()
-    memInfo.version = versionTest
-    
-    ret = fn(dcgm_handle, fieldId, byref(memInfo), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return memInfo
-
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_introspect_get_field_memory_usage_validate(handle):
-    
-    """
-    Validates structure version
-    """
-    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
-    waitIfNoData = True
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetFieldMemoryUsage(handle, fieldId, versionTest, waitIfNoData)
-
-    with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetFieldMemoryUsage(handle, fieldId, versionTest, waitIfNoData)

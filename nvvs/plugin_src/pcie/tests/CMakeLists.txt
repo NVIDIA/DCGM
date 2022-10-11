@@ -51,7 +51,7 @@ if (BUILD_TESTING)
             nvvs_without_main_objects
             Catch2::Catch2
             testing_cuda_stubs
-            pluginCudaCommon_11
+            cuda_common_interface
     )
 
     target_link_libraries(pcietests PUBLIC nvvs_interface)

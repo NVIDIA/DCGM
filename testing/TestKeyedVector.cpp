@@ -186,7 +186,7 @@ std::string TestKeyedVector::GetTag()
 }
 
 /*****************************************************************************/
-int TestKeyedVector::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestKeyedVector::Init(const TestDcgmModuleInitParams &initParams)
 {
     return 0;
 }

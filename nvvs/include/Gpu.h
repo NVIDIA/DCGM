@@ -87,6 +87,11 @@ public:
         return m_pciDeviceId + m_pciSubSystemId;
     }
 
+    std::string getDeviceSerial()
+    {
+        return m_serial;
+    }
+
     unsigned int getDeviceIndex(gpuEnumMethod_enum method = NVVS_GPUENUM_NVML) const;
     bool getDeviceIsSupported()
     {
@@ -164,6 +169,7 @@ private:
     uint64_t m_gpuArch;
     unsigned int m_maxMemoryClock; /* Maximum memory clock supported for the GPU. DCGM_FI_DEV_MAX_MEM_CLOCK */
     uint64_t m_maxGpuOpTemp;
+    std::string m_serial;
     DcgmEntityStatus_t m_status;
     bool m_useSsid = false;
 

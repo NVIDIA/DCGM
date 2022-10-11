@@ -1,8 +1,23 @@
+#
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 include(utils)
 
-set(Cuda9_prefix usr/local/cuda-9.2)
 set(Cuda10_prefix usr/local/cuda-10.0)
-set(Cuda11_prefix usr/local/cuda-11.4)
+set(Cuda11_prefix usr/local/cuda-11.8)
 
 macro (load_cuda cuda_version)
     foreach (prefix ${Cuda${cuda_version}_prefix})
@@ -79,10 +94,6 @@ macro (load_cuda cuda_version)
 
 endmacro()
 
-if (NOT DEFINED CUDA9_INCLUDE_DIR AND NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    load_cuda(9)
-endif()
-
 if (NOT DEFINED CUDA10_INCLUDE_DIR AND NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     load_cuda(10)
 endif()
@@ -91,6 +102,5 @@ if (NOT DEFINED CUDA11_INCLUDE_DIR)
     load_cuda(11)
 endif()
 
-unset(Cuda9_prefix)
 unset(Cuda10_prefix)
 unset(Cuda11_prefix)

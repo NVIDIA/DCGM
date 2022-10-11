@@ -29,7 +29,7 @@
  *   dcgmGetAllDevices
  *   dcgmShutdown
  *
- * If libdcgm.so.2 is present in the current environment, api calls
+ * If libdcgm.so.3 is present in the current environment, api calls
  * shoud succeed, otherwise the stub (static) library is used.
  *
  ********************************************************************/
@@ -50,7 +50,7 @@ int main(void)
     int ret;
 
     // Calling APIs, if no shared library is present, use symbol from stub library
-    void *handle = dlopen("libdcgm.so.2", RTLD_NOW);
+    void *handle = dlopen("libdcgm.so.3", RTLD_NOW);
 
     if (handle)
     {

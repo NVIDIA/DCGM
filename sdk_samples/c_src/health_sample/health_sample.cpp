@@ -334,7 +334,7 @@ int main(int argc, char **argv)
     std::cout << "Running diagnostic.\n";
     // Update version
     diagnosticResults.version = dcgmDiagResponse_version;
-    result                    = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_MED, &diagnosticResults);
+    result                    = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_SHORT, &diagnosticResults);
 
     // Check result to see if DCGM operation was successful.
     if (result != DCGM_ST_OK)
@@ -360,7 +360,7 @@ int main(int argc, char **argv)
     else
     {
         std::cout << "Diagnostic Results (0 = Pass, 1 = Skip, 2 = Warn, 3 = Fail)\n";
-        std::cout << "Blacklist: " << diagnosticResults.levelOneResults[DCGM_SWTEST_BLACKLIST].status << std::endl;
+        std::cout << "Denylist: " << diagnosticResults.levelOneResults[DCGM_SWTEST_DENYLIST].status << std::endl;
         std::cout << "CUDA Main Library: " << diagnosticResults.levelOneResults[DCGM_SWTEST_CUDA_MAIN_LIBRARY].status
                   << std::endl;
         std::cout << "CUDA Runtime Library: "

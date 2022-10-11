@@ -121,7 +121,7 @@ class ConfigFileParser_v2
 public:
     /***************************************************************/
     /* ctor/dtor are responsible for entering default values into that object.
-     * The default is a long run on all available GPUs using standard whitelist values
+     * The default is a long run on all available GPUs using standard allowlist values
      * It is assumed that a higher layer is responsible for the memory
      * management of the FrameworkConfig object
      */

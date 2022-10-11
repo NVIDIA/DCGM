@@ -17,6 +17,7 @@
 #include "TestFieldGroups.h"
 #include "DcgmWatcher.h"
 #include "dcgm_fields.h"
+#include "dcgm_fields_internal.hpp"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include <cstring>
@@ -40,9 +41,8 @@ std::string TestFieldGroups::GetTag()
 }
 
 /*****************************************************************************/
-int TestFieldGroups::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestFieldGroups::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
     return 0;
 }
 
@@ -218,7 +218,7 @@ int TestFieldGroups::TestGetAll(void)
     dcgmFieldGroupInfo_t *fgi;
     dcgmFieldGrp_t fieldGroupHandles[DCGM_MAX_NUM_FIELD_GROUPS] = { 0 };
     dcgmReturn_t dcgmReturn;
-    DcgmFieldGroupManager *fieldGroupManager;
+    DcgmFieldGroupManager fieldGroupManager;
     DcgmWatcher watcher(DcgmWatcherTypeClient, (dcgm_connection_id_t)1);
 
     memset(&beforeFieldGroup, 0, sizeof(beforeFieldGroup));
@@ -228,11 +228,17 @@ int TestFieldGroups::TestGetAll(void)
      * and verify that attempting to return the same object actually does
      */
 
-    fieldGroupManager = new DcgmFieldGroupManager();
-
     beforeFieldGroup.version = dcgmAllFieldGroup_version;
 
     std::vector<unsigned short> fieldIds;
+
+    std::vector<unsigned short> allValidFieldIds;
+    int st = DcgmFieldGetAllFieldIds(allValidFieldIds);
+    if (st)
+    {
+        std::cerr << "DcgmFieldGetAllFieldIds returned " << st << std::endl;
+        return 1;
+    }
 
     for (i = 0; i < DCGM_MAX_NUM_FIELD_GROUPS; i++)
     {
@@ -243,12 +249,13 @@ int TestFieldGroups::TestGetAll(void)
 
         for (j = 0; j < DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP; j++)
         {
-            fgi->fieldIds[j] = i + j; /* Offset each list of fieldIds by i so they are different */
+            /* Offset each list of fieldIds by i so they are different */
+            fgi->fieldIds[j] = allValidFieldIds[(i + j) % allValidFieldIds.size()];
             fieldIds.push_back(fgi->fieldIds[j]);
             fgi->numFieldIds++;
         }
 
-        dcgmReturn = fieldGroupManager->AddFieldGroup(fgi->fieldGroupName, fieldIds, &fieldGroupHandles[i], watcher);
+        dcgmReturn = fieldGroupManager.AddFieldGroup(fgi->fieldGroupName, fieldIds, &fieldGroupHandles[i], watcher);
         if (dcgmReturn != DCGM_ST_OK)
         {
             std::cerr << "TestFieldGroupManager AddFieldGroup() returned " << (int)dcgmReturn << std::endl;
@@ -261,7 +268,7 @@ int TestFieldGroups::TestGetAll(void)
     }
 
     /* Now, retrieve the full list of groups and validate it */
-    dcgmReturn = fieldGroupManager->PopulateFieldGroupGetAll(&afterFieldGroup);
+    dcgmReturn = fieldGroupManager.PopulateFieldGroupGetAll(&afterFieldGroup);
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::cerr << "TestFieldGroupManager PopulateFieldGroupGetAll() returned " << (int)dcgmReturn << std::endl;
@@ -275,8 +282,32 @@ int TestFieldGroups::TestGetAll(void)
         numErrors++;
     }
 
-    delete (fieldGroupManager);
     return numErrors;
+}
+
+/*****************************************************************************/
+int TestFieldGroups::TestAddInvalidFieldId(void)
+{
+    DcgmFieldGroupManager fieldGroupManager;
+
+    dcgmReturn_t dcgmReturn;
+    dcgmFieldGrp_t fieldGrpHandle = 0;
+
+    /* Use a fake connection ID to exercise the client paths */
+    DcgmWatcher watcher(DcgmWatcherTypeClient, (dcgm_connection_id_t)1);
+
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_SM_CLOCK, 9999 }; /* Contains bad fieldId */
+    std::string groupNameBefore          = "badfieldidgroup";
+
+    dcgmReturn = fieldGroupManager.AddFieldGroup(groupNameBefore, fieldIds, &fieldGrpHandle, watcher);
+    if (dcgmReturn != DCGM_ST_BADPARAM)
+    {
+        std::cerr << "TestAddInvalidFieldId AddFieldGroup() returned unexpected " << (int)dcgmReturn
+                  << " != DCGM_ST_BADPARAM" << std::endl;
+        return 1;
+    }
+
+    return 0;
 }
 
 /*****************************************************************************/
@@ -306,6 +337,7 @@ int TestFieldGroups::Run()
     {
         CompleteTest("TestFieldGroupObject", TestFieldGroupObject(), Nfailed);
         CompleteTest("TestFieldGroupManager", TestFieldGroupManager(), Nfailed);
+        CompleteTest("TestAddInvalidFieldId", TestAddInvalidFieldId(), Nfailed);
         CompleteTest("TestGetAll", TestGetAll(), Nfailed);
     }
     // fatal test return ocurred

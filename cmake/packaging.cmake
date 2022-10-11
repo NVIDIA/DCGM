@@ -1,3 +1,19 @@
+#
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 set(CPACK_SET_DESTDIR OFF)
 set(DCGM_PKG "datacenter-gpu-manager")
 set(DCGM_CONFIG_PKG "${DCGM_PKG}-config")
@@ -14,6 +30,9 @@ set(CPACK_PACKAGE_CONTACT "dcgm-support <dcgm-support@nvidia.com>")
 set(CPACK_PACKAGE_VENDOR "NVIDIA Corp.")
 
 IF (CPACK_GENERATOR MATCHES "DEB")
+    if (CPACK_VMWARE)
+        message(FATAL_ERROR "DEB packages are not provided for VMWare builds")
+    endif()
 
     set(CPACK_DEBIAN_PACKAGE_EPOCH 1)
 
@@ -64,12 +83,22 @@ IF (CPACK_GENERATOR MATCHES "DEB")
 
 ELSEIF(CPACK_GENERATOR MATCHES "TGZ")
 
+    if (CPACK_VMWARE)
+        set(DCGM_TGZ_SUFFIX "${CPACK_TGZ_PACKAGE_ARCHITECTURE}-vmware")
+    else()
+        set(DCGM_TGZ_SUFFIX "${CPACK_TGZ_PACKAGE_ARCHITECTURE}")
+    endif()
+
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
-    set(CPACK_ARCHIVE_DCGM_FILE_NAME "${DCGM_PKG}-${CPACK_PACKAGE_VERSION}-${CPACK_TGZ_PACKAGE_ARCHITECTURE}")
-    set(CPACK_ARCHIVE_CONFIG_FILE_NAME "${DCGM_CONFIG_PKG}-${CPACK_PACKAGE_VERSION}-${CPACK_TGZ_PACKAGE_ARCHITECTURE}")
-    set(CPACK_ARCHIVE_TESTS_FILE_NAME "${DCGM_PKG}-tests-${CPACK_PACKAGE_VERSION}-${CPACK_TGZ_PACKAGE_ARCHITECTURE}")
+    set(CPACK_ARCHIVE_DCGM_FILE_NAME "${DCGM_PKG}-${CPACK_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
+    set(CPACK_ARCHIVE_CONFIG_FILE_NAME "${DCGM_CONFIG_PKG}-${CPACK_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
+    set(CPACK_ARCHIVE_TESTS_FILE_NAME "${DCGM_PKG}-tests-${CPACK_PACKAGE_VERSION}-${DCGM_TGZ_SUFFIX}")
 
 ELSEIF(CPACK_GENERATOR MATCHES "RPM")
+    if (CPACK_VMWARE)
+        message(FATAL_ERROR "RPM packages are not provided for VMWare builds")
+    endif()
+
     set(CPACK_RPM_PACKAGE_RELEASE 1) # this is the package spec version, not the software version
     set(CPACK_RPM_PACKAGE_EPOCH 1)
     set(CPACK_RPM_PACKAGE_LICENSE "NVIDIA Proprietary")

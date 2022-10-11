@@ -37,7 +37,7 @@ DCGM_FR_NVML_API                            = 19 # Error occurred on an NVML API
 DCGM_FR_DEVICE_COUNT_MISMATCH               = 20 # Disagreement in GPU count between /dev and NVML
 DCGM_FR_BAD_PARAMETER                       = 21 # Bad parameter passed to API
 DCGM_FR_CANNOT_OPEN_LIB                     = 22 # Cannot open a library that must be accessed
-DCGM_FR_BLACKLISTED_DRIVER                  = 23 # A blacklisted driver (nouveau) is active
+DCGM_FR_DENYLISTED_DRIVER                   = 23 # A driver on the denylist (nouveau) is active
 DCGM_FR_NVML_LIB_BAD                        = 24 # The NVML library is missing expected functions
 DCGM_FR_GRAPHICS_PROCESSES                  = 25 # Graphics processes are active on this GPU
 DCGM_FR_HOSTENGINE_CONN                     = 26 # Unstable connection to nv-hostengine (daemonized DCGM)
@@ -165,8 +165,8 @@ DCGM_FR_DEVICE_COUNT_MISMATCH_MSG     = "The number of devices NVML returns is d
 DCGM_FR_BAD_PARAMETER_MSG             = "Bad parameter to function %s cannot be processed"
 # library name, error returned from dlopen
 DCGM_FR_CANNOT_OPEN_LIB_MSG           = "Cannot open library %s: '%s'"
-# the name of the blacklisted driver
-DCGM_FR_BLACKLISTED_DRIVER_MSG        = "Found blacklisted driver: %s"
+# the name of the driver on the denylist
+DCGM_FR_DENYLISTED_DRIVER_MSG         = "Found driver on the denylist: %s"
 # the name of the function that wasn't found
 DCGM_FR_NVML_LIB_BAD_MSG              = "Cannot get pointer to %s from libnvidia-ml.so"
 DCGM_FR_GRAPHICS_PROCESSES_MSG        = "NVVS has detected graphics processes running on at least one "\
@@ -275,7 +275,7 @@ DCGM_FR_PENDING_PAGE_RETIREMENTS_NEXT = "If volatile double bit errors exist, dr
 DCGM_FR_RETIRED_PAGES_LIMIT_NEXT      = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_RETIRED_PAGES_DBE_LIMIT_NEXT  = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_CORRUPT_INFOROM_NEXT          = "Flash the InfoROM to clear this corruption."
-DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   = DEBUG_COOLING_MSG
+DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   = DEBUG_COOLING_MSG 
 DCGM_FR_POWER_UNREADABLE_NEXT         = ""
 DCGM_FR_CLOCK_THROTTLE_POWER_NEXT     = "Monitor the power conditions. This GPU can still perform workload."
 DCGM_FR_NVLINK_ERROR_THRESHOLD_NEXT   = TRIAGE_RUN_FIELD_DIAG_MSG
@@ -291,7 +291,7 @@ DCGM_FR_DEVICE_COUNT_MISMATCH_NEXT    = "Check for the presence of cgroups, oper
 DCGM_FR_BAD_PARAMETER_NEXT            = ""
 DCGM_FR_CANNOT_OPEN_LIB_NEXT          = "Check for the existence of the library and set LD_LIBRARY_PATH "\
                                                 "if needed."
-DCGM_FR_BLACKLISTED_DRIVER_NEXT       = "Please load the appropriate driver."
+DCGM_FR_DENYLISTED_DRIVER_NEXT        = "Please load the appropriate driver."
 DCGM_FR_NVML_LIB_BAD_NEXT             = "Make sure that the required version of libnvidia-ml.so "\
                                                 "is present and accessible on the system."
 DCGM_FR_GRAPHICS_PROCESSES_NEXT       = "Stop the graphics processes or run this diagnostic on a server "\

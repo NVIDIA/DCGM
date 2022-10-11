@@ -113,7 +113,7 @@ static void dcgmCheckLinkedLibrary(void)
 dcgmReturn_t dcgmInit(void)
 {
     dcgmReturn_t (*fn)(void);
-    lib_handle = dlopen("libdcgm.so.2", RTLD_LAZY);
+    lib_handle = dlopen("libdcgm.so.3", RTLD_LAZY);
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmInit");
@@ -130,7 +130,7 @@ dcgmReturn_t dcgmInit(void)
 dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmHandle_t *pDcgmHandle)
 {
     dcgmReturn_t (*fn)(dcgmOperationMode_t, dcgmHandle_t *);
-    lib_handle = dlopen("libdcgm.so.2", RTLD_LAZY);
+    lib_handle = dlopen("libdcgm.so.3", RTLD_LAZY);
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmStartEmbedded");
@@ -147,7 +147,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmH
 dcgmReturn_t DCGM_PUBLIC_API dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
 {
     dcgmReturn_t (*fn)(dcgmHandle_t);
-    lib_handle = dlopen("libdcgm.so.2", RTLD_LAZY);
+    lib_handle = dlopen("libdcgm.so.3", RTLD_LAZY);
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmStopEmbedded");

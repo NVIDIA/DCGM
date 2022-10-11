@@ -43,7 +43,6 @@ set(LOCAL_CUBLAS_PROXY "")
 
 add_subdirectory(Cuda11)
 if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    add_subdirectory(Cuda9)
     add_subdirectory(Cuda10)
 endif()
 

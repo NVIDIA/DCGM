@@ -32,7 +32,7 @@ std::string TestDcgmValue::GetTag()
 }
 
 /*****************************************************************************/
-int TestDcgmValue::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestDcgmValue::Init(const TestDcgmModuleInitParams &initParams)
 {
     return 0;
 }

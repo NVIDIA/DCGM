@@ -37,13 +37,13 @@ dcgmReturn_t DcgmSystem::GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttri
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get device attributes without a valid handle to DCGM");
+        log_error("Cannot get device attributes without a valid handle to DCGM");
         return DCGM_ST_BADPARAM;
     }
 
     if (gpuId >= DCGM_MAX_NUM_DEVICES)
     {
-        PRINT_ERROR("%u", "Cannot get device attributes for invalid GPU id %u", gpuId);
+        log_error("Cannot get device attributes for invalid GPU id {}", gpuId);
         return DCGM_ST_BADPARAM;
     }
 
@@ -54,13 +54,13 @@ dcgmReturn_t DcgmSystem::GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gp
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get gpu status without a valid handle to DCGM");
+        log_error("Cannot get gpu status without a valid handle to DCGM");
         return DCGM_ST_BADPARAM;
     }
 
     if (gpuId >= DCGM_MAX_NUM_DEVICES)
     {
-        PRINT_ERROR("%u", "Cannot get status for invalid GPU id %u", gpuId);
+        log_error("Cannot get status for invalid GPU id {}", gpuId);
         return DCGM_ST_BADPARAM;
     }
 
@@ -71,7 +71,7 @@ dcgmReturn_t DcgmSystem::GetAllSupportedDevices(std::vector<unsigned int> &gpuId
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get get all supported devices without a valid handle to DCGM");
+        log_error("Cannot get get all supported devices without a valid handle to DCGM");
         return DCGM_ST_BADPARAM;
     }
 
@@ -82,7 +82,7 @@ dcgmReturn_t DcgmSystem::GetAllSupportedDevices(std::vector<unsigned int> &gpuId
 
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%s", "Failed to retrieve supported devices '%s'", errorString(ret));
+        log_error("Failed to retrieve supported devices '{}'", errorString(ret));
         return ret;
     }
 
@@ -98,7 +98,7 @@ dcgmReturn_t DcgmSystem::GetAllDevices(std::vector<unsigned int> &gpuIdList)
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get get all devices without a valid handle to DCGM");
+        log_error("Cannot get get all devices without a valid handle to DCGM");
         return DCGM_ST_BADPARAM;
     }
 
@@ -109,7 +109,7 @@ dcgmReturn_t DcgmSystem::GetAllDevices(std::vector<unsigned int> &gpuIdList)
 
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%s", "Failed to retrieve devices '%s'", errorString(ret));
+        log_error("Failed to retrieve devices '{}'", errorString(ret));
         return ret;
     }
 
@@ -129,7 +129,7 @@ dcgmReturn_t DcgmSystem::GetGpuLatestValue(unsigned int gpuId,
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get the latest values without a valid DCGM handle");
+        log_error("Cannot get the latest values without a valid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
@@ -164,7 +164,7 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
 {
     if (m_handle == 0)
     {
-        PRINT_ERROR("", "Cannot get the latest values without a valid DCGM handle");
+        log_error("Cannot get the latest values without a valid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
@@ -191,7 +191,7 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
 
     if (ret != DCGM_ST_OK)
     {
-        PRINT_ERROR("%s", "Failed to retrieve the latest values from DCGM: '%s'", errorString(ret));
+        log_error("Failed to retrieve the latest values from DCGM: '{}'", errorString(ret));
         return ret;
     }
 

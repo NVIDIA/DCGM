@@ -154,7 +154,7 @@ std::string DcgmDiagManager::GetNvvsBinPath()
         if (result == 0)
         {
             cmd = nvvsBinPath;
-            std::cout << "The new NVVS binary path is: " << cmd << std::endl;
+            DCGM_LOG_DEBUG << "The new NVVS binary path is: " << cmd;
             return cmd;
         }
         else
@@ -184,77 +184,26 @@ dcgmReturn_t DcgmDiagManager::EnforceGPUConfiguration(unsigned int gpuId, dcgm_c
 
     if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "ProcessModuleCommand returned %d.", (int)dcgmReturn);
+        log_error("ProcessModuleCommand returned {}.", (int)dcgmReturn);
         for (unsigned int i = 0; i < msg.numStatuses; i++)
         {
-            PRINT_ERROR("%d %d %d %d",
-                        "Error in Enforcing Configuration. API Err Code: %d"
-                        " GPU ID: %d Field ID: %d Additional Error Code: %d",
-                        dcgmReturn,
-                        msg.statuses[i].gpuId,
-                        msg.statuses[i].fieldId,
-                        msg.statuses[i].errorCode);
+            log_error("Error in Enforcing Configuration. API Err Code: {} "
+                      "GPU ID: {} Field ID: {} Additional Error Code: {}",
+                      dcgmReturn,
+                      msg.statuses[i].gpuId,
+                      msg.statuses[i].fieldId,
+                      msg.statuses[i].errorCode);
         }
     }
     else
     {
         /* Log that enforcing of configuration is successful */
-        PRINT_INFO("%d", "After safe reset, configuration enforced successfully for GPU ID %d", gpuId);
+        log_info("After safe reset, configuration enforced successfully for GPU ID {}", gpuId);
         return dcgmReturn;
     }
 
-    PRINT_INFO("%d", "Configuration enforced successfully for GPU ID %d", gpuId);
+    log_info("Configuration enforced successfully for GPU ID {}", gpuId);
     return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
-bool DcgmDiagManager::AddTrainingOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd) const
-{
-    // Training (golden values)
-    if (drd->flags & DCGM_RUN_FLAGS_TRAIN)
-    {
-        cmdArgs.push_back("--train");
-        if (drd->flags & DCGM_RUN_FLAGS_FORCE_TRAIN)
-        {
-            cmdArgs.push_back("--force");
-        }
-
-        if (drd->trainingIterations != 0)
-        {
-            std::stringstream buf;
-            buf << drd->trainingIterations;
-            cmdArgs.push_back("--training-iterations");
-            cmdArgs.push_back(buf.str());
-        }
-
-        if (drd->trainingVariance != 0)
-        {
-            std::stringstream buf;
-            buf << drd->trainingVariance;
-            cmdArgs.push_back("--training-variance");
-            cmdArgs.push_back(buf.str());
-        }
-
-        if (drd->trainingTolerance != 0)
-        {
-            std::stringstream buf;
-            buf << drd->trainingTolerance;
-            cmdArgs.push_back("--training-tolerance");
-            cmdArgs.push_back(buf.str());
-        }
-
-        if (drd->goldenValuesFile[0] != '\0')
-        {
-            std::string path("/tmp/");
-            path += drd->goldenValuesFile;
-            cmdArgs.push_back("--golden-values-filename");
-            cmdArgs.push_back(path);
-        }
-
-        return true;
-    }
-
-    return false;
 }
 
 /*****************************************************************************/
@@ -293,7 +242,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
                 cmdArgs.push_back("xlong");
                 break;
             default:
-                PRINT_ERROR("%u", "Bad drd->validate %u", drd->validate);
+                log_error("Bad drd->validate {}", drd->validate);
                 return DCGM_ST_BADPARAM;
         }
     }
@@ -506,13 +455,10 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
     cmdArgs.push_back("-j");
     cmdArgs.push_back("-z");
 
-    if (AddTrainingOptions(cmdArgs, drd) == false)
+    ret = AddRunOptions(cmdArgs, drd);
+    if (ret != DCGM_ST_OK)
     {
-        ret = AddRunOptions(cmdArgs, drd);
-        if (ret != DCGM_ST_OK)
-        {
-            return ret;
-        }
+        return ret;
     }
 
     if ((ret = AddConfigFile(drd, cmdArgs)) != DCGM_ST_OK)
@@ -879,14 +825,14 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
 
         if (ret != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d", "Got st %d from AreAllTheSameSku()", (int)ret);
+            log_error("Got st {} from AreAllTheSameSku()", (int)ret);
             return ret;
         }
 
         ret = m_coreProxy.GetGroupGpuIds(0, (unsigned long long)drd->groupId, gpuIds);
         if (ret != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d", "Got st %d from GetGroupGpuIds()", (int)ret);
+            log_error("Got st {} from GetGroupGpuIds()", (int)ret);
             return ret;
         }
 
@@ -902,7 +848,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
 
         if (foundGpus == false)
         {
-            PRINT_DEBUG("%s", "Cannot perform diag: %s", errorString(DCGM_ST_GROUP_IS_EMPTY));
+            log_debug("Cannot perform diag: {}", errorString(DCGM_ST_GROUP_IS_EMPTY));
             return DCGM_ST_GROUP_IS_EMPTY;
         }
     }
@@ -913,8 +859,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
         return DCGM_ST_GROUP_INCOMPATIBLE;
     }
 
-    if ((drd->validate == DCGM_POLICY_VALID_NONE) && (strlen(drd->testNames[0]) == 0)
-        && ((drd->flags & DCGM_RUN_FLAGS_TRAIN) == 0))
+    if ((drd->validate == DCGM_POLICY_VALID_NONE) && (strlen(drd->testNames[0]) == 0))
     {
         return DCGM_ST_OK;
     }
@@ -963,7 +908,7 @@ std::string DcgmDiagManager::GetCompareTestName(const std::string &testname)
 unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
 {
     std::string compareName = GetCompareTestName(testName);
-    unsigned int index      = DCGM_PER_GPU_TEST_COUNT_V7;
+    unsigned int index      = DCGM_PER_GPU_TEST_COUNT_V8;
     if (compareName == "diagnostic")
         index = DCGM_DIAGNOSTIC_INDEX;
     else if (compareName == "pcie")
@@ -1111,7 +1056,7 @@ void DcgmDiagManager::FillTestResult(Json::Value &test,
 
         dcgmDiagResult_t ret = StringToDiagResponse(result[NVVS_STATUS].asString());
 
-        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
         {
             // Software test
             dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
@@ -1254,12 +1199,6 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(const std::string &output,
         }
         else
         {
-            // Good output
-            if (!jValue[NVVS_NAME][NVVS_TRAINING_MSG].empty())
-            {
-                return response.RecordTrainingMessage(jValue[NVVS_NAME][NVVS_TRAINING_MSG].asString());
-            }
-
             if (!jValue[NVVS_NAME][NVVS_HEADERS].empty())
             {
                 // Get nvvs version
@@ -1329,7 +1268,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_t *drd,
     dcgmReturn_t retAction;
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    PRINT_DEBUG("%d %p %d", "performing action %d on group %p with validation %d", action, drd->groupId, drd->validate);
+    log_debug("performing action {} on group {} with validation {}", action, drd->groupId, drd->validate);
 
     if (drd->gpuList[0] == '\0')
     {
@@ -1374,8 +1313,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_t *drd,
         }
     }
 
-    if ((drd->validate != DCGM_POLICY_VALID_NONE) || (strlen(drd->testNames[0]) > 0)
-        || (drd->flags & DCGM_RUN_FLAGS_TRAIN) == DCGM_RUN_FLAGS_TRAIN)
+    if ((drd->validate != DCGM_POLICY_VALID_NONE) || (strlen(drd->testNames[0]) > 0))
     {
         retValidation = RunDiag(drd, response);
 
@@ -1398,7 +1336,7 @@ dcgmReturn_t DcgmDiagManager::CanRunNewNvvsInstance() const
     if (m_nvvsPID > 0)
     {
         // nvvs instance already running - do not launch a new one
-        PRINT_WARNING("%d", "Previous instance of nvvs is still running. PID: %d", m_nvvsPID);
+        log_warning("Previous instance of nvvs is still running. PID: {}", m_nvvsPID);
         return DCGM_ST_DIAG_ALREADY_RUNNING;
     }
 
@@ -1436,7 +1374,7 @@ dcgmReturn_t DcgmDiagManager::ReadProcessOutput(fmt::memory_buffer &stdoutStream
     event.data.fd = stderrFd.Get();
     if (epoll_ctl(epollFd, EPOLL_CTL_ADD, stderrFd.Get(), &event) < 0)
     {
-        PRINT_ERROR("%s %d", "epoll_ctl failed. errno %d", errno);
+        log_error("epoll_ctl failed. errno {}", errno);
         return DCGM_ST_GENERIC_ERROR;
     }
 

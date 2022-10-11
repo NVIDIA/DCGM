@@ -61,10 +61,12 @@ TestFramework::TestFramework()
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
-    , m_goldenValues()
     , m_validGpuId(0)
+    , m_skipLibraryList()
 {
     output = new Output();
+
+    InitSkippedLibraries();
 }
 
 /*****************************************************************************/
@@ -107,6 +109,14 @@ TestFramework::TestFramework(bool jsonOutput, GpuSet *gpuSet)
         // This should never happen
         m_validGpuId = 0;
     }
+
+    InitSkippedLibraries();
+}
+
+/*****************************************************************************/
+void TestFramework::InitSkippedLibraries()
+{
+    m_skipLibraryList.push_back("libcurand.so");
 }
 
 /*****************************************************************************/
@@ -141,7 +151,7 @@ std::string TestFramework::GetPluginBaseDir()
     {
         std::stringstream ss;
         ss << "Unable to read nvvs binary path from /proc: " << strerror(errno);
-        PRINT_ERROR("%s", "%s", ss.str().c_str());
+        log_error(ss.str());
         throw std::runtime_error(ss.str());
     }
     // nRead expected to be <= (sizeof(buf) - 1) so this should be safe
@@ -154,7 +164,7 @@ std::string TestFramework::GetPluginBaseDir()
         std::stringstream errBuf;
         errBuf << "Cannot stat NVVS binary '" << buf << "' : '" << strerror(errno)
                << "', so we cannot securely load the plugins.";
-        PRINT_ERROR("%s", "%s", errBuf.str().c_str());
+        log_error(errBuf.str());
         throw std::runtime_error(errBuf.str());
     }
 
@@ -172,7 +182,7 @@ std::string TestFramework::GetPluginBaseDir()
         for (pathIt = searchPaths.begin(); pathIt != searchPaths.end(); pathIt++)
         {
             pluginsPath = binaryPath + (*pathIt);
-            PRINT_DEBUG("%s", "Searching %s for plugins.", pluginsPath.c_str());
+            log_debug("Searching {} for plugins.", pluginsPath.c_str());
             if (access(pluginsPath.c_str(), 0) == 0)
             {
                 struct stat status;
@@ -222,12 +232,9 @@ std::string TestFramework::GetPluginDirExtension() const
 
     static const std::string CUDA_11_EXTENSION("/cuda11/");
     static const std::string CUDA_10_EXTENSION("/cuda10/");
-    static const std::string CUDA_9_EXTENSION("/cuda9/");
 
     switch (cudaMajorVersion)
     {
-        case 9:
-            return CUDA_9_EXTENSION;
         case 10:
             return CUDA_10_EXTENSION;
         case 11:
@@ -245,6 +252,16 @@ std::string TestFramework::GetPluginDir()
 
 void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName)
 {
+    for (const auto &skipLibrary : m_skipLibraryList)
+    {
+        if (!strncmp(skipLibrary.c_str(), libraryName, skipLibrary.size()))
+        {
+            DCGM_LOG_DEBUG << "Skipping library " << libraryName << " because it matches " << skipLibrary
+                           << " in the skip list.";
+            return;
+        }
+    }
+
     if (!strncmp("libpluginCommon.so", libraryName, 18))
     {
         /* libpluginCommon.so is a resource for the plugins, so it won't contain the symbols a pure plugin has.
@@ -252,15 +269,13 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
         void *dlib = dlopen(libraryPath, RTLD_LAZY);
         if (dlib == NULL)
         {
-            std::stringstream ss;
-            std::string dlopen_error = dlerror();
-            ss << "Unable to open plugin " << libraryName << " due to: " << dlopen_error << std::endl;
-            PRINT_ERROR("%s", "%s", ss.str().c_str());
+            std::string const dlopen_error = dlerror();
+            log_error("Unable to open plugin {} due to: {}", libraryName, dlopen_error);
         }
         else
         {
             dlList.insert(dlList.end(), dlib);
-            PRINT_DEBUG("%s", "Successfully loaded dlib %s", libraryName);
+            log_debug("Successfully loaded dlib {}", libraryName);
         }
     }
     else
@@ -305,41 +320,37 @@ bool TestFramework::PluginPermissionsMatch(const std::string &pluginDir, const s
 
     if (stat(plugin.c_str(), &statBuf))
     {
-        PRINT_ERROR("%s %s %s",
-                    "Not loading plugin '%s' in dir '%s' because I cannot stat the file : '%s'",
-                    plugin.c_str(),
-                    pluginDir.c_str(),
-                    strerror(errno));
+        log_error("Not loading plugin '{}' in dir '{}' because I cannot stat the file : '{}'",
+                  plugin,
+                  pluginDir,
+                  strerror(errno));
     }
     else if (m_nvvsBinaryMode != statBuf.st_mode)
     {
-        PRINT_ERROR("%s %s %o %o",
-                    "Not loading plugin '%s' in dir '%s' because its permissions '%o' do not match "
-                    "the diagnostic's : '%o'",
-                    plugin.c_str(),
-                    pluginDir.c_str(),
-                    statBuf.st_mode,
-                    m_nvvsBinaryMode);
+        log_error("Not loading plugin '{}' in dir '{}' because its permissions '{:o}' do not match "
+                  "the diagnostic's : '{:o}'",
+                  plugin,
+                  pluginDir,
+                  statBuf.st_mode,
+                  m_nvvsBinaryMode);
     }
     else if (m_nvvsOwnerUid != statBuf.st_uid)
     {
-        PRINT_ERROR("%s %s %u %u",
-                    "Not loading plugin '%s' in dir '%s' because its owner uid '%u' does not match "
-                    "the diagnostic's : '%u'",
-                    plugin.c_str(),
-                    pluginDir.c_str(),
-                    statBuf.st_uid,
-                    m_nvvsOwnerUid);
+        log_error("Not loading plugin '{}' in dir '{}' because its owner uid '{}' does not match "
+                  "the diagnostic's : '{}'",
+                  plugin,
+                  pluginDir,
+                  statBuf.st_uid,
+                  m_nvvsOwnerUid);
     }
     else if (m_nvvsOwnerGid != statBuf.st_gid)
     {
-        PRINT_ERROR("%s %s %o %o",
-                    "Not loading plugin '%s' in dir '%s' because its owner gid '%o' does not match "
-                    "the diagnostic's : '%o'",
-                    plugin.c_str(),
-                    pluginDir.c_str(),
-                    statBuf.st_gid,
-                    m_nvvsOwnerGid);
+        log_error("Not loading plugin '{}' in dir '{}' because its owner gid '{:o}' does not match "
+                  "the diagnostic's : '{:o}'",
+                  plugin,
+                  pluginDir,
+                  statBuf.st_gid,
+                  m_nvvsOwnerGid);
     }
     else
     {
@@ -364,7 +375,7 @@ void TestFramework::loadPlugins()
     if (getcwd(oldPath, sizeof(oldPath)) == 0)
     {
         errbuf << "Cannot load plugins: unable to get current dir: '" << strerror(errno) << "'";
-        PRINT_ERROR("%s", "%s", errbuf.str().c_str());
+        log_error(errbuf.str());
         throw std::runtime_error(errbuf.str());
     }
 
@@ -372,7 +383,7 @@ void TestFramework::loadPlugins()
     {
         errbuf << "Error: Cannot load plugins. Unable to change to the plugin dir '" << pluginDir << "': '"
                << strerror(errno) << "'";
-        PRINT_ERROR("%s", "%s", errbuf.str().c_str());
+        log_error(errbuf.str());
         throw std::runtime_error(errbuf.str());
     }
 
@@ -383,7 +394,7 @@ void TestFramework::loadPlugins()
     {
         errbuf << "Cannot load plugins: unable to open the current dir '" << pluginDir << "': '" << strerror(errno)
                << "'";
-        PRINT_ERROR("%s", "%s", errbuf.str().c_str());
+        log_error(errbuf.str());
         throw std::runtime_error(errbuf.str());
     }
 
@@ -408,10 +419,7 @@ void TestFramework::loadPlugins()
 
     closedir(dir);
 
-    if (chdir(oldPath))
-    {
-        DCGM_LOG_ERROR << "Cannot chdir to original directory";
-    }
+    chdir(oldPath);
 
     for (size_t i = 0; i < m_plugins.size(); i++)
     {
@@ -469,65 +477,14 @@ void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSet)
             goList(Test::NVVS_CLASS_CUSTOM, testList, gpuList);
     }
 
-    if (!nvvsCommon.training)
-        output->print();
-}
-
-/*****************************************************************************/
-void TestFramework::CalculateAndSaveGoldenValues()
-{
-    if (nvvsCommon.training)
-    {
-        // filename becomes a parameter in the next check in
-        dcgmReturn_t ret = m_goldenValues.CalculateAndWriteGoldenValues(nvvsCommon.goldenValuesFile);
-        char buf[512];
-
-        if (ret == DCGM_ST_OK)
-        {
-            snprintf(buf,
-                     sizeof(buf),
-                     "Successfully trained the diagnostic. The golden values file is here %s\n",
-                     nvvsCommon.goldenValuesFile.c_str());
-        }
-        else
-        {
-            snprintf(buf, sizeof(buf), "ERROR in training : %s\n", errorString(ret));
-        }
-
-        output->AddTrainingResult(buf);
-        output->print();
-    }
-}
-
-/*****************************************************************************/
-void TestFramework::ReportTrainingError(Test *test)
-{
-    std::stringstream msg;
-    msg << "Unable to complete training due to failure in " << test->GetTestName() << ": \n";
-    /*    std::vector<std::string> warnings = test->GetWarnings();
-        for (size_t i = 0; i < warnings.size(); i++)
-            msg << warnings[i] << "\n";
-        throw std::runtime_error(msg.str()); */
-}
-
-/*****************************************************************************/
-void TestFramework::EvaluateTestTraining(Test *test)
-{
-    /*    if (test->GetResult() == NVVS_RESULT_FAIL)
-        {
-            ReportTrainingError(test);
-        }
-        else
-        {
-        m_goldenValues.RecordGoldenValueInputs(test->GetTestName(), test->GetObservedMetrics());
-        } */
+    output->print();
 }
 
 /*****************************************************************************/
 void TestFramework::GetAndOutputHeader(Test::testClasses_enum classNum)
 {
-    // Don't do anything if we're in training mode or the legacy parse mode
-    if (nvvsCommon.parse || nvvsCommon.training)
+    // Don't do anything if we're in the legacy parse mode
+    if (nvvsCommon.parse)
         return;
 
     std::string header;
@@ -684,8 +641,8 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
                 {
                     if (!nvvsCommon.requirePersistenceMode)
                         tp->AddString(SW_STR_REQUIRE_PERSISTENCE, "False");
-                    if (name == "Blacklist")
-                        tp->AddString(SW_STR_DO_TEST, "blacklist");
+                    if (name == "Denylist")
+                        tp->AddString(SW_STR_DO_TEST, "denylist");
                     else if (name == "NVML Library")
                         tp->AddString(SW_STR_DO_TEST, "libraries_nvml");
                     else if (name == "CUDA Main Library")
@@ -710,17 +667,10 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
 
                 m_plugins[pluginIndex]->RunTest(600, tp);
 
-                if (nvvsCommon.training)
-                {
-                    EvaluateTestTraining(test);
-                }
-                else
-                {
-                    output->Result(m_plugins[pluginIndex]->GetResult(),
-                                   m_plugins[pluginIndex]->GetResults(),
-                                   m_plugins[pluginIndex]->GetErrors(),
-                                   m_plugins[pluginIndex]->GetInfo());
-                }
+                output->Result(m_plugins[pluginIndex]->GetResult(),
+                               m_plugins[pluginIndex]->GetResults(),
+                               m_plugins[pluginIndex]->GetErrors(),
+                               m_plugins[pluginIndex]->GetInfo());
 
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
                 {
@@ -742,7 +692,9 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
             DCGM_LOG_DEBUG << "Test " << name << " had over result " << m_plugins[pluginIndex]->GetResult()
                            << ". Configless is " << nvvsCommon.configless;
 
-            if (m_plugins[pluginIndex]->GetResult() == NVVS_RESULT_FAIL && !nvvsCommon.configless)
+            if (m_plugins[pluginIndex]->GetResult() == NVVS_RESULT_FAIL
+                && ((!nvvsCommon.configless) || nvvsCommon.failEarly))
+
             {
                 skipRest = true;
             }

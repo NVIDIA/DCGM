@@ -26,6 +26,7 @@
 #include "dcgm_test_structs.h"
 #include <dcgm_nvml.h>
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -49,7 +50,6 @@ extern "C" {
 #define _DCGM_CASSERT_SYMBOL(line, msg)       _DCGM_CASSERT_SYMBOL_INNER(line, msg)
 #define DCGM_CASSERT(expression, msg) \
     __attribute__((unused)) typedef char _DCGM_CASSERT_SYMBOL(__LINE__, msg)[((expression) ? 1 : -1)]
-
 
 /**
  * Max length of the DCGM string field
@@ -201,7 +201,7 @@ typedef struct dcgm_cm_field_info_watcher_t
 {
     DcgmWatcherType_t watcherType;     /* Type of watcher. See DcgmWatcherType_t */
     dcgm_connection_id_t connectionId; /* Connection ID of the watcher */
-    long long monitorFrequencyUsec;    /* How often this field should be sampled */
+    long long monitorIntervalUsec;     /* How often this field should be sampled */
     long long maxAgeUsec;              /* Maximum time to cache samples of this
                                        field. If 0, the class default is used */
 } dcgm_cm_field_info_watcher_t, *dcgm_cm_field_info_watcher_p;
@@ -213,23 +213,23 @@ typedef struct dcgm_cm_field_info_watcher_t
 
 typedef struct dcgmCacheManagerFieldInfo_v3_t
 {
-    unsigned int version;           /* Version. Check against dcgmCacheManagerInfo_version */
-    unsigned int flags;             /* Bitmask of DCGM_CMI_F_? #defines that apply to this field */
-    unsigned int gpuId;             /* ID of the GPU for this field */
-    unsigned short fieldId;         /* Field ID of this field */
-    short lastStatus;               /* Last nvml status returned for this field when taking a sample */
-    long long oldestTimestamp;      /* Timestamp of the oldest record. 0=no records or single
-                              non-time series record */
-    long long newestTimestamp;      /* Timestamp of the newest record. 0=no records or
-                              single non-time series record */
-    long long monitorFrequencyUsec; /* How often is this field updated in usec */
-    long long maxAgeUsec;           /* How often is this field updated */
-    long long execTimeUsec;         /* Cumulative time spent updating this
-                              field since the cache manager started */
-    long long fetchCount;           /* Number of times that this field has been
-                              fetched from the driver */
-    int numSamples;                 /* Number of samples currently cached for this field */
-    int numWatchers;                /* Number of watchers that are valid in watchers[] */
+    unsigned int version;          /* Version. Check against dcgmCacheManagerInfo_version */
+    unsigned int flags;            /* Bitmask of DCGM_CMI_F_? #defines that apply to this field */
+    unsigned int gpuId;            /* ID of the GPU for this field */
+    unsigned short fieldId;        /* Field ID of this field */
+    short lastStatus;              /* Last nvml status returned for this field when taking a sample */
+    long long oldestTimestamp;     /* Timestamp of the oldest record. 0=no records or single
+                             non-time series record */
+    long long newestTimestamp;     /* Timestamp of the newest record. 0=no records or
+                             single non-time series record */
+    long long monitorIntervalUsec; /* How often is this field updated in usec */
+    long long maxAgeUsec;          /* How often is this field updated */
+    long long execTimeUsec;        /* Cumulative time spent updating this
+                             field since the cache manager started */
+    long long fetchCount;          /* Number of times that this field has been
+                             fetched from the driver */
+    int numSamples;                /* Number of samples currently cached for this field */
+    int numWatchers;               /* Number of watchers that are valid in watchers[] */
     dcgm_cm_field_info_watcher_t watchers[DCGM_CM_FIELD_INFO_NUM_WATCHERS]; /* Who are the first 10
                                                                            watchers of this field? */
 } dcgmCacheManagerFieldInfo_v3_t, *dcgmCacheManagerFieldInfo_v3_p;
@@ -366,15 +366,15 @@ typedef struct
 
 
 /**
- * Request to blacklist a given module ID
+ * Request to add a module ID to the denylist
  */
 typedef struct
 {
-    unsigned int version;    /*!< Version. Should be dcgmModuleBlacklist_version */
-    dcgmModuleId_t moduleId; /*!< Module to blacklist */
-} dcgmModuleBlacklist_v1;
+    unsigned int version;    /*!< Version. Should be dcgmModuleDenylist_version */
+    dcgmModuleId_t moduleId; /*!< Module to add to the denylist */
+} dcgmModuleDenylist_v1;
 
-#define dcgmModuleBlacklist_version1 MAKE_DCGM_VERSION(dcgmModuleBlacklist_v1, 1)
+#define dcgmModuleDenylist_version1 MAKE_DCGM_VERSION(dcgmModuleDenylist_v1, 1)
 
 
 /**
@@ -511,7 +511,7 @@ typedef struct
     unsigned int cmdRet;       //!< OUT: Error code generated
 } dcgmGroupGetInfo_v1;
 
-#define SAMPLES_BUFFER_SIZE 16384
+#define SAMPLES_BUFFER_SIZE_V1 16384
 
 /**
  * Version 1 of dcgmEntitiesGetLatestValues_t
@@ -525,28 +525,65 @@ typedef struct
                                //!<     This is ignored if fieldIdList[] is provided
     unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
     unsigned int fieldIdCount;                                      //!< IN: Number of field IDs in fieldIdList[] array.
-    unsigned int flags;               //!< IN: Optional flags that affect how this request is processed.
-    unsigned int cmdRet;              //!< OUT: Error code generated
-    unsigned int bufferSize;          //!< OUT: Length of populated buffer
-    char buffer[SAMPLES_BUFFER_SIZE]; //!< OUT: this field is last, and can be truncated for speed */
+    unsigned int flags;                  //!< IN: Optional flags that affect how this request is processed.
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V1]; //!< OUT: this field is last, and can be truncated for speed */
 } dcgmEntitiesGetLatestValues_v1;
 
+#define SAMPLES_BUFFER_SIZE_V2 4186112 // 4MB - 8k for header
+
 /**
- * Version 1 of dcgmGetMultipleValuesForField_t
+ * Version 2 of dcgmEntitiesGetLatestValues_t
  */
 typedef struct
 {
-    unsigned int entityGroupId;       //!< IN: Optional group id for information to be fetched
-    unsigned int entityId;            //!< IN: Optional entity id for information to be fetched
-    unsigned int fieldId;             //!< IN: Field id to fetch
-    long long startTs;                //!< IN: Starting timestamp
-    long long endTs;                  //!< IN: End timestamp
-    unsigned int order;               //!< IN: Order for output data, see dcgmOrder_t
-    unsigned int count;               //!< IN: Number of values to retrieve (may be limited by size of buffer)
-    unsigned int cmdRet;              //!< OUT: Error code generated
-    unsigned int bufferSize;          //!< OUT: Length of populated buffer
-    char buffer[SAMPLES_BUFFER_SIZE]; //!< OUT:: this field is last, and can be truncated for speed */
+    unsigned int groupId;                                    //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                              //!< IN: Number of entries in entities[]
+    unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
+                               //!<     This is ignored if fieldIdList[] is provided
+    unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
+    unsigned int fieldIdCount;                                      //!< IN: Number of field IDs in fieldIdList[] array.
+    unsigned int flags;                  //!< IN: Optional flags that affect how this request is processed.
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V2]; //!< OUT: this field is last, and can be truncated for speed */
+} dcgmEntitiesGetLatestValues_v2;
+
+/**
+ * Version 1 of dcgmGetMultipleValuesForField
+ */
+typedef struct
+{
+    unsigned int entityGroupId;          //!< IN: Optional group id for information to be fetched
+    unsigned int entityId;               //!< IN: Optional entity id for information to be fetched
+    unsigned int fieldId;                //!< IN: Field id to fetch
+    long long startTs;                   //!< IN: Starting timestamp
+    long long endTs;                     //!< IN: End timestamp
+    unsigned int order;                  //!< IN: Order for output data, see dcgmOrder_t
+    unsigned int count;                  //!< IN: Number of values to retrieve (may be limited by size of buffer)
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V1]; //!< OUT:: this field is last, and can be truncated for speed */
 } dcgmGetMultipleValuesForField_v1;
+
+/**
+ * Version 2 of dcgmGetMultipleValuesForField
+ */
+typedef struct
+{
+    unsigned int entityGroupId;          //!< IN: Optional group id for information to be fetched
+    unsigned int entityId;               //!< IN: Optional entity id for information to be fetched
+    unsigned int fieldId;                //!< IN: Field id to fetch
+    long long startTs;                   //!< IN: Starting timestamp
+    long long endTs;                     //!< IN: End timestamp
+    unsigned int order;                  //!< IN: Order for output data, see dcgmOrder_t
+    unsigned int count;                  //!< IN: Number of values to retrieve (may be limited by size of buffer)
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V2]; //!< OUT:: this field is last, and can be truncated for speed */
+} dcgmGetMultipleValuesForField_v2;
 
 /**
  * Version 1 of dcgmJobCmd_t
@@ -571,7 +608,7 @@ typedef struct
 } dcgmJobGetStats_v1;
 
 /**
- * Version 1 of dcgmWatchFieldValue_t
+ * Version 1 of dcgmWatchFieldValue_t (DCGM 2.x)
  */
 typedef struct
 {
@@ -583,6 +620,24 @@ typedef struct
     int maxKeepSamples;         //!< IN: Maximum number of samples to keep. 0=no limit
     unsigned int cmdRet;        //!< OUT: Error code generated
 } dcgmWatchFieldValue_v1;
+
+/**
+ * Version 2 of dcgmWatchFieldValue_t (DCGM 3.x+)
+ */
+typedef struct
+{
+    unsigned int entityId;      //!< IN: entityId (gpuId for GPUs) to watch field on
+    unsigned int entityGroupId; //!< IN: Optional entity group id
+    unsigned short fieldId;     //!< IN: Field ID to watch
+    unsigned char unused[6];    //!< IN: Unused. Aligns next member to 8-byte boundary
+    long long updateFreq;       //!< IN: How often to update this field in usec
+    double maxKeepAge;          //!< IN: How long to keep data for this field in seconds
+    int maxKeepSamples;         //!< IN: Maximum number of samples to keep. 0=no limit
+    int updateOnFirstWatcher;   //!< IN: Should we do an UpdateAllFields() automatically if we are the first watcher?
+                                //!< 1=yes. 0=no.
+    int wereFirstWatcher;       //!< OUT: Returns 1 if we were the first watcher. 0 if not */
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmWatchFieldValue_v2;
 
 /**
  * Version 1 of dcgmUpdateAllFields_v1
@@ -704,9 +759,9 @@ typedef struct
 
 typedef struct
 {
-    dcgmNvLinkStatus_v2 ls; //!< IN/OUT: nvlink status populated on success
+    dcgmNvLinkStatus_v3 ls; //!< IN/OUT: nvlink status populated on success
     unsigned int cmdRet;    //!< OUT: Error code generated
-} dcgmGetNvLinkStatus_v1;
+} dcgmGetNvLinkStatus_v2;
 
 typedef struct
 {
@@ -722,9 +777,9 @@ typedef struct
 
 typedef struct
 {
-    unsigned int moduleId; //!< IN: Module to blacklist
+    unsigned int moduleId; //!< IN: Module to add to the denylist
     unsigned int cmdRet;   //!< OUT: Error code generated
-} dcgmMsgModuleBlacklist_v1;
+} dcgmMsgModuleDenylist_v1;
 
 typedef struct
 {
@@ -746,28 +801,16 @@ typedef struct
 
 typedef struct
 {
-    union
-    {
-        dcgmMigHierarchy_v1 v1; //!< OUT: populated on success
-        dcgmMigHierarchy_v2 v2; //!< OUT: populated on success
-    } mh;
+    dcgmMigHierarchy_v2 data; //!< OUT: populated on success
 
-    unsigned int v2;     //!< IN: boolean to specify version
     unsigned int cmdRet; //!< OUT: Error code generated
 } dcgmMsgGetGpuInstanceHierarchy_v1;
 
-/**
- * Older version of nvmlProcessInfo_t. This is here because NVML changed the size of nvmlProcessInfo_t
- * without changing the version used by nvmlDeviceGetComputeRunningProcesses(). This can be removed
- * once nvml.h has this structure.
- */
-typedef struct nvmlProcessInfo_v1_st
+typedef struct
 {
-    unsigned int pid;                 //!< Process ID
-    unsigned long long usedGpuMemory; //!< Amount of used GPU memory in bytes.
-                                      //! Under WDDM, \ref NVML_VALUE_NOT_AVAILABLE is always reported
-                                      //! because Windows KMD manages all the memory and not the NVIDIA driver
-} nvmlProcessInfo_v1_t;
+    unsigned int index;  //!< IN: the index of the GPU to create
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmMsgNvmlCreateInjectionGpu_v1;
 
 /**
  * Verify that DCGM definitions that are copies of NVML ones match up with their NVML counterparts
@@ -799,22 +842,17 @@ DCGM_CASSERT(dcgmConnectV2Params_version1 == (long)16777224, 1);
 DCGM_CASSERT(dcgmConnectV2Params_version == (long)0x02000010, 1);
 DCGM_CASSERT(dcgmFieldGroupInfo_version == (long)16777744, 1);
 DCGM_CASSERT(dcgmAllFieldGroup_version == (long)16811016, 1);
-DCGM_CASSERT(dcgmDeviceAttributes_version1 == (long)16782628, 1);
-DCGM_CASSERT(dcgmDeviceAttributes_version2 == (long)33559648, 1);
 DCGM_CASSERT(dcgmDeviceAttributes_version3 == (long)0x3001464, 1);
 DCGM_CASSERT(dcgmDeviceAttributes_version == (long)0x3001464, 1);
 DCGM_CASSERT(dcgmHealthResponse_version4 == (long)0x0401050C, 1);
-DCGM_CASSERT(dcgmIntrospectContext_version == (long)16777232, 1);
 DCGM_CASSERT(dcgmIntrospectMemory_version == (long)16777232, 1);
 DCGM_CASSERT(dcgmIntrospectCpuUtil_version == (long)16777248, 1);
-DCGM_CASSERT(dcgmIntrospectFieldsExecTime_version == (long)16777248, 1);
-DCGM_CASSERT(dcgmIntrospectFullFieldsExecTime_version == (long)0x020004D8, 1);
 DCGM_CASSERT(dcgmJobInfo_version == (long)0x030098A8, 1);
 DCGM_CASSERT(dcgmPolicy_version == (long)16777360, 1);
 DCGM_CASSERT(dcgmPolicyCallbackResponse_version == (long)16777240, 1);
-DCGM_CASSERT(dcgmDiagResponse_version6 == (long)0x06079090, 1);
 DCGM_CASSERT(dcgmDiagResponse_version7 == (long)0x07099290, 1);
-DCGM_CASSERT(dcgmDiagResponse_version == (long)0x07099290, 1);
+DCGM_CASSERT(dcgmDiagResponse_version8 == (long)0x80d9690, 8);
+DCGM_CASSERT(dcgmDiagResponse_version == (long)0x80d9690, 1);
 DCGM_CASSERT(dcgmRunDiag_version7 == (long)0x70054D0, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version6 == (long)16787744, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version7 == (long)117451168, 1);
@@ -822,13 +860,14 @@ DCGM_CASSERT(dcgmVgpuDeviceAttributes_version == (long)117451168, 1);
 DCGM_CASSERT(dcgmVgpuInstanceAttributes_version == (long)16777556, 1);
 DCGM_CASSERT(dcgmVgpuConfig_version == (long)16777256, 1);
 DCGM_CASSERT(dcgmModuleGetStatuses_version == (long)0x01000088, 1);
-DCGM_CASSERT(dcgmModuleBlacklist_version1 == (long)0x01000008, 1);
+DCGM_CASSERT(dcgmModuleDenylist_version1 == (long)0x01000008, 1);
 DCGM_CASSERT(dcgmSettingsSetLoggingSeverity_version1 == (long)0x01000008, 1);
 DCGM_CASSERT(dcgmVersionInfo_version == (long)0x2000204, 1);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version1 == (long)0x01000048, 1);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version2 == (long)0x02000050, 2);
 DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
+DCGM_CASSERT(dcgmNvLinkStatus_version3 == (long)0x30015bc, 3);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

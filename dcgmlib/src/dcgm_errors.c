@@ -46,7 +46,7 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_DEVICE_COUNT_MISMATCH, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BAD_PARAMETER, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_CANNOT_OPEN_LIB, DCGM_ERROR_MONITOR),
-    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BLACKLISTED_DRIVER, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_DENYLISTED_DRIVER, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVML_LIB_BAD, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GRAPHICS_PROCESSES, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_HOSTENGINE_CONN, DCGM_ERROR_MONITOR),
@@ -224,8 +224,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "The GPU Diagnostic returned Json that cannot be parsed.";
         case DCGM_ST_DIAG_BAD_LAUNCH:
             return "Error while launching the GPU Diagnostic.";
-        case DCGM_ST_DIAG_VARIANCE:
-            return "The results of training DCGM GPU Diagnostic cannot be trusted because they vary too much from run to run";
+        case DCGM_ST_DIAG_UNUSED: // No longer used
+            return "Unused error code";
         case DCGM_ST_DIAG_THRESHOLD_EXCEEDED:
             return "A field value met or exceeded the error threshold.";
         case DCGM_ST_INSUFFICIENT_DRIVER_VERSION:

@@ -182,15 +182,6 @@ private:
     void UpdateChildPID(pid_t value, uint64_t myTicket) const;
 
     /*
-     * Adds the training related options to the command argument array for NVVS based on the contents of the
-     * dcgmRunDiag_t struct.
-     *
-     * Returns true if training arguments were added
-     *         false if no training arguments were added
-     */
-    bool AddTrainingOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd) const;
-
-    /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
      */
     dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_t *drd) const;

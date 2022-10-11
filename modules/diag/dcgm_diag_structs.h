@@ -32,16 +32,16 @@
 /**
  * Subrequest DCGM_DIAG_SR_RUN version 4
  */
-typedef struct dcgm_diag_msg_run_v4
+typedef struct dcgm_diag_msg_run_v6
 {
     dcgm_module_command_header_t header; /* Command header */
 
     dcgmPolicyAction_t action;        /*  IN: Action to perform after running the diagnostic */
     dcgmRunDiag_t runDiag;            /*  IN: Parameters for how to run the diagnostic */
-    dcgmDiagResponse_v6 diagResponse; /* OUT: Detailed specifics about how the diag run went */
-} dcgm_diag_msg_run_v4;
+    dcgmDiagResponse_v8 diagResponse; /* OUT: Detailed specifics about how the diag run went */
+} dcgm_diag_msg_run_v6;
 
-#define dcgm_diag_msg_run_version4 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v4, 4)
+#define dcgm_diag_msg_run_version6 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v6, 6)
 
 /*****************************************************************************/
 /**

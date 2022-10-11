@@ -37,29 +37,29 @@ typedef struct dcgm_profiling_msg_get_mgs_v1
 {
     dcgm_module_command_header_t header; /* Command header */
 
-    dcgmProfGetMetricGroups_t metricGroups; /* IN/OUT user request to process */
-} dcgm_profiling_msg_get_mgs_v1;
+    dcgmProfGetMetricGroups_v3 metricGroups; /* IN/OUT user request to process */
+} dcgm_profiling_msg_get_mgs_v2;
 
-#define dcgm_profiling_msg_get_mgs_version1 MAKE_DCGM_VERSION(dcgm_profiling_msg_get_mgs_v1, 1)
-#define dcgm_profiling_msg_get_mgs_version  dcgm_profiling_msg_get_mgs_version1
+#define dcgm_profiling_msg_get_mgs_version2 MAKE_DCGM_VERSION(dcgm_profiling_msg_get_mgs_v2, 2)
+#define dcgm_profiling_msg_get_mgs_version  dcgm_profiling_msg_get_mgs_version2
 
-typedef dcgm_profiling_msg_get_mgs_v1 dcgm_profiling_msg_get_mgs_t;
+typedef dcgm_profiling_msg_get_mgs_v2 dcgm_profiling_msg_get_mgs_t;
 
 /*****************************************************************************/
 /**
  * Subrequest DCGM_PROFILING_SR_WATCH_FIELDS
  */
-typedef struct dcgm_profiling_msg_watch_fields_v1
+typedef struct dcgm_profiling_msg_watch_fields_v2
 {
     dcgm_module_command_header_t header; /* Command header */
 
-    dcgmProfWatchFields_t watchFields; /* IN/OUT user request to process */
-} dcgm_profiling_msg_watch_fields_v1;
+    dcgmProfWatchFields_v2 watchFields; /* IN/OUT user request to process */
+} dcgm_profiling_msg_watch_fields_v2;
 
-#define dcgm_profiling_msg_watch_fields_version1 MAKE_DCGM_VERSION(dcgm_profiling_msg_watch_fields_v1, 1)
-#define dcgm_profiling_msg_watch_fields_version  dcgm_profiling_msg_watch_fields_version1
+#define dcgm_profiling_msg_watch_fields_version2 MAKE_DCGM_VERSION(dcgm_profiling_msg_watch_fields_v2, 2)
+#define dcgm_profiling_msg_watch_fields_version  dcgm_profiling_msg_watch_fields_version2
 
-typedef dcgm_profiling_msg_watch_fields_v1 dcgm_profiling_msg_watch_fields_t;
+typedef dcgm_profiling_msg_watch_fields_v2 dcgm_profiling_msg_watch_fields_t;
 
 /*****************************************************************************/
 /**

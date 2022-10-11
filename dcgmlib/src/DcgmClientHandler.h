@@ -17,7 +17,6 @@
 
 #include "DcgmIpc.h"
 #include "DcgmMutex.h"
-#include "DcgmProtobuf.h"
 #include "DcgmRequest.h"
 #include "dcgm_module_structs.h"
 #include "dcgm_structs.h"
@@ -35,13 +34,8 @@ class DCHConnectionAttributes
 {
 public:
     DCHConnectionAttributes(bool requiresModuleCommands, const char *buildInfoString)
-        : m_requiresModuleCommands(requiresModuleCommands)
-        , m_buildInfo(DcgmNs::DcgmBuildInfo(buildInfoString))
+        : m_buildInfo(DcgmNs::DcgmBuildInfo(buildInfoString))
     {}
-
-    /* Boolean as to if this connection can communicate without using protobufs. We should use
-       module command messages rather than protobuf messages. This is inferred from m_buildInfo.GetVersion() */
-    bool m_requiresModuleCommands = false;
 
     DcgmNs::DcgmBuildInfo m_buildInfo; /* Build info retrieved from the server */
 };
@@ -70,20 +64,6 @@ public:
     void CloseConnForHostEngine(dcgmHandle_t pConnHandle);
 
     /*****************************************************************************
-     * This method is used to exchange protobuf encoded commands with the Host Engine
-     * Used to achieve Async functionality
-     *
-     * request IN: Optional custom request handler that you have allocated.
-     *
-     *****************************************************************************/
-    dcgmReturn_t ExchangeMsgAsync(dcgmHandle_t connHandle,
-                                  DcgmProtobuf *pEncodedObj,
-                                  DcgmProtobuf *pDecodeObj,
-                                  std::vector<dcgm::Command *> *pRecvdCmds,
-                                  std::unique_ptr<DcgmRequest> request,
-                                  unsigned int timeoutMs = 60000);
-
-    /*****************************************************************************
      * Module command version of ExchangeMsgAsync
      *
      *****************************************************************************/
@@ -92,17 +72,6 @@ public:
                                             std::unique_ptr<DcgmRequest> request,
                                             size_t maxResponseSize,
                                             unsigned int timeoutMs = 60000);
-
-    /*****************************************************************************
-     * Find out of a given DCGM handle is capable of only communicating with
-     * module commands (without protobufs). This is expected for later 2.x
-     * releases and 3.x releases
-     *
-     * Returns: true if the host engine referenced in dcgmHandle is capable of
-     *          only using module commands.
-     *          false if not. Also false if dcgmHandle is not a known remote connection.
-     */
-    bool HandleRequiresModuleCommands(dcgmHandle_t dcgmHandle);
 
 private:
     DcgmIpc m_dcgmIpc;

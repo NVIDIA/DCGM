@@ -37,7 +37,7 @@ static void main_sig_handler(int signo)
         case SIGQUIT:
         case SIGKILL:
         case SIGTERM:
-            PRINT_ERROR("%d", "Received signal %d. Requesting stop.", signo);
+            log_error("Received signal {}. Requesting stop.", signo);
             main_should_stop          = 1;
             nvvsCommon.mainReturnCode = MAIN_RET_ERROR; /* Still counts as an error */
             break;
@@ -45,18 +45,18 @@ static void main_sig_handler(int signo)
 
         case SIGUSR1:
         case SIGUSR2:
-            PRINT_ERROR("%d", "Ignoring SIGUSRn (%d)", signo);
+            log_error("Ignoring SIGUSRn ({})", signo);
             break;
 
         case SIGHUP:
             /* This one is usually used to tell a process to reread its config.
              * Treating this as a no-op for now
              */
-            PRINT_ERROR("", "Ignoring SIGHUP");
+            log_error("Ignoring SIGHUP");
             break;
 
         default:
-            PRINT_ERROR("%d", "Received unknown signal %d. Ignoring", signo);
+            log_error("Received unknown signal {}. Ignoring", signo);
             break;
     }
 }
@@ -75,8 +75,8 @@ void OutputMainError(const std::string &error)
         std::cout << jv.toStyledString() << std::endl;
     }
 
-    PRINT_ERROR("%s", "Got runtime_error: %s", error.c_str());
-    PRINT_ERROR("%llx", "Global error mask is: 0x%064llx", nvvsCommon.errorMask);
+    log_error("Got runtime_error: {}", error);
+    log_error("Global error mask is: {:#064x}", nvvsCommon.errorMask);
 }
 
 /*****************************************************************************/

@@ -21,22 +21,6 @@
 
 const double DUMMY_TEMPERATURE_VALUE = 30.0;
 
-errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SBE_ERROR_THRESHOLD },
-                                      { DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, nullptr },
-                                      { DCGM_FI_DEV_THERMAL_VIOLATION, nullptr },
-                                      { DCGM_FI_DEV_XID_ERRORS, nullptr },
-                                      { DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PCIE_STR_MAX_PCIE_REPLAYS },
-                                      { 0, nullptr } };
-
-unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
-                                        DCGM_FI_DEV_GPU_UTIL,
-                                        DCGM_FI_DEV_POWER_USAGE,
-                                        DCGM_FI_DEV_SM_CLOCK,
-                                        DCGM_FI_DEV_MEM_CLOCK,
-                                        DCGM_FI_DEV_POWER_VIOLATION,
-                                        DCGM_FI_DEV_CLOCK_THROTTLE_REASONS,
-                                        0 };
-
 
 PluginCoreFunctionality::PluginCoreFunctionality()
     : m_dcgmRecorder()
@@ -156,92 +140,9 @@ void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int l
     m_dcgmRecorder.WriteToFile(statsfile, logFileType, m_startTime);
 }
 
-long long PluginCoreFunctionality::DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp)
+nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp, nvvsPluginResult_t &result)
 {
-    unsigned int flags           = DCGM_FV_FLAG_LIVE_DATA;
-    dcgmFieldValue_v2 maxTempVal = {};
-    dcgmReturn_t ret
-        = m_dcgmRecorder.GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
-
-    if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
-    {
-        DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuInfo.gpuId << ": "
-                         << errorString(ret) << ", defaulting to the slowdown temperature";
-
-        if (gpuInfo.status == DcgmEntityStatusFake)
-        {
-            /* fake gpus don't report max temp */
-            return 85;
-        }
-        else
-        {
-            return gpuInfo.attributes.thermalSettings.slowdownTemp;
-        }
-    }
-    else
-    {
-        return maxTempVal.value.i64;
-    }
-}
-
-nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp,
-                                                              timelib64_t endTime,
-                                                              nvvsPluginResult_t &result)
-{
-    std::vector<unsigned short> fieldIds;
-    std::vector<dcgmTimeseriesInfo_t> thresholds;
-    std::vector<dcgmTimeseriesInfo_t> *thresholdsPtr = nullptr;
-    bool needThresholds                              = false;
-    dcgmTimeseriesInfo_t tsInfo                      = {};
-    tsInfo.isInt                                     = true;
-
-    for (unsigned int i = 0; standardErrorFields[i].fieldId != 0; i++)
-    {
-        if (standardErrorFields[i].thresholdName == nullptr)
-        {
-            fieldIds.push_back(standardErrorFields[i].fieldId);
-            tsInfo.val.i64 = 0;
-            thresholds.push_back(tsInfo);
-        }
-        else if (tp.HasKey(standardErrorFields[i].thresholdName))
-        {
-            fieldIds.push_back(standardErrorFields[i].fieldId);
-            needThresholds = true;
-            tsInfo.val.i64 = tp.GetDouble(standardErrorFields[i].thresholdName);
-            thresholds.push_back(tsInfo);
-        }
-    }
-
-    if (needThresholds)
-    {
-        thresholdsPtr = &thresholds;
-    }
-
-    m_errors.clear();
-
-    for (auto &&gpuInfo : m_gpuInfos)
-    {
-        long long maxTemp = DetermineMaxTemp(gpuInfo, tp);
-        int ret
-            = m_dcgmRecorder.CheckErrorFields(fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, m_errors, m_startTime);
-
-        if (ret == DR_COMM_ERROR)
-        {
-            DCGM_LOG_ERROR << "Unable to read the error values from the hostengine";
-            result = NVVS_RESULT_FAIL;
-        }
-        else if (ret == DR_VIOLATION || result == NVVS_RESULT_FAIL)
-        {
-            result = NVVS_RESULT_FAIL;
-            // Check for throttling errors
-            ret = m_dcgmRecorder.CheckForThrottling(gpuInfo.gpuId, m_startTime, m_errors);
-            if (ret == DR_COMM_ERROR)
-            {
-                DCGM_LOG_ERROR << "Unable to read the throttling information from the hostengine";
-                result = NVVS_RESULT_FAIL;
-            }
-        }
-    }
+    m_errors = m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_gpuInfos);
 
     return result;
 }
@@ -257,9 +158,7 @@ dcgmReturn_t PluginCoreFunctionality::PluginEnded(const std::string &statsfile,
         return DCGM_ST_UNINITIALIZED;
     }
 
-    timelib64_t now = timelib_usecSince1970();
-
-    CheckCommonErrors(tp, now, result);
+    CheckCommonErrors(tp, result);
 
     m_dcgmRecorder.AddDiagStats(customStats);
 

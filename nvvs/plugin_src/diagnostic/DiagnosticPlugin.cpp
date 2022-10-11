@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #define __STDC_LIMIT_MACROS
+#include <EarlyFailChecker.h>
 #include <fmt/format.h>
 #include <stdint.h>
 
@@ -200,7 +201,7 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
 {
     cudaError_t cudaSt;
 
-    PRINT_DEBUG("", "Begin Init");
+    log_debug("Begin Init");
 
     // Attach to every eligible device by index and reset it in case a previous plugin
     // didn't clean up after itself.
@@ -224,7 +225,7 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
         }
 
         cudaDeviceReset();
-        PRINT_DEBUG("%d", "Reset device %d", deviceIdx);
+        log_debug("Reset device {}", deviceIdx);
     }
 
     for (size_t i = 0; i < gpuInfo.numGpus; i++)
@@ -245,7 +246,7 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
             else
             {
                 AddErrorForGpu(gpuId, d);
-                PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+                log_error(d.GetMessage());
             }
             return false;
         }
@@ -253,7 +254,7 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
         m_device.push_back(gbDevice);
     }
 
-    PRINT_DEBUG("", "End Init");
+    log_debug("End Init");
     return true;
 }
 
@@ -550,9 +551,7 @@ private:
     long long m_totalErrors;
     DcgmRecorder &m_dcgmRecorder;
     bool m_failEarly;
-    unsigned long m_failCheckInterval;
 };
-
 
 /****************************************************************************/
 /*
@@ -568,8 +567,10 @@ bool GpuBurnPlugin::RunTest()
     int activeThreadCount  = 0;
     unsigned int timeCount = 0;
 
+    unsigned long startTime     = timelib_usecSince1970();
     bool failEarly              = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long checkInterval = static_cast<int>(m_testParameters->GetDouble(FAIL_CHECK_INTERVAL));
+    bool failedEarly            = false;
     std::string dcgmError;
 
     if (Init(m_gpuInfo) == false)
@@ -579,6 +580,8 @@ bool GpuBurnPlugin::RunTest()
         AddError(d);
         return false;
     }
+
+    EarlyFailChecker efc(m_testParameters, failEarly, checkInterval, m_gpuInfo);
 
     /* Catch any runtime errors */
     try
@@ -620,8 +623,7 @@ bool GpuBurnPlugin::RunTest()
                 Cleanup();
                 std::stringstream ss;
                 ss << "Unable to initialize test for GPU " << m_device[i]->gpuId << ". Aborting.";
-                std::string error = ss.str();
-                PRINT_ERROR("%s", "%s", error.c_str());
+                log_error(ss.str());
                 return false;
             }
             // Start the worker thread
@@ -635,8 +637,8 @@ bool GpuBurnPlugin::RunTest()
 
             for (size_t i = 0; i < m_device.size(); i++)
             {
-                /* If nvvs requested we stop, ping each worker to stop */
-                if (main_should_stop)
+                /* If nvvs requested we stop or we failed early, ping each worker to stop */
+                if (main_should_stop || failedEarly)
                 {
                     workerThreads[i]->Stop();
                 }
@@ -654,6 +656,12 @@ bool GpuBurnPlugin::RunTest()
                 if (st)
                 {
                     activeThreadCount++;
+
+                    if (efc.CheckCommonErrors(timelib_usecSince1970(), startTime, m_dcgmRecorder) == NVVS_RESULT_FAIL)
+                    {
+                        DCGM_LOG_ERROR << "Stopping execution early due to error(s) detected.";
+                        failedEarly = true;
+                    }
                 }
             }
 
@@ -662,7 +670,7 @@ bool GpuBurnPlugin::RunTest()
     }
     catch (const std::exception &e)
     {
-        PRINT_ERROR("%s", "Caught exception %s", e.what());
+        log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
@@ -785,7 +793,6 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_totalErrors(0)
     , m_dcgmRecorder(dr)
     , m_failEarly(failEarly)
-    , m_failCheckInterval(failCheckInterval)
 {
     memset(m_params, 0, sizeof(m_params));
     if (m_precision & DIAG_HALF_PRECISION)
@@ -885,7 +892,7 @@ int GpuBurnWorker::Bind()
     {
         DcgmError d { m_device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_UNBOUND, d, m_device->cuDevice);
-        PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+        log_error(d.GetMessage());
         m_plugin.AddErrorForGpu(m_device->gpuId, d);
         return -1;
     }
@@ -1034,6 +1041,14 @@ int GpuBurnWorker::Compare(int precisionIndex)
     if (faultyElems)
     {
         m_error += (long long int)faultyElems;
+    }
+
+    if (m_failEarly)
+    {
+        if (m_error > 0)
+        {
+            return 1;
+        }
     }
 
 #if 0 /* DON'T CHECK IN ENABLED. Generate an API error */
@@ -1209,5 +1224,5 @@ void GpuBurnWorker::run()
         m_plugin.SetGpuStat(m_device->gpuId, gflopsKey, gflops);
 
     } while (iterEnd - startTime < m_testDuration && !ShouldStop() && !st);
-    m_stopTime = timelib_usecSince1970();
+    m_stopTime = timelib_secSince1970();
 }

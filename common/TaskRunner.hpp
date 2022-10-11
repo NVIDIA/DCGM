@@ -107,7 +107,7 @@ public:
         m_debugLogging = enabled;
         if (enabled)
         {
-            PRINT_INFO("", "Debug logging is enabled for the TaskRunner at %p", (void *)this);
+            log_info("Debug logging is enabled for the TaskRunner at {}", (void *)this);
         }
         m_runnerSemaphore->SetDebugLogging(enabled);
     }

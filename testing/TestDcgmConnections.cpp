@@ -49,9 +49,8 @@ int TestDcgmConnections::Cleanup(void)
 }
 
 /*****************************************************************************/
-int TestDcgmConnections::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestDcgmConnections::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
     return 0;
 }
 
@@ -513,9 +512,27 @@ int TestDcgmConnections::TestThrash(void)
     std::cout << "All workers exited. Stopping host engine." << std::endl;
 
     /* Trigger clean-up and prepare for further tests */
-    dcgmShutdown();
-    dcgmInit();
-    dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &dcgmHandle);
+    dcgmReturn = dcgmShutdown();
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmShutdown returned %d\n", dcgmReturn);
+        return -1;
+    }
+
+    dcgmReturn = dcgmInit();
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmInit returned %d\n", dcgmReturn);
+        return -1;
+    }
+
+    dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &dcgmHandle);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmStartEmbedded returned %d\n", dcgmReturn);
+        return -1;
+    }
+
     return 0;
 }
 

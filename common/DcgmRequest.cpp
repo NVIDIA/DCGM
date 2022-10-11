@@ -27,7 +27,7 @@ DcgmRequest::DcgmRequest(dcgm_request_id_t requestId)
     , m_mutex()
     , m_condition()
 {
-    PRINT_DEBUG("%p %d", "DcgmRequest %p, requestId %d created", (void *)this, m_requestId);
+    log_debug("DcgmRequest {}, requestId {} created", (void *)this, m_requestId);
 }
 
 /*****************************************************************************/
@@ -52,7 +52,7 @@ DcgmRequest::~DcgmRequest()
     m_status = DCGM_ST_UNINITIALIZED;
     Unlock();
 
-    PRINT_DEBUG("%p", "DcgmRequest %p destructed", (void *)this);
+    log_debug("DcgmRequest {} destructed", (void *)this);
 }
 
 /*****************************************************************************/
@@ -75,7 +75,7 @@ int DcgmRequest::Wait(int timeoutMs)
 
     if (m_status != DCGM_ST_PENDING)
     {
-        PRINT_DEBUG("%p %d", "DcgmRequest %p already in state %d", (void *)this, m_status);
+        log_debug("DcgmRequest {} already in state {}", (void *)this, m_status);
         return DCGM_ST_OK; /* Already out of pending state */
     }
 
@@ -102,7 +102,7 @@ int DcgmRequest::Wait(int timeoutMs)
         }
     }
 
-    PRINT_DEBUG("%p %d %d", "DcgmRequest %p wait complete. m_status %d, retSt %d", (void *)this, m_status, retSt);
+    log_debug("DcgmRequest {} wait complete. m_status {}, retSt {}", (void *)this, m_status, retSt);
 
     return retSt;
 }
@@ -125,7 +125,7 @@ int DcgmRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
     if (!msg)
         return DCGM_ST_BADPARAM;
 
-    PRINT_DEBUG("%p %p", "DcgmRequest::ProcessMessage msg %p DcgmRequest %p", (void *)msg.get(), (void *)this);
+    log_debug("DcgmRequest::ProcessMessage msg {} DcgmRequest {}", (void *)msg.get(), (void *)this);
 
     Lock();
     m_status = DCGM_ST_OK;
@@ -139,7 +139,7 @@ int DcgmRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
 /*****************************************************************************/
 int DcgmRequest::SetStatus(int status)
 {
-    PRINT_DEBUG("%p %d", "DcgmRequest::SetStatus DcgmRequest %p, status %d", (void *)this, status);
+    log_debug("DcgmRequest::SetStatus DcgmRequest {}, status {}", (void *)this, status);
 
     Lock();
     m_status = status;

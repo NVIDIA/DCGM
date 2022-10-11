@@ -54,7 +54,7 @@ int NvvsDevice::SaveState(nvvs_device_state_t *savedState)
 
     if (savedState->populated)
     {
-        PRINT_ERROR("", "Cannot save state - this object is already populated");
+        log_error("Cannot save state - this object is already populated");
         return -1; /* This object is already populated */
     }
 
@@ -140,7 +140,7 @@ int NvvsDevice::RestoreState(void)
         return 1;
     else
     {
-        PRINT_ERROR("", "Unexpected no states restored. Should have been shortcut");
+        log_error("Unexpected no states restored. Should have been shortcut");
         return -1;
     }
 }
@@ -166,7 +166,7 @@ void NvvsDevice::RecordInfo(const char *logText)
     }
     else
     {
-        PRINT_INFO("%s", "%s", logText);
+        log_info(logText);
     }
 }
 
@@ -183,7 +183,7 @@ void NvvsDevice::RecordWarning(const DcgmError &d, int failPlugin)
     }
     else
     {
-        PRINT_WARNING("%s", "%s", d.GetMessage().c_str());
+        log_warning(d.GetMessage());
         if (failPlugin)
         {
             throw std::runtime_error(d.GetMessage().c_str());
@@ -224,7 +224,7 @@ int NvvsDeviceList::Init(std::vector<unsigned int> gpuIds)
 
     if (m_devices.size() > 0)
     {
-        PRINT_ERROR("", "m_devices already initialized.");
+        log_error("m_devices already initialized.");
         return -1;
     }
 
@@ -256,7 +256,7 @@ void NvvsDeviceList::RecordInfo(const char *logText)
     if (m_plugin)
         m_plugin->AddInfo(logText);
     else
-        PRINT_INFO("%s", "%s", logText);
+        log_info(logText);
 }
 
 /*****************************************************************************/
@@ -272,7 +272,7 @@ void NvvsDeviceList::RecordWarning(const DcgmError &d, int failPlugin)
     }
     else
     {
-        PRINT_WARNING("%s", "%s", d.GetMessage().c_str());
+        log_warning(d.GetMessage());
         if (failPlugin)
         {
             throw std::runtime_error(d.GetMessage().c_str());

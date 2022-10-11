@@ -17,6 +17,7 @@ import dcgm_structs
 import dcgm_structs_internal
 import dcgm_agent_internal
 import dcgm_fields
+import dcgm_fields_internal
 from dcgm_structs import dcgmExceptionClass
 import logger
 import test_utils
@@ -113,14 +114,14 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     """
     Verifies that we can decode PID structs
     """
-    fieldTag = dcgm_fields.DCGM_FI_DEV_COMPUTE_PIDS
+    fieldTag = dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS
     pids = []
 
     # pylint: disable=undefined-variable
     dr = DcgmReader(fieldIds=[ fieldTag ], updateFrequency=100000)
-    logger.debug("Trying for 2 seconds")
+    logger.debug("Trying for 5 seconds")
     exit_loop = False
-    for _ in range(10):
+    for _ in range(25):
         if (exit_loop):
             break
 

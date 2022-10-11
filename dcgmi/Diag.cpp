@@ -67,8 +67,6 @@ char DIAG_INTEGRATION[] = "+-----  Integration  -------+------------------------
 
 char DIAG_STRESS[] = "+-----  Stress  ------------+------------------------------------------------+\n";
 
-char DIAG_Training[] = "+-----  Training  ----------+------------------------------------------------+\n";
-
 // Header Names
 const std::string DISPLAY_DEPLOYMENT("Deployment");
 const std::string DISPLAY_HARDWARE("Hardware");
@@ -76,7 +74,7 @@ const std::string DISPLAY_INTEGRATION("Integration");
 const std::string DISPLAY_STRESS("Stress");
 
 // Test Names
-const std::string DISPLAY_BLACKLIST("Blacklist");
+const std::string DISPLAY_DENYLIST("Denylist");
 const std::string DISPLAY_NVML_LIB("NVML Library");
 const std::string DISPLAY_CUDA_MAIN_LIB("CUDA Main Library");
 const std::string DISPLAY_CUDA_TOOLKIT("CUDA Toolkit Library");
@@ -89,7 +87,7 @@ const std::string DISPLAY_INFOROM("Inforom");
 
 // Must follow the same order as dcgmSoftwareTest_enum in dcgm_structs.h
 const std::string levelOneTests[] = {
-    DISPLAY_BLACKLIST,   DISPLAY_NVML_LIB,    DISPLAY_CUDA_MAIN_LIB,   DISPLAY_CUDA_TOOLKIT, DISPLAY_PERMISSIONS,
+    DISPLAY_DENYLIST,    DISPLAY_NVML_LIB,    DISPLAY_CUDA_MAIN_LIB,   DISPLAY_CUDA_TOOLKIT, DISPLAY_PERMISSIONS,
     DISPLAY_PERSISTENCE, DISPLAY_ENVIRONMENT, DISPLAY_PAGE_RETIREMENT, DISPLAY_GRAPHICS,     DISPLAY_INFOROM,
 };
 
@@ -262,7 +260,7 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_t &diagResult)
     /* need to search through all devices because results are written to gpu indexes */
     for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
     {
-        for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
+        for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
         {
             if (diagResult.perGpuResponses[i].results[j].status == DCGM_DIAG_RESULT_FAIL)
             {
@@ -290,7 +288,7 @@ void Diag::PopulateGpuList(const dcgmDiagResponse_t &diagResult, std::vector<uns
         if (diagResult.perGpuResponses[i].gpuId != DCGM_MAX_NUM_DEVICES)
         {
             bool someTestRan = false;
-            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V7; j++)
+            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
             {
                 if (diagResult.perGpuResponses[i].results[j].status != DCGM_DIAG_RESULT_NOT_RUN)
                 {
@@ -331,11 +329,10 @@ void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t r
 
     if (result != DCGM_ST_OK)
     {
-        PRINT_ERROR("%u %d %s",
-                    "Error in diagnostic for group with ID: %u. Return: %d '%s'",
-                    (unsigned int)(uintptr_t)m_drd.groupId,
-                    result,
-                    errMsg.c_str());
+        log_error("Error in diagnostic for group with ID: {}. Return: {} '{}'",
+                  (unsigned int)(uintptr_t)m_drd.groupId,
+                  result,
+                  errMsg);
     }
 }
 
@@ -385,7 +382,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
             if (ret != DCGM_ST_OK)
             {
                 errMsg << "\nError: Could not stop the launched diagnostic.";
-                PRINT_ERROR("%d", "There was an error stopping the launched diagnostic. Return: %d", ret);
+                log_error("There was an error stopping the launched diagnostic. Return: {}", ret);
             }
         }
 
@@ -423,20 +420,13 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 
         std::cout << DIAG_HEADER;
 
-        if (m_drd.flags & DCGM_RUN_FLAGS_TRAIN)
-        {
-            HelperDisplayTrainingOutput(diagResult);
-        }
-        else
-        {
-            HelperDisplayDeployment(diagResult);
+        HelperDisplayDeployment(diagResult);
 
-            if (gpuVec.size() > 0)
-            {
-                HelperDisplayIntegration(diagResult.perGpuResponses, gpuVec);
-                HelperDisplayHardware(diagResult.perGpuResponses, gpuVec);
-                HelperDisplayPerformance(diagResult.perGpuResponses, gpuVec);
-            }
+        if (gpuVec.size() > 0)
+        {
+            HelperDisplayIntegration(diagResult.perGpuResponses, gpuVec);
+            HelperDisplayHardware(diagResult.perGpuResponses, gpuVec);
+            HelperDisplayPerformance(diagResult.perGpuResponses, gpuVec);
         }
 
         std::cout << DIAG_FOOTER;
@@ -546,64 +536,6 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
 
 dcgmReturn_t Diag::RunViewDiag()
 {
-    // Start Injected Data
-    /*
-     *
-    diagResult.blacklist = DCGM_DIAG_RESULT_PASS;
-    diagResult.cudaMainLibrary = DCGM_DIAG_RESULT_PASS;
-    diagResult.cudaRuntimeLibrary = DCGM_DIAG_RESULT_PASS;
-    diagResult.environment = DCGM_DIAG_RESULT_PASS;
-    diagResult.gpuCount = 4;
-    diagResult.graphicsProcesses = DCGM_DIAG_RESULT_PASS;
-    diagResult.nvmlLibrary = DCGM_DIAG_RESULT_FAIL;
-    diagResult.pageRetirement = DCGM_DIAG_RESULT_FAIL;
-    diagResult.permissions = DCGM_DIAG_RESULT_PASS;
-    diagResult.persistenceMode = DCGM_DIAG_RESULT_PASS;
-    diagResult.version = dcgmHealthResponse_version;
-
-    diagResult.perGpuResponses[0].gpuId = 0;
-    diagResult.perGpuResponses[0].hwDiagnostic = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[0].memory = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[0].pci = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[0].smPerformance = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[0].targetedPerf = DCGM_DIAG_RESULT_SKIP;
-    diagResult.perGpuResponses[0].targetedPower = DCGM_DIAG_RESULT_FAIL;
-
-    diagResult.perGpuResponses[1].gpuId = 1;
-    diagResult.perGpuResponses[1].hwDiagnostic = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[1].memory = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[1].pci = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[1].smPerformance = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[1].targetedPerf = DCGM_DIAG_RESULT_SKIP;
-    diagResult.perGpuResponses[1].targetedPower = DCGM_DIAG_RESULT_FAIL;
-
-    diagResult.perGpuResponses[2].gpuId = 2;
-    diagResult.perGpuResponses[2].hwDiagnostic = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[2].memory = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[2].pci = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[2].smPerformance = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[2].targetedPerf = DCGM_DIAG_RESULT_SKIP;
-    diagResult.perGpuResponses[2].targetedPower = DCGM_DIAG_RESULT_SKIP;
-
-    diagResult.perGpuResponses[3].gpuId = 3;
-    diagResult.perGpuResponses[3].hwDiagnostic = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[3].memory = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[3].pci = DCGM_DIAG_RESULT_FAIL;
-    diagResult.perGpuResponses[3].smPerformance = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[3].targetedPerf = DCGM_DIAG_RESULT_PASS;
-    diagResult.perGpuResponses[3].targetedPower = DCGM_DIAG_RESULT_SKIP;
-    // End
-
-    std::cout << DIAG_HEADER;
-
-    HelperDisplayDeployment(diagResult);
-    HelperDisplayHardware(diagResult.gpuCount, diagResult.perGpuResponses);
-    HelperDisplayIntegration(diagResult.gpuCount, diagResult.perGpuResponses);
-    HelperDisplayPerformance(diagResult.gpuCount, diagResult.perGpuResponses);
-
-
-    std::cout << DIAG_FOOTER;
-    */
     return DCGM_ST_OK;
 }
 
@@ -635,15 +567,7 @@ void Diag::HelperDisplayDeployment(dcgmDiagResponse_t &diagResult)
     }
 }
 
-void Diag::HelperDisplayTrainingOutput(dcgmDiagResponse_t &diagResult)
-{
-    std::cout << DIAG_Training;
-    CommandOutputController cmdView = CommandOutputController();
-    cmdView.setDisplayStencil(DIAG_DATA);
-    DisplayVerboseInfo(cmdView, "Training Result", diagResult.trainingMsg);
-}
-
-void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -673,7 +597,7 @@ void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v3 *diagResults, const s
 }
 
 /*****************************************************************************/
-void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -683,7 +607,7 @@ void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v3 *diagResults, cons
 }
 
 /*****************************************************************************/
-void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v3 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -786,7 +710,7 @@ void Diag::HelperDisplayDetails(bool forceVerbose,
                                 const std::vector<unsigned int> &gpuIndices,
                                 unsigned int testIndex,
                                 CommandOutputController &cmdView,
-                                dcgmDiagResponsePerGpu_v3 *diagResults)
+                                dcgmDiagResponsePerGpu_v4 *diagResults)
 {
     bool displayInfo     = forceVerbose;
     bool displayWarnings = forceVerbose;
@@ -826,7 +750,7 @@ void Diag::HelperDisplayDetails(bool forceVerbose,
 /*****************************************************************************/
 void Diag::HelperDisplayGpuResults(std::string dataName,
                                    unsigned int testIndex,
-                                   dcgmDiagResponsePerGpu_v3 *diagResults,
+                                   dcgmDiagResponsePerGpu_v4 *diagResults,
                                    const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
@@ -1064,7 +988,7 @@ std::string Diag::HelperGetPluginName(unsigned int index)
 /*
  * Adds the result to this test entry and returns true, or returns false if this gpu didn't run the test.
  */
-bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v3 &gpuResult,
+bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
                                Json::Value &testEntry,
                                unsigned int gpuIndex,
                                unsigned int testIndex,
@@ -1156,7 +1080,7 @@ void Diag::HelperJsonBuildOutput(Json::Value &output,
     HelperJsonAddBasicTests(output, categoryIndex, diagResult);
 
     // Now get each of the other test's results
-    for (unsigned int pluginIndex = 0; pluginIndex < DCGM_PER_GPU_TEST_COUNT_V7; pluginIndex++)
+    for (unsigned int pluginIndex = 0; pluginIndex < DCGM_PER_GPU_TEST_COUNT_V8; pluginIndex++)
     {
         Json::Value testEntry;
         std::string testName      = HelperGetPluginName(pluginIndex);
@@ -1212,14 +1136,7 @@ dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std
     Json::Value output;
     dcgmReturn_t result = DCGM_ST_OK;
 
-    if (m_drd.flags & DCGM_RUN_FLAGS_TRAIN)
-    {
-        output[NVVS_NAME][NVVS_TRAINING_MSG] = diagResult.trainingMsg;
-    }
-    else
-    {
-        HelperJsonBuildOutput(output, diagResult, gpuIndices);
-    }
+    HelperJsonBuildOutput(output, diagResult, gpuIndices);
 
     if (m_iterations <= 1)
     {
@@ -1241,6 +1158,7 @@ dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std
 
 /*****************************************************************************/
 StartDiag::StartDiag(const std::string &hostname,
+                     const bool hostAddressWasOverridden,
                      const std::string &parms,
                      const std::string &configPath,
                      bool jsonOutput,
@@ -1253,6 +1171,10 @@ StartDiag::StartDiag(const std::string &hostname,
     std::string configFileContents;
     drd.version = dcgmRunDiag_version;
     m_hostName  = hostname;
+
+    /* If the host address was overridden, complain if we can't connect.
+       Otherwise, don't complain and just start an embedded host engine instead */
+    m_silent = !hostAddressWasOverridden;
 
     // Parms is in the format: test_name.attr_name=attr_value[;...]
     // Parse it
@@ -1379,18 +1301,24 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
     diag_hostname = m_hostName;
 
     // Attempt to start an embedded host engine
-    dcgmHandle_t embeddedHandle;
-    connectionStatus = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &embeddedHandle);
+    dcgmStartEmbeddedV2Params_v1 params {};
+    params.version  = dcgmStartEmbeddedV2Params_version1;
+    params.opMode   = DCGM_OPERATION_MODE_AUTO;
+    params.logFile  = nullptr;
+    params.severity = DcgmLoggingSeverityUnspecified;
+
+    connectionStatus = dcgmStartEmbedded_v2(&params);
 
     if (connectionStatus != DCGM_ST_OK)
     {
-        std::cout << "Error: Unable to connect to host engine. " << errorString(connectionStatus) << "." << std::endl;
+        std::cout << "Error: Unable to start an embedded host engine. " << errorString(connectionStatus) << "."
+                  << std::endl;
     }
     else
     {
-        connectionStatus = m_diagObj.RunStartDiag(embeddedHandle);
+        connectionStatus = m_diagObj.RunStartDiag(params.dcgmHandle);
 
-        dcgmStopEmbedded(embeddedHandle);
+        dcgmStopEmbedded(params.dcgmHandle);
     }
 
     // reset global hostname

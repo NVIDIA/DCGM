@@ -140,7 +140,7 @@ nvvsPluginResult_t Plugin::GetOverallResult(const nvvsPluginGpuResults_t &result
                 break; /* Exit switch case */
 
             default:
-                PRINT_ERROR("%d", "Got unknown result value: %d", it->second);
+                log_error("Got unknown result value: {}", it->second);
                 break;
         }
     }
@@ -198,7 +198,7 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
     for (auto &&error : m_errors)
     {
         results->errors[results->numErrors].errorCode = error.GetCode();
-        results->errors[results->numErrors].gpuId     = error.GetGpuId();
+        results->errors[results->numErrors].gpuId     = -1;
         snprintf(results->errors[results->numErrors].msg,
                  sizeof(results->errors[results->numErrors].msg),
                  "%s",
@@ -227,7 +227,7 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
             }
 
             results->errors[results->numErrors].errorCode = error.GetCode();
-            results->errors[results->numErrors].gpuId     = -1;
+            results->errors[results->numErrors].gpuId     = gpuId;
             snprintf(results->errors[results->numErrors].msg,
                      sizeof(results->errors[results->numErrors].msg),
                      "%s",

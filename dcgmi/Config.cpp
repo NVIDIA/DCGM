@@ -68,7 +68,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error: UpdateAllFields. Return: %d", result);
+        log_error("Error: UpdateAllFields. Return: {}", result);
         return result;
     }
 
@@ -78,8 +78,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get group information. Return: " << error << std::endl;
-        PRINT_ERROR(
-            "%u,%d", "Error: GroupGetInfo for GroupId: %u. Return: %d", (unsigned int)(uintptr_t)mGroupId, result);
+        log_error("Error: GroupGetInfo for GroupId: {}. Return: {}", (unsigned int)(uintptr_t)mGroupId, result);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -353,7 +352,7 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error: UpdateAllFields. Return: %d", result);
+        log_error("Error: UpdateAllFields. Return: {}", result);
         return result;
     }
 
@@ -388,10 +387,8 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
         gpuErrView.addError(stHandle);
         gpuErrView.display();
 
-        PRINT_ERROR("%u, %d",
-                    "Error: Unable to set configuration on group %u. Return: %d",
-                    (unsigned int)(uintptr_t)mGroupId,
-                    result);
+        log_error(
+            "Error: Unable to set configuration on group {}. Return: {}", (unsigned int)(uintptr_t)mGroupId, result);
 
         ret = result;
         goto cleanup_local;
@@ -428,7 +425,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to update fields. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error: UpdateAllFields. Return: %d", result);
+        log_error("Error: UpdateAllFields. Return: {}", result);
         return result;
     }
 
@@ -438,8 +435,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get group information. Return: " << error << std::endl;
-        PRINT_ERROR(
-            "%u,%d", "Error: GroupGetInfo for GroupId: %u. Return: %d", (unsigned int)(uintptr_t)mGroupId, result);
+        log_error("Error: GroupGetInfo for GroupId: {}. Return: {}", (unsigned int)(uintptr_t)mGroupId, result);
         return DCGM_ST_GENERIC_ERROR;
     }
 

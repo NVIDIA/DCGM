@@ -580,7 +580,7 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t &gpuList)
     }
     catch (const std::runtime_error &e)
     {
-        PRINT_ERROR("%s", "Caught exception %s", e.what());
+        log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         m_plugin->AddError(d);
@@ -681,9 +681,17 @@ MemtestWorker::MemtestWorker(memtest_device_p device, Memtest &plugin, TestParam
     , m_plugin(plugin)
     , m_testParameters(tp)
     , m_dcgmRecorder(dr)
+    , m_failGpu(false)
 {
     m_testDuration    = tp->GetDouble(MEMTEST_STR_TEST_DURATION);
     m_useMappedMemory = tp->GetBoolFromString(MEMTEST_STR_USE_MAPPED_MEM);
+
+    const char *failGpu = getenv("__DCGM_DIAG_MEMTEST_FAIL_GPU");
+    if (failGpu != nullptr && isdigit(failGpu[0]) && atoi(failGpu) == m_device->gpuId)
+    {
+        DCGM_LOG_INFO << "__DCGM_DIAG_MEMTEST_FAIL_GPU was set for this gpu";
+        m_failGpu = true;
+    }
 }
 
 int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
@@ -713,6 +721,11 @@ int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
         {
             break;
         }
+    }
+
+    if (m_failGpu)
+    {
+        return 5; // return fake error count to trigger failure code
     }
 
     return err;

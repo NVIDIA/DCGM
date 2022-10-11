@@ -32,10 +32,11 @@ public:
     TestGroupManager();
     virtual ~TestGroupManager();
 
-    int Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus);
+    int Init(const TestDcgmModuleInitParams &initParams) override;
     int Run();
     int Cleanup();
     std::string GetTag();
+    void GetConfig(TestDcgmModuleConfig &config) override;
 
 private:
     int TestGroupCreation();
@@ -49,7 +50,7 @@ private:
                                 std::string groupName,
                                 DcgmCacheManager *cacheManager);
 
-    std::vector<test_nvcm_gpu_t> m_gpus; /* List of GPUs to run on, copied in Init() */
+    std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
 };
 
 #endif /* TESTGROUPMANAGER_H */

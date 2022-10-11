@@ -20,6 +20,118 @@
 #include <DcgmCacheManager.h>
 #include <Defer.hpp>
 
+#if defined(NV_VMWARE)
+/* No. of iterations corresponding to different sample set of vgpuIds */
+#define NUM_VGPU_LISTS             5
+#define TEST_MAX_NUM_VGPUS_PER_GPU 16
+
+TEST_CASE("CacheManager: Test VgpuManageList")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+    dcgm_field_meta_p fieldMeta = 0;
+    dcgmcm_sample_t sample;
+
+    memset(&sample, 0, sizeof(sample));
+
+    unsigned int gpuId = cm.AddFakeGpu();
+    nvmlVgpuInstance_t vgpuIds[NUM_VGPU_LISTS][TEST_MAX_NUM_VGPUS_PER_GPU]
+        = { { 11, 41, 52, 61, 32, 45, 91, 21, 43, 29, 19, 93, 0, 0, 0, 0 },
+            { 8, 32, 45, 91, 21, 43, 29, 19, 93, 0, 0, 0, 0, 0, 0, 0 },
+            { 7, 41, 52, 32, 45, 91, 21, 43, 0, 0, 0, 0, 0, 0, 0, 0 },
+            { 4, 41, 32, 91, 43, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+            { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } };
+
+    for (unsigned int i = 0; i < NUM_VGPU_LISTS; i++)
+    {
+        REQUIRE(cm.ManageVgpuList(gpuId, (unsigned int *)(vgpuIds + i)) == DCGM_ST_OK);
+
+        fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_VGPU_VM_NAME);
+        REQUIRE(fieldMeta != nullptr);
+
+        for (unsigned int j = 0; j < (TEST_MAX_NUM_VGPUS_PER_GPU - 1); j++)
+        {
+            /* Since 0 is not a valid vgpuId, so existing the loop as subsequent elements will also be zero */
+            if (vgpuIds[i][j + 1] == 0)
+                break;
+
+            memset(&sample, 0, sizeof(sample));
+            sample.timestamp = 0;
+            switch (fieldMeta->fieldType)
+            {
+                case DCGM_FT_DOUBLE:
+                    sample.val.d = 1.0;
+                    break;
+
+                case DCGM_FT_TIMESTAMP:
+                    sample.val.i64 = timelib_usecSince1970();
+                    break;
+
+                case DCGM_FT_INT64:
+                    sample.val.i64 = 1;
+                    break;
+
+                case DCGM_FT_STRING:
+                    sample.val.str      = (char *)"nvidia"; /* Use static string so we don't have to alloc/free */
+                    sample.val2.ptrSize = strlen(sample.val.str) + 1;
+                    break;
+
+                case DCGM_FT_BINARY:
+                    /* Just insert any blob of data */
+                    sample.val.blob     = &sample;
+                    sample.val2.ptrSize = sizeof(sample);
+                    break;
+
+                default:
+                    break;
+            }
+
+            /* Inject a fake value */
+            REQUIRE(cm.InjectSamples(DCGM_FE_VGPU, vgpuIds[i][j + 1], fieldMeta->fieldId, &sample, 1) == 0);
+
+            /* To verify retrieved sample against whatever sample which was injected in the cache */
+            memset(&sample, 0, sizeof(sample));
+            REQUIRE(cm.GetLatestSample(DCGM_FE_VGPU, vgpuIds[i][j + 1], fieldMeta->fieldId, &sample, 0) == DCGM_ST_OK);
+
+            REQUIRE(std::string(sample.val.str) == std::string("nvidia"));
+
+            REQUIRE(cm.FreeSamples(&sample, 1, fieldMeta->fieldId) == 0);
+        }
+
+        /* Inject-retrieve routine for vGPU field 'DCGM_FI_DEV_VGPU_TYPE' for single vgpuId(41) which is of int type of
+         * value */
+        if (i == 0)
+        {
+            fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_VGPU_TYPE);
+            REQUIRE(fieldMeta != nullptr);
+
+            sample.val.i64   = 1;
+            sample.timestamp = 0;
+            REQUIRE(cm.InjectSamples(DCGM_FE_VGPU, 41, fieldMeta->fieldId, &sample, 1) == 0);
+
+            memset(&sample, 0, sizeof(sample));
+
+            REQUIRE(cm.GetLatestSample(DCGM_FE_VGPU, 41, fieldMeta->fieldId, &sample, 0) == DCGM_ST_OK);
+
+            REQUIRE(sample.val.i64 == 1);
+        }
+
+        /* To verify that no samples retrieved for a vgpuId 41 which has been removed from the List. */
+        if ((i == (NUM_VGPU_LISTS - 1)) && (NUM_VGPU_LISTS != 1))
+        {
+            /* For vGPU field 'DCGM_FI_DEV_VGPU_VM_NAME' */
+            REQUIRE(cm.GetLatestSample(DCGM_FE_VGPU, 41, fieldMeta->fieldId, &sample, 0) == DCGM_ST_NOT_WATCHED);
+
+            /* For vGPU field 'DCGM_FI_DEV_VGPU_TYPE' */
+            fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_VGPU_TYPE);
+            REQUIRE(fieldMeta != nullptr);
+
+            REQUIRE(cm.GetLatestSample(DCGM_FE_VGPU, 41, fieldMeta->fieldId, &sample, 0) == DCGM_ST_NOT_WATCHED);
+        }
+    }
+}
+#endif
 
 TEST_CASE("CacheManager: Test GetGpuId")
 {
@@ -150,5 +262,17 @@ TEST_CASE("CacheManager: CUDA_VISIBLE_DEVICES")
     cm.GenerateCudaVisibleDevicesValue(gpuId, DCGM_FE_GPU_CI, computeInstanceIds[0], buf);
     tmp.str("");
     tmp << "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"; // Dummy UUID because this is a fake GPU
+    CHECK(buf.str() == tmp.str());
+
+    /* NvSwitch ID is not a CUDA item */
+    cm.GenerateCudaVisibleDevicesValue(gpuId, DCGM_FE_SWITCH, 0, buf);
+    tmp.str("");
+    tmp << "Unsupported";
+    CHECK(buf.str() == tmp.str());
+
+    /* Link ID is not a CUDA item */
+    cm.GenerateCudaVisibleDevicesValue(gpuId, DCGM_FE_LINK, 0, buf);
+    tmp.str("");
+    tmp << "Unsupported";
     CHECK(buf.str() == tmp.str());
 }

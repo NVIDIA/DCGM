@@ -73,7 +73,11 @@ def helper_basic_stats_file_check(statsFile, gpuIds, statName):
         assert gpuId in foundGpuIds, "Couldn't find GPU %d in the stats file (found %s)" % (gpuId, str(foundGpuIds))
 
 def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, pluginIndex, statName=None):
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr='%s.test_duration=20' % pluginName) # was 20
+    
+    #Run on a single GPU since we're just testing the stats file output
+    gpuIds = [gpuIds[0], ]
+
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr='%s.test_duration=10' % pluginName) # was 20
 
     dd.SetStatsPath('/tmp/')
 

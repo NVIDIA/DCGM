@@ -116,20 +116,7 @@ class FieldReader(DcgmReader):
                 self.passed = True
                 return
 
-
-## Injection helpers
-def inject_value(handle, entityId, fieldId, value, offset, isInt=True, verifyInsertion=True,
-                 entityType=dcgm_fields.DCGM_FE_GPU):
-    if isInt:
-        ret = inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-    else:
-        ret = inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-
-    if verifyInsertion:
-        assert ret == dcgm_structs.DCGM_ST_OK, "Could not inject value %s in field id %s" % (value, fieldId)
-    return ret
-
-def inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def get_field_value_i64(entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = fieldId
@@ -138,9 +125,9 @@ def inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroup
     field.ts = int((time.time()+offset) * 1000000.0)
     field.value.i64 = value
 
-    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
+    return field
 
-def inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def get_field_value_fp64(entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = fieldId
@@ -149,11 +136,61 @@ def inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGrou
     field.ts = int((time.time()+offset) * 1000000.0)
     field.value.dbl = value
 
+    return field
+
+
+## Injection helpers
+# handle          - the handle to DCGM
+# entityId        - the id of the entity we're injecting the value for
+# fieldId         - the id of the field we're injecting a value into
+# value           - the value we're injecting
+# offset          - the offset - in seconds - for the timestamp the value should have
+# isInt           - True if the value is an integer, False if it's a floating point value (defaults to True)
+# verifyInsertion - True if we should fail if the value couldn't be injected, False = ignore. (default to True)
+# entityType      - the type of entity we're injecting the value for, defaults to GPU
+# repeatCount     - the number of repeated times we should inject the value, defaults to 0, meaning 1 injection
+# repeatOffset    - how many seconds to increment the offset by in each subsequent injection
+def inject_value(handle, entityId, fieldId, value, offset, isInt=True, verifyInsertion=True,
+                 entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=0, repeatOffset=1):
+    if isInt:
+        ret = inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+
+        for i in range(0, repeatCount):
+            if ret != dcgm_structs.DCGM_ST_OK:
+                # Don't continue inserting if it isn't working
+                break
+
+            offset = offset + repeatOffset
+            ret = inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+
+    else:
+
+        ret = inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+        for i in range(0, repeatCount):
+            if ret != dcgm_structs.DCGM_ST_OK:
+                # Don't continue inserting if it isn't working
+                break
+
+            offset = offset + repeatOffset
+            ret = inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+
+    if verifyInsertion:
+        assert ret == dcgm_structs.DCGM_ST_OK, "Could not inject value %s in field id %s" % (value, fieldId)
+    return ret
+
+def inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+    field = get_field_value_i64(entityId, fieldId, value, offset, entityGroupId)
+
     return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
 
-STANDALONE_BLACKLIST_SCRIPT_NAME = "blacklist_recommendations.py"
-def createBlacklistApp(numGpus=None, numSwitches=None, testNames=None, instantaneous=False):
-    args = ["./%s" % STANDALONE_BLACKLIST_SCRIPT_NAME]
+def inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+    field = get_field_value_fp64(entityId, fieldId, value, offset, entityGroupId)
+
+    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
+
+STANDALONE_DENYLIST_SCRIPT_NAME = "denylist_recommendations.py"
+def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantaneous=False):
+    args = ["./%s" % STANDALONE_DENYLIST_SCRIPT_NAME]
     if numGpus == None or numSwitches == None:
         args.append("-d")
     else:

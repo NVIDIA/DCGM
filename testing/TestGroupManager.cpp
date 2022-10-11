@@ -36,9 +36,9 @@ std::string TestGroupManager::GetTag()
 }
 
 /*************************************************************************/
-int TestGroupManager::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestGroupManager::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
+    m_gpus = initParams.liveGpuIds;
     return 0;
 }
 
@@ -96,6 +96,8 @@ int TestGroupManager::Run()
         printf("TestGroupManager::TestGroupGetAllGrpIds PASSED\n");
     }
 
+    /* This test is purposely put last because it adds more GPUs to the host engine and is
+       thus destructive to other tests */
     st = TestDefaultGpusAreDynamic();
     if (st)
     {
@@ -192,7 +194,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
 
     for (unsigned int i = 0; i < m_gpus.size(); i++)
     {
-        st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[i].gpuId);
+        st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[i]);
         if (DCGM_ST_OK != st)
         {
             fprintf(stderr, "pDcgmGrp->AddEntityToGroup returned %d\n", st);
@@ -216,7 +218,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
 
     for (int i = m_gpus.size() - 1; i >= 0; i--)
     {
-        st = pDcgmGrpManager->RemoveEntityFromGroup(0, groupId, DCGM_FE_GPU, m_gpus[i].gpuId);
+        st = pDcgmGrpManager->RemoveEntityFromGroup(0, groupId, DCGM_FE_GPU, m_gpus[i]);
         if (DCGM_ST_OK != st)
         {
             fprintf(stderr, "pDcgmGrp->RemoveEntityFromGroup returned %d\n", st);
@@ -224,7 +226,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
         }
     }
 
-    st = pDcgmGrpManager->RemoveEntityFromGroup(0, groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
+    st = pDcgmGrpManager->RemoveEntityFromGroup(0, groupId, DCGM_FE_GPU, m_gpus[0]);
     if (DCGM_ST_BADPARAM != st)
     {
         fprintf(stderr, "pDcgmGrp->RemoveEntityFromGroup should return DCGM_ST_BADPARAM. Returned : %d\n", st);
@@ -328,7 +330,7 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
+    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0]);
     if (DCGM_ST_OK != st)
     {
         fprintf(stderr, "pDcgmGrp->AddEntityToGroup returned %d\n", st);
@@ -336,7 +338,7 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0].gpuId);
+    st = pDcgmGrpManager->AddEntityToGroup(groupId, DCGM_FE_GPU, m_gpus[0]);
     if (DCGM_ST_BADPARAM != st)
     {
         fprintf(stderr, "pDcgmGrp->AddEntityToGroup must fail for duplicate entry %d\n", st);
@@ -419,7 +421,6 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     unsigned int fakeEntityId;
     size_t beforeSize, afterSize;
     std::vector<dcgmGroupEntityPair_t> entities;
-    dcgmStartEmbeddedV2Params_v1 parms = {};
 
     /* We need to use the host engine handler directly or we'll be injecting
        entities into the wrong cache manager */
@@ -483,11 +484,16 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     }
 
 CLEANUP:
-    // Restart things to get rid of the fake GPU we added. It can mess up other tests.
-    heHandler->Cleanup();
-    parms.version = dcgmStartEmbeddedV2Params_version1;
-    DcgmHostEngineHandler::Init(parms);
+    /* We used to restart the host engine here to clear injected GPUs, but that's handled by
+       GetConfig() returning config.restartEngineAfter = true now */
     return retSt;
+}
+
+/*************************************************************************/
+void TestGroupManager::GetConfig(TestDcgmModuleConfig &config)
+{
+    config.restartEngineBefore = false;
+    config.restartEngineAfter  = true; /* TestDefaultGpusAreDynamic() is destructive */
 }
 
 /*************************************************************************/

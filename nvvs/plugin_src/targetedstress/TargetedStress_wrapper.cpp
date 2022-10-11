@@ -22,6 +22,8 @@
 #include <stdexcept>
 #include <stdio.h>
 
+#include <EarlyFailChecker.h>
+
 #include "DcgmThread/DcgmThread.h"
 #include "PluginStrings.h"
 #include "cuda_runtime_api.h"
@@ -204,7 +206,7 @@ int ConstantPerf::CudaInit()
 
         if (device->cudaDeviceIdx < 0 || device->cudaDeviceIdx >= count)
         {
-            PRINT_ERROR("%d %d", "Invalid cuda device index %d >= count of %d or < 0", device->cudaDeviceIdx, count);
+            log_error("Invalid cuda device index {} >= count of {} or < 0", device->cudaDeviceIdx, count);
             return -1;
         }
 
@@ -619,8 +621,11 @@ bool ConstantPerf::RunTest()
         return false;
     }
 
+    bool failedEarly                = false;
     bool failEarly                  = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
+
+    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
 
     try /* Catch runtime errors */
     {
@@ -634,7 +639,7 @@ bool ConstantPerf::RunTest()
         }
 
         /* Wait for all workers to finish */
-        while (Nrunning > 0)
+        while (Nrunning > 0 && failedEarly == false)
         {
             Nrunning = 0;
             /* Just go in a round-robin loop around our workers until
@@ -647,6 +652,12 @@ bool ConstantPerf::RunTest()
                 if (st)
                 {
                     Nrunning++;
+
+                    if (efc.CheckCommonErrors(timelib_usecSince1970(), startTime, m_dcgmRecorder) == NVVS_RESULT_FAIL)
+                    {
+                        DCGM_LOG_ERROR << "Stopping execution early due to error(s) detected.";
+                        failedEarly = true;
+                    }
                 }
             }
             timeCount++;
@@ -654,7 +665,7 @@ bool ConstantPerf::RunTest()
     }
     catch (const std::runtime_error &e)
     {
-        PRINT_ERROR("%s", "Caught exception %s", e.what());
+        log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         AddError(d);
@@ -991,12 +1002,11 @@ void ConstantPerfWorker::run(void)
                     {
                         break;
                     }
-                    PRINT_DEBUG("%d %d %f %f",
-                                "deviceIdx %d, streamIdx %d, usecInCopies %f, usecInGemm %f",
-                                m_device->gpuId,
-                                i,
-                                cpStream->usecInCopies,
-                                cpStream->usecInGemm);
+                    log_debug("deviceIdx {}, streamIdx {}, usecInCopies {}, usecInGemm {}",
+                              m_device->gpuId,
+                              i,
+                              cpStream->usecInCopies,
+                              cpStream->usecInGemm);
                 }
 
                 for (j = 0; j < m_atATime; j++)
@@ -1054,6 +1064,7 @@ void ConstantPerfWorker::run(void)
             m_plugin.AddInfo(ss.str());
             lastPrintTime = now;
         }
+
         /* Time to check for failure? */
         if (m_failEarly && now - lastFailureCheckTime > m_failCheckInterval)
         {
@@ -1062,7 +1073,7 @@ void ConstantPerfWorker::run(void)
             if (!result)
             {
                 // Stop the test because a failure occurred
-                PRINT_DEBUG("%d", "Test failure detected for GPU %d. Stopping test early.", m_device->gpuId);
+                log_debug("Test failure detected for GPU {}. Stopping test early.", m_device->gpuId);
                 break;
             }
             lastFailureCheckTime = now;
@@ -1084,6 +1095,5 @@ void ConstantPerfWorker::run(void)
     }
 
     m_stopTime = timelib_usecSince1970();
-    PRINT_DEBUG(
-        "%d %lld", "ConstantPerfWorker deviceIndex %d finished at %lld", m_device->gpuId, (long long)m_stopTime);
+    log_debug("ConstantPerfWorker deviceIndex {} finished at {}", m_device->gpuId, (long long)m_stopTime);
 }

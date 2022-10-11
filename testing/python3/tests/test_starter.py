@@ -47,14 +47,14 @@ def is_dcgm_package_installed():
     else:
         return False
 
-# Helper function to get the path to libdcgm.so.2
-# Returns the path to libdcgm.so.2 as a string on success
+# Helper function to get the path to libdcgm.so.3
+# Returns the path to libdcgm.so.3 as a string on success
 # Returns None on failure
 def get_libdcgm_path():
     """ 
-    Returns relative path to libdcgm.so.2
+    Returns relative path to libdcgm.so.3
     """
-    return "../../lib/libdcgm.so.2"
+    return "../../lib/libdcgm.so.3"
 
 @test_utils.run_only_as_root()
 @test_utils.run_only_on_bare_metal()
@@ -72,7 +72,7 @@ def test_dcgm_stub_library(handle):
     if is_dcgm_package_installed():
         test_utils.skip_test("A DCGM package is already installed on this machine")
 
-    # Checks if libdcgm.so.2 is set within LD_LIBRARY_PATH
+    # Checks if libdcgm.so.3 is set within LD_LIBRARY_PATH
     libdcgm_path = get_libdcgm_path()
     assert libdcgm_path is not None
 
@@ -81,25 +81,25 @@ def test_dcgm_stub_library(handle):
         if not (os.path.isfile(libdcgm_path + "/libdcgm_stub.a")):
             test_utils.skip_test("Unable to find \"libdcgm_stub.a\" in %s" % libdcgm_path)
         else:
-            dcgm_lib_original = libdcgm_path + "/libdcgm.so.2"
+            dcgm_lib_original = libdcgm_path + "/libdcgm.so.3"
             dcgm_lib_modified = dcgm_lib_original + "_modified"
     else:
-        # Tear down the environment by finding and renaming "libdcgm.so.2" to "libdcgm.so.2_orig"
-        # gets the path to libdcgm.so.2, like: /usr/lib/libdcgm.so.2
+        # Tear down the environment by finding and renaming "libdcgm.so.3" to "libdcgm.so.3_orig"
+        # gets the path to libdcgm.so.3, like: /usr/lib/libdcgm.so.3
         try:
             ldconfig_out_buf = check_output(["ldconfig","-p"])
             ldconfig_out = ldconfig_out_buf.decode('utf-8')
-            dcgm_lib = [x for x in ldconfig_out.split("\n") if "libdcgm.so.2" in x]
+            dcgm_lib = [x for x in ldconfig_out.split("\n") if "libdcgm.so.3" in x]
             dcgm_lib_original = [x for x in dcgm_lib[0].split("=>")[-1] if x[0]!=" "]
             dcgm_lib_modified = [x for x in dcgm_lib_original + "_modified" if x[0]!=" "]
         except:
-            test_utils.skip_test("Unable to find libdcgm.so.2 library")
+            test_utils.skip_test("Unable to find libdcgm.so.3 library")
 
     # Renaming the file
     try:
         os.rename(dcgm_lib_original,dcgm_lib_modified)
     except:
-        test_utils.skip_test("Unable to rename libdcgm.so.2 library")
+        test_utils.skip_test("Unable to rename libdcgm.so.3 library")
 
     try:
         stub_app = apps.DcgmStubRunnerApp()
@@ -117,7 +117,7 @@ def test_dcgm_stub_library(handle):
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
-@test_utils.skip_blacklisted_gpus(["GeForce GT 640"])
+@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
 def test_dcgm_agent_get_values_for_fields(handle, gpuIds):
     """
     Verifies that DCGM Engine can be initialized successfully
@@ -283,8 +283,8 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
     for gpuId in gpuIds:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
         numWatchersWithWatch[gpuId] = fieldInfo.numWatchers
-        assert fieldInfo.monitorFrequencyUsec == updateFreq, "after watch: fieldInfo.monitorFrequencyUsec %d != updateFreq %d" % \
-               (fieldInfo.monitorFrequencyUsec, updateFreq)
+        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
+               (fieldInfo.monitorIntervalUsec, updateFreq)
 
     #Update the watch with a faster update frequency
     updateFreq = 50000 #50 msec
@@ -294,8 +294,8 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
     for gpuId in gpuIds:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
         numWatchersAfter[gpuId] = fieldInfo.numWatchers
-        assert fieldInfo.monitorFrequencyUsec == updateFreq, "after watch: fieldInfo.monitorFrequencyUsec %d != updateFreq %d" % \
-               (fieldInfo.monitorFrequencyUsec, updateFreq)
+        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
+               (fieldInfo.monitorIntervalUsec, updateFreq)
 
     assert numWatchersWithWatch == numWatchersAfter, "numWatchersWithWatch (%s) != numWatchersAfter (%s)" % \
            (str(numWatchersWithWatch), str(numWatchersAfter))
@@ -397,7 +397,7 @@ def test_dcgm_entity_api_sanity(handle, gpuIds):
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_all_supported_gpus()
-@test_utils.skip_blacklisted_gpus(["GeForce GT 640"])
+@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
 @test_utils.run_with_injection_nvswitches(2)
 def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -406,7 +406,7 @@ def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
     #Will throw an exception on API error
     linkStatus = systemObj.discovery.GetNvLinkLinkStatus()
 
-    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version2, "Version mismatch %d != %d" % (linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version2)
+    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version3, "Version mismatch %d != %d" % (linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version3)
 
     if len(systemObj.discovery.GetAllGpuIds()) == len(gpuIds):
         assert linkStatus.numGpus == len(gpuIds), "Gpu count mismatch: %d != %d" % (linkStatus.numGpus, len(gpuIds))

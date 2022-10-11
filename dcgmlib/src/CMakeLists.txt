@@ -15,7 +15,8 @@ add_subdirectory(tests)
 
 find_package(fmt REQUIRED)
 
-set(SRCS
+set(SRCS 
+    DcgmCMUtils.cpp
     DcgmCacheManager.cpp
     DcgmFieldGroup.cpp
     DcgmVersion.cpp
@@ -26,6 +27,9 @@ set(SRCS
     DcgmGpuInstance.cpp
     DcgmCoreCommunication.cpp
     DcgmMigManager.cpp
+    DcgmTopology.cpp
+    DcgmGpmManager.cpp
+    DcgmVgpu.cpp
     dcgm.c
     dcgm_errors.c
     dcgm_fields.cpp
@@ -89,7 +93,6 @@ target_link_libraries(
         dcgm_mig_types
         -Wl,--whole-archive
         buildinfo_objects
-        common_protobuf_objects
         module_common_objects
         transport_objects
         dcgm_common

@@ -27,6 +27,7 @@
 #include "DcgmMutex.h"
 #include "DcgmSystem.h"
 #include "DcgmValuesSinceHolder.h"
+#include "TestParameters.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "timelib.h"
@@ -38,6 +39,15 @@
 #define DR_COMM_ERROR -1
 #define DR_VIOLATION  -2
 #define DR_THROTTLING -3
+
+typedef struct
+{
+    unsigned short fieldId;
+    const char *thresholdName;
+} errorType_t;
+
+extern errorType_t standardErrorFields[];
+extern unsigned short standardInfoFields[];
 
 class DcgmRecorder
 {
@@ -287,6 +297,24 @@ public:
      *                      to field ids that should be added to the private storage.
      */
     void AddDiagStats(const std::vector<dcgmDiagCustomStats_t> &customStats);
+
+    /**
+     * Check the errors that should be checked for each plugin
+     *
+     * @param tp (I) - the test parameters for this plugin
+     * @param starttime (I) - the start time for the plugin
+     * @param result (O) - set to NVVS_RESULT_FAIL if a failure is detected
+     *
+     * @return a vector filled with each detected error
+     */
+    std::vector<DcgmError> CheckCommonErrors(TestParameters &tp,
+                                             timelib64_t startTime,
+                                             nvvsPluginResult_t &result,
+                                             std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfos);
+
+    /*
+     */
+    long long DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp);
 
 private:
     std::vector<unsigned short> m_fieldIds;

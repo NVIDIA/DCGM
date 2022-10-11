@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include "CudaWorkerThread.hpp"
+
 /* DCGM Distributed Cuda Context
  *
  * This class encapsulates the state of each process executing CUDA code,
@@ -136,8 +138,8 @@ public:
                            const std::string &);
 
     // Move constructors.
-    DistributedCudaContext(DistributedCudaContext &) = delete;  //!< no copy
-    DistributedCudaContext(DistributedCudaContext &&) noexcept; //!< but move
+    DistributedCudaContext(DistributedCudaContext &) = delete; //!< no copy
+    DistributedCudaContext(DistributedCudaContext &&);         //!< but move
 
     // Destructor.
     ~DistributedCudaContext();
@@ -557,10 +559,13 @@ private:
      * (0 return value), and a return value of -1 indicates an error, and +1
      * a request to proceed to the next activity level.
      *
+     * @param activity  reference to activity level to adjust
+     * @param quitEarly reference to bool to indicate to terminate early.
+     *
      * @return An int is returned indicating synchronization success (>0),
      * repetition (= 0), or failure (<0).
      */
-    int ReadLnCheck(unsigned int &activity);
+    int ReadLnCheck(unsigned int &activity, bool &quitEarly);
 
     /**
      * \brief Move DistributedCudaContext rvalue into another.
@@ -589,19 +594,6 @@ private:
      * @ returns Nothing. If we can't respond, an exception is thrown.
      */
     void Respond(const char *format, ...);
-
-    /**
-     * \brief Main CUDA kernel.
-     *
-     * This calls the main CUDA kernel.
-     *
-     * @param numSms       Number of SMs to use.
-     * @param threadsPerSm Threads per SM.
-     * @param runForUsecs  Microseconds to run for,
-     *
-     * @return An int representing the result is returned.
-     */
-    int RunSleepKernel(unsigned int numSms, unsigned int threadsPerSm, unsigned int runForUsec);
 
     /**
      * \brief Helper to return whether ECC adds overhead to dram bandwidth for this SKU.
@@ -685,12 +677,7 @@ private:
     int m_outFd { -1 }; //!< file descriptor we write to
 
     // Primary CUDA attributes.
-    CUdevice m_device { 0 };          //!< Cuda ordinal of the device to use
-    CUcontext m_context { nullptr };  //!< Cuda context
-    CUfunction m_cuFuncWaitNs {};     //!< Pointer to waitNs() CUDA kernel
-    CUfunction m_cuFuncWaitCycles {}; //!< Pointer to waitCycles() CUDA kernel
-
-    CUmodule m_module { nullptr }; //!< .PTX file that belongs to m_context
+    CUdevice m_device { 0 }; //!< Cuda ordinal of the device to use
 
     // Simple attributes, computed by Init().
     struct
@@ -750,6 +737,9 @@ private:
      * for m_testFieldId instead of stair stepping from 0 to 100%.
      */
     bool m_targetMaxValue { false };
+
+    CudaWorkerThread m_cudaWorker; /* Worker thread for launching cuda workloads against
+                                      our GPU */
 
     /**@}*/
 };

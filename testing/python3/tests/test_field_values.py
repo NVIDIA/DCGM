@@ -21,6 +21,7 @@ import dcgm_agent_internal
 import logger
 import test_utils
 import dcgm_fields
+import dcgm_fields_internal
 import dcgmvalue
 import time
 import ctypes
@@ -44,14 +45,23 @@ g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES,
     dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE,
     dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE,
+    dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE,
+    dcgm_fields.DCGM_FI_PROF_PIPE_INT_ACTIVE,
+    dcgm_fields.DCGM_FI_PROF_NVOFA0_ACTIVE,
 ]
+for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVDEC0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVDEC7_ACTIVE + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVJPG0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVJPG7_ACTIVE + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVLINK_L0_TX_BYTES, dcgm_fields.DCGM_FI_PROF_NVLINK_L17_RX_BYTES + 1):
+    g_profilingFieldIds.append(fieldId)
 
 def get_usec_since_1970():
     sec = time.time()
     return int(sec * 1000000.0)
 
 @test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
+@test_utils.run_with_injection_gpus(1)
 def test_dcgm_field_values_since_agent(handle, gpuIds):
 
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -86,8 +96,7 @@ def test_dcgm_field_values_since_agent(handle, gpuIds):
     fieldWatcher = dcgm_field_helpers.DcgmFieldGroupWatcher(handle, groupObj.GetId(), fieldGroupObj,
                                                             operationMode, updateFreq, maxKeepAge, maxKeepSamples, 0)
 
-    #DcgmFieldCollectionWatcher triggers a field value update so expectedValueCount should be incremented here as well
-    expectedValueCount += 1
+    # Using injected GPUs, so don't increment expectedValueCount here anymore
 
     assert len(fieldWatcher.values[gpuId][fvGood.fieldId]) == expectedValueCount, "%d != %d" % (len(fieldWatcher.values[gpuId][fvGood.fieldId]), expectedValueCount)
     #Cheat a bit by getting nextSinceTimestamp from the fieldWatcher. We are trying to
@@ -792,9 +801,9 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     #Some field IDs don't generate data by default. For instance, accounting data only works if accounting
     #mode is enabled and processes are running. Field IDs in this list fall into this category and have
     #already been confirmed to generate data within the cache manager
-    exceptionFieldIds = [dcgm_fields.DCGM_FI_DEV_COMPUTE_PIDS,
+    exceptionFieldIds = [dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS,
                          dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA,
-                         dcgm_fields.DCGM_FI_DEV_GRAPHICS_PIDS,
+                         dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS,
                          dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
                          dcgm_fields.DCGM_FI_DEV_VGPU_VM_ID,
                          dcgm_fields.DCGM_FI_DEV_VGPU_VM_NAME,
@@ -802,17 +811,22 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
                          dcgm_fields.DCGM_FI_DEV_VGPU_UUID,
                          dcgm_fields.DCGM_FI_DEV_VGPU_DRIVER_VERSION,
                          dcgm_fields.DCGM_FI_DEV_VGPU_MEMORY_USAGE,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_LICENSE_INSTANCE_STATE,
+                         dcgm_fields.DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
                          dcgm_fields.DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT,
                          dcgm_fields.DCGM_FI_DEV_VGPU_PCI_ID,
                          dcgm_fields.DCGM_FI_DEV_VGPU_ENC_STATS,
                          dcgm_fields.DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO,
                          dcgm_fields.DCGM_FI_DEV_VGPU_FBC_STATS,
                          dcgm_fields.DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO,
+                         dcgm_fields.DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID,
                          dcgm_fields.DCGM_FI_DEV_GPU_NVLINK_ERRORS,
-                         dcgm_fields.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
-                         dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES]
+                         dcgm_fields_internal.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
+                         dcgm_fields_internal.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES]
     exceptionFieldIds.extend(g_profilingFieldIds)
+
+    migFieldIds = [dcgm_fields.DCGM_FI_DEV_MIG_GI_INFO,
+                   dcgm_fields.DCGM_FI_DEV_MIG_CI_INFO,
+                   dcgm_fields.DCGM_FI_DEV_MIG_ATTRIBUTES]
 
     baseFieldIds = [dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
                     dcgm_fields.DCGM_FI_DEV_FB_FREE]
@@ -826,6 +840,8 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
            moduleAttribute != 'DCGM_FI_UNKNOWN':
             fieldIdVars[moduleAttribute] = dcgm_fields.__dict__[moduleAttribute]
 
+    migModeEnabled = test_utils.is_mig_mode_enabled()
+
     numErrors = 0
 
     #Add watches on all known fieldIds
@@ -836,7 +852,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         maxKeepAge = 3600.0
         maxKeepEntries = 100
         try:
-            if test_utils.is_mig_mode_enabled() and fieldId == dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA:
+            if migModeEnabled and fieldId == dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA:
                 # We cannot enable accounting mode with MIG mode enabled - CUDANVML-153
                 continue
 
@@ -855,6 +871,9 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     for fieldIdName in list(fieldIdVars.keys()):
         fieldId = fieldIdVars[fieldIdName]
 
+        if (not migModeEnabled) and (fieldId in migFieldIds):
+            continue #Don't check MIG fields if MIG mode is disabled
+
         #Verify that we can fetch field metadata. This call will throw an exception on error
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
 
@@ -864,12 +883,14 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         if fieldId in exceptionFieldIds:
             continue #Don't check fields that are excluded from testing
         #Skip NvSwitch fields since they are pushed from fabric manager rather than polled
-        if fieldId >= dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 and fieldId <= dcgm_fields.DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS:
+        if fieldId >= dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 and fieldId <= dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
             continue
 
         if fieldValue.status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
             #It's ok for fields to not be supported. We got a useful error code
             logger.info("field %s (id %d) returned st DCGM_ST_NOT_SUPPORTED (OK)" % (fieldIdName, fieldId))
+        elif migModeEnabled and ((fieldId == dcgm_fields.DCGM_FI_DEV_MIG_CI_INFO) and (fieldValue.status == dcgm_structs.DCGM_ST_NO_DATA)):
+            logger.info("field %s (id %d) returned st DCGM_ST_NO_DATA (OK), no compute instances present" % (fieldIdName, fieldId))
         elif fieldValue.status != dcgm_structs.DCGM_ST_OK:
             logger.error("No value for field %s (id %d). status: %d" % (fieldIdName, fieldId, fieldValue.status))
             numErrors += 1
@@ -991,29 +1012,6 @@ def test_dcgm_device_attributes_v3(handle, gpuIds):
         assert gpuAttrib.identifiers.pciDeviceId != 0, "gpuAttrib.identifiers.pciDeviceId: %08X" % gpuAttrib.identifiers.pciDeviceId
         assert gpuAttrib.identifiers.pciSubSystemId != 0, "gpuAttrib.identifiers.pciSubSystemId: %08X" % gpuAttrib.identifiers.pciSubSystemId
         assert gpuAttrib.settings.confidentialComputeMode >= 0, "gpuAttrib.settings.confidentialComputeMode: '%d'" % gpuAttrib.settings.confidentialComputeMode
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_device_attributes_v2(handle, gpuIds):
-    for gpuId in gpuIds:
-        gpuAttrib = dcgm_agent.dcgmGetDeviceAttributes(handle, gpuId, version=dcgm_structs.dcgmDeviceAttributes_version2)
-
-        #Validate field values
-        assert gpuAttrib.version != 0, "gpuAttrib.version == 0"
-        assert len(gpuAttrib.identifiers.brandName) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.brandName), \
-            "gpuAttrib.identifiers.brandName: '%s'" % gpuAttrib.identifiers.brandName
-        assert len(gpuAttrib.identifiers.deviceName) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.deviceName), \
-            "gpuAttrib.identifiers.deviceName: '%s'" % gpuAttrib.identifiers.deviceName
-        assert len(gpuAttrib.identifiers.pciBusId) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.pciBusId), \
-            "gpuAttrib.identifiers.pciBusId: '%s'" % gpuAttrib.identifiers.pciBusId
-        assert len(gpuAttrib.identifiers.uuid) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.uuid), \
-            "gpuAttrib.identifiers.uuid: '%s'" % gpuAttrib.identifiers.uuid
-        assert len(gpuAttrib.identifiers.vbios) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.vbios), \
-            "gpuAttrib.identifiers.vbios: '%s'" % gpuAttrib.identifiers.vbios
-        assert len(gpuAttrib.identifiers.driverVersion) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.driverVersion), \
-            "gpuAttrib.identifiers.driverVersion: '%s'" % gpuAttrib.identifiers.driverVersion
-        assert gpuAttrib.identifiers.pciDeviceId != 0, "gpuAttrib.identifiers.pciDeviceId: %08X" % gpuAttrib.identifiers.pciDeviceId
-        assert gpuAttrib.identifiers.pciSubSystemId != 0, "gpuAttrib.identifiers.pciSubSystemId: %08X" % gpuAttrib.identifiers.pciSubSystemId
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()

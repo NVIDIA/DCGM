@@ -31,7 +31,7 @@ TestAllocator::TestAllocator()
 TestAllocator::~TestAllocator()
 {}
 
-int TestAllocator::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestAllocator::Init(const TestDcgmModuleInitParams &initParams)
 {
     return 0;
 }

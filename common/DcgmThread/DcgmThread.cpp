@@ -73,12 +73,12 @@ int DcgmThread::Start()
     {
         if (m_hasRun)
         {
-            PRINT_ERROR("%u", "Can't start thread. Already running as handle %u", (unsigned int)m_pthread);
+            log_error("Can't start thread. Already running as handle {}", (unsigned int)m_pthread);
             return -100;
         }
         else if (m_hasStarted)
         {
-            PRINT_ERROR("", "Can't start thread. Thread is already about to start running");
+            log_error("Can't start thread. Thread is already about to start running");
             return -101;
         }
     }
@@ -91,7 +91,7 @@ int DcgmThread::Start()
     if (st)
     {
         m_pthread = 0;
-        PRINT_ERROR("%d", "Unable to pthread_create. errno=%d", st);
+        log_error("Unable to pthread_create. errno={}", st);
         return -200;
     }
 
@@ -141,13 +141,13 @@ void DcgmThread::Kill()
     if (st == 0 || st == ESRCH)
         return; /* Thread terminated */
 
-    PRINT_WARNING("%u %d", "pthread_cancel(%u) returned %d", (unsigned int)m_pthread, st);
+    log_warning("pthread_cancel({}) returned {}", (unsigned int)m_pthread, st);
 }
 
 /*****************************************************************************/
 void DcgmThread::SendSignal(int signum)
 {
-    PRINT_DEBUG("%u %d", "Signalling thread %u with signum %d", (unsigned int)m_pthread, signum);
+    log_debug("Signalling thread {} with signum {}", (unsigned int)m_pthread, signum);
     pthread_kill(m_pthread, signum);
 }
 
@@ -181,7 +181,7 @@ int DcgmThread::Wait(int timeoutMs)
             {
                 // The thread is guaranteed to have exited, only if the pthread_join call succeeded
                 m_alreadyJoined.store(false);
-                PRINT_ERROR("%p %d", "pthread_join(%p) returned st %d", (void *)m_pthread, st);
+                log_error("pthread_join({}) returned st {}", (void *)m_pthread, st);
                 return 1;
             }
 
@@ -239,7 +239,7 @@ int DcgmThread::Wait(int timeoutMs)
         {
             // The thread is guaranteed to have exited, only if the pthread_join call succeeded
             m_alreadyJoined.store(false);
-            PRINT_ERROR("%p %d", "pthread_join(%p) returned st %d", (void *)m_pthread, st);
+            log_error("pthread_join({}) returned st {}", (void *)m_pthread, st);
             return 1;
         }
     }
@@ -269,7 +269,7 @@ int DcgmThread::Wait(int timeoutMs)
     else if (!st)
         return 0; /* Thread was gone */
 
-    PRINT_ERROR("%u %d", "pthread_timedjoin_np(%u) returned st %d", m_pthread, st);
+    log_error("pthread_timedjoin_np({}) returned st {}", m_pthread, st);
     return 1;
 #endif
 }
@@ -296,7 +296,7 @@ void DcgmThread::RunInternal(void)
 {
     m_hasRun = true;
 
-    PRINT_DEBUG("%u", "Thread handle %u running", (unsigned int)m_pthread);
+    log_debug("Thread handle {} running", (unsigned int)m_pthread);
     try
     {
         run();
@@ -305,7 +305,7 @@ void DcgmThread::RunInternal(void)
     {
         m_exception = std::current_exception();
     }
-    PRINT_DEBUG("%u", "Thread id %u stopped", (unsigned int)m_pthread);
+    log_debug("Thread id {} stopped", (unsigned int)m_pthread);
 
     m_hasExited = true;
 }
@@ -380,12 +380,12 @@ void DcgmThread::InstallSignalHandler(void)
     int ret = sigaction(DCGM_THREAD_SIGNUM, NULL, &currentSigHandler);
     if (ret < 0)
     {
-        PRINT_ERROR("%d", "Got st %d from sigaction", ret);
+        log_error("Got st {} from sigaction", ret);
         return;
     }
     if (currentSigHandler.sa_handler != SIG_DFL && currentSigHandler.sa_handler != SIG_IGN)
     {
-        PRINT_INFO("%d", "Signal %d is already handled. Nothing to do.", DCGM_THREAD_SIGNUM);
+        log_info("Signal {} is already handled. Nothing to do.", DCGM_THREAD_SIGNUM);
         return;
     }
 
@@ -398,7 +398,7 @@ void DcgmThread::InstallSignalHandler(void)
     ret = sigaction(DCGM_THREAD_SIGNUM, &newSigHandler, NULL);
     if (ret < 0)
     {
-        PRINT_ERROR("%d", "Got error %d from sigaction while adding our signal handler.", ret);
+        log_error("Got error {} from sigaction while adding our signal handler.", ret);
     }
 }
 

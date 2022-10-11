@@ -26,6 +26,7 @@ from distutils.version import LooseVersion # pylint: disable=import-error,no-nam
 import dcgm_structs
 import dcgm_agent_internal
 import dcgm_fields
+import dcgm_fields_internal
 import pydcgm
 import logger
 import test_utils
@@ -233,7 +234,6 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
 # generating graphs may cause hostengine to timeout so make timeout an extra 20 sec
 @test_utils.run_with_standalone_host_engine(timeout=BOUNDED_TEST_DURATION + 20)
 @test_utils.run_with_initialized_client()
-@test_utils.run_with_introspection_enabled(runIntervalMs=50)
 def test_dcgm_standalone_perf_bounded(handle):
     '''
     Test that runs some subtests.  When we bound the number of samples to keep for each field: 
@@ -415,10 +415,10 @@ def helper_field_has_variable_size(fieldId):
     '''
     Returns True if a field has a variable memory size per record. False if it doesn't.
     '''
-    if fieldId == dcgm_fields.DCGM_FI_DEV_GPU_UTIL_SAMPLES or \
-       fieldId == dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES or \
-       fieldId == dcgm_fields.DCGM_FI_DEV_GRAPHICS_PIDS or \
-       fieldId == dcgm_fields.DCGM_FI_DEV_COMPUTE_PIDS:
+    if fieldId == dcgm_fields_internal.DCGM_FI_DEV_GPU_UTIL_SAMPLES or \
+       fieldId == dcgm_fields_internal.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES or \
+       fieldId == dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS or \
+       fieldId == dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS:
        return True
 
     fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)

@@ -50,8 +50,8 @@ public:
     [[nodiscard]] std::string const &GetLogFileName() const; //!< Log file name
     [[nodiscard]] bool IsLogRotate() const;                  //!< Flag to rotate log file
 
-    //! Get modules to blacklist
-    [[nodiscard]] std::set<dcgmModuleId_t> const &GetBlacklistedModules() const;
+    //! Get modules to add to the denylist
+    [[nodiscard]] std::set<dcgmModuleId_t> const &GetDenylistedModules() const;
 
     [[nodiscard]] std::string const &GetServiceAccount() const; //!< Service account for unprivileged processes
 

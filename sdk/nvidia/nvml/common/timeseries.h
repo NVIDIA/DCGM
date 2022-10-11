@@ -154,7 +154,7 @@ extern "C"
  *         <0 TS_ST_? #define on error
  *
  */
-    int timeseries_insert_string(timeseries_p ts, timelib64_t timestamp, char *value);
+    int timeseries_insert_string(timeseries_p ts, timelib64_t timestamp, const char *value);
 
     /*****************************************************************************/
     /*

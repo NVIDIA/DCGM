@@ -42,13 +42,13 @@ dcgmReturn_t DcgmGdFieldGroup::Init(dcgmHandle_t handle,
 
     if (handle == (dcgmHandle_t) nullptr)
     {
-        PRINT_ERROR("", "Cannot initialize with an invalid DCGM handle");
+        log_error("Cannot initialize with an invalid DCGM handle");
         return DCGM_ST_BADPARAM;
     }
 
     if (fieldIds.empty())
     {
-        PRINT_ERROR("", "Cannot initialize the field group with an empty list of field ids");
+        log_error("Cannot initialize the field group with an empty list of field ids");
         return DCGM_ST_BADPARAM;
     }
 

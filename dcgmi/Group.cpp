@@ -58,7 +58,7 @@ dcgmReturn_t Group::RunGroupList(dcgmHandle_t mDcgmHandle, bool json)
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot retrieve group list. Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%d", "Error: could not retrieve group lists. Return: %d", result);
+        log_error("Error: could not retrieve group lists. Return: {}", result);
         return result;
     }
 
@@ -83,10 +83,9 @@ dcgmReturn_t Group::RunGroupList(dcgmHandle_t mDcgmHandle, bool json)
             result = RunGroupInfo(mDcgmHandle, out["Groups"][ss.str()]);
             if (DCGM_ST_OK != result)
             {
-                PRINT_ERROR("%u %d",
-                            "Error in displaying group info with group ID: %u. Return: %d",
-                            (unsigned int)(uintptr_t)groupId,
-                            result);
+                log_error("Error in displaying group info with group ID: {}. Return: {}",
+                          (unsigned int)(uintptr_t)groupId,
+                          result);
                 return result;
             }
         }
@@ -107,7 +106,7 @@ dcgmReturn_t Group::RunGroupCreate(dcgmHandle_t mDcgmHandle, dcgmGroupType_t gro
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot create group " << groupName << ". Return: " << errorString(result) << std::endl;
-        PRINT_ERROR("%u %d", "Error: could not create group with ID: %u. Return: %d", (unsigned int)newGroupId, result);
+        log_error("Error: could not create group with ID: {}. Return: {}", (unsigned int)newGroupId, result);
         return result;
     }
 
@@ -135,8 +134,7 @@ dcgmReturn_t Group::RunGroupDestroy(dcgmHandle_t mDcgmHandle)
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Cannot destroy group " << (unsigned int)(uintptr_t)groupId << ". Return: " << error << "."
                   << std::endl;
-        PRINT_ERROR(
-            "%u %d", "Error in destroying group with ID: %u. Return: %d", (unsigned int)(uintptr_t)groupId, result);
+        log_error("Error in destroying group with ID: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
         return result;
     }
 
@@ -180,10 +178,7 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outG
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to retrieve information about group " << (unsigned int)(uintptr_t)groupId
                   << ". Return: " << error << "." << std::endl;
-        PRINT_ERROR("%u %d",
-                    "Error retrieving info on group with ID: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error("Error retrieving info on group with ID: {}. Return: {}", (unsigned int)(uintptr_t)groupId, result);
         return result;
     }
 
@@ -257,7 +252,7 @@ dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add)
     result = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
     if (DCGM_ST_OK != result)
     {
-        PRINT_ERROR("%d", "Error: parsing for GPUs failed. Return: %d", result);
+        log_error("Error: parsing for GPUs failed. Return: {}", result);
         return result;
     }
 

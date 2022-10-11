@@ -18,6 +18,7 @@
 #include "DcgmGPUHardwareLimits.h"
 #include "DcgmLogging.h"
 #include "dcgm_errors.h"
+#include "dcgm_fields_internal.hpp"
 #include <assert.h>
 #include <dirent.h>
 #include <dlfcn.h>
@@ -68,7 +69,7 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
 {
     if (UsingFakeGpus())
     {
-        PRINT_ERROR("%s", "Plugin is using fake gpus");
+        log_error("Plugin is using fake gpus");
         SetResult(NVVS_RESULT_PASS);
         checkPageRetirement();
         return;
@@ -77,8 +78,8 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     TestParameters testParameters(*(m_infoStruct.defaultTestParameters));
     testParameters.SetFromStruct(numParameters, tpStruct);
 
-    if (testParameters.GetString(SW_STR_DO_TEST) == "blacklist")
-        checkBlacklist();
+    if (testParameters.GetString(SW_STR_DO_TEST) == "denylist")
+        checkDenylist();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "permissions")
         checkPermissions();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "libraries_nvml")
@@ -93,7 +94,7 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
 
         if (!shouldCheckPersistence)
         {
-            PRINT_INFO("", "Skipping persistence check");
+            log_info("Skipping persistence check");
             SetResult(NVVS_RESULT_SKIP);
         }
         else
@@ -263,7 +264,7 @@ bool Software::checkLibraries(libraryCheck_t checkLib)
     return fail;
 }
 
-bool Software::checkBlacklist()
+bool Software::checkDenylist()
 {
     // check whether the nouveau driver is installed and if so, fail this test
     bool status = false;
@@ -271,7 +272,7 @@ bool Software::checkBlacklist()
     const std::string searchPaths[] = { "/sys/bus/pci/devices", "/sys/bus/pci_express/devices" };
     const std::string driverDirs[]  = { "driver", "subsystem/drivers" };
 
-    const std::vector<std::string> blackList = { "nouveau" };
+    const std::vector<std::string> denyList = { "nouveau" };
 
     for (int i = 0; i < sizeof(searchPaths) / sizeof(searchPaths[0]); i++)
     {
@@ -296,7 +297,7 @@ bool Software::checkBlacklist()
                 std::string baseDir = searchPaths[i];
                 std::stringstream testPath;
                 testPath << baseDir << "/" << ent->d_name << "/" << driverDirs[j];
-                if (checkDriverPathBlacklist(testPath.str(), blackList))
+                if (checkDriverPathDenylist(testPath.str(), denyList))
                 {
                     SetResult(NVVS_RESULT_FAIL);
                     status = true;
@@ -311,7 +312,7 @@ bool Software::checkBlacklist()
     return status;
 }
 
-int Software::checkDriverPathBlacklist(std::string driverPath, std::vector<std::string> const &blackList)
+int Software::checkDriverPathDenylist(std::string driverPath, std::vector<std::string> const &denyList)
 {
     int ret;
     char symlinkTarget[1024];
@@ -347,12 +348,12 @@ int Software::checkDriverPathBlacklist(std::string driverPath, std::vector<std::
     else
     {
         symlinkTarget[ret] = '\0'; // readlink doesn't null terminate
-        for (auto const &item : blackList)
+        for (auto const &item : denyList)
         {
             if (strcmp(item.c_str(), basename(symlinkTarget)) == 0)
             {
                 DcgmError d { DcgmError::GpuIdTag::Unknown };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BLACKLISTED_DRIVER, d, item.c_str());
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DENYLISTED_DRIVER, d, item.c_str());
                 AddError(d);
                 return 1;
             }
@@ -747,7 +748,7 @@ int Software::checkForBadEnvVaribles()
         /* Does the variable exist in the environment? */
         if (getenv(checkKey.c_str()) == nullptr)
         {
-            PRINT_DEBUG("%s", "Env Variable %s not found (GOOD)", checkKey.c_str());
+            log_debug("Env Variable {} not found (GOOD)", checkKey.c_str());
             continue;
         }
 

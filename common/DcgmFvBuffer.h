@@ -186,7 +186,7 @@ public:
     dcgmBufferedFv_t *AddStringValue(dcgm_field_entity_group_t entityGroupId,
                                      dcgm_field_eid_t entityId,
                                      unsigned short fieldId,
-                                     char *value,
+                                     const char *value,
                                      long long timestamp,
                                      dcgmReturn_t status);
     dcgmBufferedFv_t *AddBlobValue(dcgm_field_entity_group_t entityGroupId,
@@ -196,6 +196,17 @@ public:
                                    size_t valueSize,
                                    long long timestamp,
                                    dcgmReturn_t status);
+    /**************************************************************************
+     * Append a blank value to this fvBuffer of the correct field type of fieldId
+     *
+     * Returns A pointer to the allocated field-value structure. Do NOT zero
+     *             this structure as all of its fields have been set before being returned
+     *         nullptr on error (will be logged)
+     */
+    dcgmBufferedFv_t *AddBlankValue(dcgm_field_entity_group_t entityGroupId,
+                                    dcgm_field_eid_t entityId,
+                                    unsigned short fieldId,
+                                    dcgmReturn_t status);
 
 private:
     /**************************************************************************

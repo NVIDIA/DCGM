@@ -26,11 +26,28 @@
 #include "DcgmLogging.h"
 #include "DcgmRecorder.h"
 #include "NvvsCommon.h"
+#include "PluginStrings.h"
 #include "dcgm_agent.h"
 #include "dcgm_fields.h"
 #include "timelib.h"
 
 const long long defaultFrequency = 1000000; // update each field every second (a million microseconds)
+
+errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SBE_ERROR_THRESHOLD },
+                                      { DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, nullptr },
+                                      { DCGM_FI_DEV_THERMAL_VIOLATION, nullptr },
+                                      { DCGM_FI_DEV_XID_ERRORS, nullptr },
+                                      { DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PCIE_STR_MAX_PCIE_REPLAYS },
+                                      { 0, nullptr } };
+
+unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
+                                        DCGM_FI_DEV_GPU_UTIL,
+                                        DCGM_FI_DEV_POWER_USAGE,
+                                        DCGM_FI_DEV_SM_CLOCK,
+                                        DCGM_FI_DEV_MEM_CLOCK,
+                                        DCGM_FI_DEV_POWER_VIOLATION,
+                                        DCGM_FI_DEV_CLOCK_THROTTLE_REASONS,
+                                        0 };
 
 DcgmRecorder::DcgmRecorder()
     : m_fieldIds()
@@ -354,7 +371,7 @@ int DcgmRecorder::WriteToFile(const std::string &filename, int logFileType, long
 
     if (f.fail())
     {
-        PRINT_ERROR("%s %s", "Unable to open file %s: '%s'", filename.c_str(), strerror(errno));
+        log_error("Unable to open file {}: '{}'", filename, strerror(errno));
         return -1;
     }
 
@@ -652,7 +669,7 @@ dcgmReturn_t DcgmRecorder::CheckPerSecondErrorConditions(const std::vector<unsig
 
     if (fieldIds.size() != failureThreshold.size())
     {
-        PRINT_ERROR("", "One failure threshold must be specified for each field id");
+        log_error("One failure threshold must be specified for each field id");
         return DCGM_ST_BADPARAM;
     }
 
@@ -931,7 +948,7 @@ std::string DcgmRecorder::GetGpuUtilizationNote(unsigned int gpuId, timelib64_t 
     {
         std::string error;
         GetErrorString(ret, error);
-        PRINT_ERROR("%s %u", "unable to query for gpu temperature: %s for GPU %u", error.c_str(), gpuId);
+        log_error("unable to query for gpu temperature: {} for GPU {}", error, gpuId);
         return error;
     }
 
@@ -955,4 +972,92 @@ dcgmReturn_t DcgmRecorder::GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAtt
 void DcgmRecorder::AddDiagStats(const std::vector<dcgmDiagCustomStats_t> &customStats)
 {
     m_customStatHolder.AddDiagStats(customStats);
+}
+
+long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp)
+{
+    unsigned int flags           = DCGM_FV_FLAG_LIVE_DATA;
+    dcgmFieldValue_v2 maxTempVal = {};
+    dcgmReturn_t ret             = GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
+
+    if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
+    {
+        DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuInfo.gpuId << ": "
+                         << errorString(ret) << ", defaulting to the slowdown temperature";
+
+        if (gpuInfo.status == DcgmEntityStatusFake)
+        {
+            /* fake gpus don't report max temp */
+            return 85;
+        }
+        else
+        {
+            return gpuInfo.attributes.thermalSettings.slowdownTemp;
+        }
+    }
+    else
+    {
+        return maxTempVal.value.i64;
+    }
+}
+
+std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
+                                                       timelib64_t startTime,
+                                                       nvvsPluginResult_t &result,
+                                                       std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfos)
+{
+    std::vector<DcgmError> errors;
+    std::vector<unsigned short> fieldIds;
+    std::vector<dcgmTimeseriesInfo_t> thresholds;
+    std::vector<dcgmTimeseriesInfo_t> *thresholdsPtr = nullptr;
+    bool needThresholds                              = false;
+    dcgmTimeseriesInfo_t tsInfo                      = {};
+    tsInfo.isInt                                     = true;
+
+    for (unsigned int i = 0; standardErrorFields[i].fieldId != 0; i++)
+    {
+        if (standardErrorFields[i].thresholdName == nullptr)
+        {
+            fieldIds.push_back(standardErrorFields[i].fieldId);
+            tsInfo.val.i64 = 0;
+            thresholds.push_back(tsInfo);
+        }
+        else if (tp.HasKey(standardErrorFields[i].thresholdName))
+        {
+            fieldIds.push_back(standardErrorFields[i].fieldId);
+            needThresholds = true;
+            tsInfo.val.i64 = tp.GetDouble(standardErrorFields[i].thresholdName);
+            thresholds.push_back(tsInfo);
+        }
+    }
+
+    if (needThresholds)
+    {
+        thresholdsPtr = &thresholds;
+    }
+
+    for (auto &&gpuInfo : gpuInfos)
+    {
+        long long maxTemp = DetermineMaxTemp(gpuInfo, tp);
+        int ret           = CheckErrorFields(fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, errors, startTime);
+
+        if (ret == DR_COMM_ERROR)
+        {
+            DCGM_LOG_ERROR << "Unable to read the error values from the hostengine";
+            result = NVVS_RESULT_FAIL;
+        }
+        else if (ret == DR_VIOLATION || result == NVVS_RESULT_FAIL)
+        {
+            result = NVVS_RESULT_FAIL;
+            // Check for throttling errors
+            ret = CheckForThrottling(gpuInfo.gpuId, startTime, errors);
+            if (ret == DR_COMM_ERROR)
+            {
+                DCGM_LOG_ERROR << "Unable to read the throttling information from the hostengine";
+                result = NVVS_RESULT_FAIL;
+            }
+        }
+    }
+
+    return errors;
 }

@@ -13,11 +13,11 @@
 # limitations under the License.
 import fileinput 
 
-whitelist = 'whitelist.txt'
+allowlist = 'allowlist.txt'
 tests = ['quick', 'long']
 template = 'template.txt'
 
-f = open(whitelist, 'r')
+f = open(allowlist, 'r')
 tuples = list()
 
 for line in f:

@@ -26,7 +26,6 @@
 #include "DcgmGroupManager.h"
 #include "DcgmIpc.h"
 #include "DcgmModule.h"
-#include "DcgmProtobuf.h"
 #include "DcgmRequest.h"
 #include "DcgmWatcher.h"
 #include "dcgm_agent.h"
@@ -89,25 +88,6 @@ public:
     dcgmReturn_t RunServer(unsigned short portNumber, char const *socketPath, unsigned int isConnectionTCP);
 
     /*****************************************************************************
-     * This method is used to process one or more commands at the host engine.
-     * For Host Engine, this method is intended to be a common processing method
-     * for both Embedded and Stand-alone use case.
-     * @param pVecCmdsToProcess : Serves as both Input and Output argument
-     * @param pIsComplete       : Notifies if the command is complete with its processing
-     * @param pConnection       : Pointer to the actual connection object this request came
-     *                            from or NULL if this is an embedded request
-     * @param requestId         : ID of the request this came from
-     *
-     *
-     * @return
-     * 0        On Success
-     * <0       On Error
-     *****************************************************************************/
-    int HandleCommands(std::vector<dcgm::Command *> *pVecCmdsToProcess,
-                       dcgm_connection_id_t connectionId,
-                       dcgm_request_id_t requestId);
-
-    /*****************************************************************************
      * This method is used to handle a client disconnecting from the host engine
      *****************************************************************************/
     void OnConnectionRemove(dcgm_connection_id_t connectionId);
@@ -137,7 +117,6 @@ public:
     }
 
     /*****************************************************************************/
-    dcgmReturn_t ProcessProtobufMessage(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
     dcgmReturn_t ProcessModuleCommandMsg(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
     dcgmReturn_t ProcessModuleCommand(dcgm_module_command_header_t *moduleCommand);
 
@@ -152,7 +131,7 @@ public:
      *
      * activeOnly     IN: If set to 1, will not count GPUs that are inaccessible for any
      *                    reason. Reasons include (but are not limited to):
-     *                    - not being whitelisted
+     *                    - not on the allowlist
      *                    - being blocked by cgroups
      *                    - fallen off bus
      * entityGroupId IN: Which entity group to fetch the entities of
@@ -188,26 +167,6 @@ public:
     dcgmReturn_t GetDcgmGpuIds(std::vector<unsigned int> &gpuIds, int onlySupported);
 
     dcgmReturn_t GetDcgmGpuArch(dcgm_field_eid_t entityId, dcgmChipArchitecture_t &arch);
-
-    /*****************************************************************************
-     * Process a WATCH_FIELD_VALUE message
-     *****************************************************************************/
-    dcgmReturn_t WatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                 dcgm_field_eid_t entityId,
-                                 unsigned short dcgmFieldId,
-                                 timelib64_t monitorFrequencyUsec,
-                                 double maxSampleAge,
-                                 int maxKeepSamples,
-                                 const DcgmWatcher &watcher);
-
-    /*****************************************************************************
-     * Process an UNWATCH_FIELD_VALUE message
-     *****************************************************************************/
-    dcgmReturn_t UnwatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                   dcgm_field_eid_t entityId,
-                                   unsigned short dcgmFieldId,
-                                   int clearCache,
-                                   const DcgmWatcher &watcher);
 
     /****************************************************************************
      * Get the most recent sample of a field
@@ -311,7 +270,7 @@ public:
      ****************************************************************************/
     dcgmReturn_t WatchFieldGroup(unsigned int groupId,
                                  dcgmFieldGrp_t fieldGroupId,
-                                 timelib64_t monitorFrequencyUsec,
+                                 timelib64_t monitorIntervalUsec,
                                  double maxSampleAge,
                                  int maxKeepSamples,
                                  DcgmWatcher const &watcher);
@@ -330,7 +289,7 @@ public:
     dcgmReturn_t HelperGetFieldSummary(dcgmFieldSummaryRequest_t &fieldSummary);
     dcgmReturn_t HelperCreateFakeEntities(dcgmCreateFakeEntities_t *fakeEntities);
     dcgmReturn_t HelperWatchPredefined(dcgmWatchPredefined_t *watchPredef, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t HelperModuleBlacklist(dcgmModuleId_t moduleId);
+    dcgmReturn_t HelperModuleDenylist(dcgmModuleId_t moduleId);
     dcgmReturn_t HelperModuleStatus(dcgmModuleGetStatuses_v1 &msg);
     unsigned int GetHostEngineHealth() const;
 
@@ -342,6 +301,8 @@ public:
     void SetServiceAccount(const char *serviceAccout);
     std::string const &GetServiceAccount() const;
 
+    dcgmReturn_t NvmlInjectFieldValue(dcgm_field_eid_t gpuId, const nvmlFieldValue_t &value);
+
 private:
     std::mutex m_lock; /* Lock used for accessing table of job stats and the objects within them */
 
@@ -352,82 +313,15 @@ private:
     int Unlock();
 
     /*****************************************************************************
-     * This method is used to process a single command on the host engine
-     *****************************************************************************/
-    int ProcessRequest(dcgm::Command *pCmd,
-                       bool *pIsComplete,
-                       dcgm_connection_id_t connectionId,
-                       dcgm_request_id_t requestId);
-
-    /*****************************************************************************
      Deletes an object if it is not null then sets its pointer to null
      *****************************************************************************/
     template <typename T>
     static void deleteNotNull(T *&obj);
 
     /*****************************************************************************
-     * This method is used to get GPU Ids corresponding to all the devices on
-     * the node. The GPU Ids are valid for a life-span of hostengine and cannot
-     * be assumed to get same value across the reboots.
-     *****************************************************************************/
-    dcgmReturn_t GetDcgmGpuIds(dcgm::FieldMultiValues *pDcgmFieldMultiValues, int onlySupported);
-
-    /*****************************************************************************
-     * This method is used to query Cache Manager to get latest sample for a field
-     *****************************************************************************/
-    dcgmReturn_t GetFieldValue(dcgm_field_entity_group_t entityGroupId,
-                               dcgm_field_eid_t entityId,
-                               unsigned int fieldId,
-                               dcgm::FieldValue *pDcgmFieldValue);
-
-    /*****************************************************************************
-     * This method is used to get values corresponding to the fields
-     *****************************************************************************/
-    dcgmReturn_t GetValuesForFields(dcgm_field_entity_group_t entityGroupId,
-                                    dcgm_field_eid_t entityId,
-                                    unsigned int fieldIds[],
-                                    unsigned int count,
-                                    dcgm::FieldValue values[]);
-
-    /*****************************************************************************
-     * This method is used to inject a field value
-     *****************************************************************************/
-    dcgmReturn_t InjectFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                  dcgm_field_eid_t entityId,
-                                  dcgm::InjectFieldValue *injectFieldValue);
-
-    /*****************************************************************************
      * This method is get information for a field in the cache manager
      *****************************************************************************/
     dcgmReturn_t GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_t *fieldInfo);
-
-    /*****************************************************************************
-     * Process a WATCH_FIELD_VALUE message
-     *****************************************************************************/
-    dcgmReturn_t WatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                 dcgm_field_eid_t entityId,
-                                 const dcgm::WatchFieldValue *watchFieldValue,
-                                 const DcgmWatcher &watcher);
-
-    /*****************************************************************************
-     * Process an UNWATCH_FIELD_VALUE message
-     *****************************************************************************/
-    dcgmReturn_t UnwatchFieldValue(dcgm_field_entity_group_t entityGroupId,
-                                   dcgm_field_eid_t entityId,
-                                   const dcgm::UnwatchFieldValue *unwatchFieldValue,
-                                   const DcgmWatcher &watcher);
-
-    /*****************************************************************************
-     * Process an UPDATE_ALL_FIELDS message
-     *****************************************************************************/
-    dcgmReturn_t UpdateAllFields(const dcgm::UpdateAllFields *updateAllFields);
-
-    /*****************************************************************************
-     * Process an GET_FIELD_MULTIPLE_VALUES message
-     *****************************************************************************/
-    dcgmReturn_t GetFieldMultipleValues(dcgm_field_entity_group_t entityGroupId,
-                                        dcgm_field_eid_t entityId,
-                                        dcgm::FieldMultiValues *pFieldMultiValues);
 
     /*****************************************************************************
      * This method is used to try to load a module of DCGM
@@ -459,13 +353,14 @@ private:
      * Add a watch on a field group for all GPUs
      *
      * activeOnly: Whether or not to only watch the field group on GPUs that
-     *             are active. Inactive GPUs include GPUs that are not whitelisted
+     *             are active. Inactive GPUs include GPUs that are not on the
+     *             allowlist.
      *
      * This helper is used both internally and externally
      *
      ****************************************************************************/
     dcgmReturn_t WatchFieldGroupAllGpus(dcgmFieldGrp_t fieldGroupId,
-                                        timelib64_t monitorFrequencyUsec,
+                                        timelib64_t monitorIntervalUsec,
                                         double maxSampleAge,
                                         int maxKeepSamples,
                                         int activeOnly,
@@ -477,8 +372,6 @@ private:
     dcgmReturn_t TranslateBitmapToGpuVector(uint64_t gpuBitmap, std::vector<unsigned int> &gpuIds);
 
     void RemoveUnhealthyGpus(std::vector<unsigned int> &gpuIds);
-
-    dcgmReturn_t ProcessSelectGpusByTopology(dcgm::Command *pCmd, bool *pIsComplete);
 
     /*****************************************************************************
      Helper method to RPC to the health module for a health check
@@ -492,57 +385,6 @@ private:
      Helper method for watching the fields that the host engine cares about
      *****************************************************************************/
     dcgmReturn_t WatchHostEngineFields(void);
-
-    /*****************************************************************************
-     Helper methods for processing the different commands on the host engine
-     *****************************************************************************/
-    dcgmReturn_t ProcessClientLogin(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessGroupCreate(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessAddRemoveGroup(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessGroupDestroy(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessGroupInfo(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessGroupGetallIds(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    static dcgmReturn_t ProcessDiscoverDevices(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetEntityList(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessRegForPolicyUpdate(dcgm::Command *pCmd,
-                                           bool *pIsComplete,
-                                           dcgm_connection_id_t pConnectionId,
-                                           dcgm_request_id_t requestId);
-    dcgmReturn_t ProcessUnregForPolicyUpdate(dcgm::Command *pCmd, bool *pIsComplete, dcgm_connection_id_t connectionId);
-    dcgmReturn_t ProcessSetCurrentViolPolicy(dcgm::Command *pCmd,
-                                             bool *pIsComplete,
-                                             dcgm_connection_id_t pConnectionId);
-    dcgmReturn_t ProcessGetCurrentViolPolicy(dcgm::Command *pCmd, bool *pIsComplete);
-    static dcgmReturn_t ProcessInjectFieldValue(dcgm::Command *pCmd, bool *pIsComplete);
-    static dcgmReturn_t ProcessGetFieldLatestValue(dcgm::Command *pCmd, bool *pIsComplete);
-    static dcgmReturn_t ProcessGetFieldMultipleValues(dcgm::Command *pCmd, bool *pIsComplete);
-    static dcgmReturn_t ProcessWatchFieldValue(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    static dcgmReturn_t ProcessUnwatchFieldValue(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    static dcgmReturn_t ProcessUpdateAllFields(dcgm::Command *pCmd, bool *pIsComplete);
-    static dcgmReturn_t ProcessCacheManagerFieldInfo(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessWatchFields(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t ProcessUnwatchFields(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t ProcessGetPidInfo(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessFieldGroupCreate(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t ProcessFieldGroupDestroy(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t ProcessFieldGroupGetOne(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessFieldGroupGetAll(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessWatchPredefined(dcgm::Command *pCmd, bool *pIsComplete, DcgmWatcher &dcgmWatcher);
-    dcgmReturn_t ProcessJobStartStats(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessJobStopStats(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessJobRemove(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessJobGetInfo(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetTopologyAffinity(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetTopologyIO(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessCreateFakeEntities(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetNvLinkLinkStatus(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetMultipleLatestValues(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessSetNvLinkLinkStatus(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessGetFieldSummary(dcgm::Command *pCmd, bool *pIsComplete);
-    dcgmReturn_t ProcessModuleBlacklist(dcgm::Command *pCmd);
-    dcgmReturn_t ProcessModuleGetStatuses(dcgm::Command *pCmd);
-    dcgmReturn_t ProcessIsHostengineHealthy(dcgm::Command *pCmd, bool *pIsComplete);
 
     /*****************************************************************************/
     /* Remove any requests that the host engine was tracking */
@@ -569,6 +411,12 @@ private:
             m_persistAfterDisconnect.erase(it);
         }
     }
+
+    /*****************************************************************************/
+    void LoadNvml();
+
+    /*****************************************************************************/
+    void ShutdownNvml();
 
     /*****************************************************************************/
     /* DcgmIpc callbacks */
@@ -615,11 +463,6 @@ private:
     dcgmFieldGrp_t mFieldGroupPidAndJobStats;
 
     void HandleAddWatchError(int ret, std::string field);
-    static void finalizeCmd(dcgm::Command *pCmd,
-                            dcgmReturn_t cmdStatus,
-                            bool *&pIsComplete,
-                            void *returnArg,
-                            size_t returnArgSize);
 
     /* This data structure stores pluggable modules for handling client requests */
     dcgmhe_module_info_t m_modules[DcgmModuleIdCount];
@@ -631,6 +474,7 @@ private:
 
     unsigned int m_hostengineHealth;
     std::string m_serviceAccount;
+    bool m_usingInjectionNvml;
 };
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

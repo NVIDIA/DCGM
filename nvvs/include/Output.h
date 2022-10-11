@@ -56,7 +56,6 @@ public:
     virtual void updatePluginProgress(unsigned int progress, bool clear);
     virtual void print();
     virtual void addInfoStatement(const std::string &info);
-    virtual void AddTrainingResult(const std::string &trainingOut);
 
     /***************************PRIVATE**********************************/
 private:

@@ -146,18 +146,18 @@ dcgmReturn_t DcgmGroupManager::AddAllEntitiesToGroup(DcgmGroupInfo *pDcgmGrp, dc
     if (dcgmReturn == DCGM_ST_MODULE_NOT_LOADED)
     {
         DCGM_LOG_WARNING << "Can't get entities for entityGroupId " << entityGroupId
-                         << " due to the module not being loaded. This is likely due to module blacklisting.";
+                         << " due to the module not being loaded. This is likely due to module denylisting.";
         return DCGM_ST_OK;
     }
     else if (dcgmReturn != DCGM_ST_OK)
     {
-        PRINT_ERROR("%d", "Got error %d from GetAllEntitiesOfEntityGroup()", dcgmReturn);
+        log_error("Got error {} from GetAllEntitiesOfEntityGroup()", dcgmReturn);
         return dcgmReturn;
     }
 
     if (entities.size() < 1)
     {
-        PRINT_WARNING("%u", "Got 0 entities from GetAllEntitiesOfEntityGroup() of eg %u", entityGroupId);
+        log_warning("Got 0 entities from GetAllEntitiesOfEntityGroup() of eg {}", entityGroupId);
     }
 
     /* Add the returned GPUs to our newly-created group */
@@ -166,12 +166,11 @@ dcgmReturn_t DcgmGroupManager::AddAllEntitiesToGroup(DcgmGroupInfo *pDcgmGrp, dc
         dcgmReturn = pDcgmGrp->AddEntityToGroup((*entityIt).entityGroupId, (*entityIt).entityId);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d %u %u %u",
-                        "Error %d from AddEntityToGroup(gid %u, eg %u, eid %u",
-                        (int)dcgmReturn,
-                        pDcgmGrp->GetGroupId(),
-                        (*entityIt).entityGroupId,
-                        (*entityIt).entityId);
+            log_error("Error {} from AddEntityToGroup(gid {}, eg {}, eid {}",
+                      (int)dcgmReturn,
+                      pDcgmGrp->GetGroupId(),
+                      (*entityIt).entityGroupId,
+                      (*entityIt).entityId);
             retSt = dcgmReturn;
             break;
         }
@@ -199,7 +198,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
 
     if (mNumGroups >= DCGM_MAX_NUM_GROUPS + 2)
     {
-        PRINT_ERROR("", "Add Group: Max number of groups already configured");
+        log_error("Add Group: Max number of groups already configured");
         Unlock();
         return DCGM_ST_MAX_LIMIT;
     }
@@ -240,7 +239,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
 
             if (dcgmReturn != DCGM_ST_OK)
             {
-                PRINT_ERROR("%s", "Got error %s from AddAllEntitiesToGroup()", errorString(dcgmReturn));
+                log_error("Got error {} from AddAllEntitiesToGroup()", errorString(dcgmReturn));
                 Unlock();
                 delete (pDcgmGrp);
                 return dcgmReturn;
@@ -258,7 +257,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
         dcgmReturn = AddAllEntitiesToGroup(pDcgmGrp, entityGroupId);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            PRINT_ERROR("%s", "Got error %s from AddAllEntitiesToGroup()", errorString(dcgmReturn));
+            log_error("Got error {} from AddAllEntitiesToGroup()", errorString(dcgmReturn));
             Unlock();
             delete (pDcgmGrp);
             return dcgmReturn;
@@ -287,7 +286,7 @@ dcgmReturn_t DcgmGroupManager::RemoveGroup(dcgm_connection_id_t connectionId, un
     if (itGroup == mGroupIdMap.end())
     {
         Unlock();
-        PRINT_ERROR("%d", "Delete Group: Not able to find entry corresponding to the group ID %d", groupId);
+        log_error("Delete Group: Not able to find entry corresponding to the group ID {}", groupId);
         return DCGM_ST_NOT_CONFIGURED;
     }
     else
@@ -296,7 +295,7 @@ dcgmReturn_t DcgmGroupManager::RemoveGroup(dcgm_connection_id_t connectionId, un
         if (NULL == pDcgmGrp)
         {
             Unlock();
-            PRINT_ERROR("%d", "Delete Group: Invalid entry corresponding to the group ID %d", groupId);
+            log_error("Delete Group: Invalid entry corresponding to the group ID {}", groupId);
             return DCGM_ST_GENERIC_ERROR;
         }
 
@@ -317,7 +316,7 @@ dcgmReturn_t DcgmGroupManager::RemoveGroup(dcgm_connection_id_t connectionId, un
 
     Unlock();
 
-    PRINT_DEBUG("%u", "Removed GroupId %u", groupId);
+    log_debug("Removed GroupId {}", groupId);
     return DCGM_ST_OK;
 }
 
@@ -341,10 +340,8 @@ dcgmReturn_t DcgmGroupManager::RemoveAllGroupsForConnection(dcgm_connection_id_t
 
         if (connectionId == pDcgmGroup->GetConnectionId())
         {
-            PRINT_DEBUG("%u %u",
-                        "RemoveAllGroupsForConnection queueing removal of connectionId %u, groupId %u",
-                        connectionId,
-                        groupId);
+            log_debug(
+                "RemoveAllGroupsForConnection queueing removal of connectionId {}, groupId {}", connectionId, groupId);
             removeGroupIds.push_back(groupId);
         }
     }
@@ -361,10 +358,7 @@ dcgmReturn_t DcgmGroupManager::RemoveAllGroupsForConnection(dcgm_connection_id_t
         }
     }
 
-    PRINT_DEBUG("%u %u",
-                "Removed %u groups for connectionId %u",
-                (unsigned int)removeGroupIds.size(),
-                (unsigned int)connectionId);
+    log_debug("Removed {} groups for connectionId {}", (unsigned int)removeGroupIds.size(), (unsigned int)connectionId);
 
     return DCGM_ST_OK;
 }
@@ -378,7 +372,7 @@ DcgmGroupInfo *DcgmGroupManager::GetGroupById(unsigned int groupId)
     itGroup = mGroupIdMap.find(groupId);
     if (itGroup == mGroupIdMap.end())
     {
-        PRINT_ERROR("%d", "Get Group: Not able to find entry corresponding to the group ID %d", groupId);
+        log_error("Get Group: Not able to find entry corresponding to the group ID {}", groupId);
         return nullptr;
     }
     else
@@ -386,7 +380,7 @@ DcgmGroupInfo *DcgmGroupManager::GetGroupById(unsigned int groupId)
         pDcgmGrp = itGroup->second;
         if (nullptr == pDcgmGrp)
         {
-            PRINT_ERROR("%d", "Get Group: Invalid entry corresponding to the group ID %d", groupId);
+            log_error("Get Group: Invalid entry corresponding to the group ID {}", groupId);
             return nullptr;
         }
     }
@@ -410,16 +404,10 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vecto
         ret = DcgmHostEngineHandler::Instance()->GetAllEntitiesOfEntityGroup(1, entityGroupId, entities);
         if (ret != DCGM_ST_OK)
         {
-            PRINT_ERROR("%d %u",
-                        "GetGroupEntities Got error %d from GetAllEntitiesOfEntityGroup() for groupId %u",
-                        ret,
-                        groupId);
+            log_error("GetGroupEntities Got error {} from GetAllEntitiesOfEntityGroup() for groupId {}", ret, groupId);
         }
         else
-            PRINT_DEBUG("%u %u",
-                        "GetGroupEntities got %u entities for dynamic group %u",
-                        (unsigned int)entities.size(),
-                        groupId);
+            log_debug("GetGroupEntities got {} entities for dynamic group {}", (unsigned int)entities.size(), groupId);
         Unlock();
         return ret;
     }
@@ -470,7 +458,7 @@ std::string DcgmGroupManager::GetGroupName(dcgm_connection_id_t connectionId, un
     if (!groupObj)
     {
         Unlock();
-        PRINT_DEBUG("%u %u", "Group %u connectionId %u not found", groupId, connectionId);
+        log_debug("Group {} connectionId {} not found", groupId, connectionId);
         return ret;
     }
 
@@ -515,20 +503,15 @@ dcgmReturn_t DcgmGroupManager::RemoveEntityFromGroup(dcgm_connection_id_t connec
     if (!groupObj)
     {
         Unlock();
-        PRINT_DEBUG("%u %u", "Group %u connectionId %u not found", groupId, connectionId);
+        log_debug("Group {} connectionId {} not found", groupId, connectionId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
     ret = groupObj->RemoveEntityFromGroup(entityGroupId, entityId);
     Unlock();
 
-    PRINT_DEBUG("%u %u %u %u %d",
-                "conn %u, groupId %u removed eg %u, eid %u. ret %d",
-                connectionId,
-                groupId,
-                entityGroupId,
-                entityId,
-                (int)ret);
+    log_debug(
+        "conn {}, groupId {} removed eg {}, eid {}. ret {}", connectionId, groupId, entityGroupId, entityId, (int)ret);
     return ret;
 }
 
@@ -545,7 +528,7 @@ dcgmReturn_t DcgmGroupManager::AreAllTheSameSku(dcgm_connection_id_t connectionI
     if (!groupObj)
     {
         Unlock();
-        PRINT_DEBUG("%u %u", "Group %u connectionId %u not found", groupId, connectionId);
+        log_debug("Group {} connectionId {} not found", groupId, connectionId);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -573,7 +556,7 @@ dcgmReturn_t DcgmGroupManager::verifyAndUpdateGroupId(unsigned int *groupId)
     DcgmGroupInfo *groupObj = GetGroupById(*groupId);
     if (!groupObj)
     {
-        PRINT_DEBUG("%u", "Group %u not found", *groupId);
+        log_debug("Group {} not found", *groupId);
         ret = DCGM_ST_NOT_CONFIGURED;
     }
     Unlock();
@@ -597,7 +580,7 @@ dcgmReturn_t DcgmGroupManager::GetAllGroupIds(dcgm_connection_id_t connectionId,
         pDcgmGrp = itGroup->second;
         if (NULL == pDcgmGrp)
         {
-            PRINT_ERROR("%u", "NULL DcgmGroupInfo() at groupId %u", itGroup->first);
+            log_error("NULL DcgmGroupInfo() at groupId {}", itGroup->first);
             continue;
         }
 
@@ -660,8 +643,7 @@ dcgmReturn_t DcgmGroupInfo::AddEntityToGroup(dcgm_field_entity_group_t entityGro
     DcgmEntityStatus_t entityStatus = DcgmHostEngineHandler::Instance()->GetEntityStatus(entityGroupId, entityId);
     if (entityStatus != DcgmEntityStatusOk && entityStatus != DcgmEntityStatusFake)
     {
-        PRINT_ERROR(
-            "%u %u %d", "eg %u, eid %u is in status %d. Not adding to group.", entityGroupId, entityId, entityStatus);
+        log_error("eg {}, eid {} is in status {}. Not adding to group.", entityGroupId, entityId, entityStatus);
         if (entityStatus == DcgmEntityStatusUnsupported)
             return DCGM_ST_GPU_NOT_SUPPORTED;
         else if (entityStatus == DcgmEntityStatusLost)
@@ -679,11 +661,10 @@ dcgmReturn_t DcgmGroupInfo::AddEntityToGroup(dcgm_field_entity_group_t entityGro
         if (mEntityList[i].entityGroupId == insertEntity.entityGroupId
             && mEntityList[i].entityId == insertEntity.entityId)
         {
-            PRINT_WARNING("%u %u %u",
-                          "AddEntityToGroup groupId %u eg %u, eid %u was already in the group",
-                          mGroupId,
-                          entityGroupId,
-                          entityId);
+            log_warning("AddEntityToGroup groupId {} eg {}, eid {} was already in the group",
+                        mGroupId,
+                        entityGroupId,
+                        entityId);
             return DCGM_ST_BADPARAM;
         }
     }
@@ -713,11 +694,7 @@ dcgmReturn_t DcgmGroupInfo::RemoveEntityFromGroup(dcgm_field_entity_group_t enti
         }
     }
 
-    PRINT_ERROR("%u %u %u",
-                "Tried to remove eg %u, eid %u from groupId %u. was not found.",
-                entityGroupId,
-                entityId,
-                GetGroupId());
+    log_error("Tried to remove eg {}, eid {} from groupId {}. was not found.", entityGroupId, entityId, GetGroupId());
     return DCGM_ST_BADPARAM;
 }
 

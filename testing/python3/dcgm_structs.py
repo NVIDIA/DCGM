@@ -29,9 +29,12 @@ from inspect import isclass
 DCGM_MAX_STR_LENGTH                   =   256
 DCGM_MAX_NUM_DEVICES                  =   32 # DCGM 2.0 and newer = 32. DCGM 1.8 and older = 16
 DCGM_MAX_NUM_SWITCHES                 =   12
-DCGM_NVLINK_MAX_LINKS_PER_GPU         =   12
+DCGM_NVLINK_MAX_LINKS_PER_GPU         =   18
 DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY1 =   6
-DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH    =   36
+DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY2 =   12
+DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH_V1 =   36 # Max NvLinks per NvSwitch pre-Hopper
+DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH    =   64
+DCGM_LANE_MAX_LANES_PER_NVSWICH_LINK  =   4
 DCGM_MAX_CLOCKS                       =   256
 DCGM_MAX_NUM_GROUPS                   =   64
 DCGM_MAX_BLOB_LENGTH                  =   4096
@@ -104,7 +107,7 @@ DCGM_ST_PROFILING_MULTI_PASS        = -38  # The requested profiling metrics can
 DCGM_ST_DIAG_ALREADY_RUNNING        = -39  # A diag instance is already running, cannot run a new diag until the current one finishes.
 DCGM_ST_DIAG_BAD_JSON               = -40  # The DCGM GPU Diagnostic returned JSON that cannot be parsed
 DCGM_ST_DIAG_BAD_LAUNCH             = -41  # Error while launching the DCGM GPU Diagnostic
-DCGM_ST_DIAG_VARIANCE               = -42  # There is too much variance while training the diagnostic
+DCGM_ST_DIAG_UNUSED                 = -42  # Unused
 DCGM_ST_DIAG_THRESHOLD_EXCEEDED     = -43  # A field value met or exceeded the error threshold.
 DCGM_ST_INSUFFICIENT_DRIVER_VERSION = -44  # The installed driver version is insufficient for this API
 DCGM_ST_INSTANCE_NOT_FOUND          = -45  # The specified GPU instance does not exist
@@ -169,11 +172,16 @@ DCGM_TARGETED_POWER_INDEX   = 5
 DCGM_MEMORY_BANDWIDTH_INDEX = 6
 DCGM_MEMTEST_INDEX          = 7
 DCGM_PULSE_TEST_INDEX       = 8
+DCGM_UNUSED1_TEST_INDEX     = 9
+DCGM_UNUSED2_TEST_INDEX     = 10
+DCGM_UNUSED3_TEST_INDEX     = 11
+DCGM_UNUSED4_TEST_INDEX     = 12
+DCGM_UNUSED5_TEST_INDEX     = 13
 DCGM_PER_GPU_TEST_COUNT_V7  = 9
-DCGM_PER_GPU_TEST_COUNT_V6  = 7
+DCGM_PER_GPU_TEST_COUNT_V8  = 13
 
 # DCGM Diag Level One test indices
-DCGM_SWTEST_BLACKLIST            = 0
+DCGM_SWTEST_DENYLIST             = 0
 DCGM_SWTEST_NVML_LIBRARY         = 1
 DCGM_SWTEST_CUDA_MAIN_LIBRARY    = 2
 DCGM_SWTEST_CUDA_RUNTIME_LIBRARY = 3
@@ -243,7 +251,7 @@ class DCGMError(Exception):
         DCGM_ST_DIAG_ALREADY_RUNNING:        "A diag instance is already running, cannot run a new diag until the current one finishes",
         DCGM_ST_DIAG_BAD_JSON:               "The GPU Diagnostic returned Json that cannot be parsed.",
         DCGM_ST_DIAG_BAD_LAUNCH:             "Error while launching the GPU Diagnostic.",
-        DCGM_ST_DIAG_VARIANCE:               "The results of training DCGM GPU Diagnostic cannot be trusted because they vary too much from run to run",
+        DCGM_ST_DIAG_UNUSED:                 "Unused error code",
         DCGM_ST_DIAG_THRESHOLD_EXCEEDED:     "A field value met or exceeded the error threshold.",
         DCGM_ST_INSUFFICIENT_DRIVER_VERSION: "The installed driver version is insufficient for this API",
         DCGM_ST_INSTANCE_NOT_FOUND:          "The specified GPU instance does not exist",
@@ -561,13 +569,13 @@ def _LoadDcgmLibrary(libDcgmPath=None):
                         dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
                     else:
                         if libDcgmPath:
-                            lib_file = os.path.join(libDcgmPath, "libdcgm.so.2")
+                            lib_file = os.path.join(libDcgmPath, "libdcgm.so.3")
                         else:
                             # Try Debian-based distros
-                            lib_file = '/usr/lib/{}-linux-gnu/libdcgm.so.2'.format(platform.machine())
+                            lib_file = '/usr/lib/{}-linux-gnu/libdcgm.so.3'.format(platform.machine())
                             if not os.path.isfile(lib_file):
                                 # Presume Redhat-based distros
-                                lib_file = '/usr/lib64/libdcgm.so.2'
+                                lib_file = '/usr/lib64/libdcgm.so.3'
 
                     dcgmLib = CDLL(lib_file)
                         
@@ -615,6 +623,16 @@ def _dcgmErrorString(result):
     fn.restype = c_char_p # otherwise return is an int
     str = fn(result)
     return str
+
+# Represents a link object. type should be one of DCGM_FE_GPU or
+# DCGM_FE_SWITCH. gpuId or switchID the associated gpu or switch;
+#
+class c_dcgm_link_t(_PrintableStructure):
+    _fields = [
+        ('type', c_uint8),
+        ('index', c_uint8),
+        ('id', c_uint16)
+    ]
 
 class c_dcgmConnectV2Params_v1(_PrintableStructure):
     _fields_ = [
@@ -733,19 +751,6 @@ DCGM_MAX_INSTANCES = DCGM_MAX_NUM_DEVICES * DCGM_MAX_INSTANCES_PER_GPU
 DCGM_MAX_COMPUTE_INSTANCES = DCGM_MAX_INSTANCES
 
 DCGM_MIG_RECONFIG_DELAY_PROCESSING = 0x1 # Ask the hostengine to wait to process reconfiguring the GPUs
-
-# /**
-#  * Structure to store the GPU hierarchy for a system
-#  */
-class c_dcgmMigHierarchy_v1(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint),
-        ('count', c_uint),
-        ('entityList', c_dcgmMigHierarchyInfo_t * DCGM_MAX_HIERARCHY_INFO),
-    ]
-
-
-c_dcgmMigHierarchy_version1 = make_dcgm_version(c_dcgmMigHierarchy_v1, 1)
 
 
 class c_dcgmMigHierarchy_v2(_PrintableStructure):
@@ -1010,13 +1015,6 @@ class  c_dcgmDeviceVgpuTypeInfo_v2(_PrintableStructure):
 
 dcgmDeviceVgpuTypeInfo_version2 = make_dcgm_version(c_dcgmDeviceVgpuTypeInfo_v2, 2)
 
-class c_dcgmDeviceSettings_v1(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint),
-        ('persistenceModeEnabled', c_uint),
-        ('migModeEnabled', c_uint),
-    ]
-
 class c_dcgmDeviceSettings_v2(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
@@ -1028,7 +1026,7 @@ class c_dcgmDeviceSettings_v2(_PrintableStructure):
 # /**
 #  * Represents attributes corresponding to a device
 #  */
-class c_dcgmDeviceAttributes_v1(_PrintableStructure):
+class c_dcgmDeviceAttributes_deprecated_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('clockSets', c_dcgmDeviceSupportedClockSets_v1),
@@ -1039,24 +1037,11 @@ class c_dcgmDeviceAttributes_v1(_PrintableStructure):
         ('unused', c_char * 208)
     ]
 
-dcgmDeviceAttributes_version1 = make_dcgm_version(c_dcgmDeviceAttributes_v1, 1)
+dcgmDeviceAttributes_deprecated_version1 = make_dcgm_version(c_dcgmDeviceAttributes_deprecated_v1, 1)
 
 # /**
 #  * Represents attributes corresponding to a device
 #  */
-class c_dcgmDeviceAttributes_v2(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint),
-        ('clockSets', c_dcgmDeviceSupportedClockSets_v1),
-        ('thermalSettings', c_dcgmDeviceThermals_v1),
-        ('powerLimits', c_dcgmDevicePowerLimits_v1),
-        ('identifiers', c_dcgmDeviceIdentifiers_v1),
-        ('memoryUsage', c_dcgmDeviceMemoryUsage_v1),
-        ('settings', c_dcgmDeviceSettings_v1),
-    ]
-
-dcgmDeviceAttributes_version2 = make_dcgm_version(c_dcgmDeviceAttributes_v2, 2)
-
 class c_dcgmDeviceAttributes_v3(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
@@ -1069,6 +1054,104 @@ class c_dcgmDeviceAttributes_v3(_PrintableStructure):
     ]
 
 dcgmDeviceAttributes_version3 = make_dcgm_version(c_dcgmDeviceAttributes_v3, 3)
+
+# /**
+#  * Represents attributes info for a MIG device
+#  */
+class c_dcgmDeviceMigAttributesInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('gpuInstanceId', c_uint),
+        ('computeInstanceId', c_uint),
+        ('multiprocessorCount', c_uint),
+        ('sharedCopyEngineCount', c_uint),
+        ('sharedDecoderCount', c_uint),
+        ('sharedEncoderCount', c_uint),
+        ('sharedJpegCount', c_uint),
+        ('sharedOfaCount', c_uint),
+        ('gpuInstanceSliceCount', c_uint),
+        ('computeInstanceSliceCount', c_uint),
+        ('memorySizeMB', c_uint64),
+    ]
+
+dcgmDeviceMigAttributesInfo_version1 = make_dcgm_version(c_dcgmDeviceMigAttributesInfo_v1, 1)
+
+# /**
+#  * Represents attributes for a MIG device
+#  */
+class c_dcgmDeviceMigAttributes_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('migDevicesCount', c_uint),
+        ('migAttributesInfo', c_dcgmDeviceMigAttributesInfo_v1),
+    ]
+
+dcgmDeviceMigAttributes_version1 = make_dcgm_version(c_dcgmDeviceMigAttributes_v1, 1)
+
+# /**
+#  * Represents GPU instance profile information
+#  */
+class c_dcgmGpuInstanceProfileInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('id', c_uint),
+        ('isP2pSupported', c_uint),
+        ('sliceCount', c_uint),
+        ('instanceCount', c_uint),
+        ('multiprocessorCount', c_uint),
+        ('copyEngineCount', c_uint),
+        ('decoderCount', c_uint),
+        ('encoderCount', c_uint),
+        ('jpegCount', c_uint),
+        ('ofaCount', c_uint),
+        ('memorySizeMB', c_uint64),
+    ]
+
+dcgmGpuInstanceProfileInfo_version1 = make_dcgm_version(c_dcgmGpuInstanceProfileInfo_v1, 1)
+
+# /**
+#  * Represents GPU instance profiles
+#  */
+class c_dcgmGpuInstanceProfiles_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('profileCount', c_uint),
+        ('profileInfo', c_dcgmGpuInstanceProfileInfo_v1),
+    ]
+
+dcgmGpuInstanceProfiles_version1 = make_dcgm_version(c_dcgmGpuInstanceProfiles_v1, 1)
+
+# /**
+#  * Represents Compute instance profile information
+#  */
+class c_dcgmComputeInstanceProfileInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('gpuInstanceId', c_uint),
+        ('id', c_uint),
+        ('sliceCount', c_uint),
+        ('instanceCount', c_uint),
+        ('multiprocessorCount', c_uint),
+        ('sharedCopyEngineCount', c_uint),
+        ('sharedDecoderCount', c_uint),
+        ('sharedEncoderCount', c_uint),
+        ('sharedJpegCount', c_uint),
+        ('sharedOfaCount', c_uint),
+    ]
+
+dcgmComputeInstanceProfileInfo_version1 = make_dcgm_version(c_dcgmComputeInstanceProfileInfo_v1, 1)
+
+# /**
+#  * Represents Compute instance profiles
+#  */
+class c_dcgmComputeInstanceProfiles_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('profileCount', c_uint),
+        ('profileInfo', c_dcgmComputeInstanceProfileInfo_v1),
+    ]
+
+dcgmComputeInstanceProfiles_version1 = make_dcgm_version(c_dcgmComputeInstanceProfiles_v1, 1)
 
 # /**
 #  * Represents vGPU attributes corresponding to a device
@@ -1611,28 +1694,28 @@ class c_dcgmDiagTestResult_v2(_PrintableStructure):
         ('info', c_char * 1024)
     ]
 
-class c_dcgmDiagResponsePerGpu_v3(_PrintableStructure):
+class c_dcgmDiagResponsePerGpu_v4(_PrintableStructure):
     _fields_ = [
         ('gpuId', c_uint),
         ('hwDiagnosticReturn', c_uint),
-        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT_V7)
+        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT_V8)
     ]
 
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
 
-class c_dcgmDiagResponse_v7(_PrintableStructure):
+class c_dcgmDiagResponse_v8(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('gpuCount', c_uint),
         ('levelOneTestCount', c_uint),
         ('levelOneResults', c_dcgmDiagTestResult_v2 * LEVEL_ONE_MAX_RESULTS),
-        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v3 * DCGM_MAX_NUM_DEVICES),
+        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v4 * DCGM_MAX_NUM_DEVICES),
         ('systemError',     c_dcgmDiagErrorDetail_t),
-        ('trainingMsg',     c_char * 1024)
+        ('_unused',     c_char * 1024)
     ]
 
-dcgmDiagResponse_version7 = make_dcgm_version(c_dcgmDiagResponse_v7, 7)
+dcgmDiagResponse_version8 = make_dcgm_version(c_dcgmDiagResponse_v8, 8)
 
 DCGM_AFFINITY_BITMASK_ARRAY_SIZE = 8
 
@@ -1692,28 +1775,6 @@ class c_dcgmAllFieldGroup_v1(_PrintableStructure):
 
 dcgmAllFieldGroup_version1 = make_dcgm_version(c_dcgmAllFieldGroup_v1, 1)
 
-
-class DCGM_INTROSPECT_LVL(object):
-    '''
-    Identifies a level to retrieve field introspection info for
-    '''
-    INVALID = 0
-    FIELD = 1
-    FIELD_GROUP = 2
-    ALL_FIELDS = 3
-    
-class c_dcgmIntrospectContext_v1(_PrintableStructure):
-    '''
-    Identifies the retrieval context for introspection API calls.
-    '''
-    _fields_ = [
-        ('version', c_uint32),
-        ('introspectLvl', c_int),         # one of DCGM_INTROSPECT_LVL_?
-        ('fieldGroupId', c_void_p)        # Only needed if \ref introspectLvl is FIELD_GROUP
-    ]
-    
-dcgmIntrospectContext_version1 = make_dcgm_version(c_dcgmIntrospectContext_v1, 1)
-
 class c_dcgmIntrospectMemory_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
@@ -1721,55 +1782,6 @@ class c_dcgmIntrospectMemory_v1(_PrintableStructure):
     ]
 
 dcgmIntrospectMemory_version1 = make_dcgm_version(c_dcgmIntrospectMemory_v1, 1)
-
-class c_dcgmIntrospectFieldsExecTime_v1(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint32),               # version number (dcgmIntrospectFieldsExecTime_version)                              
-        ('meanUpdateFreqUsec', c_longlong),  # the mean update frequency of all fields                                                                                      
-        ('recentUpdateUsec', c_double),      # the sum of every field's most recent execution time after they                                            
-                                             # have been normalized to \ref meanUpdateFreqUsec.           
-                                             # This is roughly how long it takes to update fields every \ref meanUpdateFreqUsec                                                                              
-                                                                
-        ('totalEverUpdateUsec', c_longlong), # The total amount of time, ever, that has been spent updating all the fields                                
-    ]
-                                                                                                                                    
-dcgmIntrospectFieldsExecTime_version1 = make_dcgm_version(c_dcgmIntrospectFieldsExecTime_v1, 1)
-
-class c_dcgmIntrospectFullFieldsExecTime_v2(_PrintableStructure):
-    '''
-    Full introspection info for field execution time
-    '''
-    _fields_ = [
-        ('version', c_uint32),
-        ('aggregateInfo', c_dcgmIntrospectFieldsExecTime_v1),   # info that includes global and device scope
-        ('hasGlobalInfo', c_int),                               # 0 means \ref globalInfo is populated, !0 means it's not
-        ('globalInfo', c_dcgmIntrospectFieldsExecTime_v1),      # info that only includes global field scope
-        ('gpuInfoCount', c_uint),                               # count of how many entries in \ref gpuInfo are populated
-        ('gpuIdsForGpuInfo', c_uint * DCGM_MAX_NUM_DEVICES),    # the GPU ID at a given index identifies which gpu
-                                                                # the corresponding entry in \ref gpuInfo is from
-        ('gpuInfo', c_dcgmIntrospectFieldsExecTime_v1 * DCGM_MAX_NUM_DEVICES),  # info that is separated by the
-                                                                                # GPU ID that the watches were for
-    ]
-
-dcgmIntrospectFullFieldsExecTime_version2 = make_dcgm_version(c_dcgmIntrospectFullFieldsExecTime_v2, 2)
-
-class c_dcgmIntrospectFullMemory_v1(_PrintableStructure):
-    '''
-    Full introspection info for field memory
-    '''
-    _fields_ = [
-        ('version', c_uint32),
-        ('aggregateInfo', c_dcgmIntrospectMemory_v1),   # info that includes global and device scope
-        ('hasGlobalInfo', c_int),                       # 0 means \ref globalInfo is populated, !0 means it's not
-        ('globalInfo', c_dcgmIntrospectMemory_v1),      # info that only includes global field scope
-        ('gpuInfoCount', c_uint),                               # count of how many entries in \ref gpuInfo are populated
-        ('gpuIdsForGpuInfo', c_uint * DCGM_MAX_NUM_DEVICES),    # the GPU ID at a given index identifies which gpu
-                                                                # the corresponding entry in \ref gpuInfo is from
-        ('gpuInfo', c_dcgmIntrospectMemory_v1 * DCGM_MAX_NUM_DEVICES),  # info that is separated by the
-                                                                        # GPU ID that the watches were for
-    ]
-
-dcgmIntrospectFullMemory_version1 = make_dcgm_version(c_dcgmIntrospectFullMemory_v1, 1)
 
 class c_dcgmIntrospectCpuUtil_v1(_PrintableStructure):
     _fields_ = [
@@ -1794,7 +1806,9 @@ DCGM_THROTTLE_MASK_LEN = 50
 # Flags options for running the GPU diagnostic
 DCGM_RUN_FLAGS_VERBOSE     = 0x0001
 DCGM_RUN_FLAGS_STATSONFAIL = 0x0002
+# UNUSED
 DCGM_RUN_FLAGS_TRAIN       = 0x0004
+# UNUSED
 DCGM_RUN_FLAGS_FORCE_TRAIN = 0x0008
 DCGM_RUN_FLAGS_FAIL_EARLY  = 0x0010 # Enable fail early checks for the Targeted Stress, Targeted Power, SM Stress, and Diagnostic tests
 
@@ -1814,10 +1828,10 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
         ('throttleMask', c_char * DCGM_THROTTLE_MASK_LEN), # Throttle reasons to ignore as either integer mask or csv list of reasons
         ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
-        ('trainingValues', c_uint), # Number of iterations for training.
-        ('trainingVariance', c_uint), # Acceptable training variance as a percentage of the value. (0-100)
-        ('trainingTolerance',c_uint), # Acceptable training tolerance as a percentage of the value. (0-100)
-        ('goldenValuesFile', c_char * DCGM_PATH_LEN), # The path where the golden values should be recorded
+        ('_unusedInt1', c_uint), # Unused
+        ('_unusedInt2', c_uint), # Unused
+        ('_unusedInt3', c_uint), # Unused
+        ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
         ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
     ]
 
@@ -1871,29 +1885,21 @@ class c_dcgmNvLinkGpuLinkStatus_v1(_PrintableStructure):
 class c_dcgmNvLinkGpuLinkStatus_v2(_PrintableStructure):
     _fields_ = [
         ('entityId', c_uint32),   # Entity ID of the GPU (gpuId)
+        ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY2),  #Link state of each link of this GPU
+    ]
+
+class c_dcgmNvLinkGpuLinkStatus_v3(_PrintableStructure):
+    _fields_ = [
+        ('entityId', c_uint32),   # Entity ID of the GPU (gpuId)
         ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_GPU),  #Link state of each link of this GPU
     ]
 
 #State of NvLink links for a NvSwitch
-class c_dcgmNvLinkNvSwitchLinkStatus_t(_PrintableStructure):
+class c_dcgmNvLinkNvSwitchLinkStatus_v1(_PrintableStructure):
     _fields_ = [
         ('entityId', c_uint32), # Entity ID of the NvSwitch (physicalId)
-        ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH) #Link state of each link of this NvSwitch
+        ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH_V1) #Link state of each link of this NvSwitch
     ]
-
-class c_dcgmNvLinkStatus_v1(_PrintableStructure):
-    '''
-    NvSwitch link status for all GPUs and NvSwitches in the system
-    '''
-    _fields_ = [
-        ('version', c_uint32),       # version of this message. Should be dcgmNvLinkStatus_version1
-        ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
-        ('gpus', c_dcgmNvLinkGpuLinkStatus_v1 * DCGM_MAX_NUM_DEVICES),  #Per-GPU NvLink link statuses
-        ('numNvSwitches', c_uint32), # Number of NvSwitches populated in nvSwitches[]
-        ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_t * DCGM_MAX_NUM_SWITCHES) #Per-NvSwitch NvLink link statuses
-    ]
-
-dcgmNvLinkStatus_version1 = make_dcgm_version(c_dcgmNvLinkStatus_v1, 1)
 
 class c_dcgmNvLinkStatus_v2(_PrintableStructure):
     '''
@@ -1904,10 +1910,31 @@ class c_dcgmNvLinkStatus_v2(_PrintableStructure):
         ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
         ('gpus', c_dcgmNvLinkGpuLinkStatus_v2 * DCGM_MAX_NUM_DEVICES),  #Per-GPU NvLink link statuses
         ('numNvSwitches', c_uint32), # Number of NvSwitches populated in nvSwitches[]
-        ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_t * DCGM_MAX_NUM_SWITCHES) #Per-NvSwitch NvLink link statuses
+        ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_v1 * DCGM_MAX_NUM_SWITCHES) #Per-NvSwitch NvLink link statuses
     ]
 
 dcgmNvLinkStatus_version2 = make_dcgm_version(c_dcgmNvLinkStatus_v2, 2)
+
+#State of NvLink links for a NvSwitch
+class c_dcgmNvLinkNvSwitchLinkStatus_v2(_PrintableStructure):
+    _fields_ = [
+        ('entityId', c_uint32), # Entity ID of the NvSwitch (physicalId)
+        ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH) #Link state of each link of this NvSwitch
+    ]
+
+class c_dcgmNvLinkStatus_v3(_PrintableStructure):
+    '''
+    NvSwitch link status for all GPUs and NvSwitches in the system
+    '''
+    _fields_ = [
+        ('version', c_uint32),       # version of this message. Should be dcgmNvLinkStatus_version1
+        ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
+        ('gpus', c_dcgmNvLinkGpuLinkStatus_v3 * DCGM_MAX_NUM_DEVICES),  #Per-GPU NvLink link statuses
+        ('numNvSwitches', c_uint32), # Number of NvSwitches populated in nvSwitches[]
+        ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_v2 * DCGM_MAX_NUM_SWITCHES) #Per-NvSwitch NvLink link statuses
+    ]
+
+dcgmNvLinkStatus_version3 = make_dcgm_version(c_dcgmNvLinkStatus_v3, 3)
 
 # Bitmask values for dcgmGetFieldIdSummary
 DCGM_SUMMARY_MIN      = 0x00000001
@@ -1960,7 +1987,7 @@ DcgmModuleIdCount          = 9 # 1 greater than largest ID above
 
 # Module Status
 DcgmModuleStatusNotLoaded   = 0 # Module has not been loaded yet
-DcgmModuleStatusBlacklisted = 1 # Module has been blacklisted from being loaded
+DcgmModuleStatusDenylisted  = 1 # Module has been added to the denylist so it can't be loaded
 DcgmModuleStatusFailed      = 2 # Loading the module failed
 DcgmModuleStatusLoaded      = 3 # Module has been loaded
 
@@ -1982,52 +2009,27 @@ class c_dcgmModuleGetStatuses_v1(_PrintableStructure):
 dcgmModuleGetStatuses_version1 = make_dcgm_version(c_dcgmModuleGetStatuses_v1, 1)
 
 
-DCGM_PROF_MAX_NUM_GROUPS          = 10 # Maximum number of metric ID groups that can exist in DCGM
-DCGM_PROF_MAX_FIELD_IDS_PER_GROUP = 8  # Maximum number of field IDs that can be in a single DCGM profiling metric group
+DCGM_PROF_MAX_NUM_GROUPS_V2          = 10 # Maximum number of metric ID groups that can exist in DCGM
+DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2 = 64 # Maximum number of field IDs that can be in a single DCGM profiling metric group
 
-class c_dcgmProfMetricGroupInfo_t(_PrintableStructure):
+class c_dcgmProfMetricGroupInfo_v2(_PrintableStructure):
     _fields_ = [
         ('majorId', c_ushort),
         ('minorId', c_ushort),
         ('numFieldIds', c_uint32),
-        ('fieldIds', c_ushort * DCGM_PROF_MAX_FIELD_IDS_PER_GROUP),
+        ('fieldIds', c_ushort * DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2),
     ]
 
-class c_dcgmProfGetMetricGroups_v2(_PrintableStructure):
+class c_dcgmProfGetMetricGroups_v3(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
         ('unused', c_uint32),
-        ('groupId', c_void_p),
+        ('gpuId', c_uint32),
         ('numMetricGroups', c_uint32),
-        ('unused1', c_uint32),
-        ('metricGroups', c_dcgmProfMetricGroupInfo_t * DCGM_PROF_MAX_NUM_GROUPS),
+        ('metricGroups', c_dcgmProfMetricGroupInfo_v2 * DCGM_PROF_MAX_NUM_GROUPS_V2),
     ]
 
-dcgmProfGetMetricGroups_version1 = make_dcgm_version(c_dcgmProfGetMetricGroups_v2, 2)
-
-class c_dcgmProfWatchFields_v1(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint32),
-        ('groupId', c_void_p),
-        ('numFieldIds', c_uint32),
-        ('fieldIds', c_ushort * 16),
-        ('updateFreq', c_int64),
-        ('maxKeepAge', c_double),
-        ('maxKeepSamples', c_int32),
-        ('flags', c_uint32),
-    ]
-
-dcgmProfWatchFields_version1 = make_dcgm_version(c_dcgmProfWatchFields_v1, 1)
-
-class c_dcgmProfUnwatchFields_v1(_PrintableStructure):
-    _fields_ = [
-        ('version', c_uint32),
-        ('groupId', c_void_p),
-        ('flags', c_uint32),
-    ]
-
-dcgmProfUnwatchFields_version1 = make_dcgm_version(c_dcgmProfUnwatchFields_v1, 1)
-
+dcgmProfGetMetricGroups_version3 = make_dcgm_version(c_dcgmProfGetMetricGroups_v3, 3)
 
 class c_dcgmVersionInfo_v2(_PrintableStructure):
     _fields_ = [

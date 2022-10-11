@@ -48,7 +48,7 @@ typedef enum dcgmError_enum
     DCGM_FR_DEVICE_COUNT_MISMATCH        = 20, //!< Disagreement in GPU count between /dev and NVML
     DCGM_FR_BAD_PARAMETER                = 21, //!< Bad parameter passed to API
     DCGM_FR_CANNOT_OPEN_LIB              = 22, //!< Cannot open a library that must be accessed
-    DCGM_FR_BLACKLISTED_DRIVER           = 23, //!< A blacklisted driver (nouveau) is active
+    DCGM_FR_DENYLISTED_DRIVER            = 23, //!< A driver on the denylist (nouveau) is active
     DCGM_FR_NVML_LIB_BAD                 = 24, //!< The NVML library is missing expected functions
     DCGM_FR_GRAPHICS_PROCESSES           = 25, //!< Graphics processes are active on this GPU
     DCGM_FR_HOSTENGINE_CONN              = 26, //!< Unstable connection to nv-hostengine (daemonized DCGM)
@@ -195,8 +195,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_BAD_PARAMETER_MSG "Bad parameter to function %s cannot be processed"
 // library name, error returned from dlopen
 #define DCGM_FR_CANNOT_OPEN_LIB_MSG "Cannot open library %s: '%s'"
-// the name of the blacklisted driver
-#define DCGM_FR_BLACKLISTED_DRIVER_MSG "Found blacklisted driver: %s"
+// the name of the denylisted driver
+#define DCGM_FR_DENYLISTED_DRIVER_MSG "Found driver on the denylist: %s"
 // the name of the function that wasn't found
 #define DCGM_FR_NVML_LIB_BAD_MSG "Cannot get pointer to %s from libnvidia-ml.so"
 #define DCGM_FR_GRAPHICS_PROCESSES_MSG                                                 \
@@ -383,7 +383,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_CANNOT_OPEN_LIB_NEXT                                  \
     "Check for the existence of the library and set LD_LIBRARY_PATH " \
     "if needed."
-#define DCGM_FR_BLACKLISTED_DRIVER_NEXT "Please load the appropriate driver."
+#define DCGM_FR_DENYLISTED_DRIVER_NEXT "Please load the appropriate driver."
 #define DCGM_FR_NVML_LIB_BAD_NEXT                             \
     "Make sure that the required version of libnvidia-ml.so " \
     "is present and accessible on the system."

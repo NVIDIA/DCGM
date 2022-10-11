@@ -33,6 +33,7 @@ if (BUILD_TESTING)
             StringHelpersTests.cpp
             DcgmUtilitiesTests.cpp
             TimeLibTests.cpp
+            DcgmLogging.cpp
     )
 
     find_package(Threads REQUIRED)

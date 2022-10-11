@@ -140,7 +140,7 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
     }
     else if (moduleCommand->moduleId != DcgmModuleIdNvSwitch)
     {
-        PRINT_ERROR("%u", "Unexpected module command for module %u", moduleCommand->moduleId);
+        log_error("Unexpected module command for module {}", moduleCommand->moduleId);
         return DCGM_ST_BADPARAM;
     }
     else /* NvSwitch module request */

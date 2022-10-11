@@ -47,7 +47,7 @@ dcgmReturn_t DcgmModuleConfig::ProcessSetConfig(dcgm_config_msg_set_v1 *msg)
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter %u", groupId);
+        log_error("Error: Bad group id parameter {}", groupId);
         return dcgmReturn;
     }
 
@@ -56,7 +56,7 @@ dcgmReturn_t DcgmModuleConfig::ProcessSetConfig(dcgm_config_msg_set_v1 *msg)
     dcgmReturn = mpConfigManager->SetConfig(groupId, &msg->config, &statusList);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%d", "SetConfig returned %d", dcgmReturn);
+        log_error("SetConfig returned {}", dcgmReturn);
     }
 
     return dcgmReturn;
@@ -78,7 +78,7 @@ dcgmReturn_t DcgmModuleConfig::ProcessGetConfig(dcgm_config_msg_get_v1 *msg)
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter: %u", groupId);
+        log_error("Error: Bad group id parameter: {}", groupId);
         return dcgmReturn;
     }
 
@@ -90,13 +90,13 @@ dcgmReturn_t DcgmModuleConfig::ProcessGetConfig(dcgm_config_msg_get_v1 *msg)
         dcgmReturn = mpConfigManager->GetCurrentConfig(groupId, &msg->numConfigs, msg->configs, &statusList);
     else
     {
-        PRINT_ERROR("%u", "Bad reqType %u", msg->reqType);
+        log_error("Bad reqType {}", msg->reqType);
         return DCGM_ST_BADPARAM;
     }
 
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%d", "GetConfig failed with %d", dcgmReturn);
+        log_error("GetConfig failed with {}", dcgmReturn);
     }
 
     return dcgmReturn;
@@ -118,7 +118,7 @@ dcgmReturn_t DcgmModuleConfig::ProcessEnforceConfigGroup(dcgm_config_msg_enforce
     dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%u", "Error: Bad group id parameter: %u", dcgmReturn);
+        log_error("Error: Bad group id parameter: {}", dcgmReturn);
         return dcgmReturn;
     }
 

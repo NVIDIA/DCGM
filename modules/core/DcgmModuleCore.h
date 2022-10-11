@@ -49,9 +49,12 @@ public:
     dcgmReturn_t ProcessJobGetStats(dcgm_core_msg_job_get_stats_t &msg);
     dcgmReturn_t ProcessJobRemove(dcgm_core_msg_job_cmd_t &msg);
     dcgmReturn_t ProcessJobRemoveAll(dcgm_core_msg_job_cmd_t &msg);
-    dcgmReturn_t ProcessEntitiesGetLatestValues(dcgm_core_msg_entities_get_latest_values_t &msg);
-    dcgmReturn_t ProcessGetMultipleValuesForField(dcgm_core_msg_get_multiple_values_for_field_t &msg);
-    dcgmReturn_t ProcessWatchFieldValue(dcgm_core_msg_watch_field_value_t &msg);
+    dcgmReturn_t ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_entities_get_latest_values_v1 &msg);
+    dcgmReturn_t ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_entities_get_latest_values_v2 &msg);
+    dcgmReturn_t ProcessGetMultipleValuesForFieldV1(dcgm_core_msg_get_multiple_values_for_field_v1 &msg);
+    dcgmReturn_t ProcessGetMultipleValuesForFieldV2(dcgm_core_msg_get_multiple_values_for_field_v2 &msg);
+    dcgmReturn_t ProcessWatchFieldValueV1(dcgm_core_msg_watch_field_value_v1 &msg);
+    dcgmReturn_t ProcessWatchFieldValueV2(dcgm_core_msg_watch_field_value_v2 &msg);
     dcgmReturn_t ProcessUpdateAllFields(dcgm_core_msg_update_all_fields_t &msg);
     dcgmReturn_t ProcessUnwatchFieldValue(dcgm_core_msg_unwatch_field_value_t &msg);
     dcgmReturn_t ProcessInjectFieldValue(dcgm_core_msg_inject_field_value_t &msg);
@@ -70,11 +73,12 @@ public:
     dcgmReturn_t ProcessGetFieldSummary(dcgm_core_msg_get_field_summary_t &msg);
     dcgmReturn_t ProcessCreateFakeEntities(dcgm_core_msg_create_fake_entities_t &msg);
     dcgmReturn_t ProcessWatchPredefinedFields(dcgm_core_msg_watch_predefined_fields_t &msg);
-    dcgmReturn_t ProcessModuleBlacklist(dcgm_core_msg_module_blacklist_t &msg);
+    dcgmReturn_t ProcessModuleDenylist(dcgm_core_msg_module_denylist_t &msg);
     dcgmReturn_t ProcessModuleStatus(dcgm_core_msg_module_status_t &msg);
     dcgmReturn_t ProcessHostEngineHealth(dcgm_core_msg_hostengine_health_t &msg);
     dcgmReturn_t ProcessFieldGroupGetAll(dcgm_core_msg_fieldgroup_get_all_t &msg);
     dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gpu_instance_hierarchy_t &msg);
+    dcgmReturn_t ProcessProfGetMetricGroups(dcgm_core_msg_get_metric_groups_t &msg);
 
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 

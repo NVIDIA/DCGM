@@ -122,8 +122,8 @@ def dcgm_diag_test_didnt_pass(rc):
         return False
 
 def dcgm_diag_test_index_to_name(index):
-    if index == dcgm_structs.DCGM_SWTEST_BLACKLIST:
-        return "blacklist"
+    if index == dcgm_structs.DCGM_SWTEST_DENYLIST:
+        return "denylist"
     elif index == dcgm_structs.DCGM_SWTEST_NVML_LIBRARY:
         return "nvmlLibrary"
     elif index == dcgm_structs.DCGM_SWTEST_CUDA_MAIN_LIBRARY:

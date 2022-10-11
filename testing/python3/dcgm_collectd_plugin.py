@@ -48,7 +48,7 @@ if 'DCGM_HOSTNAME' in os.environ:
 if 'DCGMLIBPATH' in os.environ:
     g_dcgmLibPath = os.environ['DCGMLIBPATH']
 
-c_ONE_SEC_IN_USEC = 1000000
+c_ONE_SEC_IN_USEC = 1000000    
 
 g_intervalSec = 10 # Default
 
@@ -136,7 +136,7 @@ class DcgmCollectdPlugin(DcgmReader):
     ###########################################################################
     def __init__(self):
         global c_ONE_SEC_IN_USEC
-
+        
         collectd.debug('Initializing DCGM with interval={}s'.format(g_intervalSec))
         DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin', updateFrequency=g_intervalSec*c_ONE_SEC_IN_USEC, fieldIntervalMap = g_fieldIntervalMap)
 
@@ -144,7 +144,7 @@ class DcgmCollectdPlugin(DcgmReader):
 ###########################################################################
     def CustomDataHandler(self, fvs):
         global c_ONE_SEC_IN_USEC
-
+        
         value = collectd.Values(type='gauge')  # pylint: disable=no-member
         value.plugin = 'dcgm_collectd'
 
@@ -167,7 +167,7 @@ class DcgmCollectdPlugin(DcgmReader):
 
                 # Filter out times too close together (< 1.0 sec) but always
                 # include latest one.
-
+                
                 for val in gpuFv[fieldId][::-1]:
                     # Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
                     if val.isBlank:
@@ -188,11 +188,11 @@ class DcgmCollectdPlugin(DcgmReader):
                     if val.isBlank:
                         continue
 
-                    # Round down to 1-second for now
+                    # Round down to 1-second for now                    
                     valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC)
                     valueArray = [val.value, ]
                     value.dispatch(type=fieldTag, type_instance=typeInstance, time=valTimeSec1970, values=valueArray, plugin=value.plugin)
-
+                    
                     collectd.debug("    gpuId %d, tag %s, sample %d, value %s, time %s" % (gpuId, fieldTag, i, str(val.value), str(val.ts)))  # pylint: disable=no-member
                     i += 1
 
@@ -213,7 +213,7 @@ def parse_config(config):
     global g_fieldIntervalMap
     global g_parseRegEx
     global g_fieldRegEx
-
+ 
     g_fieldIntervalMap = {}
 
     for node in config.children:
@@ -222,11 +222,11 @@ def parse_config(config):
         elif node.key == 'FieldIds':
             fieldIds = node.values[0]
 
-            # And we parse out the field ID list with this regex.
+            # And we parse out the field ID list with this regex.            
             field_set_list = g_parseRegEx.finditer(fieldIds)
 
             for field_set in field_set_list:
-                # We get the list of fields...
+                # We get the list of fields...                
                 fields = field_set.group(2)
 
                 # ... and the optional interval.
@@ -249,16 +249,16 @@ def parse_config(config):
                     fields = fields[1:-1]
                     field_list = g_fieldRegEx.finditer(fields)
                     for field_group in field_list:
-
+                        
                         # We map any field names to field numbers, and add
                         # them to the list for the interval
                         field = dcgm_fields_collectd.GetFieldByName(field_group.group(2))
                         g_fieldIntervalMap[interval] += [field]
                 else: # just one field
-                    # Map field name to number.
+                    # Map field name to number.                    
                     field = dcgm_fields_collectd.GetFieldByName(fields)
                     g_fieldIntervalMap[interval] += [field]
-
+    
 
 ###############################################################################
 ##### Wrapper the Class methods for collectd callbacks
@@ -289,7 +289,7 @@ def config_dcgm(config = None):
     Interval is the default collectd sampling interval in seconds.
 
     FieldIds may appear several times. One is either a field ID by name or
-    number. A field ID list is either a single field ID or a list of same,
+    number. A field ID list is either a single field ID or a list of same, 
     separated by commas (,) and bounded by parenthesis ( ( and ) ). Each field
     ID list can be followed by an optional colon (:) and a floating point
     DCGM sampling interval. If no sampling interval is specified the default
@@ -303,7 +303,7 @@ def config_dcgm(config = None):
     is asynchronous sometimes one less than expected will be collected and other
     times one more than expected will be collected.
     """
-
+    
     # If we throw an exception here, collectd config will terminate loading the
     # plugin.
     if config is not None:

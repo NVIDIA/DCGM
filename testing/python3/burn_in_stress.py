@@ -24,7 +24,6 @@ import _thread
 import threading
 import test_utils
 import utils
-import option_parser
 import dcgm_structs
 import dcgm_structs_internal
 import dcgm_agent
@@ -33,7 +32,7 @@ import dcgmvalue
 import dcgm_fields
 import DcgmiDiag
 import nvidia_smi_utils
-
+import option_parser
 import subprocess
 import shlex
 import pydcgm
@@ -61,7 +60,7 @@ TOTAL_TEST_CYCLES = 0
 
 def get_dcgmi_bin_directory():
     """
-    Function to return the directory where dcgmi is expected 
+    Function to return the directory where dcgmi is expected
 
     Example: apps/amd64
     """
@@ -91,33 +90,24 @@ def get_dcgmi_bin_path():
 
 dcgmi_absolute_path = os.path.join(script_dir, get_dcgmi_bin_path())
 
-def get_current_field_group_id(hostIP):
-    data = {}
+def get_newest_field_group_id(dcgmSystem):
     field_group_id = ""
-    try:
-        cmd = "%s fieldgroup --host %s -l" % (dcgmi_absolute_path, hostIP)
-        output_buf = check_output(cmd, shell=True)
-        output = output_buf.decode('utf-8')
-        field_group_id = output.splitlines()[-4].split()[-2]  # Parser output to get the latest fieldgroup id
-    except CalledProcessError:
-        print("Unable to get fieldgroup ID\n")
-    return field_group_id
 
+    maxFieldGroupId = None
+    maxFieldGroupName = ""
 
-def get_field_ids(hostIP, fieldGroupID):
-    data = {}
-    field_ids = ""
-    field_group_name = None
-    try:
-        cmd = "%s fieldgroup --host %s -i -j -g %s" % (dcgmi_absolute_path, hostIP, fieldGroupID)
-        output = check_output(cmd, shell=True)
-        data = json.loads(output)
-        field_ids = data["body"]["Field IDs"]["value"]
-        field_group_name = data["body"]["Name"]["value"]
-    except Exception:
-        print("Failed to gather fieldgroup json data")        
-    return field_ids.replace(" ", ""), field_group_name
+    fieldGroups = dcgmSystem.GetAllFieldGroups()
+    
+    assert fieldGroups.numFieldGroups > 0
 
+    for idx in range(0, fieldGroups.numFieldGroups):
+        fieldGroup = fieldGroups.fieldGroups[idx]
+        if maxFieldGroupId is None or fieldGroup.fieldGroupId > maxFieldGroupId:
+            maxFieldGroupId = fieldGroup.fieldGroupId
+            maxFieldGroupName = fieldGroup.fieldGroupName
+
+    print("Most recent field group is ID %d, name %s" % (maxFieldGroupId, maxFieldGroupName))
+    return maxFieldGroupId
 
 def updateTestResults(result):
     """
@@ -167,13 +157,13 @@ def setupEnvironment():
     if not nvidia_smi_utils.are_gpus_free():
         print("Some GPUs are in use, please make sure that GPUs are free and try again")
         sys.exit(1)
-    
+
     if test_utils.is_framework_compatible() == False:
         print("burn_in_stress.py found to be a different version than DCGM. Exiting")
         sys.exit(1)
     else:
         print(("Running against Git Commit %s" % version.GIT_COMMIT))
-    
+
     test_utils.set_nvvs_bin_path()
 
     # Collects the output of "nvidia-smi -q" and prints it out on the screen for debugging
@@ -198,7 +188,7 @@ def setupEnvironment():
 
 # class to enable printing different colors for terminal output
 class bcolors:
-    PURPPLE = '\033[95m'     # purpple
+    PURPLE = '\033[95m'     # purple
     BLUE = '\033[94m'        # blue
     GREEN = '\033[92m'      # green
     YELLOW = '\033[93m'      # yellow
@@ -255,7 +245,7 @@ class RunHostEngine(apps.NvHostEngineApp):
         pid = self.getpid()
         vmem = []
         rmem = []
-        hm = open(self.memlog, "a") 
+        hm = open(self.memlog, "a")
         loopTime = 3  # Seconds between loops
 
         timeout_start = time.time()
@@ -355,7 +345,7 @@ class BurnInHandle(object):
         dcgmGroup = self.dcgmSystem.GetDefaultGroup()
         groupGpuIds = dcgmGroup.GetGpuIds()
 
-        assert len(groupGpuIds) > 0, "DCGM doesn't see any enabled GPUs. Set __DCGM_WL_BYPASS=1 in your environment to bypass DCGM's whitelist"
+        assert len(groupGpuIds) > 0, "DCGM doesn't see any enabled GPUs. Set __DCGM_WL_BYPASS=1 in your environment to bypass DCGM's allowlist"
 
         # See if the user provided the GPU IDs they care about. If so, return those
         if len(self.burnInCfg.onlyGpuIds) < 1:
@@ -368,7 +358,7 @@ class BurnInHandle(object):
 
     def GetGpuAttributes(self, gpuIds=None):
         """
-        Get an array of dcgm_structs.c_dcgmDeviceAttributes_v1 entries for the passed in gpuIds. None=all devices DCGM knows about
+        Get an array of dcgm_structs.c_dcgmDeviceAttributes_v3 entries for the passed in gpuIds. None=all devices DCGM knows about
         """
         retList = []
         if gpuIds is None:
@@ -532,7 +522,7 @@ class GroupsOperationsHelper:
         return self.__safe_checkcall(args)
 
     def delete_group(self):
-        assert self.group_id is not None 
+        assert self.group_id is not None
         args = ["group", "--host", self.host_ip, "-d", str(self.group_id)]
         return self.__safe_checkcall(args)
 
@@ -598,7 +588,6 @@ class GroupTests:
 
 # Run the CONFIG subsystem tests
 class ConfigTests:
-
     def __init__(self, burnInHandle):
         self.groups_op = GroupsOperationsHelper(burnInHandle)
         self.group_id = None
@@ -659,8 +648,8 @@ class ConfigTests:
         minPowerLimit = self.get_power_power_limit(MIN_POWER_LIMIT, gpuIds)
         if defPowerLimit == minPowerLimit:
             print("Only the default power limit is available for this device, skipping minimum power limit test")
-            print(bcolors.PURPPLE + "&&&& SKIPPED" + bcolors.ENDC)
-            return
+            RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "SKIPPED", bcolors.PURPLE)
+            return ""
         else:
             minPowerLimit = int(minPowerLimit) + 1  # +1 to address fractions lost in data type conversion
 
@@ -700,7 +689,7 @@ class ConfigTests:
         # Trying to enforce previous "--set" configurations for each device
         args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--enforce"]
         print("Trying to enforce last configuration used via \"--set\": %s" % args)
-        time.sleep(1) 
+        time.sleep(1)
 
         return args
 
@@ -723,7 +712,8 @@ class ConfigTests:
         for gpuId in gpuIds:
             if not self.burnInHandle.GpuSupportsEcc(gpuId):
                 print("Skipping ECC tests for GPU %d that doesn't support ECC" % gpuId)
-                return None
+                RunDcgmi.print_test_footer("ECC tests", "SKIPPED", bcolors.PURPLE)
+                return ""
 
         args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-e", val]
         print("Enable/Disable ecc on device: %s" % args)
@@ -1052,7 +1042,7 @@ class ProcessStatsTests:
         for pid in pids:
             stats_msg = "--> Generating Data for Process Stats -  PID %d <--" % pid
             updateTestResults("CYCLE")
-            print(bcolors.PURPPLE + stats_msg + bcolors.ENDC)
+            print(bcolors.PURPLE + stats_msg + bcolors.ENDC)
             args = ["stats", "--host", self.host_ip, "-g", str(self.group_id), "--pid", str(pid), "-v"]
             print("Collecting process stats information: %s" % args)
             sys.stdout.flush()
@@ -1120,71 +1110,16 @@ class NvlinkTests:
 class IntrospectionTests:
 
     def __init__(self, burnInHandle):
-        self.groups_op = GroupsOperationsHelper(burnInHandle)
-        self.group_id = None
         self.burnInHandle = burnInHandle
         self.host_ip = get_host_ip(self.burnInHandle.burnInCfg)
 
-
-    def test1_create_group(self, gpuIds):
-        """ Creates a group for testing the subsystem nvlink """
-        self.group_id = self.groups_op.create_group(None, gpuIds)
-        return self.group_id > 1
-
-    def test2_enable_introspection_feature(self, gpuIds):
-        """ Enables the introspection feature """
-
-        args = ["introspect", "--host", self.host_ip, "--enable"]
-        print("Enabling the introspection features for collecting various stats: %s" % args)
-
-        return args
-
-    def test3_show_hostengine_stats(self, gpuIds):
+    def test1_show_hostengine_stats(self, gpuIds):
         """ Prints out hostengine statistics """
 
         args = ["introspect", "--host", self.host_ip, "--show", "--hostengine"]
         print("Showing introspection information for hostengine: %s" % args)
 
         return args
-
-    def test4_show_all_fields_stats(self, gpuIds):
-        """ Prints out all-fields statistics """
-
-        args = ["introspect", "--host", self.host_ip, "--show", "--all-fields"]
-        print("Showing introspection information for all fields: %s" % args)
-
-        return args
-
-
-    def test5_enable_watches_for_introspection(self, gpuIds):
-        """ Set watches for device introspection information """
-
-        args = ["stats", "--host", self.host_ip, "-g", str(self.group_id), "-e"]
-        print("Enabling watches for collecting device introspection information: %s" % args)
-
-        return args
-
-
-    def test6_show_field_group_stats(self, gpuIds):
-        """ Prints out all field-group stats """
-
-        args = ["introspect", "--host", self.host_ip, "--show", "--field-group", "all"]
-        print("Showing all field-group introspection information: %s" % args)
-
-        return args
-
-    def test7_disable_introspection_feature(self, gpuIds):
-        """ Disables the introspection feature """
-
-        args = ["introspect", "--host", self.host_ip, "--disable"]
-        print("Disabling the introspection feature: %s" % args)
-
-        return args
-
-    def test8_delete_group(self, gpuIds):
-        """ Removes group used for testing """
-
-        return self.groups_op.delete_group()
 
 
 # Run the Fieldgroups subsystem tests
@@ -1195,21 +1130,33 @@ class FieldGroupsTests():
         self.group_id = None
         self.burnInHandle = burnInHandle
         self.host_ip = get_host_ip(self.burnInHandle.burnInCfg)
+        self.dcgmHandle = pydcgm.DcgmHandle(ipAddress=self.host_ip)
+        self.dcgmSystem = self.dcgmHandle.GetSystem()
+        self.numFieldGroupsAdded = 0
 
     def test1_create_group(self, gpuIds):
         self.group_id = self.groups_op.create_group(None, gpuIds)
         return self.group_id > 1
 
     def test2_create_fieldgroup(self, gpuIds):
-        all_field_ids = []
-        for i in range(1,4): # There are 3 fieldGroups DCGM_INTERNAL_30SEC, HOURLY, JOB
-            field_Ids, field_group_name  = get_field_ids(self.host_ip, i)
-            if "," in field_Ids[-1]:
-                field_Ids = field_Ids[:-1] # removes unwanted comma from last field id
-            all_field_ids.append(field_Ids)
+        # Get the field IDs of all of the field groups that exist so far. This is assumed to be the default groups 
+        # DCGM_INTERNAL_30SEC, HOURLY, JOB...etc.
+        allFieldIds = []
+        
+        fieldGroups = self.dcgmSystem.GetAllFieldGroups()
+        for fieldGroup in fieldGroups.fieldGroups[:fieldGroups.numFieldGroups]:
+            allFieldIds.extend(fieldGroup.fieldIds[:fieldGroup.numFieldIds])
 
-        all_fields = "".join(all_field_ids)
-        args = ["fieldgroup", "--host", self.host_ip, "-c", "testFg", "-f", "%s" % all_fields]
+        print("Found %d fieldIds in %d field groups" % (len(allFieldIds), fieldGroups.numFieldGroups))
+
+        #Make sure we only use as many as what the API can handle
+        if len(allFieldIds) > dcgm_structs.DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP:
+            allFieldIds = allFieldIds[:dcgm_structs.DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP-1]
+
+        allFieldsStr = ",".join(map(str,allFieldIds))
+        fieldGroupName = "testFg_%d" % self.numFieldGroupsAdded
+        args = ["fieldgroup", "--host", self.host_ip, "-c", fieldGroupName, "-f", "%s" % allFieldsStr]
+        self.numFieldGroupsAdded += 1
         print("Creating a field groups: %s" % args)
         return args
 
@@ -1224,14 +1171,14 @@ class FieldGroupsTests():
         return args
 
     def test5_get_fieldgroup_info(self, gpuIds):
-        fieldGroupId = get_current_field_group_id(self.host_ip)
-        args = ["fieldgroup", "--host", self.host_ip, "-i", "-g", "%s" % fieldGroupId]
+        fieldGroupId = get_newest_field_group_id(self.dcgmSystem)
+        args = ["fieldgroup", "--host", self.host_ip, "-i", "-g", "%d" % fieldGroupId]
         print("Listing field ID information: %s" % args)
         return args
 
     def test6_delete_fieldgroup(self, gpuIds):
-        fieldGroupId = get_current_field_group_id(self.host_ip)
-        args = ["fieldgroup", "--host", self.host_ip, "-d", "-g", "%s" % fieldGroupId]
+        fieldGroupId = get_newest_field_group_id(self.dcgmSystem)
+        args = ["fieldgroup", "--host", self.host_ip, "-d", "-g", "%d" % fieldGroupId]
         print("Deleting a field group: %s" % args)
         return args
 
@@ -1275,6 +1222,8 @@ class DmonTests:
         self.group_id = None
         self.burnInHandle = burnInHandle
         self.host_ip = get_host_ip(self.burnInHandle.burnInCfg)
+        self.dcgmHandle = pydcgm.DcgmHandle(ipAddress=self.host_ip)
+        self.dcgmSystem = self.dcgmHandle.GetSystem()
 
     def test1_create_group(self, gpuIds):
         """ Creates a group for testing the subsystem dmon """
@@ -1290,26 +1239,36 @@ class DmonTests:
     def test3_dmon_with_various_field_ids_per_device(self, gpuIds):
         """ Runs dmon to get field group info for each device """
 
-        for i in range(1,4): # There are 3 fieldGroups DCGM_INTERNAL_30SEC, HOURLY, JOB
-            field_Ids, field_group_name  = get_field_ids(self.host_ip, i)
-            if "," in field_Ids[-1]:
-                field_Ids = field_Ids[:-1] # removes unwanted comma from last field id
+        print_header = False
 
-            for gpuId in gpuIds:
-                cmd = "%s dmon --host %s -i %s -e %s -c 10 -d 100" % (dcgmi_absolute_path, self.host_ip, str(gpuId), field_Ids)
-                print("Running dmon on a single GPU with field group %s: %s" % (field_group_name, shlex.split(cmd)))
-                try:
-                    check_output(cmd, shell=True)
-                    print(bcolors.BLUE + "&&&& PASSED" + bcolors.ENDC)
-                    updateTestResults("PASSED")
-                    updateTestResults("COUNT") 
-                except CalledProcessError:
-                    print("Failed to get dmon data for GPU %s " % str(gpuId))
-                    print(bcolors.RED + "&&&& FAILED" + bcolors.ENDC)
-                    updateTestResults("FAILED")
-                    updateTestResults("COUNT")
+        fieldIdsStr = "%d,%d" % (dcgm_fields.DCGM_FI_DEV_SM_CLOCK, dcgm_fields.DCGM_FI_DEV_MEM_CLOCK)
 
-        return
+        for gpuId in gpuIds:
+            cmd = "%s dmon --host %s -i %s -e %s -c 10 -d 100" % (dcgmi_absolute_path, self.host_ip, str(gpuId), fieldIdsStr)
+
+            if print_header:
+                RunDcgmi.print_test_header(inspect.currentframe().f_code.co_name)
+            print("Running dmon on a single GPU with field ids %s: %s" % (fieldIdsStr, shlex.split(cmd)))
+
+            try:
+                check_output(cmd, shell=True)
+                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "PASSED", bcolors.BLUE)
+                updateTestResults("PASSED")
+                updateTestResults("COUNT")
+            except CalledProcessError:
+                print("Failed to get dmon data for GPU %s " % str(gpuId))
+                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
+                updateTestResults("FAILED")
+                updateTestResults("COUNT")
+            except Exception:
+                print("Unexpected exception %s " % str(gpuId))
+                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
+                updateTestResults("FAILED")
+                updateTestResults("COUNT")
+
+            print_header = True
+
+        return ""
 
     def test4_dmon_field_group_dcgm_internal_30sec(self, gpuIds):
         args = ["dmon", "--host", self.host_ip, "-f", "1", "-c", "10", "-d", "100"]
@@ -1344,9 +1303,9 @@ def IsDiagTest(testname):
 
 class RunDcgmi():
     """
-    Class to launch an instance of the dcgmi client for each gpu  
+    Class to launch an instance of the dcgmi client for each gpu
     and control its execution
-    """ 
+    """
 
     forbidden_strings = [
         # None of this error codes should be ever printed by dcgmi
@@ -1391,12 +1350,12 @@ class RunDcgmi():
     def _get_sorted_tests(self, obj):
         """ Helper function to get test elements from each class and sort them in ascending order
 
-            Lambda breakdown: 
+            Lambda breakdown:
             sorted(filter(lambda x:x[0].startswith("test"), inspect.getmembers(obj)) -> Filters and sorts each members from the class that startswith "test"
-            key=lambda x:int(x[0][4:x[0].find('_')])) -> key modifies the object to compare the items by their integer value found after the "_"          
+            key=lambda x:int(x[0][4:x[0].find('_')])) -> key modifies the object to compare the items by their integer value found after the "_"
         """
         return sorted([x for x in inspect.getmembers(obj) if x[0].startswith("test")], key=lambda x:int(x[0][4:x[0].find('_')]))
-        
+
     def get_group_tests(self):
         return self._get_sorted_tests(self.group_tests)
 
@@ -1436,15 +1395,17 @@ class RunDcgmi():
     def get_dmon_tests(self):
         return self._get_sorted_tests(self.dmon_tests)
 
-    def print_test_header(self, testName):
-        print(("&&&& RUNNING " + testName))
+    @staticmethod
+    def print_test_header(testName):
+        print(("&&&& RUNNING " + testName + "\n"))
 
-    def print_test_footer(self, testName, statusText, color):
+    @staticmethod
+    def print_test_footer(testName, statusText, color):
         #Don't include colors for eris
-        if option_parser.options.eris or option_parser.options.dvssc_testing:
-            print(("&&&& " + statusText + " " + testName))
+        if option_parser.options.dvssc_testing or option_parser.options.eris:
+            print(("&&&& " + statusText + " " + testName + "\n"))
         else:
-            print((color + "&&&& " + statusText + " " + testName + bcolors.ENDC))
+            print(color + "&&&& " + statusText + " " + testName + bcolors.ENDC + "\n")
 
     def start(self, timeout=None, server=None):
         """
@@ -1462,7 +1423,7 @@ class RunDcgmi():
             gpuIdLists = self.burnInHandle.GetGpuIdsGroupedBySku()
 
 
-            # Starts a process to run dcgmi 
+            # Starts a process to run dcgmi
             for gpuIds in gpuIdLists:
                 fout = open('DCGMI-RUN_%s.log' % self.timestamp, 'a+')
 
@@ -1488,10 +1449,29 @@ class RunDcgmi():
                 for test in all_tests:
                     for (testName, testMethod) in test:
                         try:
-                            self.print_test_header(testName)
+                            RunDcgmi.print_test_header(testName)
 
                             exec_test = testMethod(gpuIds)
-                            if type(exec_test) == bool or exec_test is None:
+
+                            if exec_test is None:
+                                # The test was not run (likely prevented by
+                                # decorator).
+                                RunDcgmi.print_test_footer(testName, "SKIPPED", bcolors.PURPLE)
+                                continue
+
+                            if type(exec_test) == str:
+                                # The test itself reported.
+                                continue
+
+                            if type(exec_test) == bool:
+                                if exec_test:
+                                    RunDcgmi.print_test_footer(testName, "PASSED", bcolors.BLUE)
+                                    updateTestResults("PASSED")
+                                else:
+                                    RunDcgmi.print_test_footer(testName, "FAILED", bcolors.RED)
+                                    updateTestResults("FAILED")
+
+                                updateTestResults("COUNT")
                                 continue
 
                             # We need to check pass / fail differently for the diag. If it finds a legitimate problem
@@ -1520,30 +1500,30 @@ class RunDcgmi():
                             print("Got rc %d" % rc)
 
                             if rc == 0:
-                                self.print_test_footer(testName, "PASSED", bcolors.BLUE)
+                                RunDcgmi.print_test_footer(testName, "PASSED", bcolors.BLUE)
                                 updateTestResults("PASSED")
                                 updateTestResults("COUNT")
                             elif rc == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
-                                self.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
+                                RunDcgmi.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
                                 updateTestResults("WAIVED")
                                 updateTestResults("COUNT")
                             elif diagPassed == True:
                                 # If we reach here, it means the diag detected a problem we consider legitimate.
                                 # Mark this test as waived instead of failed
-                                self.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
+                                RunDcgmi.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
                                 print("Waiving test due to errors we believe to be legitimate detected by the diagnostic")
                                 if dd is not None:
                                     dd.PrintFailures()
                                 updateTestResults("WAIVED")
                                 updateTestResults("COUNT")
                             else:
-                                self.print_test_footer(testName, "FAILED", bcolors.RED)
+                                RunDcgmi.print_test_footer(testName, "FAILED", bcolors.RED)
                                 if dd is not None:
                                     dd.PrintFailures()
                                 updateTestResults("FAILED")
                                 updateTestResults("COUNT")
                         except test_utils.TestSkipped as err:
-                                self.print_test_footer(testName, "SKIPPED", bcolors.PURPPLE)
+                                RunDcgmi.print_test_footer(testName, "SKIPPED", bcolors.PURPLE)
                                 print(err)
                                 updateTestResults("SKIPPED")
 
@@ -1620,7 +1600,7 @@ def run_local_host_engine(burnInCfg):
         _thread.start_new_thread(lambda: host_engine.mem_usage(burnInCfg.runtime), ())
         _thread.start_new_thread(lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
     except:
-        print("Error: unable to create thread") 
+        print("Error: unable to create thread")
     time.sleep(1)
 
     return host_engine
@@ -1674,13 +1654,10 @@ def run_remote(runtime, address, srv, nodes):
     # Gets current user name
     user = os.getlogin()
 
-    # Loads python 2.7.x cluster module as target system only has python 2.6.x 
-    # (may vary on different cluster configurations)
-    module = "module load python/2.7/2.7.8"
-    py_cmd = "python2 burn_in_stress.py"
+    py_cmd = sys.executable + " burn_in_stress.py"
 
     # Run the tests on remote systems
-    cmd="ssh %s@%s \"MODULEPATH=%s %s;cd testing; LD_LIBRARY_PATH=~/testing %s -t %s -s %s \"" % (user, address, os.environ["MODULEPATH"], module, py_cmd, runtime, srv)
+    cmd="ssh %s@%s \"MODULEPATH=%s;cd testing; LD_LIBRARY_PATH=~/testing %s -t %s -s %s \"" % (user, address, os.environ["MODULEPATH"], py_cmd, runtime, srv)
     return Popen(cmd.split())
 
 # Run the tests on the local (single) node
@@ -1697,7 +1674,7 @@ def run_tests(burnInCfg):
     if len(gpuIds) < 1:
         print("\n...................................................\n")
         print("At least one GPU is required to run the burn_in stress test on a single node.\n")
-        print("Set __DCGM_WL_BYPASS=1 in your environment to bypass the DCGM whitelist\n")
+        print("Set __DCGM_WL_BYPASS=1 in your environment to bypass the DCGM allowlist\n")
         sys.exit(1)
     else:
         for gpuId in gpuIds:
@@ -1717,7 +1694,7 @@ def run_tests(burnInCfg):
             _thread.start_new_thread(lambda: host_engine.mem_usage(burnInCfg.runtime), ())
             _thread.start_new_thread(lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
         except:
-            print("Error: unable to create thread") 
+            print("Error: unable to create thread")
         time.sleep(1)
     else:
         print("\nHostengine detected, using existing nv-hostegine...")
@@ -1763,7 +1740,8 @@ class BurnInGlobalConfig:
         self.remote = False  #Are we connecting to a remote server? True = Yes. False = No
         self.eud = True      #Should we run the EUD? True = Yes
         self.runtime = 0     #How long to run the tests in seconds
-        self.onlyGpuIds = []      #Only GPU IDs this framework should run on
+        self.onlyGpuIds = [] #Only GPU IDs this framework should run on
+        self.dvssc_testing = False    #Display color on output
 
         #Undocumented globals I'm pulling out of the global namespace for sanity's sake
         self.srv = None
@@ -1793,11 +1771,18 @@ def parseCommandLine():
     parser.add_argument("-ne", "--noeud",  action="store_true", help="Runs without the EUD Diagnostics test")
     parser.add_argument("-i", "--indexes", nargs=1, help="One or more GPU IDs to run the burn-in tests on, separated by commas. These come from 'dcgmi discovery -l'")
     parser.add_argument("-d", "--debug", action="store_true", help="Write debug logs from nv-hostengine")
+    parser.add_argument("-D", "--dvssc-testing", action="store_true", help="DVSCC Testing disable colors in output")
 
     args = parser.parse_args()
 
     # passes stdout to the Logger Class
     sys.stdout = Logger()
+
+    # Parsing color
+    burnInCfg.dvssc_testing = args.dvssc_testing
+
+    # pass on to option_parser for use in logging.py
+    option_parser.options.dvssc_testing = burnInCfg.dvssc_testing
 
     # Parsing time to run argument
     if args.runtime:
@@ -1813,7 +1798,7 @@ def parseCommandLine():
     # Runs without EUD tests
     if args.noeud:
         burnInCfg.eud = False
-        print(color.PURPPLE + "## Running without Diagnostics Tests ##\n" + color.ENDC)
+        print(color.PURPLE + "## Running without Diagnostics Tests ##\n" + color.ENDC)
 
     # Parsing server arguments
     burnInCfg.server = []
@@ -1845,7 +1830,7 @@ def parseCommandLine():
                 print(color.RED + "\nFailed to validate IP Address %s\n" % add + color.ENDC)
                 sys.exit(1)
 
-        print(color.PURPPLE + "IP address to run on: %s " % str(burnInCfg.ip) + color.ENDC)
+        print(color.PURPLE + "IP address to run on: %s " % str(burnInCfg.ip) + color.ENDC)
         print("\n...................................................\n")
 
     else:
@@ -1858,13 +1843,13 @@ def parseCommandLine():
             location = os.path.abspath(os.path.join(args.nodesfile))
 
             if os.path.exists(location):
-                print(color.PURPPLE + "Nodes list file used \"%s\"\n" % str(location).split() + color.ENDC)
+                print(color.PURPLE + "Nodes list file used \"%s\"\n" % str(location).split() + color.ENDC)
 
                 # Reads the node list file and removes newlines from each line
                 f = open(location, 'r')
                 for lines in f.readlines():
                     burnInCfg.nodes.append(lines[:-1])
-            print(color.PURPPLE + "IP address to run on: %s " % burnInCfg.nodes + color.ENDC)
+            print(color.PURPLE + "IP address to run on: %s " % burnInCfg.nodes + color.ENDC)
             print("\n...................................................\n")
 
     if args.indexes:
@@ -1892,7 +1877,7 @@ def cleanup():
 def main_wrapped():
     # Initialize the framework's option parser so we can use framework classes
     option_parser.initialize_as_stub()
-    
+
     if not utils.is_root():
         sys.exit("\nOnly root can run this script\n")
 
@@ -1936,4 +1921,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

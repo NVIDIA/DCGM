@@ -83,7 +83,7 @@ public:
         using namespace Dcgm;
         if (allocatedCublasHandle != 0)
         {
-            PRINT_DEBUG("%d %p", "cublasDestroy cudaDeviceIdx %d, handle %p", cudaDeviceIdx, (void *)cublasHandle);
+            log_debug("cublasDestroy cudaDeviceIdx {}, handle {}", cudaDeviceIdx, (void *)cublasHandle);
             CublasProxy::CublasDestroy(cublasHandle);
             cublasHandle          = 0;
             allocatedCublasHandle = 0;

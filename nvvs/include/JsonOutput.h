@@ -42,7 +42,6 @@ public:
     void updatePluginProgress(unsigned int progress, bool clear) override;
     void print() override;
     void addInfoStatement(const std::string &info) override;
-    void AddTrainingResult(const std::string &trainingOut) override;
 
     /***************************PRIVATE**********************************/
 private:

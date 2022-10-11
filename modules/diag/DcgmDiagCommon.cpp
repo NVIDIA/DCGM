@@ -49,12 +49,6 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
                                                 const std::string &statsPath,
                                                 unsigned int debugLevel,
                                                 const std::string &throttleMask,
-                                                bool training,
-                                                bool forceTrain,
-                                                unsigned int trainingIterations,
-                                                unsigned int trainingVariance,
-                                                unsigned int trainingTolerance,
-                                                const std::string &goldenValuesFile,
                                                 unsigned int groupId,
                                                 bool failEarly,
                                                 unsigned int failCheckInterval,
@@ -89,15 +83,6 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
     else if (testNames == "4")
     {
         drd.validate = DCGM_POLICY_VALID_SV_XLONG;
-    }
-    else if (training == true)
-    {
-        if (testNames.size() != 0)
-        {
-            errbuf << "Invalid value: -r should not be specificied with --train, but found: '" << testNames << "'.";
-            error = errbuf.str();
-            return DCGM_ST_BADPARAM;
-        }
     }
     else
     {
@@ -156,15 +141,6 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
         drd.flags |= DCGM_RUN_FLAGS_VERBOSE;
     }
 
-    if (training)
-    {
-        drd.flags |= DCGM_RUN_FLAGS_TRAIN;
-        if (forceTrain)
-        {
-            drd.flags |= DCGM_RUN_FLAGS_FORCE_TRAIN;
-        }
-    }
-
     drd.debugLevel = debugLevel;
 
     snprintf(drd.debugLogFile, sizeof(drd.debugLogFile), "%s", debugLogFile.c_str());
@@ -176,10 +152,6 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_t &drd,
     dcgm_diag_common_set_config_file_contents(configFileContents, drd);
 
     snprintf(drd.throttleMask, sizeof(drd.throttleMask), "%s", throttleMask.c_str());
-    drd.trainingIterations = trainingIterations;
-    drd.trainingVariance   = trainingVariance;
-    drd.trainingTolerance  = trainingTolerance;
-    snprintf(drd.goldenValuesFile, sizeof(drd.goldenValuesFile), "%s", goldenValuesFile.c_str());
     if (failEarly) // v5 and newer
     {
         drd.flags |= DCGM_RUN_FLAGS_FAIL_EARLY;

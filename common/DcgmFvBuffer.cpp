@@ -53,7 +53,7 @@ dcgmReturn_t DcgmFvBuffer::Resize(size_t newCapacity)
     char *tmp_buffer = (char *)realloc(m_buffer, newCapacity);
     if (!tmp_buffer)
     {
-        PRINT_ERROR("%d", "Unable to resize buffer to %d", (int)newCapacity);
+        log_error("Unable to resize buffer to {}", (int)newCapacity);
         m_bufferUsed     = 0;
         m_bufferCapacity = 0;
         m_numEntries     = 0;
@@ -161,14 +161,14 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddDoubleValue(dcgm_field_entity_group_t entityG
 dcgmBufferedFv_t *DcgmFvBuffer::AddStringValue(dcgm_field_entity_group_t entityGroupId,
                                                dcgm_field_eid_t entityId,
                                                unsigned short fieldId,
-                                               char *value,
+                                               const char *value,
                                                long long timestamp,
                                                dcgmReturn_t status)
 {
     dcgmBufferedFv_t *retPtr;
     if (!value || !(*value))
     {
-        PRINT_ERROR("", "Bad parameter");
+        log_error("Bad parameter");
         return 0;
     }
 
@@ -178,7 +178,7 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddStringValue(dcgm_field_entity_group_t entityG
 
     if (stringLength + 1 > sizeof(retPtr->value.str))
     {
-        PRINT_ERROR("%s %d", "String %s is too big to buffer. (> %d)", value, (int)sizeof(retPtr->value.str));
+        log_error("String {} is too big to buffer. (> {})", value, (int)sizeof(retPtr->value.str));
         return 0;
     }
 
@@ -213,12 +213,12 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlobValue(dcgm_field_entity_group_t entityGro
 
     if (!value || !valueSize)
     {
-        PRINT_ERROR("", "Bad parameter");
+        log_error("Bad parameter");
         return 0;
     }
     if (valueSize > sizeof(retPtr->value.blob))
     {
-        PRINT_ERROR("%d", "Blob is too big to buffer. (> %d)", (int)sizeof(retPtr->value.blob));
+        log_error("Blob is too big to buffer. (> {})", (int)sizeof(retPtr->value.blob));
         return 0;
     }
 
@@ -241,6 +241,38 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlobValue(dcgm_field_entity_group_t entityGro
 }
 
 /******************************************************************************/
+dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGroupId,
+                                              dcgm_field_eid_t entityId,
+                                              unsigned short fieldId,
+                                              dcgmReturn_t status)
+{
+    dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldId);
+    if (fieldMeta == nullptr)
+    {
+        DCGM_LOG_ERROR << "Invalid fieldId " << fieldId;
+        return nullptr;
+    }
+
+    switch (fieldMeta->fieldType)
+    {
+        case DCGM_FT_INT64:
+            return AddInt64Value(entityGroupId, entityId, fieldId, DCGM_INT64_BLANK, 0, status);
+
+        case DCGM_FT_DOUBLE:
+            return AddDoubleValue(entityGroupId, entityId, fieldId, DCGM_FP64_BLANK, 0, status);
+
+        case DCGM_FT_STRING:
+            return AddStringValue(entityGroupId, entityId, fieldId, DCGM_STR_BLANK, 0, status);
+
+        default:
+            DCGM_LOG_ERROR << "Unhandled fieldType: " << fieldMeta->fieldType;
+            return nullptr;
+    }
+
+    return nullptr;
+}
+
+/******************************************************************************/
 dcgmBufferedFv_t *DcgmFvBuffer::GetNextFv(dcgmBufferedFvCursor_t *cursor)
 {
     dcgmBufferedFv_t *retPtr;
@@ -256,12 +288,12 @@ dcgmBufferedFv_t *DcgmFvBuffer::GetNextFv(dcgmBufferedFvCursor_t *cursor)
     /* Do some basic sanity on the FV */
     if (retPtr->version != dcgmBufferedFv_version)
     {
-        PRINT_ERROR("%d", "Corrupt fv. version %d found.", (int)retPtr->version);
+        log_error("Corrupt fv. version {} found.", (int)retPtr->version);
         return 0;
     }
     if (retPtr->length + (*cursor) > m_bufferUsed)
     {
-        PRINT_ERROR("%u %d %d", "Corrupt fv length %u at %d / %d", retPtr->length, (int)(*cursor), (int)m_bufferUsed);
+        log_error("Corrupt fv length {} at {} / {}", retPtr->length, (int)(*cursor), (int)m_bufferUsed);
         return 0;
     }
 
@@ -295,16 +327,13 @@ dcgmReturn_t DcgmFvBuffer::SetFromBuffer(const char *buffer, size_t bufferSize)
         fv = (dcgmBufferedFv_t *)&m_buffer[bufferIndex];
         if (fv->version != dcgmBufferedFv_version)
         {
-            PRINT_ERROR("%d %d %d",
-                        "Corrupt fv. version %d found at %d / %d.",
-                        (int)fv->version,
-                        (int)bufferIndex,
-                        (int)m_bufferUsed);
+            log_error(
+                "Corrupt fv. version {} found at {} / {}.", (int)fv->version, (int)bufferIndex, (int)m_bufferUsed);
             return DCGM_ST_GENERIC_ERROR;
         }
         if (fv->length + bufferIndex > m_bufferUsed)
         {
-            PRINT_ERROR("%u %d %d", "Corrupt fv length %u at %d / %d", fv->length, (int)bufferIndex, (int)m_bufferUsed);
+            log_error("Corrupt fv length {} at {} / {}", fv->length, (int)bufferIndex, (int)m_bufferUsed);
             return DCGM_ST_GENERIC_ERROR;
         }
 
@@ -345,7 +374,7 @@ void DcgmFvBuffer::ConvertBufferedFvToFv1(dcgmBufferedFv_t *fv, dcgmFieldValue_v
         }
 
         default:
-            PRINT_ERROR("%u", "Unhandled field type %u", fv->fieldType);
+            log_error("Unhandled field type {}", fv->fieldType);
             break;
     }
 }
@@ -384,7 +413,7 @@ void DcgmFvBuffer::ConvertBufferedFvToFv2(dcgmBufferedFv_t *fv, dcgmFieldValue_v
         }
 
         default:
-            PRINT_ERROR("%u", "Unhandled field type %u", fv->fieldType);
+            log_error("Unhandled field type {}", fv->fieldType);
             break;
     }
 }
@@ -409,7 +438,7 @@ dcgmReturn_t DcgmFvBuffer::GetAllAsFv1(dcgmFieldValue_v1 *fv1, size_t fv1Capacit
     /* Did we store exactly as many fields as were in this FV buffer? */
     if (fv1Capacity != numStoredTemp)
     {
-        PRINT_WARNING("%d %d", "GetAllAsFv1 capacity %d, stored %d", (int)fv1Capacity, (int)numStoredTemp);
+        log_warning("GetAllAsFv1 capacity {}, stored {}", (int)fv1Capacity, (int)numStoredTemp);
         /* Not returning an error for now */
     }
 

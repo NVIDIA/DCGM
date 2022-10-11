@@ -124,13 +124,25 @@ dcgmReturn_t DcgmFieldGroupManager::AddFieldGroup(std::string name,
     unsigned int newFieldGrpId;
     std::map<unsigned int, DcgmFieldGroup *>::iterator fieldGrpIter;
 
+    /* Validate all passed-in field IDs before we bother taking the lock */
+    for (auto &fieldId : fieldIds)
+    {
+        auto fieldMeta = DcgmFieldGetById(fieldId);
+        if (fieldMeta == nullptr)
+        {
+            DCGM_LOG_WARNING << "Invalid fieldId " << fieldId << " passed to AddFieldGroup() by connectionId "
+                             << watcher.connectionId;
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
     Lock();
 
     /* Are we above the max limit for groups? */
     if (m_fieldGroups.size() >= DCGM_MAX_NUM_FIELD_GROUPS)
     {
         Unlock();
-        PRINT_WARNING("%d", "Too many field groups (%d)", (int)DCGM_MAX_NUM_FIELD_GROUPS);
+        log_warning("Too many field groups ({})", (int)DCGM_MAX_NUM_FIELD_GROUPS);
         return DCGM_ST_MAX_LIMIT;
     }
 
@@ -140,7 +152,7 @@ dcgmReturn_t DcgmFieldGroupManager::AddFieldGroup(std::string name,
         if (fieldGrpIter->second->GetName() == name)
         {
             Unlock();
-            PRINT_DEBUG("%s", "Field group name %s already exists", name.c_str());
+            log_debug("Field group name {} already exists", name.c_str());
             return DCGM_ST_DUPLICATE_KEY;
         }
     }
@@ -157,11 +169,7 @@ dcgmReturn_t DcgmFieldGroupManager::AddFieldGroup(std::string name,
     Unlock();
 
     *fieldGrp = (dcgmFieldGrp_t)(intptr_t)newFieldGrpId;
-    PRINT_DEBUG("%u %s %u",
-                "Added field group id %u, name %s, connectionId %u",
-                newFieldGrpId,
-                name.c_str(),
-                watcher.connectionId);
+    log_debug("Added field group id {}, name {}, connectionId {}", newFieldGrpId, name.c_str(), watcher.connectionId);
     return DCGM_ST_OK;
 }
 
@@ -179,7 +187,7 @@ dcgmReturn_t DcgmFieldGroupManager::RemoveFieldGroup(dcgmFieldGrp_t fieldGrp, Dc
     if (fieldGrpIter == m_fieldGroups.end())
     {
         Unlock();
-        PRINT_DEBUG("%u", "Field group %u not found", fieldGrpId);
+        log_debug("Field group {} not found", fieldGrpId);
         return DCGM_ST_NO_DATA;
     }
 
@@ -188,7 +196,7 @@ dcgmReturn_t DcgmFieldGroupManager::RemoveFieldGroup(dcgmFieldGrp_t fieldGrp, Dc
     if (callerWatcher.watcherType == DcgmWatcherTypeClient && fieldGroupWatcher.watcherType != DcgmWatcherTypeClient)
     {
         Unlock();
-        PRINT_DEBUG("%u", "Internal field group %u could not be removed by a user", fieldGrpId);
+        log_debug("Internal field group {} could not be removed by a user", fieldGrpId);
         return DCGM_ST_NO_PERMISSION;
     }
 
@@ -200,7 +208,7 @@ dcgmReturn_t DcgmFieldGroupManager::RemoveFieldGroup(dcgmFieldGrp_t fieldGrp, Dc
         connectionIt = m_connectionFieldGroupIds.find(fieldGroupWatcher.connectionId);
         if (connectionIt == m_connectionFieldGroupIds.end())
         {
-            PRINT_ERROR("%u", "connectionId %u has no field groups", fieldGroupWatcher.connectionId);
+            log_error("connectionId {} has no field groups", fieldGroupWatcher.connectionId);
         }
         else
         {
@@ -209,16 +217,14 @@ dcgmReturn_t DcgmFieldGroupManager::RemoveFieldGroup(dcgmFieldGrp_t fieldGrp, Dc
             fieldGroupIdIter = connectionIt->second.find(fieldGrpId);
             if (fieldGroupIdIter == connectionIt->second.end())
             {
-                PRINT_ERROR(
-                    "%u %u", "fieldGroupId %u missing from connection %u", fieldGrpId, fieldGroupWatcher.connectionId);
+                log_error("fieldGroupId {} missing from connection {}", fieldGrpId, fieldGroupWatcher.connectionId);
             }
             else
             {
                 connectionIt->second.erase(fieldGroupIdIter);
-                PRINT_DEBUG("%u %u",
-                            "Removed fieldGroupId %u from connection %u in m_connectionFieldGroupIds",
-                            fieldGrpId,
-                            fieldGroupWatcher.connectionId);
+                log_debug("Removed fieldGroupId {} from connection {} in m_connectionFieldGroupIds",
+                          fieldGrpId,
+                          fieldGroupWatcher.connectionId);
             }
         }
     }
@@ -228,7 +234,7 @@ dcgmReturn_t DcgmFieldGroupManager::RemoveFieldGroup(dcgmFieldGrp_t fieldGrp, Dc
     m_fieldGroups.erase(fieldGrpIter);
 
     Unlock();
-    PRINT_DEBUG("%u", "Removed field group %u", fieldGrpId);
+    log_debug("Removed field group {}", fieldGrpId);
     return DCGM_ST_OK;
 }
 
@@ -247,7 +253,7 @@ dcgmReturn_t DcgmFieldGroupManager::GetFieldGroupFields(dcgmFieldGrp_t fieldGrp,
     if (fieldGrpIter == m_fieldGroups.end())
     {
         Unlock();
-        PRINT_DEBUG("%u", "Field group %u not found", fieldGrpId);
+        log_debug("Field group {} not found", fieldGrpId);
         return DCGM_ST_NO_DATA;
     }
 
@@ -273,7 +279,7 @@ std::string DcgmFieldGroupManager::GetFieldGroupName(dcgmFieldGrp_t fieldGrp)
     }
     else
     {
-        PRINT_DEBUG("%u", "Field group %u not found", fieldGrpId);
+        log_debug("Field group {} not found", fieldGrpId);
     }
 
     Unlock();
@@ -307,7 +313,7 @@ dcgmReturn_t DcgmFieldGroupManager::PopulateFieldGroupInfo(dcgmFieldGroupInfo_t 
     if (fieldGrpIter == m_fieldGroups.end())
     {
         Unlock();
-        PRINT_DEBUG("%u", "Field group %u not found", fieldGrpId);
+        log_debug("Field group {} not found", fieldGrpId);
         return DCGM_ST_NO_DATA;
     }
 
@@ -369,7 +375,7 @@ dcgmReturn_t DcgmFieldGroupManager::PopulateFieldGroupGetAll(dcgmAllFieldGroup_t
     }
 
     Unlock();
-    PRINT_DEBUG("%u", "Found %u field groups", allGroupInfo->numFieldGroups);
+    log_debug("Found {} field groups", allGroupInfo->numFieldGroups);
     return DCGM_ST_OK;
 }
 
@@ -389,14 +395,14 @@ void DcgmFieldGroupManager::OnConnectionRemove(dcgm_connection_id_t connectionId
     if (outer_it == m_connectionFieldGroupIds.end())
     {
         Unlock();
-        PRINT_DEBUG("%u", "No field groups found for connectionId %u", connectionId);
+        log_debug("No field groups found for connectionId {}", connectionId);
         return;
     }
 
     /* Walk all of the group IDs of this connection and remove the groups */
     for (inner_it = outer_it->second.begin(); inner_it != outer_it->second.end(); ++inner_it)
     {
-        PRINT_DEBUG("%u", "Queueing fieldGroupId %u to be removed", inner_it->first);
+        log_debug("Queueing fieldGroupId {} to be removed", inner_it->first);
         groupIdsToRemove.push_back(inner_it->first);
     }
 
@@ -410,7 +416,7 @@ void DcgmFieldGroupManager::OnConnectionRemove(dcgm_connection_id_t connectionId
         dcgmReturn = RemoveFieldGroup((dcgmFieldGrp_t)(intptr_t)*uint_it, watcher);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            PRINT_WARNING("%u %d", "RemoveFieldGroup of fieldGroupId %u returned %d.", *uint_it, (int)dcgmReturn);
+            log_warning("RemoveFieldGroup of fieldGroupId {} returned {}.", *uint_it, (int)dcgmReturn);
         }
     }
 }

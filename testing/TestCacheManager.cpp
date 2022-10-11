@@ -16,6 +16,7 @@
 
 #include "TestCacheManager.h"
 #include "DcgmCacheManager.h"
+#include "DcgmTopology.hpp"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
 #include <bitset>
@@ -44,9 +45,9 @@ std::string TestCacheManager::GetTag()
 }
 
 /*****************************************************************************/
-int TestCacheManager::Init(std::vector<std::string> argv, std::vector<test_nvcm_gpu_t> gpus)
+int TestCacheManager::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = gpus;
+    m_gpus = initParams.liveGpuIds;
     return 0;
 }
 
@@ -93,18 +94,25 @@ static std::unique_ptr<DcgmCacheManager> createCacheManager(int pollInLockStep)
 int TestCacheManager::AddPowerUsageWatchAllGpusHelper(DcgmCacheManager *cacheManager)
 {
     int st;
-    test_nvcm_gpu_t *gpu;
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
 
     for (int i = 0; i < (int)m_gpus.size(); i++)
     {
-        gpu = &m_gpus[i];
-
-        st = cacheManager->AddFieldWatch(
-            DCGM_FE_GPU, gpu->gpuId, DCGM_FI_DEV_POWER_USAGE, 1000000, 86400.0, 0, watcher, false);
+        bool updateOnFirstWatch = false; /* All of the callers of this call UpdateFields() right after */
+        bool wereFirstWatcher   = false;
+        st                      = cacheManager->AddFieldWatch(DCGM_FE_GPU,
+                                         m_gpus[i],
+                                         DCGM_FI_DEV_POWER_USAGE,
+                                         1000000,
+                                         86400.0,
+                                         0,
+                                         watcher,
+                                         false,
+                                         updateOnFirstWatch,
+                                         wereFirstWatcher);
         if (st)
         {
-            fprintf(stderr, "AddFieldWatch returned %d for nvml gpu %d\n", st, (int)gpu->nvmlIndex);
+            fprintf(stderr, "AddFieldWatch returned %d for gpu %u\n", st, m_gpus[i]);
             return -1;
         }
     }
@@ -116,7 +124,6 @@ int TestCacheManager::TestRecording()
 {
     int st = 0;
     int i, Msamples;
-    test_nvcm_gpu_p gpu = 0;
     dcgmcm_sample_t sample;
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
@@ -142,79 +149,22 @@ int TestCacheManager::TestRecording()
     /* Verify all field values were saved */
     for (i = 0; i < (int)m_gpus.size(); i++)
     {
-        gpu = &m_gpus[i];
-
-        st = cacheManager->GetLatestSample(DCGM_FE_GPU, gpu->gpuId, DCGM_FI_DEV_POWER_USAGE, &sample, 0);
+        st = cacheManager->GetLatestSample(DCGM_FE_GPU, m_gpus[i], DCGM_FI_DEV_POWER_USAGE, &sample, 0);
         if (st != DCGM_ST_OK)
         {
-            fprintf(stderr, "Got st %d from GetLatestSample() for nvml gpu %u\n", st, gpu->nvmlIndex);
+            fprintf(stderr, "Got st %d from GetLatestSample() for gpu %u\n", st, m_gpus[i]);
             return 1;
             /* Non-fatal */
         }
 
         Msamples = 1; /* Only fetch one */
         st       = cacheManager->GetSamples(
-            DCGM_FE_GPU, gpu->gpuId, DCGM_FI_DEV_POWER_USAGE, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING);
+            DCGM_FE_GPU, m_gpus[i], DCGM_FI_DEV_POWER_USAGE, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
         if (st != DCGM_ST_OK)
         {
-            fprintf(stderr, "Got st %d from GetSamples() for nvml gpu %u\n", st, gpu->nvmlIndex);
+            fprintf(stderr, "Got st %d from GetSamples() for gpu %u\n", st, m_gpus[i]);
             return 1;
             /* Non-fatal */
-        }
-    }
-
-    return 0;
-}
-
-int TestCacheManager::TestGpuFieldBytesUsed()
-{
-    int st = 0;
-    int i;
-    test_nvcm_gpu_p gpu                            = 0;
-    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
-    if (nullptr == cacheManager)
-    {
-        return -1;
-    }
-
-    /* Add a watch on a field for all GPUs */
-    st = AddPowerUsageWatchAllGpusHelper(cacheManager.get());
-    if (st != 0)
-    {
-        return st;
-    }
-
-    /* Now make sure all values are read */
-    st = cacheManager->UpdateAllFields(1);
-    if (st)
-    {
-        fprintf(stderr, "UpdateAllFields returned %d\n", st);
-        return -1;
-    }
-
-    /* Now test the function we want to test */
-    for (i = 0; i < (int)m_gpus.size(); i++)
-    {
-        long long bytesUsed = 0;
-        gpu                 = &m_gpus[i];
-
-        // try to retrieve bytes used a couple times since it sometimes takes a couple ms for the first
-        // metadata gathering run to be complete
-        for (int attempts = 3; attempts > 0; --attempts)
-        {
-            st = cacheManager->GetGpuFieldBytesUsed(gpu->gpuId, DCGM_FI_DEV_POWER_USAGE, &bytesUsed);
-            if (st == DCGM_ST_OK)
-                break;
-            usleep(10000); // 10 ms
-        }
-
-        if (st != DCGM_ST_OK || bytesUsed < 1024 // 1 KB
-            || bytesUsed > 1024 * 1024 * 20)     // 20 MB
-        {
-            fprintf(stderr,
-                    "return value from GetGpuFieldBytesUsed was outside of acceptable range.  Value: %lld",
-                    bytesUsed);
-            return 1;
         }
     }
 
@@ -235,19 +185,22 @@ int TestCacheManager::TestRecordingGlobal()
     dcgmcm_sample_t sample;
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
 
-    st = cacheManager->AddFieldWatch(DCGM_FE_NONE, 0, DCGM_FI_DRIVER_VERSION, 1000000, 86400.0, 0, watcher, false);
+    bool updateOnFirstWatch
+        = true; /* Do one case where we tell it to update on first watch and don't call UpdateAllFields() after */
+    bool wereFirstWatcher = false;
+    st                    = cacheManager->AddFieldWatch(DCGM_FE_NONE,
+                                     0,
+                                     DCGM_FI_DRIVER_VERSION,
+                                     1000000,
+                                     86400.0,
+                                     0,
+                                     watcher,
+                                     false,
+                                     updateOnFirstWatch,
+                                     wereFirstWatcher);
     if (st)
     {
         fprintf(stderr, "AddGlobalFieldWatch returned %d \n", st);
-        retSt = -1;
-        goto CLEANUP;
-    }
-
-    /* Now make sure all values are read */
-    st = cacheManager->UpdateAllFields(1);
-    if (st)
-    {
-        fprintf(stderr, "UpdateAllFields returned %d\n", st);
         retSt = -1;
         goto CLEANUP;
     }
@@ -259,18 +212,24 @@ int TestCacheManager::TestRecordingGlobal()
         retSt = 1;
         /* Non-fatal */
     }
-    free(sample.val.str); // sample for this field is string type which has been strdup'ed
+    else
+    {
+        free(sample.val.str); // sample for this field is string type which has been strdup'ed
+    }
 
     Msamples = 1; /* Only fetch one */
     st       = cacheManager->GetSamples(
-        DCGM_FE_NONE, 0, DCGM_FI_DRIVER_VERSION, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING);
+        DCGM_FE_NONE, 0, DCGM_FI_DRIVER_VERSION, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
     if (st != DCGM_ST_OK)
     {
         fprintf(stderr, "Got st %d from GetSamples()\n", st);
         retSt = 1;
         /* Non-fatal */
     }
-    free(sample.val.str); // sample for this field is string type which has been strdup'd
+    else
+    {
+        free(sample.val.str); // sample for this field is string type which has been strdup'd
+    }
 
 CLEANUP:
     return retSt;
@@ -441,10 +400,9 @@ int TestCacheManager::TestConvertVectorToBitmask()
 {
     uint64_t bitmask;
     std::vector<unsigned int> gpuIds;
-    DcgmCacheManager cacheManager;
     int retSt = 0;
 
-    cacheManager.ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
+    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
     if (bitmask != 0)
     {
         fprintf(stderr, "An empty vector should produce an empty bitmask.\n");
@@ -454,7 +412,7 @@ int TestCacheManager::TestConvertVectorToBitmask()
     gpuIds.push_back(0);
     gpuIds.push_back(2);
 
-    cacheManager.ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
+    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
     if (bitmask != (uint64_t)0x5)
     {
         fprintf(stderr, "Expected 0x05 but got %llx.\n", static_cast<long long>(bitmask));
@@ -464,14 +422,14 @@ int TestCacheManager::TestConvertVectorToBitmask()
     gpuIds.push_back(7);
     gpuIds.push_back(8);
     gpuIds.push_back(9);
-    cacheManager.ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
+    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
     if (bitmask != (uint64_t)0x385)
     {
         fprintf(stderr, "Expected 0x385 but got %llx.\n", static_cast<long long>(bitmask));
         retSt = 100;
     }
 
-    cacheManager.ConvertVectorToBitmask(gpuIds, bitmask, 2);
+    ConvertVectorToBitmask(gpuIds, bitmask, 2);
     if (bitmask != (uint64_t)0x05)
     {
         fprintf(stderr, "Expected 0x05 but got %llx.\n", static_cast<long long>(bitmask));
@@ -484,21 +442,20 @@ int TestCacheManager::TestConvertVectorToBitmask()
 /*****************************************************************************/
 int TestCacheManager::TestAffinityBitmasksMatch()
 {
-    DcgmCacheManager cacheManager;
     dcgmAffinity_t affinity = {};
     int retSt               = 0;
 
     affinity.affinityMasks[0].bitmask[0] = 0x1;
     affinity.affinityMasks[0].bitmask[1] = 0x10;
     affinity.affinityMasks[1].bitmask[0] = 0x1;
-    if (cacheManager.AffinityBitmasksMatch(affinity, 0, 1) == true)
+    if (AffinityBitmasksMatch(affinity, 0, 1) == true)
     {
         fprintf(stderr, "Should have failed since bitmask 1 is different for the two gpus.\n");
         retSt = 100;
     }
 
     affinity.affinityMasks[1].bitmask[1] = 0x10;
-    if (cacheManager.AffinityBitmasksMatch(affinity, 0, 1) == false)
+    if (AffinityBitmasksMatch(affinity, 0, 1) == false)
     {
         fprintf(stderr, "Shouldn't have failed since bitmask 1 is the same for the two gpus.\n");
         retSt = 100;
@@ -509,19 +466,15 @@ int TestCacheManager::TestAffinityBitmasksMatch()
     affinity.affinityMasks[4].bitmask[0] = 0x100;
     affinity.affinityMasks[5].bitmask[0] = 0x100;
 
-    if ((cacheManager.AffinityBitmasksMatch(affinity, 0, 2) == true)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 1, 2) == true)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 1, 3) == true)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 1, 4) == true)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 2, 4) == true)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 2, 5) == true))
+    if ((AffinityBitmasksMatch(affinity, 0, 2) == true) || (AffinityBitmasksMatch(affinity, 1, 2) == true)
+        || (AffinityBitmasksMatch(affinity, 1, 3) == true) || (AffinityBitmasksMatch(affinity, 1, 4) == true)
+        || (AffinityBitmasksMatch(affinity, 2, 4) == true) || (AffinityBitmasksMatch(affinity, 2, 5) == true))
     {
         fprintf(stderr, "Shouldn't have matched different bitmasks.\n");
         retSt = 100;
     }
 
-    if ((cacheManager.AffinityBitmasksMatch(affinity, 2, 3) == false)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 4, 5) == false))
+    if ((AffinityBitmasksMatch(affinity, 2, 3) == false) || (AffinityBitmasksMatch(affinity, 4, 5) == false))
     {
         fprintf(stderr, "Should have matched identical bitmasks.\n");
         retSt = 100;
@@ -534,15 +487,14 @@ int TestCacheManager::TestAffinityBitmasksMatch()
         affinity.affinityMasks[4].bitmask[i] = 0x100;
         affinity.affinityMasks[5].bitmask[i] = 0x100;
     }
-    if ((cacheManager.AffinityBitmasksMatch(affinity, 2, 3) == false)
-        || (cacheManager.AffinityBitmasksMatch(affinity, 4, 5) == false))
+    if ((AffinityBitmasksMatch(affinity, 2, 3) == false) || (AffinityBitmasksMatch(affinity, 4, 5) == false))
     {
         fprintf(stderr, "Should have matched identical bitmasks.\n");
         retSt = 100;
     }
 
     affinity.affinityMasks[2].bitmask[0] = 0;
-    if (cacheManager.AffinityBitmasksMatch(affinity, 2, 3) == true)
+    if (AffinityBitmasksMatch(affinity, 2, 3) == true)
     {
         fprintf(stderr, "Shouldn't have matched different bitmasks.\n");
         retSt = 100;
@@ -554,7 +506,6 @@ int TestCacheManager::TestAffinityBitmasksMatch()
 /*****************************************************************************/
 int TestCacheManager::TestCreateGroupsFromCpuAffinities()
 {
-    DcgmCacheManager dcm;
     dcgmAffinity_t affinity = {};
     std::vector<std::vector<unsigned int>> affinityGroups;
     std::vector<unsigned int> gpuIds;
@@ -572,7 +523,7 @@ int TestCacheManager::TestCreateGroupsFromCpuAffinities()
     }
 
 
-    dcm.CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
+    CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
 
     if (affinityGroups.size() != 1)
     {
@@ -587,7 +538,7 @@ int TestCacheManager::TestCreateGroupsFromCpuAffinities()
 
     affinityGroups.clear();
 
-    dcm.CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
+    CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
 
     if (affinityGroups.size() != 2)
     {
@@ -633,7 +584,6 @@ int TestCacheManager::TestPopulatePotentialCpuMatches()
     std::vector<std::vector<unsigned int>> affinityGroups;
     std::vector<size_t> potentialCpuMatches;
     int retSt = 0;
-    DcgmCacheManager dcm;
 
     for (unsigned int i = 0; i < 4; i++)
     {
@@ -645,7 +595,7 @@ int TestCacheManager::TestPopulatePotentialCpuMatches()
         affinityGroups.push_back(group);
     }
 
-    dcm.PopulatePotentialCpuMatches(affinityGroups, potentialCpuMatches, numGpus);
+    PopulatePotentialCpuMatches(affinityGroups, potentialCpuMatches, numGpus);
 
     if (potentialCpuMatches.size() != 3)
     {
@@ -675,7 +625,6 @@ int TestCacheManager::TestCombineAffinityGroups()
     std::vector<unsigned int> combinedGpuList;
     unsigned int gpuIndex = 0;
     int retSt             = 0;
-    DcgmCacheManager dcm;
 
     for (unsigned int i = 0; i < 5; i++)
     {
@@ -698,7 +647,7 @@ int TestCacheManager::TestCombineAffinityGroups()
      * group 3 : gpus 6,  7,  8,  9
      * group 4 : gpus 10, 11, 12, 13, 14
      */
-    dcm.CombineAffinityGroups(affinityGroups, combinedGpuList, 8);
+    CombineAffinityGroups(affinityGroups, combinedGpuList, 8);
     for (unsigned int i = 0; i < 5; i++)
     {
         if (combinedGpuList[i] != i + 10)
@@ -718,7 +667,7 @@ int TestCacheManager::TestCombineAffinityGroups()
     }
 
     combinedGpuList.clear();
-    dcm.CombineAffinityGroups(affinityGroups, combinedGpuList, 12);
+    CombineAffinityGroups(affinityGroups, combinedGpuList, 12);
     for (unsigned int i = 0; i < 5; i++)
     {
         if (combinedGpuList[i] != i + 10)
@@ -807,7 +756,6 @@ int TestCacheManager::TestSetIOConnectionLevels()
     int retSt          = 0;
     dcgmTopology_t top = {};
     std::map<unsigned int, std::vector<DcgmGpuConnectionPair>> connectionLevel;
-    DcgmCacheManager dcm;
 
     std::vector<unsigned int> affinityGroup;
     for (unsigned int i = 0; i < 4; i++)
@@ -815,7 +763,7 @@ int TestCacheManager::TestSetIOConnectionLevels()
 
     setup_topology(top);
 
-    dcm.SetIOConnectionLevels(affinityGroup, &top, connectionLevel);
+    SetIOConnectionLevels(affinityGroup, &top, connectionLevel);
 
     if (connectionLevel.size() != 2)
     {
@@ -864,7 +812,7 @@ int TestCacheManager::TestSetIOConnectionLevels()
     }
 
     uint64_t outputGpus = 0;
-    if (dcm.HasStrongConnection(connectionLevel[1], 4, outputGpus) == true)
+    if (HasStrongConnection(connectionLevel[1], 4, outputGpus) == true)
     {
         fprintf(stderr, "Level 0 doesn't have a strong connection between 4 gpus, but reported to.\n");
         return 100;
@@ -875,7 +823,7 @@ int TestCacheManager::TestSetIOConnectionLevels()
         return 100;
     }
 
-    if (dcm.HasStrongConnection(connectionLevel[1], 2, outputGpus) == false)
+    if (HasStrongConnection(connectionLevel[1], 2, outputGpus) == false)
     {
         fprintf(stderr, "Level 0 has a strong connection between 2 gpus, but said it didn't.\n");
         return 100;
@@ -888,7 +836,7 @@ int TestCacheManager::TestSetIOConnectionLevels()
     }
 
     outputGpus = 0;
-    if (dcm.HasStrongConnection(connectionLevel[2], 4, outputGpus) == false)
+    if (HasStrongConnection(connectionLevel[2], 4, outputGpus) == false)
     {
         fprintf(stderr, "Level 1 has a strong connection between 4 gpus, but said it didn't.\n");
         return 100;
@@ -911,7 +859,6 @@ int TestCacheManager::TestMatchByIO()
     std::vector<std::vector<unsigned int>> affinityGroups;
     std::vector<size_t> potentialCpuMatches;
     uint64_t outputGpus;
-    DcgmCacheManager dcm;
 
     std::vector<unsigned int> group;
     for (unsigned int i = 0; i < 4; i++)
@@ -922,7 +869,7 @@ int TestCacheManager::TestMatchByIO()
 
     potentialCpuMatches.push_back(0);
 
-    dcm.MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
+    MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
 
     if (outputGpus != 0x5)
     {
@@ -930,7 +877,7 @@ int TestCacheManager::TestMatchByIO()
         retSt = 100;
     }
 
-    dcm.MatchByIO(affinityGroups, &top, potentialCpuMatches, 3, outputGpus);
+    MatchByIO(affinityGroups, &top, potentialCpuMatches, 3, outputGpus);
 
     if (outputGpus != 0xd)
     {
@@ -938,7 +885,7 @@ int TestCacheManager::TestMatchByIO()
         retSt = 100;
     }
 
-    dcm.MatchByIO(affinityGroups, &top, potentialCpuMatches, 4, outputGpus);
+    MatchByIO(affinityGroups, &top, potentialCpuMatches, 4, outputGpus);
 
     if (outputGpus != 0xF)
     {
@@ -949,7 +896,7 @@ int TestCacheManager::TestMatchByIO()
     // Alter the topology
     top.element[5].path = DCGM_TOPOLOGY_NVLINK3;
 
-    dcm.MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
+    MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
 
     if (outputGpus != 0xC)
     {
@@ -1031,15 +978,18 @@ int TestCacheManager::TestWatchesVisited()
      * were visited by the watch code */
     for (i = 0; i < (int)m_gpus.size(); i++)
     {
-        vgpuIds = gpuIdToVgpuList(m_gpus[i].gpuId, numVgpus);
+        vgpuIds = gpuIdToVgpuList(m_gpus[i], numVgpus);
 
-        st = cacheManager->ManageVgpuList(m_gpus[i].gpuId, (unsigned int *)&vgpuIds[0]);
+        st = cacheManager->ManageVgpuList(m_gpus[i], (unsigned int *)&vgpuIds[0]);
         if (st)
         {
             fprintf(stderr, "cacheManager->ManageVgpuList failed with %d", (int)st);
             retSt = -1;
             goto CLEANUP;
         }
+
+        bool updateOnFirstWatch = false; /* we call UpdateFields() right after the loop */
+        bool wereFirstWatcher   = false;
 
         for (j = 0; j < (int)validFieldIds.size(); j++)
         {
@@ -1048,13 +998,15 @@ int TestCacheManager::TestWatchesVisited()
                 fieldEntityGroup = DCGM_FE_NONE;
 
             st = cacheManager->AddFieldWatch(fieldEntityGroup,
-                                             m_gpus[i].gpuId,
+                                             m_gpus[i],
                                              validFieldIds[j],
                                              watchFreq,
                                              maxSampleAge,
                                              maxKeepSamples,
                                              watcher,
-                                             false);
+                                             false,
+                                             updateOnFirstWatch,
+                                             wereFirstWatcher);
             if (st == DCGM_ST_REQUIRES_ROOT && geteuid() != 0)
             {
                 printf("Skipping fieldId %u that isn't supported for non-root\n", validFieldIds[j]);
@@ -1086,7 +1038,9 @@ int TestCacheManager::TestWatchesVisited()
                                                  maxSampleAge,
                                                  maxKeepSamples,
                                                  watcher,
-                                                 false);
+                                                 false,
+                                                 updateOnFirstWatch,
+                                                 wereFirstWatcher);
                 if (st)
                 {
                     fprintf(stderr, "cacheManager->AddFieldWatch() returned %d\n", st);
@@ -1109,8 +1063,7 @@ int TestCacheManager::TestWatchesVisited()
             if (fieldIdIsGlobal[validFieldIds[j]])
                 fieldEntityGroup = DCGM_FE_NONE;
 
-            st = cacheManager->GetEntityWatchInfoSnapshot(
-                fieldEntityGroup, m_gpus[i].gpuId, validFieldIds[j], &watchInfo);
+            st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, m_gpus[i], validFieldIds[j], &watchInfo);
             if (st)
             {
                 fprintf(stderr, "cacheManager->GetEntityWatchInfoSnapshot() returned %d\n", st);
@@ -1120,14 +1073,14 @@ int TestCacheManager::TestWatchesVisited()
 
             if (!watchInfo.isWatched)
             {
-                fprintf(stderr, "gpuId %u, fieldId %u was not watched.\n", m_gpus[i].gpuId, validFieldIds[j]);
+                fprintf(stderr, "gpuId %u, fieldId %u was not watched.\n", m_gpus[i], validFieldIds[j]);
                 retSt = 300;
                 continue;
             }
 
             if (!watchInfo.lastQueriedUsec)
             {
-                fprintf(stderr, "gpuId %u, fieldId %u has never updated.\n", m_gpus[i].gpuId, validFieldIds[j]);
+                fprintf(stderr, "gpuId %u, fieldId %u has never updated.\n", m_gpus[i], validFieldIds[j]);
                 retSt = 400;
                 continue;
             }
@@ -1136,7 +1089,7 @@ int TestCacheManager::TestWatchesVisited()
             if (fieldEntityGroup == DCGM_FE_NONE)
                 continue;
             fieldEntityGroup = DCGM_FE_VGPU;
-            vgpuIds          = gpuIdToVgpuList(m_gpus[i].gpuId, numVgpus);
+            vgpuIds          = gpuIdToVgpuList(m_gpus[i], numVgpus);
 
             /* Add a watch on every GPU field for every VGPU */
             for (vgpuIt = vgpuIds.begin() + 1; vgpuIt != vgpuIds.end(); ++vgpuIt)
@@ -1153,7 +1106,7 @@ int TestCacheManager::TestWatchesVisited()
                 {
                     fprintf(stderr,
                             "gpuId %u, vgpu %u, fieldId %u was not watched.\n",
-                            m_gpus[i].gpuId,
+                            m_gpus[i],
                             *vgpuIt,
                             validFieldIds[j]);
                     retSt = 600;
@@ -1164,7 +1117,7 @@ int TestCacheManager::TestWatchesVisited()
                 {
                     fprintf(stderr,
                             "gpuId %u, vgpu %u, fieldId %u has never updated.\n",
-                            m_gpus[i].gpuId,
+                            m_gpus[i],
                             *vgpuIt,
                             validFieldIds[j]);
                     retSt = 700;
@@ -1705,10 +1658,21 @@ int TestCacheManager::TestRecordTiming()
 
     memset(&samples, 0, sizeof(samples));
 
+    bool updateOnFirstWatch = false; /* we call UpdateFields() right after the loop */
+    bool wereFirstWatcher   = false;
+
     for (i = 0; i < Nfields; i++)
     {
-        st = cacheManager->AddFieldWatch(
-            DCGM_FE_GPU, gpuId, fieldIds[i], fieldFrequency[i], 86400.0, 0, watcher, false);
+        st = cacheManager->AddFieldWatch(DCGM_FE_GPU,
+                                         gpuId,
+                                         fieldIds[i],
+                                         fieldFrequency[i],
+                                         86400.0,
+                                         0,
+                                         watcher,
+                                         false,
+                                         updateOnFirstWatch,
+                                         wereFirstWatcher);
         if (st)
         {
             fprintf(stderr, "Error from AddFieldWatch index %d: %d\n", i, st);
@@ -1735,7 +1699,7 @@ int TestCacheManager::TestRecordTiming()
 
         Nsamples = Msamples;
         st       = cacheManager->GetSamples(
-            DCGM_FE_GPU, gpuId, fieldIds[i], &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING);
+            DCGM_FE_GPU, gpuId, fieldIds[i], &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
         if (st)
         {
             fprintf(stderr, "Got st %d from GetSamples for field %d\n", st, (int)fieldIds[i]);
@@ -1800,6 +1764,8 @@ int TestCacheManager::TestTimeBasedQuota()
     dcgmReturn_t nvcmSt;
     int Nsamples;
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+    bool updateOnFirstWatch = false; /* fake GPU */
+    bool wereFirstWatcher   = false;
 
     fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP);
     if (!fieldMeta)
@@ -1825,7 +1791,16 @@ int TestCacheManager::TestTimeBasedQuota()
     }
 
     /* Add a watch to populate metadata for the field (like maxKeepAge) */
-    st = cacheManager->AddFieldWatch(DCGM_FE_GPU, gpuId, fieldMeta->fieldId, 1000000, maxKeepAge, 0, watcher, false);
+    st = cacheManager->AddFieldWatch(DCGM_FE_GPU,
+                                     gpuId,
+                                     fieldMeta->fieldId,
+                                     1000000,
+                                     maxKeepAge,
+                                     0,
+                                     watcher,
+                                     false,
+                                     updateOnFirstWatch,
+                                     wereFirstWatcher);
     if (st)
     {
         fprintf(stderr, "cacheManager->AddFieldWatch returned %d\n", st);
@@ -1855,7 +1830,7 @@ int TestCacheManager::TestTimeBasedQuota()
     /* This will return the oldest sample. This should be within maxKeepAgeUsec of "now" */
     Nsamples = Msamples;
     nvcmSt   = cacheManager->GetSamples(
-        DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING);
+        DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
     if (nvcmSt != DCGM_ST_OK)
     {
         fprintf(stderr, "GetSamples returned %d\n", st);
@@ -1906,6 +1881,8 @@ int TestCacheManager::TestCountBasedQuota()
     dcgmReturn_t nvcmSt;
     int Nsamples;
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+    bool updateOnFirstWatch = false; /* fake GPU */
+    bool wereFirstWatcher   = false;
 
     fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP);
     if (!fieldMeta)
@@ -1931,8 +1908,16 @@ int TestCacheManager::TestCountBasedQuota()
     }
 
     /* Add a watch to populate metadata for the field (like maxKeepAge) */
-    st = cacheManager->AddFieldWatch(
-        DCGM_FE_GPU, gpuId, fieldMeta->fieldId, 1000000, 86400.0, maxKeepSamples, watcher, false);
+    st = cacheManager->AddFieldWatch(DCGM_FE_GPU,
+                                     gpuId,
+                                     fieldMeta->fieldId,
+                                     1000000,
+                                     86400.0,
+                                     maxKeepSamples,
+                                     watcher,
+                                     false,
+                                     updateOnFirstWatch,
+                                     wereFirstWatcher);
     if (st)
     {
         fprintf(stderr, "cacheManager->AddFieldWatch returned %d\n", st);
@@ -1961,7 +1946,7 @@ int TestCacheManager::TestCountBasedQuota()
     /* This will return the oldest sample. This should be within maxKeepAgeUsec of "now" */
     Nsamples = Msamples;
     nvcmSt   = cacheManager->GetSamples(
-        DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING);
+        DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &samples[0], &Nsamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
     if (nvcmSt != DCGM_ST_OK)
     {
         fprintf(stderr, "GetSamples returned %d\n", st);
@@ -2154,9 +2139,10 @@ int TestCacheManager::TestUpdatePerf()
     dcgmcm_runtime_stats_t stats {};
     dcgmcm_runtime_stats_t statsBefore {};
     int i;
+    int retSt = 0;
     timelib64_t startTime, endTime;
     dcgmReturn_t dcgmReturn;
-    int numLoops = 1000;
+    int numLoops = 100000;
 
     if (m_gpus.size() < 1)
     {
@@ -2168,6 +2154,14 @@ int TestCacheManager::TestUpdatePerf()
     if (nullptr == cacheManager)
     {
         return -1;
+    }
+
+    /* Do a baseline UpdateAllFields() to make sure the cache manager is done with any startup costs */
+    dcgmReturn = cacheManager->UpdateAllFields(1);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Got dcgmReturn %d from UpdateAllFields()\n", (int)dcgmReturn);
+        return 50;
     }
 
     /* Get stats before our test so we can see how many locks occurred during our test */
@@ -2188,17 +2182,28 @@ int TestCacheManager::TestUpdatePerf()
 
     endTime = timelib_usecSince1970();
 
-    printf("TestUpdatePerf completed %d UpdateAllFields(1) in %lld usec\n", numLoops, (long long)(endTime - startTime));
+    long long timePerUpdate = (endTime - startTime) / (long long)numLoops;
+
+    printf("TestUpdatePerf completed %d UpdateAllFields(1) in %lld usec, %lld usec per call\n",
+           numLoops,
+           (long long)(endTime - startTime),
+           timePerUpdate);
 
     cacheManager->GetRuntimeStats(&stats);
 
-    if (stats.updateCycleFinished.load(std::memory_order_relaxed) < numLoops)
+    long long finishedLoops = stats.updateCycleFinished.load(std::memory_order_relaxed);
+    double finishedRate     = (double)finishedLoops / (double)numLoops;
+
+    /* Assume we get at least 90% of our loops until we fix the data races
+       between UpdateAllFields() and the cache manager main thread */
+    if (finishedRate < 0.9)
     {
         fprintf(stderr,
                 "stats.updateCycleFinished %d < numLoops %d\n",
                 (int)stats.updateCycleFinished.load(std::memory_order_relaxed),
                 numLoops);
-        return 200;
+        retSt = 200;
+        /* Keep going */
     }
 
     long long awakeTimePerLoopPerGpu = (stats.awakeTimeUsec / stats.updateCycleFinished) / (long long)m_gpus.size();
@@ -2206,7 +2211,7 @@ int TestCacheManager::TestUpdatePerf()
 
     printf("TestUpdatePerf Awake usec per gpu: %lld (IsDebug %d)\n", awakeTimePerLoopPerGpu, IsDebugBuild());
     printf("TestUpdatePerf locksPerUpdate %lld, totalLockCount %lld\n", totalLockCount / numLoops, totalLockCount);
-    return 0;
+    return retSt;
 }
 
 /*****************************************************************************/
@@ -2336,8 +2341,12 @@ int AttachDetach(DcgmCacheManager &dcm, std::string &error)
     timelib64_t attach_diff      = 0;
     timelib64_t detach_diff      = 0;
     unsigned int nvmlDeviceCount = 0;
+    int numIterations            = 50;
+    double maxTestSecs           = 10.0;
+    int iteration;
 
-    for (int i = 0; i < 50; i++)
+    for (iteration = 0; iteration < numIterations && attach_diff < maxTestSecs && detach_diff < maxTestSecs;
+         iteration++)
     {
         start = timelib_usecSince1970();
         ret   = dcm.AttachGpus();
@@ -2392,9 +2401,12 @@ int AttachDetach(DcgmCacheManager &dcm, std::string &error)
 
     dcm.AttachGpus(); /* Don't leave NVML uninitialized. This will break later tests */
 
-    double attach_avg = attach_diff / 50.0;
-    double detach_avg = detach_diff / 50.0;
-    printf("Average duration in microseconds: AttachGpus() - %.2f DetachGpus() - %.2f\n", attach_avg, detach_avg);
+    if (iteration > 0)
+    {
+        double attach_avg = attach_diff / (double)(iteration);
+        double detach_avg = detach_diff / (double)(iteration);
+        printf("Average duration in microseconds: AttachGpus() - %.2f DetachGpus() - %.2f\n", attach_avg, detach_avg);
+    }
 
     return 0;
 }
@@ -2498,17 +2510,29 @@ int TestCacheManager::TestAttachDetachWithWatches(void)
 
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
 
+
+    bool updateOnFirstWatch = false; /* we call UpdateFields() right after */
+    bool wereFirstWatcher   = false;
+
     int count = dcm.GetGpuCount(1);
     for (int i = 0; i < count; i++)
     {
         int j = 0;
         while (fieldIds[j] != 0)
         {
-            ret = dcm.AddFieldWatch(DCGM_FE_GPU, i, fieldIds[j], 1, 86400.0, 0, watcher, false);
+            ret = dcm.AddFieldWatch(
+                DCGM_FE_GPU, i, fieldIds[j], 1, 86400.0, 0, watcher, false, updateOnFirstWatch, wereFirstWatcher);
             if (ret != DCGM_ST_OK)
                 fprintf(stderr, "TestAttachDeteachWithWatches(): AddFieldWatch error: %s\n", errorString(ret));
             j++;
         }
+    }
+
+    ret = dcm.UpdateAllFields(1);
+    if (ret != DCGM_ST_OK)
+    {
+        fprintf(stderr, "UpdateAllFields() returned %d\n", ret);
+        return 50;
     }
 
     ret = dcm.DetachGpus();
@@ -2624,7 +2648,6 @@ int TestCacheManager::Run()
         CompleteTest("TestTimedModeAwakeTime", TestTimedModeAwakeTime(), Nfailed);
         CompleteTest("TestWatchesVisited", TestWatchesVisited(), Nfailed);
         CompleteTest("TestRecording", TestRecording(), Nfailed);
-        CompleteTest("TestGpuFieldBytesUsed", TestGpuFieldBytesUsed(), Nfailed);
         CompleteTest("TestInjection", TestInjection(), Nfailed);
         CompleteTest("TestManageVgpuList", TestManageVgpuList(), Nfailed);
         CompleteTest("TestSummary", TestSummary(), Nfailed);

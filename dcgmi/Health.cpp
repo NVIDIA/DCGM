@@ -84,10 +84,9 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to get health watches. Return: " << error << std::endl;
-        PRINT_ERROR("%u, %d",
-                    "Error: could not get Health information for group: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error("Error: could not get Health information for group: {}. Return: {}",
+                  (unsigned int)(uintptr_t)groupId,
+                  result);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -167,10 +166,9 @@ dcgmReturn_t Health::SetWatches(dcgmHandle_t mDcgmHandle,
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to set health watches. Return: " << error << std::endl;
-        PRINT_ERROR("%u, %d",
-                    "Error: could not set Health information for group: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error("Error: could not set Health information for group: {}. Return: {}",
+                  (unsigned int)(uintptr_t)groupId,
+                  result);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -362,10 +360,9 @@ dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
         std::cout << "Error: Unable to check health watches. Return: " << error << std::endl;
-        PRINT_ERROR("%u, %d",
-                    "Error: could not check Health information for group: %u. Return: %d",
-                    (unsigned int)(uintptr_t)groupId,
-                    result);
+        log_error("Error: could not check Health information for group: {}. Return: {}",
+                  (unsigned int)(uintptr_t)groupId,
+                  result);
         return DCGM_ST_GENERIC_ERROR;
     }
 

@@ -526,26 +526,11 @@ class DcgmGroupProfiling:
     Returns a dcgm_structs.c_dcgmProfGetMetricGroups_v2 instance
     '''
     def GetSupportedMetricGroups(self):
-        ret = dcgm_agent.dcgmProfGetSupportedMetricGroups(self._dcgmHandle.handle, self._groupId)
-        return ret
-    
-    '''
-    Watch a list of profiling field IDs
+        gpuIds = self._dcgmGroup.GetGpuIds()
+        if len(gpuIds) < 1:
+            return dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED
 
-    Returns a dcgm_structs.c_dcgmProfWatchFields_v1 instance
-    '''
-    def WatchFields(self, fieldIds, updateFreq, maxKeepAge, maxKeepSamples):
-        ret = dcgm_agent.dcgmProfWatchFields(self._dcgmHandle.handle, fieldIds, self._groupId, 
-                                             updateFreq, maxKeepAge, maxKeepSamples)
-        return ret
-    
-    '''
-    Unwatch all profiling fields that were watched with WatchFields
-
-    Returns a dcgm_structs.c_dcgmProfUnwatchFields_v1 instance
-    '''
-    def UnwatchFields(self):
-        ret = dcgm_agent.dcgmProfUnwatchFields(self._dcgmHandle.handle, self._groupId)
+        ret = dcgm_agent.dcgmProfGetSupportedMetricGroups(self._dcgmHandle.handle, gpuIds[0])
         return ret
 
 class DcgmGroup:

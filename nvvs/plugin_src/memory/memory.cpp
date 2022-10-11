@@ -127,7 +127,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
             DcgmError d { memGlobals->dcgmGpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
             memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
-            PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+            log_error(d.GetMessage());
             goto error_no_cleanup;
         }
         cuRes = cuMemAlloc(&alloc, size);
@@ -234,7 +234,6 @@ error_no_cleanup:
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_DBE, d, memGlobals->dcgmGpuIndex);
         memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
         memGlobals->memory->AddInfo("A DBE occurred, CUDA error containment reported issue.");
-        // PRINT_ERROR(STR_DEVICE_MEMORY_TEST_ERROR_DBE);
         return NVVS_RESULT_FAIL;
     }
 
@@ -460,7 +459,7 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, d, "dcgmEntitiesGetLatestValues");
         d.AddDcgmError(ret);
-        PRINT_ERROR("%s", "%s", d.GetMessage().c_str());
+        log_error(d.GetMessage());
         memGlobals->memory->AddError(d);
         memGlobals->memory->SetResult(NVVS_RESULT_FAIL);
         mem_cleanup(memGlobals);
@@ -516,7 +515,7 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
     }
     catch (std::runtime_error &e)
     {
-        PRINT_ERROR("%s", "Caught runtime_error %s", e.what());
+        log_error("Caught runtime_error {}", e.what());
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         memGlobals->memory->AddError(d);

@@ -37,7 +37,7 @@
 std::string moduleIdToName(dcgmModuleId_t moduleId)
 {
     // If adding a case here, you very likely also need to add one in the
-    // BlacklistModule::Execute method below
+    // DenylistModule::Execute method below
     switch (moduleId)
     {
         case DcgmModuleIdCore:
@@ -76,8 +76,8 @@ std::string statusToStr(dcgmModuleStatus_t status)
     {
         case DcgmModuleStatusNotLoaded:
             return "Not loaded";
-        case DcgmModuleStatusBlacklisted:
-            return "Blacklisted";
+        case DcgmModuleStatusDenylisted:
+            return "Denylisted";
         case DcgmModuleStatusFailed:
             return "Failed to load";
         case DcgmModuleStatusLoaded:
@@ -92,7 +92,7 @@ std::string statusToStr(dcgmModuleStatus_t status)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// This sample goes through the process of listing and blacklisting modules
+// This sample goes through the process of listing and adding modules to the denylist
 // running a process and viewing the statistics of the group while the process ran.
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     char hostIpAddress[16]  = { 0 };
     // We will need to cast to dcgmModuleId_t, but we need to read into a
     // unsigned int
-    unsigned int blacklistModuleId;
+    unsigned int denylistModuleId;
     dcgmModuleGetStatuses_t getStatuses;
 
     // In our case we do not know whether to run in standalone or embedded so we will get the user
@@ -190,9 +190,9 @@ int main(int argc, char **argv)
         }
     }
 
-    std::cout << "Blacklist module. Enter module ID:\n";
+    std::cout << "Denylist module. Enter module ID:\n";
 
-    while (!(std::cin >> blacklistModuleId))
+    while (!(std::cin >> denylistModuleId))
     {
         std::cout << "Invalid input.\n";
         std::cin.clear();
@@ -200,16 +200,16 @@ int main(int argc, char **argv)
     }
 
     // Need to validate the input
-    if (blacklistModuleId >= DcgmModuleIdCount)
+    if (denylistModuleId >= DcgmModuleIdCount)
     {
         std::cout << "Invalid module ID. Aborting. \n";
         goto cleanup;
     }
 
-    result = dcgmModuleBlacklist(dcgmHandle, (dcgmModuleId_t)blacklistModuleId);
+    result = dcgmModuleDenylist(dcgmHandle, (dcgmModuleId_t)denylistModuleId);
     if (result != DCGM_ST_OK)
     {
-        std::cout << "Could not blacklist module. Return: " << errorString(result) << std::endl;
+        std::cout << "Could not add module to the denylist. Return: " << errorString(result) << std::endl;
         // Don't need to go to cleanup. This is an expected error. It could mean
         // that the module is already loaded
     }

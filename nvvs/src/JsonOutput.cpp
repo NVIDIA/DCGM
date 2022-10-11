@@ -53,11 +53,6 @@
 
 void JsonOutput::header(const std::string &headerString)
 {
-    if (nvvsCommon.training)
-    {
-        return; // Training mode doesn't want this output
-    }
-
     if (m_testIndex != 0)
     {
         headerIndex++;
@@ -73,7 +68,7 @@ void JsonOutput::header(const std::string &headerString)
 
 bool isSoftwareTest(const std::string &testName)
 {
-    if (testName == "Blacklist" || testName == "NVML Library" || testName == "CUDA Main Library"
+    if (testName == "Denylist" || testName == "NVML Library" || testName == "CUDA Main Library"
         || testName == "CUDA Toolkit Libraries" || testName == "Permissions and OS-related Blocks"
         || testName == "Persistence Mode" || testName == "Environmental Variables"
         || testName == "Page Retirement/Row Remap" || testName == "Graphics Processes" || testName == "Inforom")
@@ -85,11 +80,6 @@ bool isSoftwareTest(const std::string &testName)
 
 void JsonOutput::prep(const std::string &testString)
 {
-    if (nvvsCommon.training)
-    {
-        return; // Training mode doesn't want this output
-    }
-
     softwareTest    = isSoftwareTest(testString);
     std::size_t pos = testString.find(" GPU");
     if (pos == std::string::npos)
@@ -149,11 +139,6 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagEvent_t> &errors,
                         const std::vector<dcgmDiagEvent_t> &info)
 {
-    if (nvvsCommon.training)
-    {
-        return; // Training mode doesn't want this output
-    }
-
     std::string resultStr = resultEnumToString(overallResult);
 
     if (overallResult == NVVS_RESULT_SKIP)
@@ -283,16 +268,6 @@ void JsonOutput::addInfoStatement(const std::string &info)
     }
 
     globalInfoCount++;
-}
-
-void JsonOutput::AddTrainingResult(const std::string &trainingOut)
-{
-    if (jv[NVVS_VERSION_STR].empty())
-    {
-        jv[NVVS_VERSION_STR] = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
-    }
-
-    jv[NVVS_TRAINING_MSG] = trainingOut;
 }
 
 JsonOutput::JsonOutput(std::vector<unsigned int> gpuIndices)

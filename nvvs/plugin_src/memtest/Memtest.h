@@ -237,6 +237,7 @@ private:
     DcgmRecorder &m_dcgmRecorder;     /* Object for interacting with DCGM */
     bool m_useMappedMemory;           /* Use host (mapped) or device memory */
     unsigned int m_testDuration;      /* Duration to execute all iterations of tests */
+    bool m_failGpu;                   /* Whether to fail this gpu, set via env for testing */
 
     /*************************************************************************/
     int RunTests(char *ptr, unsigned int tot_num_blocks);

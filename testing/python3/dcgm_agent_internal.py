@@ -141,33 +141,6 @@ def dcgmGetFieldValuesSince(dcgmHandle, groupId, sinceTimestamp, fieldIds, enumC
     dcgm_structs._dcgmCheckReturn(ret)
     return c_nextSinceTimestamp.value
 
-def dcgmMetadataStateSetRunInterval(dcgmHandle, runIntervalMs):
-    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmMetadataStateSetRunInterval")
-    ret = fn(dcgmHandle, c_uint(runIntervalMs))
-    _dcgmIntCheckReturn(ret)
-
-@dcgm_agent.ensure_byte_strings()
-def dcgmIntrospectGetFieldExecTime(dcgm_handle, fieldId, waitIfNoData=True):
-    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmIntrospectGetFieldExecTime")
-    
-    execTime = dcgm_structs.c_dcgmIntrospectFullFieldsExecTime_v2()
-    execTime.version = dcgm_structs.dcgmIntrospectFullFieldsExecTime_version2
-    
-    ret = fn(dcgm_handle, fieldId, byref(execTime), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return execTime
-
-@dcgm_agent.ensure_byte_strings()
-def dcgmIntrospectGetFieldMemoryUsage(dcgm_handle, fieldId, waitIfNoData=True):
-    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmIntrospectGetFieldMemoryUsage")
-    
-    memInfo = dcgm_structs.c_dcgmIntrospectFullMemory_v1()
-    memInfo.version = dcgm_structs.dcgmIntrospectFullMemory_version1
-    
-    ret = fn(dcgm_handle, fieldId, byref(memInfo), waitIfNoData)
-    dcgm_structs._dcgmCheckReturn(ret)
-    return memInfo
-
 @dcgm_agent.ensure_byte_strings()
 def dcgmVgpuConfigSet(dcgm_handle, group_id, configToSet, status_handle):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmVgpuConfigSet")

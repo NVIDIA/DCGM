@@ -105,6 +105,8 @@ void Command::SetPersistAfterDisconnect(unsigned int persistAfterDisconnect)
 {
     m_persistAfterDisconnect = persistAfterDisconnect;
 }
+
+/*****************************************************************************/
 dcgmReturn_t Command::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
 {
     if (!m_silent)

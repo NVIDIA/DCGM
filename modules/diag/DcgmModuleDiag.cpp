@@ -56,7 +56,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
     dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
     dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
     dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
-    dcgmTerminateCharBuffer(msg->runDiag.goldenValuesFile);
+    dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
 
     size_t i;
     for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
@@ -78,19 +78,19 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
     return dcgmReturn;
 }
 
-dcgmReturn_t DcgmModuleDiag::ProcessRun_v4(dcgm_diag_msg_run_v4 *msg)
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
 
-    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version4);
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version6);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
     }
     else
     {
-        drw.SetVersion6(&msg->diagResponse);
+        drw.SetVersion8(&msg->diagResponse);
     }
 
     /* Sanitize the inputs */
@@ -101,7 +101,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v4(dcgm_diag_msg_run_v4 *msg)
     dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
     dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
     dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
-    dcgmTerminateCharBuffer(msg->runDiag.goldenValuesFile);
+    dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
 
     size_t i;
     for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
@@ -117,7 +117,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v4(dcgm_diag_msg_run_v4 *msg)
     dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        PRINT_ERROR("%d", "RunDiagAndAction returned %d", dcgmReturn);
+        log_error("RunDiagAndAction returned {}", dcgmReturn);
     }
 
     return dcgmReturn;
@@ -168,9 +168,9 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
         {
             case DCGM_DIAG_SR_RUN:
 
-                if (moduleCommand->version == dcgm_diag_msg_run_version4)
+                if (moduleCommand->version == dcgm_diag_msg_run_version6)
                 {
-                    retSt = ProcessRun_v4((dcgm_diag_msg_run_v4 *)moduleCommand);
+                    retSt = ProcessRun_v6((dcgm_diag_msg_run_v6 *)moduleCommand);
                 }
                 else if (moduleCommand->version == dcgm_diag_msg_run_version5)
                 {
@@ -205,7 +205,7 @@ DCGM_PUBLIC_API DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc)
 {
     if (dcc == nullptr)
     {
-        PRINT_ERROR("", "Cannot instantiate the diag class without libdcgm callback functions!");
+        log_error("Cannot instantiate the diag class without libdcgm callback functions!");
         return nullptr;
     }
 

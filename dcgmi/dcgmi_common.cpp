@@ -88,6 +88,11 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
                 case 'C':
                     insertElem.entityGroupId = DCGM_FE_GPU_CI;
                     break;
+                case 'l':
+                case 'L':
+                    insertElem.entityGroupId = DCGM_FE_LINK;
+                    break;
+
                 default:
                     SHOW_AND_LOG_ERROR << "Error: invalid entity type: '" << entityIdStr
                                        << "'. Expected gpu/ci/i/vgpu/nvswitch.";
@@ -104,7 +109,10 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
             return DCGM_ST_BADPARAM;
         }
 
-        /* Add an item */
+        /** Add an item
+         * They are encoded as a 32 bit unsigned int with a type, GPU ID, and
+         * link index. Do we encode them literally for now?
+         */
         if (isdigit(entityIdStr.at(0)))
         {
             insertElem.entityId = std::stol(entityIdStr);

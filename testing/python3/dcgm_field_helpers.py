@@ -14,6 +14,7 @@
 
 import time
 import dcgm_fields
+import dcgm_fields_internal
 import dcgm_structs
 import dcgm_agent
 import ctypes
@@ -58,7 +59,7 @@ class DcgmFieldValue():
             if self.fieldId == dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA:
                 accStats = dcgm_structs.c_dcgmDevicePidAccountingStats_v1()
                 ctypes.memmove(ctypes.addressof(accStats), rawValue.value.blob, accStats.FieldsSizeof())
-            if self.fieldId in [dcgm_fields.DCGM_FI_DEV_COMPUTE_PIDS, dcgm_fields.DCGM_FI_DEV_GRAPHICS_PIDS]:
+            if self.fieldId in [dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS, dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS]:
                 processStats = dcgm_structs.c_dcgmRunningProcess_t()
                 ctypes.memmove(ctypes.addressof(processStats), rawValue.value.blob, processStats.FieldsSizeof())
                 self.value = processStats
@@ -188,7 +189,7 @@ class DcgmFieldValueCollection:
         self._nextSinceTimestamp = dcgm_agent.dcgmGetValuesSince_v2(self._handle, self._groupId, fieldGroup.fieldGroupId, self._nextSinceTimestamp, helper_dcgm_field_values_since_entity_callback, self)
         afterCount = self._numValuesSeen
         return afterCount - beforeCount
-
+        
 
     '''
     Empty .values{} so that old data is no longer present in this structure.
@@ -259,7 +260,7 @@ class DcgmFieldGroupWatcher(DcgmFieldValueCollection):
 
         return super().GetAllSinceLastCall(self._fieldGroup)
 
-
+    
 def py_helper_dcgm_field_values_since_entity_callback(entityGroupId, entityId, values, numValues, userData):
 
     userData = ctypes.cast(userData, ctypes.py_object).value
@@ -278,7 +279,7 @@ class DcgmFieldValueEntityCollection:
         self._groupId = groupId
         self._numValuesSeen = 0
         self._nextSinceTimestamp = 0
-
+        
 
     '''
     Helper function called by the callback of dcgm_agent.dcgmGetValuesSince to process individual field values
@@ -320,8 +321,8 @@ class DcgmFieldValueEntityCollection:
         self._nextSinceTimestamp = dcgm_agent.dcgmGetValuesSince_v2(self._handle, self._groupId, fieldGroup.fieldGroupId, self._nextSinceTimestamp, helper_dcgm_field_values_since_entity_callback, self)
         afterCount = self._numValuesSeen
         return afterCount - beforeCount
-
-
+        
+    
     '''
     Empty .values{} so that old data is no longer present in this structure.
     This can be used to prevent .values from growing over time

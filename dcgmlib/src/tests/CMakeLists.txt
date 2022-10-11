@@ -34,7 +34,6 @@ if (BUILD_TESTING)
 
     target_link_libraries(dcgmlibtests PRIVATE
             dcgmtest_interface
-            common_protobuf_interface
             common_interface
             dcgm_interface
     )
@@ -51,7 +50,6 @@ if (BUILD_TESTING)
                 sdk_nvml_essentials_objects
                 sdk_nvml_loader
             -Wl,--no-whole-archive
-            common_protobuf_objects
             dcgm
             Catch2::Catch2
             ${CMAKE_THREAD_LIBS_INIT}
