@@ -916,4 +916,41 @@ DCGM_ENTRY_POINT(dcgmModuleIdToName,
                  id,
                  name)
 
+DCGM_ENTRY_POINT(dcgmInjectEntityFieldValueToNvml,
+                 tsapiInjectEntityFieldValueToNvml,
+                 (dcgmHandle_t pDcgmHandle,
+                  dcgm_field_entity_group_t entityGroupId,
+                  dcgm_field_eid_t entityId,
+                  dcgmInjectFieldValue_t *pDcgmInjectFieldValue),
+                 "({} {} {} {})",
+                 pDcgmHandle,
+                 entityGroupId,
+                 entityId,
+                 pDcgmInjectFieldValue)
+
+DCGM_ENTRY_POINT(dcgmCreateNvmlInjectionGpu,
+                 tsapiCreateNvmlInjectionGpu,
+                 (dcgmHandle_t dcgmHandle, unsigned int index),
+                 "({} {})",
+                 dcgmHandle,
+                 index)
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+DCGM_ENTRY_POINT(dcgmInjectNvmlDevice,
+                 tsapiInjectNvmlDevice,
+                 (dcgmHandle_t dcgmHandle,
+                  unsigned int gpuId,
+                  const char *key,
+                  const injectNvmlVal_t *extraKeys,
+                  unsigned int extraKeyCount,
+                  const injectNvmlVal_t *value),
+                 "({}, {}, {}, {}, {}, {})",
+                 dcgmHandle,
+                 gpuId,
+                 key,
+                 extraKeys,
+                 extraKeyCount,
+                 value)
+#endif
+
 /*****************************************************************************/

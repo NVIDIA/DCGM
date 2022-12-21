@@ -114,12 +114,12 @@ public:
      */
     Reporter &operator<<(const char *value)
     {
-        return operator<<<const char *>(value);
+        return operator<< <const char *>(value);
     }
 
     Reporter &operator<<(long long value)
     {
-        return operator<<<long long>(value);
+        return operator<< <long long>(value);
     }
 
     /*

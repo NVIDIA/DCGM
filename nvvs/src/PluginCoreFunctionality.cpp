@@ -164,6 +164,7 @@ dcgmReturn_t PluginCoreFunctionality::PluginEnded(const std::string &statsfile,
 
     WriteStatsFile(statsfile, tp.GetDouble(PS_LOGFILE_TYPE), result);
 
+    m_dcgmRecorder.Shutdown();
     return DCGM_ST_OK;
 }
 

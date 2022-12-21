@@ -115,7 +115,7 @@ public:
      */
     const nvvsPluginGpuResults_t &GetGpuResults() const
     {
-        return m_results;
+        return m_resultsPerGPU;
     }
 
     /*************************************************************************/
@@ -131,6 +131,8 @@ public:
      *
      */
     void SetResultForGpu(unsigned int gpuId, nvvsPluginResult_t res);
+
+    void SetNonGpuResult(nvvsPluginResult_t res);
 
     /*************************************************************************/
     const std::vector<std::string> &GetWarnings() const
@@ -293,20 +295,19 @@ private:
      */
     void ResetResultsAndMessages();
 
-    nvvsPluginGpuResults_t m_results;            /* Per GPU results: Pass | Fail | Skip | Warn */
-    std::vector<std::string> m_warnings;         /* List of general warnings from the plugin */
-    std::vector<DcgmError> m_errors;             /* List of errors from the plugin */
-    nvvsPluginGpuErrors_t m_errorsPerGPU;        // Per GPU list of errors from the plugin
+    std::vector<nvvsPluginResult_t> m_nonGpuResults; /* Results for non-GPU specific tests */
+    std::vector<DcgmError> m_errors;                 /* List of errors from the plugin */
+    std::vector<std::string> m_warnings;             /* List of general warnings from the plugin */
+    std::vector<std::string> m_verboseInfo;          /* List of general verbose output from the plugin */
+
+    nvvsPluginGpuResults_t m_resultsPerGPU;      /* Per GPU results: Pass | Fail | Skip | Warn */
+    nvvsPluginGpuErrors_t m_errorsPerGPU;        /* Per GPU list of errors from the plugin */
     nvvsPluginGpuMessages_t m_warningsPerGPU;    /* Per GPU list of warnings from the plugin */
-    std::vector<std::string> m_verboseInfo;      /* List of general verbose output from the plugin */
     nvvsPluginGpuMessages_t m_verboseInfoPerGPU; /* Per GPU list of verbose output from the plugin */
 
     /* Variables */
     observedMetrics_t m_values; /* Record the values found for pass/fail criteria */
     bool m_fakeGpus;            /* Whether or not this plugin is using fake gpus */
-
-    /* Mutexes */
-    DcgmMutex m_dataMutex; /* Mutex for plugin data */
 
     /* Returns the external display name for the specified test type */
     std::string GetDisplayName();
@@ -316,9 +317,11 @@ protected:
     /* Variables */
     infoStruct_t m_infoStruct;
     std::string m_logFile;
-    DcgmMutex m_mutex;                   /* mutex for locking the plugin (for use by subclasses). */
     std::vector<unsigned int> m_gpuList; /* list of GPU ids for this plugin */
     CustomStatHolder m_customStatHolder; /* hold stats that aren't DCGM fields */
+    /* Mutexes */
+    DcgmMutex m_dataMutex; /* Mutex for plugin data */
+    DcgmMutex m_mutex;     /* mutex for locking the plugin (for use by subclasses). */
 
     long long DetermineMaxTemp(unsigned int gpuId,
                                double parameterValue,

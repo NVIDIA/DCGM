@@ -8028,7 +8028,9 @@ nvmlReturn_t DECLDIR nvmlGetExcludedDeviceInfoByIndex(unsigned int index, nvmlEx
 #define NVML_GPU_INSTANCE_PROFILE_8_SLICE      0x5
 #define NVML_GPU_INSTANCE_PROFILE_6_SLICE      0x6
 #define NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV1 0x7
-#define NVML_GPU_INSTANCE_PROFILE_COUNT        0x8
+#define NVML_GPU_INSTANCE_PROFILE_2_SLICE_REV1 0x8
+#define NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV2 0x9
+#define NVML_GPU_INSTANCE_PROFILE_COUNT        0xA
 
 typedef struct nvmlGpuInstancePlacement_st
 {
@@ -8107,7 +8109,8 @@ typedef struct nvmlGpuInstance_st* nvmlGpuInstance_t;
 #define NVML_COMPUTE_INSTANCE_PROFILE_7_SLICE 0x4
 #define NVML_COMPUTE_INSTANCE_PROFILE_8_SLICE 0x5
 #define NVML_COMPUTE_INSTANCE_PROFILE_6_SLICE 0x6
-#define NVML_COMPUTE_INSTANCE_PROFILE_COUNT   0x7
+#define NVML_COMPUTE_INSTANCE_PROFILE_1_SLICE_REV1  0x7
+#define NVML_COMPUTE_INSTANCE_PROFILE_COUNT         0x8
 
 #define NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_SHARED 0x0 //!< All the engines except multiprocessors would be shared
 #define NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_COUNT  0x1
@@ -9348,6 +9351,25 @@ nvmlReturn_t DECLDIR nvmlGpmSampleGet(nvmlDevice_t device, nvmlGpmSample_t gpmSa
  *         - NVML_SUCCESS on success
  *         - Nonzero NVML_ERROR_? enum if there is an error in processing the query
  */
+
+/**
+ * Read a sample of GPM metrics into the provided \a gpmSample buffer for a MIG GPU Instance.
+ *
+ * After two samples are gathered, you can call nvmlGpmMetricGet on those
+ * samples to retrive metrics
+ *
+ * %HOPPER_OR_NEWER%
+ *
+ * @param device                Device to get samples for
+ * @param gpuInstanceId         MIG GPU Instance ID
+ * @param gpmSample             Buffer to read samples into
+ *
+ * @return
+ *         - \ref NVML_SUCCESS on success
+ *         - Nonzero NVML_ERROR_? enum on error
+ */
+nvmlReturn_t DECLDIR nvmlGpmMigSampleGet(nvmlDevice_t device, unsigned int gpuInstanceId, nvmlGpmSample_t gpmSample);
+
 nvmlReturn_t DECLDIR nvmlGpmQueryDeviceSupport(nvmlDevice_t device, nvmlGpmSupport_t *gpmSupport);
 
 /** @} */ // @defgroup nvmlGpmFunctions

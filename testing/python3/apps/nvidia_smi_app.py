@@ -53,7 +53,6 @@ class NvidiaSmiApp(app_runner.AppRunner):
         path = NvidiaSmiApp.paths[utils.platform_identifier]
         self.output_filename = None
         super(NvidiaSmiApp, self).__init__(path, args)
-        self.stats = None
         
         if not test_utils.noLogging:
             self.trace_fname = os.path.join(logger.log_dir, "app_%03d_trace.log" % (self.process_nb))
@@ -95,54 +94,6 @@ class NvidiaSmiApp(app_runner.AppRunner):
         for forbidden_text in NvidiaSmiApp.forbidden_strings:
             assert stdout.find(forbidden_text) == -1, "nvidia-smi printed \"%s\", this should never happen!" % forbidden_text
 
-        self.stats = performance_stats.PerformanceStats(self.trace_fname)
-        # TODO(aalsudani) figure out if this needs to stay
-        # if self.stats_fname:
-        #     self.stats.write_to_file(self.stats_fname)
-        # if self.dvs_stats_fname:
-        #     self.stats.write_to_file_dvs(self.dvs_stats_fname)
-
     def __str__(self):
         return "nvidia-smi" + super(NvidiaSmiApp, self).__str__()
 
-class NvidiaSmiAppPerfRun(object):
-    def __init__(self, args=None, human_readable_fname=True, dvs_fname=True, iterations=5):
-        args = args or []
-        self.apps = [NvidiaSmiApp(args) for i in range(iterations)]
-        self.human_readable_fname = human_readable_fname
-        self.dvs_fname = dvs_fname
-        self.stats = None
-
-
-    def run(self):
-        for app in self.apps:
-            app.run()
-
-        # Skip this part if --no-logging option is used
-        if logger.log_dir is None:
-            return
-
-        if test_utils.noLogging:
-            return
-
-        first_run = self.apps[0]
-        last_run = self.apps[-1]
-        if last_run.trace_fname is None:
-            return
-        
-        last_stats = last_run.stats
-        for i in range(len(self.apps) - 1):
-            if self.apps[i].stats is not None:
-                last_stats.combine_stat(self.apps[i].stats)
-
-        if self.human_readable_fname is True:
-            self.human_readable_fname = os.path.join(logger.log_dir, "app_%03d-%03d.avg_stats.txt") % (first_run.process_nb, last_run.process_nb)
-        if self.human_readable_fname:
-            last_stats.write_to_file(self.human_readable_fname)
-
-        if self.dvs_fname is True:
-            self.dvs_fname = os.path.join(logger.log_dir, "app_%03d-%03d.avg_dvs_stats.txt") % (first_run.process_nb, last_run.process_nb)
-        if self.dvs_fname:
-            last_stats.write_to_file_dvs(self.dvs_fname)
-
-        self.stats = last_stats

@@ -312,7 +312,7 @@ public:
 
     ~FileHandle() noexcept;
 
-    FileHandle(FileHandle const &) = delete;
+    FileHandle(FileHandle const &)            = delete;
     FileHandle &operator=(FileHandle const &) = delete;
 
     FileHandle(FileHandle &&other) noexcept;
@@ -441,6 +441,9 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
                          FileHandle *outfp,
                          FileHandle *errfp,
                          bool stderrToStdout,
-                         const char *userName = nullptr);
+                         const char *userName);
+
+bool IsRunningAsRoot();
+
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

@@ -122,16 +122,30 @@ void PhysicalGpu::ValuesDump(std::map<Entity, dcgmFieldValue_v1> &values, ValueT
         switch (type)
         {
             case PhysicalGpu::ValueType::Int64:
-                value = fieldValue.value.i64;
-                value /= divisor;
-                info_reporter << value;
+                if (fieldValue.value.i64 == DCGM_INT64_BLANK)
+                {
+                    info_reporter << "<unknown>";
+                }
+                else
+                {
+                    value = fieldValue.value.i64;
+                    value /= divisor;
+                    info_reporter << value;
+                }
 
                 break;
 
             case PhysicalGpu::ValueType::Double:
-                value = fieldValue.value.dbl;
-                value /= divisor;
-                info_reporter << value;
+                if (fieldValue.value.dbl == DCGM_FP64_BLANK)
+                {
+                    info_reporter << "<unknown>";
+                }
+                else
+                {
+                    value = fieldValue.value.dbl;
+                    value /= divisor;
+                    info_reporter << value;
+                }
 
                 break;
 
@@ -358,12 +372,20 @@ bool PhysicalGpu::ValueGet(std::map<Entity, dcgmFieldValue_v1> &values,
     switch (type)
     {
         case ValueType::Int64:
+            if (values[entity].value.i64 == DCGM_INT64_BLANK)
+            {
+                return false;
+            }
             value = values[entity].value.i64;
             value /= divisor;
 
             break;
 
         case ValueType::Double:
+            if (values[entity].value.dbl == DCGM_FP64_BLANK)
+            {
+                return false;
+            }
             value = values[entity].value.dbl;
             value /= divisor;
 
@@ -2480,8 +2502,9 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
 
     int nvLinkMasks = DCGM_TOPOLOGY_NVLINK1 | DCGM_TOPOLOGY_NVLINK2 | DCGM_TOPOLOGY_NVLINK3 | DCGM_TOPOLOGY_NVLINK4
                       | DCGM_TOPOLOGY_NVLINK5 | DCGM_TOPOLOGY_NVLINK6 | DCGM_TOPOLOGY_NVLINK7 | DCGM_TOPOLOGY_NVLINK8
-                      | DCGM_TOPOLOGY_NVLINK9 | DCGM_TOPOLOGY_NVLINK10 | DCGM_TOPOLOGY_NVLINK11
-                      | DCGM_TOPOLOGY_NVLINK12;
+                      | DCGM_TOPOLOGY_NVLINK9 | DCGM_TOPOLOGY_NVLINK10 | DCGM_TOPOLOGY_NVLINK11 | DCGM_TOPOLOGY_NVLINK12
+                      | DCGM_TOPOLOGY_NVLINK13 | DCGM_TOPOLOGY_NVLINK14 | DCGM_TOPOLOGY_NVLINK15
+                      | DCGM_TOPOLOGY_NVLINK16 | DCGM_TOPOLOGY_NVLINK17 | DCGM_TOPOLOGY_NVLINK18;
 
     /* Find the GPU we have the most NvLink connections to */
     unsigned int bestGpuId   = 0;

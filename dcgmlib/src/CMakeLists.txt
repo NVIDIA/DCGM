@@ -24,6 +24,7 @@ set(SRCS
     DcgmClientHandler.cpp
     DcgmGroupManager.cpp
     DcgmHostEngineHandler.cpp
+    DcgmInjectionNvmlManager.cpp
     DcgmGpuInstance.cpp
     DcgmCoreCommunication.cpp
     DcgmMigManager.cpp

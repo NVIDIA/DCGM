@@ -19,7 +19,6 @@
 #include "timelib.h"
 #include <CudaCommon.h>
 #include <assert.h>
-#include <cmath>
 #include <cuda.h>
 #include <dcgm_structs.h>
 #include <string.h>

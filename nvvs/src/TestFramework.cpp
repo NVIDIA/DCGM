@@ -24,6 +24,7 @@
 #include <PluginStrings.h>
 #include <TestFramework.h>
 
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -43,9 +44,9 @@
 extern DcgmSystem dcgmSystem;
 extern DcgmHandle dcgmHandle;
 
-int main_should_stop __attribute__((visibility("default"))) = 0; /* Global boolean to say whether we should be exiting
-                                                            or not. This is set by the signal handler if we receive a
-                                                            CTRL-C or other terminating signal */
+/* Global boolean to say whether we should be exiting or not. This is set by the signal handler if we receive a CTRL-C
+ * or other terminating signal */
+std::atomic_int32_t main_should_stop __attribute__((visibility("default"))) = 0;
 
 // globals
 extern "C" {
@@ -230,6 +231,7 @@ std::string TestFramework::GetPluginDirExtension() const
     DCGM_LOG_DEBUG << "The following Cuda version will be used for plugins: " << cudaDriverValue.value.i64 << "("
                    << cudaMajorVersion << "." << cudaMinorVersion << ")";
 
+    static const std::string CUDA_12_EXTENSION("/cuda12/");
     static const std::string CUDA_11_EXTENSION("/cuda11/");
     static const std::string CUDA_10_EXTENSION("/cuda10/");
 
@@ -239,6 +241,8 @@ std::string TestFramework::GetPluginDirExtension() const
             return CUDA_10_EXTENSION;
         case 11:
             return CUDA_11_EXTENSION;
+        case 12:
+            return CUDA_12_EXTENSION;
         default:
             DCGM_LOG_ERROR << "Detected unsupported Cuda version: " << cudaMajorVersion << "." << cudaMinorVersion;
             throw std::runtime_error("Detected unsupported Cuda version");
@@ -448,33 +452,72 @@ void TestFramework::insertIntoTestGroup(std::string groupName, Test *testObject)
 }
 
 /*****************************************************************************/
-void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSet)
+void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
 {
+    bool pulseTestWillExecute = false;
     // iterate through all GPU sets
-    for (auto setItr = gpuSet.begin(); setItr != gpuSet.end(); setItr++)
+    // Check if the pulse test will execute
+    for (auto &gpuSet : gpuSets)
     {
         std::vector<Test *> testList;
-        std::vector<Gpu *> gpuList = (*setItr)->gpuObjs;
+        std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
 
-        testList = (*setItr)->m_softwareTestObjs;
+        testList = gpuSet->m_hardwareTestObjs;
         if (testList.size() > 0)
-            goList(Test::NVVS_CLASS_SOFTWARE, testList, gpuList);
+        {
+            pulseTestWillExecute = WillExecutePulseTest(testList);
+            if (pulseTestWillExecute)
+            {
+                break;
+            }
+        }
 
-        testList = (*setItr)->m_hardwareTestObjs;
+        testList = gpuSet->m_customTestObjs;
         if (testList.size() > 0)
-            goList(Test::NVVS_CLASS_HARDWARE, testList, gpuList);
+        {
+            pulseTestWillExecute = WillExecutePulseTest(testList);
+            if (pulseTestWillExecute)
+            {
+                break;
+            }
+        }
+    }
 
-        testList = (*setItr)->m_integrationTestObjs;
-        if (testList.size() > 0)
-            goList(Test::NVVS_CLASS_INTEGRATION, testList, gpuList);
+    // iterate through all GPU sets
+    for (auto &gpuSet : gpuSets)
+    {
+        std::vector<Test *> testList;
+        std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
 
-        testList = (*setItr)->m_performanceTestObjs;
+        testList = gpuSet->m_softwareTestObjs;
         if (testList.size() > 0)
-            goList(Test::NVVS_CLASS_PERFORMANCE, testList, gpuList);
+        {
+            goList(Test::NVVS_CLASS_SOFTWARE, testList, gpuList, pulseTestWillExecute);
+        }
 
-        testList = (*setItr)->m_customTestObjs;
+        testList = gpuSet->m_hardwareTestObjs;
         if (testList.size() > 0)
-            goList(Test::NVVS_CLASS_CUSTOM, testList, gpuList);
+        {
+            goList(Test::NVVS_CLASS_HARDWARE, testList, gpuList, pulseTestWillExecute);
+        }
+
+        testList = gpuSet->m_integrationTestObjs;
+        if (testList.size() > 0)
+        {
+            goList(Test::NVVS_CLASS_INTEGRATION, testList, gpuList, pulseTestWillExecute);
+        }
+
+        testList = gpuSet->m_performanceTestObjs;
+        if (testList.size() > 0)
+        {
+            goList(Test::NVVS_CLASS_PERFORMANCE, testList, gpuList, pulseTestWillExecute);
+        }
+
+        testList = gpuSet->m_customTestObjs;
+        if (testList.size() > 0)
+        {
+            goList(Test::NVVS_CLASS_CUSTOM, testList, gpuList, pulseTestWillExecute);
+        }
     }
 
     output->print();
@@ -590,6 +633,10 @@ std::string TestFramework::GetTestDisplayName(dcgmPerGpuTestIndices_t index)
             return std::string("Targeted Power");
         case DCGM_MEMORY_BANDWIDTH_INDEX:
             return std::string("Memory Bandwidth");
+        case DCGM_MEMTEST_INDEX:
+            return std::string("Memtest");
+        case DCGM_PULSE_TEST_INDEX:
+            return std::string("Pulse Test");
         case DCGM_SOFTWARE_INDEX:
             return std::string("Software");
         case DCGM_CONTEXT_CREATE_INDEX:
@@ -599,8 +646,24 @@ std::string TestFramework::GetTestDisplayName(dcgmPerGpuTestIndices_t index)
     }
 }
 
+bool TestFramework::WillExecutePulseTest(std::vector<Test *> &testsList) const
+{
+    for (auto const &test : testsList)
+    {
+        if (test->GetTestIndex() == DCGM_PULSE_TEST_INDEX)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
-void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> testsList, std::vector<Gpu *> gpuList)
+void TestFramework::goList(Test::testClasses_enum classNum,
+                           std::vector<Test *> testsList,
+                           std::vector<Gpu *> gpuList,
+                           bool checkFileCreation)
 {
     GetAndOutputHeader(classNum);
 
@@ -616,6 +679,13 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
             std::string name   = tp->GetString(PS_PLUGIN_NAME);
 
             int pluginIndex = GetPluginIndex(classNum, name);
+
+            if (test->GetTestIndex() == DCGM_PULSE_TEST_INDEX)
+            {
+                // Add the iterations parameters
+                tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, nvvsCommon.currentIteration);
+                tp->AddDouble(PULSE_TEST_STR_TOTAL_ITERATIONS, nvvsCommon.totalIterations);
+            }
 
             if (pluginIndex == -1)
             {
@@ -650,7 +720,17 @@ void TestFramework::goList(Test::testClasses_enum classNum, std::vector<Test *> 
                     else if (name == "CUDA Toolkit Libraries")
                         tp->AddString(SW_STR_DO_TEST, "libraries_cudatk");
                     else if (name == "Permissions and OS-related Blocks")
+                    {
                         tp->AddString(SW_STR_DO_TEST, "permissions");
+                        if (checkFileCreation)
+                        {
+                            tp->AddString(SW_STR_CHECK_FILE_CREATION, "True");
+                        }
+                        else
+                        {
+                            tp->AddString(SW_STR_CHECK_FILE_CREATION, "False");
+                        }
+                    }
                     else if (name == "Persistence Mode")
                         tp->AddString(SW_STR_DO_TEST, "persistence_mode");
                     else if (name == "Environmental Variables")

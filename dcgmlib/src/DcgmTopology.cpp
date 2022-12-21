@@ -628,6 +628,9 @@ dcgmReturn_t PopulateTopologyNvLink(const std::vector<dcgm_topology_helper_t> &g
                 }
             }
 
+            DCGM_LOG_DEBUG << "gpuId " << gpuId1 << ", localNvLinkQuantity " << localNvLinkQuantity
+                           << ", localLinkMask x" << std::hex << localNvLinkMask;
+
             // fill in remoteNvLink information
             for (unsigned remoteNvLink = 0; remoteNvLink < NVML_NVLINK_MAX_LINKS; remoteNvLink++)
             {
@@ -667,6 +670,8 @@ dcgmReturn_t PopulateTopologyNvLink(const std::vector<dcgm_topology_helper_t> &g
                     }
                 }
             }
+
+            DCGM_LOG_DEBUG << "gpuId " << gpuId2 << ", remoteNvLinkMask x" << std::hex << remoteNvLinkMask;
 
             if (elementsFilled >= elementArraySize)
             {

@@ -38,13 +38,13 @@ function usage() {
 function verify_deb() {
     DEB="$1"
     CONTENTS="$(normalize_deb_name "$DEB")"
-    diff "$CONTENTS" <(list_deb_contents "$1")
+    diff <(sort "$CONTENTS") <(list_deb_contents "$1" | sort)
 }
 
 function verify_rpm() {
     RPM="$1"
     CONTENTS="$(normalize_rpm_name "$RPM")"
-    diff "$CONTENTS" <(list_rpm_contents "$1")
+    diff <(sort "$CONTENTS") <(list_rpm_contents "$1" | sort)
 }
 
 while true; do

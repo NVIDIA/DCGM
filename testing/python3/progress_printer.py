@@ -35,7 +35,7 @@ class DefaultProgressPrinter(ProgressPrinter):
             if subtest.depth == 3:
                 self.childrenTest = ""
                 _erisTestNumber += 1
-                subtest._DefaultProgressPrinter_header_log_id = logger.info("&&&& RUNNING %s - %d" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
+                subtest._DefaultProgressPrinter_header_log_id = logger.info("\n&&&& RUNNING %s - %d\n" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
             else:
                 subtest._DefaultProgressPrinter_header_log_id = logger.info("", defer=subtest.quiet)
         else:
@@ -75,14 +75,14 @@ class DefaultProgressPrinter(ProgressPrinter):
 
             if subtest.depth == 3 and subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
                 if subtest.result == test_utils.SubTest.SKIPPED:
-                    logger.info("&&&& WAIVED %s - %d" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& WAIVED %s - %d\n" % (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.SUCCESS and not self.childrenTest == "F":
-                    logger.info("&&&& PASSED %s - %d" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& PASSED %s - %d\n" % (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.FAILURE_LOGGED:
-                    logger.info("&&&& FAILURE_LOGGED %s - %d" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& FAILURE_LOGGED %s - %d\n" % (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.FAILED or self.childrenTest == "F":
-                    logger.info("&&&& FAILED %s - %d" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& FAILED %s - %d\n" % (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.NOT_CONNECTED:
-                    logger.info("&&&& RETRY %s - %d" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& RETRY %s - %d\n" % (subtest.name, _erisTestNumber))
 
 progress_printer = DefaultProgressPrinter()

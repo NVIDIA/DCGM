@@ -42,6 +42,7 @@ class DcgmProfTesterApp(app_runner.AppRunner):
     def __init__(self, args=None, gpuIds=None, cudaDriverMajorVersion=None):
         args = args or []
         assert(cudaDriverMajorVersion is not None)
+        
         path = DcgmProfTesterApp.paths[utils.platform_identifier]
         #Append the 10,11..etc to the dcgmproftester command
         path += str(int(cudaDriverMajorVersion))

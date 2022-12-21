@@ -61,10 +61,10 @@ public:
         , m_owningThread(std::this_thread::get_id())
     {}
 
-    ThreadSafeQueueHandle(ThreadSafeQueueHandle &&) noexcept = default;
+    ThreadSafeQueueHandle(ThreadSafeQueueHandle &&) noexcept            = default;
     ThreadSafeQueueHandle &operator=(ThreadSafeQueueHandle &&) noexcept = default;
 
-    ThreadSafeQueueHandle(ThreadSafeQueueHandle const &) = delete;
+    ThreadSafeQueueHandle(ThreadSafeQueueHandle const &)            = delete;
     ThreadSafeQueueHandle &operator=(ThreadSafeQueueHandle const &) = delete;
 
     ~ThreadSafeQueueHandle() noexcept
@@ -163,10 +163,10 @@ public:
         assert(m_readOnlyLock.owns_lock() == true);
     }
 
-    ThreadSafeQueueReadHandle(ThreadSafeQueueReadHandle &&) noexcept = default;
+    ThreadSafeQueueReadHandle(ThreadSafeQueueReadHandle &&) noexcept            = default;
     ThreadSafeQueueReadHandle &operator=(ThreadSafeQueueReadHandle &&) noexcept = default;
 
-    ThreadSafeQueueReadHandle(ThreadSafeQueueReadHandle const &) = delete;
+    ThreadSafeQueueReadHandle(ThreadSafeQueueReadHandle const &)            = delete;
     ThreadSafeQueueReadHandle &operator=(ThreadSafeQueueReadHandle const &) = delete;
 
     ~ThreadSafeQueueReadHandle() noexcept

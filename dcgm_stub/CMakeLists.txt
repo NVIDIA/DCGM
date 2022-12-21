@@ -13,6 +13,6 @@
 # limitations under the License.
 add_library(dcgm_stub STATIC)
 target_sources(dcgm_stub PRIVATE dcgm_stub_static.c)
-target_link_libraries(dcgm_stub PUBLIC dcgm_interface)
+target_link_libraries(dcgm_stub PUBLIC dcgm_interface nvmli_interface)
 target_link_libraries(dcgm_stub PRIVATE dl rt)
 target_compile_definitions(dcgm_stub PRIVATE DCGM_API_EXPORT=1)

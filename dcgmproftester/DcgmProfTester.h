@@ -215,6 +215,8 @@ private:
 
     std::vector<entity_id_t> m_gpuInstances;
 
+    std::vector<dcgmGroupEntityPair_t> m_entities;
+
     /* Workers */
     std::map<int, std::shared_ptr<DcgmNs::ProfTester::DistributedCudaContext>> m_dcgmCudaContexts;
 

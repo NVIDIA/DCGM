@@ -19,6 +19,7 @@ import logger
 import test_utils
 import dcgm_fields
 import dcgm_internal_helpers
+import dcgm_field_injection_helpers
 import option_parser
 import DcgmDiag
 import DcgmHandle
@@ -66,7 +67,7 @@ def helper_test_denylist_checks(handle, gpuIds):
     settings['watches'] = dcgm_structs.DCGM_HEALTH_WATCH_MEM | dcgm_structs.DCGM_HEALTH_WATCH_PCIE
     error_list = []
     
-    ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuIds[0],
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
                         dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 0, -50)
     denylist_recommendations.check_health(handleObj, settings, error_list)
 
@@ -78,7 +79,7 @@ def helper_test_denylist_checks(handle, gpuIds):
     # Inject a memory error and verify that we fail
     denylist_recommendations.g_gpus = [] # Reset g_gpus
     
-    ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuIds[0],
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
                                                        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 

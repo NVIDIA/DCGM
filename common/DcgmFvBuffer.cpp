@@ -17,12 +17,13 @@
 #include "DcgmLogging.h"
 
 /******************************************************************************/
-DcgmFvBuffer::DcgmFvBuffer(size_t initialCapacity)
+DcgmFvBuffer::DcgmFvBuffer(size_t initialCapacity, bool growExponentially)
 {
-    m_buffer         = 0;
-    m_bufferCapacity = 0;
-    m_bufferUsed     = 0;
-    m_numEntries     = 0;
+    m_buffer            = 0;
+    m_bufferCapacity    = 0;
+    m_bufferUsed        = 0;
+    m_numEntries        = 0;
+    m_growExponentially = growExponentially;
     /* Allow this to be initialized without a capacity for efficient setting from a buffer */
     if (initialCapacity > 0)
         Resize(initialCapacity);
@@ -84,8 +85,15 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddFvReally(size_t bytesNeeded)
     size_t spaceUsedAfter = m_bufferUsed + bytesNeeded;
     if (spaceUsedAfter > m_bufferCapacity)
     {
+        size_t newBufferCapacity;
         // Find nearest value that is a product of 512
-        size_t newBufferCapacity = (spaceUsedAfter + 511U) & (~511U);
+        // Find nearest value that is a product of 512
+        newBufferCapacity = (spaceUsedAfter + 511U) & (~511U);
+        if (m_growExponentially)
+        {
+            /* Using 1.6x to avoid heap fragmentation */
+            newBufferCapacity = (size_t)(newBufferCapacity * 1.6);
+        }
 
         dcgmReturn = Resize(newBufferCapacity);
         if (dcgmReturn != DCGM_ST_OK)
@@ -266,6 +274,35 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGr
 
         default:
             DCGM_LOG_ERROR << "Unhandled fieldType: " << fieldMeta->fieldType;
+            return nullptr;
+    }
+
+    return nullptr;
+}
+
+/******************************************************************************/
+dcgmBufferedFv_t *DcgmFvBuffer::AddFV1Value(dcgm_field_entity_group_t entityGroupId,
+                                            dcgm_field_eid_t entityId,
+                                            dcgmFieldValue_v1 *fv1)
+{
+    assert(fv1 != nullptr);
+
+    switch (fv1->fieldType)
+    {
+        case DCGM_FT_INT64:
+            return AddInt64Value(
+                entityGroupId, entityId, fv1->fieldId, fv1->value.i64, fv1->ts, (dcgmReturn_t)fv1->status);
+
+        case DCGM_FT_DOUBLE:
+            return AddDoubleValue(
+                entityGroupId, entityId, fv1->fieldId, fv1->value.dbl, fv1->ts, (dcgmReturn_t)fv1->status);
+
+        case DCGM_FT_STRING:
+            return AddStringValue(
+                entityGroupId, entityId, fv1->fieldId, fv1->value.str, fv1->ts, (dcgmReturn_t)fv1->status);
+
+        default:
+            DCGM_LOG_ERROR << "Unhandled fieldType: " << fv1->fieldType;
             return nullptr;
     }
 
@@ -459,6 +496,12 @@ dcgmReturn_t DcgmFvBuffer::GetSize(size_t *bufferSize, size_t *elementCount)
     if (elementCount)
         *elementCount = m_numEntries;
     return DCGM_ST_OK;
+}
+
+/******************************************************************************/
+void DcgmFvBuffer::SetGrowExponentially(bool growExponentially)
+{
+    m_growExponentially = growExponentially;
 }
 
 /******************************************************************************/

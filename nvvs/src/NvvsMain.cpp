@@ -69,7 +69,7 @@ void OutputMainError(const std::string &error)
     }
     else
     {
-        Json::Value jv;
+        ::Json::Value jv;
         jv[NVVS_NAME][NVVS_VERSION_STR]   = DRIVER_MAJOR_VERSION;
         jv[NVVS_NAME][NVVS_RUNTIME_ERROR] = error;
         std::cout << jv.toStyledString() << std::endl;

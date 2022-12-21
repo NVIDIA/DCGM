@@ -172,7 +172,7 @@ DCGM_TARGETED_POWER_INDEX   = 5
 DCGM_MEMORY_BANDWIDTH_INDEX = 6
 DCGM_MEMTEST_INDEX          = 7
 DCGM_PULSE_TEST_INDEX       = 8
-DCGM_UNUSED1_TEST_INDEX     = 9
+DCGM_EUD_TEST_INDEX         = 9
 DCGM_UNUSED2_TEST_INDEX     = 10
 DCGM_UNUSED3_TEST_INDEX     = 11
 DCGM_UNUSED4_TEST_INDEX     = 12
@@ -700,12 +700,18 @@ DcgmMigProfileGpuInstanceSlice3     = 3  # GPU instance slice 3
 DcgmMigProfileGpuInstanceSlice4     = 4  # GPU instance slice 4
 DcgmMigProfileGpuInstanceSlice7     = 5  # GPU instance slice 7
 DcgmMigProfileGpuInstanceSlice8     = 6  # GPU instance slice 8
+DcgmMigProfileGpuInstanceSlice6         = 7  # GPU instance slice 6
+DcgmMigProfileGpuInstanceSlice1Rev1     = 8  # GPU instance slice 1 revision 1
+DcgmMigProfileGpuInstanceSlice2Rev1     = 9  # GPU instance slice 2 revision 1
+DcgmMigProfileGpuInstanceSlice1Rev2     = 10 # GPU instance slice 1 revision 2
 DcgmMigProfileComputeInstanceSlice1 = 30 # compute instance slice 1
 DcgmMigProfileComputeInstanceSlice2 = 31 # compute instance slice 2
 DcgmMigProfileComputeInstanceSlice3 = 32 # compute instance slice 3
 DcgmMigProfileComputeInstanceSlice4 = 33 # compute instance slice 4
 DcgmMigProfileComputeInstanceSlice7 = 34 # compute instance slice 7 
 DcgmMigProfileComputeInstanceSlice8 = 35 # compute instance slice 8
+DcgmMigProfileComputeInstanceSlice6     = 36 # compute instance slice 6
+DcgmMigProfileComputeInstanceSlice1Rev1 = 37 # compute instance slice 1 revision 1
 
 # /**
 #  * Represents a pair of entity pairings to uniquely identify an entity and its place in the hierarchy.

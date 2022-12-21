@@ -51,7 +51,7 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
     m_testParameters->AddString(PS_RUN_IF_GOM_ENABLED, "False");
     m_testParameters->AddString(TS_STR_USE_DGEMM, "True");
     m_testParameters->AddString(TS_STR_IS_ALLOWED, "False");
-    m_testParameters->AddDouble(TS_STR_TEST_DURATION, 120.0);
+    m_testParameters->AddDouble(TS_STR_TEST_DURATION, 30.0);
     m_testParameters->AddDouble(TS_STR_TARGET_PERF, 100.0);
     m_testParameters->AddDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.95);
     m_testParameters->AddDouble(TS_STR_CUDA_STREAMS_PER_GPU, TS_MAX_STREAMS_PER_DEVICE);

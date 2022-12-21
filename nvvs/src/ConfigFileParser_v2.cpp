@@ -200,10 +200,8 @@ ConfigFileParser_v2::ConfigFileParser_v2(const std::string &configFile, const Fr
 
     try
     {
-        char execLocation[DCGM_PATH_LEN];
-        ssize_t ret = readlink("/proc/self/exe", execLocation, sizeof(execLocation));
-        // Ensure it's null-terminated
-        execLocation[DCGM_PATH_LEN - 1] = '\0';
+        char execLocation[PATH_MAX] { 0 };
+        ssize_t ret = readlink("/proc/self/exe", execLocation, sizeof(execLocation) - 1);
 
         if (ret < 0)
         {

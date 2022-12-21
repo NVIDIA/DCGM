@@ -75,6 +75,13 @@ public:
      */
     virtual ~DcgmThread();
 
+    /*************************************************************************/
+    /*
+     * Set the name of this thread that will appear in GDB and other debugging tools
+     *
+     * Must be called before Start().
+     */
+    void SetThreadName(std::string threadName);
 
     /*************************************************************************/
     /*

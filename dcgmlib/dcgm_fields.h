@@ -1427,368 +1427,10 @@ typedef unsigned int dcgm_field_eid_t;
 
 #define DCGM_FI_INTERNAL_FIELDS_0_END 699
 
-
 /**
- * <p>Low latency bin</p>
+ * Starting field ID of the NVSwitch instance
  */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 700
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P00 701
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P00 702
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 1</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P00 703
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P01 704
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P01 705
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P01 706
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 2</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P01 707
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P02 708
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P02 709
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P02 710
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 3</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P02 711
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P03 712
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P03 713
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P03 714
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 4</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P03 715
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P04 716
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P04 717
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P04 718
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 5</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P04 719
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P05 720
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P05 721
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P05 722
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 6</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P05 723
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P06 724
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P06 725
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P06 726
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 7</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P06 727
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P07 728
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P07 729
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P07 730
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 8</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P07 731
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P08 732
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P08 733
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P08 734
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 9</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P08 735
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P09 736
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P09 737
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P09 738
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 10</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P09 739
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P10 740
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P10 741
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P10 742
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 11</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P10 743
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P11 744
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P11 745
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P11 746
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 12</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P11 747
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P12 748
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P12 749
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P12 750
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 13</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P12 751
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P13 752
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P13 753
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P13 754
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 14</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P13 755
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P14 756
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P14 757
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P14 758
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 15</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P14 759
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P15 760
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P15 761
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P15 762
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 16</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P15 763
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P16 764
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P16 765
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P16 766
-/**
- * Max latency bin
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch latency bins for port 17</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P16 767
-
-/**
- * <p>Low latency bin</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P17 768
-/**
- * Medium latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MED_P17 769
-/**
- * High latency bin
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_HIGH_P17 770
-/**
- * <p>Max latency bin</p>
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>&nbsp;</p>
- * <p>NVSwitch Tx and Rx Counter 0 for each port</p>
- * <p>By default, Counter 0 counts bytes.</p>
- */
-#define DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P17 771
+#define DCGM_FI_FIRST_NVSWITCH_FIELD_ID 700
 
 /**
  * <p>NVSwitch Tx Throughput Counter for ports 0-17</p>
@@ -2012,10 +1654,84 @@ typedef unsigned int dcgm_field_eid_t;
  */
 #define DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX 862
 
-/**
- * Starting field ID of the NVSwitch instance
+/*
+ * NVSwitch Physical ID.
  */
-#define DCGM_FI_FIRST_NVSWITCH_FIELD_ID 700
+#define DCGM_FI_DEV_NVSWITCH_PHYS_ID 863
+
+/**
+ * NVSwitch reset required.
+ */
+#define DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED 864
+
+/**
+ * NvSwitch NvLink ID
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_ID 865
+
+/**
+ * NvSwitch PCIE domain
+ */
+#define DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN 866
+
+/**
+ * NvSwitch PCIE bus
+ */
+#define DCGM_FI_DEV_NVSWITCH_PCIE_BUS 867
+
+/**
+ * NvSwitch PCIE device
+ */
+#define DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE 868
+
+/**
+ * NvSwitch PCIE function
+ */
+#define DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION 869
+
+/**
+ * NvLink status.  UNKNOWN:-1 OFF:0 SAFE:1 ACTIVE:2 ERROR:3
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_STATUS 870
+
+/**
+ * NvLink device type (GPU/Switch).
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_TYPE 871
+
+/**
+ * NvLink device pcie domain.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN 872
+
+/**
+ * NvLink device pcie bus.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS 873
+
+/**
+ * NvLink device pcie device.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE 874
+/**
+ * NvLink device pcie function.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION 875
+
+/**
+ * NvLink device link ID
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_ID 876
+
+/**
+ * NvLink device SID.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID 877
+
+/**
+ * NvLink device link uid.
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_UUID 878
 
 /**
  * Last field ID of the NVSwitch instance

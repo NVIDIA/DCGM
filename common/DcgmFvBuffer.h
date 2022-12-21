@@ -86,8 +86,12 @@ public:
      *                      set this to 32 * how many records you expect to buffer.
      *                      You can use FVBUFFER_GUESS_INITIAL_CAPAXITY to get this
      *                      number for you
+     * growExponentially IN: Should we grow this FV buffer exponentially?. Only use
+     *                       if you plan to append a lot of samples. This will 2x
+     *                       memory usage every time we resize but will call
+     *                       realloc() and memcpy() fewer times.
      */
-    DcgmFvBuffer(size_t initialCapacity = 512);
+    DcgmFvBuffer(size_t initialCapacity = 512, bool growExponentially = false);
 
     /*************************************************************************/
     ~DcgmFvBuffer();
@@ -207,6 +211,26 @@ public:
                                     dcgm_field_eid_t entityId,
                                     unsigned short fieldId,
                                     dcgmReturn_t status);
+    /**************************************************************************
+     * Convert and append a dcgmFieldValue_v1 field to this buffer
+     *
+     * Returns A pointer to the allocated field-value structure. Do NOT zero
+     *             this structure as all of its fields have been set before being returned
+     *         nullptr on error (will be logged)
+     */
+    dcgmBufferedFv_t *AddFV1Value(dcgm_field_entity_group_t entityGroupId,
+                                  dcgm_field_eid_t entityId,
+                                  dcgmFieldValue_v1 *fv1);
+
+    /**************************************************************************
+     * Tell this object whether to grow exponentially or not from now on
+     *
+     * growExponentially IN: Should we grow this FV buffer exponentially?. Only use
+     *                       if you plan to append a lot of samples. This will 2x
+     *                       memory usage every time we resize but will call
+     *                       realloc() and memcpy() fewer times.
+     */
+    void SetGrowExponentially(bool growExponentially);
 
 private:
     /**************************************************************************
@@ -229,12 +253,15 @@ private:
      */
     dcgmBufferedFv_t *AddFvReally(size_t bytesNeeded);
 
-    char *m_buffer;          /* Buffer of FVs, one after another. m_bufferUsed is how many bytes
-                       of this are used. m_bufferCapacity is how many bytes this buffer
-                       can hold before being resized. */
-    size_t m_bufferUsed;     /* How much of this buffer is currently used in bytes */
-    size_t m_bufferCapacity; /* how many bytes this buffer can hold before being resized */
-    size_t m_numEntries;     /* Number of FVs that are currently buffered */
+    char *m_buffer;           /* Buffer of FVs, one after another. m_bufferUsed is how many bytes
+                        of this are used. m_bufferCapacity is how many bytes this buffer
+                        can hold before being resized. */
+    size_t m_bufferUsed;      /* How much of this buffer is currently used in bytes */
+    size_t m_bufferCapacity;  /* how many bytes this buffer can hold before being resized */
+    size_t m_numEntries;      /* Number of FVs that are currently buffered */
+    bool m_growExponentially; /* Should we grow this FV buffer exponentially?. Only use
+                                 if you plan to append a lot of samples. This will 2x
+                                 memory usage every time we resize */
 };
 
 #endif // DCGMFVBUFFER_H

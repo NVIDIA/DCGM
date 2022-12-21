@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <dcgm_nvml.h>
 #include "nvml_error_strings.h"
 #include "nvml_loader_hook.h"
@@ -8,6 +23,9 @@
 
 static void *g_nvmlLib                                     = 0;
 static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 0;
+#ifdef INJECTION_LIBRARY_AVAILABLE
+static bool g_injectionLibraryLoaded = false;
+#endif
 
 // The following defines the hooking mechanism that calls the hooked function
 // set by a user of this library. Insert this macro to enable an API to be hooked
@@ -81,12 +99,23 @@ static void *nvmlLoaderLoadLibrary(const char *name)
 #include "entry_points.h"
 #undef NVML_ENTRY_POINT
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#define NVML_INJECTION_ENTRY_POINT(nvmlFuncname, tsapiFuncname, argtypes, fmt, ...) \
+    NVML_DYNAMIC_WRAP(nvmlFuncname, nvmlFuncname, argtypes, ##__VA_ARGS__)
+#include <entry_point_nvml_injection.h>
+#undef NVML_INJECTION_ENTRY_POINT
+#endif
+
 static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
 {
     static std::mutex dcgmLibLock;
 
     if (g_nvmlLib)
         return NVML_ERROR_ALREADY_INITIALIZED;
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    g_injectionLibraryLoaded = false;
+#endif
 
     /* Lock our mutex */
     std::lock_guard<std::mutex> guard(dcgmLibLock);
@@ -114,6 +143,23 @@ static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
     };
 
     const char **paths = nvmlPaths;
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    const char *nvmlInjectionPaths[] =
+    {
+        "libnvml_injection.so.1",
+        "./apps/amd64/libnvml_injection.so.1",
+        "./libnvml_injection.so.1",
+        nullptr,
+    };
+
+    char *injectionMode = getenv("NVML_INJECTION_MODE");
+    if (injectionMode != nullptr)
+    {
+        paths = nvmlInjectionPaths;
+        g_injectionLibraryLoaded = true;
+    }
+#endif
 
     for (unsigned int i = 0; paths[i] != nullptr; i++)
     {
@@ -181,6 +227,26 @@ nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
     return localNvmlInitWithFlags(flags);
 }
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+static nvmlReturn_t localInjectionNvmlInit();
+NVML_DYNAMIC_WRAP(localInjectionNvmlInit, injectionNvmlInit, ())
+nvmlReturn_t injectionNvmlInit()
+{
+    NVML_API_HOOK(injectionNvmlInit);
+
+    if (!g_nvmlLib)
+    {
+        nvmlReturn_t result = nvmlLoadDefaultSharedLibrary();
+        if (result != NVML_SUCCESS)
+        {
+            return result;
+        }
+    }
+    
+    return localInjectionNvmlInit();
+}
+#endif
+
 NVML_DYNAMIC_WRAP(nvmlShutdown, nvmlShutdown, ())
 
 typedef const char *(*nvmlErrorString_loader_t)(nvmlReturn_t result);
@@ -231,3 +297,27 @@ void resetAllNvmlHooks(void)
 {
     ++g_nvmlStaticLibResetHooksCount;
 }
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+void nvmlClearLibraryHandleIfNeeded(void)
+{
+    bool needToClear          = false;
+    const char *injectionMode = getenv("NVML_INJECTION_MODE");
+
+    if (g_injectionLibraryLoaded && injectionMode == nullptr)
+    {
+        needToClear = true;
+    }
+    else if (g_injectionLibraryLoaded == false && injectionMode != nullptr)
+    {
+        needToClear = true;
+    }
+ 
+    if (needToClear && g_nvmlLib != 0)
+    {
+        dlclose(g_nvmlLib);
+        g_nvmlLib = 0;
+    }
+}
+#endif 
+

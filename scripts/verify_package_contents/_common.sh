@@ -26,7 +26,7 @@ function get_escaped_version() {
     # The sed script below:
     # - extracts the version from the project line
     # replaces "." with "\."
-    egrep 'project\(dcgm' < "$DCGM_DIR/CMakeLists.txt" | sed 's/project(.* \([0-9\.]*\).*)/\1/;s/\./\\./g'
+    grep -E 'project\(dcgm' < "$DCGM_DIR/CMakeLists.txt" | sed 's/project(.* \([0-9\.]*\).*)/\1/;s/\./\\./g'
 }
 
 ESCAPED_VERSION=$(get_escaped_version)

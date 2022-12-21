@@ -19,6 +19,7 @@
 #include "DcgmFvBuffer.h"
 #include "DcgmGpmManager.hpp"
 #include "DcgmGpuInstance.h"
+#include "DcgmInjectionNvmlManager.h"
 #include "DcgmMigManager.h"
 #include "DcgmMutex.h"
 #include "DcgmSettings.h"
@@ -32,7 +33,7 @@
 #include "timelib.h"
 #include "timeseries.h"
 
-#include <DcgmThread.h>
+#include <DcgmTaskRunner.h>
 
 #include <bitset>
 #include <condition_variable>
@@ -273,26 +274,19 @@ struct dcgmcm_runtime_stats_t
     long long sleepTimeUsec = 0;    /* Amount of time the cache manager update thread was sleeping in usec */
     long long awakeTimeUsec = 0;    /* Amount of time the cache manager update thread was awake in usec */
 
-    long long updateCycleStarted          = 0; /* Counter of how many update cycles have been started */
     std::atomic_llong updateCycleFinished = 0; /* Counter of how many update cycles have been finished */
-    long long shouldFinishCycle           = 0; /* Lockstep mode only. How many cycles should we be
-                                              finished with? If m_updateCycleFinished < m_shouldFinishCycle,
-                                              we start another cycle loop. This is technically the
-                                              predicate for m_condition */
-    long long lockCount = 0;                   /* Number of times that the cache manager mutex has been locked. This is
+    long long lockCount                   = 0; /* Number of times that the cache manager mutex has been locked. This is
                                               periodically snapshotted from the cache manager update threads */
 
     dcgmcm_runtime_stats_t() = default;
 
     dcgmcm_runtime_stats_t(dcgmcm_runtime_stats_t const &other) noexcept
     {
-        numSleepsSkipped   = other.numSleepsSkipped;
-        numSleepsDone      = other.numSleepsDone;
-        sleepTimeUsec      = other.sleepTimeUsec;
-        awakeTimeUsec      = other.awakeTimeUsec;
-        updateCycleStarted = other.updateCycleStarted;
-        shouldFinishCycle  = other.shouldFinishCycle;
-        lockCount          = other.lockCount;
+        numSleepsSkipped = other.numSleepsSkipped;
+        numSleepsDone    = other.numSleepsDone;
+        sleepTimeUsec    = other.sleepTimeUsec;
+        awakeTimeUsec    = other.awakeTimeUsec;
+        lockCount        = other.lockCount;
 
         updateCycleFinished.store(other.updateCycleFinished);
     }
@@ -300,13 +294,11 @@ struct dcgmcm_runtime_stats_t
     {
         if (this != &other)
         {
-            numSleepsSkipped   = other.numSleepsSkipped;
-            numSleepsDone      = other.numSleepsDone;
-            sleepTimeUsec      = other.sleepTimeUsec;
-            awakeTimeUsec      = other.awakeTimeUsec;
-            updateCycleStarted = other.updateCycleStarted;
-            shouldFinishCycle  = other.shouldFinishCycle;
-            lockCount          = other.lockCount;
+            numSleepsSkipped = other.numSleepsSkipped;
+            numSleepsDone    = other.numSleepsDone;
+            sleepTimeUsec    = other.sleepTimeUsec;
+            awakeTimeUsec    = other.awakeTimeUsec;
+            lockCount        = other.lockCount;
 
             updateCycleFinished.store(other.updateCycleFinished);
         }
@@ -424,7 +416,7 @@ public:
 
 /*****************************************************************************/
 /* Cache manager main class */
-class DcgmCacheManager : public DcgmThread
+class DcgmCacheManager : public DcgmTaskRunner
 {
 public:
     /* Constructor/destructor */
@@ -1567,6 +1559,20 @@ public:
 
     nvmlDevice_t GetNvmlDeviceFromEntityId(dcgm_field_eid_t entityId) const;
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    dcgmReturn_t InjectNvmlGpu(dcgm_field_eid_t gpuId,
+                               const char *key,
+                               const injectNvmlVal_t &value,
+                               const injectNvmlVal_t *extraKeys,
+                               unsigned int extraKeyCount);
+#endif
+
+    dcgmReturn_t CreateNvmlInjectionDevice(unsigned int index);
+
+    dcgmReturn_t InjectNvmlFieldValue(dcgm_field_eid_t gpuId,
+                                      const dcgmFieldValue_v1 &value,
+                                      dcgm_field_meta_p fieldMeta);
+
 private:
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
                                     frequency of the most frequent stat being tracked (0) */
@@ -1597,11 +1603,6 @@ private:
     DcgmMutex *m_mutex;                     /* Lock used for protecting data structures within this class */
     unsigned int m_inDriverCount;           // Count of threads currently in driver calls
     unsigned int m_waitForDriverClearCount; // Count of threads waiting for the driver to be clear
-
-    std::condition_variable m_startUpdateCondition;    /* Condition used for signaling the update thread to wake up.
-                                      It should be passed with m_lock to CondWait */
-    std::condition_variable m_updateCompleteCondition; /* Condition used for telling waiting threads that an
-                                         update loop has completed */
 
     /* Track per-entity watches of fields. Use GetEntityWatchInfo() method to get a
        pointer to an element of this.
@@ -1647,6 +1648,11 @@ private:
     bool m_forceProfMetricsThroughGpm; /* Should we force profiling metrics through GPM? True=yes. False=no. This
                                           is useful for using the GPM simulator in NVML to test end-to-end with
                                           control values */
+
+    DcgmInjectionNvmlManager m_nvmlInjectionManager;
+
+    dcgmcm_update_thread_t
+        *m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
 
     /*************************************************************************/
     /*
@@ -2005,12 +2011,20 @@ private:
 
     /*************************************************************************/
     /*
-     * Polling thread run() top level helpers for either running in lock step
-     * or timed mode
+     * Polling thread run() top level helpers
      *
+     * DoOneUpdateAllFields returns the timestamp of when the next watch will need an
+     * update in seconds since 1970.
      */
-    void RunTimedWakeup(dcgmcm_update_thread_t *threadCtx);
-    void RunLockStep(dcgmcm_update_thread_t *threadCtx);
+    timelib64_t DoOneUpdateAllFields(void);
+
+    /*************************************************************************/
+    /*
+     * The part of run() that actually does work. This exists so that all
+     * allocating and freeing is done by the parent run() and we don't need
+     * a goto FAILED to cleanup in run().
+     */
+    void RunWrapped(void);
 
     /*************************************************************************/
     /*

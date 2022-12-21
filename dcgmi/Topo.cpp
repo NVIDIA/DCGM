@@ -378,6 +378,24 @@ std::string Topo::HelperGetNvLinkPath(dcgmGpuTopologyLevel_t &path, unsigned int
         case DCGM_TOPOLOGY_NVLINK12:
             pathSS << "twelve NVLINKs ";
             break;
+        case DCGM_TOPOLOGY_NVLINK13:
+            pathSS << "thirteen NVLINKs ";
+            break;
+        case DCGM_TOPOLOGY_NVLINK14:
+            pathSS << "fourteen NVLINKs ";
+            break;
+        case DCGM_TOPOLOGY_NVLINK15:
+            pathSS << "fifteen NVLINKs ";
+            break;
+        case DCGM_TOPOLOGY_NVLINK16:
+            pathSS << "sixteen NVLINKs ";
+            break;
+        case DCGM_TOPOLOGY_NVLINK17:
+            pathSS << "seventeen NVLINKs ";
+            break;
+        case DCGM_TOPOLOGY_NVLINK18:
+            pathSS << "eighteen NVLINKs ";
+            break;
         default:
             return "Unknown";
     }

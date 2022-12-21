@@ -51,9 +51,13 @@ bool DcgmEntityTimeSeries::operator==(const DcgmEntityTimeSeries &ets)
     return m_entityId == ets.m_entityId;
 }
 
-void DcgmEntityTimeSeries::AddValue(unsigned short fieldId, dcgmFieldValue_v1 &val)
+void DcgmEntityTimeSeries::AddValue(dcgm_field_entity_group_t entityGroupId,
+                                    dcgm_field_eid_t entityId,
+                                    unsigned short fieldId,
+                                    dcgmFieldValue_v1 &val)
 {
-    m_fieldValueTimeSeries[fieldId].push_back(val);
+    m_fieldValueTimeSeries[fieldId].SetGrowExponentially(true);
+    m_fieldValueTimeSeries[fieldId].AddFV1Value(entityGroupId, entityId, &val);
 }
 
 bool DcgmEntityTimeSeries::IsFieldStored(unsigned short fieldId)
@@ -63,28 +67,36 @@ bool DcgmEntityTimeSeries::IsFieldStored(unsigned short fieldId)
 
 void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcgmFieldValue_v1 &dfv, uint64_t mask)
 {
-    for (size_t i = 0; i < m_fieldValueTimeSeries[fieldId].size(); i++)
+    DcgmFvBuffer &fvBuffer = m_fieldValueTimeSeries[fieldId];
+
+    size_t bufferSize   = 0;
+    size_t elementCount = 0;
+    fvBuffer.GetSize(&bufferSize, &elementCount);
+
+    dcgmBufferedFvCursor_t fvCursor = 0;
+    dcgmBufferedFv_t *fv            = nullptr;
+
+    for (fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
     {
-        const dcgmFieldValue_v1 &val = m_fieldValueTimeSeries[fieldId][i];
-        switch (val.fieldType)
+        switch (fv->fieldType)
         {
             case DCGM_FT_DOUBLE:
-                if (val.value.dbl != 0.0 && !DCGM_FP64_IS_BLANK(val.value.dbl))
+                if (fv->value.dbl != 0.0 && !DCGM_FP64_IS_BLANK(fv->value.dbl))
                 {
-                    memcpy(&dfv, &val, sizeof(dfv));
+                    DcgmFvBuffer::ConvertBufferedFvToFv1(fv, &dfv);
                     return;
                 }
                 break;
             case DCGM_FT_INT64:
                 // Ignore values that are 0 after applying the mask
-                if (mask != 0 && (val.value.i64 & mask) == 0)
+                if (mask != 0 && (fv->value.i64 & mask) == 0)
                 {
                     continue;
                 }
 
-                if (val.value.i64 != 0 && !DCGM_INT64_IS_BLANK(val.value.i64))
+                if (fv->value.i64 != 0 && !DCGM_INT64_IS_BLANK(fv->value.i64))
                 {
-                    memcpy(&dfv, &val, sizeof(dfv));
+                    DcgmFvBuffer::ConvertBufferedFvToFv1(fv, &dfv);
                     return;
                 }
                 break;
@@ -100,27 +112,34 @@ void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcgmFieldValu
 void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jsonIndex)
 {
     jv[GPUS][jsonIndex]["gpuId"] = m_entityId;
-    for (std::map<unsigned short, std::vector<dcgmFieldValue_v1>>::iterator iter = m_fieldValueTimeSeries.begin();
-         iter != m_fieldValueTimeSeries.end();
-         iter++)
+    for (auto &iter : m_fieldValueTimeSeries)
     {
         std::string tag;
-        DcgmRecorder::GetTagFromFieldId(iter->first, tag);
+        DcgmRecorder::GetTagFromFieldId(iter.first, tag);
 
         jv[GPUS][jsonIndex][tag] = Json::Value(Json::arrayValue);
 
-        for (size_t i = 0; i < iter->second.size(); i++)
+        DcgmFvBuffer &fvBuffer = iter.second;
+
+        size_t bufferSize   = 0;
+        size_t elementCount = 0;
+        fvBuffer.GetSize(&bufferSize, &elementCount);
+
+        dcgmBufferedFvCursor_t fvCursor = 0;
+        dcgmBufferedFv_t *fv            = nullptr;
+
+        for (fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
         {
             Json::Value entry;
-            entry["timestamp"] = iter->second[i].ts;
-            switch (iter->second[i].fieldType)
+            entry["timestamp"] = fv->timestamp;
+            switch (fv->fieldType)
             {
                 case DCGM_FT_INT64:
-                    entry["value"] = iter->second[i].value.i64;
+                    entry["value"] = fv->value.i64;
                     break;
 
                 case DCGM_FT_DOUBLE:
-                    entry["value"] = iter->second[i].value.dbl;
+                    entry["value"] = fv->value.dbl;
                     break;
             }
 
@@ -145,7 +164,7 @@ void DcgmValuesSinceHolder::AddValue(dcgm_field_entity_group_t entityGroupId,
                                      unsigned short fieldId,
                                      dcgmFieldValue_v1 &val)
 {
-    m_values[entityGroupId][entityId].AddValue(fieldId, val);
+    m_values[entityGroupId][entityId].AddValue(entityGroupId, entityId, fieldId, val);
 }
 
 bool DcgmValuesSinceHolder::IsStored(dcgm_field_entity_group_t entityGroupId,
@@ -194,8 +213,20 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
                                                             std::vector<DcgmError> &errorList,
                                                             timelib64_t startTime)
 {
-    std::vector<dcgmFieldValue_v1> &values = m_values[DCGM_FE_GPU][gpuId].m_fieldValueTimeSeries[fieldId];
-    for (size_t i = 1; i < values.size(); i++)
+    DcgmFvBuffer &values = m_values[DCGM_FE_GPU][gpuId].m_fieldValueTimeSeries[fieldId];
+
+    size_t bufferSize   = 0;
+    size_t elementCount = 0;
+    values.GetSize(&bufferSize, &elementCount);
+
+    dcgmBufferedFvCursor_t fvCursor = 0;
+    dcgmBufferedFv_t *fv            = nullptr;
+    dcgmBufferedFv_t *prevFv        = nullptr;
+
+    /* We're doing differences so skip the first element and set it to previous */
+    prevFv = values.GetNextFv(&fvCursor);
+
+    for (fv = values.GetNextFv(&fvCursor); fv != nullptr; prevFv = fv, fv = values.GetNextFv(&fvCursor))
     {
         // These values are watched with a refresh of once per second, so comparing with the previous value
         // should be sufficient.
@@ -203,10 +234,10 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
         {
             case DCGM_FT_DOUBLE:
             {
-                double delta = values[i].value.dbl - values[i - 1].value.dbl;
+                double delta = fv->value.dbl - prevFv->value.dbl;
                 if (delta >= dfv.value.dbl)
                 {
-                    double timeDelta = (values[i].ts - startTime) / 1000000.0;
+                    double timeDelta = (fv->timestamp - startTime) / 1000000.0;
                     DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS_DBL, d, fieldName, dfv.value.dbl, delta, timeDelta);
@@ -218,10 +249,10 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
 
             case DCGM_FT_INT64:
             {
-                int delta = values[i].value.i64 - values[i - 1].value.i64;
+                int delta = fv->value.i64 - prevFv->value.i64;
                 if (delta >= dfv.value.i64)
                 {
-                    double timeDelta = (values[i].ts - startTime) / 1000000.0;
+                    double timeDelta = (fv->timestamp - startTime) / 1000000.0;
                     DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS, d, fieldName, dfv.value.i64, delta, timeDelta);

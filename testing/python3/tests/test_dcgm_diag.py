@@ -36,30 +36,14 @@ import shutil
 from ctypes import *
 from apps.app_runner import AppRunner
 from apps.dcgmi_app import DcgmiApp
-from dcgm_internal_helpers import inject_value
+from dcgm_field_injection_helpers import inject_value, inject_nvml_value
+import dcgm_field_injection_helpers
+
 
 # Most injection tests use SmStress plugin, which also sleeps for 3 seconds
 
 # These are used on all architectures but are specific to each.
 injection_offset = 3
-
-def injection_wrapper(handle, gpuId, fieldId, value, isInt):
-    # Sleep 1 second so that the insertion happens after the test run begins while not prolonging things
-    time.sleep(1)
-    if isInt:
-        ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuId, fieldId, value, 0)
-        assert ret == dcgm_structs.DCGM_ST_OK
-        ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuId, fieldId, value, 5)
-        assert ret == dcgm_structs.DCGM_ST_OK
-        ret = dcgm_internal_helpers.inject_field_value_i64(handle, gpuId, fieldId, value, 10)
-        assert ret == dcgm_structs.DCGM_ST_OK
-    else:
-        ret = dcgm_internal_helpers.inject_field_value_fp64(handle, gpuId, fieldId, value, 0)
-        assert ret == dcgm_structs.DCGM_ST_OK
-        ret = dcgm_internal_helpers.inject_field_value_fp64(handle, gpuId, fieldId, value, 5)
-        assert ret == dcgm_structs.DCGM_ST_OK
-        ret = dcgm_internal_helpers.inject_field_value_fp64(handle, gpuId, fieldId, value, 10)
-        assert ret == dcgm_structs.DCGM_ST_OK
 
 def check_diag_result_fail(response, gpuIndex, testIndex):
     return response.perGpuResponses[gpuIndex].results[testIndex].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL
@@ -132,18 +116,15 @@ def helper_check_diag_thermal_violation(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=10')
 
     # kick off a thread to inject the failing value while I run the diag
-    diag_thread = threading.Thread(target=injection_wrapper,
-                                   args =[handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
-                                          9223372036854775792, True])
-    diag_thread.start()
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 9223372036854775792, 0, repeatCount=3, repeatOffset=5)
     response = test_utils.diag_execute_wrapper(dd, handle)
-    diag_thread.join()
 
     assert response.gpuCount == len(gpuIds), "Expected %d gpus, but found %d reported" % (len(gpuIds), response.gpuCount)
     for gpuIndex in range(response.gpuCount):
         diag_assert_error_not_found(response, gpuIndex, dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "Thermal violations")
 
 """
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_if_mig_is_disabled()
 def TODO: add the injection nvml test here
@@ -153,11 +134,8 @@ def helper_check_diag_high_temp_fail(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=10')
 
     # kick off a thread to inject the failing value while I run the diag
-    diag_thread = threading.Thread(target=injection_wrapper,
-                                   args =[handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_GPU_TEMP, 120, True])
-    diag_thread.start()
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_GPU_TEMP, 120, 0, repeatCount=3, repeatOffset=5)
     response = test_utils.diag_execute_wrapper(dd, handle)
-    diag_thread.join()
 
     assert response.gpuCount == len(gpuIds), "Expected %d gpus, but found %d reported" % (len(gpuIds), response.gpuCount)
     diag_result_assert_fail(response, gpuIds[0], dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "Expected a failure due to 120 degree inserted temp.", dcgm_errors.DCGM_FR_TEMP_VIOLATION)
@@ -233,12 +211,13 @@ def find_throttle_failure(response, gpuId, pluginIndex):
 
     return False, ""
 
-def helper_test_thermal_violations_in_seconds(handle, gpuIds):
+def helper_test_thermal_violations_in_seconds(handle):
+    gpuIds = test_utils.create_injection_nvml_gpus(handle, 2)
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=10')
     dd.UseFakeGpus()
     fieldId = dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION
     injected_value = 2344122048
-    inject_value(handle, gpuIds[0], fieldId, injected_value, 10, True)
+    inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 10)
 
     # Verify that the inserted values are visible in DCGM before starting the diag
     assert dcgm_internal_helpers.verify_field_value(gpuIds[0], fieldId, injected_value, maxWait=5, numMatches=1), \
@@ -258,11 +237,11 @@ def helper_test_thermal_violations_in_seconds(handle, gpuIds):
         # Didn't find an error
         assert False, "Thermal violations were injected but not found in error message: '%s'." % errmsg
 
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
-@test_utils.run_with_injection_gpus(2)
-def test_thermal_violations_in_seconds_standalone(handle, gpuIds):
-    helper_test_thermal_violations_in_seconds(handle, gpuIds)
+def test_thermal_violations_in_seconds_standalone(handle):
+    helper_test_thermal_violations_in_seconds(handle)
 
 #####
 # Helper method for inserting errors and performing the diag
@@ -302,7 +281,7 @@ def helper_test_throttle_mask_fail_hw_slowdown(handle, gpuId):
         throttle_mask=0, shouldPass=False, failureMsg="Expected test to fail because of throttling"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_hw_slowdown(handle, gpuIds):
@@ -324,7 +303,7 @@ def helper_test_throttle_mask_ignore_hw_slowdown(handle, gpuId):
         failureMsg="Expected test to pass because throttle mask (interger bitmask) ignores the throttle reason"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_ignore_hw_slowdown(handle, gpuIds):
@@ -340,7 +319,7 @@ def helper_test_throttle_mask_ignore_hw_slowdown_string(handle, gpuId):
         failureMsg="Expected test to pass because throttle mask (named reason) ignores the throttle reason"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_ignore_hw_slowdown_string(handle, gpuIds):
@@ -357,7 +336,7 @@ def helper_test_throttle_mask_fail_double_inject_ignore_one(handle, gpuId):
         failureMsg="Expected test to fail because throttle mask (interger bitmask) ignores one of the throttle reasons"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_double_inject_ignore_one(handle, gpuIds):
@@ -374,7 +353,7 @@ def helper_test_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuId
         failureMsg="Expected test to fail because throttle mask (named reason) ignores one of the throttle reasons"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuIds):
@@ -390,7 +369,7 @@ def helper_test_throttle_mask_fail_ignore_different_throttle(handle, gpuId):
         failureMsg="Expected test to fail because throttle mask (interger bitmask) ignores different throttle reason"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_ignore_different_throttle(handle, gpuIds):
@@ -406,7 +385,7 @@ def helper_test_throttle_mask_fail_ignore_different_throttle_string(handle, gpuI
         failureMsg="Expected test to fail because throttle mask (named reason) ignores different throttle reason"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_ignore_different_throttle_string(handle, gpuIds):
@@ -422,7 +401,7 @@ def helper_test_throttle_mask_pass_no_throttle(handle, gpuId):
         failureMsg="Expected test to pass because there is no throttling"
     )
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_pass_no_throttle(handle, gpuIds):
@@ -570,7 +549,7 @@ def helper_verify_log_file_creation(handle, gpuIds):
         logger.info("The diagnostic had a problem when executing, so we cannot run this test.")
 
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_verify_log_file_creation_standalone(handle, gpuIds):
@@ -620,13 +599,13 @@ def helper_throttling_masking_failures(handle, gpuId):
     throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX)
     assert throttled, "Expected to find throttling failure, but did not: (%s)" % errMsg
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttling_masking_failures_standalone(handle, gpuIds):
     helper_throttling_masking_failures(handle, gpuIds[0])
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_handle_concurrency_standalone(handle, gpuIds):
@@ -837,7 +816,7 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
 
     assert verifed, "dcgmi JSON output did not pass verification"
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_per_gpu_responses_standalone_api(handle, gpuIds):
@@ -861,7 +840,7 @@ def test_dcgm_diag_per_gpu_responses_standalone_api(handle, gpuIds):
              shutil.rmtree(testDirectory, ignore_errors=True)
 
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_per_gpu_responses_standalone_dcgmi(handle, gpuIds):
@@ -874,7 +853,7 @@ def test_dcgm_diag_per_gpu_responses_standalone_dcgmi(handle, gpuIds):
     logger.info("Starting test for per gpu responses (dcgmi output)")
     helper_per_gpu_responses_dcgmi(handle, gpuIds, "SM Stress", "sm stress.test_duration=5,pcie.max_pcie_replays=1")
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_memtest_fails_standalone_dcgmi(handle, gpuIds):
@@ -898,7 +877,7 @@ def helper_test_diagnostic_config_usage(handle, gpuIds):
     assert response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_DIAGNOSTIC_INDEX].result != dcgm_structs.DCGM_DIAG_RESULT_PASS, \
                 "Should have a failure due to injected SBEs, but got passing result"
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_diagnostic_config_usage_standalone(handle, gpuIds):
@@ -915,7 +894,7 @@ def helper_test_dcgm_short_diagnostic_run(handle, gpuIds):
         assert response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_DIAGNOSTIC_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, \
                     "Should have passed the 15 second diagnostic for all GPUs"
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_memtest_failures_standalone(handle, gpuIds):
@@ -928,7 +907,7 @@ def test_memtest_failures_standalone(handle, gpuIds):
     assert response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result != dcgm_structs.DCGM_DIAG_RESULT_PASS, \
                 "Should have a failure due to injected DBEs, but got passing result"
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -944,6 +923,7 @@ def test_dcgm_short_memtest_run(handle, gpuIds):
         assert response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_MEMTEST_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, \
                     "Should have passed the 15 second diagnostic for all GPUs"
 
+@test_utils.run_with_diag_small_fb_mode() #Needs to be before host engine start
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -965,7 +945,7 @@ def test_dcgm_diag_output(handle, gpuIds):
     finally:
         del os.environ['__DCGM_DIAG_MEMTEST_FAIL_GPU']
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()

@@ -75,7 +75,7 @@ typedef enum testResult
 static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice cuDevice, CUcontext /*ctx*/)
 {
     unsigned int error_h;
-    size_t total, free;
+    size_t totalMem, freeMem;
     size_t size;
     CUdeviceptr alloc, errors;
     CUmodule mod;
@@ -113,16 +113,23 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuMemGetInfo(&free, &total);
+    cuRes = cuMemGetInfo(&freeMem, &totalMem);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
+    if (IsSmallFrameBufferModeSet())
+    {
+        minAllocationPcnt = 0.0;
+        freeMem           = std::min(freeMem, (size_t)256 * 1024 * 1024);
+        DCGM_LOG_DEBUG << "Setting small FB mode free " << freeMem;
+    }
+
     // alloc as much memory as possible
-    size = free;
+    size = freeMem;
     do
     {
         size = (size / 100) * 99;
-        if (size < (total * minAllocationPcnt))
+        if (size < (totalMem * minAllocationPcnt))
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
@@ -141,7 +148,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
         std::stringstream ss;
         ss.setf(std::ios::fixed, std::ios::floatfield);
         ss.precision(1);
-        ss << "Allocated " << size << " bytes (" << (float)(size * 100.0f / total) << "%)";
+        ss << "Allocated " << size << " bytes (" << (float)(size * 100.0f / totalMem) << "%)";
         memGlobals->memory->AddInfoVerboseForGpu(memGlobals->dcgmGpuIndex, ss.str());
     }
 
@@ -425,20 +432,6 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
     memGlobals->testParameters = tp;
 
     memGlobals->m_dcgmRecorder = new DcgmRecorder(memory->GetHandle());
-
-    char fieldGroupName[128];
-    char groupName[128];
-    snprintf(fieldGroupName, sizeof(fieldGroupName), "memory%d_field_group", gpuId);
-    snprintf(groupName, sizeof(groupName), "memory%d_group", gpuId);
-
-    std::vector<unsigned short> fieldIds;
-    fieldIds.push_back(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
-
-    std::vector<unsigned int> gpuIds;
-    gpuIds.push_back(gpuId);
-
-    // Allow 5 minutes for the test - that should be plenty
-    memGlobals->m_dcgmRecorder->AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 300.0);
 
     st = mem_init(memGlobals, gpuInfo);
     if (st)

@@ -122,7 +122,7 @@ helper_dcgm_field_values_since_callback = dcgm_agent.dcgmFieldValueEnumeration_f
 
 def py_helper_dcgm_field_values_since_callback_v2(entityGroupId, entityId, values, numValues, userData):
     userData = ctypes.cast(userData, ctypes.py_object).value
-    userData._ProcessValues(entityGroupId, entityId, values[0:numValues])
+    userData._ProcessValuesV2(entityGroupId, entityId, values[0:numValues])
     return 0
 
 helper_dcgm_field_values_since_callback_v2 = dcgm_agent.dcgmFieldValueEntityEnumeration_f(py_helper_dcgm_field_values_since_callback_v2)
@@ -133,6 +133,7 @@ Helper class for handling field value update callbacks and storing them in a .va
 class DcgmFieldValueCollection:
     def __init__(self, handle, groupId):
         self.values = {} #2D dictionary of [gpuId][fieldId](DcgmFieldValueTimeSeries)
+        self.entityValues = {} #3D dictionary of [entityGroupId][entityId][fieldId](DcgmFieldValueTimeSeries)
         self._handle = handle
         self._groupId = groupId
         self._numValuesSeen = 0
@@ -155,6 +156,27 @@ class DcgmFieldValueCollection:
                 self.values[gpuId][value.fieldId] = DcgmFieldValueTimeSeries()
 
             self.values[gpuId][value.fieldId].InsertValue(value)
+
+    '''
+    Helper function called by the callback py_helper_dcgm_field_values_since_callback_v2 to process individual field values
+    '''
+    def _ProcessValuesV2(self, entityGroupId, entityId, values):
+        self._numValuesSeen += len(values)
+
+        if entityGroupId not in self.entityValues:
+            self.entityValues[entityGroupId] = {}
+
+        if entityId not in self.entityValues[entityGroupId]:
+            self.entityValues[entityGroupId][entityId] = {}
+
+        for rawValue in values:
+            #Convert to python-friendly value
+            value = DcgmFieldValue(rawValue)
+
+            if value.fieldId not in self.entityValues[entityGroupId][entityId]:
+                self.entityValues[entityGroupId][entityId][value.fieldId] = DcgmFieldValueTimeSeries()
+
+            self.entityValues[entityGroupId][entityId][value.fieldId].InsertValue(value)
 
     '''
     Get the latest values for a fieldGroup and store them to the .values member variable

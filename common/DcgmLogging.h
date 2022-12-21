@@ -200,6 +200,7 @@ struct basic_format_string
     std::source_location loc;
 
     template <class T>
+    // NOLINTNEXTLINE(google-explicit-constructor)
     consteval basic_format_string(T const &arg, std::source_location loc = std::source_location::current())
         : fmt(arg)
         , loc(loc)
@@ -488,7 +489,7 @@ public:
 class DcgmLogging
 {
 public:
-    DcgmLogging(const DcgmLogging &other) = delete;
+    DcgmLogging(const DcgmLogging &other)            = delete;
     DcgmLogging &operator=(const DcgmLogging &other) = delete;
 
     static void init(const char *logFile,

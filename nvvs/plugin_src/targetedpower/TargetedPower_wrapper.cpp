@@ -25,7 +25,7 @@
 
 /*************************************************************************/
 ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
-    : m_testParameters(NULL)
+    : m_testParameters(nullptr)
     , m_dcgmCommErrorOccurred(false)
     , m_dcgmRecorderInitialized(true)
     , m_dcgmRecorder(handle)
@@ -78,6 +78,10 @@ ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
 ConstantPower::~ConstantPower()
 {
     Cleanup();
+    if (m_testParameters != nullptr)
+    {
+        delete m_testParameters;
+    }
 }
 
 void ConstantPower::Cleanup()

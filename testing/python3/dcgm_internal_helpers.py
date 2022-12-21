@@ -25,67 +25,7 @@ import sys
 
 from apps.app_runner import AppRunner
 from DcgmReader import DcgmReader
-
-
-class InjectionThread(threading.Thread):
-    """
-    Thread for injecting values into DCGM.
-    """
-    def __init__(self, handle, gpuId, fieldId, value, offset=0, interval=0.1, iterations=0, isInt=True):
-        """
-        Initialize the thread.
-        If 'iterations' is 0, thread inserts values (every 'interval' seconds) until the 'Stop()' method
-        is called (the thread may take up to 'interval' seconds to stop after the method is called).
-        Otherwise, thread inserts values (every 'interval' seconds) until values have been inserted
-        'iterations' number of times.
-
-        :param dcgmHandle_t* handle: Handle to the host engine
-        :param int gpuId: The GPU ID for which the values should be inserted.
-        :param int fieldId: The field for which the values should be inserted.
-        :param (float or int) value: The value to insert.
-        :param float offset: Offset (in seconds) for the inserted values, defaults to 0, optional
-        :param float interval: The interval (in seconds) at which values should be inserted, defaults to 0.1, optional
-        :param int iterations: The number of values to insert, defaults to 0 (insert until Stop() is called), optional
-        :param bool isInt: Whether the value to insert is an integer value, defaults to True, optional
-        """
-        super(InjectionThread, self).__init__()
-        self._handle = handle
-        self._gpuId = gpuId
-        self._injections = []
-        self._injections.append((fieldId, value))
-        self._offset = offset
-        self._interval = interval
-        if self._interval < 0.05:
-            self._interval = 0.05
-        self._iterations = iterations
-        self._isInt = isInt
-        self._stopRequested = threading.Event()
-        self.retCode = None
-
-    def AddInjectedValue(self, fieldId, value):
-        self._injections.append((fieldId, value))
-        self._interval = 0.04
-
-    def Stop(self):
-        """
-        Requests the thread to stop inserting values. Thread may continue running for up to 'interval' seconds
-        depending on when it checks for the stop request.
-        """
-        self._stopRequested.set()
-
-    def ShouldStop(self):
-        return self._stopRequested.is_set()
-
-    def run(self):
-        i = 0
-        while i < self._iterations or not self.ShouldStop():
-            for pair in self._injections:
-                self.retCode = inject_value(self._handle, self._gpuId, pair[0], pair[1], self._offset,
-                                             self._isInt, False)
-                if self.retCode != dcgm_structs.DCGM_ST_OK:
-                    return
-            time.sleep(self._interval)
-            i += 1
+from dcgm_field_injection_helpers import inject_value
 
 
 class FieldReader(DcgmReader):
@@ -115,78 +55,6 @@ class FieldReader(DcgmReader):
             if self.numMatchesSeen == self._desiredNumMatches:
                 self.passed = True
                 return
-
-def get_field_value_i64(entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
-    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
-    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = fieldId
-    field.status = 0
-    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    field.ts = int((time.time()+offset) * 1000000.0)
-    field.value.i64 = value
-
-    return field
-
-def get_field_value_fp64(entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
-    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
-    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = fieldId
-    field.status = 0
-    field.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
-    field.ts = int((time.time()+offset) * 1000000.0)
-    field.value.dbl = value
-
-    return field
-
-
-## Injection helpers
-# handle          - the handle to DCGM
-# entityId        - the id of the entity we're injecting the value for
-# fieldId         - the id of the field we're injecting a value into
-# value           - the value we're injecting
-# offset          - the offset - in seconds - for the timestamp the value should have
-# isInt           - True if the value is an integer, False if it's a floating point value (defaults to True)
-# verifyInsertion - True if we should fail if the value couldn't be injected, False = ignore. (default to True)
-# entityType      - the type of entity we're injecting the value for, defaults to GPU
-# repeatCount     - the number of repeated times we should inject the value, defaults to 0, meaning 1 injection
-# repeatOffset    - how many seconds to increment the offset by in each subsequent injection
-def inject_value(handle, entityId, fieldId, value, offset, isInt=True, verifyInsertion=True,
-                 entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=0, repeatOffset=1):
-    if isInt:
-        ret = inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-
-        for i in range(0, repeatCount):
-            if ret != dcgm_structs.DCGM_ST_OK:
-                # Don't continue inserting if it isn't working
-                break
-
-            offset = offset + repeatOffset
-            ret = inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-
-    else:
-
-        ret = inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-        for i in range(0, repeatCount):
-            if ret != dcgm_structs.DCGM_ST_OK:
-                # Don't continue inserting if it isn't working
-                break
-
-            offset = offset + repeatOffset
-            ret = inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=entityType)
-
-    if verifyInsertion:
-        assert ret == dcgm_structs.DCGM_ST_OK, "Could not inject value %s in field id %s" % (value, fieldId)
-    return ret
-
-def inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
-    field = get_field_value_i64(entityId, fieldId, value, offset, entityGroupId)
-
-    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
-
-def inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
-    field = get_field_value_fp64(entityId, fieldId, value, offset, entityGroupId)
-
-    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
 
 STANDALONE_DENYLIST_SCRIPT_NAME = "denylist_recommendations.py"
 def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantaneous=False):

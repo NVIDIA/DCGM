@@ -360,8 +360,11 @@ def main(cmdArgs):
     else:
         gpuIdStr = settings['dev_id']
 
-    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, dcgmiPrefix=prefix, runMode=3, debugLevel=5, \
-                debugFile=debugFile)
+    #Need to skip checks for down NvLinks or QA will file bugs
+    paramsStr = "pcie.test_nvlink_status=false"
+
+    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=3, 
+                debugLevel=5, debugFile=debugFile)
 
     # Start tests
     run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])

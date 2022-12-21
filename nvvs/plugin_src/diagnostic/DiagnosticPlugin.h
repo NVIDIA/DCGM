@@ -43,7 +43,6 @@
 class GpuBurnDevice : public PluginDevice
 {
 public:
-    CUdevice cuDevice {};
     CUcontext cuContext {};
 
     GpuBurnDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
@@ -71,23 +70,9 @@ public:
             throw d;
         }
 
-        cuSt = cuDeviceGetByPCIBusId(&cuDevice, pciBusId);
-        if (cuSt)
-        {
-            DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDeviceGetByPCIBusId");
-            cuGetErrorString(cuSt, &errorString);
-            if (errorString != NULL)
-            {
-                snprintf(buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cuSt), gpuId);
-                d.AddDetail(buf);
-            }
-            throw d;
-        }
-
         /* Initialize the runtime implicitly so we can grab its context */
-        log_debug("Attaching to cuda device index {}", (int)cuDevice);
-        cudaSetDevice(cuDevice);
+        log_debug("Attaching to cuda device index {}", cudaDeviceIdx);
+        cudaSetDevice(cudaDeviceIdx);
         cudaFree(0);
 
         /* Grab the runtime's context */
@@ -107,7 +92,7 @@ public:
         else if (cuContext == NULL)
         {
             // cuCtxGetCurrent doesn't return an error if there's not context, so check and attempt to create one
-            cuSt = cuCtxCreate(&cuContext, 0, cuDevice);
+            cuSt = cuCtxCreate(&cuContext, 0, cudaDeviceIdx);
 
             if (cuSt != CUDA_SUCCESS)
             {

@@ -35,7 +35,7 @@ public:
     HostEngineCommandLine()  = default;
     ~HostEngineCommandLine() = default;
 
-    HostEngineCommandLine(HostEngineCommandLine &&) = default;
+    HostEngineCommandLine(HostEngineCommandLine &&)            = default;
     HostEngineCommandLine &operator=(HostEngineCommandLine &&) = default;
     [[nodiscard]] std::string const &GetUnixSocketPath() const; //!< Host Engine Unix domain socket path
     [[nodiscard]] bool IsConnectionTcp() const;                 //!< Flag to indicate that connection is TCP/IP
@@ -54,6 +54,8 @@ public:
     [[nodiscard]] std::set<dcgmModuleId_t> const &GetDenylistedModules() const;
 
     [[nodiscard]] std::string const &GetServiceAccount() const; //!< Service account for unprivileged processes
+
+    [[nodiscard]] std::string const &GetHomeDir() const; //!< Home directory for the host engine
 
 private:
     struct Impl;

@@ -200,8 +200,7 @@ private:
                       timelib64_t endTime);
 
     /*************************************************************************/
-    TestParameters *m_testParameters; /* Parameters for this test, passed in from the framework.
-                                                               Set when the go() method is called. DO NOT FREE */
+    TestParameters *m_testParameters; /* Parameters for this test */
 
     DcgmRecorder m_dcgmRecorder;          /* DCGM stats recording interfact object */
     bool m_dcgmRecorderInitialized;       /* Has DcgmRecorder been initialized? */

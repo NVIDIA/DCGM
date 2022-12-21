@@ -258,7 +258,7 @@ def parse_command_line():
     if logfile != None:
         logging.basicConfig(level=numeric_log_level, filename=logfile, filemode='w+', format='%(asctime)s %(levelname)s: %(message)s')
     else:
-        logging.basicConfig(level=numeric_log_level, filemode='w+', format='%(asctime)s %(levelname)s: %(message)s')
+        logging.basicConfig(level=numeric_log_level, stream=sys.stdout, filemode='w+', format='%(asctime)s %(levelname)s: %(message)s')
 
 ###############################################################################
 def initialize_signal_handlers():
@@ -274,6 +274,8 @@ def main():
     parse_command_line()
 
     prometheus_obj = DcgmPrometheus()
+
+    logging.info("Starting Prometheus server on port " + str(g_settings['prometheusPort']))
 
     #start prometheus client server.
     start_http_server(g_settings['prometheusPort'])

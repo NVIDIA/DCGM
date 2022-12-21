@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef DCGM_AGENT_24__H
+#define DCGM_AGENT_24__H
 
 #include "dcgm_api_export.h"
 #include "dcgm_structs.h"
@@ -175,3 +176,5 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmIntrospectGetFieldExecTime(dcgmHandle_t pDcgmHa
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* DCGM_AGENT_24__H */

@@ -26,6 +26,9 @@
 #include "dcgm_test_structs.h"
 #include <dcgm_nvml.h>
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#include <nvml_injection.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -812,6 +815,19 @@ typedef struct
     unsigned int cmdRet; //!< OUT: Error code generated
 } dcgmMsgNvmlCreateInjectionGpu_v1;
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#define DCGM_MAX_EXTRA_KEYS 4
+typedef struct
+{
+    unsigned int gpuId;                             //!< IN: the DCGM gpu id of the device being injected
+    char key[DCGM_MAX_STR_LENGTH];                  //!< IN: The key for the NVML injected value
+    injectNvmlVal_t extraKeys[DCGM_MAX_EXTRA_KEYS]; //!< IN: extra keys, optional
+    unsigned int extraKeyCount;                     //!< IN: the number of extra keys
+    injectNvmlVal_t value;                          //!< IN: the NVML value being injected
+    unsigned int cmdRet;                            //!< OUT: Error code generated
+} dcgmMsgNvmlInjectDevice_v1;
+#endif
+
 /**
  * Verify that DCGM definitions that are copies of NVML ones match up with their NVML counterparts
  */
@@ -872,6 +888,8 @@ DCGM_CASSERT(dcgmNvLinkStatus_version3 == (long)0x30015bc, 3);
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus
 #define DCGM_ARRAY_CAPACITY(a) std::extent<decltype(a)>::value
+static_assert(NVML_COMPUTE_INSTANCE_PROFILE_COUNT == 0x08);
+static_assert(NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV2 == 0x09);
 #endif
 #endif
 

@@ -35,15 +35,6 @@ DcgmConfigManager::DcgmConfigManager(dcgmCoreCallbacks_t &dcc)
 }
 
 /*****************************************************************************/
-bool DcgmConfigManager::RunningAsRoot(void)
-{
-    if (geteuid() == 0)
-        return true;
-    else
-        return false;
-}
-
-/*****************************************************************************/
 DcgmConfigManager::~DcgmConfigManager()
 {
     int i;
@@ -374,7 +365,7 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         return DCGM_ST_VER_MISMATCH;
     }
 
-    if (!RunningAsRoot())
+    if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("SetConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
@@ -556,7 +547,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     }
     *numConfigs = 0;
 
-    if (!RunningAsRoot())
+    if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("GetCurrentConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
@@ -618,7 +609,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     std::vector<unsigned int> gpuIds;
     dcgmReturn_t dcgmReturn;
 
-    if (!RunningAsRoot())
+    if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("GetTargetConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
@@ -751,7 +742,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
 {
     dcgmReturn_t dcgmRet;
 
-    if (!RunningAsRoot())
+    if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("EnforceConfig not supported for non-root");
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);

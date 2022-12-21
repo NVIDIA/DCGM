@@ -23,12 +23,16 @@
 #include "NvvsJsonStrings.h"
 #include "dcgm_config_structs.h"
 #include "dcgm_structs.h"
+#include "serialize/DcgmJsonSerialize.hpp"
+
+#include <JsonResult.hpp>
 
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
 #include <iterator>
+#include <ranges>
 #include <sstream>
 #include <sys/epoll.h>
 #include <sys/stat.h>
@@ -433,6 +437,14 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
             cmdArgs.push_back(std::string(buf));
         }
     }
+
+    if (drd->totalIterations > 1)
+    {
+        cmdArgs.push_back("--current-iteration");
+        cmdArgs.push_back(fmt::format("{}", drd->currentIteration));
+        cmdArgs.push_back("--total-iterations");
+        cmdArgs.push_back(fmt::format("{}", drd->totalIterations));
+    }
 }
 
 /*****************************************************************************/
@@ -476,7 +488,8 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
 dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  std::string *stderrStr,
                                                  dcgmRunDiag_t *drd,
-                                                 std::string const &gpuIds) const
+                                                 std::string const &gpuIds,
+                                                 ExecuteWithServiceAccount useServiceAccount) const
 {
     std::vector<std::string> args;
 
@@ -485,7 +498,7 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
         return ret;
     }
 
-    return PerformExternalCommand(args, stdoutStr, stderrStr);
+    return PerformExternalCommand(args, stdoutStr, stderrStr, useServiceAccount);
 }
 
 /*****************************************************************************/
@@ -520,7 +533,8 @@ void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket) const
 /****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &args,
                                                      std::string *const stdoutStr,
-                                                     std::string *const stderrStr) const
+                                                     std::string *const stderrStr,
+                                                     ExecuteWithServiceAccount useServiceAccount) const
 {
     if (stdoutStr == nullptr || stderrStr == nullptr)
     {
@@ -561,7 +575,8 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
             return ret;
         }
 
-        auto serviceAccount = GetServiceAccount(m_coreProxy);
+        auto serviceAccount
+            = useServiceAccount == ExecuteWithServiceAccount::Yes ? GetServiceAccount(m_coreProxy) : std::nullopt;
 
         if (serviceAccount.has_value())
         {
@@ -775,6 +790,92 @@ dcgmReturn_t DcgmDiagManager::ResetGpuAndEnforceConfig(unsigned int gpuId,
     return DCGM_ST_GENERIC_ERROR;
 }
 
+namespace
+{
+/**
+ * @brief Result type of the \c ExecuteAndParseNvvsOutput function
+ */
+struct ExecuteAndParseNvvsResult
+{
+    dcgmReturn_t ret = DCGM_ST_GENERIC_ERROR; /*!< Return code of the nvvs execution. If value is DCGM_ST_OK, the
+                                               * \c results field is guaranteed to be populated. */
+    std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> results {}; /*!< Parsed results of the nvvs execution.
+                                                                      * This field is populated only if \c ret is
+                                                                      * DCGM_ST_OK.*/
+};
+
+static std::string_view SanitizeNvvsJson(std::string_view stdoutStr)
+{
+    /*
+     *  Sometimes during the tests NVML outputs warnings like
+     *  WARNING: Failed to acquire log file lock. File is in use by a different instance
+     *  right to the stdout where we expect only JSON objects.
+     */
+    std::string_view jsonStr = stdoutStr;
+    jsonStr.remove_prefix(std::min(jsonStr.find_first_of('{'), jsonStr.size()));
+    if (jsonStr.length() != stdoutStr.length())
+    {
+        log_warning("NVVS JSON output has some non-JSON prefix");
+        log_debug("NVVS non-JSON prefix: {}", stdoutStr.substr(0, stdoutStr.length() - jsonStr.length()));
+    }
+    return jsonStr;
+}
+
+/**
+ * @brief Executes nvvs and parses the JSON output to the DiagnosticResults structure
+ * @param self DiagManager instance
+ * @param response Response
+ * @param drd Diagnostic request data
+ * @param gpuIds GPU IDs
+ * @param useServiceAccount Whether to use the service account
+ * @return \c ExecuteAndParseNvvsResult structure.
+ *         If the ret field is \c DCGM_ST_OK, the results field is guaranteed to be populated.
+ * @note This function fills in the response system error information in case of an error.
+ */
+auto ExecuteAndParseNvvs(DcgmDiagManager &self,
+                         DcgmDiagResponseWrapper &response,
+                         dcgmRunDiag_t *drd,
+                         std::string const &gpuIds,
+                         DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
+                         = DcgmDiagManager::ExecuteWithServiceAccount::Yes) -> ExecuteAndParseNvvsResult
+{
+    ExecuteAndParseNvvsResult result {};
+    std::string stdoutStr;
+    std::string stderrStr;
+
+    result.ret = self.PerformNVVSExecute(&stdoutStr, &stderrStr, drd, gpuIds, useServiceAccount);
+    if (result.ret != DCGM_ST_OK)
+    {
+        auto const msg = fmt::format("Error when executing the diagnostic: {}\n"
+                                     "Nvvs stderr: \n{}\n",
+                                     errorString(result.ret),
+                                     stderrStr);
+        log_error(msg);
+        response.RecordSystemError({ msg.data(), msg.size() });
+
+        return result;
+    }
+
+    auto tmpResults
+        = DcgmNs::JsonSerialize::TryDeserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(SanitizeNvvsJson(stdoutStr));
+    if (!tmpResults.has_value())
+    {
+        auto const msg = fmt::format("Failed to parse the NVVS JSON output\n"
+                                     "Nvvs stderr: \n{}\n",
+                                     SanitizedString(stderrStr));
+        log_error(msg);
+        response.RecordSystemError({ msg.data(), msg.size() });
+
+        return { DCGM_ST_NVVS_ERROR, std::nullopt };
+    }
+
+    result.results = std::move(*tmpResults);
+
+    return result;
+}
+
+} // namespace
+
 dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrapper &response)
 {
     std::string stdoutStr;
@@ -865,21 +966,53 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
     }
     else
     {
-        ret = PerformNVVSExecute(&stdoutStr, &stderrStr, drd, indexList.str());
-        if (ret != DCGM_ST_OK)
+        auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, indexList.str());
+        if (nvvsResults.ret != DCGM_ST_OK)
         {
-            fmt::memory_buffer msg;
-            fmt::format_to(std::back_inserter(msg), "Error when executing the diagnostic: {}\n", errorString(ret));
-            fmt::format_to(std::back_inserter(msg), "Nvvs stderr:\n{}\n", stderrStr);
-            // Record a system error here even though it may be overwritten with a more specific one later
-            response.RecordSystemError({ msg.data(), msg.size() });
-
-            return ret;
+            // Do not overwrite the response system error here as it should already have more specific information
+            return nvvsResults.ret;
         }
 
+        /*
+         * For long and xlong tests, we need to run NVVS again with EUD enabled if previously NVVS was not run as root.
+         * So we validate if a service account was provided and that was did not have root privileges.
+         */
+        if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG)
+        {
+            if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
+            {
+                auto serviceAccountCredentials = GetUserCredentials((*serviceAccount).c_str());
+                if (serviceAccountCredentials.has_value())
+                {
+                    if ((*serviceAccountCredentials).gid != 0 && (*serviceAccountCredentials).uid != 0
+                        && std::ranges::count((*serviceAccountCredentials).groups, 0) <= 0)
+                    {
+                        // Record a system error here even though it may be overwritten with a more specific one later
+                        auto eudDrd     = *drd;
+                        eudDrd.validate = DCGM_POLICY_VALID_NONE;
+                        memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
+                        SafeCopyTo(eudDrd.testNames[0], (char const *)"eud");
+
+                        auto eudResults = ExecuteAndParseNvvs(
+                            *this, response, &eudDrd, indexList.str(), ExecuteWithServiceAccount::No);
+
+                        if (eudResults.ret != DCGM_ST_OK)
+                        {
+                            return eudResults.ret;
+                        }
+
+                        if (!DcgmNs::Nvvs::Json::MergeResults(*nvvsResults.results, std::move(*eudResults.results)))
+                        {
+                            log_error("Failed to merge the NVVS JSON output");
+                            response.RecordSystemError("Unable to merge JSON results for regular Diag and EUD tests");
+                            return DCGM_ST_NVVS_ERROR;
+                        }
+                    }
+                }
+            }
+        }
         // FillResponseStructure will return DCGM_ST_OK if it can parse the json, passing through
-        // better information than just DCGM_ST_NOT_CONFIGURED if NVVS had an error.
-        ret = FillResponseStructure(stdoutStr, response, drd->groupId, ret);
+        ret = FillResponseStructure(*nvvsResults.results, response, drd->groupId, ret);
         if (ret != DCGM_ST_OK && !stderrStr.empty())
         {
             DCGM_LOG_ERROR << fmt::format("Error happened during JSON parsing of NVVS output: {}", errorString(ret));
@@ -931,329 +1064,165 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
     {
         index = DCGM_PULSE_TEST_INDEX;
     }
+    else if (compareName == "eud")
+    {
+        index = DCGM_EUD_TEST_INDEX;
+    }
 
     return index;
 }
 
-bool DcgmDiagManager::IsMsgForThisTest(unsigned int testIndex, const std::string &msg, const std::string &gpuMsg)
-
+static void PopulateErrorDetail(std::vector<DcgmNs::Nvvs::Json::Warning> const &warnings, dcgmDiagErrorDetail_t &ed)
 {
-    // Memory tests are run individually per GPU
-    if (testIndex == DCGM_MEMORY_INDEX)
-        return true;
-
-    size_t pos = msg.find(gpuMsg);
-
-    if (pos == std::string::npos)
-    {
-        if (msg.find("GPU ") == std::string::npos)
-            return true; // If a GPU isn't specified, then assume it's a message for all GPUs
-        else
-            return false; // If a different GPU is specified, then it definitly isn't for us
-    }
-
-    // Make sure GPU 1 doesn't match GPU 12, etc.
-    if (msg[pos + gpuMsg.size()] == '\0' || msg[pos + gpuMsg.size()] == ' ')
-        return true;
-
-    return false;
+    namespace rv = std::ranges::views;
+    int errCode  = DCGM_FR_OK;
+    fmt::format_to_n(
+        ed.msg,
+        sizeof(ed.msg),
+        "{}",
+        fmt::join(rv::transform(warnings,
+                                [&errCode](auto const &w) {
+                                    if (w.error_code.has_value() && dcgmError_t(*w.error_code) != DCGM_FR_OK)
+                                    {
+                                        if (errCode == DCGM_FR_OK
+                                            || (dcgmErrorGetPriorityByCode(*w.error_code) == DCGM_ERROR_ISOLATE
+                                                && dcgmErrorGetPriorityByCode(errCode) != DCGM_ERROR_ISOLATE))
+                                        {
+                                            /*
+                                             * We either preserve first non-OK error code or first isolate-level code.
+                                             */
+                                            errCode = *w.error_code;
+                                        }
+                                    }
+                                    return w.message;
+                                }),
+                  ", "));
+    ed.code = errCode;
 }
 
-std::string DcgmDiagManager::JsonStringArrayToCsvString(Json::Value &array,
-                                                        unsigned int testIndex,
-                                                        const std::string &gpuMsg)
+dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult)
 {
-    std::stringstream message;
-    bool first         = true;
-    bool perGpuResults = gpuMsg.empty();
-    for (Json::ArrayIndex index = 0; index < array.size(); index++)
+    switch (nvvsResult)
     {
-        if (perGpuResults || IsMsgForThisTest(testIndex, array[index].asString(), gpuMsg))
+        case NVVS_RESULT_PASS:
+            return DCGM_DIAG_RESULT_PASS;
+        case NVVS_RESULT_WARN:
+            return DCGM_DIAG_RESULT_WARN;
+        case NVVS_RESULT_FAIL:
+            return DCGM_DIAG_RESULT_FAIL;
+        case NVVS_RESULT_SKIP:
+            return DCGM_DIAG_RESULT_SKIP;
+        default:
         {
-            if (!first)
-            {
-                message << ", ";
-            }
-            message << array[index].asString();
-            first = false;
+            log_error("Unknown NVVS result {}", static_cast<int>(nvvsResult));
+            return DCGM_DIAG_RESULT_FAIL;
         }
-    }
-    return message.str();
-}
-
-void DcgmDiagManager::PopulateErrorDetail(Json::Value &jsonResult, dcgmDiagErrorDetail_t &ed, double nvvsVersion)
-{
-    std::stringstream tmp;
-
-    ed.code = DCGM_FR_OK;
-
-    for (Json::ArrayIndex warnIndex = 0; warnIndex < jsonResult[NVVS_WARNINGS].size(); warnIndex++)
-    {
-        if (nvvsVersion >= 1.7)
-        {
-            if (warnIndex != 0)
-            {
-                tmp << ", " << jsonResult[NVVS_WARNINGS][warnIndex][NVVS_WARNING].asString();
-            }
-            else
-            {
-                tmp << jsonResult[NVVS_WARNINGS][warnIndex][NVVS_WARNING].asString();
-                ed.code = static_cast<dcgmError_t>(jsonResult[NVVS_WARNINGS][warnIndex][NVVS_ERROR_ID].asInt());
-            }
-        }
-        else
-        {
-            if (warnIndex != 0)
-            {
-                tmp << ", " << jsonResult[NVVS_WARNINGS][warnIndex].asString();
-            }
-            else
-            {
-                tmp << jsonResult[NVVS_WARNINGS][warnIndex].asString();
-                // Since we've run a legacy NVVS, we don't know the error code
-                ed.code = DCGM_FR_UNKNOWN;
-            }
-        }
-    }
-
-    if (!tmp.str().empty())
-    {
-        SafeCopyTo(ed.msg, tmp.str().c_str());
     }
 }
+// Since we've run a legacy NVVS, we don't know the error code
+static std::string InfoToCsvString(DcgmNs::Nvvs::Json::Info const &info)
+{
+    return fmt::format("{}", fmt::join(info.messages, ", "));
+}
 
-void DcgmDiagManager::FillTestResult(Json::Value &test,
+void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
                                      DcgmDiagResponseWrapper &response,
-                                     std::set<unsigned int> &gpuIdSet,
-                                     double nvvsVersion)
+                                     std::unordered_set<unsigned int> &gpuIdSet)
 {
-    // It's only relevant if it has a test name, results, a status, and gpu ids
-    if (test[NVVS_TEST_NAME].empty() || test[NVVS_RESULTS].empty())
-        return;
-
-    const double PER_GPU_NVVS_VERSION = 1.7;
-    bool perGpuResults                = (nvvsVersion >= PER_GPU_NVVS_VERSION);
-
-    DCGM_LOG_ERROR << test;
-    for (Json::ArrayIndex resultIndex = 0; resultIndex < test[NVVS_RESULTS].size(); resultIndex++)
+    if (test.name.empty() || test.results.empty())
     {
-        Json::Value &result = test[NVVS_RESULTS][resultIndex];
+        return;
+    }
 
-        if (result[NVVS_STATUS].empty() || result[NVVS_GPU_IDS].empty())
-        {
-            continue;
-        }
-
-        unsigned int testIndex = GetTestIndex(test[NVVS_TEST_NAME].asString());
-        std::string gpuIds     = result[NVVS_GPU_IDS].asString();
-        std::vector<std::string> gpuIdVec;
-
-        dcgmTokenizeString(gpuIds, ",", gpuIdVec);
+    for (auto const &result : test.results)
+    {
+        auto testIndex = GetTestIndex(test.name);
         if (testIndex == DCGM_CONTEXT_CREATE_INDEX)
         {
             testIndex = 0; // Context create is only ever run by itself, and its result is stored in index 0.
         }
 
-        dcgmDiagResult_t ret = StringToDiagResponse(result[NVVS_STATUS].asString());
+        dcgmDiagResult_t const ret = NvvsPluginResultToDiagResult(result.status.result);
 
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
         {
             // Software test
             dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
-            PopulateErrorDetail(result, ed, nvvsVersion);
-            response.AddErrorDetail(0, testIndex, test[NVVS_TEST_NAME].asString(), ed, ret);
-
-            for (size_t gpuIdIt = 0; gpuIdIt < gpuIdVec.size() && gpuIdSet.size() < gpuIdVec.size(); gpuIdIt++)
+            if (result.warnings.has_value())
             {
-                unsigned int gpuIndex = strtol(gpuIdVec[gpuIdIt].c_str(), NULL, 10);
-                response.SetGpuIndex(gpuIndex);
-                gpuIdSet.insert(gpuIndex);
+                ::PopulateErrorDetail(*result.warnings, ed);
+            }
+            response.AddErrorDetail(0, testIndex, test.name, ed, ret);
+
+            for (auto const gpuId : result.gpuIds.ids)
+            {
+                response.SetGpuIndex(gpuId);
+                gpuIdSet.insert(gpuId);
             }
 
             continue;
         }
 
-        for (size_t gpuIdIt = 0; gpuIdIt < gpuIdVec.size(); gpuIdIt++)
+        for (auto const gpuId : result.gpuIds.ids)
         {
-            char gpuMsg[128];
-            unsigned int gpuIndex = strtol(gpuIdVec[gpuIdIt].c_str(), NULL, 10);
+            response.SetGpuIndex(gpuId);
+            gpuIdSet.insert(gpuId);
+            response.SetPerGpuResponseState(testIndex, ret, gpuId);
 
-            response.SetGpuIndex(gpuIndex);
-            gpuIdSet.insert(gpuIndex);
-            response.SetPerGpuResponseState(testIndex, ret, gpuIndex);
-
-            if (perGpuResults)
-            {
-                gpuMsg[0] = '\0';
-            }
-            else
-            {
-                snprintf(gpuMsg, sizeof(gpuMsg), "GPU %u", gpuIndex);
-            }
-
-            if (result[NVVS_WARNINGS].empty() == false)
+            if (result.warnings.has_value() && !(*result.warnings).empty())
             {
                 dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
-                PopulateErrorDetail(result, ed, nvvsVersion);
-                response.AddErrorDetail(gpuIndex, testIndex, "", ed, ret);
+                ::PopulateErrorDetail(*result.warnings, ed);
+                response.AddErrorDetail(gpuId, testIndex, "", ed, ret);
             }
 
-            if (result[NVVS_INFO].empty() == false)
+            if (result.info.has_value() && !(*result.info).messages.empty())
             {
-                std::string info = JsonStringArrayToCsvString(result[NVVS_INFO], testIndex, gpuMsg);
-                response.AddPerGpuMessage(testIndex, info, gpuIndex, false);
+                std::string info = InfoToCsvString(*result.info);
+                response.AddPerGpuMessage(testIndex, info, gpuId, false);
             }
         }
     }
 }
 
-dcgmReturn_t DcgmDiagManager::ValidateNvvsOutput(const std::string &output,
-                                                 size_t &jsonStart,
-                                                 Json::Value &jv,
-                                                 DcgmDiagResponseWrapper &response)
-{
-    Json::CharReaderBuilder rBuilder;
-    std::stringstream jsonStream(output);
-
-    if (output.empty() || !Json::parseFromStream(rBuilder, jsonStream, &jv, nullptr))
-    {
-        // logging.c prepends error messages and we can't change it right now. Attempt to move to JSON beginning
-        // and parse.
-        bool failed = true;
-        jsonStart   = output.find('{');
-
-        if (jsonStart != std::string::npos)
-        {
-            std::string justJson = output.substr(jsonStart);
-
-            std::string jsonError;
-            jsonStream.str(justJson);
-            if (!justJson.empty() && Json::parseFromStream(rBuilder, jsonStream, &jv, &jsonError))
-            {
-                // We recovered. log the warning and move on with life
-                DCGM_LOG_DEBUG << "Found non JSON data in the NVVS stdout: " << output.substr(0, jsonStart);
-                failed = false; // flag to know we can proceed
-            }
-            else if (!jsonError.empty())
-            {
-                DCGM_LOG_ERROR << "JSON parse error: " << jsonError;
-            }
-        }
-
-        if (failed)
-        {
-            DCGM_LOG_ERROR << "Failed to parse NVVS output: " << SanitizedString(output);
-            response.RecordSystemError(fmt::format("Couldn't parse json: '{}'", output));
-            return DCGM_ST_DIAG_BAD_JSON;
-        }
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmDiagManager::FillResponseStructure(const std::string &output,
+dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::DiagnosticResults const &results,
                                                     DcgmDiagResponseWrapper &response,
                                                     int groupId,
                                                     dcgmReturn_t oldRet)
 {
     unsigned int numGpus = m_coreProxy.GetGpuCount(groupId);
-    Json::Value jValue;
-    std::set<unsigned int> gpuIdSet;
-    size_t jsonStart;
+    std::unordered_set<unsigned int> gpuIdSet;
+    response.InitializeResponseStruct(numGpus);
 
-    try
+    if (results.runtimeError.has_value())
     {
-        if (dcgmReturn_t ret = ValidateNvvsOutput(output, jsonStart, jValue, response); ret != DCGM_ST_OK)
-        {
-            return oldRet == DCGM_ST_OK ? ret : oldRet;
-        }
+        response.RecordSystemError((*results.runtimeError));
 
-        response.InitializeResponseStruct(numGpus);
-
-        if (jValue[NVVS_NAME].empty())
-        {
-            fmt::basic_memory_buffer<char, 1024> buf;
-            fmt::format_to(std::back_inserter(buf),
-                           "Received json that doesn't include required data {}. Full output: '{}'",
-                           NVVS_NAME,
-                           jsonStart == 0 ? output : output.substr(jsonStart));
-
-            auto msg = fmt::to_string(buf);
-            DCGM_LOG_ERROR << SanitizedString(msg);
-            response.RecordSystemError(msg);
-
-            // If oldRet was OK, change return code to indicate JSON error
-            if (oldRet == DCGM_ST_OK)
-            {
-                return DCGM_ST_DIAG_BAD_JSON;
-            }
-        }
-        else if (!jValue[NVVS_NAME][NVVS_RUNTIME_ERROR].empty())
-        {
-            response.RecordSystemError(jValue[NVVS_NAME][NVVS_RUNTIME_ERROR].asString());
-            // If oldRet was OK, change return code to indicate NVVS error
-            if (oldRet == DCGM_ST_OK)
-            {
-                return DCGM_ST_NVVS_ERROR;
-            }
-        }
-        else
-        {
-            if (!jValue[NVVS_NAME][NVVS_HEADERS].empty())
-            {
-                // Get nvvs version
-                double nvvsVersion = 0.0;
-                try
-                {
-                    nvvsVersion = std::stod(jValue[NVVS_NAME][NVVS_VERSION_STR].asString());
-                }
-                catch (...)
-                {
-                    DCGM_LOG_ERROR << "Failed to parse NVVS version string: "
-                                   << jValue[NVVS_NAME][NVVS_VERSION_STR].asString();
-                }
-                if (nvvsVersion < 0.1 || nvvsVersion > 10)
-                {
-                    // Default to version 1.3
-                    nvvsVersion = 1.3;
-                }
-
-                for (Json::ArrayIndex i = 0; i < jValue[NVVS_NAME][NVVS_HEADERS].size(); i++)
-                {
-                    Json::Value &category = jValue[NVVS_NAME][NVVS_HEADERS][i];
-
-                    if (category[NVVS_TESTS].empty())
-                    {
-                        break;
-                    }
-
-                    for (Json::ArrayIndex testIndex = 0; testIndex < category[NVVS_TESTS].size(); testIndex++)
-                    {
-                        FillTestResult(category[NVVS_TESTS][testIndex], response, gpuIdSet, nvvsVersion);
-                    }
-                }
-
-                response.SetGpuCount(gpuIdSet.size());
-            }
-        }
+        return oldRet == DCGM_ST_OK ? DCGM_ST_NVVS_ERROR : oldRet;
     }
-    catch (Json::Exception const &err)
+    else if (results.categories.has_value())
     {
-        DCGM_LOG_ERROR << "Could not parse JSON received from NVVS: " << err.what();
-        response.RecordSystemError(fmt::format("Couldn't parse json: '{}'", output));
-        return DCGM_ST_DIAG_BAD_JSON;
+        // If oldRet was OK, change return code to indicate NVVS error
+        double nvvsVersion = results.version;
+        if (nvvsVersion < 1.7)
+        {
+            log_error("Unsupported NVVS response version. Should be at least 1.7 with per-GPU results");
+            return DCGM_ST_DIAG_BAD_JSON;
+        }
+
+        for (auto const &category : (*results.categories))
+        {
+            for (auto const &test : category.tests)
+            {
+                FillTestResult(test, response, gpuIdSet);
+            }
+        }
+
+        response.SetGpuCount(gpuIdSet.size());
     }
 
     // Do not mask old errors if there are any
     return oldRet;
-}
-
-dcgmDiagResult_t DcgmDiagManager::StringToDiagResponse(std::string_view result)
-{
-    return result == "PASS"   ? DCGM_DIAG_RESULT_PASS
-           : result == "SKIP" ? DCGM_DIAG_RESULT_SKIP
-           : result == "WARN" ? DCGM_DIAG_RESULT_WARN
-                              : DCGM_DIAG_RESULT_FAIL;
 }
 
 /*****************************************************************************/

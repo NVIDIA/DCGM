@@ -21,6 +21,8 @@ Conflicts=dcgm.service
 User=root
 PrivateTmp=false
 
+Environment="DCGM_HOME_DIR=/var/log/nvidia-dcgm"
+
 ExecStart=@DCGM_HOSTENGINE_LOCATION@/nv-hostengine -n --service-account nvidia-dcgm
 
 Restart=on-abort

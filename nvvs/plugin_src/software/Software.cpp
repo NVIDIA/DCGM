@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fmt/format.h>
 #include <iostream>
 #include <stdexcept>
 #include <string.h>
@@ -81,7 +82,9 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     if (testParameters.GetString(SW_STR_DO_TEST) == "denylist")
         checkDenylist();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "permissions")
-        checkPermissions();
+    {
+        checkPermissions(testParameters.GetBoolFromString(SW_STR_CHECK_FILE_CREATION));
+    }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "libraries_nvml")
         checkLibraries(CHECK_NVML);
     else if (testParameters.GetString(SW_STR_DO_TEST) == "libraries_cuda")
@@ -132,7 +135,7 @@ bool Software::CountDevEntry(const std::string &entryName)
     return false;
 }
 
-bool Software::checkPermissions()
+bool Software::checkPermissions(bool checkFileCreation)
 {
     // check how many devices we see reporting and compare to
     // the number of devices listed in /dev
@@ -188,6 +191,24 @@ bool Software::checkPermissions()
         AddError(d);
         SetResult(NVVS_RESULT_WARN);
     }
+
+    if (checkFileCreation)
+    {
+        // Make sure we have the ability to create files in this directory
+        if (euidaccess(".", W_OK))
+        {
+            char cwd[1024];
+            const char *working_dir = getcwd(cwd, sizeof(cwd));
+
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            d.SetCode(DCGM_FR_FILE_CREATE_PERMISSIONS);
+            d.SetMessage(fmt::format("No permission to create a file in directory '{}'", working_dir));
+            d.SetNextSteps(DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT);
+            AddError(d);
+            return false;
+        }
+    }
+
     return false;
 }
 

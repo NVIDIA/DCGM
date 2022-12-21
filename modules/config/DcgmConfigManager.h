@@ -179,12 +179,6 @@ private:
      *****************************************************************************/
     dcgmReturn_t SetConfigGpu(unsigned int gpuId, dcgmConfig_t *setConfig, DcgmConfigManagerStatusList *statusList);
 
-    /*****************************************************************************
-     * This method returns nonzero if the host engine is running as root and 0 if the host
-     * engine is running as non-root.
-     *****************************************************************************/
-    bool RunningAsRoot(void);
-
     /* Array of currently-active target configs. These can be null, so you may have to alloc them */
     dcgmConfig_t *m_activeConfig[DCGM_MAX_NUM_DEVICES];
 

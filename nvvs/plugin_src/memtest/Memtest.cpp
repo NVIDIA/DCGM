@@ -42,6 +42,7 @@
 #include "CudaCommon.h"
 #include "PluginStrings.h"
 #include "inc/tests.h"
+#include <PluginCommon.h>
 #include <chrono>
 #include <random>
 
@@ -740,10 +741,16 @@ void MemtestWorker::run()
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, m_device->cuDevice);
 
-    unsigned long totmem = prop.totalGlobalMem;
+    size_t totmem = prop.totalGlobalMem;
+
+    if (IsSmallFrameBufferModeSet())
+    {
+        totmem = std::min((size_t)128 * 1024 * 1024, totmem);
+        DCGM_LOG_DEBUG << "Setting small FB mode total size " << totmem;
+    }
 
     // need to leave a little headroom or later calls will fail
-    unsigned int tot_num_blocks = totmem / BLOCKSIZE - 16;
+    size_t tot_num_blocks = totmem / BLOCKSIZE - 16;
 
     cuSt = cuCtxSetCurrent(m_device->cuContext);
     if (cuSt)
@@ -754,8 +761,8 @@ void MemtestWorker::run()
 
     DCGM_LOG_INFO << "Attached to device " << m_device->gpuId << "successfully.";
 
-    size_t free, total;
-    cudaMemGetInfo(&free, &total);
+    size_t freeMem, totalMem;
+    cudaMemGetInfo(&freeMem, &totalMem);
 
     if (allocate_small_mem() != DCGM_ST_OK)
     {
@@ -765,7 +772,7 @@ void MemtestWorker::run()
 
     char *ptr = NULL;
 
-    tot_num_blocks = std::min(tot_num_blocks, (unsigned int)(free / BLOCKSIZE - 16));
+    tot_num_blocks = std::min(tot_num_blocks, (size_t)(freeMem / BLOCKSIZE - 16));
     do
     {
         tot_num_blocks -= 16; // magic number 16 MB

@@ -94,13 +94,13 @@ public:
     /**
      * Copy constructors. Deleted for now to force moving
      */
-    DcgmMessage(const DcgmMessage &other) = delete;
+    DcgmMessage(const DcgmMessage &other)     = delete;
     DcgmMessage &operator=(DcgmMessage other) = delete;
 
     /**
      * Move Constructors
      */
-    DcgmMessage(DcgmMessage &&other) = default;
+    DcgmMessage(DcgmMessage &&other)            = default;
     DcgmMessage &operator=(DcgmMessage &&other) = default;
 
     /**

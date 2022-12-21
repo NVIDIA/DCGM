@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
-
+#
+# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 set -ex
 
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
 PKGNAME=fmt
-PKGVER=8.0.1
+PKGVER=9.1.0
 PKG="${PKGNAME}-${PKGVER}"
 PKGDIR="${HOME}/.build/${TARGET}/${PKG}"
 SOURCE="https://github.com/fmtlib/fmt/archive/refs/tags/${PKGVER}.tar.gz"
-SHA512SUM="643e68d5b2e0e9c83231ab2b0036596a6297b1d9ed6bd7b1172bee4ff134c8af8f09174c06c94225132c1b635b0977ea4ce783748d7bd76a9a0b5ad597456c84"
+SHA512SUM="a18442042722dd48e20714ec034a12fcc0576c9af7be5188586970e2edf47529825bdc99af366b1d5891630c8dbf6f63bfa9f012e77ab3d3ed80d1a118e3b2be"
 
 mkdir -p ${PKGDIR}_{build,src}
 mkdir -p ${PKGDIR}_build_{Release,Debug,RelWithDebInfo}

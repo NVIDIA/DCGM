@@ -13,6 +13,7 @@
 # limitations under the License.
 import dcgm_structs_internal
 import dcgm_agent_internal
+import dcgm_field_injection_helpers
 import dcgm_fields
 import dcgm_structs
 import pydcgm
@@ -21,37 +22,6 @@ import argparse
 import sys
 import time
 
-##############################################################################
-
-## Injection helpers
-def inject_value(handle, gpuId, fieldId, value, offset, isInt=True):
-    if isInt:
-        ret = inject_field_value_i64(handle, gpuId, fieldId, value, offset)
-    else:
-        ret = inject_field_value_fp64(handle, gpuId, fieldId, value, offset)
-    assert ret == dcgm_structs.DCGM_ST_OK, "Could not inject value %s in field id %s" % (value, fieldId)
-
-def inject_field_value_i64(handle, gpuId, fieldId, value, offset):
-    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
-    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = fieldId
-    field.status = 0
-    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    field.ts = int((time.time()+offset) * 1000000.0)
-    field.value.i64 = value
-
-    return dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
-
-def inject_field_value_fp64(handle, gpuId, fieldId, value, offset):
-    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
-    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = fieldId
-    field.status = 0
-    field.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
-    field.ts = int((time.time()+offset) * 1000000.0)
-    field.value.dbl = value
-
-    return dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
 
 ##############################################################################
 
@@ -80,14 +50,14 @@ if args.iterations is not None and args.iterations < 0:
 handle = pydcgm.DcgmHandle(None, 'localhost', dcgm_structs.DCGM_OPERATION_MODE_AUTO)
 
 if not args.loop:
-    inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
+    dcgm_field_injection_helpers.inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
     sys.exit(0)
 
 # loop
 try:
     i = 0
     while args.iterations == 0 or i < args.iterations:
-        inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
+        dcgm_field_injection_helpers.inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
         time.sleep(args.interval)
         i += 1
 except KeyboardInterrupt:

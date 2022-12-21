@@ -97,6 +97,11 @@ public:
         return GetTestDisplayName(m_index);
     }
 
+    dcgmPerGpuTestIndices_t GetTestIndex() const
+    {
+        return m_index;
+    }
+
     /***************************PRIVATE**********************************/
 private:
     /* Methods */

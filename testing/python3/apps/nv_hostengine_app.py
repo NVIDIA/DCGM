@@ -51,11 +51,12 @@ class NvHostEngineApp(app_runner.AppRunner):
             ]
     supported_profile_tools = ['callgrind', 'massif']
     
-    def __init__(self, args=None, profile_dir=None):
+    def __init__(self, args=None, profile_dir=None, heEnv=None):
         '''
         args: special args to execute nv-hostengine with
         profile_dir: output directory to create which will contain 
                      profiling files if profiling is enabled.
+        heEnv: Dictionary of environmental variables to set for the host engine's process
         '''
         path = NvHostEngineApp.paths[utils.platform_identifier]
         self.hostengine_executable = path
@@ -87,7 +88,7 @@ class NvHostEngineApp(app_runner.AppRunner):
         else:
             args.extend(pidArgs)
 
-        super(NvHostEngineApp, self).__init__(path, args)
+        super(NvHostEngineApp, self).__init__(path, args, cwd=None, env=heEnv)
         
         if not test_utils.noLogging and not option_parser.options.profile:
             self.dcgm_trace_fname = os.path.join(logger.log_dir, "app_%03d_dcgm_trace.log" % (self.process_nb))
@@ -96,7 +97,7 @@ class NvHostEngineApp(app_runner.AppRunner):
         else:
             self.dcgm_trace_fname = None
 
-        #logger.error("env: %s" % (str(self.env)))
+        #logger.error("env: %s; heEnv: %s" % (str(self.env), str(heEnv)))
 
     def _check_valgrind_installed(self):
         output = subprocess.check_output('which valgrind', shell=True).strip()
@@ -240,10 +241,13 @@ class NvHostEngineApp(app_runner.AppRunner):
             logger.debug("Pid file %s not found" % self._pidFilename)
             return None
 
-        with open(self._pidFilename) as fp:
-            lines = fp.readlines()
-            if len(lines) == 0:
-                return self._getpid_old()
+        try:
+            with open(self._pidFilename) as fp:
+                lines = fp.readlines()
+                if len(lines) == 0:
+                    return self._getpid_old()
+        except FileNotFoundError: # Likely another process delete race
+            return None
 
             pidStr = lines[0].strip()
         #logger.error("pidStr %s" % pidStr)

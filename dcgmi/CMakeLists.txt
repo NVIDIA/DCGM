@@ -27,6 +27,7 @@ target_link_libraries(dcgmi_objects
         dcgm_thread_interface
         common_interface
         diag_interface
+        nvmli_interface
 )
 target_sources(dcgmi_objects
     PRIVATE

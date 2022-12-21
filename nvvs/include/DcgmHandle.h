@@ -31,9 +31,9 @@ public:
     {}
 
     DcgmHandle(DcgmHandle &&other) noexcept;
-    DcgmHandle(const DcgmHandle &other) = delete;
+    DcgmHandle(const DcgmHandle &other)            = delete;
     DcgmHandle &operator=(const DcgmHandle &other) = delete;
-    DcgmHandle &operator                           =(dcgmHandle_t handle);
+    DcgmHandle &operator=(dcgmHandle_t handle);
     ~DcgmHandle();
 
     /*

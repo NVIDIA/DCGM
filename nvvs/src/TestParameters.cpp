@@ -350,9 +350,15 @@ int TestParameters::SetSubTestDouble(std::string subTest, std::string key, doubl
 }
 
 /*****************************************************************************/
-std::string TestParameters::GetString(std::string key)
+std::string TestParameters::GetString(std::string_view key) const
 {
-    return m_globalParameters[key]->GetString();
+    auto it = m_globalParameters.find(key);
+    if (it == m_globalParameters.end())
+    {
+        log_warning("Tried to get unknown parameter {}", key);
+        return "";
+    }
+    return it->second->GetString();
 }
 
 /*****************************************************************************/
@@ -378,9 +384,14 @@ int TestParameters::GetBoolFromString(std::string key)
 }
 
 /*****************************************************************************/
-double TestParameters::GetDouble(std::string key)
+double TestParameters::GetDouble(std::string_view key) const
 {
-    return m_globalParameters[key]->GetDouble();
+    auto it = m_globalParameters.find(key);
+    if (it == m_globalParameters.end())
+    {
+        return 0.0;
+    }
+    return it->second->GetDouble();
 }
 
 /*****************************************************************************/
@@ -390,7 +401,7 @@ std::string TestParameters::GetSubTestString(std::string subTest, std::string ke
 }
 
 /*****************************************************************************/
-bool TestParameters::HasKey(const std::string &key)
+bool TestParameters::HasKey(const std::string &key) const
 {
     return m_globalParameters.find(key) != m_globalParameters.end();
 }

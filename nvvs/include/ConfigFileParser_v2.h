@@ -78,10 +78,10 @@ public:
         , requirePersistence(true)
     {}
 
-    NvvsFrameworkConfig(const NvvsFrameworkConfig &) = default;
-    NvvsFrameworkConfig(NvvsFrameworkConfig &&)      = default;
+    NvvsFrameworkConfig(const NvvsFrameworkConfig &)            = default;
+    NvvsFrameworkConfig(NvvsFrameworkConfig &&)                 = default;
     NvvsFrameworkConfig &operator=(NvvsFrameworkConfig const &) = default;
-    NvvsFrameworkConfig &operator=(NvvsFrameworkConfig &&) = default;
+    NvvsFrameworkConfig &operator=(NvvsFrameworkConfig &&)      = default;
 };
 
 /* Class that represents a run, nominally set via the configuration file */

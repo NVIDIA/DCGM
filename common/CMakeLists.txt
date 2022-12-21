@@ -13,6 +13,7 @@
 # limitations under the License.
 find_package(fmt REQUIRED)
 add_subdirectory(DcgmThread)
+add_subdirectory(serialize)
 
 add_subdirectory(transport)
 add_subdirectory(tests)
@@ -26,14 +27,14 @@ target_sources(buildinfo_objects PRIVATE
 
 add_library(common_interface INTERFACE)
 target_include_directories(common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(common_interface INTERFACE sdk_nvml_interface dcgm_interface)
+target_link_libraries(common_interface INTERFACE sdk_nvml_interface dcgm_interface nvmli_interface)
 
 add_library(dcgm_logging STATIC)
 target_sources(dcgm_logging PRIVATE 
     DcgmLogging.cpp
     DcgmLogging.h
 )
-target_link_libraries(dcgm_logging PUBLIC common_interface fmt::fmt)
+target_link_libraries(dcgm_logging PUBLIC common_interface fmt::fmt nvmli_interface)
 
 add_library(dcgm_mutex STATIC)
 target_sources(dcgm_mutex PRIVATE

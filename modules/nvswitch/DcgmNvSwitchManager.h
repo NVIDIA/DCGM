@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <map>
+
 #include "dcgm_nvswitch_structs.h"
 
 #include <DcgmCoreProxy.h>
@@ -25,6 +27,14 @@
 
 namespace DcgmNs
 {
+
+using phys_id_t      = uint32_t;
+using uuid_p         = nscq_uuid_t *;
+using label_t        = nscq_label_t;
+using link_id_t      = uint8_t;
+using lane_vc_id_t   = uint8_t;
+using nvlink_state_t = nscq_nvlink_state_t;
+
 class DcgmNvSwitchFieldWatch
 {
 public:
@@ -310,76 +320,46 @@ protected:
                                         DcgmFvBuffer &buf,
                                         const std::vector<dcgm_field_update_info_t> &entities);
 
+public:
     /*************************************************************************/
-    /**
-     * Update Switch Int32 fields (generally temperatures).
+    /*
+     * Here we define Index lookup functions to check if an index matches
+     * any of the supplied entities. The index is a tuple composed of the
+     * various indicies provided in an NSCQ lambda callback and it is expected
+     * this function will be fully specialized for each index case of multiple
+     * indicies (switch, link, lane, etc.)
      */
-    dcgmReturn_t UpdateSwitchInt32Fields(unsigned short fieldId,
-                                         DcgmFvBuffer &buf,
-                                         const std::vector<dcgm_field_update_info_t> &entities,
-                                         timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Switch Throughput fields.
-     */
-    dcgmReturn_t UpdateSwitchThroughputFields(unsigned short fieldId,
-                                              DcgmFvBuffer &buf,
+    template <typename... indexTypes>
+    std::optional<dcgmGroupEntityPair_t> Find(unsigned short fieldId,
                                               const std::vector<dcgm_field_update_info_t> &entities,
-                                              timelib64_t now);
+                                              std::tuple<indexTypes...> index)
+    {
+        return std::nullopt;
+    }
 
     /*************************************************************************/
     /**
-     * Update Switch Error Vector fields.
+     * Update Fields.
      */
-    dcgmReturn_t UpdateSwitchErrorVectorFields(unsigned short fieldId,
-                                               DcgmFvBuffer &buf,
-                                               const std::vector<dcgm_field_update_info_t> &entities,
-                                               timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Link Uint64 fields (generally error counters).
-     */
-    dcgmReturn_t UpdateLinkUint64Fields(unsigned short fieldId,
-                                        DcgmFvBuffer &buf,
-                                        const std::vector<dcgm_field_update_info_t> &entities,
-                                        timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Link Throughput fields.
-     */
-    dcgmReturn_t UpdateLinkThroughputFields(unsigned short fieldId,
-                                            DcgmFvBuffer &buf,
-                                            const std::vector<dcgm_field_update_info_t> &entities,
-                                            timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Link Error Vector fields.
-     */
-    dcgmReturn_t UpdateLinkErrorVectorFields(unsigned short fieldId,
-                                             DcgmFvBuffer &buf,
-                                             const std::vector<dcgm_field_update_info_t> &entities,
-                                             timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Lane CRC and ECC fields.
-     */
-    dcgmReturn_t UpdateLaneUint64Fields(unsigned short fieldId,
-                                        DcgmFvBuffer &buf,
-                                        const std::vector<dcgm_field_update_info_t> &entities,
-                                        timelib64_t now);
-
-    /*************************************************************************/
-    /**
-     * Update Lane latency fields.
-     */
-    dcgmReturn_t UpdateLaneLatencyFields(unsigned short fieldId,
-                                         DcgmFvBuffer &buf,
-                                         const std::vector<dcgm_field_update_info_t> &entities,
-                                         timelib64_t now);
+    template <typename nscqFieldType, typename storageType, bool is_vector, typename... indexTypes>
+    dcgmReturn_t UpdateFields(unsigned short fieldId,
+                              DcgmFvBuffer &buf,
+                              const std::vector<dcgm_field_update_info_t> &entities,
+                              timelib64_t now);
 };
+
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p> index);
+
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p, link_id_t> index);
+
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p, link_id_t, lane_vc_id_t> index);
 } // namespace DcgmNs

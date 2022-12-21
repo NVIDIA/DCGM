@@ -38,7 +38,7 @@ public:
     DcgmWatcher(DcgmWatcher &&)      = default;
 
     DcgmWatcher &operator=(DcgmWatcher const &) = default;
-    DcgmWatcher &operator=(DcgmWatcher &&) = default;
+    DcgmWatcher &operator=(DcgmWatcher &&)      = default;
 
     DcgmWatcherType_t watcherType;     /*!< Watcher type */
     dcgm_connection_id_t connectionId; /*!< Connection associated with this watcher */

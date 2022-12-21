@@ -199,3 +199,8 @@ def test_dcgm_reader_all_since_last_call_false_repeat(handle):
 @test_utils.run_with_initialized_client()
 def test_dcgm_reader_all_since_last_call_true_repeat(handle):
     util_dcgm_reader_all_since_last_call(handle, True, True)
+
+        
+
+
+

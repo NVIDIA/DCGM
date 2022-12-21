@@ -710,4 +710,9 @@ FileHandle const &PipePair::BorrowReceiver() const &
 {
     return m_receiver;
 }
+
+bool IsRunningAsRoot()
+{
+    return geteuid() == 0;
+}
 } // namespace DcgmNs::Utils

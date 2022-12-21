@@ -103,7 +103,15 @@ DCGM_FR_PENDING_ROW_REMAP                   = 85 # Row remapping is pending
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE            = 86 # P2P copy test detected an error writing to this GPU
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE            = 87 # P2P copy test detected an error writing from this GPU
 DCGM_FR_NVSWITCH_NVLINK_DOWN                = 88 # An NVLink is down
-DCGM_FR_ERROR_SENTINEL                      = 89 # MUST BE THE LAST ERROR CODE
+DCGM_FR_EUD_BINARY_PERMISSIONS              = 89 # EUD binary permissions are incorrect
+DCGM_FR_EUD_NON_ROOT_USER                   = 90 # EUD plugin is not running as root
+DCGM_FR_EUD_SPAWN_FAILURE                   = 91 # EUD plugin failed to spawn the EUD binary
+DCGM_FR_EUD_TIMEOUT                         = 92 # EUD plugin timed out
+DCGM_FR_EUD_ZOMBIE                          = 93 # EUD process remains running after the plugin considers it finished
+DCGM_FR_EUD_NON_ZERO_EXIT_CODE              = 94 # EUD process exited with a non-zero exit code
+DCGM_FR_EUD_TEST_FAILED                     = 95 # EUD test failed
+DCGM_FR_FILE_CREATE_PERMISSIONS             = 96 # We cannot write a file in this directory.
+DCGM_FR_ERROR_SENTINEL                      = 97 # MUST BE THE LAST ERROR CODE
 
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
@@ -259,6 +267,7 @@ DCGM_FR_PENDING_ROW_REMAP_MSG         = "GPU %u has pending row remappings"
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
 DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG      = "NVSwitch %u's NvLink %u is down."
+DCGM_FR_FILE_CREATE_PERMISSIONS_MSG   = "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -369,6 +378,8 @@ DCGM_FR_PENDING_ROW_REMAP_NEXT        = ""
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT     = "Please check fabric manager and initialization logs to figure out why the link is down. You may also need to run a field diagnostic."
+DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT  = "Please restart the hostengine with parameter --home-dir to specify a different home directory for the " \
+    "diagnostic or change permissions in the current directory to allow the user to write files there."
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

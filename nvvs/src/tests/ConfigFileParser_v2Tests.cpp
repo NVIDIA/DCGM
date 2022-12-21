@@ -214,3 +214,19 @@ SCENARIO("FrameworkConfig::SetFrameworkConfigValue (nvvs_fwcfg_enum field, const
     CHECK_CONFIG_FIELD_VALUE(fc, scriptable, false);
     CHECK(res == false);
 }
+
+SCENARIO("Load Default Config")
+{
+    std::string error("We caught an exception parsing the default yaml!");
+    FrameworkConfig fc;
+    try
+    {
+        // We will throw an error if there's a problem with the default yaml
+        ConfigFileParser_v2 cfp("", fc);
+        cfp.Init();
+    }
+    catch (std::runtime_error &e)
+    {
+        CHECK(error == e.what());
+    }
+}

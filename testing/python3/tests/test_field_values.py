@@ -834,10 +834,12 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     gpuId = gpuIds[0]
     fieldIdVars = {}
 
+    ignoreFieldIds = set(('DCGM_FI_MAX_FIELDS', 'DCGM_FI_UNKNOWN', 'DCGM_FI_FIRST_NVSWITCH_FIELD_ID', 
+                         'DCGM_FI_LAST_NVSWITCH_FIELD_ID'))
+
     #Find all of the numerical field IDs by looking at the dcgm_fields module's attributes
     for moduleAttribute in list(dcgm_fields.__dict__.keys()):
-        if moduleAttribute.find("DCGM_FI_") == 0 and moduleAttribute != 'DCGM_FI_MAX_FIELDS' and \
-           moduleAttribute != 'DCGM_FI_UNKNOWN':
+        if moduleAttribute.find("DCGM_FI_") == 0 and moduleAttribute not in ignoreFieldIds:
             fieldIdVars[moduleAttribute] = dcgm_fields.__dict__[moduleAttribute]
 
     migModeEnabled = test_utils.is_mig_mode_enabled()
@@ -883,7 +885,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         if fieldId in exceptionFieldIds:
             continue #Don't check fields that are excluded from testing
         #Skip NvSwitch fields since they are pushed from fabric manager rather than polled
-        if fieldId >= dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 and fieldId <= dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
+        if fieldId >= dcgm_fields.DCGM_FI_FIRST_NVSWITCH_FIELD_ID and fieldId <= dcgm_fields.DCGM_FI_LAST_NVSWITCH_FIELD_ID:
             continue
 
         if fieldValue.status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
@@ -1070,8 +1072,10 @@ def helper_nvswitch_monitoring(handle, switchIds):
     groupObj = systemObj.GetGroupWithEntities('SwitchGroup', entities)
 
     fieldIds = []
-    for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00, dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P05):
-        fieldIds.append(i)
+    for i in range(dcgm_fields.DCGM_FI_FIRST_NVSWITCH_FIELD_ID, dcgm_fields.DCGM_FI_LAST_NVSWITCH_FIELD_ID):
+        fieldMeta = dcgm_fields.DcgmFieldGetById(i)
+        if fieldMeta is not None:
+            fieldIds.append(i)
 
     fieldGroupObj = pydcgm.DcgmFieldGroup(handleObj, "my_group", fieldIds)
 

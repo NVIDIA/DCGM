@@ -24,6 +24,7 @@
 #include "PluginStrings.h"
 #include "dcgm_structs_internal.h"
 #include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
 #include <PluginInterface.h>
 #include <cstdlib>
 #include <iostream>
@@ -560,6 +561,15 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
                           static_cast<unsigned int>(gpuArch));
                 gpu->setDeviceIsSupported(true);
             }
+#ifdef INJECTION_LIBRARY_AVAILABLE
+            // Fake NVML injection GPUs need this else if block.
+            else if (status == DcgmEntityStatusOk)
+            {
+                DCGM_LOG_DEBUG << "dcgmIndex " << gpuIds[i] << ", brand " << gpuBrand << " arch " << gpuArch
+                               << " is supported.";
+                gpu->setDeviceIsSupported(true);
+            }
+#endif
             else
             {
                 log_debug("dcgmIndex {}, brand {}, arch {} is not supported (only supporting fake gpus)",
@@ -677,18 +687,16 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
     //    then all available GPU objects are included in the set
     // b) the "tests" vector is also exclusionary. If tests.size() == 0 then all available test
     //    objects are included in the set
-    for (unsigned int i = 0; i < gpuSets.size(); i++)
+    for (auto &&gpuSet : gpuSets)
     {
         bool first_pass = true;
 
         // go through the vector of tests requested and try to match them with an actual test.
         // push a warning if no match found
-        for (std::vector<std::map<std::string, std::string>>::iterator reqIt = gpuSets[i]->testsRequested.begin();
-             reqIt != gpuSets[i]->testsRequested.end();
-             ++reqIt)
+        for (auto &&req : gpuSet->testsRequested)
         {
             bool found                    = false;
-            std::string requestedTestName = (*reqIt)["name"];
+            std::string requestedTestName = req["name"];
             std::string compareTestName   = requestedTestName;
             std::transform(compareTestName.begin(), compareTestName.end(), compareTestName.begin(), ::tolower);
 
@@ -717,17 +725,20 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
 
             if (found)
             {
-                fillTestVectors(suite, Test::NVVS_CLASS_SOFTWARE, gpuSets[i].get());
-                fillTestVectors(suite, Test::NVVS_CLASS_HARDWARE, gpuSets[i].get());
-                fillTestVectors(suite, Test::NVVS_CLASS_INTEGRATION, gpuSets[i].get());
-                fillTestVectors(suite, Test::NVVS_CLASS_PERFORMANCE, gpuSets[i].get());
+                fillTestVectors(suite, Test::NVVS_CLASS_SOFTWARE, gpuSet.get());
+                fillTestVectors(suite, Test::NVVS_CLASS_HARDWARE, gpuSet.get());
+                fillTestVectors(suite, Test::NVVS_CLASS_INTEGRATION, gpuSet.get());
+                fillTestVectors(suite, Test::NVVS_CLASS_PERFORMANCE, gpuSet.get());
             }
             // then check the test groups
             else
             {
-                if (first_pass == true)
+                /*
+                 * When diag module runs EUD with enabled service-account, the EUD is the only test in the command line.
+                 */
+                if (first_pass == true && compareTestName != "eud")
                 {
-                    fillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, gpuSets[i].get());
+                    fillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, gpuSet.get());
                     first_pass = false;
                 }
                 std::map<std::string, std::vector<Test *>> groups       = m_tf->getTestGroups();
@@ -761,7 +772,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
 
 
                             m_allowlist->getDefaultsByDeviceId(
-                                compareRequestedName, gpuSets[i]->gpuObjs[0]->getDeviceId(), tp);
+                                compareRequestedName, gpuSet->gpuObjs[0]->getDeviceId(), tp);
 
                             if (nvvsCommon.parms.size() > 0)
                             {
@@ -772,7 +783,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
 
                             (*testIt)->pushArgVectorElement(Test::NVVS_CLASS_CUSTOM, tp);
-                            gpuSets[i]->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
+                            gpuSet->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
                             break;
                         }
                     }
@@ -818,13 +829,23 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             if (suite == NVVS_SUITE_MEDIUM || suite == NVVS_SUITE_LONG)
                 testNames.push_back(MEMORY_PLUGIN_NAME);
             if (suite == NVVS_SUITE_LONG)
+            {
                 testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
+                if (DcgmNs::Utils::IsRunningAsRoot())
+                {
+                    testNames.push_back(EUD_PLUGIN_NAME);
+                }
+            }
             if (suite == NVVS_SUITE_XLONG)
             {
                 testNames.push_back(MEMORY_PLUGIN_NAME);
                 testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
                 testNames.push_back(MEMTEST_PLUGIN_NAME);
                 testNames.push_back(PULSE_TEST_PLUGIN_NAME);
+                if (DcgmNs::Utils::IsRunningAsRoot())
+                {
+                    testNames.push_back(EUD_PLUGIN_NAME);
+                }
             }
             type = HARDWARE_TEST_OBJS;
             break;
@@ -837,7 +858,6 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             if (suite == NVVS_SUITE_LONG || suite == NVVS_SUITE_XLONG)
             {
                 testNames.push_back(MEMBW_PLUGIN_NAME);
-                testNames.push_back(SMSTRESS_PLUGIN_NAME);
                 testNames.push_back(TS_PLUGIN_NAME);
                 testNames.push_back(TP_PLUGIN_NAME);
             }
@@ -890,7 +910,7 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
 
             tp->AddString(PS_PLUGIN_NAME, (*it));
             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
-
+            tp->AddDouble(PS_SUITE_LEVEL, (double)suite);
 
             (*testIt)->pushArgVectorElement(testClass, tp);
             set->AddTestObject(type, *testIt);
@@ -1231,6 +1251,23 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             "failure check interval",
             cmd);
 
+        TCLAP::ValueArg<unsigned int> currentIteration(
+            "",
+            "current-iteration",
+            "Specify which iteration of the diagnostic is currently running.",
+            false,
+            0,
+            "current iteration",
+            cmd);
+
+        TCLAP::ValueArg<unsigned int> totalIterations("",
+                                                      "total-iterations",
+                                                      "Specify how many iterations of the diagnostic will be run.",
+                                                      false,
+                                                      1,
+                                                      "total iterations",
+                                                      cmd);
+
 
         cmd.parse(argc, argv);
 
@@ -1240,20 +1277,22 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             configFile = configFileArg;
         }
 
-        listGpus                   = listGpusArg.getValue();
-        listTests                  = listTestsArg.getValue();
-        nvvsCommon.verbose         = verboseArg.getValue();
-        nvvsCommon.pluginPath      = pluginPathArg.getValue();
-        nvvsCommon.parse           = parseArg.getValue();
-        nvvsCommon.quietMode       = quietModeArg.getValue();
-        nvvsCommon.configless      = configLessArg.getValue();
-        nvvsCommon.fakegpusString  = fakeGpusArg.getValue();
-        nvvsCommon.statsOnlyOnFail = statsOnFailArg.getValue();
-        nvvsCommon.indexString     = indexArg.getValue();
-        nvvsCommon.parmsString     = parms.getValue();
-        nvvsCommon.jsonOutput      = jsonArg.getValue();
-        nvvsCommon.dcgmHostname    = dcgmHost.getValue();
-        nvvsCommon.fromDcgm        = fromDcgmArg.getValue();
+        listGpus                    = listGpusArg.getValue();
+        listTests                   = listTestsArg.getValue();
+        nvvsCommon.verbose          = verboseArg.getValue();
+        nvvsCommon.pluginPath       = pluginPathArg.getValue();
+        nvvsCommon.parse            = parseArg.getValue();
+        nvvsCommon.quietMode        = quietModeArg.getValue();
+        nvvsCommon.configless       = configLessArg.getValue();
+        nvvsCommon.fakegpusString   = fakeGpusArg.getValue();
+        nvvsCommon.statsOnlyOnFail  = statsOnFailArg.getValue();
+        nvvsCommon.indexString      = indexArg.getValue();
+        nvvsCommon.parmsString      = parms.getValue();
+        nvvsCommon.jsonOutput       = jsonArg.getValue();
+        nvvsCommon.dcgmHostname     = dcgmHost.getValue();
+        nvvsCommon.fromDcgm         = fromDcgmArg.getValue();
+        nvvsCommon.currentIteration = currentIteration.getValue();
+        nvvsCommon.totalIterations  = totalIterations.getValue();
         nvvsCommon.SetStatsPath(statsPathArg.getValue());
 
         this->initWaitTime = initializationWaitTime.getValue();

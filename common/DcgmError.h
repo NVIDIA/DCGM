@@ -73,9 +73,10 @@ public:
         return m_code;
     }
 
-    void SetCode(dcgmError_t code)
+    DcgmError &SetCode(dcgmError_t code)
     {
         m_code = code;
+        return *this;
     }
 
     /*****************************************************************************/
@@ -91,11 +92,12 @@ public:
     }
 
     /*****************************************************************************/
-    void SetMessage(const std::string &msg)
+    DcgmError &SetMessage(const std::string &msg)
     {
         m_message = msg;
 
         SetFullError();
+        return *this;
     }
 
     /*****************************************************************************/
@@ -123,7 +125,7 @@ public:
     }
 
     /*****************************************************************************/
-    void AddDcgmError(dcgmReturn_t ret)
+    DcgmError &AddDcgmError(dcgmReturn_t ret)
     {
         std::stringstream buf;
         const char *msg = errorString(ret);
@@ -139,21 +141,24 @@ public:
         m_errorDetail = buf.str();
 
         SetFullError();
+        return *this;
     }
 
     /*****************************************************************************/
-    void SetNextSteps(const std::string &nextSteps)
+    DcgmError &SetNextSteps(const std::string &nextSteps)
     {
         m_nextSteps = nextSteps;
 
         SetFullError();
+        return *this;
     }
 
-    void AddDetail(const std::string &additionalDetail)
+    DcgmError &AddDetail(const std::string &additionalDetail)
     {
         m_details = additionalDetail;
 
         SetFullError();
+        return *this;
     }
 
     /*****************************************************************************/
@@ -173,9 +178,10 @@ public:
         return m_gpuId;
     }
 
-    void SetGpuId(unsigned int gpuId)
+    DcgmError &SetGpuId(unsigned int gpuId)
     {
         m_gpuId = gpuId;
+        return *this;
     }
 
     /***************************PRIVATE**********************************/

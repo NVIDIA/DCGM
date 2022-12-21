@@ -32,7 +32,7 @@ if (BUILD_TESTING)
 
     target_include_directories(diagnostictests PRIVATE ${YAML_INCLUDE_DIR})
     target_include_directories(diagnostictests PRIVATE ${JSONCPP_INCLUDE_DIR})
-    target_include_directories(diagnostictests PRIVATE ${CUDA11_INCLUDE_DIR})
+    target_include_directories(diagnostictests PRIVATE ${CUDA12_INCLUDE_DIR})
     target_include_directories(diagnostictests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
     target_include_directories(diagnostictests PRIVATE ..) # include the plugin dir
     target_include_directories(diagnostictests PRIVATE ../../include) # include the plugin_src/include dir
@@ -53,6 +53,7 @@ if (BUILD_TESTING)
     target_link_libraries(diagnostictests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
     target_link_libraries(diagnostictests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
     target_link_libraries(diagnostictests PRIVATE sdk_nvml_essentials_objects)
+    target_link_libraries(diagnostictests PUBLIC nvvs_plugins_common_objects)
     
     target_link_options(diagnostictests PRIVATE -rdynamic)
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "DcgmError.h"
+#include "DcgmFvBuffer.h"
 #include "dcgm_agent.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
@@ -41,7 +42,10 @@ public:
 
     /*
      */
-    void AddValue(unsigned short fieldId, dcgmFieldValue_v1 &val);
+    void AddValue(dcgm_field_entity_group_t entityGroupId,
+                  dcgm_field_eid_t entityId,
+                  unsigned short fieldId,
+                  dcgmFieldValue_v1 &val);
 
     /*
      * Return true if this fieldId has already been recorded in this timeseries
@@ -65,7 +69,7 @@ public:
 private:
     dcgm_field_eid_t m_entityId; // entity id that we're dealing with
     // Map of fieldIds to values in timeseries order
-    std::map<unsigned short, std::vector<dcgmFieldValue_v1>> m_fieldValueTimeSeries;
+    std::map<unsigned short, DcgmFvBuffer> m_fieldValueTimeSeries;
 };
 
 class DcgmValuesSinceHolder

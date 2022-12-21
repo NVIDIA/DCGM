@@ -19,7 +19,7 @@ set -euo pipefail
 DIR="$(dirname $(realpath $0))"
 source "$DIR/_common.sh"
 
-pushd "$DCGM_DIR"
+pushd "$DCGM_DIR" >/dev/null
 
 LONG_OPTS=help,no-build
 ! PARSED=$(getopt --options= --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
@@ -87,7 +87,7 @@ if [[ -z "$NOBUILD" ]]; then
     echo 'amd64 aarch64 ppc64le' | xargs -d' ' -I'{}' -P3 bash -c 'set -ex; ./build.sh --release --deb --rpm --arch {}'
 fi
 
-ls _out/Linux-*-release/*rpm | egrep -v test | xargs -n1 ./scripts/verify_package_contents/generate_package_contents.sh --rpm
-ls _out/Linux-*-release/*deb | egrep -v test | xargs -n1 ./scripts/verify_package_contents/generate_package_contents.sh --deb
+ls _out/Linux-*-release/*rpm | grep -Ev test | xargs -n1 ./scripts/verify_package_contents/generate_package_contents.sh --rpm
+ls _out/Linux-*-release/*deb | grep -Ev test | xargs -n1 ./scripts/verify_package_contents/generate_package_contents.sh --deb
 
 popd

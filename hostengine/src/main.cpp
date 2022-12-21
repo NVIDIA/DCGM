@@ -481,6 +481,12 @@ int main(int argc, char **argv)
     auto const serviceAccount = cmdLine.GetServiceAccount();
     params.serviceAccount     = serviceAccount.c_str();
 
+    auto const diagHomeDir = cmdLine.GetHomeDir();
+    if (diagHomeDir.empty() == false)
+    {
+        setenv(DCGM_HOME_DIR_VAR_NAME, diagHomeDir.c_str(), 1);
+    }
+
     ret = dcgmStartEmbedded_v2((dcgmStartEmbeddedV2Params_v1 *)&params);
 
     dcgmHandle = params.dcgmHandle;

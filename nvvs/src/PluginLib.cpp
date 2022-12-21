@@ -189,7 +189,7 @@ bool PluginLib::VerifyTerminated(const char *str, unsigned int bufSize)
 /*****************************************************************************/
 dcgmReturn_t PluginLib::GetPluginInfo()
 {
-    dcgmDiagPluginInfo_t pluginInfo;
+    dcgmDiagPluginInfo_t pluginInfo {};
     dcgmReturn_t ret;
 
     try
@@ -344,7 +344,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     const dcgmDiagPluginTestParameter_t *parms = parameters.data();
 
     // We don't need to set this up for the software plugin
-    if (m_pluginName != "software")
+    if (m_pluginName != "software" && m_pluginName != "eud")
     {
         m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
     }
@@ -459,7 +459,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
 
     // We don't write a stats file or perform these checks for the software plugin
-    if (m_pluginName != "software")
+    if (m_pluginName != "software" && m_pluginName != "eud")
     {
         m_coreFunctionality.PluginEnded(GetFullLogFileName(), m_testParameters, GetResult(), m_customStats);
         std::vector<DcgmError> coreErrors = m_coreFunctionality.GetErrors();

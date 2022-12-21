@@ -73,6 +73,7 @@ if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     define_dcgmproftester(10)
 endif()
 define_dcgmproftester(11)
+define_dcgmproftester(12)
 
 set(DCGMPROFTESTER ${DCGMPROFTESTER_TARGETS} PARENT_SCOPE)
 

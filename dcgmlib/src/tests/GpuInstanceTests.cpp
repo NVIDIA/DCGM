@@ -35,3 +35,34 @@ TEST_CASE("GpuInstance: DriveGpuInstanceName")
         REQUIRE(name == c);
     }
 }
+
+TEST_CASE("GpuInstance: ProfileType Check")
+{
+    nvmlGpuInstance_t instance {};
+    nvmlGpuInstancePlacement_t placement {};
+    nvmlGpuInstanceProfileInfo_t profileInfo {};
+
+    for (unsigned int i = NVML_GPU_INSTANCE_PROFILE_1_SLICE; i < NVML_GPU_INSTANCE_PROFILE_COUNT; i++)
+    {
+        DcgmGpuInstance dgi(DcgmNs::Mig::GpuInstanceId { 0 },
+                            i,
+                            DcgmNs::Mig::GpuInstanceProfileId { i },
+                            instance,
+                            placement,
+                            profileInfo,
+                            i);
+
+        // The NVML GPU instance profiles start at 0 and count up. The DCGM profiles need to subtract their offset
+        // in order to match.
+        REQUIRE(dgi.GetMigProfileType() - DcgmMigProfileGpuInstanceSlice1 == i);
+    }
+
+    DcgmGpuInstance dgi(DcgmNs::Mig::GpuInstanceId { 0 },
+                        0,
+                        DcgmNs::Mig::GpuInstanceProfileId { 0 },
+                        instance,
+                        placement,
+                        profileInfo,
+                        NVML_GPU_INSTANCE_PROFILE_COUNT);
+    REQUIRE(dgi.GetMigProfileType() == DcgmMigProfileNone);
+}

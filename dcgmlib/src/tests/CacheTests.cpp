@@ -206,7 +206,7 @@ void callback(unsigned int gpuId, void *userData)
 TEST_CASE("CacheManager: Test Event Register")
 {
     DcgmCacheManager cm;
-    dcgmcmEventSubscription_t sub;
+    dcgmcmEventSubscription_t sub {};
     sub.type     = DcgmcmEventTypeMigReconfigure;
     sub.fn.migCb = nullptr;
 

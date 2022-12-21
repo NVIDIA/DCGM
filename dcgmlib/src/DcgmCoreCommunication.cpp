@@ -283,6 +283,7 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetEntityNvLinkLinkStatus(dcgm_module
         nvsMsg.header.connectionId = header->connectionId;
         nvsMsg.header.requestId    = header->requestId;
         nvsMsg.header.version      = dcgm_nvswitch_msg_get_link_states_version;
+        nvsMsg.entityId            = nls.request.entityId;
 
         nls.response.ret = DcgmHostEngineHandler::Instance()->ProcessModuleCommand(&nvsMsg.header);
 

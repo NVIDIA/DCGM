@@ -14,9 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-useradd -r -M -s /usr/sbin/nologin nvidia-dcgm
+serviceUser=nvidia-dcgm
+useradd -r -M -s /usr/sbin/nologin ${serviceUser}
 retcode=$?
 
 if [ $retcode -ne 0 ] && [ $retcode -ne 9 ]; then
     exit $retcode
 fi
+
+defaultLogDir=/var/log/nvidia-dcgm
+mkdir -p ${defaultLogDir}
+chown ${serviceUser}:${serviceUser} ${defaultLogDir}
+retcode=$?
+if [ $retcode -ne 0 ]; then
+    exit $retcode
+fi
+chmod 755 ${defaultLogDir}
+retcode=$?
+if [ $retcode -ne 0 ]; then
+    exit $retcode
+fi
+

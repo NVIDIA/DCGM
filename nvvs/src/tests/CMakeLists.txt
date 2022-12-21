@@ -40,6 +40,7 @@ if (BUILD_TESTING)
             PluginLibTests.cpp
             PluginCoreFunctionalityTests.cpp
             CustomDataHolderTests.cpp
+            JsonResultTests.cpp
     )
 
     target_include_directories(nvvscoretests PRIVATE ${YAML_INCLUDE_DIR})
@@ -49,6 +50,7 @@ if (BUILD_TESTING)
     #       for any libdcgm function that is needed.    
     target_link_libraries(nvvscoretests
         PRIVATE
+            serialize
             nvvs_without_main_objects
             Catch2::Catch2
             fmt::fmt

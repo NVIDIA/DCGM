@@ -16,6 +16,7 @@
 #ifndef _NVVS_NVVS_JsonOutput_H
 #define _NVVS_NVVS_JsonOutput_H
 
+#include "JsonResult.hpp"
 #include "NvvsCommon.h"
 #include "NvvsJsonStrings.h"
 #include "Output.h"
