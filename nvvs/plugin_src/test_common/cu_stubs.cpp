@@ -55,6 +55,11 @@ CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags, CUdevice dev)
     return CUDA_SUCCESS;
 }
 
+CUresult CUDAAPI cuCtxDestroy(CUcontext ctx)
+{
+    return CUDA_SUCCESS;
+}
+
 CUresult cuCtxGetCurrent(CUcontext *pctx)
 {
     return CUDA_SUCCESS;

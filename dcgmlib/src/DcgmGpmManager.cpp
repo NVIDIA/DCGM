@@ -52,6 +52,7 @@ dcgmReturn_t DcgmGpmManagerEntity::RemoveConnectionWatches(dcgm_connection_id_t 
 
 /****************************************************************************/
 dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
+                                                       DcgmGpuInstance *const pGpuInstance,
                                                        timelib64_t now,
                                                        timelib64_t updateInterval,
                                                        dcgmSampleMap::iterator &latestSampleIt)
@@ -69,8 +70,35 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
 
     /* Fetch a new sample, insert it, and return its iterator */
 
-    latestSampleIt          = m_gpmSamples.try_emplace(now, DcgmGpmSample()).first;
-    nvmlReturn_t nvmlReturn = nvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
+    latestSampleIt = m_gpmSamples.try_emplace(now, DcgmGpmSample()).first;
+
+    bool isMigSample        = m_entityPair.entityGroupId == DCGM_FE_GPU_I;
+    nvmlReturn_t nvmlReturn = NVML_SUCCESS;
+    if (isMigSample)
+    {
+        if (!pGpuInstance)
+        {
+            log_error("Received null pGpuInstance");
+            return DCGM_ST_BADPARAM;
+        }
+
+        DcgmNs::Mig::Nvml::GpuInstanceId giIndex = pGpuInstance->GetNvmlInstanceId();
+        // A MIG sample is a GPU-I level aggregation of GPU-CI counters. If this
+        // GPU-I has no child GPU-CIs, skip calling NVML and return BLANK values
+        if (pGpuInstance->GetComputeInstanceCount() == 0)
+        {
+            unsigned int entityId = m_entityPair.entityId;
+            log_warning("Requested samples for GPU-I {} (NVML id: {}) which has no child GPU-CIs. No data available",
+                        entityId,
+                        giIndex.id);
+            return DCGM_ST_NO_DATA;
+        }
+        nvmlReturn = nvmlGpmMigSampleGet(nvmlDevice, giIndex.id, latestSampleIt->second.m_sample);
+    }
+    else
+    {
+        nvmlReturn = nvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
+    }
     if (nvmlReturn != NVML_SUCCESS)
     {
         DCGM_LOG_ERROR << "Got nvml st " << nvmlReturn << " from nvmlGpmSampleGet().";
@@ -83,6 +111,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
 
 /****************************************************************************/
 dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
+                                                   DcgmGpuInstance *const pGpuInstance,
                                                    double &value,
                                                    unsigned int fieldId,
                                                    timelib64_t now)
@@ -106,7 +135,7 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     }
 
     dcgmSampleMap::iterator latestSampleIt;
-    dcgmReturn = MaybeFetchNewSample(nvmlDevice, now, updateInterval, latestSampleIt);
+    dcgmReturn = MaybeFetchNewSample(nvmlDevice, pGpuInstance, now, updateInterval, latestSampleIt);
     if (dcgmReturn != DCGM_ST_OK)
     {
         /* Any error is already logged by MaybeFetchNewSample */
@@ -226,6 +255,7 @@ dcgmReturn_t DcgmGpmManager::RemoveWatcher(dcgm_entity_key_t entityKey, DcgmWatc
 /****************************************************************************/
 dcgmReturn_t DcgmGpmManager::GetLatestSample(dcgm_entity_key_t entityKey,
                                              nvmlDevice_t nvmlDevice,
+                                             DcgmGpuInstance *const pGpuInstance,
                                              double &value,
                                              timelib64_t now)
 {
@@ -242,7 +272,7 @@ dcgmReturn_t DcgmGpmManager::GetLatestSample(dcgm_entity_key_t entityKey,
         return DCGM_ST_NOT_WATCHED;
     }
 
-    return entityIt->second.GetLatestSample(nvmlDevice, value, entityKey.fieldId, now);
+    return entityIt->second.GetLatestSample(nvmlDevice, pGpuInstance, value, entityKey.fieldId, now);
 }
 
 /****************************************************************************/

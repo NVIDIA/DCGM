@@ -100,7 +100,7 @@ def helper_dcgm_config_get_attributes(handle):
             memClock = attributes.clockSets.clockSet[i].memClock
             smClock = attributes.clockSets.clockSet[i].smClock
 
-            assert memClock > 0 and memClock < 10000, "gpuId %d got memClock out of range 0 - 10000: %d" % (gpuId, memClock)
+            assert memClock > 0 and memClock < 20000, "gpuId %d got memClock out of range 0 - 20000: %d" % (gpuId, memClock)
             assert smClock > 0 and smClock < 10000, "gpuId %d got smClock out of range 0 - 10000: %d" % (gpuId, smClock)
 
 @test_utils.run_with_embedded_host_engine()

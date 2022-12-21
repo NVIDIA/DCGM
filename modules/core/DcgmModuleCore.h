@@ -16,6 +16,7 @@
 // #pragma once
 #pragma once
 
+#include "DcgmInjectionNvmlManager.h"
 #include "DcgmModule.h"
 #include "dcgm_core_structs.h"
 #include <DcgmCacheManager.h>
@@ -79,6 +80,11 @@ public:
     dcgmReturn_t ProcessFieldGroupGetAll(dcgm_core_msg_fieldgroup_get_all_t &msg);
     dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gpu_instance_hierarchy_t &msg);
     dcgmReturn_t ProcessProfGetMetricGroups(dcgm_core_msg_get_metric_groups_t &msg);
+    dcgmReturn_t ProcessNvmlInjectFieldValue(dcgm_core_msg_nvml_inject_field_value_t &msg);
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    dcgmReturn_t ProcessNvmlInjectDevice(dcgm_core_msg_nvml_inject_device_t &msg);
+#endif
+    dcgmReturn_t ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg);
 
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 

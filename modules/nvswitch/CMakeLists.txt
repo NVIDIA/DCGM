@@ -37,6 +37,12 @@ set(SRCS
     DcgmModuleNvSwitch.h
     DcgmNvSwitchManager.cpp
     DcgmNvSwitchManager.h
+    NvSwitchData.cpp
+    NvSwitchData.h
+    UpdateFunctions.h
+    FieldIds.h
+    FieldDefinitions.h
+    FieldDefinitions.cpp
     dcgm_nvswitch_structs.h
 )
 

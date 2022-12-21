@@ -1355,6 +1355,11 @@ NVML_ENTRY_POINT(nvmlGpmSampleGet, tsapiGpmSampleGet,
         "(%p, %p)",
         device, gpmSample)
 
+NVML_ENTRY_POINT(nvmlGpmMigSampleGet, tsapiGpmMigSampleGet,
+        (nvmlDevice_t device, unsigned int gpuInstanceId, nvmlGpmSample_t gpmSample),
+        "(%p, %d, %p)",
+        device, gpuInstanceId, gpmSample)
+
 NVML_ENTRY_POINT(nvmlGpmQueryDeviceSupport, tsapiGpmQueryDeviceSupport,
         (nvmlDevice_t device, nvmlGpmSupport_t *gpmSupport),
         "(%p, %p)",

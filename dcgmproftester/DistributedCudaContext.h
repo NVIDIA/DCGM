@@ -146,7 +146,7 @@ public:
 
     // Assignments operators.
     DistributedCudaContext &operator=(DistributedCudaContext &) = delete;
-    DistributedCudaContext &operator                            =(DistributedCudaContext &&) noexcept;
+    DistributedCudaContext &operator=(DistributedCudaContext &&) noexcept;
 
     /** @name DeviceID
      * Device moniker and physical GPU relationships.

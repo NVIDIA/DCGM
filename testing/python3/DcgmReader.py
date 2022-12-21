@@ -364,10 +364,10 @@ class DcgmReader(object):
     def AddFieldWatches(self):
         maxKeepSamples = 0 #No limit. Handled by m_maxKeepAge
         for interval, fieldGroup in self.m_fieldGroups.items():
-            self.LogInfo("AddWatchFields: interval = " + str(interval) + "\n")
+            self.LogDebug("AddWatchFields: interval = " + str(interval) + "\n")
             self.m_dcgmGroup.samples.WatchFields(fieldGroup, interval, self.m_maxKeepAge, maxKeepSamples)
         self.m_dcgmSystem.UpdateAllFields(1)
-        self.LogInfo("AddWatchFields exit\n")
+        self.LogDebug("AddWatchFields exit\n")
 
 
     ###########################################################################
@@ -378,26 +378,26 @@ class DcgmReader(object):
     def GetFieldMetadata(self):
         self.m_fieldIdToInfo = {}
         self.m_fieldGroups = {}
-        self.m_fieldGroup = None;
+        self.m_fieldGroup = None
         allFieldIds = []
 
         # Initialize groups for all field intervals.
-        self.LogInfo("GetFieldMetaData:\n")
+        self.LogDebug("GetFieldMetaData:\n")
 
         intervalIndex = 0
         for interval, fieldIds in self.m_publishFields.items():
-            self.LogInfo("sampling interval = " + str(interval) + ":\n")
+            self.LogDebug("sampling interval = " + str(interval) + ":\n")
             for fieldId in fieldIds:
-                self.LogInfo("   fieldId: " + str(fieldId) + "\n")
+                self.LogDebug("   fieldId: " + str(fieldId) + "\n")
 
             intervalIndex += 1
             fieldGroupName = self.m_fieldGroupName + "_" + str(intervalIndex)
             findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(fieldGroupName)
-            self.LogInfo("fieldGroupName: " + fieldGroupName + "\n")
+            self.LogDebug("fieldGroupName: " + fieldGroupName + "\n")
 
             # Remove our field group if it exists already
             if findByNameId is not None:
-                self.LogInfo("fieldGroupId: " + findByNameId  + "\n")
+                self.LogDebug("fieldGroupId: " + findByNameId  + "\n")
                 delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
                 delFieldGroup.Delete()
                 del(delFieldGroup)

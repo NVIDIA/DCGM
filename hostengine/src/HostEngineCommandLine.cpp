@@ -41,6 +41,7 @@ struct HostEngineCommandLine::Impl
     std::string m_pidFilePath;               /*!< PID filename to use to prevent more than one nv-hostengine daemon
                                                   instance from running */
     std::string m_serviceAccount;            /*!< Service account that will be used for unprivileged processes */
+    std::string m_homeDir;                   /*!< Home directory for the DCGM diagnostic. */
 
     std::set<dcgmModuleId_t> m_denylistModules; /*!< Modules to add to the denylist */
 
@@ -115,6 +116,11 @@ std::set<dcgmModuleId_t> const &HostEngineCommandLine::GetDenylistedModules() co
 std::string const &HostEngineCommandLine::GetServiceAccount() const
 {
     return m_pimpl->m_serviceAccount;
+}
+
+std::string const &HostEngineCommandLine::GetHomeDir() const
+{
+    return m_pimpl->m_homeDir;
 }
 
 namespace
@@ -444,6 +450,16 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                                     /*typedesc*/ "USERNAME",
                                                     cmdLine);
 
+        auto homeDir = ValueArg<std::string>("",
+                                             "home-dir",
+                                             "The full path to the directory that the DCGM diagnostic should be "
+                                             "launched from. This becomes the default output directory for DCGM "
+                                             "diagnostic log and stats files.",
+                                             /*req*/ false,
+                                             /*default*/ "",
+                                             /*typedesc*/ "Diagnostic home",
+                                             cmdLine);
+
         cmdLine.parse(argc, argv);
 
         impl->m_hostEngineSockPath        = domainSockArg.getValue();
@@ -458,6 +474,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
         impl->m_shouldDaemonize           = not daemonizeArg.getValue();
         impl->m_isLogRotate               = logRotateArg.getValue();
         impl->m_serviceAccount            = serviceAccount.getValue();
+        impl->m_homeDir                   = homeDir.getValue();
     }
     catch (TCLAP::ArgException const &ex)
     {

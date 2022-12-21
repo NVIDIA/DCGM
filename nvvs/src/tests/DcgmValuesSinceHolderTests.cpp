@@ -28,7 +28,7 @@ SCENARIO("void DcgmEntityTimeSeries::AddValue(unsigned short fieldId, dcgmFieldV
     dcgmFieldValue_v1 fv = {};
 
     CHECK(!timeSeries.IsFieldStored(1));
-    timeSeries.AddValue(1, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
     CHECK(timeSeries.IsFieldStored(1));
     CHECK(!timeSeries.IsFieldStored(2));
 }
@@ -46,11 +46,11 @@ SCENARIO("void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcg
 
     // First we inject a zero
     fv.value.i64 = 0;
-    timeSeries.AddValue(1, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     // Then a non-zero
     fv.value.i64 = 33;
-    timeSeries.AddValue(1, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     // Now we test retrieving the value
     memset(&fv, 0, sizeof(fv));
@@ -74,11 +74,11 @@ SCENARIO("void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcg
 
     // First we inject a zero
     fv.value.dbl = 0.0;
-    timeSeries.AddValue(2, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     // Then a non-zero
     fv.value.dbl = 33.0;
-    timeSeries.AddValue(2, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     memset(&fv, 0, sizeof(fv));
 
@@ -106,20 +106,20 @@ SCENARIO("void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jso
     fv.fieldType = DCGM_FT_INT64;
 
     fv.value.i64 = 0;
-    timeSeries.AddValue(1, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     fv.value.i64 = 1;
-    timeSeries.AddValue(1, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     // DOUBLE
     fv.fieldId   = 2;
     fv.fieldType = DCGM_FT_DOUBLE;
 
     fv.value.dbl = 0.0;
-    timeSeries.AddValue(2, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     fv.value.dbl = 1.0;
-    timeSeries.AddValue(2, fv);
+    timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     timeSeries.AddToJson(jv, jsonIndex);
     CHECK(jv[c_GPUS][jsonIndex]["gpuId"].asUInt() == 0);

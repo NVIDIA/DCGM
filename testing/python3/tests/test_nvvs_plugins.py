@@ -24,7 +24,7 @@ import signal
 import threading
 import time
 
-from dcgm_internal_helpers import inject_value
+from dcgm_field_injection_helpers import inject_value
 
 ################# General helpers #################
 def check_diag_result_fail(response, gpuIndex, testIndex):
@@ -61,8 +61,14 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
     ###
     # Verify fail early behavior by inserting an error.
     # Setup test parameters
-    duration = 20 if testIndex != dcgm_structs.DCGM_TARGETED_POWER_INDEX else 30 # Prevent false failures due to min
-                                                                                 # duration requirements for Targeted Power
+    
+    # We will be exiting early so the following duration is just how long we allow the test
+    # to run before we kill it due to a suspected test failure.
+    # Note that this has been increased from 20 -> 60 because some platforms are egregiously
+    # slow for even small context create + smaller cuda malloc. 
+    # If this test fails, it will take the full duration.
+    duration = 60
+    
     paramsStr = "%s.test_duration=%s" % (test_name, duration)
     response = None
     test_names = test_name
@@ -100,35 +106,35 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
             "Expected the extra test to be skipped since the first test failed.\nGot results: %s" % \
             (extraTestResult)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_sm_stress_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "SM Stress", dcgm_structs.DCGM_SM_STRESS_INDEX, None)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_diagnostic_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "diagnostic", dcgm_structs.DCGM_DIAGNOSTIC_INDEX, None)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_targeted_stress_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "targeted stress", dcgm_structs.DCGM_TARGETED_STRESS_INDEX, None)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_targeted_power_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "targeted power", dcgm_structs.DCGM_TARGETED_POWER_INDEX, None)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()

@@ -125,6 +125,7 @@ void GpuBurnPlugin::Cleanup()
         GpuBurnDevice *gbd = m_device[deviceIdx];
         cudaSetDevice(gbd->cudaDeviceIdx);
         delete gbd;
+        cudaDeviceReset();
     }
 
     m_device.clear();
@@ -589,7 +590,8 @@ bool GpuBurnPlugin::RunTest()
         /* Create and initialize worker threads */
         for (size_t i = 0; i < m_device.size(); i++)
         {
-            DCGM_LOG_DEBUG << "Creating worker thread for GPU " << m_device[i]->gpuId;
+            unsigned int gpuId = m_device[i]->gpuId; /* Cache for logging as the device may get freed */
+            DCGM_LOG_DEBUG << "Creating worker thread for GPU " << gpuId;
             workerThreads[i] = new GpuBurnWorker(
                 m_device[i], *this, m_precision, m_testDuration, m_matrixDim, m_dcgmRecorder, failEarly, checkInterval);
             // initialize the worker
@@ -599,30 +601,36 @@ bool GpuBurnPlugin::RunTest()
                 // Couldn't initialize the worker - stop all launched workers and exit
                 for (size_t j = 0; j <= i; j++)
                 {
+                    if (workerThreads[j] == nullptr)
+                    {
+                        log_error("Unexpected nullptr workerThreads[{}]. i={}", j, i);
+                        continue;
+                    }
+
                     // Ask each worker to stop and wait up to 3 seconds for the thread to stop
                     try
                     {
-                        st = workerThreads[i]->StopAndWait(3000);
+                        st = workerThreads[j]->StopAndWait(3000);
                         if (st)
                         {
                             // Thread did not stop
-                            workerThreads[i]->Kill();
+                            workerThreads[j]->Kill();
                         }
                     }
                     catch (std::exception const &ex)
                     {
                         // Thread did not stop
-                        workerThreads[i]->Kill();
-                        DcgmError d { m_device[i]->gpuId };
+                        workerThreads[j]->Kill();
+                        DcgmError d { m_device[j]->gpuId };
                         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
                         AddError(d);
                     }
-                    delete (workerThreads[i]);
-                    workerThreads[i] = NULL;
+                    delete (workerThreads[j]);
+                    workerThreads[j] = nullptr;
                 }
                 Cleanup();
                 std::stringstream ss;
-                ss << "Unable to initialize test for GPU " << m_device[i]->gpuId << ". Aborting.";
+                ss << "Unable to initialize test for GPU " << gpuId << ". Aborting.";
                 log_error(ss.str());
                 return false;
             }
@@ -883,7 +891,7 @@ GpuBurnWorker::~GpuBurnWorker()
 int GpuBurnWorker::Bind()
 {
     /* Make sure we are pointing at the right device */
-    cudaSetDevice(m_device->cuDevice);
+    cudaSetDevice(m_device->cudaDeviceIdx);
 
     /* Grab the context from the runtime */
     CHECK_CUDA_ERROR("cuCtxGetCurrent", cuCtxGetCurrent(&m_device->cuContext));
@@ -891,7 +899,7 @@ int GpuBurnWorker::Bind()
     if (!m_device->cuContext)
     {
         DcgmError d { m_device->gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_UNBOUND, d, m_device->cuDevice);
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_UNBOUND, d, m_device->cudaDeviceIdx);
         log_error(d.GetMessage());
         m_plugin.AddErrorForGpu(m_device->gpuId, d);
         return -1;
@@ -941,12 +949,20 @@ int GpuBurnWorker::InitBuffers()
     {
         return st;
     }
+
     size_t resultSizeFP64 = sizeof(double) * m_matrixDim * m_matrixDim;
     size_t resultSizeFP32 = resultSizeFP64 / 2;
     size_t resultSizeFP16 = resultSizeFP64 / 4;
 
     m_iters = (useBytes - (2 * resultSizeFP64) - (2 * resultSizeFP32) - (2 * resultSizeFP16))
               / resultSizeFP64; // We remove A and B sizes
+
+    if (IsSmallFrameBufferModeSet())
+    {
+        /* The minimum size is 1 output matrix */
+        m_iters = 1;
+        DCGM_LOG_DEBUG << "Setting small FB mode m_iters " << m_iters;
+    }
 
     CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_Cdata, m_iters * resultSizeFP64));
 

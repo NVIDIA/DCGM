@@ -23,7 +23,7 @@ def create_parser(
         name = 'the monitoring tool', # Replace with 'prometheus', 'telegraf', etc.
         field_ids = None,
         log_file = None,
-        log_level = 'CRITICAL',
+        log_level = 'INFO',
         dcgm_hostname = environ.get('DCGM_HOSTNAME') or 'localhost',
 ):
     '''

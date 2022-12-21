@@ -1449,7 +1449,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                              cmd);
 
 
-    // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
     helpOutput.addFooter("Verbose diagnostic output is currently limited on client, for full diagnostic and validation "
                          "logs please check your server.\n");

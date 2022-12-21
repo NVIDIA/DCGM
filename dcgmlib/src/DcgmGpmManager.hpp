@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <map>
 
+#include "DcgmGpuInstance.h"
+#include "DcgmMigTypes.hpp"
 #include <DcgmLogging.h>
 #include <DcgmUtilities.h>
 #include <DcgmWatchTable.h>
@@ -76,7 +78,7 @@ public:
     }
 
     /* Copy constructors can't be done since m_sample is opaque. Doing so would result in double frees */
-    DcgmGpmSample(const DcgmGpmSample &other) = delete;
+    DcgmGpmSample(const DcgmGpmSample &other)            = delete;
     DcgmGpmSample &operator=(const DcgmGpmSample &other) = delete;
 
     /* Moving can be done though */
@@ -127,6 +129,7 @@ private:
      * Either way, return a pointer to the latest sample in our sample buffer.
      */
     dcgmReturn_t MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
+                                     DcgmGpuInstance *const pGpuInstance,
                                      timelib64_t now,
                                      timelib64_t updateInterval,
                                      dcgmSampleMap::iterator &latestSampleIt);
@@ -158,7 +161,11 @@ public:
      * Get a sample for the given fieldId
      *
      */
-    dcgmReturn_t GetLatestSample(nvmlDevice_t nvmlDevice, double &value, unsigned int fieldId, timelib64_t now);
+    dcgmReturn_t GetLatestSample(nvmlDevice_t nvmlDevice,
+                                 DcgmGpuInstance *const pGpuInstance,
+                                 double &value,
+                                 unsigned int fieldId,
+                                 timelib64_t now);
 };
 
 /**
@@ -236,7 +243,11 @@ public:
      * @return DCGM_ST_OK on success.
      *         Other DCGM_ST_? error code on failure.
      */
-    dcgmReturn_t GetLatestSample(dcgm_entity_key_t entityKey, nvmlDevice_t nvmlDevice, double &value, timelib64_t now);
+    dcgmReturn_t GetLatestSample(dcgm_entity_key_t entityKey,
+                                 nvmlDevice_t nvmlDevice,
+                                 DcgmGpuInstance *const pGpuInstance,
+                                 double &value,
+                                 timelib64_t now);
 
     /*************************************************************************/
     /*

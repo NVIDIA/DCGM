@@ -485,6 +485,7 @@ dcgmReturn_t DcgmClientHandler::PopulateConnectionAttributes(dcgmHandle_t dcgmHa
     msg.header.version    = dcgm_core_msg_hostengine_version_version;
     msg.version.version   = dcgmVersionInfo_version;
 
+    // coverity[overrun-buffer-arg]
     dcgmReturn_t dcgmReturn = ExchangeModuleCommandAsync(connectionId, &msg.header, nullptr, sizeof(msg));
     if (dcgmReturn != DCGM_ST_OK)
     {

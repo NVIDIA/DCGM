@@ -103,13 +103,13 @@ public:
 
     /*************************************************************************/
     /* Getters. Call these from within the plugin */
-    std::string GetString(std::string key);
-    double GetDouble(std::string key);
+    std::string GetString(std::string_view key) const;
+    double GetDouble(std::string_view key) const;
     int GetBoolFromString(std::string key);
     std::string GetSubTestString(std::string subTest, std::string key);
     double GetSubTestDouble(std::string subTest, std::string key);
     int GetBoolFromSubTestString(std::string subTest, std::string key);
-    bool HasKey(const std::string &key);
+    bool HasKey(const std::string &key) const;
 
     /*************************************************************************/
     /*
@@ -128,8 +128,8 @@ public:
     /*************************************************************************/
 
 private:
-    std::map<std::string, TestParameterValue *> m_globalParameters;
-    std::map<std::string, std::map<std::string, TestParameterValue *>> m_subTestParameters;
+    std::map<std::string, TestParameterValue *, std::less<>> m_globalParameters;
+    std::map<std::string, std::map<std::string, TestParameterValue *>, std::less<>> m_subTestParameters;
 
     /*************************************************************************/
     int SetStructValue(TestParameterValue *tpv, dcgmDiagPluginTestParameter_t &param) const;

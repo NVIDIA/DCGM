@@ -29,11 +29,11 @@
 class Config
 {
 public:
-    Config()                   = default;
-    Config(const Config &orig) = default;
-    Config(Config &&)          = default;
+    Config()                          = default;
+    Config(const Config &orig)        = default;
+    Config(Config &&)                 = default;
     Config &operator=(Config const &) = default;
-    Config &operator=(Config &&) = default;
+    Config &operator=(Config &&)      = default;
 
     virtual ~Config() = default;
 

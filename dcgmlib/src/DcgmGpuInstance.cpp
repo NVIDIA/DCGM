@@ -57,6 +57,18 @@ DcgmGpuInstance::DcgmGpuInstance(DcgmNs::Mig::GpuInstanceId dcgmInstanceId,
         case NVML_GPU_INSTANCE_PROFILE_8_SLICE:
             m_sliceProfile = DcgmMigProfileGpuInstanceSlice8;
             break;
+        case NVML_GPU_INSTANCE_PROFILE_6_SLICE:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice6;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV1:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice1Rev1;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_2_SLICE_REV1:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice2Rev1;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV2:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice1Rev2;
+            break;
         default:
             // In practice we cannot get here due to how we're instantiating things
             m_sliceProfile = DcgmMigProfileNone;

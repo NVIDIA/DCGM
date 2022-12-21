@@ -13,3 +13,4 @@ cscope.out
 .vscode/remote_
 **/__pycache__/*.pyc
 __pycache__
+.run/

@@ -1109,15 +1109,6 @@ skus:
       minimum_bandwidth: 607500.0
     pulse_test:
       is_allowed: true
-      use_curand: true
-      test_duration: 500.0
-      duty0: 0.5
-      freq0: 50000.0
-      kernel: dgemm
-      workload: SYNCED_WAVEFORM
-      freq0: 50000
-      duty0: 0.5
-      matrix_size_mode: max_alloc
   # Tesla V100 DGX-Station 32GB
   - name: Tesla V100 DGX-Station 32GB
     id: 1db7
@@ -1460,15 +1451,6 @@ skus:
       minimum_bandwidth: 137500.0
     pulse_test:
       is_allowed: true
-      use_curand: true
-      test_duration: 500.0
-      duty0: 0.5
-      freq0: 50000.0
-      kernel: hmma
-      workload: SYNCED_WAVEFORM
-      freq0: 50000
-      duty0: 0.5
-      matrix_size_mode: max_alloc
   # RTX 6000/8000 passive SKUs
   - name: RTX 6000/8000 passive SKUs
     id: 1e78
@@ -1579,15 +1561,6 @@ skus:
       minimum_bandwidth: 1173000.0
     pulse_test:
       is_allowed: true
-      use_curand: true
-      test_duration: 500.0
-      duty0: 0.5
-      freq0: 50000.0
-      kernel: hmma
-      workload: SYNCED_WAVEFORM
-      freq0: 50000
-      duty0: 0.5
-      matrix_size_mode: max_alloc
   # A40
   - name: A40
     id: 2235
@@ -2478,6 +2451,8 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows ~1639000. Multiply by .75 to get ~1230000
       minimum_bandwidth: 1230000
+    pulse_test:
+      is_allowed: true
   - name: A800-20f5 80GB
     id: 20f5
     targeted_power:
@@ -2512,29 +2487,20 @@ skus:
       minimum_bandwidth: 971000.0
     pulse_test:
       is_allowed: true
-      use_curand: true
-      test_duration: 500.0
-      duty0: 0.5
-      freq0: 50000.0
-      kernel: hmma
-      workload: SYNCED_WAVEFORM
-      freq0: 50000
-      duty0: 0.5
-      matrix_size_mode: max_alloc
-  - name: A100-20f6 40GB
-    id: 20f6
+  - name: A800-SXM4-80GB
+    id: 20f3
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
-      target_power: 249.0
+      target_power: 399.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
       use_dgemm: false
     sm_stress:
       is_allowed: true
-      # dcgmproftester -t 1007 measures ~16500. Multiply by .75 to get 12375
-      target_stress: 12375.0
+      # dcgmproftester -t 1007 measures ~18600. Multiply by .75 to get ~13950
+      target_stress: 13950.0
       use_dgemm: false
     pcie:
       is_allowed: true
@@ -2551,16 +2517,79 @@ skus:
       is_allowed: true
     memory_bandwidth:
       is_allowed: true
-      # dcgmproftester -t 1005 shows ~1295000. Multiply by .75 to get ~971000
+      # dcgmproftester -t 1005 shows ~1566000. Multiply by .75 to get ~1175000
       minimum_bandwidth: 971000.0
     pulse_test:
       is_allowed: true
-      use_curand: true
-      test_duration: 500.0
-      duty0: 0.5
-      freq0: 50000.0
-      kernel: hmma
-      workload: SYNCED_WAVEFORM
-      freq0: 50000
-      duty0: 0.5
-      matrix_size_mode: max_alloc
+  # Nvidia L40
+  - name: Nvidia L40
+    id: 26f5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 349.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 15375
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at ~35600, multiply by .75 to get ~25900
+      target_stress: 25900.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~735670. Multiply by .75 to get ~551800
+      minimum_bandwidth: 551800
+  # PG133 SKU 255
+  - name: PG133 SKU 255
+    id: 26b8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 24500
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at 32725.2, multiply by .75 to get ~24500
+      target_stress: 24500.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~746850. Multiply by .75 to get ~560100
+      minimum_bandwidth: 560100

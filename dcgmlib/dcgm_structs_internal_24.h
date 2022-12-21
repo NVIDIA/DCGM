@@ -34,3 +34,10 @@ typedef struct
     unsigned int moduleId; //!< IN: Module to blacklist
     unsigned int cmdRet;   //!< OUT: Error code generated
 } dcgmMsgModuleBlacklist_v1;
+
+DCGM_CASSERT(dcgmDeviceAttributes_version1 == (long)16782628, 1);
+DCGM_CASSERT(dcgmDeviceAttributes_version2 == (long)33559648, 1);
+DCGM_CASSERT(dcgmDiagResponse_version6 == (long)0x06079090, 1);
+DCGM_CASSERT(dcgmIntrospectFieldsExecTime_version == (long)16777248, 1);
+DCGM_CASSERT(dcgmIntrospectFullFieldsExecTime_version == (long)0x020004D8, 1);
+DCGM_CASSERT(dcgmIntrospectContext_version == (long)16777232, 1);

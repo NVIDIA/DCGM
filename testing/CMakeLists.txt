@@ -33,6 +33,7 @@ target_link_libraries(testdcgmunittests
         sdk_nvml_loader
         dcgm
         dcgmmodulediag_private_static
+        serialize
         ${JSONCPP_STATIC_LIBS}
         ${CMAKE_THREAD_LIBS_INIT}
         fmt::fmt
@@ -111,6 +112,7 @@ install(
         python3/dcgm_agent.py
         python3/dcgm_fields.py
         python3/dcgm_fields_collectd.py
+        python3/dcgm_fields_internal.py
         python3/dcgm_structs.py
         python3/dcgmvalue.py
         python3/DcgmDiag.py

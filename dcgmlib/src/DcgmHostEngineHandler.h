@@ -35,6 +35,8 @@
 #include <mutex>
 #include <unordered_map>
 
+#define INJECTION_MODE_ENV_VAR "NVML_INJECTION_MODE"
+
 /* Module status structure */
 typedef struct dcgmhe_module_info_t
 {
@@ -300,6 +302,8 @@ public:
 
     void SetServiceAccount(const char *serviceAccout);
     std::string const &GetServiceAccount() const;
+
+    bool UsingInjectionNvml() const;
 
     dcgmReturn_t NvmlInjectFieldValue(dcgm_field_eid_t gpuId, const nvmlFieldValue_t &value);
 

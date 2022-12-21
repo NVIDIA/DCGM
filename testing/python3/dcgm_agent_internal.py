@@ -92,6 +92,27 @@ def dcgmInjectEntityFieldValue(dcgmHandle, entityGroupId, entityId, value):
     return ret
 
 @dcgm_agent.ensure_byte_strings()
+def dcgmInjectEntityFieldValueToNvml(dcgmHandle, entityGroupId, entityId, value):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmInjectEntityFieldValueToNvml")
+    ret = fn(dcgmHandle, c_uint(entityGroupId), c_uint(entityId), byref(value))
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmCreateNvmlInjectionGpu(dcgmHandle, index):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmCreateNvmlInjectionGpu")
+    ret = fn(dcgmHandle, c_uint(index))
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmInjectNvmlDevice(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, value):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmInjectNvmlDevice")
+    ret = fn(dcgmHandle, c_uint(gpuId), key, byref(extraKeys), c_uint(extraKeyCount), byref(value))
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
 def dcgmSetEntityNvLinkLinkState(dcgmHandle, entityGroupId, entityId, linkId, linkState):
     linkStateStruct = dcgm_structs_internal.c_dcgmSetNvLinkLinkState_v1()
     linkStateStruct.version = dcgm_structs_internal.dcgmSetNvLinkLinkState_version1
@@ -172,8 +193,8 @@ def dcgmVgpuConfigEnforce(dcgm_handle, group_id, status_handle):
 @dcgm_agent.ensure_byte_strings()
 def dcgmGetVgpuDeviceAttributes(dcgm_handle, gpuId):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetVgpuDeviceAttributes")
-    device_values = dcgm_structs.c_dcgmVgpuDeviceAttributes_v6()
-    device_values.version = dcgm_structs.dcgmVgpuDeviceAttributes_version6
+    device_values = dcgm_structs.c_dcgmVgpuDeviceAttributes_v7()
+    device_values.version = dcgm_structs.dcgmVgpuDeviceAttributes_version7
     ret = fn(dcgm_handle, c_int(gpuId), byref(device_values))
     dcgm_structs._dcgmCheckReturn(ret)
     return device_values

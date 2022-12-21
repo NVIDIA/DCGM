@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 3.0.4)
+project(dcgm VERSION 3.1.3)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -37,6 +37,10 @@ include(CheckCCompilerFlag)
 check_c_compiler_flag("-Wno-cast-function-type" CC_HAS_WNO_CAST_FUNCTION_TYPE)
 if (CC_HAS_WNO_CAST_FUNCTION_TYPE)
     set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -Wno-cast-function-type")
+endif()
+check_c_compiler_flag("-Wunreachable-code-loop-increment" CC_HAS_WUNREACHABLE_CODE_LOOP_INCREMENT)
+if (CC_HAS_WUNREACHABLE_CODE_LOOP_INCREMENT)
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -Wunreachable-code-loop-increment")
 endif()
 
 option(ENABLE_LTO "Enable LTO during the build" OFF)
@@ -257,6 +261,13 @@ define_property(TARGET PROPERTY INSTALL_TO_DIR BRIEF_DOCS "Installation dir" FUL
 
 enable_testing()
 
+set (NVML_INJECTION_DIR "${CMAKE_SOURCE_DIR}/nvml-injection")
+if (EXISTS ${NVML_INJECTION_DIR})
+    add_compile_definitions(INJECTION_LIBRARY_AVAILABLE)
+    add_subdirectory(${NVML_INJECTION_DIR})
+    set(LINK_INJECTION_LIB "true")
+endif()
+
 add_subdirectory(docs)
 add_subdirectory(sdk)
 add_subdirectory(cublas_proxy)
@@ -315,6 +326,9 @@ set(DCGM_INSTALL_TARGETS
     ${DCGM_CUBLAS_PROXY}
     ${DCGMPROFTESTER}
 )
+if (${LINK_INJECTION_LIB} STREQUAL "true")
+    set(DCGM_INSTALL_TARGETS ${DCGM_INSTALL_TARGETS} nvml_injection nvmli_interface)
+endif()
 
 install(
     TARGETS

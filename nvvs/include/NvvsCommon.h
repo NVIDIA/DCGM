@@ -18,9 +18,10 @@
 #include "DcgmError.h"
 #include "DcgmLogging.h"
 #include "Gpu.h"
+#include <atomic>
+#include <cstdint>
 #include <map>
 #include <set>
-#include <stdint.h>
 #include <string>
 #include <sysexits.h>
 #include <vector>
@@ -36,7 +37,7 @@
                              but those are pretty ambiguous as well */
 
 /* Has the user requested a stop? 1=yes. 0=no. Defined in main.cpp */
-extern int main_should_stop;
+extern std::atomic_int32_t main_should_stop;
 
 enum suiteNames_enum
 {
@@ -120,6 +121,9 @@ public:
     bool failEarly;              // enable failure checks throughout test rather than at the end so we stop test sooner
     uint64_t failCheckInterval;  /* how often failure checks should occur when running tests (in seconds). Only
                                         applies if failEarly is enabled. */
+    unsigned int currentIteration;     /* the current iteration of the diagnostic being executed.
+                                          See dcgmi/CommandLineParser.h */
+    unsigned int totalIterations;      /* the total number of iterations of the diagnostic that will run. */
     Gpu *m_gpus[DCGM_MAX_NUM_DEVICES]; // Pointers to the gpu objects that are active for this run
 };
 

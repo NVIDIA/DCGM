@@ -174,22 +174,12 @@ void Allowlist::PostProcessAllowlist(std::vector<Gpu *> &gpus)
 /*****************************************************************************/
 static bool isBoolParam(const std::string &param)
 {
-    const static std::unordered_set<std::string> boolParams = { "use_dgemm",
-                                                                "use_doubles",
-                                                                "l1_is_allowed",
-                                                                PULSE_TEST_STR_EXIT_ON_ERROR,
-                                                                PULSE_TEST_STR_SKIP_HOSTALLOC_INIT,
-                                                                PULSE_TEST_STR_USE_CURAND,
-                                                                PULSE_TEST_STR_USE_CUPTI };
-    return boolParams.find(param) != boolParams.end();
-}
-
-static bool isStringParam(const std::string &param)
-{
-    const static std::unordered_set<std::string> stringParams = {
-        PULSE_TEST_STR_CHECK_MODE, PULSE_TEST_STR_WORKLOAD, PULSE_TEST_STR_KERNEL, PULSE_TEST_STR_MATRIX_SIZE_MODE
+    const static std::unordered_set<std::string> boolParams = {
+        "use_dgemm",
+        "use_doubles",
+        "l1_is_allowed",
     };
-    return stringParams.find(param) != stringParams.end();
+    return boolParams.find(param) != boolParams.end();
 }
 
 /*****************************************************************************/
@@ -247,12 +237,11 @@ void Allowlist::FillMap()
                             bool paramValue = paramOrSubtest.as<bool>();
                             tp->AddString(testName, paramValue ? "True" : "False");
                         }
-                        else if (isStringParam(testName))
-                        {
-                            DCGM_LOG_VERBOSE << "Reading " << testName
-                                             << " as a string. String: " << paramOrSubtest.as<std::string>();
-                            tp->AddString(testName, paramOrSubtest.as<std::string>());
-                        }
+                        /* We used to have an if to handle the string parameters here in order to ensure correct
+                         * parsing. For now, the string parameters have been removed, but if we add some back then we'll
+                         * need to add this if statement again.
+                         *
+                         * else if (isStringParam(testName)) */
                         else
                         {
                             DCGM_LOG_VERBOSE << "Reading " << testName

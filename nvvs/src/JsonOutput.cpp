@@ -19,6 +19,7 @@
 #include "NvvsCommon.h"
 #include <DcgmBuildInfo.hpp>
 #include <fmt/format.h>
+#include <ranges>
 
 /* This class fills in a json object in the format:
  * {
@@ -29,12 +30,15 @@
  *         "tests" : [
  *           {
  *             "name" : <name>,
- *             "results" : [              # There is one results entry per GPU for all tests except Software/Deployment.
- * Software test has one results entry which represents all GPUs.
+ *             # There is one results entry per GPU for all tests except Software/Deployment.
+ *             # Software test has one results entry which represents all GPUs.
+ *             "results" : [
  *               {
- *                 "gpu_ids" : <gpu_ids>, # GPU ID (as string) (name is "gpu_ids" for backwards compatibility). For
- * deployment test, this is a CSV string of GPU ids "status : "<status>",  # One of PASS|FAIL|WARN|SKIPPED "warnings" :
- * [         # Optional, depends on test output and result
+ *                 # GPU ID (as string) (name is "gpu_ids" for backwards compatibility).
+ *                 # For deployment test, this is a CSV string of GPU ids
+ *                 "gpu_ids" : <gpu_ids>,
+ *                 "status : "<status>",  # One of PASS|FAIL|WARN|SKIPPED
+ *                 "warnings" : [         # Optional, depends on test output and result
  *                   "<warning_text>", ...
  *                 ],
  *                 "info" : [             # Optional, depends on test output and result
@@ -133,6 +137,140 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
     resultField[NVVS_INFO].append(prefix + info.msg);
 }
 
+[[maybe_unused]] static DcgmNs::Nvvs::Json::Result MakeSkipResult(
+    nvvsPluginResult_t overallResult,
+    const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
+    const std::vector<dcgmDiagEvent_t> &info)
+{
+    using namespace DcgmNs::Nvvs::Json;
+    Result result {};
+    if (overallResult == nvvsPluginResult_t::NVVS_RESULT_SKIP)
+    {
+        for (auto const &gpuResult : perGpuResults)
+        {
+            result.gpuIds.ids.insert(gpuResult.gpuId);
+            result.status.result = overallResult;
+            for (auto const &msg : info)
+            {
+                if (msg.gpuId == gpuResult.gpuId || msg.gpuId == DCGM_DIAG_ALL_GPUS)
+                {
+                    if (!result.info.has_value())
+                    {
+                        result.info = Info {};
+                    }
+                    (*result.info).messages.emplace_back(msg.msg);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+[[maybe_unused]] static DcgmNs::Nvvs::Json::Result MakeSoftwareResult(nvvsPluginResult_t overallResult,
+                                                                      std::string const &gpuIdsStr,
+                                                                      const std::vector<dcgmDiagEvent_t> &errors,
+                                                                      const std::vector<dcgmDiagEvent_t> &info)
+{
+    using namespace DcgmNs::Nvvs::Json;
+    Result result {};
+    for (auto const &id : DcgmNs::Split(gpuIdsStr, ','))
+    {
+        int gpuId      = -1;
+        auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), gpuId);
+        if (ec != std::errc {})
+        {
+            log_error("Failed to parse GPU ID: {}", id);
+        }
+        else
+        {
+            result.gpuIds.ids.insert(gpuId);
+        }
+    }
+    result.status.result = overallResult;
+
+    if (!errors.empty())
+    {
+        result.warnings = std::vector<Warning> {};
+    }
+    for (const auto &error : errors)
+    {
+        (*result.warnings).emplace_back(Warning { .message = error.msg, .error_code = error.errorCode });
+    }
+
+    if (!info.empty())
+    {
+        result.info = Info {};
+    }
+    for (const auto &i : info)
+    {
+        (*result.info).messages.emplace_back(i.msg);
+    }
+
+    return result;
+}
+
+[[maybe_unused]] static std::vector<DcgmNs::Nvvs::Json::Result> MakeHardwareResults(
+    nvvsPluginResult_t overallResult,
+    std::vector<unsigned int> const &gpuIndices,
+    const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
+    const std::vector<dcgmDiagEvent_t> &errors,
+    const std::vector<dcgmDiagEvent_t> &info)
+{
+    using namespace DcgmNs::Nvvs::Json;
+    std::vector<Result> result {};
+
+    // Add Json for each GPU
+    for (unsigned int gpuId : gpuIndices)
+    {
+        Result gpuResult {};
+        gpuResult.gpuIds.ids.insert((int)gpuId);
+        gpuResult.status.result = overallResult;
+
+        for (auto &&entry : perGpuResults)
+        {
+            if ((unsigned int)entry.gpuId == gpuId)
+            {
+                gpuResult.status.result = entry.result;
+                break;
+            }
+        }
+
+        // GPU %u: Prefix for general warnings/info messages
+        for (auto &&error : errors)
+        {
+            if (error.gpuId == DCGM_DIAG_ALL_GPUS || (error.gpuId >= 0 && (unsigned)error.gpuId == gpuId))
+            {
+                if (!gpuResult.warnings.has_value())
+                {
+                    gpuResult.warnings = std::vector<Warning> {};
+                }
+                (*gpuResult.warnings)
+                    .emplace_back(Warning { .message    = fmt::format("GPU {}: {}", gpuId, error.msg),
+                                            .error_code = error.errorCode });
+            }
+            gpuResult.status.result = nvvsPluginResult_t::NVVS_RESULT_FAIL;
+        }
+
+        for (auto &&singleInfo : info)
+        {
+            if (singleInfo.gpuId == DCGM_DIAG_ALL_GPUS
+                || (singleInfo.gpuId >= 0 && (unsigned)singleInfo.gpuId == gpuId))
+            {
+                if (!gpuResult.info.has_value())
+                {
+                    gpuResult.info = Info {};
+                }
+                (*gpuResult.info).messages.emplace_back(fmt::format("GPU {}: {}", gpuId, singleInfo.msg));
+            }
+        }
+
+        result.push_back(std::move(gpuResult));
+    }
+
+    return result;
+}
+
 /*****************************************************************************/
 void JsonOutput::Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
@@ -190,7 +328,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
         for (size_t i = 0; i < m_gpuIndices.size(); i++)
         {
             unsigned int gpuId           = m_gpuIndices[i];
-            nvvsPluginResult_t gpuResult = overallResult;
+            nvvsPluginResult_t gpuResult = NVVS_RESULT_SKIP;
 
             for (auto &&entry : perGpuResults)
             {

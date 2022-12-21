@@ -155,9 +155,9 @@ bool DcgmWatchTable::IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t current
     {
         case DcgmModuleIdCore:
             /* Ignore NvSwitch fields but keep the rest, including profiling fields */
-            return fieldId >= DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
+            return fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdNvSwitch:
-            return fieldId < DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00 || fieldId >= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
+            return fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID || fieldId >= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdProfiling:
             return fieldId < DCGM_FI_PROF_FIRST_ID || fieldId > DCGM_FI_PROF_LAST_ID;
         default:

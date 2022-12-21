@@ -229,8 +229,7 @@ private:
 
     /*************************************************************************/
     /* Variables */
-    TestParameters *m_testParameters; /* Parameters for this test, passed in from the framework.
-                                                               DO NOT DELETE */
+    TestParameters *m_testParameters; /* Parameters for this test */
     bool m_dcgmCommErrorOccurred;     /* Has there been a communication error with DCGM? */
     bool m_dcgmRecorderInitialized;   /* Has DcgmRecorder been initialized? */
     DcgmRecorder m_dcgmRecorder;      /* DCGM stats recording interfact object */

@@ -58,9 +58,9 @@ struct ITask
         Ok,       //!< The task finished its work
         Deferred, //!< The task is still working and should be put back in a queue
     };
-    ITask()          = default;
-    virtual ~ITask() = default;
-    ITask(ITask &&)  = default;
+    ITask()                         = default;
+    virtual ~ITask()                = default;
+    ITask(ITask &&)                 = default;
     ITask &operator=(ITask const &) = default;
 
     /**
@@ -124,10 +124,10 @@ public:
         : NamedBasicTask(fmt::format("Unknown at {:#x}", std::size_t(this)), std::move(func))
     {}
 
-    NamedBasicTask(NamedBasicTask const &) = delete;
+    NamedBasicTask(NamedBasicTask const &)            = delete;
     NamedBasicTask &operator=(NamedBasicTask const &) = delete;
 
-    NamedBasicTask(NamedBasicTask &&) noexcept = default;
+    NamedBasicTask(NamedBasicTask &&) noexcept            = default;
     NamedBasicTask &operator=(NamedBasicTask &&) noexcept = default;
 
     /**
@@ -254,10 +254,10 @@ public:
         : BaseType(std::move(func))
     {}
 
-    Task(Task const &) = delete;
+    Task(Task const &)            = delete;
     Task &operator=(Task const &) = delete;
 
-    Task(Task &&) noexcept = default;
+    Task(Task &&) noexcept            = default;
     Task &operator=(Task &&) noexcept = default;
 };
 

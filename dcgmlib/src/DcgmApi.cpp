@@ -38,8 +38,13 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <type_traits>
+#include <unistd.h>
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+void nvmlClearLibraryHandleIfNeeded(void);
+#endif
 
 // Wrap each dcgmFunction with apiEnter and apiExit
 #define DCGM_ENTRY_POINT(dcgmFuncname, tsapiFuncname, argtypes, fmt, ...)         \
@@ -1260,8 +1265,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_BADPARAM;
     }
 
-    if ((pDcgmVgpuDeviceAttr->version < dcgmVgpuDeviceAttributes_version6)
-        || (pDcgmVgpuDeviceAttr->version > dcgmVgpuDeviceAttributes_version7))
+    if (pDcgmVgpuDeviceAttr->version != dcgmVgpuDeviceAttributes_version7)
     {
         return DCGM_ST_VER_MISMATCH;
     }
@@ -1992,28 +1996,28 @@ static dcgmReturn_t helperGetMultipleValuesForFieldFvBuffer(dcgmHandle_t pDcgmHa
         return DCGM_ST_UNKNOWN_FIELD;
     }
 
-    dcgm_core_msg_get_multiple_values_for_field_v2 msg = {};
+    auto msg = std::make_unique<dcgm_core_msg_get_multiple_values_for_field_v2>();
 
-    msg.header.length
-        = sizeof(msg) - sizeof(msg.fv.buffer); /* avoid transferring the large buffer when making request */
-    msg.header.moduleId   = DcgmModuleIdCore;
-    msg.header.subCommand = DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2;
-    msg.header.version    = dcgm_core_msg_get_multiple_values_for_field_version2;
+    msg->header.length
+        = sizeof(*msg) - sizeof(msg->fv.buffer); /* avoid transferring the large buffer when making request */
+    msg->header.moduleId   = DcgmModuleIdCore;
+    msg->header.subCommand = DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2;
+    msg->header.version    = dcgm_core_msg_get_multiple_values_for_field_version2;
 
-    msg.fv.entityId = entityId;
-    msg.fv.fieldId  = fieldId;
-    msg.fv.startTs  = startTs;
-    msg.fv.endTs    = endTs;
-    msg.fv.count    = maxCount;
-    msg.fv.order    = order;
+    msg->fv.entityId = entityId;
+    msg->fv.fieldId  = fieldId;
+    msg->fv.startTs  = startTs;
+    msg->fv.endTs    = endTs;
+    msg->fv.count    = maxCount;
+    msg->fv.order    = order;
 
     if (fieldMeta->scope == DCGM_FS_GLOBAL)
-        msg.fv.entityGroupId = DCGM_FE_NONE;
+        msg->fv.entityGroupId = DCGM_FE_NONE;
     else
-        msg.fv.entityGroupId = entityGroup;
+        msg->fv.entityGroupId = entityGroup;
 
     // coverity[overrun-buffer-arg]
-    ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+    ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg->header, sizeof(*msg));
 
     if (DCGM_ST_OK != ret)
     {
@@ -2022,7 +2026,7 @@ static dcgmReturn_t helperGetMultipleValuesForFieldFvBuffer(dcgmHandle_t pDcgmHa
     }
 
     /* Check the status of the DCGM command */
-    ret = (dcgmReturn_t)msg.fv.cmdRet;
+    ret = (dcgmReturn_t)msg->fv.cmdRet;
     if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_SUPPORTED)
     {
         DCGM_LOG_WARNING << "Handling ret " << ret << " for eg " << entityGroup << " eid " << entityId
@@ -2038,8 +2042,8 @@ static dcgmReturn_t helperGetMultipleValuesForFieldFvBuffer(dcgmHandle_t pDcgmHa
         return ret;
     }
 
-    *count = msg.fv.count;
-    fvBuffer->SetFromBuffer(msg.fv.buffer, msg.fv.bufferSize);
+    *count = msg->fv.count;
+    fvBuffer->SetFromBuffer(msg->fv.buffer, msg->fv.bufferSize);
     return DCGM_ST_OK;
 }
 
@@ -3432,13 +3436,14 @@ dcgmReturn_t tsapiCreateMigEntity(dcgmHandle_t dcgmHandle, dcgmCreateMigEntity_t
     }
 
     if (cme->createOption == DcgmMigCreateComputeInstance
-        && (cme->profile < DcgmMigProfileComputeInstanceSlice1 || cme->profile > DcgmMigProfileComputeInstanceSlice7))
+        && (cme->profile < DcgmMigProfileComputeInstanceSlice1
+            || cme->profile > DcgmMigProfileComputeInstanceSlice1Rev1))
     {
         DCGM_LOG_ERROR << "Invalid profile " << cme->profile << " for creating a compute instance";
         return DCGM_ST_BADPARAM;
     }
     else if (cme->createOption == DcgmMigCreateGpuInstance
-             && (cme->profile < DcgmMigProfileGpuInstanceSlice1 || cme->profile > DcgmMigProfileGpuInstanceSlice7))
+             && (cme->profile < DcgmMigProfileGpuInstanceSlice1 || cme->profile > DcgmMigProfileGpuInstanceSlice1Rev2))
     {
         DCGM_LOG_ERROR << "Invalid profile " << cme->profile << " for creating a GPU instance";
         return DCGM_ST_BADPARAM;
@@ -4747,6 +4752,116 @@ dcgmReturn_t tsapiHostengineIsHealthy(dcgmHandle_t dcgmHandle, dcgmHostengineHea
     return ret;
 }
 
+dcgmReturn_t tsapiInjectEntityFieldValueToNvml(dcgmHandle_t dcgmHandle,
+                                               dcgm_field_entity_group_t entityGroupId,
+                                               dcgm_field_eid_t entityId,
+                                               dcgmInjectFieldValue_t *value)
+{
+    if (value == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgm_core_msg_nvml_inject_field_value_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE;
+    msg.header.version    = dcgm_core_msg_inject_field_value_version;
+
+    msg.iv.entityGroupId = entityGroupId;
+    msg.iv.entityId      = entityId;
+    memcpy(&msg.iv.fieldValue, value, sizeof(msg.iv.fieldValue));
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.iv.cmdRet;
+}
+
+dcgmReturn_t tsapiCreateNvmlInjectionGpu(dcgmHandle_t dcgmHandle, unsigned int index)
+{
+    dcgm_core_msg_nvml_create_injection_gpu_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY;
+    msg.header.version    = dcgm_core_msg_nvml_create_injection_gpu_version;
+
+    msg.info.index = index;
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+dcgmReturn_t tsapiInjectNvmlDevice(dcgmHandle_t dcgmHandle,
+                                   unsigned int gpuId,
+                                   const char *key,
+                                   const injectNvmlVal_t *extraKeys,
+                                   unsigned int extraKeyCount,
+                                   const injectNvmlVal_t *value)
+{
+    if (key == nullptr || value == nullptr)
+    {
+        DCGM_LOG_ERROR << "Both key and value are required to process injecting an NVML device.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (extraKeyCount > DCGM_MAX_EXTRA_KEYS)
+    {
+        DCGM_LOG_ERROR << "Cannot process " << extraKeyCount << " extra keys. The maximum is " << DCGM_MAX_EXTRA_KEYS;
+        return DCGM_ST_BADPARAM;
+    }
+    else if (extraKeys != nullptr && extraKeyCount == 0)
+    {
+        DCGM_LOG_ERROR << "Extra keys cannot be processed specifying how many there are. (0 specified.)";
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgm_core_msg_nvml_inject_device_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVML_INJECT_DEVICE;
+    msg.header.version    = dcgm_core_msg_nvml_inject_device_version;
+
+    snprintf(msg.info.key, sizeof(msg.info.key), "%s", key);
+    if (extraKeys != nullptr && extraKeyCount > 0)
+    {
+        memcpy(&msg.info.extraKeys, extraKeys, sizeof(injectNvmlVal_t) * extraKeyCount);
+    }
+    msg.info.extraKeyCount = extraKeyCount;
+    msg.info.gpuId         = gpuId;
+    memcpy(&msg.info.value, value, sizeof(msg.info.value));
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+#endif
+
 /*****************************************************************************/
 namespace
 {
@@ -4763,6 +4878,33 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v1 &params)
     if (!g_dcgmGlobals.isInitialized)
     {
         return DCGM_ST_UNINITIALIZED;
+    }
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    // Force close the handle so injection NVML works with embedded tests
+    nvmlClearLibraryHandleIfNeeded();
+#endif
+
+    // Change to home dir
+    std::string homeDirMsg;
+    bool chdirFail      = false;
+    const char *homeDir = getenv(DCGM_HOME_DIR_VAR_NAME);
+    if (homeDir == nullptr)
+    {
+        homeDirMsg = fmt::format("Not changing to a home directory - '{}' is not defined in the environment.",
+                                 DCGM_HOME_DIR_VAR_NAME);
+    }
+    else
+    {
+        if (chdir(homeDir))
+        {
+            char errbuf[1024];
+            strerror_r(errno, errbuf, sizeof(errbuf));
+
+            std::string cwd(std::filesystem::current_path());
+            homeDirMsg = fmt::format("Couldn't change to directory '{}' from '{}': {}.", homeDir, cwd, errbuf);
+            chdirFail  = true;
+        }
     }
 
     dcgmGlobalsLock();
@@ -4794,10 +4936,28 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v1 &params)
     const std::string logSeverity = DcgmLogging::getLogSeverityFromArgAndEnv(
         loggingSeverityArg, DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY, DCGM_ENV_LOG_PREFIX);
 
-    DcgmLogging::init(logFile.c_str(), DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityError));
+    DcgmLoggingSeverity_t loggingSeverity
+        = DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityError);
+    DcgmLogging::init(logFile.c_str(), loggingSeverity);
+    /* Set severity explicitly in case logging is already initialized and ignoring logFile + loggingSeverity */
+    DcgmLogging::setLoggerSeverity<BASE_LOGGER>(loggingSeverity);
     DcgmLogging::routeLogToBaseLogger<SYSLOG_LOGGER>();
     log_debug("Initialized base logger");
     DCGM_LOG_SYSLOG_DEBUG << "Initialized syslog logger";
+
+    if (homeDirMsg.empty() == false)
+    {
+        if (chdirFail)
+        {
+            DCGM_LOG_ERROR << homeDirMsg << " Exiting.";
+            dcgmGlobalsUnlock();
+            return DCGM_ST_INIT_ERROR;
+        }
+        else
+        {
+            DCGM_LOG_DEBUG << homeDirMsg;
+        }
+    }
 
     DCGM_LOG_INFO << DcgmNs::DcgmBuildInfo().GetBuildInfoStr();
     /* See if the host engine is running already */
@@ -4896,10 +5056,10 @@ template <class To>
 class SafeArgumentCast
 {
 public:
-    SafeArgumentCast(SafeArgumentCast const &) = delete;
-    SafeArgumentCast(SafeArgumentCast &&)      = delete;
+    SafeArgumentCast(SafeArgumentCast const &)            = delete;
+    SafeArgumentCast(SafeArgumentCast &&)                 = delete;
     SafeArgumentCast &operator=(SafeArgumentCast const &) = delete;
-    SafeArgumentCast &operator=(SafeArgumentCast &&) = delete;
+    SafeArgumentCast &operator=(SafeArgumentCast &&)      = delete;
 
     template <class From>
     explicit SafeArgumentCast(From *inputArgument)

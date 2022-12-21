@@ -197,7 +197,7 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
             m_response.v8ptr->perGpuResponses[gpuIndex].hwDiagnosticReturn = rc;
         }
     }
-    if (m_version == dcgmDiagResponse_version7)
+    else if (m_version == dcgmDiagResponse_version7)
     {
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
         {

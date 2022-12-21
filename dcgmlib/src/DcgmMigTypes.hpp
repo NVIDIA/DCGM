@@ -51,7 +51,7 @@ struct BaseId : BaseHasher<BaseId<TIdType>>
     BaseId(BaseId &&) noexcept  = default;
 
     BaseId &operator=(BaseId const &other) = default;
-    BaseId &operator=(BaseId &&) noexcept = default;
+    BaseId &operator=(BaseId &&) noexcept  = default;
 
 protected:
     friend struct BaseHasher<BaseType>;

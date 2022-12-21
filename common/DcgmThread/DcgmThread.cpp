@@ -39,7 +39,7 @@ void *dcgmthread_starter(void *parm)
 DcgmThread::DcgmThread(bool sendSignalOnStop, std::string threadName)
 {
     m_sendSignalOnStop = sendSignalOnStop;
-    m_threadName       = std::move(threadName);
+    SetThreadName(std::move(threadName));
     resetStatusFlags();
 
 #ifdef __linux__
@@ -64,6 +64,12 @@ void DcgmThread::resetStatusFlags()
 #ifdef __linux__
     m_alreadyJoined = false;
 #endif
+}
+
+/*****************************************************************************/
+void DcgmThread::SetThreadName(std::string threadName)
+{
+    m_threadName = std::move(threadName);
 }
 
 /*****************************************************************************/

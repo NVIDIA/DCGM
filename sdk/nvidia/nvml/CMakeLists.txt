@@ -52,6 +52,9 @@ target_sources(
 
 add_library(sdk_nvml_loader STATIC)
 target_link_libraries(sdk_nvml_loader PUBLIC sdk_nvml_interface)
+if (${LINK_INJECTION_LIB} STREQUAL "true")
+    target_link_libraries(sdk_nvml_loader PUBLIC nvmli_interface)
+endif()
 
 target_sources(
     sdk_nvml_loader

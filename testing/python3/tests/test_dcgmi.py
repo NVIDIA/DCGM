@@ -448,6 +448,13 @@ def test_dcgmi_diag(handle, gpuIds):
     allGpusCsv = ",".join(map(str,gpuIds))
     ## keep args in this order. Changing it may break the test
 
+    pciTestParameters = "pcie.h2d_d2h_single_unpinned.min_pci_width=4"
+    #Need to skip checks for down NvLinks or QA will file bugs
+    if test_utils.are_any_nvlinks_down:
+        pciTestParameters += ";pcie.test_nvlink_status=false"
+
+    pciTestCmdLineArgs = ["diag", "--run", "pcie", "-p", pciTestParameters, "-i", str(gpuIds[0])]
+
     _test_valid_args([
            ["diag", "--run", "1", "-i", allGpusCsv], # run diagnostic other settings currently run for too long
            ["diag", "--run", "1", "-i", str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"], # Test that we can pass a long debugLogFile
@@ -463,7 +470,7 @@ def test_dcgmi_diag(handle, gpuIds):
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "96"], # verifies that --throttle-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
            ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "232"], # verifies that --throttle-mask with ALL reasons to be ignored
            ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in gpuIds)], # verifies --gpuList option accepts and validates list of GPUs passed in
-           ["diag", "--run", "pcie", "-p", "pcie.h2d_d2h_single_unpinned.min_pci_width=4", "-i", str(gpuIds[0])],
+           pciTestCmdLineArgs,
 
     ])
       

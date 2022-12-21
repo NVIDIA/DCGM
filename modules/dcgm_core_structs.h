@@ -77,6 +77,9 @@
         */
 #define DCGM_CORE_SR_WATCH_FIELD_VALUE_V2             53 /* Watch a gpu's field value (DCGM 3.x+) */
 #define DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2 54 /* Get multiples values for a given field (V2) */
+#define DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY          55 /* Create an entity in the injection NVML library */
+#define DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE          56 /* Inject a value into injection NVML */
+#define DCGM_CORE_SR_NVML_INJECT_DEVICE               57 /* Inject a value for an NVML device */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -624,6 +627,19 @@ typedef struct
 #define dcgm_core_msg_nvml_create_injection_gpu_version dcgm_core_msg_nvml_create_injection_gpu_version1
 
 typedef dcgm_core_msg_nvml_create_injection_gpu_v1 dcgm_core_msg_nvml_create_injection_gpu_t;
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+    dcgmMsgNvmlInjectDevice_v1 info;     /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_inject_device_v1;
+
+#define dcgm_core_msg_nvml_inject_device_version1 MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_v1, 1)
+#define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version1
+
+typedef dcgm_core_msg_nvml_inject_device_v1 dcgm_core_msg_nvml_inject_device_t;
+#endif
 
 DCGM_CASSERT(dcgm_core_msg_client_disconnect_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_logging_changed_version1 == (long)0x1000018, 1);

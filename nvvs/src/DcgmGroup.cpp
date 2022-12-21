@@ -122,7 +122,15 @@ dcgmReturn_t DcgmGroup::AddGpu(unsigned int gpuId)
 dcgmReturn_t DcgmGroup::Cleanup()
 {
     if (m_handle == 0 || m_groupId == 0)
+    {
         return DCGM_ST_OK;
+    }
+
+    if (auto const ret = dcgmUnwatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId()); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to unwatch fields for group {}: ({}) {}", m_groupId, ret, errorString(ret));
+        return ret;
+    }
 
     dcgmReturn_t ret = FieldGroupDestroy();
     dcgmReturn_t tmp;

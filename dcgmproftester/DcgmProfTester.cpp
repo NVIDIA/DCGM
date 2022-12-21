@@ -131,9 +131,9 @@ dcgmReturn_t DcgmProfTester::CreateDcgmGroups(short unsigned int fieldId)
         return dcgmReturn;
     }
 
-    for (auto &[gpuId, _] : m_gpus)
+    for (auto &[entityGroupId, entityId] : m_entities)
     {
-        dcgmReturn = dcgmGroupAddEntity(m_dcgmHandle, m_groupId, DCGM_FE_GPU, gpuId);
+        dcgmReturn = dcgmGroupAddEntity(m_dcgmHandle, m_groupId, entityGroupId, entityId);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -1007,6 +1007,8 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
             // Count GPU instances and per-GPU instance Compute instances.
             for (auto *p = hierarchy.entityList; p < hierarchy.entityList + hierarchy.count; p++)
             {
+                m_entities.emplace_back(dcgmGroupEntityPair_t { p->entity.entityGroupId, p->entity.entityId });
+
                 if ((p->entity.entityGroupId == DCGM_FE_GPU_I) && (p->parent.entityGroupId == DCGM_FE_GPU)
                     && (m_gpus.find(p->parent.entityId) != m_gpus.end()))
                 {
@@ -1025,6 +1027,10 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
         // Pick up non-MIG GPUs.
         for (auto &[gpuId, gpu] : m_gpus)
         {
+            // GPUs are not reported as entities in mig hierarchy. Add the GPU
+            // here regardless of the condition below
+            m_entities.emplace_back(dcgmGroupEntityPair_t { DCGM_FE_GPU, gpuId });
+
             if (!gpu->IsMIG())
             {
                 m_gpuInstances.emplace_back(gpuId);
@@ -1108,10 +1114,12 @@ int main(int argc, char **argv)
         }
 
         // CUDA_VERSION_USED is defined in CMakeLists.txt file
-        if ((cudaLoaded / 1000) != CUDA_VERSION_USED)
+        int majorCudaVersionLoaded = cudaLoaded / 1000;
+
+        if (majorCudaVersionLoaded != CUDA_VERSION_USED)
         {
             DCGM_LOG_FATAL << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
-                           << ". Installed Cuda version is " << cudaLoaded / 1000 << ".";
+                           << ". Installed Cuda version is " << majorCudaVersionLoaded << ".";
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1160,7 +1168,7 @@ int main(int argc, char **argv)
 
             if (st != DCGM_ST_OK)
             {
-                DCGM_LOG_ERROR << "Error " << dcgmReturn << " from RunTests(). Exiting.";
+                DCGM_LOG_ERROR << "Error " << st << " from RunTests(). Exiting.";
             }
 
             dcgmReturn = dpt->ShutdownGpus();

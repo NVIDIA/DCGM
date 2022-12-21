@@ -50,3 +50,19 @@ void CheckAndSetResult(Plugin *p,
         }
     }
 }
+
+/*****************************************************************************/
+bool IsSmallFrameBufferModeSet(void)
+{
+    const char *str = getenv("__DCGM_DIAG_SMALL_FB_MODE");
+    if (str != nullptr && str[0] == '1')
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+/*****************************************************************************/

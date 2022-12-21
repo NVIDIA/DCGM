@@ -28,6 +28,10 @@
  */
 #define DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V1 8
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Structure to return all of the profiling metric groups that are available for the given groupId.
  */
@@ -140,7 +144,6 @@ typedef struct
  * Version 1 for \ref dcgmDeviceAttributes_v1
  */
 #define dcgmDeviceAttributes_version1 MAKE_DCGM_VERSION(dcgmDeviceAttributes_v1, 1)
-DCGM_CASSERT(dcgmDeviceAttributes_version1 == (long)16782628, 1);
 
 typedef struct
 {
@@ -157,7 +160,6 @@ typedef struct
  * Version 2 for \ref dcgmDeviceAttributes_v2
  */
 #define dcgmDeviceAttributes_version2 MAKE_DCGM_VERSION(dcgmDeviceAttributes_v2, 2)
-DCGM_CASSERT(dcgmDeviceAttributes_version2 == (long)33559648, 1);
 
 /**
  * Number of NvLink links per NvSwitch supported by DCGM pre-Hopper
@@ -241,7 +243,6 @@ typedef struct
  * Version 6 for \ref dcgmDiagResponse_v6
  */
 #define dcgmDiagResponse_version6 MAKE_DCGM_VERSION(dcgmDiagResponse_v6, 6)
-DCGM_CASSERT(dcgmDiagResponse_version6 == (long)0x06079090, 1);
 
 /**
  * Identifies a level to retrieve field introspection info for
@@ -397,8 +398,8 @@ typedef dcgmIntrospectFullMemory_v1 dcgmIntrospectFullMemory_t;
  */
 #define dcgmIntrospectFullMemory_version dcgmIntrospectFullMemory_version1
 
-DCGM_CASSERT(dcgmIntrospectFieldsExecTime_version == (long)16777248, 1);
-DCGM_CASSERT(dcgmIntrospectFullFieldsExecTime_version == (long)0x020004D8, 1);
-DCGM_CASSERT(dcgmIntrospectContext_version == (long)16777232, 1);
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DCGM_STRUCTS_24__H

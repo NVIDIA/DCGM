@@ -98,8 +98,9 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errstr
 
     int *bufferd1      = nullptr;
     int *bufferd2      = nullptr;
-    int *hostBufferSrc = (int *)malloc(m_size);
-    int *hostBufferDst = (int *)malloc(m_size);
+    int *hostBufferSrc = (int *)calloc(1, m_size);
+    int *hostBufferDst = (int *)calloc(1, m_size);
+
     size_t stride      = 64 * 1024 / sizeof(int);
     size_t offset_size = m_size / sizeof(int);
 

@@ -28,7 +28,7 @@ import utils
 import test_utils
 
 log_dir = None
-have_removed_log_dir = False #Have we removed the log dir from previous runs?
+have_recreated_log_dir = False #Have we removed and recreated the log dir from previous runs?
 default_log_dir = '_out_runLogs'
 _log_file = None
 _log_file_counter = None
@@ -98,7 +98,7 @@ def setup_environment():
     global log_dir
     global dcgm_trace_log_filename
     global nvml_trace_log_filename
-    global have_removed_log_dir
+    global have_recreated_log_dir
     curr_log_dir = None
 
     # Users can specify a non-default logging base path via the command line
@@ -113,36 +113,45 @@ def setup_environment():
     nvml_trace_log_filename = os.path.join(log_dir, "nvml_trace.log")
 
     #We clean up the log dir from previous runs once per test run in order to prevent the constant accumulation of logs
-    if not have_removed_log_dir:
-        have_removed_log_dir = True #We set this boolean here so we don't incorrectly remove this directory if this function is called again
+    if not have_recreated_log_dir:
+        have_recreated_log_dir = True #We set this boolean here so we don't incorrectly remove this directory if this function is called again
         if os.path.isdir(log_dir):
             shutil.rmtree(log_dir, ignore_errors=True)
 
-    if not test_utils.noLogging:
         try:
             os.mkdir(log_dir)
         except OSError:
             pass
         os.chmod(log_dir, 0o777) # so that non-root tests could write to this directory
+    
+    if _log_file is None:
         _log_file = open(os.path.join(log_dir, "log.txt"), "a")
+    
+    if _summary_file is None:
         _summary_file = open(os.path.join(log_dir, summary_filename), "a")
 
+    # We always want the dcgm_trace log to be set to log within our test framework folder
+    # so we don't fill up /var/log with errors.
+    os.environ['__DCGM_DBG_FILE'] = dcgm_trace_log_filename
+    os.environ['__DCGM_DBG_APPEND'] = '1'
+    # create the file upfront ant set proper chmod
+    # so that non-root tests could dcgmInit and write to this log
+    with open(dcgm_trace_log_filename, "a"):
+        pass
+    os.chmod(dcgm_trace_log_filename, 0o777) 
+
+    if not test_utils.noLogging:
         #Log both NVML and DCGM so we can the underlying NVML calls for the DCGM data
-        os.putenv('__NVML_DBG_FILE', nvml_trace_log_filename)
-        os.putenv('__NVML_DBG_LVL', test_utils.loggingLevel)
-        os.putenv('__NVML_DBG_APPEND', '1')
-        os.putenv('__DCGM_DBG_FILE', dcgm_trace_log_filename)
-        os.putenv('__DCGM_DBG_LVL', test_utils.loggingLevel)
-        os.putenv('__DCGM_DBG_APPEND', '1')
+        os.environ['__NVML_DBG_FILE'] = nvml_trace_log_filename
+        os.environ['__NVML_DBG_LVL'] = test_utils.loggingLevel
+        os.environ['__NVML_DBG_APPEND'] = '1'
+        os.environ['__DCGM_DBG_LVL'] = test_utils.loggingLevel
     
         # create the file upfront ant set proper chmod
         # so that non-root tests could dcgmInit and write to this log
         with open(nvml_trace_log_filename, "a"):
             pass
         os.chmod(nvml_trace_log_filename, 0o777)
-        with open(dcgm_trace_log_filename, "a"):
-            pass
-        os.chmod(dcgm_trace_log_filename, 0o777) 
 
         addtrace_logging(dcgm_structs, 
                 # Don't attach trace logging to some functions
@@ -150,7 +159,7 @@ def setup_environment():
     else:
         #Not logging. Clear the environmental variables
         envVars = ['__NVML_DBG_FILE', '__NVML_DBG_LVL', '__NVML_DBG_APPEND', 
-                   '__DCGM_DBG_FILE', '__DCGM_DBG_LVL', '__DCGM_DBG_APPEND']
+                   '__DCGM_DBG_LVL']
         for envVar in envVars:
             if envVar in os.environ:
                 del(os.environ[envVar])
@@ -265,7 +274,7 @@ def log(level, msg, caller_depth=0, defer=False):
             # will be printing this message to stdout so we need to flush all deferred lines first
             for (log_id, defered_level, line) in _defered_lines:
                 print(apply_coloring(defered_level, line))
-                if _summary_file and (not test_utils.noLogging):
+                if _summary_file is not None:
                     _summary_file.write(line)
                     _summary_file.write("\n")
             del _defered_lines[:]
@@ -281,7 +290,7 @@ def log(level, msg, caller_depth=0, defer=False):
                     _defered_lines.append((_log_id, level, line))
                 else:
                     print(apply_coloring(level, line))
-                    if _summary_file and (not test_utils.noLogging):
+                    if _summary_file is not None:
                         _summary_file.write(line)
                         _summary_file.write("\n")
 

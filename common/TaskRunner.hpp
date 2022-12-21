@@ -306,7 +306,8 @@ public:
     /**
      * This enum describes possible results of the Run() method
      */
-    enum class [[nodiscard]] RunResult : std::uint8_t {
+    enum class [[nodiscard]] RunResult : std::uint8_t
+    {
         Ok,            //!< The Run method can be called again
         NoLongerValid, //!< The Run method should not be called again
     };

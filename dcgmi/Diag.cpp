@@ -102,6 +102,7 @@ const std::string DISPLAY_PCIE("PCIe");
 const std::string DISPLAY_MEMBW("Memory Bandwidth");
 const std::string DISPLAY_MEMTEST("Memtest");
 const std::string DISPLAY_PULSE_TEST("Pulse Test");
+const std::string DISPLAY_EUD_TEST("EUD Test");
 
 #define DATA_NAME_TAG "<DATA_NAME"
 #define DATA_INFO_TAG "<DATA_INFO"
@@ -488,6 +489,7 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
 
     Json::Value output;
     dcgmReturn_t overallRet = DCGM_ST_OK;
+    m_drd.totalIterations   = m_iterations;
 
     for (unsigned int i = 0; i < m_iterations; i++)
     {
@@ -495,6 +497,8 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
         {
             std::cout << "\nRunning iteration " << i + 1 << " of " << m_iterations << "...\n";
         }
+
+        m_drd.currentIteration = i;
 
         dcgmReturn_t ret                             = RunDiagOnce(handle);
         output[NVVS_ITERATIONS][static_cast<int>(i)] = m_jsonTmpValue;
@@ -618,6 +622,7 @@ void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v4 *diagResults, cons
     HelperDisplayGpuResults(TP_PLUGIN_NAME, DCGM_TARGETED_POWER_INDEX, diagResults, gpuIndices);
     HelperDisplayGpuResults(MEMBW_PLUGIN_NAME, DCGM_MEMORY_BANDWIDTH_INDEX, diagResults, gpuIndices);
     HelperDisplayGpuResults(MEMTEST_PLUGIN_NAME, DCGM_MEMTEST_INDEX, diagResults, gpuIndices);
+    HelperDisplayGpuResults(EUD_PLUGIN_NAME, DCGM_EUD_TEST_INDEX, diagResults, gpuIndices);
 }
 
 /*****************************************************************************/
@@ -979,6 +984,9 @@ std::string Diag::HelperGetPluginName(unsigned int index)
 
         case DCGM_PULSE_TEST_INDEX:
             return DISPLAY_PULSE_TEST;
+
+        case DCGM_EUD_TEST_INDEX:
+            return DISPLAY_EUD_TEST;
     }
 
     return "";
@@ -1101,6 +1109,7 @@ void Diag::HelperJsonBuildOutput(Json::Value &output,
                 case DCGM_MEMORY_INDEX:
                 case DCGM_DIAGNOSTIC_INDEX:
                 case DCGM_PULSE_TEST_INDEX:
+                case DCGM_EUD_TEST_INDEX:
 
                     HelperJsonAddPlugin(hardware, hardwarePluginCount, testEntry);
                     break;

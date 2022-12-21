@@ -118,6 +118,12 @@ def _run_burn_in_tests():
     else:
         logger.warning("burn_in_stress.py script not found!")
 
+def do_root_check_possibly_exit():
+    if not option_parser.options.no_root_check:
+        if not utils.is_root():
+            print("The test framework must be run as root to function properly. Switch to root by running 'sudo su'.")
+            sys.exit(1)
+
 class TestFrameworkSetup(object):
     def __enter__(self):
         '''Initialize the test framework or exit on failure'''
@@ -130,6 +136,10 @@ class TestFrameworkSetup(object):
 
         # Various setup steps
         option_parser.parse_options()
+
+        # The test framework must be run as root. Check after initializing the option_parser
+        do_root_check_possibly_exit()
+
         utils.verify_user_file_permissions()
         utils.verify_localhost_dns()
         if not option_parser.options.use_running_hostengine:
@@ -143,11 +153,9 @@ class TestFrameworkSetup(object):
             sys.exit(1)
         utils.verify_nvidia_fabricmanager_service_active_if_needed()
 
-        if not test_utils.noLogging:
-            logger.setup_environment()
-
-            if logger.log_dir:
-                logger.close()
+        # Setup logging regardless of if we're going to be logging or not in order to clear out old logs
+        # and initialize logger classes.
+        logger.setup_environment()
 
         option_parser.validate()
 
@@ -192,18 +200,9 @@ class TestFrameworkSetup(object):
         del os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE']
         pass
 
-def do_root_check_possibly_exit():
-    if not option_parser.options.no_root_check:
-        if not utils.is_root():
-            logger.warning("The test framework must be run as root to function properly. Switch to root by running 'sudo su'.")
-            sys.exit(1)
-
 def main():
 
     with TestFrameworkSetup():
-
-        do_root_check_possibly_exit()
-
         if not option_parser.options.no_env_check:
             if not test_utils.is_test_environment_sane():
                 logger.warning("The test environment does not seem to be healthy, test framework cannot continue.")

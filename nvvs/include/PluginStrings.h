@@ -27,6 +27,7 @@
 #define PS_PLUGIN_NAME  "name"
 #define PS_LOGFILE      "logfile"
 #define PS_LOGFILE_TYPE "logfile_type"
+#define PS_SUITE_LEVEL  "suite_level"
 
 #define PS_RUN_IF_GOM_ENABLED "run_if_gom_enabled" /* Should this plugin run if GOM mode is enabled */
 
@@ -36,6 +37,7 @@
 #define SW_STR_DO_TEST             "do_test"
 #define SW_STR_REQUIRE_PERSISTENCE "require_persistence_mode"
 #define SW_PLUGIN_NAME             "software"
+#define SW_STR_CHECK_FILE_CREATION "check_file_creation"
 
 /******************************************************************************
  * PCIE PLUGIN
@@ -320,32 +322,17 @@
  ***************************************************************************/
 #define PULSE_TEST_PLUGIN_NAME "pulse_test"
 
-#define PULSE_TEST_STR_IS_ALLOWED          "is_allowed"              /* Is the plugin allowed to run */
-#define PULSE_TEST_STR_INJECT_ERRORS       "inject_errors"           /* number of errors to inect (test only( */
-#define PULSE_TEST_STR_ADAPTERS            "adapters"                /* CUDA adapters to use */
-#define PULSE_TEST_STR_CHECK_MODE          "check_mode"              /* Either diff or crc (way to check results) */
-#define PULSE_TEST_STR_WORKLOAD            "workload"                /* type of workload */
-#define PULSE_TEST_STR_KERNEL              "kernel"                  /* which kernel to use */
-#define PULSE_TEST_STR_MATRIX_SIZE_MODE    "matrix_size_mode"        /* standard or max alloc */
-#define PULSE_TEST_STR_EXIT_ON_ERROR       "exit_on_error"           /* if true, exit on the first error */
-#define PULSE_TEST_STR_SKIP_HOSTALLOC_INIT "skip_hostalloc_mem_init" /* initialize the host memory or not */
-#define PULSE_TEST_STR_USE_CURAND          "use_curand"              /* Use curand if available */
-#define PULSE_TEST_STR_USE_CUPTI           "use_cupti"               /* Use cupti if available */
-#define PULSE_TEST_STR_SYNC_TIMEOUT        "sync_timeout"            /* timeout before marking a workload slow */
-#define PULSE_TEST_STR_MIN_K_SIZE          "min_k_size"              /* minimum k size for a k-schmoo */
-#define PULSE_TEST_STR_K_SIZE              "k_size"                  /* value to use for k */
-#define PULSE_TEST_STR_INTERNAL_LOOPS      "internal_loops"          /* number of kernel calls between checks */
-#define PULSE_TEST_STR_RANDOM_SEED         "random_seed"             /* seed value for random number generator */
-#define PULSE_TEST_STR_WAVES               "waves"                   /* multiply the minimum saturation by a factor */
-#define PULSE_TEST_STR_FORCE_M             "force_m"                 /* forced value for m */
-#define PULSE_TEST_STR_FORCE_N             "force_n"                 /* forced value for n */
-#define PULSE_TEST_STR_TEST_DURATION       "test_duration"           /* amount of time to run. 0 = forever */
-#define PULSE_TEST_STR_ALPHA               "alpha"                   /* alpha value */
-#define PULSE_TEST_STR_BETA                "beta"                    /* beta value */
-#define PULSE_TEST_STR_FREQ_0              "freq0"                   /* frequency 0 in hertz */
-#define PULSE_TEST_STR_FREQ_1              "freq1"                   /* frequency 1 in hertz */
-#define PULSE_TEST_STR_DUTY_0              "duty0"                   /* duty 0 as a decimal */
-#define PULSE_TEST_STR_DUTY_1              "duty1"                   /* duty 1 as a decimal */
+#define PULSE_TEST_STR_IS_ALLOWED        "is_allowed" /* Is the plugin allowed to run */
+#define PULSE_TEST_STR_CURRENT_ITERATION "current_iteration"
+#define PULSE_TEST_STR_TOTAL_ITERATIONS  "total_iterations"
+
+/****************************************************************************
+ * EUD PLUGIN
+ ***************************************************************************/
+#define EUD_PLUGIN_NAME      "eud"
+#define EUD_FULL_PROFILE     "full_profile"     /*!< Run the full MODS profile or not */
+#define EUD_PASSTHROUGH_ARGS "passthrough_args" /*!< Arguments to pass to the EUD binary */
+#define EUD_TMP_DIR          "tmp_dir"          /*!< Temporary directory to use for EUD */
 
 /*****************************************************************************
  * PER PLUGIN ERROR DEFINITIONS AND THEIR BITMASKS

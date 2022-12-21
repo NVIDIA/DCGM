@@ -49,6 +49,8 @@ NvvsCommon::NvvsCommon()
     , throttleIgnoreMask(DCGM_INT64_BLANK)
     , failEarly(false)
     , failCheckInterval(5)
+    , currentIteration(0)
+    , totalIterations(1)
 
 {
     memset(m_gpus, 0, sizeof(m_gpus));
@@ -80,6 +82,8 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , throttleIgnoreMask(other.throttleIgnoreMask)
     , failEarly(other.failEarly)
     , failCheckInterval(other.failCheckInterval)
+    , currentIteration(other.currentIteration)
+    , totalIterations(other.totalIterations)
 {
     memset(m_gpus, 0, sizeof(m_gpus));
 }
@@ -111,6 +115,8 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     throttleIgnoreMask     = other.throttleIgnoreMask;
     failEarly              = other.failEarly;
     failCheckInterval      = other.failCheckInterval;
+    currentIteration       = other.currentIteration;
+    totalIterations        = other.totalIterations;
 
     return *this;
 }
@@ -142,6 +148,8 @@ void NvvsCommon::Init()
     throttleIgnoreMask = DCGM_INT64_BLANK;
     failEarly          = false;
     failCheckInterval  = 5;
+    currentIteration   = 0;
+    totalIterations    = 1;
 }
 
 void NvvsCommon::SetStatsPath(const std::string &statsPath)
@@ -201,6 +209,8 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(MEMTEST_PLUGIN_NAME);
         case DCGM_PULSE_TEST_INDEX:
             return std::string(PULSE_TEST_PLUGIN_NAME);
+        case DCGM_EUD_TEST_INDEX:
+            return std::string(EUD_PLUGIN_NAME);
         default:
             return std::string("Unknown");
     }
@@ -254,6 +264,10 @@ dcgmPerGpuTestIndices_t GetTestIndex(const std::string name)
     else if (testName == CTXCREATE_PLUGIN_NAME)
     {
         return DCGM_CONTEXT_CREATE_INDEX;
+    }
+    else if (testName == EUD_PLUGIN_NAME)
+    {
+        return DCGM_EUD_TEST_INDEX;
     }
 
     return DCGM_UNKNOWN_INDEX;

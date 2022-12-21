@@ -22,11 +22,13 @@
 #include "DcgmDiagResponseWrapper.h"
 #include "DcgmMutex.h"
 #include "DcgmUtilities.h"
+#include "JsonResult.hpp"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
 #include <fmt/format.h>
 #include <json/json.h>
+#include <unordered_set>
 
 #define NVVS_PLUGIN_DIR "NVVS_PLUGIN_DIR"
 
@@ -52,9 +54,6 @@ public:
     dcgmReturn_t ResetGpuAndEnforceConfig(unsigned int gpuId,
                                           dcgmPolicyAction_t action,
                                           dcgm_connection_id_t connectionId);
-
-    /* perform the specified action */
-    dcgmReturn_t PerformDiag(unsigned int gpuId, dcgmPolicyAction_t action, dcgm_connection_id_t connectionId);
 
     /* perform the specified validation */
     dcgmReturn_t RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrapper &response);
@@ -82,6 +81,12 @@ public:
     dcgmReturn_t EnforceGPUConfiguration(unsigned int gpuId, dcgm_connection_id_t connectionId);
 
 
+    enum class ExecuteWithServiceAccount
+    {
+        No,
+        Yes,
+    };
+
     /* Execute NVVS.
      * Currently output is stored in a local variable and JSON output is not collected but
      * place holders are there for when these pieces should be inserted
@@ -89,7 +94,8 @@ public:
     dcgmReturn_t PerformNVVSExecute(std::string *stdoutStr,
                                     std::string *stderrStr,
                                     dcgmRunDiag_t *drd,
-                                    std::string const &gpuIds = "") const;
+                                    std::string const &gpuIds                   = "",
+                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
 
     /* Should not be made public... for testing purposes only */
     dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const;
@@ -112,31 +118,32 @@ public:
                                    dcgmRunDiag_t *drd,
                                    std::string const &gpuIds = "") const;
 
-    /*
-     * Fill the response structure during a validation action - made public for unit testing
-     *
-     * @param output - the output from NVVS we're parsing
-     * @param response - the response structure we are filling in
-     * @param groupId - the groupId we ran the diagnostic on
-     * @param oldRet - the return from PerformExternalCommand.
-     * @return DCGM_ST_OK on SUCCES
-     *         oldRet if it's an error and we couldn't parse the Json
-     *         DCGM_ST_BADPARAM if oldRet is DCGM_ST_OK and we can't parse the Json
+    /**
+     * @brief Fill the response structure during a validation stage
+     * @param[in] results - deserialized NVVS results
+     * @param[out] response - the response structure we are filling in
+     * @param[in] groupId - the groupId we ran the diagnostic on
+     * @param[in] oldRet - a return from earlier stages of the validation
+     * @return \c DCGM_ST_OK on SUCCESS
+     * @return \a oldRet if there was an error and previous value of the oldRet is not DCGM_ST_OK
+     * @return \c DCGM_ST_NVVS_ERROR if an error is detected in the NVVS output
+     *          and the previous value of the oldRet is DCGM_ST_OK
      */
-    dcgmReturn_t FillResponseStructure(const std::string &output,
+    dcgmReturn_t FillResponseStructure(DcgmNs::Nvvs::Json::DiagnosticResults const &results,
                                        DcgmDiagResponseWrapper &response,
                                        int groupId,
                                        dcgmReturn_t oldRet);
 
-    void FillTestResult(Json::Value &test,
-                        DcgmDiagResponseWrapper &response,
-                        std::set<unsigned int> &gpuIdSet,
-                        double nvvsVersion);
+    static void FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
+                               DcgmDiagResponseWrapper &response,
+                               std::unordered_set<unsigned int> &gpuIdSet);
 
     /* perform external command - switched to public for testing*/
     dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
                                         std::string *stdoutStr,
-                                        std::string *stderrStr) const;
+                                        std::string *stderrStr,
+                                        ExecuteWithServiceAccount useServiceAccount
+                                        = ExecuteWithServiceAccount::Yes) const;
 
 private:
     /* variables */
@@ -155,17 +162,7 @@ private:
 
     /* methods */
 
-    /* convert a string to a dcgmDiagResponse_t */
-    static dcgmDiagResult_t StringToDiagResponse(std::string_view result);
-
-    static bool IsMsgForThisTest(unsigned int testIndex, const std::string &msg, const std::string &gpuMsg);
-
     static unsigned int GetTestIndex(const std::string &testName);
-
-    /* Converts the given JSON array to a CSV string using the values in the array */
-    static std::string JsonStringArrayToCsvString(Json::Value &array,
-                                                  unsigned int testIndex,
-                                                  const std::string &gpuMsg);
 
     /*
      * Get a ticket for updating the PID of nvvs child. The ticket helps ensure that updates to the child PID are valid.
@@ -189,20 +186,6 @@ private:
     void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
                                      dcgmRunDiag_t *drd,
                                      const std::string &gpuIds) const;
-
-    /*
-     * Populates the error detail struct with the error and error code if present in the Json
-     */
-    static void PopulateErrorDetail(Json::Value &jsonResult, dcgmDiagErrorDetail_t &ed, double nvvsVersion);
-
-    /*
-     * Validate and parse the json output from NVVS into jv, and record the position of jsonStart
-     */
-    dcgmReturn_t ValidateNvvsOutput(const std::string &output,
-                                    size_t &jsonStart,
-                                    Json::Value &jv,
-                                    DcgmDiagResponseWrapper &response);
-
 
     /*
      * Kill an active NVVS process within the specified number of retries.

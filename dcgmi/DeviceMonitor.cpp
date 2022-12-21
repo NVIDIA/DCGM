@@ -272,7 +272,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
 {
     dcgmi_entity_pair_t entityKey;
 
-    // Note: this is a pointer to a map, and we cast it to map below.
+    // Note: this is a pointer to a map and we cast it to map below.
     auto &entityStats = *(DeviceMonitor::EntityStats *)userdata;
 
     entityKey.entityGroupId = entityGroupId;

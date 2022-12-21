@@ -292,7 +292,15 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
              && fieldId < (DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU);
              fieldIdCount++, fieldId++)
         {
-            if (values[fieldId].status != DCGM_ST_OK)
+            if (values[fieldId].status == DCGM_ST_NOT_SUPPORTED)
+            {
+                /* Skip unsupported nvlinks */
+                log_debug("Unable to retrieve nvlink {} count for link {}, gpuId {}",
+                          HelperGetNvlinkErrorCountType(values[fieldId].fieldId).c_str(),
+                          nvlink,
+                          gpuId);
+            }
+            else if (values[fieldId].status != DCGM_ST_OK)
             {
                 std::cout << "Warning: Unable to retrieve nvlink "
                           << HelperGetNvlinkErrorCountType(values[fieldId].fieldId) << " count for link " << nvlink

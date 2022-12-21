@@ -32,7 +32,7 @@ configure_file(
     @ONLY)
 
 add_library(nvvs_without_main_objects OBJECT)
-target_link_libraries(nvvs_without_main_objects PUBLIC nvvs_interface dcgm dcgm_common dcgm_logging dcgm_mutex)
+target_link_libraries(nvvs_without_main_objects PUBLIC nvvs_interface dcgm dcgm_common dcgm_logging dcgm_mutex serialize)
 target_include_directories(nvvs_without_main_objects PRIVATE ${YAML_INCLUDE_DIR})
 target_include_directories(nvvs_without_main_objects PRIVATE ${JSONCPP_INCLUDE_DIR})
 target_sources(nvvs_without_main_objects

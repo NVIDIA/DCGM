@@ -31,7 +31,7 @@
 #include "dcgm_fields.h"
 #include "timelib.h"
 
-const long long defaultFrequency = 1000000; // update each field every second (a million microseconds)
+const long long defaultFrequency = 5000000; // update each field every 5 seconds (a million microseconds)
 
 errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SBE_ERROR_THRESHOLD },
                                       { DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, nullptr },
@@ -1036,6 +1036,7 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
         thresholdsPtr = &thresholds;
     }
 
+    dcgmUpdateAllFields(m_dcgmHandle.GetHandle(), 1);
     for (auto &&gpuInfo : gpuInfos)
     {
         long long maxTemp = DetermineMaxTemp(gpuInfo, tp);

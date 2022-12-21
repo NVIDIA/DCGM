@@ -35,4 +35,17 @@ void CheckAndSetResult(Plugin *p,
                        bool &allPassed,
                        bool dcgmCommError);
 
+/********************************************************************/
+/*
+ * Returns whether the environmental variable for Small FrameBuffer mode
+ * is set. This is a hint that we're not testing the plugins in their entirety
+ * but just want them to run minimally to test something else.
+ *
+ * Startup time for plugins scales linearly with the number of GPUs we have and
+ * how much FB (FrameBuffer) we allocate per GPU. Setting this will cause plugins
+ * that allocate a lot of FB to start faster. This should only be used from the
+ * DCGM test framework.
+ */
+bool IsSmallFrameBufferModeSet(void);
+
 #endif // _NVVS_NVVS_Plugin_common_H_

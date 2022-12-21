@@ -21,17 +21,17 @@ const double DUMMY_TEMPERATURE_VALUE = 30.0;
 /*************************************************************************/
 Plugin::Plugin()
     : progressOut(nullptr)
-    , m_results()
-    , m_warnings()
     , m_errors()
+    , m_warnings()
+    , m_verboseInfo()
+    , m_resultsPerGPU()
     , m_errorsPerGPU()
     , m_warningsPerGPU()
-    , m_verboseInfo()
     , m_verboseInfoPerGPU()
     , m_values()
     , m_fakeGpus(false)
-    , m_dataMutex(0)
     , m_infoStruct {}
+    , m_dataMutex(0)
     , m_mutex(0)
 {}
 
@@ -43,7 +43,7 @@ Plugin::~Plugin()
 void Plugin::ResetResultsAndMessages()
 {
     DcgmLockGuard lock(&m_dataMutex);
-    m_results.clear();
+    m_resultsPerGPU.clear();
     m_warnings.clear();
     m_errors.clear();
     m_errorsPerGPU.clear();
@@ -66,7 +66,7 @@ void Plugin::InitializeForGpuList(const dcgmDiagPluginGpuList_t &gpuInfo)
         m_warningsPerGPU[gpuInfo.gpus[i].gpuId];
         m_errorsPerGPU[gpuInfo.gpus[i].gpuId];
         m_verboseInfoPerGPU[gpuInfo.gpus[i].gpuId];
-        m_results[gpuInfo.gpus[i].gpuId] = NVVS_RESULT_PASS; // default result should be pass
+        m_resultsPerGPU[gpuInfo.gpus[i].gpuId] = NVVS_RESULT_PASS; // default result should be pass
         m_gpuList.push_back(gpuInfo.gpus[i].gpuId);
         if (gpuInfo.gpus[i].status == DcgmEntityStatusFake)
         {
@@ -162,7 +162,7 @@ nvvsPluginResult_t Plugin::GetOverallResult(const nvvsPluginGpuResults_t &result
 nvvsPluginResult_t Plugin::GetResult()
 {
     DcgmLockGuard lock(&m_dataMutex);
-    return GetOverallResult(m_results);
+    return GetOverallResult(m_resultsPerGPU);
 }
 
 /*************************************************************************/
@@ -170,7 +170,7 @@ void Plugin::SetResult(nvvsPluginResult_t res)
 {
     DcgmLockGuard lock(&m_dataMutex);
     nvvsPluginGpuResults_t::iterator it;
-    for (it = m_results.begin(); it != m_results.end(); ++it)
+    for (it = m_resultsPerGPU.begin(); it != m_resultsPerGPU.end(); ++it)
     {
         it->second = res;
     }
@@ -180,7 +180,7 @@ void Plugin::SetResult(nvvsPluginResult_t res)
 void Plugin::SetResultForGpu(unsigned int gpuId, nvvsPluginResult_t res)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    m_results[gpuId] = res;
+    m_resultsPerGPU[gpuId] = res;
 }
 
 /*************************************************************************/
@@ -195,6 +195,14 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
     results->numInfo   = 0;
 
     bool errorsFull = false;
+
+    for (auto const &nonGpuResult : m_nonGpuResults)
+    {
+        auto &result  = results->perGpuResults[results->numResults++];
+        result.gpuId  = -1;
+        result.result = nonGpuResult;
+    }
+
     for (auto &&error : m_errors)
     {
         results->errors[results->numErrors].errorCode = error.GetCode();
@@ -309,7 +317,7 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
         }
     }
 
-    for (auto &[gpuId, result] : m_results)
+    for (auto &[gpuId, result] : m_resultsPerGPU)
     {
         results->perGpuResults[results->numResults].gpuId  = gpuId;
         results->perGpuResults[results->numResults].result = result;
@@ -383,4 +391,9 @@ void Plugin::PopulateCustomStats(dcgmDiagCustomStats_t &customStats)
 std::string Plugin::GetDisplayName()
 {
     return GetTestDisplayName(m_infoStruct.testIndex);
+}
+
+void Plugin::SetNonGpuResult(nvvsPluginResult_t res)
+{
+    m_nonGpuResults.emplace_back(res);
 }

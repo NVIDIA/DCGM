@@ -81,7 +81,7 @@ private:
         WaitersGuard(WaitersGuard const &) = delete;
         WaitersGuard(WaitersGuard &&)      = delete;
 
-        WaitersGuard &operator=(WaitersGuard &&) = delete;
+        WaitersGuard &operator=(WaitersGuard &&)      = delete;
         WaitersGuard &operator=(WaitersGuard const &) = delete;
 
     private:
@@ -89,21 +89,25 @@ private:
     };
 
 public:
-    enum class [[nodiscard]] ReleaseResult {
+    enum class [[nodiscard]] ReleaseResult
+    {
         Ok,        //!< Semaphore was successfully released
         Destroyed, //!< Semaphore was marked to be destroyed. The semaphore may or may not be released.
         Overflow,  //!< Too many releases were made to the semaphore.
     };
-    enum class [[nodiscard]] WaitResult {
+    enum class [[nodiscard]] WaitResult
+    {
         Ok,        //!< The semaphore was successfully acquired and its counter was decreased by 1
         Destroyed, //!< The semaphore was marked to be destroyed. The semaphore may or may not be acquired.
     };
-    enum class [[nodiscard]] TimedWaitResult {
+    enum class [[nodiscard]] TimedWaitResult
+    {
         Ok,        //!< The semaphore was successfully acquired and its counter was decreased by 1
         Destroyed, //!< The semaphore was marked to be destroyed. The semaphore may or may not be acquired.
         TimedOut,  //!< The semaphore was not acquired as due to the timeout
     };
-    enum class [[nodiscard]] AsyncWaitResult {
+    enum class [[nodiscard]] AsyncWaitResult
+    {
         Ok,         //!< The semaphore was acquired and its counter was decreased by 1
         Destroyed,  //!< The semaphore was marked to be destroyed. The semaphore may or may not be acquired.
         LockNeeded, //!< The semaphore cannot be acquired without full lock: its counter is 0.
@@ -153,10 +157,10 @@ public:
         sem_destroy(&m_systemSemaphore);
     }
 
-    Semaphore(Semaphore const &) = delete;
+    Semaphore(Semaphore const &)            = delete;
     Semaphore &operator=(Semaphore const &) = delete;
 
-    Semaphore(Semaphore &&) = delete;
+    Semaphore(Semaphore &&)            = delete;
     Semaphore &operator=(Semaphore &&) = delete;
 
     /**

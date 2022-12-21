@@ -42,8 +42,9 @@ import time
 
 from apps.dcgmi_app import DcgmiApp
 from apps.nv_hostengine_app import NvHostEngineApp
-from dcgm_internal_helpers import InjectionThread, check_nvvs_process
+from dcgm_internal_helpers import check_nvvs_process
 
+import dcgm_field_injection_helpers
 import dcgm_internal_helpers
 import dcgm_fields
 import dcgm_structs
@@ -151,31 +152,13 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
         value = 1000
         delay = 15
 
-    inject_error = InjectionThread(handle, gpuIds[0], field_id, value)
-    if delay == 0:
-        inject_error.start()
-        logger.info("Injecting errors now (field %s, value %s)" % (field_id, value))
-        assert dcgm_internal_helpers.verify_field_value(gpuIds[0], field_id, value)
+    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], field_id, value, delay, repeatCount=20)
 
     start = time.time()
     dcgmi.start(timeout=1500) # 25min timeout
     logger.info("Started diag with args: %s" % args)
 
-    # Some tests do a diff test for the field values so we must let them see 0 values first
-    if delay != 0:
-        running, _ = dcgm_internal_helpers.check_nvvs_process(want_running=True)
-        assert running, "nvvs did not start"
-        logger.info("Nvvs started after %.1fs" % (time.time() - start))
-        time.sleep(delay)
-        logger.info("Injecting errors now (field %s, value %s)" % (field_id, value))
-        inject_error.start()
-        assert dcgm_internal_helpers.verify_field_value(gpuIds[0], field_id, value, maxWait=3)
-
     retcode = dcgmi.wait()
-    
-    inject_error.Stop()
-    inject_error.join()
-    assert inject_error.retCode == dcgm_structs.DCGM_ST_OK
     
     copy_nvvs_log("/tmp/nvvs.log", log_file)
     expected_retcode = ctypes.c_uint8(dcgm_structs.DCGM_ST_NVVS_ERROR).value

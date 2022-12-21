@@ -2044,6 +2044,8 @@ int TestCacheManager::TestTimedModeAwakeTime()
     /* Sleep for 10 seconds to allow timed mode to wake up a few times */
     usleep(10 * 1000000);
 
+    cacheManager->Shutdown();
+
     cacheManager->GetRuntimeStats(&stats);
 
     long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
@@ -2088,17 +2090,21 @@ int TestCacheManager::TestLockstepModeAwakeTime()
         return 0;
     }
 
-
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
         return -1;
     }
 
+    /* Trigger one UpdateAllFields() to make sure lock step mode can wake up and go right
+       back to idle */
+    cacheManager->UpdateAllFields(0);
+
     std::cout << "TestLockstepModeAwakeTime sleeping for 10 seconds." << std::endl;
     /* Sleep for 10 seconds to allow timed mode to wake up a few times */
     usleep(10 * 1000000);
 
+    cacheManager->Shutdown();
     cacheManager->GetRuntimeStats(&stats);
 
     long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;

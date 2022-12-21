@@ -824,6 +824,12 @@ dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo
                             case NVML_COMPUTE_INSTANCE_PROFILE_8_SLICE:
                                 ci.sliceProfile = DcgmMigProfileComputeInstanceSlice8;
                                 break;
+                            case NVML_COMPUTE_INSTANCE_PROFILE_6_SLICE:
+                                ci.sliceProfile = DcgmMigProfileComputeInstanceSlice6;
+                                break;
+                            case NVML_COMPUTE_INSTANCE_PROFILE_1_SLICE_REV1:
+                                ci.sliceProfile = DcgmMigProfileComputeInstanceSlice1Rev1;
+                                break;
                             default:
                                 DCGM_LOG_ERROR << "Unknown NVML Compute Instance Profile " << cpIndex
                                                << ". Slices: " << profileInfo.sliceCount;
@@ -872,8 +878,7 @@ dcgmReturn_t DcgmCacheManager::InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo
 /*****************************************************************************/
 // NOTE: NVML is initialized by DcgmHostEngineHandler before DcgmCacheManager is instantiated
 DcgmCacheManager::DcgmCacheManager()
-    : DcgmThread(false, "cache_mgr_main")
-    , m_pollInLockStep(0)
+    : m_pollInLockStep(0)
     , m_maxSampleAgeUsec((timelib64_t)3600 * 1000000)
     , m_driverIsR450OrNewer(false)
     , m_driverIsR520OrNewer(false)
@@ -885,8 +890,6 @@ DcgmCacheManager::DcgmCacheManager()
     , m_nvmlInitted(true)
     , m_inDriverCount(0)
     , m_waitForDriverClearCount(0)
-    , m_startUpdateCondition()
-    , m_updateCompleteCondition()
     , m_nvmlEventSetInitialized(false)
     , m_nvmlEventSet()
     , m_runStats {}
@@ -894,6 +897,8 @@ DcgmCacheManager::DcgmCacheManager()
     , m_migManager()
     , m_delayedMigReconfigProcessingTimestamp(0)
     , m_forceProfMetricsThroughGpm(false)
+    , m_nvmlInjectionManager()
+    , m_updateThreadCtx(nullptr)
 {
     int kvSt = 0;
 
@@ -1915,7 +1920,7 @@ dcgmReturn_t DcgmCacheManager::Shutdown()
         log_warning("m_eventThread was NULL");
 
     /* Wake up the cache manager thread if it's sleeping. No need to wait */
-    Stop();
+    TaskRunner::Stop();
     UpdateAllFields(0);
 
     /* Wait for the thread to exit for a reasonable amount of time. After that,
@@ -2261,12 +2266,34 @@ unsigned int DcgmCacheManager::NvmlIndexToGpuId(int nvmlIndex)
 /*********************************f********************************************/
 dcgmReturn_t DcgmCacheManager::Start(void)
 {
-    int st = DcgmThread::Start();
+    SetThreadName("cache_mgr_main");
 
+    int st = DcgmThread::Start();
     if (st)
+    {
+        DCGM_LOG_ERROR << "DcgmThread::Start() returned " << st;
         return DCGM_ST_GENERIC_ERROR;
-    else
-        return DCGM_ST_OK;
+    }
+
+    /* Wait for the thread to actually run so it can service UpdateAllFields...etc. */
+
+    long long waitSoFarUsec = 0;
+    long long waitFor       = 100;
+    long long timeOutUsec   = 30000000; /* 30 second timeout. Should never hit unless we're
+                                       at a breakpoint or something */
+    for (waitSoFarUsec = 0; waitSoFarUsec < timeOutUsec; waitSoFarUsec += waitFor)
+    {
+        if (HasRun())
+        {
+            DCGM_LOG_DEBUG << "Waited " << waitSoFarUsec << " usec for the cache manager thread to start.";
+            return DCGM_ST_OK;
+        }
+
+        usleep(waitFor);
+    }
+
+    DCGM_LOG_ERROR << "Timed out waiting for the cache manager thread to start after " << waitSoFarUsec << " usec.";
+    return DCGM_ST_TIMEOUT;
 }
 
 /*********************************f********************************************/
@@ -2365,73 +2392,26 @@ dcgmReturn_t DcgmCacheManager::Resume()
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::UpdateAllFields(int waitForUpdate)
 {
-    long long waitForFinishedCycle = 0;
-    unsigned int sleepAtATimeMs    = 1000;
+    using namespace DcgmNs;
+    auto task = Enqueue(make_task("DoOneUpdateAllFields", [this] { return DoOneUpdateAllFields(); }));
 
-    dcgm_mutex_lock(m_mutex);
-    /*
-     * Which cycle should we wait for? If one is in progress, wait for the one
-     * after the current. This can be simplified as wait for the next cycle
-     * that starts to finish
-     */
-    waitForFinishedCycle = m_runStats.updateCycleStarted + 1;
-
-    /* Other UpdateAllFields could be waiting on this cycle as well, but that's ok.
-     * They would have had to get the lock in between us Unlock()ing below and the
-     * polling loop getting the lock. Either way, we're consistent thanks to the lock */
-    m_runStats.shouldFinishCycle = std::max(waitForFinishedCycle, m_runStats.shouldFinishCycle);
-
-    dcgm_mutex_unlock(m_mutex);
-    m_startUpdateCondition.notify_all();
-    // Add some kind of incrementing here.
-
-    if (!waitForUpdate)
+    if (!task.has_value())
     {
-        return DCGM_ST_OK; /* We don't care when it finishes. Just return */
+        DCGM_LOG_ERROR << "Unable to enqueueDoOneUpdateAllFields";
+        return DCGM_ST_GENERIC_ERROR;
     }
-    if (!HasRun())
+    else if (waitForUpdate)
     {
-        DCGM_LOG_DEBUG << "Skipping waitForUpdate since the cache manager thread is not running yet.";
-        return DCGM_ST_OK;
-    }
-
-    /* Wait for signals that update loops have completed until the loop we care
-       about has completed */
-    while (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
-    {
-#ifdef DEBUG_UPDATE_LOOP
-        log_debug("Sleeping {} ms. {} < {}", sleepAtATimeMs, m_runStats.updateCycleFinished, waitForFinishedCycle);
-#endif
-        dcgm_mutex_lock(m_mutex);
-
-        /* Check the updateCycleFinished one more time, now that we got the lock */
-        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
+        if (HasRun())
         {
-            m_mutex->CondWait(m_updateCompleteCondition, sleepAtATimeMs, [this, waitForFinishedCycle] {
-                return not(m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < waitForFinishedCycle)
-                       || ShouldStop() != 0;
-            });
-#ifdef DEBUG_UPDATE_LOOP
-            log_debug("UpdateAllFields() RETURN st {}", st);
+            /* Wait for the return value */
+            timelib64_t nextWakeup = (*task).get();
+            DCGM_LOG_DEBUG << "DoOneUpdateAllFields returned " << (long long)nextWakeup;
         }
         else
         {
-            log_debug("UpdateAllFields() skipped CondWait()");
-#endif
+            DCGM_LOG_DEBUG << "Skipping waitForUpdate since cache thread hasn't run yet.";
         }
-
-        dcgm_mutex_unlock(m_mutex);
-
-#ifdef DEBUG_UPDATE_LOOP
-        log_debug("Woke up to st {}. updateCycleFinished {}, waitForFinishedCycle {}",
-                  st,
-                  m_runStats.updateCycleFinished,
-                  waitForFinishedCycle);
-#endif
-
-        /* Make sure we don't get stuck waiting when a shutdown is requested */
-        if (ShouldStop())
-            return DCGM_ST_OK;
     }
 
     return DCGM_ST_OK;
@@ -3012,7 +2992,7 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
         }
     }
 
-    {
+    { /* Scoped lock */
         DcgmLockGuard dlg(m_mutex);
 
         watchInfo = GetEntityWatchInfo(watchEntityGroupId, watchEntityId, dcgmFieldId, 1);
@@ -3062,18 +3042,20 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
                            << dcgmFieldId << " as module-pushed";
             watchInfo->pushedByModule = true;
         }
-    } // End of m_mutex lock guard
+
+        wereFirstWatcher = false;
+        if (watchInfo->lastQueriedUsec == 0)
+        {
+            wereFirstWatcher = true;
+        }
+
+    } /* End scoped lock */
 
     /* If our field has never been queried. Force an update to get the cache to start updating. Otherwise,
        this field may not update until the cache manager thread times out in 10 seconds */
-    wereFirstWatcher = false;
-    if (watchInfo->lastQueriedUsec == 0)
+    if (wereFirstWatcher && updateOnFirstWatch)
     {
-        wereFirstWatcher = true;
-        if (updateOnFirstWatch)
-        {
-            UpdateAllFields(1);
-        }
+        UpdateAllFields(1);
     }
 
     DCGM_LOG_DEBUG << "AddFieldWatch eg " << watchEntityGroupId << ", eid " << watchEntityId << ", fieldId "
@@ -3091,16 +3073,23 @@ bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
         return false;
     }
 
-    /* Note: MIG support for GPM has not been added yet */
-    if (entityKey.entityGroupId != DCGM_FE_GPU)
+    switch (entityKey.entityGroupId)
     {
-        return false;
+        case DCGM_FE_GPU:
+        case DCGM_FE_GPU_I:
+        case DCGM_FE_GPU_CI:
+            break;
+        default:
+            return false;
     }
 
-    /* Treating entityId as gpuId since validated above */
-    if (entityKey.entityId >= m_numGpus)
+    unsigned int gpuId = m_numGpus; // Initialize to an invalid value for check below
+    dcgmReturn_t ret   = GetGpuId(entityKey.entityGroupId, entityKey.entityId, gpuId);
+
+    if (ret != DCGM_ST_OK || gpuId >= m_numGpus)
     {
-        DCGM_LOG_ERROR << "gpuId " << entityKey.entityId << " >= m_numGpus " << m_numGpus;
+        log_error(
+            "Could not query eg {} eid {} gpu {}. ret {}", entityKey.entityGroupId, entityKey.entityId, gpuId, ret);
         return false;
     }
 
@@ -3109,7 +3098,7 @@ bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
         return true;
     }
 
-    if (m_gpus[entityKey.entityId].arch != DCGM_CHIP_ARCH_HOPPER)
+    if (m_gpus[gpuId].arch != DCGM_CHIP_ARCH_HOPPER)
     {
         return false;
     }
@@ -3198,45 +3187,50 @@ dcgmReturn_t DcgmCacheManager::AddGlobalFieldWatch(unsigned short dcgmFieldId,
     if (dcgmFieldId >= DCGM_FI_MAX_FIELDS)
         return DCGM_ST_BADPARAM;
 
-    DcgmLockGuard dlg(m_mutex);
+    { /* Scoped lock */
+        DcgmLockGuard dlg(m_mutex);
 
-    watchInfo = GetGlobalWatchInfo(dcgmFieldId, 1);
-    if (watchInfo == nullptr)
-    {
-        DCGM_LOG_ERROR << "Got watchInfo == null from GetGlobalWatchInfo";
-        return DCGM_ST_GENERIC_ERROR;
-    }
+        watchInfo = GetGlobalWatchInfo(dcgmFieldId, 1);
+        if (watchInfo == nullptr)
+        {
+            DCGM_LOG_ERROR << "Got watchInfo == null from GetGlobalWatchInfo";
+            return DCGM_ST_GENERIC_ERROR;
+        }
 
-    /* Populate the cache manager version of watcher so we can insert/update it in this watchInfo's
-        watcher table */
-    newWatcher.watcher             = watcher;
-    newWatcher.monitorIntervalUsec = monitorIntervalUsec;
+        /* Populate the cache manager version of watcher so we can insert/update it in this watchInfo's
+            watcher table */
+        newWatcher.watcher             = watcher;
+        newWatcher.monitorIntervalUsec = monitorIntervalUsec;
 
-    newWatcher.maxAgeUsec   = ToLegacyTimestamp(GetMaxAge(
-        FromLegacyTimestamp<milliseconds>(monitorIntervalUsec), seconds(std::uint64_t(maxSampleAge)), maxKeepSamples));
-    newWatcher.isSubscribed = subscribeForUpdates;
+        newWatcher.maxAgeUsec   = ToLegacyTimestamp(GetMaxAge(FromLegacyTimestamp<milliseconds>(monitorIntervalUsec),
+                                                            seconds(std::uint64_t(maxSampleAge)),
+                                                            maxKeepSamples));
+        newWatcher.isSubscribed = subscribeForUpdates;
 
-    /* New watch? */
-    if (!watchInfo->isWatched)
-    {
-        NvmlPreWatch(-1, dcgmFieldId);
-    }
+        /* New watch? */
+        if (!watchInfo->isWatched)
+        {
+            NvmlPreWatch(-1, dcgmFieldId);
+        }
 
-    /* Add or update the watcher in our table */
-    AddOrUpdateWatcher(watchInfo, &wasAdded, &newWatcher);
+        /* Add or update the watcher in our table */
+        AddOrUpdateWatcher(watchInfo, &wasAdded, &newWatcher);
 
-    watchInfo->isWatched = 1;
+        watchInfo->isWatched = 1;
+
+        wereFirstWatcher = false;
+        if (watchInfo->lastQueriedUsec == 0)
+        {
+            wereFirstWatcher = true;
+        }
+
+    } /* End scoped lock */
 
     /* If our field has never been queried. Force an update to get the cache to start updating. Otherwise,
        this field may not update until the cache manager thread times out in 10 seconds */
-    wereFirstWatcher = false;
-    if (watchInfo->lastQueriedUsec == 0)
+    if (wereFirstWatcher && updateOnFirstWatch)
     {
-        wereFirstWatcher = true;
-        if (updateOnFirstWatch)
-        {
-            UpdateAllFields(1);
-        }
+        UpdateAllFields(1);
     }
 
     log_debug("AddGlobalFieldWatch dcgmFieldId {}, mfu {}, msa {}, mka {}, sfu {}",
@@ -5208,7 +5202,7 @@ void DcgmCacheManager::MarkReturnedFromDriver()
 bool DcgmCacheManager::IsModulePushedFieldId(unsigned int fieldId)
 {
     /* NvLink and Profiling fields are the fields >= 700 */
-    if (fieldId >= DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00)
+    if (fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID)
         return true;
     else
         return false;
@@ -5860,147 +5854,88 @@ dcgmReturn_t DcgmCacheManager::ClearEntity(dcgm_field_entity_group_t entityGroup
 }
 
 /*****************************************************************************/
-void DcgmCacheManager::RunLockStep(dcgmcm_update_thread_t *threadCtx)
+timelib64_t DcgmCacheManager::DoOneUpdateAllFields(void)
 {
-    bool haveLock               = false;
-    unsigned int sleepAtATimeMs = 10000;
-    timelib64_t earliestNextUpdate, lastWakeupTime, now;
+    timelib64_t earliestNextUpdate    = 0;
+    dcgmcm_update_thread_t *threadCtx = m_updateThreadCtx;
 
-    lastWakeupTime = 0;
+    assert(threadCtx != nullptr);
 
-    while (!ShouldStop())
+    /* If we haven't allocated fvBuffer yet, do so only if there are any live subscribers */
+    if (!threadCtx->fvBuffer && m_haveAnyLiveSubscribers)
     {
-        if (!haveLock)
-            dcgm_mutex_lock(m_mutex);
-        haveLock = true;
+        /* Buffer live updates for subscribers */
+        threadCtx->fvBuffer = new DcgmFvBuffer();
+    }
 
-        /* Update runtime stats */
-        m_runStats.numSleepsDone++;
-        m_runStats.lockCount = m_mutex->GetLockCount();
-        m_runStats.sleepTimeUsec += 1000 * ((long long)sleepAtATimeMs);
-        now = timelib_usecSince1970();
-        /* If lastWakeupTime != 0 then we actually work up to do work */
-        if (lastWakeupTime)
-            m_runStats.awakeTimeUsec += now - lastWakeupTime;
-
-#ifdef DEBUG_UPDATE_LOOP
-        log_debug("Waiting on m_startUpdateCondition for {} ms. updateCycleFinished {}. was awake for {} usec",
-                  sleepAtATimeMs,
-                  m_runStats.updateCycleFinished,
-                  (long long)now - lastWakeupTime);
-#endif
-
-        /* Wait for someone to call UpdateAllFields(). Check if shouldFinishCycle changed before we got the lock.
-         * If so, we need to skip our sleep and do another update cycle */
-        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) >= m_runStats.shouldFinishCycle)
-        {
-            m_mutex->CondWait(m_startUpdateCondition, sleepAtATimeMs, [this] {
-                return (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < m_runStats.shouldFinishCycle)
-                       || (ShouldStop() != 0);
-            });
-            if (ShouldStop() != 0)
-            {
-                break;
-            }
-#ifdef DEBUG_UPDATE_LOOP
-            log_debug("Woke up to st {}. updateCycleFinished {}, shouldFinishCycle {}",
-                      st,
-                      m_runStats.updateCycleFinished,
-                      m_runStats.shouldFinishCycle);
-        }
-        else
-        {
-            log_debug("RunLockStep() skipped CondWait()");
-#endif
-        }
-
-
-        if (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) >= m_runStats.shouldFinishCycle)
-        {
-            lastWakeupTime = 0;
-            continue;
-        }
-
-        lastWakeupTime = timelib_usecSince1970();
-
-        m_runStats.updateCycleStarted++;
-
-        /* Leave the mutex locked throughout the update loop. It will be unlocked before any driver calls */
-
-        /* If we haven't allocated fvBuffer yet, do so only if there are any live subscribers */
-        if (!threadCtx->fvBuffer && m_haveAnyLiveSubscribers)
-        {
-            /* Buffer live updates for subscribers */
-            threadCtx->fvBuffer = new DcgmFvBuffer();
-        }
+    /* ActuallyUpdateAllFields needs a locked mutex */
+    {
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
         /* Try to update all fields */
         earliestNextUpdate = 0;
         ActuallyUpdateAllFields(threadCtx, &earliestNextUpdate);
-
-        if (threadCtx->fvBuffer)
-            UpdateFvSubscribers(threadCtx);
-
-        m_runStats.updateCycleFinished.fetch_add(1, std::memory_order_relaxed);
-#ifdef DEBUG_UPDATE_LOOP
-        log_debug("Setting m_updateCompleteCondition at updateCycleFinished {}", m_runStats.updateCycleFinished);
-#endif
-        haveLock = false;
-        dcgm_mutex_unlock(m_mutex);
-        /* Let anyone waiting on this update cycle know we're done */
-        m_updateCompleteCondition.notify_all();
     }
 
-    if (haveLock)
-        dcgm_mutex_unlock(m_mutex);
+    if (threadCtx->fvBuffer)
+        UpdateFvSubscribers(threadCtx);
+
+    m_runStats.updateCycleFinished++;
+
+    return earliestNextUpdate;
 }
 
 /*****************************************************************************/
-void DcgmCacheManager::RunTimedWakeup(dcgmcm_update_thread_t *threadCtx)
+void DcgmCacheManager::RunWrapped(void)
 {
     timelib64_t now, maxNextWakeTime, diff, earliestNextUpdate, startOfLoop;
     timelib64_t wakeTimeInterval = 10000000;
     unsigned int sleepAtATimeMs  = 1000;
 
+    /* On the first iteration, wake up right away */
+    SetRunInterval(std::chrono::milliseconds(0));
+
     while (!ShouldStop())
     {
+        timelib64_t sleepStart = timelib_usecSince1970();
+
+        /* Run any queued tasks first. This also sleeps */
+        auto rr = TaskRunner::Run(true);
+
         startOfLoop = timelib_usecSince1970();
+
+        /* Measure how long we were in Run() as our sleep time. We could have been running tasks too,
+           but we're really trying to measure how active our timed loop is. */
+        m_runStats.sleepTimeUsec += startOfLoop - sleepStart;
+
+        /* Possibly exit the loop after we've recorded how long we were asleep */
+        if (rr != TaskRunner::RunResult::Ok)
+        {
+            break;
+        }
+
         /* Maximum time of 10 second between loops */
         maxNextWakeTime = startOfLoop + wakeTimeInterval;
 
-        dcgm_mutex_lock(m_mutex);
-        m_runStats.updateCycleStarted++;
-
-        /* If we haven't allocated fvBuffer yet, do so only if there are any live subscribers */
-        if (!threadCtx->fvBuffer && m_haveAnyLiveSubscribers)
-        {
-            /* Buffer live updates for subscribers */
-            threadCtx->fvBuffer = new DcgmFvBuffer();
-        }
-
-        /* Try to update all fields */
-        earliestNextUpdate = 0;
-        ActuallyUpdateAllFields(threadCtx, &earliestNextUpdate);
-
-        if (threadCtx->fvBuffer)
-            UpdateFvSubscribers(threadCtx);
-
-        m_runStats.updateCycleFinished.fetch_add(1, std::memory_order_relaxed);
-        dcgm_mutex_unlock(m_mutex);
-        /* Let anyone waiting on this update cycle know we're done */
-        m_updateCompleteCondition.notify_all();
+        earliestNextUpdate = DoOneUpdateAllFields();
 
         /* Resync */
         now = timelib_usecSince1970();
         m_runStats.awakeTimeUsec += (now - startOfLoop);
 
+        /* Don't timed wake for lock-step mode */
+        if (m_pollInLockStep)
+        {
+            SetRunInterval(std::chrono::milliseconds(3600 * 1000)); /* 1 hour */
+            continue;
+        }
+
         /* Only bother if we are supposed to sleep for > 100 usec. Sleep takes 60+ usec */
         /* Are we past our maximum time between loops? */
         if (now > maxNextWakeTime - 100)
         {
-            // printf("No sleep. now %lld. maxNextWakeTime %lld\n",
-            //       (long long int)diff, (long long int)maxNextWakeTime);
             m_runStats.numSleepsSkipped++;
+            SetRunInterval(std::chrono::milliseconds(0));
             continue;
         }
 
@@ -6013,52 +5948,36 @@ void DcgmCacheManager::RunTimedWakeup(dcgmcm_update_thread_t *threadCtx)
 
         if (diff < 1000)
         {
-            // printf("No sleep. diff %lld\n", (long long int)diff);
             m_runStats.numSleepsSkipped++;
+            SetRunInterval(std::chrono::milliseconds(0));
             continue;
         }
 
-        sleepAtATimeMs = diff / 1000;
-        m_runStats.sleepTimeUsec += diff;
+        sleepAtATimeMs       = diff / 1000;
         m_runStats.lockCount = m_mutex->GetLockCount();
         m_runStats.numSleepsDone++;
-        // printf("Sleeping for %u\n", sleepAtATimeMs);
-
-        /* Sleep for diff usec. This is an interruptible wait in case someone calls UpdateAllFields() */
-        dcgm_mutex_lock(m_mutex);
-        m_mutex->CondWait(m_startUpdateCondition, sleepAtATimeMs, [this] {
-            return (m_runStats.updateCycleFinished.load(std::memory_order_relaxed) < m_runStats.shouldFinishCycle)
-                   || (ShouldStop() != 0);
-        });
-        /* We don't care about st. Either it timed out or we were woken up. Either way, run
-         * another update loop
-         */
-        dcgm_mutex_unlock(m_mutex);
+        /* Note: sleepTimeUsec is measured above in the loop */
+        SetRunInterval(std::chrono::milliseconds(sleepAtATimeMs));
     }
 }
 
 /*****************************************************************************/
 void DcgmCacheManager::run(void)
 {
-    dcgmcm_update_thread_t *updateThreadCtx;
-
-    updateThreadCtx = (dcgmcm_update_thread_t *)malloc(sizeof(*updateThreadCtx));
-    if (!updateThreadCtx)
+    m_updateThreadCtx = (dcgmcm_update_thread_t *)malloc(sizeof(*m_updateThreadCtx));
+    if (m_updateThreadCtx == nullptr)
     {
         log_error("Unable to alloc updateThreadCtx. Exiting update thread");
         return;
     }
-    memset(updateThreadCtx, 0, sizeof(*updateThreadCtx));
+    memset(m_updateThreadCtx, 0, sizeof(*m_updateThreadCtx));
 
     log_info("Cache manager update thread starting");
 
-    if (m_pollInLockStep)
-        RunLockStep(updateThreadCtx);
-    else
-        RunTimedWakeup(updateThreadCtx);
+    RunWrapped();
 
-    FreeThreadCtx(updateThreadCtx);
-    free(updateThreadCtx);
+    FreeThreadCtx(m_updateThreadCtx);
+    free(m_updateThreadCtx);
 
     log_info("Cache manager update thread ending");
 }
@@ -6747,7 +6666,7 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
     if (!m_nvmlEventSetInitialized)
     {
         log_error("event set not initialized");
-        Stop(); /* Skip the next loop */
+        TaskRunner::Stop(); /* Skip the next loop */
     }
 
     while (!eventThread->ShouldStop())
@@ -6905,7 +6824,7 @@ dcgmReturn_t DcgmCacheManager::CacheTopologyNvLink(dcgmcm_update_thread_t *threa
 {
     dcgmTopology_t *topology_p = NULL;
     unsigned int topologySize  = 0;
-    dcgmReturn_t ret           = PopulateTopologyNvLink(GetTopologyHelper(), &topology_p, topologySize);
+    dcgmReturn_t ret           = PopulateTopologyNvLink(GetTopologyHelper(true), &topology_p, topologySize);
 
     if (ret == DCGM_ST_NOT_SUPPORTED && threadCtx->watchInfo)
         threadCtx->watchInfo->lastStatus = NVML_ERROR_NOT_SUPPORTED;
@@ -10499,6 +10418,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_PROF_NVLINK_L17_TX_BYTES:
         case DCGM_FI_PROF_NVLINK_L17_RX_BYTES:
         {
+            DcgmLockGuard dlg(m_mutex);
+
             /* Need to add new prof fields to this case */
             static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_NVLINK_L17_RX_BYTES);
 
@@ -10517,13 +10438,40 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 break;
             }
 
-            DcgmLockGuard dlg(m_mutex); /* Protect m_gpmManager */
+            unsigned int localGIIndex      = 0;
+            DcgmGpuInstance *pGpuInstance  = nullptr;
+            nvmlDevice_t nvmlDeviceToQuery = nvmlDevice;
 
-            /* Note that this code will only work for GPUs until the top of this function sets nvmlDevice
-               for GPU-Is and GPI-CLs. Right now, we're protected by EntitySupportsGpm() returning false for them */
+            switch (entityGroupId)
+            {
+                case DCGM_FE_GPU_I:
+                {
+                    if (!m_gpus[gpuId].migEnabled)
+                    {
+                        DCGM_LOG_ERROR << "A MIG related fields is requested for GPU without enabled MIG";
+                        return DCGM_ST_NOT_SUPPORTED;
+                    }
+                    localGIIndex = entityId % m_gpus[gpuId].maxGpcs;
+                    pGpuInstance = &m_gpus[gpuId].instances[localGIIndex];
+                    break;
+                }
 
-            double value            = DCGM_FP64_BLANK;
-            dcgmReturn_t dcgmReturn = m_gpmManager.GetLatestSample(watchInfo->watchKey, nvmlDevice, value, now);
+                case DCGM_FE_GPU_CI:
+                {
+                    if (!m_gpus[gpuId].migEnabled)
+                    {
+                        DCGM_LOG_ERROR << "A MIG related fields is requested for GPU without enabled MIG";
+                        return DCGM_ST_NOT_SUPPORTED;
+                    }
+                    nvmlDeviceToQuery = GetComputeInstanceNvmlDevice(
+                        gpuId, static_cast<dcgm_field_entity_group_t>(entityGroupId), threadCtx->entityKey.entityId);
+                    break;
+                }
+            }
+
+            double value = DCGM_FP64_BLANK;
+            dcgmReturn_t dcgmReturn
+                = m_gpmManager.GetLatestSample(watchInfo->watchKey, nvmlDeviceToQuery, pGpuInstance, value, now);
             if (dcgmReturn != DCGM_ST_OK)
             {
                 DCGM_LOG_ERROR << "Got unexpected return " << dcgmReturn << " from m_gpmManager.GetLatestSample";
@@ -11794,6 +11742,10 @@ dcgmReturn_t DcgmCacheManager::CreateMigEntity(const dcgmCreateMigEntity_v1 &cme
                 case DcgmMigProfileGpuInstanceSlice4:
                 case DcgmMigProfileGpuInstanceSlice7:
                 case DcgmMigProfileGpuInstanceSlice8:
+                case DcgmMigProfileGpuInstanceSlice6:
+                case DcgmMigProfileGpuInstanceSlice1Rev1:
+                case DcgmMigProfileGpuInstanceSlice2Rev1:
+                case DcgmMigProfileGpuInstanceSlice1Rev2:
                 {
                     // NVML profiles start at 0 and count up, so these correspond to each other if we start at 0
                     profileType = cme.profile - DcgmMigProfileGpuInstanceSlice1;
@@ -11839,12 +11791,14 @@ dcgmReturn_t DcgmCacheManager::CreateMigEntity(const dcgmCreateMigEntity_v1 &cme
         {
             switch (cme.profile)
             {
-                case DcgmMigProfileComputeInstanceSlice1: // Fall through
-                case DcgmMigProfileComputeInstanceSlice2: // Fall through
-                case DcgmMigProfileComputeInstanceSlice3: // Fall through
-                case DcgmMigProfileComputeInstanceSlice4: // Fall through
-                case DcgmMigProfileComputeInstanceSlice7: // Fall through
-                case DcgmMigProfileComputeInstanceSlice8: // Fall through
+                case DcgmMigProfileComputeInstanceSlice1:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice2:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice3:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice4:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice7:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice8:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice6:     // Fall through
+                case DcgmMigProfileComputeInstanceSlice1Rev1: // Fall through
                 {
                     // NVML profiles start at 0 and count up, so these correspond to each other if we start at 0
                     profileType = cme.profile - DcgmMigProfileComputeInstanceSlice1;
@@ -12306,6 +12260,37 @@ nvmlDevice_t DcgmCacheManager::GetNvmlDeviceFromEntityId(dcgm_field_eid_t entity
     }
 
     return m_gpus[entityId].nvmlDevice;
+}
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+dcgmReturn_t DcgmCacheManager::InjectNvmlGpu(dcgm_field_eid_t gpuId,
+                                             const char *key,
+                                             const injectNvmlVal_t &value,
+                                             const injectNvmlVal_t *extraKeys,
+                                             unsigned int extraKeyCount)
+{
+    nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
+    return m_nvmlInjectionManager.InjectGpu(nvmlDevice, key, value, extraKeys, extraKeyCount);
+}
+#endif
+
+dcgmReturn_t DcgmCacheManager::CreateNvmlInjectionDevice(unsigned int index)
+{
+    dcgmReturn_t ret = m_nvmlInjectionManager.CreateDevice(index);
+    if (ret == DCGM_ST_OK)
+    {
+        AttachGpus();
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCacheManager::InjectNvmlFieldValue(dcgm_field_eid_t gpuId,
+                                                    const dcgmFieldValue_v1 &value,
+                                                    dcgm_field_meta_p fieldMeta)
+{
+    nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
+    return m_nvmlInjectionManager.InjectFieldValue(nvmlDevice, value, fieldMeta);
 }
 
 /*****************************************************************************/

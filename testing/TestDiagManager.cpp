@@ -545,29 +545,63 @@ int TestDiagManager::TestErrorsFromLevelOne()
     std::string errorReported(
         "Persistence mode for GPU 1 is currently disabled. NVVS requires persistence mode to be enabled. Enable persistence mode by running (as root): nvidia-smi -i 1 -pm 1");
 
-    std::string rawJsonOutput(
-        "{ \"DCGM GPU Diagnostic\" : { \"test_categories\" : [ { \"category\" : \"Deployment\", \"tests\" : [ ");
-    rawJsonOutput
-        += "{ \"name\" : \"Denylist\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"NVML Library\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"CUDA Main Library\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Permissions and OS-related Blocks\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"PASS\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Persistence Mode\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"FAIL\", \"warnings\" : [ \"";
-    rawJsonOutput += errorReported;
-    rawJsonOutput += "\" ] } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Environmental Variables\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Page Retirement/Row Remap\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Graphics Processes\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] }, ";
-    rawJsonOutput
-        += "{ \"name\" : \"Inforom\", \"results\" : [ { \"gpu_ids\" : \"0,1,2,3\", \"status\" : \"SKIP\" } ] } ";
-    rawJsonOutput += "] } ], \"version\" : \"1.3\" } }";
+    std::string rawJsonOutput = fmt::format(R"(
+    {{
+        "DCGM GPU Diagnostic" :
+            {{
+                "test_categories" : [
+                    {{
+                        "category" : "Deployment",
+                        "tests" : [
+                            {{
+                                "name" : "Denylist",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
+                            }},
+                            {{
+                                "name" : "NVML Library",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
+                            }},
+                            {{
+                                "name" : "CUDA Main Library",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
+                            }},
+                            {{
+                                "name" : "Permissions and OS-related Blocks",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
+                            }},
+                            {{
+                                "name" : "Persistence Mode",
+                                "results" : [
+                                    {{
+                                        "gpu_ids" : "0,1,2,3",
+                                        "status" : "FAIL",
+                                        "warnings" : ["{}"]
+                                    }}
+                                ]
+                            }},
+                            {{
+                                "name" : "Environmental Variables",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
+                            }},
+                            {{
+                                "name" : "Page Retirement/Row Remap",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
+                            }},
+                            {{
+                                "name" : "Graphics Processes",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
+                            }},
+                            {{
+                                "name" : "Inforom",
+                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
+                            }}
+                        ]
+                    }}
+                ],
+                "version" : "1.7"
+            }}
+    }})",
+                                            errorReported);
 
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
@@ -584,7 +618,9 @@ int TestDiagManager::TestErrorsFromLevelOne()
     DcgmDiagResponseWrapper drw;
     drw.SetVersion8(&response);
 
-    dcgmReturn_t ret = am.FillResponseStructure(rawJsonOutput, drw, 0, DCGM_ST_OK);
+    auto nvvsResults
+        = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { rawJsonOutput });
+    dcgmReturn_t ret = am.FillResponseStructure(nvvsResults, drw, 0, DCGM_ST_OK);
 
     if (ret != DCGM_ST_OK)
     {
@@ -710,121 +746,10 @@ int TestDiagManager::TestFillResponseStructure()
 
     g_coreCallbacks.poster = &dcc;
     DcgmDiagManager am(g_coreCallbacks);
-    dcgmDiagResponse_t response;
-    response.version = dcgmDiagResponse_version;
-    DcgmDiagResponseWrapper drw;
-    drw.SetVersion8(&response);
-
-    dcgmReturn_t ret = am.FillResponseStructure(NVVS_1_3_JSON, drw, 0, DCGM_ST_OK);
-    if (response.gpuCount != 4)
-    {
-        fprintf(stderr, "Expected 4 gpus, got %d\n", response.gpuCount);
-        return -1;
-    }
-
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Expected successful parsing, but failed!\n");
-        return -1;
-    }
-
-    for (int i = 0; i < 4; i++)
-    {
-        if (response.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status != DCGM_DIAG_RESULT_FAIL)
-        {
-            fprintf(stderr,
-                    "Expected the Sm Stress test to have failed with gpu %d, but got %d\n",
-                    i,
-                    response.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status);
-            return -1;
-        }
-
-        // Make sure all of the GPUs except GPU 1 have warnings
-        if ((strlen(response.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error.msg) == 0) && (i != 1))
-        {
-            fprintf(stderr, "Gpu %d should have a warning for Sm Stress, but doesn't\n", i);
-            return -1;
-        }
-
-        if (strlen(response.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].info) == 0)
-        {
-            fprintf(stderr, "Gpu %d has information reported, but we captured none\n", i);
-            return -1;
-        }
-
-        if (response.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Diagnostic test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    response.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].status);
-            return -1;
-        }
-
-        if (response.perGpuResponses[i].results[DCGM_TARGETED_STRESS_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Targeted Stress test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    response.perGpuResponses[i].results[DCGM_TARGETED_STRESS_INDEX].status);
-            return -1;
-        }
-
-        if (response.perGpuResponses[i].results[DCGM_TARGETED_POWER_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Targeted Power test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    response.perGpuResponses[i].results[DCGM_TARGETED_POWER_INDEX].status);
-            return -1;
-        }
-
-        if (i == 0)
-        {
-            if (response.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-            {
-                fprintf(stderr,
-                        "Expected GPU %d's Memory test to have been skipped, but found result %d\n",
-                        i,
-                        response.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status);
-                return -1;
-            }
-        }
-        else
-        {
-            if (response.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status != DCGM_DIAG_RESULT_PASS)
-            {
-                fprintf(stderr,
-                        "Expected the Memory test to have been passed with gpu %d, but got %d\n",
-                        i,
-                        response.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status);
-                return -1;
-            }
-        }
-    }
 
     const char *testNames[]
         = { "Denylist",         "NVML Library", "CUDA Main Library",         "CUDA SDK Library",   "Permissions",
             "Persistence Mode", "Environment",  "Page Retirement/Row Remap", "Graphics Processes", "Inforom" };
-
-    for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
-    {
-        if (i == DCGM_SWTEST_CUDA_RUNTIME_LIBRARY)
-        {
-            if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_NOT_RUN)
-            {
-                fprintf(
-                    stderr, "Test %d should not have run, but result was %d\n", i, response.levelOneResults[i].status);
-                return -1;
-            }
-        }
-        else if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_PASS)
-        {
-            fprintf(stderr, "%s test should've passed but got %d\n", testNames[i], response.levelOneResults[i].status);
-
-            return -1;
-        }
-    }
 
     /* Version 1.7 (v5), 2.0 (v6) / Per GPU JSON */
     dcgmDiagResponse_t perGpuResponse;
@@ -834,7 +759,9 @@ int TestDiagManager::TestFillResponseStructure()
 
     fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
 
-    ret = am.FillResponseStructure(PER_GPU_JSON, perGpuDrw, 0, DCGM_ST_OK);
+    auto nvvsResult
+        = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { PER_GPU_JSON });
+    auto ret = am.FillResponseStructure(nvvsResult, perGpuDrw, 0, DCGM_ST_OK);
     if (ret != DCGM_ST_OK)
     {
         fprintf(stderr, "Expected successful parsing, but got %d instead!\n", ret);

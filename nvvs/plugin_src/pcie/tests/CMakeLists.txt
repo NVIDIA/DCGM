@@ -36,7 +36,7 @@ if (BUILD_TESTING)
 
     target_include_directories(pcietests PRIVATE ${YAML_INCLUDE_DIR})
     target_include_directories(pcietests PRIVATE ${JSONCPP_INCLUDE_DIR})
-    target_include_directories(pcietests PRIVATE ${CUDA11_INCLUDE_DIR})
+    target_include_directories(pcietests PRIVATE ${CUDA12_INCLUDE_DIR})
     target_include_directories(pcietests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
     target_include_directories(pcietests PRIVATE ..) # include the plugin dir
     target_include_directories(pcietests PRIVATE ../../include) # include the plugin_src/include dir

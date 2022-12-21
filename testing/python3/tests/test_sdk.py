@@ -122,6 +122,8 @@ def test_sdk_health_sample_embedded(handle, gpuIds):
     """
     Test SDK health sample
     """
+
+    test_utils.skip_unhealthy_mem(handle, gpuIds)
     gpuGroups = test_utils.group_gpu_ids_by_sku(handle, gpuIds)
     if len(gpuGroups) > 1:
         test_utils.skip_test("Test only works for gpus with same sku")
@@ -148,6 +150,8 @@ def test_sdk_health_sample_standalone(handle, gpuIds):
     """
     Test SDK health sample
     """
+
+    test_utils.skip_unhealthy_mem(handle, gpuIds)
     gpuGroups = test_utils.group_gpu_ids_by_sku(handle, gpuIds)
     if len(gpuGroups) > 1:
         test_utils.skip_test("Test only works for gpus with same sku")

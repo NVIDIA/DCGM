@@ -55,6 +55,9 @@ noLoggingBackup = noLogging
 reRunning = False
 loggingLevel = "DEBUG" #Level to use for logging. These come from DcgmLogging.h
 
+DIAG_SMALL_FB_MODE_VAR = '__DCGM_DIAG_SMALL_FB_MODE'
+smallFbModeEnv = {DIAG_SMALL_FB_MODE_VAR : '1'}
+
 def check_output(*args, **kwargs):
     kwargs['universal_newlines'] = True
     return subprocess.check_output(*args, **kwargs)
@@ -1081,16 +1084,16 @@ class RunStandaloneHostEngine:
 
     _nvswitches_detected = None
 
-    def __init__(self, timeout=15, heArgs = None, profile_dir=None): #DCGM_HE_PORT_NUMBER
+    def __init__(self, timeout=15, heArgs = None, profile_dir=None, heEnv=None): #DCGM_HE_PORT_NUMBER
         self.hostEngineStarted = False
         self.timeout = timeout
 
         if option_parser.options.use_running_hostengine:
             self.nvhost_engine = None
         elif heArgs is None:
-            self.nvhost_engine = apps.NvHostEngineApp(profile_dir=profile_dir)
+            self.nvhost_engine = apps.NvHostEngineApp(profile_dir=profile_dir, heEnv=heEnv)
         else:
-            self.nvhost_engine = apps.NvHostEngineApp(heArgs, profile_dir=profile_dir)
+            self.nvhost_engine = apps.NvHostEngineApp(heArgs, profile_dir=profile_dir, heEnv=heEnv)
 
     def __enter__(self):
         if self.nvhost_engine is not None:
@@ -1113,7 +1116,7 @@ class RunStandaloneHostEngine:
                 logger.info("Skipping standalone host engine terminate. Host engine was not running")
         set_connect_mode(DCGM_CONNECT_MODE_UNKNOWN)
 
-def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False):
+def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False, heEnv=None):
     """
     Run this test with the standalone host engine.  This will start the host engine process before the test
     and stop the host engine process after the test
@@ -1121,7 +1124,7 @@ def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False)
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            with RunStandaloneHostEngine(timeout, heArgs, profile_dir=fn.__name__) as hostengineApp:
+            with RunStandaloneHostEngine(timeout, heArgs, profile_dir=fn.__name__, heEnv=heEnv) as hostengineApp:
                 # pass the hostengine app to the test function in case they want to interact with it
                 if passAppAsArg:
                     kwds['hostengineApp'] = hostengineApp
@@ -1130,6 +1133,51 @@ def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False)
         return wrapper
     return decorator
 
+INJECTION_MODE_VAR = 'NVML_INJECTION_MODE'
+def run_with_injection_nvml():
+    """
+    Have DCGM load injection NVML instead of normal NVML
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            # This environment variable tells DCGM to load injection NVML
+            os.environ[INJECTION_MODE_VAR] = 'True' 
+            fn(*args, **kwds)
+            del os.environ[INJECTION_MODE_VAR]
+            return
+        return wrapper
+    return decorator
+
+def run_with_diag_small_fb_mode():
+    """
+    Have DCGM diag run with smaller FB allocations to speed up tests that don't rely on DCGM Diag running at full scale
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            # This environment variable tells DCGM to load injection NVML
+            os.environ[DIAG_SMALL_FB_MODE_VAR] = '1'
+            fn(*args, **kwds)
+            del os.environ[DIAG_SMALL_FB_MODE_VAR]
+            return
+        return wrapper
+    return decorator
+
+def create_injection_nvml_gpus(dcgmHandle, count):
+    index = 0
+    created_indices = []
+    while len(created_indices) < count and index < dcgm_structs.DCGM_MAX_NUM_DEVICES:
+        try:
+            ret = dcgm_agent_internal.dcgmCreateNvmlInjectionGpu(dcgmHandle, index)
+            # We'll use the if statement, but really it throws an exception if it fails
+            if ret == dcgm_structs.DCGM_ST_OK:
+                created_indices.append(index)
+                index = index + 1
+        except Exception as e:
+            index = index + 1
+
+    return created_indices
 
 class RunClientInitShutdown:
     """
@@ -1423,6 +1471,25 @@ def run_with_injection_nvswitches(switchCount=1):
             return
         return wrapper
     return decorator
+
+def skip_unhealthy_mem(handle, gpuIds):
+    """
+    Verifies that the DCGM health checks return healthy for all GPUs on live systems.
+    """
+
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+
+    groupObj = systemObj.GetGroupWithGpuIds('testgroup', gpuIds)
+    groupObj.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+
+    systemObj.UpdateAllFields(1)
+
+    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+
+    #Check that our response comes back clean
+    if responseV4.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
+        test_utils.skip_test("bad response.overallHealth %d. Are these GPUs really healthy?" % responseV4.overallHealth)
 
 def watch_all_fields(handle,
                      gpuIds,
@@ -2068,7 +2135,8 @@ def with_service_account(serviceAccountName):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             try:
-                os.system('useradd -r -s /usr/sbin/nologin -M %s' % serviceAccountName)
+                os.system('groupadd -r -f %s' % serviceAccountName)
+                os.system('useradd -r -g %s -s /usr/sbin/nologin -M %s' % (serviceAccountName, serviceAccountName))
                 fn(*args, **kwargs)
             finally:
                 os.system('userdel %s' % serviceAccountName)

@@ -95,7 +95,10 @@ protected:
     // methods
     std::string GetTestDisplayName(dcgmPerGpuTestIndices_t index);
     void insertIntoTestGroup(std::string, Test *);
-    void goList(Test::testClasses_enum suite, std::vector<Test *> testsList, std::vector<Gpu *> gpuList);
+    void goList(Test::testClasses_enum suite,
+                std::vector<Test *> testsList,
+                std::vector<Gpu *> gpuList,
+                bool checkFileCreation);
     void LoadLibrary(const char *libPath, const char *libName);
     void GetAndOutputHeader(Test::testClasses_enum classNum);
     void StartStatWatches(DcgmRecorder &dcgmRecorder, int pluginIndex, std::vector<Gpu *> gpuList);
@@ -135,6 +138,12 @@ protected:
      * Initializes the values that should be in the skipped libraries list
      */
     void InitSkippedLibraries();
+
+    /********************************************************************/
+    /*
+     * Returns true if we are going to execute the pulse test
+     */
+    bool WillExecutePulseTest(std::vector<Test *> &testsList) const;
 
     /***************************PROTECTED********************************/
 protected:

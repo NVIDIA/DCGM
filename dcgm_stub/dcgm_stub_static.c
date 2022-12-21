@@ -24,6 +24,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#include <nvml_injection.h>
+#endif
+
 static void *lib_handle = NULL;
 
 

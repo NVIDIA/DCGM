@@ -41,6 +41,9 @@
 #include "DcgmGroupManager.h"
 #include <dcgm_nvml.h>
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#include <nvml_injection.h>
+#endif
 
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
 DcgmModuleCore DcgmHostEngineHandler::mModuleCoreObj;
@@ -1298,6 +1301,12 @@ void DcgmHostEngineHandler::ShutdownNvml()
 {
     if (m_usingInjectionNvml)
     {
+#ifdef INJECTION_LIBRARY_AVAILABLE
+        if (NVML_SUCCESS != injectionNvmlShutdown())
+        {
+            log_error("Error: Failed to shutdown injection NVML");
+        }
+#endif
     }
     else
     {
@@ -1312,6 +1321,19 @@ void DcgmHostEngineHandler::ShutdownNvml()
 
 void DcgmHostEngineHandler::LoadNvml()
 {
+#ifdef INJECTION_LIBRARY_AVAILABLE
+    char *injectionMode = getenv(INJECTION_MODE_ENV_VAR);
+
+    if (injectionMode != nullptr)
+    {
+        m_usingInjectionNvml = true;
+        if (NVML_SUCCESS != injectionNvmlInit())
+        {
+            throw std::runtime_error("Error: Failed to initialize injected NVML");
+        }
+    }
+#endif
+
     if (m_usingInjectionNvml == false)
     {
         if (NVML_SUCCESS != nvmlInit_v2())
@@ -3838,4 +3860,9 @@ void DcgmHostEngineHandler::SetServiceAccount(char const *serviceAccount)
 std::string const &DcgmHostEngineHandler::GetServiceAccount() const
 {
     return m_serviceAccount;
+}
+
+bool DcgmHostEngineHandler::UsingInjectionNvml() const
+{
+    return m_usingInjectionNvml;
 }

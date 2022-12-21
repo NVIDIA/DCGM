@@ -71,6 +71,10 @@ SmPerfPlugin::~SmPerfPlugin()
 {
     /* Just call our cleanup function */
     Cleanup();
+    if (m_testParameters != nullptr)
+    {
+        delete m_testParameters;
+    }
 }
 
 /*****************************************************************************/

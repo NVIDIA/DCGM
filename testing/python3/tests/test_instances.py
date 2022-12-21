@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import test_utils
-import dcgm_internal_helpers
+import dcgm_field_injection_helpers
 import dcgm_agent_internal
 import dcgm_structs_internal
 import dcgm_agent
@@ -24,7 +24,17 @@ import subprocess
 import time
 import logger
 import dcgmvalue
+import pydcgm
+import dcgm_field_helpers
 
+'''
+    Attemps to create fake GPU instances
+        handle        - the handle open to the hostengine
+        gpuId         - the ID of the GPU we want to add instances to
+        instanceCount - the number of instances requested
+
+    Returns a map of fake GPU instances: fake GPU instance ID -> GPU ID
+'''
 def create_fake_gpu_instances(handle, gpuId, instanceCount):
     cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
     cfe.numToCreate = 0
@@ -45,6 +55,14 @@ def create_fake_gpu_instances(handle, gpuId, instanceCount):
 
     return fakeInstanceMap
 
+'''
+    Attemps to create fake compute instances
+        handle    - the handle open to the hostengine
+        parentIds - a list of GPU instance IDs on which to place the fake compute instances
+        ciCount   - the number of compute instances requested
+
+    Returns a map of fake compute instances: fake compute instance ID -> GPU instance ID
+'''
 def create_fake_compute_instances(handle, parentIds, ciCount):
     fakeCIMap = {}
     if ciCount > 0:
@@ -66,6 +84,19 @@ def create_fake_compute_instances(handle, parentIds, ciCount):
 
     return fakeCIMap
 
+'''
+    Creates fake GPU instances and compute instances if needed to ensure we have the specified number of each
+    on a specific GPU. It checks the amount of MIG devices that currently exist on that GPU and creates fake
+    MIG devices to make up the difference, if needed.
+
+        handle       - the handle open to the hostengine
+        gpuId        - the GPU that needs to have the specified numbers of GPU instances and compute instances
+        minInstances - the minimum number of GPU instances that need to be on the specified GPU
+        minCIs       - the minimum number of compute instances that need to be on the specified GPU
+
+    Returns a tuple that contains a map of GPU instances to their parent GPU IDs and a map of compute instances
+    to their parent GPU instance IDs.
+'''
 def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
     instanceMap = {}
     ciMap = {}
@@ -102,6 +133,86 @@ def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
 
     return instanceMap, ciMap
 
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus(gpuCount=8)
+def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
+    dcgmHandle = pydcgm.DcgmHandle(handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    
+    instanceIds = []
+    computeInstanceIds = []
+    
+    for gpuId in gpuIds:
+        gpuInstances, gpuCis = ensure_instance_ids(handle, gpuId, 8, 8)
+        instanceIds.extend(gpuInstances.keys())
+        computeInstanceIds.extend(gpuCis.keys())
+
+    logger.debug("Got gpuInstances: " + str(instanceIds))
+    logger.debug("Got computeInstanceIds: " + str(computeInstanceIds))
+
+    fieldId = dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE
+
+    #Build up a list of up the max entity group size
+    entities = []
+    expectedValues = {dcgm_fields.DCGM_FE_GPU : {}, 
+                      dcgm_fields.DCGM_FE_GPU_I : {},
+                      dcgm_fields.DCGM_FE_GPU_CI : {}}
+    
+    value = 0.0
+
+    for gpuId in gpuIds:
+        entityPair = dcgm_structs.c_dcgmGroupEntityPair_t()
+        entityPair.entityGroupId = dcgm_fields.DCGM_FE_GPU
+        entityPair.entityId = gpuId
+        entities.append(entityPair)
+        expectedValues[entityPair.entityGroupId][entityPair.entityId] = {fieldId : value}
+        value += 0.01
+
+    for instanceId in instanceIds:
+        entityPair = dcgm_structs.c_dcgmGroupEntityPair_t()
+        entityPair.entityGroupId = dcgm_fields.DCGM_FE_GPU_I
+        entityPair.entityId = instanceId
+        entities.append(entityPair)
+        expectedValues[entityPair.entityGroupId][entityPair.entityId] = {fieldId : value}
+        value += 0.01
+
+    for ciId in computeInstanceIds:
+        entityPair = dcgm_structs.c_dcgmGroupEntityPair_t()
+        entityPair.entityGroupId = dcgm_fields.DCGM_FE_GPU_CI
+        entityPair.entityId = ciId
+        entities.append(entityPair)
+        expectedValues[entityPair.entityGroupId][entityPair.entityId] = {fieldId : value}
+        value += 0.01
+    
+    #Truncate the group to the max size
+    if len(entities) > dcgm_structs.DCGM_GROUP_MAX_ENTITIES:
+        entities = entities[:dcgm_structs.DCGM_GROUP_MAX_ENTITIES]
+    
+    dcgmGroup = dcgmSystem.GetGroupWithEntities("biggroup", entities)
+
+    dcgmFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "myfields", [fieldId, ])
+
+    #inject a known value for every entity
+    offset = 5
+    for entityPair in entities:
+        value = expectedValues[entityPair.entityGroupId][entityPair.entityId][fieldId]
+        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, fieldId,
+                                       value, offset, verifyInsertion=True,
+                                       entityType=entityPair.entityGroupId)
+    
+    dfvc = dcgm_field_helpers.DcgmFieldValueCollection(handle, dcgmGroup._groupId)
+    dfvc.GetLatestValues_v2(dcgmFieldGroup)
+
+    assert dfvc._numValuesSeen == len(entities), "%d != %d" % (dfvc._numValuesSeen, len(entities))
+    for entityPair in entities:
+        expectedValue = expectedValues[entityPair.entityGroupId][entityPair.entityId][fieldId]
+
+        timeSeries = dfvc.entityValues[entityPair.entityGroupId][entityPair.entityId][fieldId]
+        assert len(timeSeries) == 1, "%d != 1" % len(timeSeries)
+        readValue = timeSeries.values[0].value
+        assert expectedValue == readValue, "%s != %s" % (str(expectedValue), str(readValue))
+
+
 def helper_test_inject_instance_fields(handle, gpuIds):
     instances, cis = ensure_instance_ids(handle, gpuIds[0], 1, 1)
     firstInstanceId = list(instances.keys())[0]
@@ -116,8 +227,8 @@ def helper_test_inject_instance_fields(handle, gpuIds):
     dcgm_agent.dcgmGroupAddEntity(handle, groupId, dcgm_fields.DCGM_FE_GPU_CI, lastCIId)
     dcgm_agent.dcgmWatchFields(handle, groupId, fieldGroupId, 1, 100, 100)
 
-    dcgm_internal_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                       2, 5, isInt=True, verifyInsertion=True,
+    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+                                       2, 5, verifyInsertion=True,
                                        entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
 
     # Read the values to make sure they were stored properly
@@ -142,7 +253,6 @@ def helper_test_inject_instance_fields(handle, gpuIds):
             from dcgm_structs import DCGM_ST_NO_DATA
             assert (v.status == DCGM_ST_NO_DATA), "Injected meaningless value %u for entity %u from group %u" % (
                 v.value.i64, v.entityId, v.entityGroupId)
-
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_with_initialized_client()
@@ -238,8 +348,8 @@ def helper_test_health_check_instances(handle, gpuIds):
         test_utils.skip_test("Cannot test on unhealthy systems.")
 
     # Inject one error per system
-    dcgm_internal_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                       2, 5, isInt=True, verifyInsertion=True,
+    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+                                       2, 5, verifyInsertion=True,
                                        entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
 
     responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)

@@ -13,19 +13,205 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <optional>
+#include <string>
+#include <tuple>
+
 #include <DcgmLogging.h>
 #include <DcgmSettings.h>
+
+#include "FieldIds.h"
+#include "NvSwitchData.h"
+//#include "FieldDefinitions.h"
+#include "UpdateFunctions.h"
 
 #include "DcgmNvSwitchManager.h"
 
 namespace DcgmNs
 {
-template <typename T>
-struct NscqDataCollector
+using phys_id_t      = uint32_t;
+using uuid_p         = nscq_uuid_t *;
+using label_t        = nscq_label_t;
+using link_id_t      = uint8_t;
+using lane_vc_id_t   = uint8_t;
+using nvlink_state_t = nscq_nvlink_state_t;
+
+/**
+ * Here we define fully specialized Index comparison functions to check if an
+ * index matches any of the supplied entities. The index is a tuple composed of
+ * the various indicies provided in an NSCQ lambda callback.
+ * link, lane, etc.)
+ */
+
+/**
+ * This function looks up switches.
+ */
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p> index)
 {
-    unsigned int callCounter = 0;
-    T data;
-};
+    auto swIndex = FindSwitchByDevice(std::get<0>(index));
+
+    if (swIndex == -1)
+    {
+        log_error("Could not find device {}. Skipping", std::get<0>(index));
+
+        return std::nullopt;
+    }
+
+    for (auto &entity : entities)
+    {
+        if ((entity.entityGroupId == DCGM_FE_SWITCH) && (entity.entityId == m_nvSwitches[swIndex].physicalId))
+        {
+            log_debug("Found matching switch: switchId {} eid {} for fieldId {}",
+                      m_nvSwitches[swIndex].physicalId,
+                      entity.entityId,
+                      fieldId);
+
+            return dcgmGroupEntityPair_t { entity.entityGroupId, entity.entityId };
+        }
+    }
+
+    return std::nullopt;
+}
+
+/**
+ * This function looks up switches and nvlinks.
+ */
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p, link_id_t> index)
+{
+    auto swIndex = FindSwitchByDevice(std::get<0>(index));
+
+    if (swIndex == -1)
+    {
+        log_error("Could not find device {}. Skipping", std::get<0>(index));
+
+        return std::nullopt;
+    }
+
+    dcgm_link_t link;
+
+    link.raw             = 0;
+    link.parsed.switchId = m_nvSwitches[swIndex].physicalId;
+    link.parsed.type     = DCGM_FE_SWITCH;
+    link.parsed.index    = std::get<1>(index);
+
+    for (auto &entity : entities)
+    {
+        if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw))
+        {
+            log_debug("Found matching link: switchId {} link {} eg {} eid {} fieldId {}",
+                      m_nvSwitches[swIndex].physicalId,
+                      (unsigned int)link.parsed.index,
+                      entity.entityGroupId,
+                      entity.entityId,
+                      fieldId);
+
+            return dcgmGroupEntityPair_t { entity.entityGroupId, entity.entityId };
+        }
+    }
+
+    return std::nullopt;
+}
+
+/**
+ * Here, we define a mapping of field Id to lane, for those fields that refer
+ * to lanes. It is used in the Find function that deals with NSCQ callback
+ * indicies that include lanes (as well as switches and NvLinks).
+ */
+static std::optional<lane_vc_id_t> FieldIdToLane(unsigned short fieldId)
+{
+    std::map<unsigned short, lane_vc_id_t> map
+        = { { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0, 0 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0, 0 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1, 1 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1, 1 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2, 2 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2, 2 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3, 3 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3, 3 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0, 0 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0, 0 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0, 0 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0, 0 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0, 0 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1, 1 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1, 1 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1, 1 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1, 1 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1, 1 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2, 2 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2, 2 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2, 2 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2, 2 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2, 2 },
+
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3, 3 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3, 3 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3, 3 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3, 3 },
+            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3, 3 } };
+
+    auto it = map.find(fieldId);
+
+    if (it == map.end())
+    {
+        return std::nullopt;
+    }
+
+    return it->second;
+}
+
+/**
+ * This function finds switches, nvlinks, and lanes.
+ */
+template <>
+std::optional<dcgmGroupEntityPair_t> DcgmNvSwitchManager::Find(unsigned short fieldId,
+                                                               const std::vector<dcgm_field_update_info_t> &entities,
+                                                               std::tuple<uuid_p, link_id_t, lane_vc_id_t> index)
+{
+    auto swIndex = FindSwitchByDevice(std::get<0>(index));
+
+    if (swIndex == -1)
+    {
+        log_error("Could not find device {}. Skipping", std::get<0>(index));
+
+        return std::nullopt;
+    }
+
+    auto match_lane = FieldIdToLane(fieldId);
+
+    if (!match_lane.has_value())
+    {
+        log_error("Field ID {} does not identity a lane.");
+
+        return std::nullopt;
+    }
+
+    dcgm_link_t link;
+
+    link.raw             = 0;
+    link.parsed.switchId = m_nvSwitches[swIndex].physicalId;
+    link.parsed.type     = DCGM_FE_SWITCH;
+    link.parsed.index    = std::get<1>(index);
+
+    for (auto &entity : entities)
+    {
+        if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw)
+            && (*match_lane == std::get<2>(index)))
+        {
+            log_debug("Found matching lane entity: switchId {} link {} eid {} lane {} fieldId {}",
+                      m_nvSwitches[swIndex].physicalId,
+                      (unsigned int)link.parsed.index,
+                      entity.entityId,
+                      *match_lane,
+                      fieldId);
+
+            return dcgmGroupEntityPair_t { entity.entityGroupId, entity.entityId };
+        }
+    }
+
+    return std::nullopt;
+}
 
 /*************************************************************************/
 DcgmNvSwitchManager::DcgmNvSwitchManager(dcgmCoreCallbacks_t *dcc)
@@ -91,7 +277,16 @@ unsigned int DcgmNvSwitchManager::AddFakeNvSwitch()
     }
 
     log_debug("AddFakeNvSwitch allocating physicalId {}", nvSwitch->physicalId);
-    entityId = nvSwitch->physicalId;
+
+    /**
+     * The following line creates a fake NvSwitch uuid_p for Find() method
+     * matching to entites to enable testing of those Find() methods.
+     *
+     * Still, the caller has to keep track of how many fake NvSwitches are
+     * created to be able to glean the fake uuid_p.
+     */
+    m_nvSwitchNscqDevices[m_numNvSwitches] = (uuid_p)(size_t)m_numNvSwitches;
+    entityId                               = nvSwitch->physicalId;
 
     /* Set the link state to Disconnected rather than Unsupported since NvSwitches support NvLink */
     for (i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH; i++)
@@ -311,1206 +506,10 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFatalErrorsAllSwitches()
     return ret;
 }
 
-dcgmReturn_t DcgmNvSwitchManager::UpdateSwitchInt32Fields(unsigned short fieldId,
-                                                          DcgmFvBuffer &buf,
-                                                          const std::vector<dcgm_field_update_info_t> &entities,
-                                                          timelib64_t now)
-{
-    const char *nscqPath = nullptr;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT:
-            nscqPath = nscq_nvswitch_temperature_current;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN:
-            nscqPath = nscq_nvswitch_temperature_limit_slowdown;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN:
-            nscqPath = nscq_nvswitch_temperature_limit_shutdown;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-    struct TempPair
-    {
-        uuid_p device;
-        int64_t value;
-    };
-
-    NscqDataCollector<std::vector<TempPair>> collector;
-
-    auto cb = [](const uuid_p device, nscq_rc_t rc, const int32_t in, NscqDataCollector<std::vector<TempPair>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}", (int)rc, in);
-            /* Write a blank value for this entity */
-            TempPair item { .device = device, .value = DCGM_INT64_BLANK };
-
-            dest->data.push_back(item);
-
-            return;
-        }
-
-        log_debug("Received device {} temperature {}", device, in);
-
-        TempPair item { .device = device, .value = in };
-
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &pair : collector.data)
-    {
-        auto index = FindSwitchByDevice(pair.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", pair.device);
-            continue;
-        }
-
-        for (auto &entity : entities)
-        {
-            log_debug("Matching index {} {} {} {} {}",
-                      index,
-                      m_nvSwitches[index].physicalId,
-                      entity.entityGroupId,
-                      entity.entityId,
-                      DCGM_FE_SWITCH);
-
-            if ((entity.entityGroupId == DCGM_FE_SWITCH) && (entity.entityId == m_nvSwitches[index].physicalId))
-            {
-                buf.AddInt64Value(DCGM_FE_SWITCH, m_nvSwitches[index].physicalId, fieldId, pair.value, now, DCGM_ST_OK);
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateSwitchThroughputFields(unsigned short fieldId,
-                                                               DcgmFvBuffer &buf,
-                                                               const std::vector<dcgm_field_update_info_t> &entities,
-                                                               timelib64_t now)
-{
-    const char *nscqPath = nscq_nvswitch_nvlink_throughput_counters;
-
-    struct TempTriple
-    {
-        uuid_p device;
-        uint64_t throughputTx;
-        uint64_t throughputRx;
-    };
-
-    NscqDataCollector<std::vector<TempTriple>> collector;
-
-    auto cb = [](const uuid_p device,
-                 nscq_rc_t rc,
-                 const nscq_link_throughput_t in,
-                 NscqDataCollector<std::vector<TempTriple>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}", (int)rc, device);
-
-            TempTriple item { .device = device, .throughputTx = DCGM_INT64_BLANK, .throughputRx = DCGM_INT64_BLANK };
-
-            dest->data.push_back(item);
-
-            return;
-        }
-
-        log_debug("Received device {} TX throughput: {} RX throughput", device, in.tx, in.rx);
-
-        TempTriple item { .device = device, .throughputTx = in.tx, .throughputRx = in.rx };
-
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &triple : collector.data)
-    {
-        auto index = FindSwitchByDevice(triple.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", triple.device);
-            continue;
-        }
-
-        for (auto &entity : entities)
-        {
-            if ((entity.entityGroupId == DCGM_FE_SWITCH) && (entity.entityId == m_nvSwitches[index].physicalId))
-            {
-                log_debug("Matching index {} {} {} {} {}",
-                          index,
-                          m_nvSwitches[index].physicalId,
-                          entity.entityGroupId,
-                          entity.entityId,
-                          DCGM_FE_SWITCH);
-
-                buf.AddInt64Value(DCGM_FE_SWITCH,
-                                  m_nvSwitches[index].physicalId,
-                                  fieldId,
-                                  (fieldId == DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX) ? triple.throughputTx
-                                                                                  : triple.throughputRx,
-                                  now,
-                                  DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateSwitchErrorVectorFields(unsigned short fieldId,
-                                                                DcgmFvBuffer &buf,
-                                                                const std::vector<dcgm_field_update_info_t> &entities,
-                                                                timelib64_t now)
-{
-    const char *nscqPath = nullptr;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS:
-            nscqPath = nscq_nvswitch_error_fatal;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS:
-            nscqPath = nscq_nvswitch_error_nonfatal;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-    struct TempData
-    {
-        uuid_p device;
-        int64_t error_value; /* it comes in as a uint_32 */
-        timelib64_t time;
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 nscq_rc_t rc,
-                 const std::vector<nscq_error_t> in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for device {}", (int)rc, device);
-            /* Write a blank value for this entity */
-            TempData item { .device = device, .error_value = DCGM_INT64_BLANK, .time = 0 };
-
-            dest->data.push_back(item);
-
-            return;
-        }
-
-        for (auto datum : in)
-        {
-            log_debug("Received device {} error value {}", device, datum.error_value);
-
-            TempData item {
-                .device      = device,
-                .error_value = datum.error_value,
-                .time        = (int64_t)datum.time /* because ours is signed. */
-            };
-
-            dest->data.push_back(item);
-        }
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal erroes. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &item : collector.data)
-    {
-        auto index = FindSwitchByDevice(item.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", item.device);
-            continue;
-        }
-
-        for (auto &entity : entities)
-        {
-            log_debug("Matching index {} {} {} {} {}",
-                      index,
-                      m_nvSwitches[index].physicalId,
-                      entity.entityGroupId,
-                      entity.entityId,
-                      DCGM_FE_SWITCH);
-
-            if ((entity.entityGroupId == DCGM_FE_SWITCH) && (entity.entityId == m_nvSwitches[index].physicalId))
-            {
-                buf.AddInt64Value(
-                    DCGM_FE_SWITCH, m_nvSwitches[index].physicalId, fieldId, item.error_value, item.time, DCGM_ST_OK);
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateLinkUint64Fields(unsigned short fieldId,
-                                                         DcgmFvBuffer &buf,
-                                                         const std::vector<dcgm_field_update_info_t> &entities,
-                                                         timelib64_t now)
-{
-    const char *nscqPath = nullptr;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_replay_count;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_recovery_count;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_flit_err_count;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_lane_crc_err_count_aggregate;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_lane_ecc_err_count_aggregate;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-
-    struct TempData
-    {
-        uuid_p device;
-        link_id_t port;
-        int64_t count; /* careful! We are storing uint64_t */
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 const link_id_t port,
-                 nscq_rc_t rc,
-                 const uint64_t in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for physid {}, port {}", (int)rc, device, (int)port);
-
-            TempData item { .device = device, .port = port, .count = DCGM_INT64_BLANK };
-
-            dest->data.push_back(item);
-
-            return;
-        }
-
-        log_debug("Received device {}, link {} counter {}", device, (int)port, in);
-
-        TempData item {
-            .device = device, .port = port, .count = (int64_t)in /* because ours is signed */
-        };
-
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &data : collector.data)
-    {
-        auto index = FindSwitchByDevice(data.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", data.device);
-            continue;
-        }
-
-        dcgm_link_t link;
-        link.raw             = 0;
-        link.parsed.switchId = m_nvSwitches[index].physicalId;
-        link.parsed.type     = DCGM_FE_SWITCH;
-        link.parsed.index    = data.port;
-
-        for (auto &entity : entities)
-        {
-            log_debug("Matching index {} {} {} {} {} {} {}",
-                      index,
-                      m_nvSwitches[index].physicalId,
-                      (int)data.port,
-                      entity.entityGroupId,
-                      entity.entityId,
-                      DCGM_FE_LINK,
-                      link.raw);
-
-            if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw))
-            {
-                buf.AddInt64Value(DCGM_FE_LINK, link.raw, fieldId, data.count, now, DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateLinkThroughputFields(unsigned short fieldId,
-                                                             DcgmFvBuffer &buf,
-                                                             const std::vector<dcgm_field_update_info_t> &entities,
-                                                             timelib64_t now)
-{
-    const char *nscqPath = nscq_nvswitch_nvlink_port_throughput_counters;
-
-    struct TempData
-    {
-        uuid_p device;
-        link_id_t port;
-        uint64_t throughputTx;
-        uint64_t throughputRx;
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 const link_id_t port,
-                 nscq_rc_t rc,
-                 const nscq_link_throughput_t in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}, port {}", (int)rc, device, (int)port);
-
-            TempData item {
-                .device = device, .port = port, .throughputTx = DCGM_INT64_BLANK, .throughputRx = DCGM_INT64_BLANK
-            };
-
-            dest->data.push_back(item);
-            return;
-        }
-
-        log_debug("Received device {}, link {}, throughput TX: {}, throughput RX: {}", device, (int)port, in.tx, in.rx);
-
-        TempData item { .device = device, .port = port, .throughputTx = in.tx, .throughputRx = in.rx };
-
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &data : collector.data)
-    {
-        auto index = FindSwitchByDevice(data.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", data.device);
-            continue;
-        }
-
-        dcgm_link_t link;
-        link.parsed.switchId = m_nvSwitches[index].physicalId;
-        link.parsed.type     = DCGM_FE_SWITCH;
-        link.parsed.index    = data.port;
-
-        for (auto &entity : entities)
-        {
-            log_debug("Matching {} {} {} {}", entity.entityGroupId, entity.entityId, DCGM_FE_LINK, link.raw);
-
-            if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw))
-            {
-                log_debug("Matching index {} {} {} {} {} {} {}",
-                          index,
-                          m_nvSwitches[index].physicalId,
-                          (int)data.port,
-                          entity.entityGroupId,
-                          entity.entityId,
-                          DCGM_FE_LINK,
-                          link.raw);
-
-                buf.AddInt64Value(DCGM_FE_LINK,
-                                  link.raw,
-                                  fieldId,
-                                  (fieldId == DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX) ? data.throughputRx
-                                                                                       : data.throughputTx,
-                                  now,
-                                  DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateLinkErrorVectorFields(unsigned short fieldId,
-                                                              DcgmFvBuffer &buf,
-                                                              const std::vector<dcgm_field_update_info_t> &entities,
-                                                              timelib64_t now)
-{
-    const char *nscqPath = nullptr;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_fatal;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS:
-            nscqPath = nscq_nvswitch_port_error_nonfatal;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-
-    struct TempData
-    {
-        uuid_p device;
-        link_id_t port;
-        int64_t error_value; /* our source is uint32_t */
-        uint64_t time;
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 const link_id_t port,
-                 nscq_rc_t rc,
-                 const std::vector<nscq_error_t> in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}, port {}", (int)rc, device, (int)port);
-
-            TempData item { .device = device, .port = port, .error_value = DCGM_INT64_BLANK, .time = 0 };
-
-            dest->data.push_back(item);
-
-            return;
-        }
-
-        for (auto datum : in)
-        {
-            log_debug("Received device {}, link {}, counter:", device, (int)port, datum.error_value);
-
-            TempData item { .device = device, .port = port, .error_value = datum.error_value, .time = datum.time };
-
-            dest->data.push_back(item);
-        }
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &data : collector.data)
-    {
-        auto index = FindSwitchByDevice(data.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", data.device);
-            continue;
-        }
-
-        dcgm_link_t link;
-        link.parsed.switchId = m_nvSwitches[index].physicalId;
-        link.parsed.type     = DCGM_FE_SWITCH;
-        link.parsed.index    = data.port;
-
-        for (auto &entity : entities)
-        {
-            if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw))
-            {
-                log_debug("Matching index {} {} {} {} {} {} {}",
-                          index,
-                          m_nvSwitches[index].physicalId,
-                          (int)data.port,
-                          entity.entityGroupId,
-                          entity.entityId,
-                          DCGM_FE_LINK,
-                          link.raw);
-
-                buf.AddInt64Value(DCGM_FE_LINK, link.raw, fieldId, data.error_value, data.time, DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateLaneUint64Fields(unsigned short fieldId,
-                                                         DcgmFvBuffer &buf,
-                                                         const std::vector<dcgm_field_update_info_t> &entities,
-                                                         timelib64_t now)
-{
-    const char *nscqPath = nullptr;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3:
-            nscqPath = nscq_nvswitch_port_lane_crc_err_count;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3:
-            nscqPath = nscq_nvswitch_port_lane_ecc_err_count;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-    lane_vc_id_t match_lane;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0:
-            match_lane = 0;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1:
-            match_lane = 1;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2:
-            match_lane = 2;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3:
-            match_lane = 3;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-    struct TempData
-    {
-        uuid_p device;
-        link_id_t port;
-        lane_vc_id_t lane_vc;
-        int64_t count; /* careful! We are storing uint64_t */
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 const link_id_t port,
-                 const lane_vc_id_t lane_vc,
-                 nscq_rc_t rc,
-                 const uint64_t in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}, port {}", (int)rc, device, (int)port);
-            TempData item;
-
-            item.device  = device;
-            item.port    = port;
-            item.lane_vc = lane_vc;
-            item.count   = DCGM_INT64_BLANK;
-            dest->data.push_back(item);
-            return;
-        }
-
-        log_debug("Received device {}, link {}, counter {}", device, (int)port, in);
-
-        TempData item;
-
-        item.device  = device;
-        item.port    = port;
-        item.lane_vc = lane_vc;
-        item.count   = in;
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors. NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &data : collector.data)
-    {
-        auto index = FindSwitchByDevice(data.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", data.device);
-            continue;
-        }
-
-        dcgm_link_t link;
-        link.raw             = 0;
-        link.parsed.switchId = m_nvSwitches[index].physicalId;
-        link.parsed.type     = DCGM_FE_SWITCH;
-        link.parsed.index    = data.port;
-
-        for (auto &entity : entities)
-        {
-            dcgm_link_t match_link;
-
-            match_link.raw = entity.entityId;
-
-            log_debug("Matching index {} {} {} {} {} {} {} {} {} {}",
-                      index,
-                      m_nvSwitches[index].physicalId,
-                      (int)data.port,
-                      (int)data.lane_vc,
-                      entity.entityGroupId,
-                      entity.entityId,
-                      match_link.raw,
-                      match_lane,
-                      DCGM_FE_LINK,
-                      link.raw);
-
-            if ((entity.entityGroupId == DCGM_FE_LINK) && (match_link.raw == link.raw) && (match_lane == data.lane_vc))
-            {
-                buf.AddInt64Value(DCGM_FE_LINK, link.raw, fieldId, data.count, now, DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-dcgmReturn_t DcgmNvSwitchManager::UpdateLaneLatencyFields(unsigned short fieldId,
-                                                          DcgmFvBuffer &buf,
-                                                          const std::vector<dcgm_field_update_info_t> &entities,
-                                                          timelib64_t now)
-{
-    lane_vc_id_t match_vc;
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0:
-            match_vc = 0;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1:
-            match_vc = 1;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2:
-            match_vc = 2;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3:
-            match_vc = 3;
-            break;
-
-        default:
-            return DCGM_ST_BADPARAM;
-    }
-
-    const char *nscqPath = "/{nvswitch}/nvlink/{port}/{vc}/latency";
-
-    struct TempData
-    {
-        uuid_p device;
-        link_id_t port;
-        lane_vc_id_t lane_vc;
-        nscq_vc_latency_t latency;
-    };
-
-    NscqDataCollector<std::vector<TempData>> collector;
-
-    auto cb = [](const uuid_p device,
-                 const link_id_t port,
-                 const lane_vc_id_t lane_vc,
-                 nscq_rc_t rc,
-                 const nscq_vc_latency_t in,
-                 NscqDataCollector<std::vector<TempData>> *dest) {
-        if (dest == nullptr)
-        {
-            log_error("NSCQ passed dest = nullptr");
-            return;
-        }
-
-        dest->callCounter++;
-
-        if (NSCQ_ERROR(rc))
-        {
-            log_error("NSCQ passed error {} for phys id {}, port {}, lane {}", (int)rc, device, (int)port, lane_vc);
-
-            TempData item;
-
-            nscq_vc_latency_t blank {
-                DCGM_INT64_BLANK, DCGM_INT64_BLANK, DCGM_INT64_BLANK, DCGM_INT64_BLANK, DCGM_INT64_BLANK,
-            };
-
-            item.device  = device;
-            item.port    = port;
-            item.lane_vc = lane_vc;
-            item.latency = blank;
-            dest->data.push_back(item);
-            return;
-        }
-
-        log_debug("Received device {}, link {}, vc {}, latency counters: {} {} {} {} {}",
-                  device,
-                  (int)port,
-                  (int)lane_vc,
-                  in.low,
-                  in.medium,
-                  in.high,
-                  in.panic,
-                  in.count);
-
-        TempData item;
-
-        item.device  = device;
-        item.port    = port;
-        item.lane_vc = lane_vc;
-        item.latency = in;
-        dest->data.push_back(item);
-    };
-
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
-
-    log_debug("Callback called {} times", collector.callCounter);
-
-    if (NSCQ_ERROR(ret))
-    {
-        log_error("Could not read {}, fatal errors, NSCQ ret: {}", nscqPath, ret);
-
-        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
-    }
-    else if (collector.callCounter == 0)
-    {
-        /* We got called 0 times with no error. Assume there was an error and append blanks */
-        BufferBlankValueForAllEntities(fieldId, buf, entities);
-        return DCGM_ST_OK;
-    }
-
-    for (const auto &data : collector.data)
-    {
-        auto index = FindSwitchByDevice(data.device);
-
-        if (index == -1)
-        {
-            log_error("Could not find device {}. Skipping", data.device);
-            continue;
-        }
-
-        dcgm_link_t link;
-        link.raw             = 0;
-        link.parsed.switchId = m_nvSwitches[index].physicalId;
-        link.parsed.type     = DCGM_FE_SWITCH;
-        link.parsed.index    = data.port;
-
-        for (auto &entity : entities)
-        {
-            log_debug("Matching index {} {} {} {} {} {} {} {} {}",
-                      index,
-                      m_nvSwitches[index].physicalId,
-                      (int)data.port,
-                      (int)data.lane_vc,
-                      entity.entityGroupId,
-                      entity.entityId,
-                      match_vc,
-                      DCGM_FE_LINK,
-                      link.raw);
-
-            if ((entity.entityGroupId == DCGM_FE_LINK) && (entity.entityId == link.raw) && (data.lane_vc == match_vc))
-            {
-                int64_t count;
-
-                switch (fieldId)
-                {
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3:
-                        count = data.latency.low;
-                        break;
-
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3:
-                        count = data.latency.medium;
-                        break;
-
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3:
-                        count = data.latency.high;
-                        break;
-
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3:
-                        count = data.latency.panic;
-                        break;
-
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2:
-                    case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3:
-                        count = data.latency.count;
-                        break;
-
-                    default: // can't happen
-                        count = DCGM_INT64_BLANK;
-                        break;
-                }
-
-                buf.AddInt64Value(DCGM_FE_LINK, link.raw, fieldId, count, now, DCGM_ST_OK);
-
-                log_debug("Retrieved {} for switch at index {}", nscqPath, index);
-
-                break;
-            }
-        }
-
-        log_debug("Was provided {} for switch at index {}", nscqPath, index);
-    }
-
-    return DCGM_ST_OK;
-}
-
-/*************************************************************************/
-/* Types of NSCQ data that we can query. These are grouped by the type
-   of structure that NSCQ returns. This will determine which DCGM->NSCQ
-   query helper we call */
-enum nscqType
-{
-    NoneType,
-    SwitchInt32Type,
-    SwitchThroughputType,
-    SwitchErrorVectorType,
-    LinkUint64Type,
-    LinkThroughputType,
-    LinkErrorVectorType,
-    LaneUint64Type,
-    LaneLatencyType
-};
-
 /**
  * Map of fieldIds to the entities for which we want the data for that field.
  */
-typedef std::map<unsigned short, std::vector<dcgm_field_update_info_t>> fieldEntityMapType;
-
-static nscqType FieldIdToNscqType(unsigned short fieldId)
-{
-    nscqType fieldType { NoneType };
-
-    switch (fieldId)
-    {
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT:
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN:
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN:
-            fieldType = SwitchInt32Type;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX:
-        case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
-            fieldType = SwitchThroughputType;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS:
-            fieldType = SwitchErrorVectorType;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS:
-            fieldType = LinkUint64Type;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX:
-        case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX:
-            fieldType = LinkThroughputType;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS:
-        case DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS:
-            fieldType = LinkErrorVectorType;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3:
-            fieldType = LaneUint64Type;
-            break;
-
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2:
-        case DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3:
-            fieldType = LaneLatencyType;
-            break;
-
-        default:
-            fieldType = NoneType;
-            break;
-    }
-
-    return fieldType;
-}
+using fieldEntityMapType = std::map<unsigned short, std::vector<dcgm_field_update_info_t>>;
 
 /*************************************************************************/
 /* Helper to buffer up a blank value for every entity. This is useful when
@@ -1544,6 +543,7 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
     std::vector<dcgm_field_update_info_t> toUpdate;
     timelib64_t now  = timelib_usecSince1970();
     dcgmReturn_t ret = m_watchTable.GetFieldsToUpdate(DcgmModuleIdNvSwitch, now, toUpdate, nextUpdateTime);
+
     if (ret != DCGM_ST_OK)
     {
         log_error("Encountered a problem while retrieving fields to update: {}. Will process the fields retrieved.",
@@ -1553,14 +553,16 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
     if (toUpdate.size() < 1)
     {
         log_debug("No fields to update");
+
         return DCGM_ST_OK;
     }
 
     DcgmFvBuffer buf;
 
     /**
-     * For now, we're going to only visit each fieldId once and update all requested entities
-     *  for that field ID. We'll also only make on NSCQ call per fieldId
+     * For now, we're going to only visit each fieldId once and update all
+     * requested entities for that field ID. We'll also only make one NSCQ call
+     * per fieldId
      */
     fieldEntityMapType fieldEntityMap;
 
@@ -1578,50 +580,17 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
 
     for (const auto &[fieldId, entities] : fieldEntityMap)
     {
-        nscqType fieldType = FieldIdToNscqType(fieldId);
+        const FieldIdControlType<DCGM_FI_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
 
-        switch (fieldType)
+        if (internalFieldId == nullptr)
         {
-            case NoneType:
-                // Not yet supported from NSCQ.
-                BufferBlankValueForAllEntities(fieldId, buf, entities);
-                break;
+            // Not yet supported from NSCQ.
+            BufferBlankValueForAllEntities(fieldId, buf, entities);
 
-            case SwitchInt32Type:
-                ret = UpdateSwitchInt32Fields(fieldId, buf, entities, now);
-                break;
-
-            case SwitchThroughputType:
-                ret = UpdateSwitchThroughputFields(fieldId, buf, entities, now);
-                break;
-
-            case SwitchErrorVectorType:
-                ret = UpdateSwitchErrorVectorFields(fieldId, buf, entities, now);
-                break;
-
-            case LinkUint64Type:
-                ret = UpdateLinkUint64Fields(fieldId, buf, fieldEntityMap[fieldId], now);
-                break;
-
-            case LinkThroughputType:
-                ret = UpdateLinkThroughputFields(fieldId, buf, fieldEntityMap[fieldId], now);
-                break;
-
-            case LinkErrorVectorType:
-                ret = UpdateLinkErrorVectorFields(fieldId, buf, fieldEntityMap[fieldId], now);
-                break;
-
-            case LaneUint64Type:
-                ret = UpdateLaneUint64Fields(fieldId, buf, fieldEntityMap[fieldId], now);
-                break;
-
-            case LaneLatencyType:
-                ret = UpdateLaneLatencyFields(fieldId, buf, fieldEntityMap[fieldId], now);
-                break;
-
-            default:
-                break;
+            continue;
         }
+
+        ret = (this->*internalFieldId->UpdateFunc())(fieldId, buf, entities, now);
 
         if (ret != DCGM_ST_OK)
         {
@@ -1876,36 +845,39 @@ dcgmReturn_t DcgmNvSwitchManager::AttachNvSwitches()
 {
     log_debug("Attaching to NvSwitches");
 
+    const char *nscqPath = nscq_nvswitch_phys_id;
+
     struct IdPair
     {
         uuid_p device;
         phys_id_t physId;
     };
 
-    NscqDataCollector<std::vector<IdPair>> collector;
+    NscqDataCollector<IdPair> collector(DCGM_FI_UNKNOWN, nscqPath);
 
-    auto cb = [](const uuid_p device, nscq_rc_t rc, const phys_id_t in, NscqDataCollector<std::vector<IdPair>> *dest) {
+    auto cb = [](const uuid_p device, nscq_rc_t rc, const phys_id_t in, NscqDataCollector<IdPair> *dest) {
         if (dest == nullptr)
         {
             log_error("NSCQ passed dest = nullptr");
             return;
         }
+
         dest->callCounter++;
 
         if (NSCQ_ERROR(rc))
         {
-            log_error("NSCQ passed error {} for phys id {}", (int)rc, in);
+            log_error("NSCQ field Id {} passed error {} for phys id {}", dest->fieldId, (int)rc, in);
             return;
         }
 
-        log_debug("Received device {} phys id {}", device, in);
+        log_debug("Received field Id {} device {} phys id {}", dest->fieldId, device, in);
 
         IdPair item { .device = device, .physId = in };
 
         dest->data.push_back(item);
     };
 
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, NSCQ_PATH(nvswitch_phys_id), NSCQ_FN(*cb), &collector, 0);
+    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
 
     log_debug("Callback called {} times", collector.callCounter);
 
@@ -1918,6 +890,7 @@ dcgmReturn_t DcgmNvSwitchManager::AttachNvSwitches()
     for (auto const &item : collector.data)
     {
         int index = FindSwitchByPhysId(item.physId);
+
         if (index == -1)
         {
             log_debug("Not found: phys id {}. Adding new switch", item.physId);
@@ -1995,39 +968,39 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchStatusAllSwitches()
         return DCGM_ST_UNINITIALIZED;
     }
 
-    const char path[] = "/drv/nvswitch/{device}/blacklisted"; // RELINGO_IGNORE until the driver is updated
+    const char nscqPath[] = "/drv/nvswitch/{device}/blacklisted"; // RELINGO_IGNORE until the driver is updated
+
     struct DeviceStatePair
     {
         uuid_p device;
         bool state;
     };
 
-    NscqDataCollector<std::vector<DeviceStatePair>> collector;
+    NscqDataCollector<DeviceStatePair> collector(DCGM_FI_UNKNOWN, nscqPath);
 
-    auto cb
-        = [](const uuid_p device, nscq_rc_t rc, const bool in, NscqDataCollector<std::vector<DeviceStatePair>> *dest) {
-              if (dest == nullptr)
-              {
-                  log_error("NSCQ passed dest = nullptr");
-                  return;
-              }
+    auto cb = [](const uuid_p device, nscq_rc_t rc, const bool in, NscqDataCollector<DeviceStatePair> *dest) {
+        if (dest == nullptr)
+        {
+            log_error("NSCQ passed dest = nullptr");
+            return;
+        }
 
-              dest->callCounter++;
+        dest->callCounter++;
 
-              if (NSCQ_ERROR(rc))
-              {
-                  log_error("NSCQ passed error {} for device {}", (int)rc, device);
-                  return;
-              }
+        if (NSCQ_ERROR(rc))
+        {
+            log_error("NSCQ passed error {} for device {}", (int)rc, device);
+            return;
+        }
 
-              log_debug("Received device {} denylist {}", device, in);
+        log_debug("Received device {} denylist {}", device, in);
 
-              DeviceStatePair item { .device = device, .state = in };
+        DeviceStatePair item { .device = device, .state = in };
 
-              dest->data.push_back(item);
-          };
+        dest->data.push_back(item);
+    };
 
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, path, NSCQ_FN(*cb), &collector, 0);
+    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
 
     log_debug("Callback called {} times", collector.callCounter);
 
@@ -2079,17 +1052,18 @@ dcgmReturn_t DcgmNvSwitchManager::ReadLinkStatesAllSwitches()
 
     dcgmReturn_t dcgmRet = DCGM_ST_NO_DATA;
 
-    struct StateTriplet
+    struct TempData
     {
         uuid_p device;
         link_id_t linkId;
         nscq_nvlink_state_t state;
     };
 
-    const char *path = "/{nvswitch}/nvlink/{port}/status/link";
+    const char *nscqPath = "/{nvswitch}/nvlink/{port}/status/link";
 
-    using collector_t = NscqDataCollector<std::vector<StateTriplet>>;
-    collector_t collector;
+    using collector_t = NscqDataCollector<TempData>;
+
+    collector_t collector(DCGM_FI_UNKNOWN, nscqPath);
 
     auto cb = [](const uuid_p device,
                  const link_id_t linkId,
@@ -2106,37 +1080,41 @@ dcgmReturn_t DcgmNvSwitchManager::ReadLinkStatesAllSwitches()
 
         if (NSCQ_ERROR(rc))
         {
-            log_error("NSCQ passed error {} for device {}", (int)rc, device);
+            log_error("NSCQ field Id {} passed error {} for device {}", dest->fieldId, (int)rc, device);
             return;
         }
 
-        log_debug("Received device {} linkID {} state {}", device, int(linkId), int(state));
+        log_debug("Received field Id {} device {} linkID {} state {}", dest->fieldId, device, int(linkId), int(state));
 
-        StateTriplet item { .device = device, .linkId = linkId, .state = state };
+        TempData item { .device = device, .linkId = linkId, .state = state };
 
         dest->data.push_back(item);
     };
 
-    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, path, NSCQ_FN(*cb), &collector, 0);
+    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
 
     if (NSCQ_ERROR(ret))
     {
         log_error("Could not read NvLink states. NSCQ ret: {}", ret);
+
         return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
     }
 
     log_debug("Callback called {} times", collector.callCounter);
 
-    for (const StateTriplet &item : collector.data)
+    for (const TempData &item : collector.data)
     {
         unsigned int index = FindSwitchByDevice(item.device);
+
         if (index == -1)
         {
             log_error("Could not find device {}. Skipping", item.device);
+
             continue;
         }
 
         dcgmReturn_t st = UpdateLinkState(index, item.linkId, item.state);
+
         if (st == DCGM_ST_OK)
         {
             dcgmRet = DCGM_ST_OK;
@@ -2144,6 +1122,7 @@ dcgmReturn_t DcgmNvSwitchManager::ReadLinkStatesAllSwitches()
     }
 
     log_debug("Finished reading NvLink states for all switches");
+
     return dcgmRet;
 }
 
@@ -2194,30 +1173,30 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchFatalErrorsAllSwitches()
 {
     log_debug("Reading fatal errors for all switches");
 
+    const char *nscqPath = nscq_nvswitch_port_error_fatal;
+
     if (!m_attachedToNscq)
     {
         log_error("Not attached to NvSwitches. Aborting");
         return DCGM_ST_UNINITIALIZED;
     }
 
-    struct DeviceFatalError
+    struct TempData
     {
         uuid_p device;
+        link_id_t port;
         nscq_error_t error;
-        link_id_t /*unsigned int*/ port;
     };
 
-    using collector_t = NscqDataCollector<std::vector<DeviceFatalError>>;
-    collector_t collector;
+    using collector_t = NscqDataCollector<TempData>;
 
-    auto cb = [](const uuid_p device,
-                 const link_id_t /*uint64_t*/ port,
-                 nscq_rc_t rc,
-                 const nscq_error_t error,
-                 collector_t *dest) {
+    collector_t collector(DCGM_FI_UNKNOWN, nscqPath);
+
+    auto cb = [](const uuid_p device, const link_id_t port, nscq_rc_t rc, const nscq_error_t error, collector_t *dest) {
         if (dest == nullptr)
         {
             log_error("NSCQ passed dest = nullptr");
+
             return;
         }
 
@@ -2225,34 +1204,42 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchFatalErrorsAllSwitches()
 
         if (NSCQ_ERROR(rc))
         {
-            log_error("NSCQ passed error {} for device {} port {}", (int)rc, device, (int)port);
+            log_error(
+                "NSCQ field Id {} passed error {} for device {} port {}", dest->fieldId, (int)rc, device, (int)port);
+
             return;
         }
 
-        log_debug("Received device {} port {} fatal error {}", device, (int)port, error.error_value);
+        log_debug("Received field Id {} device {} port {} fatal error {}",
+                  dest->fieldId,
+                  device,
+                  (int)port,
+                  error.error_value);
 
-        DeviceFatalError item { .device = device, .error = error, .port = port };
+        TempData item { .device = device, .port = port, .error = error };
 
         dest->data.push_back(item);
     };
 
-    nscq_rc_t ret
-        = nscq_session_path_observe(m_nscqSession, NSCQ_PATH(nvswitch_port_error_fatal), NSCQ_FN(*cb), &collector, 0);
+    nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
 
     log_debug("Callback called {} times", collector.callCounter);
 
     if (NSCQ_ERROR(ret))
     {
         log_error("Could not read Switch fatal errors. NSCQ ret: {}", ret);
+
         return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
     }
 
     for (const auto &datum : collector.data)
     {
         auto index = FindSwitchByDevice(datum.device);
+
         if (index == -1)
         {
             log_error("Could not find device {}. Skipping", datum.device);
+
             continue;
         }
 

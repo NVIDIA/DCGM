@@ -51,6 +51,7 @@ target_link_libraries(dcgmmodulediag_private_static
         diag_interface
         transport_interface
         dcgm_common
+        serialize
         fmt::fmt
 )
 target_sources(dcgmmodulediag_private_static
@@ -70,6 +71,7 @@ target_link_libraries(dcgmmodulediag
         dcgm_common
         dcgm_logging
         dcgm_mutex
+        serialize
         ${JSONCPP_STATIC_LIBS}
         fmt::fmt
 )

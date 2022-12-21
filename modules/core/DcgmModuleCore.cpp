@@ -24,6 +24,10 @@
 #include <fmt/format.h>
 #include <sstream>
 
+#ifdef INJECTION_LIBRARY_AVAILABLE
+#include <nvml_injection.h>
+#endif
+
 extern "C" dcgmReturn_t dcgm_core_process_message(DcgmModule *module, dcgm_module_command_header_t *moduleCommand)
 {
     return PassMessageToModule(module, moduleCommand);
@@ -203,6 +207,20 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_PROF_GET_METRIC_GROUPS:
                 dcgmReturn = ProcessProfGetMetricGroups(*(dcgm_core_msg_get_metric_groups_t *)moduleCommand);
                 break;
+
+            case DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE:
+                dcgmReturn = ProcessNvmlInjectFieldValue(*(dcgm_core_msg_nvml_inject_field_value_t *)moduleCommand);
+                break;
+
+            case DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY:
+                dcgmReturn = ProcessNvmlCreateFakeEntity(*(dcgm_core_msg_nvml_create_injection_gpu_t *)moduleCommand);
+                break;
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+            case DCGM_CORE_SR_NVML_INJECT_DEVICE:
+                dcgmReturn = ProcessNvmlInjectDevice(*(dcgm_core_msg_nvml_inject_device_t *)moduleCommand);
+                break;
+#endif
 
             default:
                 DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
@@ -1864,6 +1882,169 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
         mg->fieldIds[mg->numFieldIds] = fieldId;
         mg->numFieldIds++;
     }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessNvmlInjectFieldValue(dcgm_core_msg_nvml_inject_field_value_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_nvml_inject_field_value_version);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    auto hostEngineHandler = DcgmHostEngineHandler::Instance();
+
+    // If the injection library isn't loaded and active, return unsupported here.
+    if (!hostEngineHandler->UsingInjectionNvml())
+    {
+        DCGM_LOG_ERROR << "Cannot inject NVML because we are using live NVML. Set the environment variable "
+                       << INJECTION_MODE_ENV_VAR << " before starting the hostengine in order to use injection NVML.";
+        msg.iv.cmdRet = DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    dcgm_field_entity_group_t entityGroupId = (dcgm_field_entity_group_t)msg.iv.entityGroupId;
+    dcgm_field_eid_t entityId               = msg.iv.entityId;
+    std::string tempStr;
+    dcgm_field_meta_p fieldMeta = nullptr;
+
+    if (msg.iv.fieldValue.version != dcgmInjectFieldValue_version)
+    {
+        DCGM_LOG_ERROR << "Struct version mismatch";
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    fieldMeta = DcgmFieldGetById(msg.iv.fieldValue.fieldId);
+    if (fieldMeta == nullptr)
+    {
+        DCGM_LOG_ERROR << "Bad fieldId " << msg.iv.fieldValue.fieldId;
+        msg.iv.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    if (!hostEngineHandler->GetIsValidEntityId(entityGroupId, entityId))
+    {
+        DCGM_LOG_ERROR << "Invalid entityId " << entityId << ", entityGroupId " << entityGroupId;
+        msg.iv.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    if (entityGroupId != DCGM_FE_GPU)
+    {
+        DCGM_LOG_ERROR << "NVML Injection only supports injecting GPU field values.";
+        msg.iv.cmdRet = DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.iv.fieldValue.fieldType != fieldMeta->fieldType)
+    {
+        msg.iv.cmdRet = DCGM_ST_BADPARAM;
+        DCGM_LOG_ERROR << "Unexpected fieldType " << msg.iv.fieldValue.fieldType << " != " << fieldMeta->fieldType
+                       << " expected for fieldId " << fieldMeta->fieldId;
+        return DCGM_ST_OK;
+    }
+
+    msg.iv.cmdRet = m_cacheManager->InjectNvmlFieldValue(entityId, msg.iv.fieldValue, fieldMeta);
+
+    return DCGM_ST_OK;
+}
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+dcgmReturn_t DcgmModuleCore::ProcessNvmlInjectDevice(dcgm_core_msg_nvml_inject_device_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_nvml_inject_device_version);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    DcgmHostEngineHandler *hostEngineHandler = DcgmHostEngineHandler::Instance();
+
+    if (!hostEngineHandler->UsingInjectionNvml())
+    {
+        DCGM_LOG_ERROR << "Cannot inject NVML because we are using live NVML. Set the environment variable "
+                       << INJECTION_MODE_ENV_VAR << " before starting the hostengine in order to use injection NVML.";
+        msg.info.cmdRet = DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_OK;
+    }
+
+    if (!hostEngineHandler->GetIsValidEntityId(DCGM_FE_GPU, msg.info.gpuId))
+    {
+        DCGM_LOG_ERROR << "Invalid gpuId " << msg.info.gpuId;
+        msg.info.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.info.key[0] == '\0')
+    {
+        DCGM_LOG_ERROR << "Cannot inject NVML device without a key.";
+        msg.info.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.info.value.type >= InjectionArgCount)
+    {
+        DCGM_LOG_ERROR << "Cannot inject a value with an invalid type.";
+        msg.info.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    // This will be updated later to support more than 1 extra key
+    if (msg.info.extraKeyCount > 1)
+    {
+        DCGM_LOG_ERROR << "Cannot inject a value with more than one extra key.";
+        msg.info.cmdRet = DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_OK;
+    }
+
+    for (unsigned int i = 0; i < msg.info.extraKeyCount; i++)
+    {
+        if (msg.info.extraKeys[i].type >= InjectionArgCount)
+        {
+            DCGM_LOG_ERROR << "Specified " << msg.info.extraKeyCount << " extra keys, but extra key " << i
+                           << " has an invalid type.";
+            msg.info.cmdRet = DCGM_ST_BADPARAM;
+            return DCGM_ST_OK;
+        }
+    }
+
+    if (msg.info.extraKeyCount == 0)
+    {
+        msg.info.cmdRet = m_cacheManager->InjectNvmlGpu(msg.info.gpuId, &msg.info.key[0], msg.info.value, nullptr, 0);
+    }
+    else
+    {
+        msg.info.cmdRet = m_cacheManager->InjectNvmlGpu(
+            msg.info.gpuId, &msg.info.key[0], msg.info.value, &msg.info.extraKeys[0], msg.info.extraKeyCount);
+    }
+
+    return DCGM_ST_OK;
+}
+#endif
+
+dcgmReturn_t DcgmModuleCore::ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_nvml_create_injection_gpu_version);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    if (!DcgmHostEngineHandler::Instance()->UsingInjectionNvml())
+    {
+        DCGM_LOG_ERROR << "Cannot create injection NVML device because we are using live NVML. "
+                       << " Set the environment variable " << INJECTION_MODE_ENV_VAR
+                       << " before starting the hostengine in order to use injection NVML.";
+        msg.info.cmdRet = DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_OK;
+    }
+
+    msg.info.cmdRet = m_cacheManager->CreateNvmlInjectionDevice(msg.info.index);
 
     return DCGM_ST_OK;
 }
