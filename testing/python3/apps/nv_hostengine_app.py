@@ -249,7 +249,7 @@ class NvHostEngineApp(app_runner.AppRunner):
         except FileNotFoundError: # Likely another process delete race
             return None
 
-            pidStr = lines[0].strip()
+        pidStr = lines[0].strip()
         #logger.error("pidStr %s" % pidStr)
 
         procPath = "/proc/" + pidStr + "/"

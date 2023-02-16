@@ -23,6 +23,9 @@
 
 TEST_CASE("PluginLib: General")
 {
+    /* Initialize logging or the plugin will crash when it tries to log to us */
+    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
+
     PluginLib pl;
     dcgmReturn_t ret = pl.LoadPlugin("./libtestplugin.so", "software");
     CHECK(ret == DCGM_ST_OK);

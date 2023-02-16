@@ -1583,20 +1583,6 @@ void bg_cleanup(BusGrindGlobals *bgGlobals)
     }
 
     bgGlobals->gpu.clear();
-
-    /* Unload our cuda context for each gpu in the current process. We enumerate all GPUs because
-       cuda opens a context on all GPUs, even if we don't use them */
-    int deviceIdx, cudaDeviceCount;
-    cudaError_t cuSt;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 }
 
 /*****************************************************************************/
@@ -1853,6 +1839,8 @@ void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGp
         return;
     }
 
+    /* NVML does not return fine-grained link state info. Prevent false-positive
+     * diag failures by displaying an info message instead of errors */
     for (unsigned int i = 0; i < linkStatus.numGpus; i++)
     {
         if (pcie_gpu_id_in_list(linkStatus.gpus[i].entityId, gpuInfo) == false)
@@ -1866,7 +1854,7 @@ void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGp
             {
                 DcgmError d { DcgmError::GpuIdTag::Unknown };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, linkStatus.gpus[i].entityId, j);
-                bgGlobals->busGrind->AddErrorForGpu(linkStatus.gpus[i].entityId, d);
+                bgGlobals->busGrind->AddInfoVerboseForGpu(linkStatus.gpus[i].entityId, d.GetMessage());
             }
         }
     }
@@ -1879,7 +1867,7 @@ void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGp
             {
                 DcgmError d { DcgmError::GpuIdTag::Unknown };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVSWITCH_NVLINK_DOWN, d, linkStatus.nvSwitches[i].entityId, j);
-                bgGlobals->busGrind->AddError(d);
+                bgGlobals->busGrind->AddInfoVerbose(d.GetMessage());
             }
         }
     }

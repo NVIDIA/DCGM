@@ -261,7 +261,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
     arguments->m_parameters.m_logFile = m_logFileString.Value();
 
     arguments->m_parameters.m_logLevel
-        = DcgmLogging::dcgmSeverityFromString(m_logLevelString.Value().c_str(), DcgmLoggingSeverityInfo);
+        = LoggingSeverityFromString(m_logLevelString.Value().c_str(), DcgmLoggingSeverityInfo);
 
     bool limitedFields { false };
     unsigned int firstFieldId { DCGM_FI_PROF_FIRST_ID };

@@ -133,6 +133,27 @@ unsigned int Gpu::getDeviceIndex(gpuEnumMethod_enum method) const
         throw std::runtime_error("Illegal enumeration method given to getDeviceIndex");
 }
 
+dcgmReturn_t Gpu::GetMigMode(bool &enabled) const
+{
+    dcgmFieldValue_v2 migModeValue {};
+    dcgmGroupEntityPair_t entity {};
+
+    dcgmHandle_t handle    = dcgmHandle.GetHandle();
+    entity.entityId        = m_index;
+    entity.entityGroupId   = DCGM_FE_GPU;
+    unsigned int flags     = DCGM_FV_FLAG_LIVE_DATA;
+    unsigned short fieldId = DCGM_FI_DEV_MIG_MODE;
+
+    dcgmReturn_t ret = dcgmEntitiesGetLatestValues(handle, &entity, 1, &fieldId, 1, flags, &migModeValue);
+
+    if (ret == DCGM_ST_OK)
+    {
+        enabled = migModeValue.value.i64 != 0;
+    }
+
+    return ret;
+}
+
 dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
 {
     dcgmHandle_t handle = dcgmHandle.GetHandle();
@@ -149,20 +170,28 @@ dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
         mv.migInvalidConfiguration = true;
         return mv;
     }
-    else if (hierarchy.count == 0)
+
+    ret = GetMigMode(mv.migEnabled);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Cannot check if this GPU has MIG mode enabled: " << errorString(ret);
+        mv.migInvalidConfiguration = true;
+    }
+
+    if (hierarchy.count == 0)
     {
         DCGM_LOG_DEBUG << "No MIG devices are configured on GPU " << this->m_index;
-        mv.migEnabled              = false;
         mv.migInvalidConfiguration = false;
         return mv;
     }
 
     dcgmFieldValue_v2 maxSliceValue {};
     dcgmGroupEntityPair_t entity {};
+
     entity.entityId        = m_index;
     entity.entityGroupId   = DCGM_FE_GPU;
-    unsigned short fieldId = DCGM_FI_DEV_MIG_MAX_SLICES;
     unsigned int flags     = DCGM_FV_FLAG_LIVE_DATA;
+    unsigned short fieldId = DCGM_FI_DEV_MIG_MAX_SLICES;
     std::int64_t maxSlices = DCGM_MAX_INSTANCES_PER_GPU;
 
     /*
@@ -187,6 +216,7 @@ dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
         if ((hierarchy.entityList[i].parent.entityId == m_index)
             && (hierarchy.entityList[i].parent.entityGroupId == DCGM_FE_GPU))
         {
+            mv.gpuInstanceCount++;
             mv.migEnabled = true;
             relevantGpuInstanceIds.insert(hierarchy.entityList[i].entity.entityId);
             if (hierarchy.entityList[i].info.nvmlProfileSlices != maxSlices)
@@ -203,6 +233,7 @@ dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
                  && (relevantGpuInstanceIds.find(hierarchy.entityList[i].parent.entityId)
                      != relevantGpuInstanceIds.end()))
         {
+            mv.computeInstanceCount++;
             mv.migEnabled = true;
             if (hierarchy.entityList[i].info.nvmlProfileSlices != maxSlices)
             {

@@ -2064,15 +2064,15 @@ dcgmReturn_t DcgmModuleCore::ProcessSetLoggingSeverity(dcgm_core_msg_set_severit
         return dcgmReturn; /* Logging handled by caller (DcgmModuleCore::ProcessMessage) */
     }
 
-    std::unique_lock<std::mutex> loggingSeverityLock = DcgmLogging::lockSeverity();
+    std::unique_lock<std::mutex> loggingSeverityLock = LoggerLockSeverity();
 
     switch (logging.targetLogger)
     {
         case BASE_LOGGER:
-            retSt = DcgmLogging::setLoggerSeverity<BASE_LOGGER>(logging.targetSeverity);
+            retSt = SetLoggerSeverity(BASE_LOGGER, logging.targetSeverity);
             break;
         case SYSLOG_LOGGER:
-            retSt = DcgmLogging::setLoggerSeverity<SYSLOG_LOGGER>(logging.targetSeverity);
+            retSt = SetLoggerSeverity(SYSLOG_LOGGER, logging.targetSeverity);
             break;
             // Do not add a default case so that the compiler catches missing loggers
     }
@@ -2085,8 +2085,8 @@ dcgmReturn_t DcgmModuleCore::ProcessSetLoggingSeverity(dcgm_core_msg_set_severit
 
     DcgmHostEngineHandler::Instance()->NotifyLoggingSeverityChange();
 
-    std::string severityString = DcgmLogging::severityToString(logging.targetSeverity, "Unknown");
-    std::string loggerString   = DcgmLogging::loggerToString(logging.targetLogger, "Unknown");
+    std::string severityString = LoggingSeverityToString(logging.targetSeverity, "Unknown");
+    std::string loggerString   = LoggerToString(logging.targetLogger, "Unknown");
 
     DCGM_LOG_INFO << "ProcessSetLoggingSeverity set severity to " << severityString << " (" << logging.targetSeverity
                   << ")"

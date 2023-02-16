@@ -23,7 +23,8 @@
 #include <vector>
 
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* Current version - 2.4.0 and later */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2
 
 class PluginLib
 {
@@ -94,6 +95,7 @@ public:
 private:
     void *m_pluginPtr;
     bool m_initialized;
+    dcgmDiagGetPluginInterfaceVersion_f m_getPluginInterfaceVersionCB;
     dcgmDiagGetPluginInfo_f m_getPluginInfoCB;
     dcgmDiagInitializePlugin_f m_initializeCB;
     dcgmDiagRunTest_f m_runTestCB;

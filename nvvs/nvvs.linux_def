@@ -1,0 +1,9 @@
+{
+    global:
+        *;
+    local:
+        _ZN4plog4util9*;
+        extern "C++" {
+            _ZN4plog4util9*;
+        };
+};

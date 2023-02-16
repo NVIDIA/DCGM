@@ -23,6 +23,8 @@ add_library(nvvs_plugins INTERFACE)
 add_library(nvvs_plugins_interface INTERFACE)
 target_include_directories(nvvs_plugins_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+set(NVVS_PLUGINS_BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 macro(declare_nvvs_plugin plugin_name dirpath)
     add_library(nvvs_plugins_${plugin_name}_interface INTERFACE)
     target_include_directories(nvvs_plugins_${plugin_name}_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/${dirpath})
@@ -50,6 +52,7 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PUBLIC ${CUDA${CUDA_VER}_LIBS})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PUBLIC pluginCommon_${CUDA_VER})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE pluginCudaCommon_${CUDA_VER})
+    target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE dcgm_logging)
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES LIBRARY_OUTPUT_NAME "${PLUGIN_NAME}")
     update_lib_ver(${PLUGIN_NAME}_${CUDA_VER})
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES INSTALL_TO_DIR ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda${CUDA_VER})
@@ -57,6 +60,8 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     if ((${CUDA_VER} EQUAL 10) OR (${CUDA_VER} EQUAL 9))
         target_compile_options(${PLUGIN_NAME}_${CUDA_VER} PRIVATE -Wno-volatile)
     endif()
+
+    target_link_options(${PLUGIN_NAME}_${CUDA_VER} PRIVATE -Wl,--version-script,${NVVS_PLUGINS_BASE_DIR}/nvvs_plugin.linux_def)
 endmacro()
 
 LIST(APPEND SUPPORTED_CUDA_VERSIONS 12)
@@ -90,6 +95,7 @@ foreach(plugin ${NVVS_PLUGINS})
 endforeach()
 
 set(NVVS_PLUGINS ${NVVS_PLUGINS} PARENT_SCOPE)
+set(NVVS_PLUGINS_BASE_DIR ${NVVS_PLUGINS_BASE_DIR} PARENT_SCOPE)
 
 target_link_libraries(
     nvvs_plugins

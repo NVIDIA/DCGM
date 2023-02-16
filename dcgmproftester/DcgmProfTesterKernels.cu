@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <stdint.h>
+#include <cuda_fp16.h>
 
 #if 0
 __device__ __inline__ uint32_t __numSmspPerSm()
@@ -236,3 +237,70 @@ __global__ void waitSmspNs(uint64_t* d_A, uint32_t waitInNs)
 }
 
 #endif
+
+static const int ITERATIONS_PER_LOOP = 1000;
+
+template <typename T>
+__device__ void doWorkload(T *pretendSideEffect, uint64_t runForNs)
+{
+    uint64_t startNs = __globaltimer();
+
+    T dummyValue = (T)getFlatIdx();
+    
+    while (startNs + runForNs > __globaltimer())
+    {
+        for (int i = 0; i < ITERATIONS_PER_LOOP; i++)
+        {
+            /* Do several per loop since the underlying instructions may be done in pairs or quads */
+            dummyValue += (T)1;
+            dummyValue += (T)1;
+            dummyValue += (T)1;
+            dummyValue += (T)1;
+        }
+    }
+
+    /* Trick the compiler so it doesn't optimize away all of the code above */
+    if (pretendSideEffect != nullptr)
+    {
+        *pretendSideEffect = dummyValue;
+    }
+}
+
+extern "C" 
+__global__ void doWorkloadFP64(double *pretendSideEffect, uint64_t runForNs)
+{
+    doWorkload<double>(pretendSideEffect, runForNs);
+}
+
+extern "C" 
+__global__ void doWorkloadFP32(float *pretendSideEffect, uint64_t runForNs)
+{
+    doWorkload<float>(pretendSideEffect, runForNs);
+}
+
+extern "C" 
+__global__ void doWorkloadFP16(__half *pretendSideEffect, uint64_t runForNs)
+{
+    uint64_t startNs = __globaltimer();
+
+    __half dummyValue = __double2half((double)getFlatIdx());
+    __half incrementBy = __double2half((double)1);
+    
+    while (startNs + runForNs > __globaltimer())
+    {
+        for (int i = 0; i < ITERATIONS_PER_LOOP; i++)
+        {
+            /* Do several per loop since the underlying instructions may be done in pairs or quads */
+            dummyValue = __hadd(dummyValue, incrementBy);
+            dummyValue = __hadd(dummyValue, incrementBy);
+            dummyValue = __hadd(dummyValue, incrementBy);
+            dummyValue = __hadd(dummyValue, incrementBy);
+        }
+    }
+
+    /* Trick the compiler so it doesn't optimize away all of the code above */
+    if (pretendSideEffect != nullptr)
+    {
+        *pretendSideEffect = dummyValue;
+    }
+}

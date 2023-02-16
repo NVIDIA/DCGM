@@ -397,3 +397,10 @@ void Plugin::SetNonGpuResult(nvvsPluginResult_t res)
 {
     m_nonGpuResults.emplace_back(res);
 }
+
+void Plugin::InitializeLogging(DcgmLoggingSeverity_t severity, hostEngineAppenderCallbackFp_t loggingCallback)
+{
+    InitLogToHostengine(severity);
+    LoggingSetHostEngineCallback(loggingCallback);
+    LoggingSetHostEngineComponentName(GetDisplayName());
+}

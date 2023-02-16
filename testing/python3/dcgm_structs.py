@@ -693,23 +693,23 @@ class c_dcgmGroupInfo_v2(_PrintableStructure):
 c_dcgmGroupInfo_version2 = make_dcgm_version(c_dcgmGroupInfo_v2, 2)
 
 
-DcgmiMigProfileNone                 = 0  # No profile (for GPUs)
-DcgmMigProfileGpuInstanceSlice1     = 1  # GPU instance slice 1
-DcgmMigProfileGpuInstanceSlice2     = 2  # GPU instance slice 2
-DcgmMigProfileGpuInstanceSlice3     = 3  # GPU instance slice 3
-DcgmMigProfileGpuInstanceSlice4     = 4  # GPU instance slice 4
-DcgmMigProfileGpuInstanceSlice7     = 5  # GPU instance slice 7
-DcgmMigProfileGpuInstanceSlice8     = 6  # GPU instance slice 8
+DcgmiMigProfileNone                     = 0  # No profile (for GPUs)
+DcgmMigProfileGpuInstanceSlice1         = 1  # GPU instance slice 1
+DcgmMigProfileGpuInstanceSlice2         = 2  # GPU instance slice 2
+DcgmMigProfileGpuInstanceSlice3         = 3  # GPU instance slice 3
+DcgmMigProfileGpuInstanceSlice4         = 4  # GPU instance slice 4
+DcgmMigProfileGpuInstanceSlice7         = 5  # GPU instance slice 7
+DcgmMigProfileGpuInstanceSlice8         = 6  # GPU instance slice 8
 DcgmMigProfileGpuInstanceSlice6         = 7  # GPU instance slice 6
 DcgmMigProfileGpuInstanceSlice1Rev1     = 8  # GPU instance slice 1 revision 1
 DcgmMigProfileGpuInstanceSlice2Rev1     = 9  # GPU instance slice 2 revision 1
 DcgmMigProfileGpuInstanceSlice1Rev2     = 10 # GPU instance slice 1 revision 2
-DcgmMigProfileComputeInstanceSlice1 = 30 # compute instance slice 1
-DcgmMigProfileComputeInstanceSlice2 = 31 # compute instance slice 2
-DcgmMigProfileComputeInstanceSlice3 = 32 # compute instance slice 3
-DcgmMigProfileComputeInstanceSlice4 = 33 # compute instance slice 4
-DcgmMigProfileComputeInstanceSlice7 = 34 # compute instance slice 7 
-DcgmMigProfileComputeInstanceSlice8 = 35 # compute instance slice 8
+DcgmMigProfileComputeInstanceSlice1     = 30 # compute instance slice 1
+DcgmMigProfileComputeInstanceSlice2     = 31 # compute instance slice 2
+DcgmMigProfileComputeInstanceSlice3     = 32 # compute instance slice 3
+DcgmMigProfileComputeInstanceSlice4     = 33 # compute instance slice 4
+DcgmMigProfileComputeInstanceSlice7     = 34 # compute instance slice 7 
+DcgmMigProfileComputeInstanceSlice8     = 35 # compute instance slice 8
 DcgmMigProfileComputeInstanceSlice6     = 36 # compute instance slice 6
 DcgmMigProfileComputeInstanceSlice1Rev1 = 37 # compute instance slice 1 revision 1
 

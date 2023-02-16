@@ -23,6 +23,7 @@ target_sources(nv-hostengine
 
 target_link_libraries(nv-hostengine PRIVATE common_interface dcgm_interface dcgm)
 target_link_libraries(nv-hostengine PRIVATE buildinfo_objects dcgm_common transport_objects)
+target_link_libraries(nv-hostengine PRIVATE dcgm_logging)
 
 find_package(Libevent REQUIRED)
 target_link_libraries(nv-hostengine PUBLIC ${LIBEVENT_STATIC_LIBS})

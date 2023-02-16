@@ -116,11 +116,43 @@ int TestDcgmValue::TestConversions()
 }
 
 /*****************************************************************************/
+int TestDcgmValue::TestConversionsOverflow()
+{
+    int Nerrors = 0;
+
+    /* Using DCGM_INT32_NOT_PERMISSIONED since that's the current maximum BLANK value defined */
+
+    int valueInt32 = nvcmvalue_int64_to_int32((long long)(DCGM_INT32_NOT_PERMISSIONED + 1));
+    if (valueInt32 != DCGM_INT32_BLANK)
+    {
+        fprintf(stderr, "overflow i64 -> i32 failed with valueInt32 %d\n", valueInt32);
+        Nerrors++;
+    }
+
+    valueInt32 = nvcmvalue_double_to_int32((double)(DCGM_INT32_NOT_PERMISSIONED + 1));
+    if (valueInt32 != DCGM_INT32_BLANK)
+    {
+        fprintf(stderr, "overflow double -> i32 failed with valueInt32 %d\n", valueInt32);
+        Nerrors++;
+    }
+
+    if (Nerrors > 0)
+    {
+        fprintf(stderr, "TestDcgmValue::TestConversionsOverflow %d conversions failed.\n", Nerrors);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+/*****************************************************************************/
 int TestDcgmValue::Run()
 {
     unsigned int numOfFailures = 0;
 
     RUN_MODULE_SUBTEST(TestDcgmValue, TestConversions, numOfFailures);
+    RUN_MODULE_SUBTEST(TestDcgmValue, TestConversionsOverflow, numOfFailures);
 
     if (numOfFailures == 0)
     {

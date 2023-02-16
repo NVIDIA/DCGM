@@ -466,7 +466,7 @@ int main(int argc, char **argv)
     params.version  = dcgmStartEmbeddedV2Params_version2;
     params.opMode   = DCGM_OPERATION_MODE_AUTO;
     params.logFile  = cmdLine.GetLogFileName().c_str();
-    params.severity = DcgmLogging::severityFromString(cmdLine.GetLogLevel().c_str(), DcgmLoggingSeverityUnspecified);
+    params.severity = LoggingSeverityFromString(cmdLine.GetLogLevel().c_str(), DcgmLoggingSeverityUnspecified);
 
     params.denyListCount = 0;
     memset(params.denyList, 0, sizeof(params.denyList));

@@ -27,6 +27,7 @@
 
 #include <JsonResult.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -408,8 +409,7 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
     if (drd->debugLevel != DCGM_INT32_BLANK)
     {
         cmdArgs.push_back("-d");
-        cmdArgs.push_back(
-            std::string(DcgmLogging::severityToString(drd->debugLevel, DCGM_LOGGING_DEFAULT_NVVS_SEVERITY)));
+        cmdArgs.push_back(std::string(LoggingSeverityToString(drd->debugLevel, DCGM_LOGGING_DEFAULT_NVVS_SEVERITY)));
     }
 
     // Plugin path
@@ -987,7 +987,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
                     if ((*serviceAccountCredentials).gid != 0 && (*serviceAccountCredentials).uid != 0
                         && std::ranges::count((*serviceAccountCredentials).groups, 0) <= 0)
                     {
-                        // Record a system error here even though it may be overwritten with a more specific one later
+                        // Run EUD only with root permissions
                         auto eudDrd     = *drd;
                         eudDrd.validate = DCGM_POLICY_VALID_NONE;
                         memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
@@ -998,6 +998,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
 
                         if (eudResults.ret != DCGM_ST_OK)
                         {
+                            // Do not overwrite the response system error here
                             return eudResults.ret;
                         }
 
@@ -1011,7 +1012,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
                 }
             }
         }
-        // FillResponseStructure will return DCGM_ST_OK if it can parse the json, passing through
+
         ret = FillResponseStructure(*nvvsResults.results, response, drd->groupId, ret);
         if (ret != DCGM_ST_OK && !stderrStr.empty())
         {
@@ -1119,7 +1120,7 @@ dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult)
         }
     }
 }
-// Since we've run a legacy NVVS, we don't know the error code
+
 static std::string InfoToCsvString(DcgmNs::Nvvs::Json::Info const &info)
 {
     return fmt::format("{}", fmt::join(info.messages, ", "));
@@ -1160,7 +1161,7 @@ void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
                 gpuIdSet.insert(gpuId);
             }
 
-            continue;
+            continue; // To next test.results item
         }
 
         for (auto const gpuId : result.gpuIds.ids)
@@ -1197,12 +1198,12 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::Diagnost
     if (results.runtimeError.has_value())
     {
         response.RecordSystemError((*results.runtimeError));
-
+        // If oldRet was OK, change return code to indicate NVVS error
         return oldRet == DCGM_ST_OK ? DCGM_ST_NVVS_ERROR : oldRet;
     }
     else if (results.categories.has_value())
     {
-        // If oldRet was OK, change return code to indicate NVVS error
+        // Get nvvs version
         double nvvsVersion = results.version;
         if (nvvsVersion < 1.7)
         {

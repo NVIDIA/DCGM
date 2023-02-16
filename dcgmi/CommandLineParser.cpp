@@ -1448,7 +1448,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                              "iterations",
                                              cmd);
 
-
+    // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
     helpOutput.addFooter("Verbose diagnostic output is currently limited on client, for full diagnostic and validation "
                          "logs please check your server.\n");
@@ -1511,7 +1511,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("statspath has to be under 128 characters");
     }
 
-    if ((!debugLevel.getValue().empty()) && (!DcgmLogging::isValidSeverity(debugLevel.getValue().c_str())))
+    if ((!debugLevel.getValue().empty()) && (!IsValidSeverity(debugLevel.getValue().c_str())))
     {
         throw TCLAP::CmdLineParseException("debugLevel must be one of " DCGM_LOGGING_SEVERITY_OPTIONS);
     }
@@ -1556,7 +1556,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     int severityInt = DCGM_INT32_BLANK;
     if (!debugLevel.getValue().empty())
     {
-        severityInt = DcgmLogging::severityFromString(debugLevel.getValue().c_str(), DcgmLoggingSeverityDebug);
+        severityInt = LoggingSeverityFromString(debugLevel.getValue().c_str(), DcgmLoggingSeverityDebug);
     }
 
     result = dcgm_diag_common_populate_run_diag(drd,

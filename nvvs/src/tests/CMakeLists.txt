@@ -52,6 +52,7 @@ if (BUILD_TESTING)
         PRIVATE
             serialize
             nvvs_without_main_objects
+            dcgm_logging
             Catch2::Catch2
             fmt::fmt
     )

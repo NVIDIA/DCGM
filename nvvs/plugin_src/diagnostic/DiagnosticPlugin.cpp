@@ -120,14 +120,6 @@ GpuBurnPlugin::~GpuBurnPlugin()
 /*****************************************************************************/
 void GpuBurnPlugin::Cleanup()
 {
-    for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
-    {
-        GpuBurnDevice *gbd = m_device[deviceIdx];
-        cudaSetDevice(gbd->cudaDeviceIdx);
-        delete gbd;
-        cudaDeviceReset();
-    }
-
     m_device.clear();
 
     // We don't own testParameters, so we don't delete them
@@ -217,16 +209,12 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
             continue;
         }
 
-        cudaSetDevice(deviceIdx);
         if (deviceIdx == 0)
         {
             // There's no reason to call these more than once since the GPUs are identical
             UpdateForHGemmSupport(deviceIdx);
             UpdateForDGemmSupport(deviceIdx);
         }
-
-        cudaDeviceReset();
-        log_debug("Reset device {}", deviceIdx);
     }
 
     for (size_t i = 0; i < gpuInfo.numGpus; i++)
@@ -852,6 +840,25 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
 /****************************************************************************/
 GpuBurnWorker::~GpuBurnWorker()
 {
+    try
+    {
+        int st = StopAndWait(60000);
+        if (st)
+        {
+            DCGM_LOG_ERROR << "Killing GpuBurnWorker thread that is still running.";
+            Kill();
+        }
+    }
+    catch (std::exception const &ex)
+    {
+        DCGM_LOG_ERROR << "StopAndWait() threw " << ex.what();
+    }
+    catch (...)
+    {
+        DCGM_LOG_ERROR << "StopAndWait() threw unknown exception";
+    }
+
+
     using namespace Dcgm;
     int st = Bind();
     if (st != 0)

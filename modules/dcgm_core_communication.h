@@ -48,7 +48,7 @@ typedef enum
     DcgmCoreReqIdGMGetGroupEntities             = 17, // DcgmGroupManager::GetGroupEntities()
     DcgmCoreReqIdGMAreAllTheSameSku             = 18, // DcgmGroupManager::AreAllTheSameSku()
     DcgmCoreReqIdGMGetGroupGpuIds               = 19, // DcgmGroupManager::GetGroupGpuIds()
-    DcgmCoreReqIdLoggingGetSeverity             = 36, // DcgmLogging::getSeverity()
+    DcgmCoreReqIdLoggingGetSeverity             = 36, // LoggingGetSeverity()
     DcgmCoreReqIdSendModuleCommand              = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
     DcgmCoreReqIdSendRawMessage                 = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
     DcgmCoreReqIdNotifyRequestOfCompletion      = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
@@ -65,7 +65,6 @@ typedef enum
    in the modules' shared library with dlsym */
 typedef dcgmReturn_t (*dcgmCoreReqPost_f)(dcgm_module_command_header_t *req, void *);
 typedef dcgmReturn_t (*dcgmCoreGetResponse_f)(dcgmCoreReqId_t reqId, unsigned int timeout);
-typedef void (*dcgmLoggerCallback_f)(const void *);
 /**
  * Contains the callbacks that should be used for communicating between the modules and libdcgm
  */

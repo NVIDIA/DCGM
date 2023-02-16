@@ -30,8 +30,10 @@
 
 typedef struct
 {
-    bool migEnabled              = false;
-    bool migInvalidConfiguration = false;
+    bool migEnabled                   = false;
+    bool migInvalidConfiguration      = false;
+    unsigned int gpuInstanceCount     = 0;
+    unsigned int computeInstanceCount = 0;
 } dcgmMigValidity_t;
 
 // define logging mechanisms, meta data, etc.
@@ -158,6 +160,13 @@ public:
      * GPU instance configured.
      */
     dcgmMigValidity_t IsMigModeDiagCompatible() const;
+
+    /*
+     * Sets enabled to true if MIG mode is enabled.
+     *
+     * @return DCGM_ST_* indicating success or failure
+     */
+    dcgmReturn_t GetMigMode(bool &enabled) const;
 
     /***************************PRIVATE**********************************/
 private:

@@ -629,6 +629,7 @@ private:
     int RunSubtestNvLinkBandwidth(void);
     int RunSubtestDramUtil(void);
     int RunSubtestGemmUtil(void);
+    int RunSubtestDataTypeActive();
 
     /**@}*/
 

@@ -15,6 +15,7 @@
  */
 #include "PluginCommon.h"
 #include "DcgmError.h"
+#include <DcgmLogging.h>
 #include <NvvsCommon.h>
 
 #include <sstream>
@@ -66,3 +67,7 @@ bool IsSmallFrameBufferModeSet(void)
 }
 
 /*****************************************************************************/
+void InitializeLoggingCallbacks(DcgmLoggingSeverity_t loggingSeverity,
+                                hostEngineAppenderCallbackFp_t loggingCallback,
+                                const std::string &pluginName)
+{}

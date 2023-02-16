@@ -285,6 +285,15 @@ public:
     /* Variables */
     Output *progressOut; // Output object passed in from the test framework for progress updates
 
+    /*
+     * Initialize logging from within this plugin with the given severity and logging callback.
+     * The main NVVS process will do the actual logging via the provided callback.
+     */
+    void InitializeLogging(DcgmLoggingSeverity_t loggingSeverity, hostEngineAppenderCallbackFp_t loggingCallback);
+
+    /* Returns the external display name for the specified test type */
+    std::string GetDisplayName();
+
     /***************************PRIVATE**********************************/
 private:
     /* Methods */
@@ -308,9 +317,6 @@ private:
     /* Variables */
     observedMetrics_t m_values; /* Record the values found for pass/fail criteria */
     bool m_fakeGpus;            /* Whether or not this plugin is using fake gpus */
-
-    /* Returns the external display name for the specified test type */
-    std::string GetDisplayName();
 
     /***************************PROTECTED********************************/
 protected:

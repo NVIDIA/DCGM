@@ -759,11 +759,14 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
             rtSt = RunSubtestDramUtil();
             break;
 
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
         case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
             rtSt = RunSubtestGemmUtil();
+            break;
+
+        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            rtSt = RunSubtestDataTypeActive();
             break;
 
         case DCGM_FI_PROF_NVLINK_RX_BYTES:
@@ -1090,9 +1093,10 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
 
             if (dcgmReturn == DCGM_ST_OK)
             {
+                m_valid = true;
+
                 if (m_parameters.m_fast) // Woot! Got a pass in fast mode!
                 {
-                    m_valid         = true;
                     m_exitRequested = true;
                 }
                 else if (IsSynchronous())
@@ -2847,13 +2851,134 @@ bool PhysicalGpu::IsHardwareNonDeterministic(unsigned int fieldId)
 }
 
 /*****************************************************************************/
+dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
+{
+    dcgmReturn_t rtSt;
+
+    const char *testHeader;
+    const char *testTag;
+
+    switch (m_parameters.m_fieldId)
+    {
+        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            testHeader = "Fp32EngineActive";
+            testTag    = "fp32_active";
+            break;
+        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            testHeader = "Fp64EngineActive";
+            testTag    = "fp64_active";
+            break;
+        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            testHeader = "Fp16EngineActive";
+            testTag    = "fp16_active";
+            break;
+        default:
+            error_reporter << "fieldId " << m_parameters.m_fieldId << " is unhandled." << error_reporter.new_line;
+
+            return DCGM_ST_GENERIC_ERROR;
+    }
+
+    double limit = IsComputeUnoptimized(m_parameters.m_fieldId) ? 0.4 : 0.5;
+
+    limit = IsHardwareNonDeterministic(m_parameters.m_fieldId) ? 0.2 : limit;
+
+    SetTickHandler(
+        [this, firstTick = false, testHeader, testTag, limit](size_t index,
+                                                              bool valid,
+                                                              std::map<Entity, dcgmFieldValue_v1> &values,
+                                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
+            unsigned int part;
+            unsigned int parts;
+            bool firstPartTick = worker.IsFirstTick();
+
+            worker.GetParts(part, parts);
+
+            if (firstPartTick)
+            {
+                if (!firstTick) // First per-test per-GPU code here.
+                {
+                    firstTick = true;
+
+                    BeginSubtest(testHeader, testTag, false);
+                }
+
+                if (!m_tester->IsFirstTick()) // Add first per test code here.
+                {
+                    m_tester->SetFirstTick();
+                }
+            }
+
+            double howFarIn;
+            double target;
+            double target2;
+
+            worker.Input() >> howFarIn;
+            worker.Input() >> target;
+            worker.Input() >> target2;
+            worker.Input().ignore(MaxStreamLength, '\n');
+
+            if (valid)
+            {
+                if (m_parameters.m_report)
+                {
+                    auto ss    = std::cout.precision();
+                    auto flags = std::cout.flags();
+
+                    info_reporter << std::fixed << std::setprecision(3);
+
+                    info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
+                                  << "]: " << testHeader << ": target ";
+
+
+                    if (target == 1.0)
+                    {
+                        info_reporter << "max";
+                    }
+                    else
+                    {
+                        info_reporter << target;
+                    }
+
+                    info_reporter << ", dcgm ";
+
+                    ValuesDump(values, ValueType::Double, 1.0); //<< value.value.dbl
+
+                    info_reporter << info_reporter.new_line;
+
+                    std::cout.precision(ss);
+                    std::cout.flags(flags);
+                }
+
+                double value;
+
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(limit, 0.9, value, howFarIn, worker.GetValidated()));
+
+                ////prevValue = value;
+
+                AppendSubtestRecord(0.0, value);
+            }
+
+            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        });
+
+    rtSt = CommandAll(false,
+                      "R %u %.3f %.3f %s\n",
+                      m_parameters.m_fieldId,
+                      m_parameters.m_duration,
+                      m_parameters.m_reportInterval,
+                      m_parameters.m_targetMaxValue ? "true" : "false");
+
+    return rtSt;
+}
+
+/*****************************************************************************/
 dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
 {
     dcgmReturn_t rtSt;
 
     const char *testHeader;
     const char *testTag;
-    ////double prevValue { 0 };
 
     switch (m_parameters.m_fieldId)
     {

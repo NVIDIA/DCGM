@@ -5,7 +5,16 @@
 int nvcmvalue_int64_to_int32(long long int64Value)
 {
     if (!DCGM_INT64_IS_BLANK(int64Value))
-        return (int)int64Value;
+    {
+        if (DCGM_INT32_IS_BLANK(int64Value))
+        {
+            return DCGM_INT32_BLANK;
+        }
+        else
+        {
+            return (int)int64Value;
+        }
+    }
 
     switch (int64Value)
     {
@@ -99,7 +108,17 @@ long long nvcmvalue_double_to_int64(double doubleValue)
 int nvcmvalue_double_to_int32(double doubleValue)
 {
     if (!DCGM_FP64_IS_BLANK(doubleValue))
-        return (int)doubleValue;
+    {
+        /* Do a check against the value rather than IS_BLANK to avoid casting truncation errors */
+        if (doubleValue >= (double)DCGM_INT32_BLANK)
+        {
+            return DCGM_INT32_BLANK;
+        }
+        else
+        {
+            return (int)doubleValue;
+        }
+    }
 
     if (doubleValue == DCGM_FP64_NOT_FOUND)
         return DCGM_INT32_NOT_FOUND;

@@ -346,7 +346,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
             {
                 if (error.gpuId == DCGM_DIAG_ALL_GPUS || (error.gpuId >= 0 && (unsigned)error.gpuId == gpuId))
                 {
-                    AppendError(error, resultField, fmt::format("GPU {}", gpuId));
+                    AppendError(error, resultField, fmt::format("GPU {} ", gpuId));
                     gpuResult = NVVS_RESULT_FAIL;
                 }
             }
@@ -356,7 +356,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
                 if (singleInfo.gpuId == DCGM_DIAG_ALL_GPUS
                     || (singleInfo.gpuId >= 0 && (unsigned)singleInfo.gpuId == gpuId))
                 {
-                    AppendInfo(singleInfo, resultField, fmt::format("GPU {}", gpuId));
+                    AppendInfo(singleInfo, resultField, fmt::format("GPU {} ", gpuId));
                 }
             }
 

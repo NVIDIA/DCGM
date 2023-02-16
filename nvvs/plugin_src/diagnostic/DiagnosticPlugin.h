@@ -91,7 +91,7 @@ public:
         }
         else if (cuContext == NULL)
         {
-            // cuCtxGetCurrent doesn't return an error if there's not context, so check and attempt to create one
+            // cuCtxGetCurrent doesn't return an error if there's no context, so check and attempt to create one
             cuSt = cuCtxCreate(&cuContext, 0, cudaDeviceIdx);
 
             if (cuSt != CUDA_SUCCESS)

@@ -1156,6 +1156,7 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateLinkState(unsigned int index, link_id_t 
                 dcgmState = DcgmNvLinkLinkStateDown;
                 break;
             case NSCQ_NVLINK_STATE_ACTIVE:
+            case NSCQ_NVLINK_STATE_SLEEP:
                 dcgmState = DcgmNvLinkLinkStateUp;
                 break;
             default:

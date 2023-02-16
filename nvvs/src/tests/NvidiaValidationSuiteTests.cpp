@@ -99,6 +99,34 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v
     return DCGM_ST_OK;
 }
 
+unsigned int fieldIntVal = 0;
+dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t handle,
+                                         dcgmGroupEntityPair_t &entity,
+                                         unsigned int entityCount,
+                                         unsigned short fieldIds[],
+                                         unsigned int fieldCount,
+                                         unsigned int flags,
+                                         dcgmFieldValue_v2 values[])
+{
+    switch (fieldIds[0])
+    {
+        case DCGM_FI_DEV_MIG_MODE:
+            if (migEnabled)
+            {
+                values[0].value.i64 = 1;
+            }
+            else
+            {
+                values[0].value.i64 = 0;
+            }
+            break;
+        case DCGM_FI_DEV_MIG_MAX_SLICES:
+            values[0].value.i64 = fieldIntVal;
+            break;
+    }
+
+    return DCGM_ST_OK;
+}
 
 TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
 {
@@ -192,6 +220,20 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
     REQUIRE(
         errorString
         == "Cannot run diagnostic: CUDA does not support enumerating GPUs when one more GPUs has MIG mode enabled and one or more GPUs has MIG mode disabled.");
+
+    // Fail when MIG is enabled but no compute instances are present
+    migEnabled       = true;
+    incompatibleGpus = false;
+    hierarchyCount   = 0;
+    gpuIndices.clear();
+    gpuIndices.push_back(0);
+    gpuIndices.push_back(1);
+    errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
+    REQUIRE(!errorString.empty());
+
+    const char *err = "Cannot run diagnostic: MIG is enabled, but no compute instances are configured."
+                      " CUDA needs to execute on a compute instance if MIG is enabled.";
+    REQUIRE(errorString == err);
 }
 
 SCENARIO("NVVS correctly processes command line arguments")

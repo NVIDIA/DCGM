@@ -987,6 +987,9 @@ std::string Diag::HelperGetPluginName(unsigned int index)
 
         case DCGM_EUD_TEST_INDEX:
             return DISPLAY_EUD_TEST;
+
+        case DCGM_CONTEXT_CREATE_INDEX:
+            return DISPLAY_CTXCREATE;
     }
 
     return "";
