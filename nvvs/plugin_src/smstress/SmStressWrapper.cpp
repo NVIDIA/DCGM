@@ -16,9 +16,15 @@
 #include "SmStressPlugin.h"
 
 #include <PluginInterface.h>
+#include <PluginLib.h>
 #include <PluginStrings.h>
 
 extern "C" {
+
+unsigned int GetPluginInterfaceVersion(void)
+{
+    return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
+}
 
 dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
 {
@@ -67,7 +73,9 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               dcgmDiagPluginGpuList_t *gpuInfo,
                               dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                              void **userData)
+                              void **userData,
+                              DcgmLoggingSeverity_t loggingSeverity,
+                              hostEngineAppenderCallbackFp_t loggingCallback)
 {
     SmPerfPlugin *spp = new SmPerfPlugin(handle, gpuInfo);
     *userData         = spp;
@@ -79,6 +87,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         return DCGM_ST_PLUGIN_EXCEPTION;
     }
 
+    InitializeLoggingCallbacks(loggingSeverity, loggingCallback, spp->GetDisplayName());
     return DCGM_ST_OK;
 }
 

@@ -15,10 +15,17 @@
  */
 #include "Software.h"
 
+#include <PluginCommon.h>
 #include <PluginInterface.h>
+#include <PluginLib.h>
 #include <PluginStrings.h>
 
 extern "C" {
+
+unsigned int GetPluginInterfaceVersion(void)
+{
+    return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
+}
 
 dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
 {
@@ -53,11 +60,14 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               dcgmDiagPluginGpuList_t *gpuInfo,
                               dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                              void **userData)
+                              void **userData,
+                              DcgmLoggingSeverity_t loggingSeverity,
+                              hostEngineAppenderCallbackFp_t loggingCallback)
 {
     Software *sw = new Software(handle, gpuInfo);
     *userData    = sw;
 
+    InitializeLoggingCallbacks(loggingSeverity, loggingCallback, sw->GetDisplayName());
     return DCGM_ST_OK;
 }
 

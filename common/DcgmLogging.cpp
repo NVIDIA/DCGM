@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "DcgmLogging.h"
+#include "DcgmLoggingImpl.h"
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -117,4 +118,148 @@ std::string helperGetLogSettingFromArgAndEnv(const std::string &arg,
     }
 
     return defaultValue;
+}
+
+void DcgmLoggingInit(const char *logFile,
+                     const DcgmLoggingSeverity_t severity,
+                     const DcgmLoggingSeverity_t consoleSeverity)
+{
+    DcgmLogging::init(logFile, severity, consoleSeverity);
+}
+
+std::string LoggerToString(int logger, const std::string &defaultLogger)
+{
+    return DcgmLogging::loggerToString(logger, defaultLogger);
+}
+
+std::string LoggingSeverityToString(int inputSeverity, const char *defaultSeverity)
+{
+    return DcgmLogging::severityToString(inputSeverity, defaultSeverity);
+}
+
+DcgmLoggingSeverity_t LoggingSeverityFromString(const char *severityStr, DcgmLoggingSeverity_t defaultSeverity)
+{
+    return DcgmLogging::severityFromString(severityStr, defaultSeverity);
+}
+
+std::string GetLogSeverityFromArgAndEnv(const std::string &arg,
+                                        const std::string &defaultValue,
+                                        const std::string &envPrefix)
+{
+    return DcgmLogging::getLogSeverityFromArgAndEnv(arg, defaultValue, envPrefix);
+}
+
+std::string GetLogFilenameFromArgAndEnv(const std::string &arg,
+                                        const std::string &defaultValue,
+                                        const std::string &envPrefix)
+{
+    return DcgmLogging::getLogFilenameFromArgAndEnv(arg, defaultValue, envPrefix);
+}
+
+bool IsValidSeverity(const char *severityStr)
+{
+    return DcgmLogging::isValidSeverity(severityStr);
+}
+
+int SetLoggerSeverity(loggerCategory_t category, int severity)
+{
+    switch (category)
+    {
+        case BASE_LOGGER:
+            return DcgmLogging::setLoggerSeverity<BASE_LOGGER>(severity);
+        case SYSLOG_LOGGER:
+            return DcgmLogging::setLoggerSeverity<SYSLOG_LOGGER>(severity);
+        case CONSOLE_LOGGER:
+            return DcgmLogging::setLoggerSeverity<CONSOLE_LOGGER>(severity);
+        case FILE_LOGGER:
+            return DcgmLogging::setLoggerSeverity<FILE_LOGGER>(severity);
+        default:
+            return -1; // NOT-REACHED
+    }
+}
+
+void LoggingSetHostEngineCallback(hostEngineAppenderCallbackFp_t callback)
+{
+    return DcgmLogging::setHostEngineCallback(callback);
+}
+
+DcgmLoggingSeverity_t GetLoggerSeverity(loggerCategory_t category)
+{
+    switch (category)
+    {
+        case BASE_LOGGER:
+            return DcgmLogging::getLoggerSeverity<BASE_LOGGER>();
+        case SYSLOG_LOGGER:
+            return DcgmLogging::getLoggerSeverity<SYSLOG_LOGGER>();
+        case CONSOLE_LOGGER:
+            return DcgmLogging::getLoggerSeverity<CONSOLE_LOGGER>();
+        case FILE_LOGGER:
+            return DcgmLogging::getLoggerSeverity<FILE_LOGGER>();
+        default:
+            return DcgmLoggingSeverityUnspecified; // NOT-REACHED
+    }
+}
+
+bool IsValidLogger(const std::string &loggerStr)
+{
+    return DcgmLogging::isValidLogger(loggerStr);
+}
+
+loggerCategory_t LoggerFromString(const std::string &loggerStr, loggerCategory_t defaultLogger)
+{
+    return DcgmLogging::loggerFromString(loggerStr, defaultLogger);
+}
+
+hostEngineAppenderCallbackFp_t DcgmLoggingGetCallback()
+{
+    return DcgmLogging::appendRecordToLogger<>;
+}
+
+std::unique_lock<std::mutex> LoggerLockSeverity()
+{
+    return DcgmLogging::lockSeverity();
+}
+
+int RouteLogToBaseLogger(loggerCategory_t category)
+{
+    switch (category)
+    {
+        case BASE_LOGGER:
+            return DcgmLogging::routeLogToBaseLogger<BASE_LOGGER>();
+        case SYSLOG_LOGGER:
+            return DcgmLogging::routeLogToBaseLogger<SYSLOG_LOGGER>();
+        case CONSOLE_LOGGER:
+            return DcgmLogging::routeLogToBaseLogger<CONSOLE_LOGGER>();
+        case FILE_LOGGER:
+            return DcgmLogging::routeLogToBaseLogger<FILE_LOGGER>();
+        default:
+            return -1; // NOT-REACHED
+    }
+}
+
+void InitLogToHostengine(const DcgmLoggingSeverity_t severity)
+{
+    DcgmLogging::initLogToHostengine(severity);
+}
+
+void LoggingSetHostEngineComponentName(const std::string &componentName)
+{
+    DcgmLogging::setHostEngineComponentName(componentName);
+}
+
+int RouteLogToConsoleLogger(loggerCategory_t category)
+{
+    switch (category)
+    {
+        case BASE_LOGGER:
+            return DcgmLogging::routeLogToConsoleLogger<BASE_LOGGER>();
+        case SYSLOG_LOGGER:
+            return DcgmLogging::routeLogToConsoleLogger<SYSLOG_LOGGER>();
+        case CONSOLE_LOGGER:
+            return DcgmLogging::routeLogToConsoleLogger<CONSOLE_LOGGER>();
+        case FILE_LOGGER:
+            return DcgmLogging::routeLogToConsoleLogger<FILE_LOGGER>();
+        default:
+            return -1; // NOT-REACHED
+    }
 }

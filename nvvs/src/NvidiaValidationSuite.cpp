@@ -261,6 +261,12 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
             continue;
         }
 
+        if (mv.migEnabled && mv.computeInstanceCount == 0)
+        {
+            return "Cannot run diagnostic: MIG is enabled, but no compute instances are configured."
+                   " CUDA needs to execute on a compute instance if MIG is enabled.";
+        }
+
         nvvsCommon.m_gpus[mgpusIndex] = visibleGpus[i];
         mgpusIndex++;
 
@@ -314,8 +320,10 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     }
     banner();
 
-    DcgmLogging::init(debugFile.c_str(),
-                      DcgmLogging::severityFromString(debugLogLevel.c_str(), DcgmLoggingSeverityDebug));
+    DcgmLoggingInit(debugFile.c_str(),
+                    LoggingSeverityFromString(debugLogLevel.c_str(), DcgmLoggingSeverityDebug),
+                    DcgmLoggingSeverityNone);
+    RouteLogToBaseLogger(SYSLOG_LOGGER);
     DCGM_LOG_INFO << "Initialized NVVS logger";
     logInit = true;
     {
@@ -1305,10 +1313,10 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
 
         initializeDesiredTests(specificTestArg.getValue());
 
-        debugFile = DcgmLogging::getLogFilenameFromArgAndEnv(
+        debugFile = GetLogFilenameFromArgAndEnv(
             debugFileArg.getValue(), NVVS_LOGGING_DEFAULT_NVVS_LOGFILE, NVVS_ENV_LOG_PREFIX);
 
-        debugLogLevel = DcgmLogging::getLogSeverityFromArgAndEnv(
+        debugLogLevel = GetLogSeverityFromArgAndEnv(
             debugLevelArg.getValue(), DCGM_LOGGING_DEFAULT_NVVS_SEVERITY, NVVS_ENV_LOG_PREFIX);
 
         if (hwdiaglogfileArg.isSet())

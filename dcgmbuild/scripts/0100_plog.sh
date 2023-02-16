@@ -19,11 +19,11 @@ set -ex
 source $(dirname $(realpath ${0}))/common_for_targets.sh
 
 PKGNAME=plog
-PKGVER=1.1.5
+PKGVER=1.1.8
 PKG="$PKGNAME-$PKGVER"
 PKGDIR="${HOME}/.build/${TARGET}/${PKG}"
 SOURCE="https://github.com/SergiusTheBest/plog/archive/$PKGVER.tar.gz"
-SHA512SUM="c16b428e1855c905c486130c8610d043962bedc2b40d1d986c250c8f7fd7139540164a3cbb408ed08298370aa150d5937f358c13ccae2728ce8ea47fa897fd0b"
+SHA512SUM="09bf6e0cae7f20c1b42e68a174b4cd6a2fb8751db9758efb87449cbff48375708e43c147c72b7ed17fb9334acaf7802441f61578356284a8ed337fd886a45e79"
 
 mkdir -p "$PKGDIR"
 

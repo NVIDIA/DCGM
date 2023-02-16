@@ -355,6 +355,13 @@ def helper_test_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuId
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgm_diag_context_create(handle, gpuIds):
+    helper_verify_diag_passing(handle, gpuIds, "context_create", dcgm_structs.DCGM_CONTEXT_CREATE_INDEX, params="")
+
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuIds):
     helper_test_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuIds[0])

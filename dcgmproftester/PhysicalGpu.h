@@ -204,6 +204,7 @@ private:
     dcgmReturn_t RunSubtestPcieBandwidth(void);
     dcgmReturn_t RunSubtestDramUtil(void);
     dcgmReturn_t RunSubtestGemmUtil(void);
+    dcgmReturn_t RunSubtestDataTypeActive(void);
     dcgmReturn_t RunSubtestNvLinkBandwidth(void);
     dcgmReturn_t RunSubtestSmOccupancyTargetMax(void);
 

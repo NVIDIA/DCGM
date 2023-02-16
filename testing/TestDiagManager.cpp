@@ -294,7 +294,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testParms[1], sizeof(drd.testParms[1]), "sm perf.target_stress=8500");
     snprintf(drd.testParms[2], sizeof(drd.testParms[2]), "targeted stress.test_duration=600");
     // Invalid severity to test default value
-    drd.debugLevel = (dcgm_logging_severity_t)20; // TODO (nik, aalsuldani): this is UB. Let's find a better way
+    drd.debugLevel = 20; // TODO (nik, aalsuldani): this is UB. Let's find a better way
     result         = am.CreateNvvsCommand(cmdArgs, &drd);
     if (result == DCGM_ST_OK)
     {

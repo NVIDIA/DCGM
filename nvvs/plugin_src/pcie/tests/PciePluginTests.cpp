@@ -102,7 +102,7 @@ TEST_CASE("Pcie: pcie_check_nvlink_status")
     bgGlobals.busGrind = new BusGrind(handle, &gpuInfo);
     pcie_check_nvlink_status(&bgGlobals, gpuInfo, handle);
     bgGlobals.busGrind->GetResults(&results);
-    CHECK(results.numErrors == 1);
+    CHECK(results.numInfo == 1);
 
     // Make sure we can fail with switches
     failingGpuId    = DCGM_MAX_NUM_DEVICES;
@@ -115,9 +115,9 @@ TEST_CASE("Pcie: pcie_check_nvlink_status")
     std::stringstream buf;
     for (unsigned int i = 0; i < results.numErrors; i++)
     {
-        buf << "Error " << i << ": " << results.errors[i].msg << "\n";
+        buf << "Info " << i << ": " << results.info[i].msg << "\n";
     }
 
     INFO(buf.str());
-    CHECK(results.numErrors == 1);
+    CHECK(results.numInfo == 1);
 }

@@ -172,7 +172,7 @@ class DcgmPrometheus(DcgmReader):
                 else:
                     fieldTagList = fieldTagList + ", %s" % (self.m_fieldIdToInfo[fieldId].tag)
 
-                logging.info("Publishing fields: '%s'" % (fieldTagList))
+        logging.info("Publishing fields: '%s'" % (fieldTagList))
 
     ###############################################################################
     def LogError(self, msg):

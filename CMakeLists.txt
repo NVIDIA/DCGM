@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 3.1.3)
+project(dcgm VERSION 3.1.6)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -119,6 +119,8 @@ add_compile_definitions(DCGM_BUILD_VGPU_MODULE)
 if(${CMAKE_POSITION_INDEPENDENT_CODE})
     add_compile_options(-fPIC)
 endif()
+
+add_compile_definitions(PLOG_LOCAL)
 
 if (NOT ANY_SANITIZER)
     add_link_options(-static-libstdc++)

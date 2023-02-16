@@ -64,14 +64,14 @@ int main(int argc, char *argv[])
 {
     dcgmReturn_t result = DCGM_ST_OK;
 
-    const std::string logFile
-        = DcgmLogging::getLogFilenameFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_FILE, DCGM_ENV_LOG_PREFIX);
+    const std::string logFile = GetLogFilenameFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_FILE, DCGM_ENV_LOG_PREFIX);
 
     const std::string logSeverity
-        = DcgmLogging::getLogSeverityFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_SEVERITY, DCGM_ENV_LOG_PREFIX);
+        = GetLogSeverityFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_SEVERITY, DCGM_ENV_LOG_PREFIX);
 
-    DcgmLogging::init(logFile.c_str(),
-                      DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityWarning));
+    DcgmLoggingInit(logFile.c_str(),
+                    LoggingSeverityFromString(logSeverity.c_str(), DcgmLoggingSeverityWarning),
+                    DcgmLoggingSeverityNone);
 
     DCGM_LOG_INFO << "Initialized DCGMI logger";
 

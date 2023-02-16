@@ -64,6 +64,117 @@ skus:
       is_allowed: true
     diagnostic:
       is_allowed: true
+  - name: PG502-20x
+    id: 2336
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 700.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 30750
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~41000, multiply by .75 to get ~30750
+      target_stress: 30750.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~170000. Multiply by .75 to get ~127500
+      minimum_bandwidth: 127500
+    pulse_test:
+      is_allowed: true
+  - name: PG502-221
+    id: 2338
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 500.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 31875
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~42500, multiply by .75 to get ~31875
+      target_stress: 31875.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1950000. Multiply by .75 to get ~1462500
+      minimum_bandwidth: 1462500
+    pulse_test:
+      is_allowed: true
+  - name: H100 80GB HBM3
+    id: 2330
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 700.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 29250.0
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~39000, multiply by .75 to get ~29250.00
+      target_stress: 29250.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~2540000. Multiply by .75 to get ~1905000.00
+      minimum_bandwidth: 1905000
+    pulse_test:
+      is_allowed: true
   # DGX Station
   - name: DGX Station
     id: 15fa
@@ -2487,6 +2598,40 @@ skus:
       minimum_bandwidth: 971000.0
     pulse_test:
       is_allowed: true
+  - name: A100-20f6 40GB
+    id: 20f6
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 249.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~16500. Multiply by .75 to get 12375
+      target_stress: 12375.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1295000. Multiply by .75 to get ~971000
+      minimum_bandwidth: 971000.0
+    pulse_test:
+      is_allowed: true
   - name: A800-SXM4-80GB
     id: 20f3
     targeted_power:
@@ -2557,6 +2702,43 @@ skus:
       is_allowed: true
       # memory bandwidth test shows ~735670. Multiply by .75 to get ~551800
       minimum_bandwidth: 551800
+  - name: H800 PCIe
+    id: 2322
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 310.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 24375
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures at ~32500, multiply by .75 to get ~24375
+      target_stress: 24375.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1646000. Multiply by .75 to get ~1245000
+      minimum_bandwidth: 1245000
+    pulse_test:
+      is_allowed: true
   # PG133 SKU 255
   - name: PG133 SKU 255
     id: 26b8

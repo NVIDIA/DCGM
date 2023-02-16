@@ -86,7 +86,7 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddFvReally(size_t bytesNeeded)
     if (spaceUsedAfter > m_bufferCapacity)
     {
         size_t newBufferCapacity;
-        // Find nearest value that is a product of 512
+
         // Find nearest value that is a product of 512
         newBufferCapacity = (spaceUsedAfter + 511U) & (~511U);
         if (m_growExponentially)

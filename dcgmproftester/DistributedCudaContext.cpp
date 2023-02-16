@@ -1502,6 +1502,68 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
     return retSt;
 }
 
+/*****************************************************************************/
+int DistributedCudaContext::RunSubtestDataTypeActive(void)
+{
+    /* Generate per-datatype activity */
+
+    auto duration             = m_duration;
+    double now                = timelib_dsecSince1970();
+    double startTime          = timelib_dsecSince1970();
+    double tick               = startTime + m_reportInterval;
+    double prevTargetActivity = 0.0;
+    unsigned int activities   = (duration + m_reportInterval) / m_reportInterval;
+    int retSt                 = 0;
+
+    m_cudaWorker.SetWorkerToIdle();
+
+    m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    Respond("S\nD 0 1\n");
+
+    for (unsigned int activity = 0; activity < activities; activity++)
+    {
+        double howFarIn       = 1.0 * activity / activities;
+        double targetActivity = 1.0; /* Go for 100% for now to match old behavior */
+
+        m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, targetActivity);
+
+        usleep(m_reportInterval * 1000000);
+
+        now = timelib_dsecSince1970();
+        if (now > tick)
+        {
+            Respond("T %0.3f %0.3f %2.3f %2.3f %u %u\n",
+                    howFarIn,
+                    prevTargetActivity,
+                    targetActivity,
+                    now - startTime,
+                    (unsigned int)(howFarIn * m_attributes.m_multiProcessorCount),
+                    m_attributes.m_multiProcessorCount);
+
+            tick = now + m_reportInterval;
+        }
+
+        prevTargetActivity = targetActivity;
+
+        bool earlyQuit { false };
+
+        retSt = ReadLnCheck(activity, earlyQuit);
+
+        if (retSt < 0 || earlyQuit)
+        {
+            break;
+        }
+    }
+
+    m_cudaWorker.SetWorkerToIdle();
+
+    // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
+    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    return 0;
+}
+
+/*****************************************************************************/
+
 // Dispatch test to be run.
 int DistributedCudaContext::RunTest(void)
 {
@@ -1572,6 +1634,9 @@ int DistributedCudaContext::RunTest(void)
         case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            retSt = RunSubtestDataTypeActive();
+            break;
+
         case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
             retSt = RunSubtestGemmUtil();
             break;

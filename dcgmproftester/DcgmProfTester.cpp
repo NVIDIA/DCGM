@@ -1075,15 +1075,14 @@ void DcgmProfTester::InitializeLogging(std::string logFile, DcgmLoggingSeverity_
      */
     if (!m_isLoggingInitialized)
     {
-        DcgmLogging &logging                        = DcgmLogging::getInstance();
         const DcgmLoggingSeverity_t consoleSeverity = DcgmLoggingSeverityWarning;
-        DcgmLogging::init(logFile.c_str(), logLevel, consoleSeverity);
-        logging.routeLogToConsoleLogger<BASE_LOGGER>();
+        DcgmLoggingInit(logFile.c_str(), logLevel, consoleSeverity);
+        RouteLogToConsoleLogger(BASE_LOGGER);
         m_isLoggingInitialized = true;
     }
     else
     {
-        DcgmLogging::setLoggerSeverity<BASE_LOGGER>(logLevel);
+        SetLoggerSeverity(BASE_LOGGER, logLevel);
     }
 }
 
@@ -1168,7 +1167,7 @@ int main(int argc, char **argv)
 
             if (st != DCGM_ST_OK)
             {
-                DCGM_LOG_ERROR << "Error " << st << " from RunTests(). Exiting.";
+                DCGM_LOG_ERROR << "Error " << dcgmReturn << " from RunTests(). Exiting.";
             }
 
             dcgmReturn = dpt->ShutdownGpus();

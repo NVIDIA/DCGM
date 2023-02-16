@@ -130,6 +130,7 @@ typedef struct {
 #define NSCQ_NVLINK_STATE_SAFE    (1)
 #define NSCQ_NVLINK_STATE_ACTIVE  (2)
 #define NSCQ_NVLINK_STATE_ERROR   (3)
+#define NSCQ_NVLINK_STATE_SLEEP   (4)
 
 typedef int8_t nscq_nvlink_state_t;
 

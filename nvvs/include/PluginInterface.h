@@ -31,6 +31,12 @@ extern "C" {
 #define FAIL_CHECK_INTERVAL "fail_check_interval"
 
 #define DCGM_MAX_PLUGIN_FIELD_IDS 96
+/* IMPORTANT:
+ *
+ * If you change any of the following struct or callback definitions, you need to increment
+ * DCGM_DIAG_PLUGIN_INTERFACE_VERSION
+ */
+
 
 typedef struct
 {
@@ -160,6 +166,17 @@ typedef struct
 } dcgmDiagResults_t;
 
 /**
+ * Get the version of this plugin.
+ *
+ * @return - the DCGM_DIAG_PLUGIN_INTERFACE_VERSION the plugin was compiled against. This should be checked against
+ *           our DCGM_DIAG_PLUGIN_INTERFACE_VERSION to make sure they are the same. Otherwise this plugin cannot
+ *           be loaded.
+ */
+DCGM_PUBLIC_API unsigned int GetPluginInterfaceVersion(void);
+
+typedef unsigned int (*dcgmDiagGetPluginInterfaceVersion_f)(void);
+
+/**
  * Make sure this plugin is compatible with our version of the diagnostic and get parameter information.
  *
  * @param pluginInterfaceVersion[in] - the plugin interface version
@@ -183,6 +200,8 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  * @param statFieldIds[out]          - information to specify additional fields ids to watch and append to the stats
  * @param userData[out]              - data the plugin would like passed back to the RunTest(), RetrieveCustomStats(),
  *                                     and RetrieveResults() functions. It can be ignored if the plugin wishes.
+ * @param loggingSeverity[in]        - Severity at which this plugin should log. See DcgmLoggingSeverity_t
+ * @param loggingCallback[in]        - Callback to use to log. The nvvs process will log on each plugin's behalf
  *file
  *
  * @return DCGM_ST_OK                - if the plugin has been set up sufficiently to run.
@@ -193,12 +212,16 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
 DCGM_PUBLIC_API dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                                               dcgmDiagPluginGpuList_t *gpuInfo,
                                               dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                                              void **userData);
+                                              void **userData,
+                                              DcgmLoggingSeverity_t loggingSeverity,
+                                              hostEngineAppenderCallbackFp_t loggingCallback);
 
 typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    dcgmDiagPluginGpuList_t *gpuInfo,
                                                    dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                                                   void **userData);
+                                                   void **userData,
+                                                   DcgmLoggingSeverity_t loggingSeverity,
+                                                   hostEngineAppenderCallbackFp_t loggingCallback);
 
 /*
  * Function called to run the test.

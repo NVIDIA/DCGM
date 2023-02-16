@@ -100,20 +100,6 @@ void SmPerfPlugin::Cleanup(void)
         m_dcgmRecorder.Shutdown();
     }
     m_dcgmRecorderInitialized = false;
-
-    /* Unload our cuda context for each gpu in the current process. We enumerate all GPUs because
-       cuda opens a context on all GPUs, even if we don't use them */
-    int cudaDeviceCount;
-    cudaError_t cuSt;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (int deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 }
 
 /*****************************************************************************/
@@ -121,7 +107,6 @@ bool SmPerfPlugin::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 {
     int gpuListIndex;
     SmPerfDevice *smDevice = 0;
-    cudaError_t cuSt;
 
     if (gpuInfo == nullptr)
     {
@@ -136,19 +121,6 @@ bool SmPerfPlugin::Init(dcgmDiagPluginGpuList_t *gpuInfo)
     if (UsingFakeGpus())
     {
         return true;
-    }
-
-    /* Attach to every device by index and reset it in case a previous plugin
-       didn't clean up after itself */
-    int cudaDeviceCount, deviceIdx;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
     }
 
     for (gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
@@ -476,8 +448,26 @@ public:
                  unsigned long failCheckInterval);
 
     /*************************************************************************/
-    virtual ~SmPerfWorker() /* Virtual to satisfy ancient compiler */
-    {}
+    ~SmPerfWorker()
+    {
+        try
+        {
+            int st = StopAndWait(60000);
+            if (st)
+            {
+                DCGM_LOG_ERROR << "Killing SmPerfWorker thread that is still running.";
+                Kill();
+            }
+        }
+        catch (std::exception const &ex)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw " << ex.what();
+        }
+        catch (...)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw unknown exception";
+        }
+    }
 
     /*************************************************************************/
     timelib64_t GetStopTime()

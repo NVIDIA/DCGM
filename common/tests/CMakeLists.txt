@@ -37,7 +37,7 @@ if (BUILD_TESTING)
     )
 
     find_package(Threads REQUIRED)
-    
+
     target_link_libraries(commontests
         PRIVATE
             common_interface

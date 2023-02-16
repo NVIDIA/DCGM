@@ -90,3 +90,4 @@ target_link_libraries(nvvs PRIVATE rt dl)
 target_link_libraries(nvvs PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 
 target_link_options(nvvs PRIVATE -rdynamic)
+target_link_options(nvvs PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/../nvvs.linux_def)

@@ -87,25 +87,25 @@ ConstantPower::~ConstantPower()
 void ConstantPower::Cleanup()
 {
     int i;
-    CPDevice *device = NULL;
+    CPDevice *device = nullptr;
 
-    if (m_hostA)
+    if (m_hostA != nullptr)
     {
         free(m_hostA);
     }
-    m_hostA = NULL;
+    m_hostA = nullptr;
 
-    if (m_hostB)
+    if (m_hostB != nullptr)
     {
         free(m_hostB);
     }
-    m_hostB = NULL;
+    m_hostB = nullptr;
 
-    if (m_hostC)
+    if (m_hostC != nullptr)
     {
         free(m_hostC);
     }
-    m_hostC = NULL;
+    m_hostC = nullptr;
 
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
@@ -118,6 +118,10 @@ void ConstantPower::Cleanup()
         {
             cudaStreamSynchronize(device->cudaStream[i]);
         }
+
+        /* Synchronize the device in case any kernels are running in other streams we aren't tracking */
+        cudaDeviceSynchronize();
+
         delete device;
     }
 
@@ -128,27 +132,12 @@ void ConstantPower::Cleanup()
         m_dcgmRecorder.Shutdown();
     }
     m_dcgmRecorderInitialized = false;
-
-    /* Unload our cuda context for each gpu in the current process. We enumerate all GPUs because
-       cuda opens a context on all GPUs, even if we don't use them */
-    int cudaDeviceCount;
-    cudaError_t cuSt;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (int deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 }
 
 /*************************************************************************/
 bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 {
     std::unique_ptr<CPDevice> device;
-    cudaError_t cuSt;
 
     if (gpuInfo == nullptr)
     {
@@ -157,19 +146,6 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
     }
 
     m_gpuInfo = *gpuInfo;
-
-    /* Attach to every device by index and reset it in case a previous plugin
-       didn't clean up after itself */
-    int cudaDeviceCount;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (int deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 
     for (int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
     {
@@ -626,8 +602,26 @@ public:
                         bool failEarly,
                         unsigned long failCheckInterval);
 
-    virtual ~ConstantPowerWorker() /* Virtual to satisfy ancient compiler */
-    {}
+    ~ConstantPowerWorker()
+    {
+        try
+        {
+            int st = StopAndWait(60000);
+            if (st)
+            {
+                DCGM_LOG_ERROR << "Killing ConstantPowerWorker thread that is still running.";
+                Kill();
+            }
+        }
+        catch (std::exception const &ex)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw " << ex.what();
+        }
+        catch (...)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw unknown exception";
+        }
+    }
 
     timelib64_t GetStopTime()
     {

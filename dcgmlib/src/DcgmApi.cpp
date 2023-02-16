@@ -4923,25 +4923,24 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v1 &params)
         paramsLogFile = params.logFile;
     }
 
-    const std::string logFile = DcgmLogging::getLogFilenameFromArgAndEnv(
-        paramsLogFile, DCGM_LOGGING_DEFAULT_HOSTENGINE_FILE, DCGM_ENV_LOG_PREFIX);
+    const std::string logFile
+        = GetLogFilenameFromArgAndEnv(paramsLogFile, DCGM_LOGGING_DEFAULT_HOSTENGINE_FILE, DCGM_ENV_LOG_PREFIX);
 
     // If logging severity is unspecified, pass empty string as the arg to the
     // helper. Empty arg => no arg => look at env
     const std::string loggingSeverityArg
         = params.severity == DcgmLoggingSeverityUnspecified
               ? ""
-              : DcgmLogging::severityToString(params.severity, DCGM_LOGGING_SEVERITY_STRING_ERROR);
+              : LoggingSeverityToString(params.severity, DCGM_LOGGING_SEVERITY_STRING_ERROR);
 
-    const std::string logSeverity = DcgmLogging::getLogSeverityFromArgAndEnv(
+    const std::string logSeverity = GetLogSeverityFromArgAndEnv(
         loggingSeverityArg, DCGM_LOGGING_DEFAULT_HOSTENGINE_SEVERITY, DCGM_ENV_LOG_PREFIX);
 
-    DcgmLoggingSeverity_t loggingSeverity
-        = DcgmLogging::severityFromString(logSeverity.c_str(), DcgmLoggingSeverityError);
-    DcgmLogging::init(logFile.c_str(), loggingSeverity);
+    DcgmLoggingSeverity_t loggingSeverity = LoggingSeverityFromString(logSeverity.c_str(), DcgmLoggingSeverityError);
+    DcgmLoggingInit(logFile.c_str(), loggingSeverity, DcgmLoggingSeverityNone);
     /* Set severity explicitly in case logging is already initialized and ignoring logFile + loggingSeverity */
-    DcgmLogging::setLoggerSeverity<BASE_LOGGER>(loggingSeverity);
-    DcgmLogging::routeLogToBaseLogger<SYSLOG_LOGGER>();
+    SetLoggerSeverity(BASE_LOGGER, loggingSeverity);
+    RouteLogToBaseLogger(SYSLOG_LOGGER);
     log_debug("Initialized base logger");
     DCGM_LOG_SYSLOG_DEBUG << "Initialized syslog logger";
 

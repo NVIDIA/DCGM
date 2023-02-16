@@ -205,8 +205,8 @@
 #define EUD_PLUGIN_WL_NAME "diagnostic" */
 
 /* Test parameters */
-//#define EUD_PLUGIN_RUN_MODE "run_mode"
-//#define EUD_PLUGIN_SINGLE_TEST "single_test"
+// #define EUD_PLUGIN_RUN_MODE "run_mode"
+// #define EUD_PLUGIN_SINGLE_TEST "single_test"
 /* Private test parameters */
 // #define EUD_STR_IS_ALLOWED "is_allowed"   /* Is the EUD plugin allowed to run? */
 // #define EUD_LOG_FILE_PATH "eud_log_file_path"
@@ -272,8 +272,8 @@
  */
 #define SMSTRESS_STR_IS_ALLOWED "is_allowed" /* Is the sm stress plugin allowed to run? */
 #define SMSTRESS_STR_USE_DGEMM  "use_dgemm"
-//#define SM_STRESS_STR_CUDA_STREAMS_PER_GPU "cuda_streams_per_gpu"
-//#define SM_STRESS_STR_CUDA_OPS_PER_STREAM  "ops_per_stream_queue"
+// #define SM_STRESS_STR_CUDA_STREAMS_PER_GPU "cuda_streams_per_gpu"
+// #define SM_STRESS_STR_CUDA_OPS_PER_STREAM  "ops_per_stream_queue"
 
 #define SMSTRESS_STR_MAX_MEMORY_CLOCK                                                                              \
     "max_memory_clock" /* Maximum memory clock in MHZ to use when locking application clocks to max while smstress \
@@ -325,6 +325,7 @@
 #define PULSE_TEST_STR_IS_ALLOWED        "is_allowed" /* Is the plugin allowed to run */
 #define PULSE_TEST_STR_CURRENT_ITERATION "current_iteration"
 #define PULSE_TEST_STR_TOTAL_ITERATIONS  "total_iterations"
+#define PULSE_TEST_STR_TEST_DURATION     "test_duration"
 
 /****************************************************************************
  * EUD PLUGIN

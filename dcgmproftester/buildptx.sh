@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/usr/local/cuda/bin/nvcc -ptx -m64 -o DcgmProfTesterKernels.ptx DcgmProfTesterKernels.cu || die "Failed to compile DcgmProfTesterKernels.cu"
+/usr/local/cuda/bin/nvcc -ptx -m64 --gpu-architecture compute_70 -o DcgmProfTesterKernels.ptx DcgmProfTesterKernels.cu || die "Failed to compile DcgmProfTesterKernels.cu"

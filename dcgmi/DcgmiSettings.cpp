@@ -38,21 +38,21 @@ dcgmReturn_t DcgmiSettingsSetLoggingSeverity::DoExecuteConnected()
 {
     dcgmSettingsSetLoggingSeverity_t logging = {};
 
-    if (!DcgmLogging::isValidSeverity(mTargetSeverity.c_str()))
+    if (!IsValidSeverity(mTargetSeverity.c_str()))
     {
         std::cout << "Error: Invalid severity string" << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    if (!DcgmLogging::isValidLogger(mTargetLogger))
+    if (!IsValidLogger(mTargetLogger))
     {
         std::cout << "Error: Invalid logger string" << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    logging.targetLogger = DcgmLogging::loggerFromString(mTargetLogger, BASE_LOGGER);
+    logging.targetLogger = LoggerFromString(mTargetLogger, BASE_LOGGER);
     logging.targetSeverity
-        = (DcgmLoggingSeverity_t)DcgmLogging::severityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);
+        = (DcgmLoggingSeverity_t)LoggingSeverityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);
 
     return dcgmHostengineSetLoggingSeverity(m_dcgmHandle, &logging);
 }

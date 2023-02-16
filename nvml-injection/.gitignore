@@ -1,0 +1,10 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+include/CMakeFiles/
+tags
+ungenerated.txt
+src/libnvml_injection.so*
+simple.cpp
+sdk/nvml/libsdk_nvml_essentials_objects.a

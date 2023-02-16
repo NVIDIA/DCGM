@@ -87,6 +87,10 @@ void ConstantPerf::Cleanup()
         {
             cudaStreamSynchronize(device->streams[i].cudaStream);
         }
+
+        /* Synchronize the device in case any kernels are running in other streams we aren't tracking */
+        cudaDeviceSynchronize();
+
         delete device;
     }
 
@@ -97,26 +101,11 @@ void ConstantPerf::Cleanup()
         m_dcgmRecorder.Shutdown();
     }
     m_dcgmRecorderInitialized = false;
-
-    /* Unload our cuda context for each gpu in the current process. We enumerate all GPUs because
-       cuda opens a context on all GPUs, even if we don't use them */
-    int cudaDeviceCount;
-    cudaError_t cuSt;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (int deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 }
 
 /*****************************************************************************/
 bool ConstantPerf::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 {
-    cudaError_t cuSt;
     CPerfDevice *cpDevice = 0;
 
     if (gpuInfo == nullptr)
@@ -126,19 +115,6 @@ bool ConstantPerf::Init(dcgmDiagPluginGpuList_t *gpuInfo)
     }
 
     m_gpuInfo = *gpuInfo;
-
-    /* Attach to every device by index and reset it in case a previous plugin
-       didn't clean up after itself */
-    int cudaDeviceCount;
-    cuSt = cudaGetDeviceCount(&cudaDeviceCount);
-    if (cuSt == cudaSuccess)
-    {
-        for (int deviceIdx = 0; deviceIdx < cudaDeviceCount; deviceIdx++)
-        {
-            cudaSetDevice(deviceIdx);
-            cudaDeviceReset();
-        }
-    }
 
     for (unsigned int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
     {
@@ -554,8 +530,26 @@ public:
                        unsigned long failCheckInterval);
 
     /*************************************************************************/
-    virtual ~ConstantPerfWorker() /* Virtual to satisfy ancient compiler */
-    {}
+    ~ConstantPerfWorker()
+    {
+        try
+        {
+            int st = StopAndWait(60000);
+            if (st)
+            {
+                DCGM_LOG_ERROR << "Killing ConstantPerfWorker thread that is still running.";
+                Kill();
+            }
+        }
+        catch (std::exception const &ex)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw " << ex.what();
+        }
+        catch (...)
+        {
+            DCGM_LOG_ERROR << "StopAndWait() threw unknown exception";
+        }
+    }
 
     /*************************************************************************/
     timelib64_t GetStopTime()

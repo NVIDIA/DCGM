@@ -126,12 +126,6 @@ dcgmReturn_t DcgmGroup::Cleanup()
         return DCGM_ST_OK;
     }
 
-    if (auto const ret = dcgmUnwatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId()); ret != DCGM_ST_OK)
-    {
-        log_error("Failed to unwatch fields for group {}: ({}) {}", m_groupId, ret, errorString(ret));
-        return ret;
-    }
-
     dcgmReturn_t ret = FieldGroupDestroy();
     dcgmReturn_t tmp;
 
@@ -228,6 +222,12 @@ dcgmReturn_t DcgmGroup::FieldGroupDestroy()
 
     if (m_fieldGroup != nullptr)
     {
+        if (auto const ret = dcgmUnwatchFields(m_handle, m_groupId, m_fieldGroup->GetFieldGroupId()); ret != DCGM_ST_OK)
+        {
+            log_error("Failed to unwatch fields for group {}: ({}) {}", m_groupId, ret, errorString(ret));
+            return ret;
+        }
+
         ret = m_fieldGroup->Cleanup();
         delete m_fieldGroup;
         m_fieldGroup = 0;

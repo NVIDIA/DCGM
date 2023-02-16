@@ -80,15 +80,14 @@ public:
         : m_coreCallbacks(dcc)
         , m_coreProxy(dcc)
     {
-        DcgmLogging::initLogToHostengine(m_coreProxy.GetLoggerSeverity(0));
-        DcgmLogging::setHostEngineCallback((hostEngineAppenderCallbackFp_t)m_coreCallbacks.loggerfunc);
+        InitLogToHostengine(m_coreProxy.GetLoggerSeverity(0));
+        LoggingSetHostEngineCallback((hostEngineAppenderCallbackFp_t)m_coreCallbacks.loggerfunc);
         char const *moduleName;
         if (DCGM_ST_OK == dcgmModuleIdToName(static_cast<dcgmModuleId_t>(moduleId), &moduleName))
         {
-            DcgmLogging::setHostEngineComponentName(moduleName);
+            LoggingSetHostEngineComponentName(moduleName);
         }
         DCGM_LOG_DEBUG << "Initialized logging for module " << moduleId;
-        DCGM_LOG_DEBUG << "Logger address " << DcgmLogging::getLoggerAddress();
     }
 
     void OnLoggingSeverityChange(dcgm_core_msg_logging_changed_t *msg) override
@@ -104,14 +103,14 @@ public:
         {
             DCGM_LOG_ERROR << "Encountered error while fetching severity for BASE_LOGGER";
         }
-        DcgmLogging::setLoggerSeverity<BASE_LOGGER>(severity);
+        SetLoggerSeverity(BASE_LOGGER, severity);
 
         severity = m_coreProxy.GetLoggerSeverity(0, SYSLOG_LOGGER);
         if (severity == DcgmLoggingSeverityUnspecified)
         {
             DCGM_LOG_ERROR << "Encountered error while fetching severity for SYSLOG_LOGGER";
         }
-        DcgmLogging::setLoggerSeverity<SYSLOG_LOGGER>(severity);
+        SetLoggerSeverity(SYSLOG_LOGGER, severity);
     }
 
 protected:

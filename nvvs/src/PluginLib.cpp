@@ -19,10 +19,12 @@
 
 #include <dlfcn.h>
 
+
 /*****************************************************************************/
 PluginLib::PluginLib()
     : m_pluginPtr(nullptr)
     , m_initialized(false)
+    , m_getPluginInterfaceVersionCB(nullptr)
     , m_getPluginInfoCB(nullptr)
     , m_initializeCB(nullptr)
     , m_runTestCB(nullptr)
@@ -46,6 +48,7 @@ PluginLib::PluginLib()
 PluginLib::PluginLib(PluginLib &&other) noexcept
     : m_pluginPtr(other.m_pluginPtr)
     , m_initialized(other.m_initialized)
+    , m_getPluginInterfaceVersionCB(other.m_getPluginInterfaceVersionCB)
     , m_getPluginInfoCB(other.m_getPluginInfoCB)
     , m_initializeCB(other.m_initializeCB)
     , m_runTestCB(other.m_runTestCB)
@@ -64,12 +67,13 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     , m_gpuInfo(other.m_gpuInfo)
     , m_coreFunctionality(std::move(other.m_coreFunctionality))
 {
-    other.m_pluginPtr         = nullptr;
-    other.m_initialized       = false;
-    other.m_runTestCB         = nullptr;
-    other.m_retrieveStatsCB   = nullptr;
-    other.m_retrieveResultsCB = nullptr;
-    other.m_userData          = nullptr;
+    other.m_pluginPtr                   = nullptr;
+    other.m_initialized                 = false;
+    other.m_getPluginInterfaceVersionCB = nullptr;
+    other.m_runTestCB                   = nullptr;
+    other.m_retrieveStatsCB             = nullptr;
+    other.m_retrieveResultsCB           = nullptr;
+    other.m_userData                    = nullptr;
 }
 
 /*****************************************************************************/
@@ -77,30 +81,32 @@ PluginLib &PluginLib::operator=(PluginLib &&other) noexcept
 {
     if (this != &other)
     {
-        m_pluginPtr         = other.m_pluginPtr;
-        m_initialized       = other.m_initialized;
-        m_getPluginInfoCB   = other.m_getPluginInfoCB;
-        m_initializeCB      = other.m_initializeCB;
-        m_runTestCB         = other.m_runTestCB;
-        m_retrieveStatsCB   = other.m_retrieveStatsCB;
-        m_retrieveResultsCB = other.m_retrieveResultsCB;
-        m_userData          = other.m_userData;
-        m_pluginName        = other.m_pluginName;
-        m_customStats       = std::move(other.m_customStats);
-        m_errors            = std::move(other.m_errors);
-        m_info              = std::move(other.m_info);
-        m_results           = std::move(other.m_results);
-        m_statFieldIds      = std::move(other.m_statFieldIds);
-        m_testGroup         = other.m_testGroup;
-        m_description       = other.m_description;
-        m_parameterInfo     = std::move(other.m_parameterInfo);
+        m_pluginPtr                   = other.m_pluginPtr;
+        m_initialized                 = other.m_initialized;
+        m_getPluginInterfaceVersionCB = other.m_getPluginInterfaceVersionCB;
+        m_getPluginInfoCB             = other.m_getPluginInfoCB;
+        m_initializeCB                = other.m_initializeCB;
+        m_runTestCB                   = other.m_runTestCB;
+        m_retrieveStatsCB             = other.m_retrieveStatsCB;
+        m_retrieveResultsCB           = other.m_retrieveResultsCB;
+        m_userData                    = other.m_userData;
+        m_pluginName                  = other.m_pluginName;
+        m_customStats                 = std::move(other.m_customStats);
+        m_errors                      = std::move(other.m_errors);
+        m_info                        = std::move(other.m_info);
+        m_results                     = std::move(other.m_results);
+        m_statFieldIds                = std::move(other.m_statFieldIds);
+        m_testGroup                   = other.m_testGroup;
+        m_description                 = other.m_description;
+        m_parameterInfo               = std::move(other.m_parameterInfo);
 
-        other.m_pluginPtr         = nullptr;
-        other.m_initialized       = false;
-        other.m_runTestCB         = nullptr;
-        other.m_retrieveStatsCB   = nullptr;
-        other.m_retrieveResultsCB = nullptr;
-        other.m_userData          = nullptr;
+        other.m_pluginPtr                   = nullptr;
+        other.m_initialized                 = false;
+        other.m_getPluginInterfaceVersionCB = nullptr;
+        other.m_runTestCB                   = nullptr;
+        other.m_retrieveStatsCB             = nullptr;
+        other.m_retrieveResultsCB           = nullptr;
+        other.m_userData                    = nullptr;
     }
 
     return *this;
@@ -119,17 +125,68 @@ dcgmReturn_t PluginLib::LoadPlugin(const std::string &path, const std::string &n
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    m_getPluginInfoCB   = (dcgmDiagGetPluginInfo_f)LoadFunction("GetPluginInfo");
-    m_initializeCB      = (dcgmDiagInitializePlugin_f)LoadFunction("InitializePlugin");
-    m_runTestCB         = (dcgmDiagRunTest_f)LoadFunction("RunTest");
-    m_retrieveStatsCB   = (dcgmDiagRetrieveCustomStats_f)LoadFunction("RetrieveCustomStats");
+    // Logging for failing to load functions happens in LoadFunction
+    m_getPluginInterfaceVersionCB = (dcgmDiagGetPluginInterfaceVersion_f)LoadFunction("GetPluginInterfaceVersion");
+    if (m_getPluginInterfaceVersionCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_getPluginInfoCB = (dcgmDiagGetPluginInfo_f)LoadFunction("GetPluginInfo");
+    if (m_getPluginInfoCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_initializeCB = (dcgmDiagInitializePlugin_f)LoadFunction("InitializePlugin");
+    if (m_initializeCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_runTestCB = (dcgmDiagRunTest_f)LoadFunction("RunTest");
+    if (m_runTestCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_retrieveStatsCB = (dcgmDiagRetrieveCustomStats_f)LoadFunction("RetrieveCustomStats");
+    if (m_retrieveStatsCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
     m_retrieveResultsCB = (dcgmDiagRetrieveResults_f)LoadFunction("RetrieveResults");
+    if (m_retrieveResultsCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
 
     if (m_getPluginInfoCB == nullptr || m_initializeCB == nullptr || m_runTestCB == nullptr
         || m_retrieveStatsCB == nullptr || m_retrieveResultsCB == nullptr)
     {
         DCGM_LOG_ERROR << "All of the required functions must be defined in the plugin";
         return DCGM_ST_GENERIC_ERROR;
+    }
+
+    unsigned int pluginVersion;
+    if (m_getPluginInterfaceVersionCB == nullptr)
+    {
+        pluginVersion = DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1;
+        DCGM_LOG_ERROR << "GetPluginInterfaceVersion is missing. Assuming version " << pluginVersion << ".";
+    }
+    else
+    {
+        pluginVersion = m_getPluginInterfaceVersionCB();
+    }
+
+    if (pluginVersion != DCGM_DIAG_PLUGIN_INTERFACE_VERSION)
+    {
+        DCGM_LOG_ERROR << "Unable to load plugin " << name << " shared library " << path << " due to version mismatch. "
+                       << "Our version: " << DCGM_DIAG_PLUGIN_INTERFACE_VERSION << ". Plugin version: " << pluginVersion
+                       << ".";
+        return DCGM_ST_GENERIC_ERROR; /* Return a generic error so this isn't confused with an API version mismatch */
     }
 
     return DCGM_ST_OK;
@@ -263,7 +320,8 @@ dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, std::vector<dcgmDi
     dcgmReturn_t ret;
     try
     {
-        ret = m_initializeCB(handle, &gpuInfo, &statFieldIds, &m_userData);
+        ret = m_initializeCB(
+            handle, &gpuInfo, &statFieldIds, &m_userData, GetLoggerSeverity(BASE_LOGGER), DcgmLoggingGetCallback());
 
         if (ret == DCGM_ST_OK)
         {
@@ -343,7 +401,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     unsigned int numParameters                 = parameters.size();
     const dcgmDiagPluginTestParameter_t *parms = parameters.data();
 
-    // We don't need to set this up for the software plugin
+    // We don't need to set this up for the software or eud plugin
     if (m_pluginName != "software" && m_pluginName != "eud")
     {
         m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
@@ -458,7 +516,7 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         return;
     }
 
-    // We don't write a stats file or perform these checks for the software plugin
+    // We don't write a stats file or perform these checks for the software or eud plugin
     if (m_pluginName != "software" && m_pluginName != "eud")
     {
         m_coreFunctionality.PluginEnded(GetFullLogFileName(), m_testParameters, GetResult(), m_customStats);

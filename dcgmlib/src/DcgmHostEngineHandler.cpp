@@ -1503,7 +1503,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     m_coreCallbacks.postfunc   = PostRequestToCore;
     m_coreCallbacks.poster     = &m_communicator;
     m_coreCallbacks.version    = dcgmCoreCallbacks_version;
-    m_coreCallbacks.loggerfunc = (dcgmLoggerCallback_f)DcgmLogging::appendRecordToLogger<>;
+    m_coreCallbacks.loggerfunc = (dcgmLoggerCallback_f)DcgmLoggingGetCallback();
 
     /* Create default groups after we've set up core callbacks. This is because creating
        default groups causes the NvSwitch module to load, which in turn tries to ask m_coreCallbacks
@@ -1666,7 +1666,7 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     {
         /* Lock hostengine logging severity to avoid module severity falling out
          * of sync with hostengine severity */
-        std::unique_lock<std::mutex> loggingSeverityLock = DcgmLogging::lockSeverity();
+        std::unique_lock<std::mutex> loggingSeverityLock = LoggerLockSeverity();
         m_modules[moduleId].dlopenPtr                    = dlopen(m_modules[moduleId].filename, RTLD_NOW);
     }
 

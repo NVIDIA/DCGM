@@ -768,19 +768,19 @@ dcgmReturn_t DcgmCoreCommunication::ProcessLoggingGetSeverity(dcgm_module_comman
     switch (getSeverity.request)
     {
         case BASE_LOGGER:
-            getSeverity.response = DcgmLogging::getLoggerSeverity<BASE_LOGGER>();
+            getSeverity.response = GetLoggerSeverity(BASE_LOGGER);
             success              = true;
             break;
         case SYSLOG_LOGGER:
-            getSeverity.response = DcgmLogging::getLoggerSeverity<SYSLOG_LOGGER>();
+            getSeverity.response = GetLoggerSeverity(SYSLOG_LOGGER);
             success              = true;
             break;
         case CONSOLE_LOGGER:
-            getSeverity.response = DcgmLogging::getLoggerSeverity<CONSOLE_LOGGER>();
+            getSeverity.response = GetLoggerSeverity(CONSOLE_LOGGER);
             success              = true;
             break;
         case FILE_LOGGER:
-            getSeverity.response = DcgmLogging::getLoggerSeverity<FILE_LOGGER>();
+            getSeverity.response = GetLoggerSeverity(FILE_LOGGER);
             success              = true;
             break;
             // Do not add a default case so that the compiler catches missing loggers

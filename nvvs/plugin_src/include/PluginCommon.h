@@ -48,4 +48,12 @@ void CheckAndSetResult(Plugin *p,
  */
 bool IsSmallFrameBufferModeSet(void);
 
+/********************************************************************/
+/*
+ * Initializes the plugin to be able to write logs to the NVVS log file.
+ */
+void InitializeLoggingCallbacks(DcgmLoggingSeverity_t loggingSeverity,
+                                hostEngineAppenderCallbackFp_t loggingCallback,
+                                const std::string &pluginName);
+
 #endif // _NVVS_NVVS_Plugin_common_H_

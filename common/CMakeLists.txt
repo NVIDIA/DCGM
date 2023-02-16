@@ -33,6 +33,7 @@ add_library(dcgm_logging STATIC)
 target_sources(dcgm_logging PRIVATE 
     DcgmLogging.cpp
     DcgmLogging.h
+    DcgmLoggingImpl.h
 )
 target_link_libraries(dcgm_logging PUBLIC common_interface fmt::fmt nvmli_interface)
 

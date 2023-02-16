@@ -455,7 +455,7 @@ void TestFramework::insertIntoTestGroup(std::string groupName, Test *testObject)
 void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
 {
     bool pulseTestWillExecute = false;
-    // iterate through all GPU sets
+
     // Check if the pulse test will execute
     for (auto &gpuSet : gpuSets)
     {

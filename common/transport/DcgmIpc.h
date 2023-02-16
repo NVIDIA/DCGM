@@ -20,6 +20,7 @@
 #include <ThreadPool.hpp>
 #include <atomic>
 #include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/dns.h>

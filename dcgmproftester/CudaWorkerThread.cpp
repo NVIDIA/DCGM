@@ -174,6 +174,30 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
         return DCGM_ST_GENERIC_ERROR;
     }
 
+    /* Load functions from our cuda module */
+    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP64, m_cudaDevice.m_module, "doWorkloadFP64");
+    if (cuSt)
+    {
+        DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP64. cuSt: " << cuSt;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    /* Load functions from our cuda module */
+    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP32, m_cudaDevice.m_module, "doWorkloadFP32");
+    if (cuSt)
+    {
+        DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP32. cuSt: " << cuSt;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    /* Load functions from our cuda module */
+    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP16, m_cudaDevice.m_module, "doWorkloadFP16");
+    if (cuSt)
+    {
+        DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP16. cuSt: " << cuSt;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -424,6 +448,8 @@ std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned 
         case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            return std::move(std::make_unique<FieldWorkerDataTypeActivity>(m_cudaDevice, fieldId));
+
         case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
             return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
 

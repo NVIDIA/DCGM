@@ -38,6 +38,9 @@ typedef struct
     CUdevice m_device { 0 };              //!< Cuda ordinal of the device to use
     CUcontext m_context { nullptr };      //!< Cuda context
     CUfunction m_cuFuncWaitNs {};         //!< Pointer to waitNs() CUDA kernel
+    CUfunction m_cuFuncDoWorkFP64 {};     //!< Pointer to doWorkloadFP64() cuda kernel
+    CUfunction m_cuFuncDoWorkFP32 {};     //!< Pointer to doWorkloadFP32() cuda kernel
+    CUfunction m_cuFuncDoWorkFP16 {};     //!< Pointer to doWorkloadFP16() cuda kernel
     CUmodule m_module { nullptr };        //!< .PTX file that belongs to m_context
     int m_maxThreadsPerMultiProcessor {}; //!< threads per multiprocessor
     int m_multiProcessorCount {};         //!< multiprocessors
@@ -130,6 +133,84 @@ public:
         kernelParams[1]   = &waitInNs;
 
         cuSt = cuLaunchKernel(m_cudaDevice.m_cuFuncWaitNs,
+                              gridDim.x,
+                              gridDim.y,
+                              gridDim.z,
+                              blockDim.x,
+                              blockDim.y,
+                              blockDim.z,
+                              sharedMemBytes,
+                              NULL,
+                              kernelParams,
+                              NULL);
+        if (cuSt)
+        {
+            DCGM_LOG_ERROR << "cuLaunchKernel returned " << cuSt;
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        return DCGM_ST_OK;
+    }
+
+    dcgmReturn_t RunDoWorkKernel(unsigned int numSms, unsigned int threadsPerSm, unsigned int runForUsec)
+    {
+        CUresult cuSt;
+        CUfunction function;
+        dim3 blockDim; /* Defaults to 1,1,1 */
+        dim3 gridDim;  /* Defaults to 1,1,1 */
+        void *kernelParams[2];
+        unsigned int sharedMemBytes = 0;
+
+        if (numSms < 1 || ((int)numSms > m_cudaDevice.m_multiProcessorCount))
+        {
+            DCGM_LOG_ERROR << "numSms " << numSms << " must be 1 <= X <= " << m_cudaDevice.m_multiProcessorCount;
+            return DCGM_ST_BADPARAM;
+        }
+
+        gridDim.x = numSms;
+
+        switch (m_fieldId)
+        {
+            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+                function = m_cudaDevice.m_cuFuncDoWorkFP16;
+                break;
+
+            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+                function = m_cudaDevice.m_cuFuncDoWorkFP32;
+                break;
+
+            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+                function = m_cudaDevice.m_cuFuncDoWorkFP64;
+                break;
+
+            default:
+                DCGM_LOG_ERROR << "Can't handle fieldId " << m_fieldId;
+                return DCGM_ST_BADPARAM;
+        }
+
+        /* blockDim.x has a limit of 1024. m_maxThreadsPerMultiProcessor is 2048 on
+        current hardware. So if we're > 1024, just divide by 2 and double the
+        number of blocks we launch.
+        */
+        if (threadsPerSm > 1024)
+        {
+            blockDim.x = threadsPerSm / 2;
+            gridDim.x *= 2;
+        }
+        else
+        {
+            blockDim.x = threadsPerSm;
+        }
+
+        /* This parameter is just in the cuda kernel to trick nvcc into thinking our function has side effects
+           so it doesn't get optimized out. Pass nullptr */
+        void *pretendSideEffect = nullptr;
+        kernelParams[0]         = &pretendSideEffect;
+
+        uint64_t waitInNs = runForUsec * 1000;
+        kernelParams[1]   = &waitInNs;
+
+        cuSt = cuLaunchKernel(function,
                               gridDim.x,
                               gridDim.y,
                               gridDim.z,
@@ -919,6 +1000,38 @@ public:
 
         m_achievedLoad = (double)opsInDutyCycle * m_flopsPerOp / (now - startTime);
         DCGM_LOG_VERBOSE << "m_achievedLoad " << m_achievedLoad << ", now " << now << ", startTime " << startTime;
+    }
+};
+
+/*****************************************************************************/
+class FieldWorkerDataTypeActivity : public FieldWorkerBase
+{
+public:
+    FieldWorkerDataTypeActivity(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, fieldId)
+    {}
+
+    ~FieldWorkerDataTypeActivity() = default;
+
+    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    {
+        unsigned int numSms       = m_cudaDevice.m_multiProcessorCount;
+        unsigned int threadsPerSm = (unsigned int)(loadTarget * m_cudaDevice.m_maxThreadsPerMultiProcessor);
+        if ((int)threadsPerSm > m_cudaDevice.m_maxThreadsPerMultiProcessor)
+            threadsPerSm = m_cudaDevice.m_maxThreadsPerMultiProcessor;
+
+        if (threadsPerSm < 1)
+        {
+            usleep(1000 * dutyCycleLengthMs.count());
+            return;
+        }
+
+        RunDoWorkKernel(numSms, threadsPerSm, dutyCycleLengthMs.count() * 1000);
+
+        /* Wait for this kernel to finish. This will block for m_dutyCycleLengthMs until the kernel finishes */
+        cuCtxSynchronize();
+
+        m_achievedLoad = loadTarget;
     }
 };
 

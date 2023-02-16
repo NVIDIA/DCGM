@@ -43,6 +43,7 @@ private:
      *
      **/
     int TestConversions(void);
+    int TestConversionsOverflow(void);
 };
 
 #endif /* TESTNVCMVALUE_H */
