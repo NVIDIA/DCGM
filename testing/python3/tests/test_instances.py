@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -738,3 +738,55 @@ def test_mig_value_reporting_embedded(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_mig_value_reporting_standalone(handle, gpuIds):
     helper_test_mig_value_reporting(handle, gpuIds)
+
+def helper_test_mig_valid_watch_info(handle, gpuIds):
+    newGpuInstances, newComputeInstances = create_mig_entities_and_verify(handle, gpuIds, 3, 1)
+
+    fieldIds = [
+        dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+    ]
+
+    # Set up the watches on these groups
+    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_EMPTY, 'tiop')
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle, fieldIds, 'tal')
+
+    # Build the entity list
+    entities = []
+    for gpuId in gpuIds:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId))
+        dcgm_agent.dcgmGroupAddEntity(handle, groupId, dcgm_fields.DCGM_FE_GPU, gpuId)
+    for instanceId in newGpuInstances:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU_I, instanceId))
+        # GpuI are not added to the group, test that they are still watched with a quota
+    for ciId in newComputeInstances:
+        entities.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU_CI, ciId))
+        dcgm_agent.dcgmGroupAddEntity(handle, groupId, dcgm_fields.DCGM_FE_GPU_CI, ciId)
+
+    dcgm_agent.dcgmWatchFields(handle, groupId, fieldGroupId, 1, 100, 100)
+
+    dcgm_agent.dcgmEntitiesGetLatestValues(handle, entities, fieldIds, 0)
+
+    errmsg = ''
+    for field in fieldIds:
+        for entity in entities:
+            fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, entity.entityId, entity.entityGroupId, field)
+            if fieldInfo.maxAgeUsec <= 0:
+                errmsg = errmsg + "\nInvalid maxAgeUsec for field %d  on entity %d of type %d{}\n" \
+                    % (field, entity.entityId, entity.entityGroupId)
+
+    ciFailMsg = delete_compute_instances_and_verify(handle, newComputeInstances)
+    instanceFailMsg = delete_gpu_instances_and_verify(handle, newGpuInstances)
+
+    if ciFailMsg != '':
+        logger.warning("The compute instances didn't clean up correctly: %s" % ciFailMsg)
+    if instanceFailMsg != '':
+        logger.warning("The GPU instances didn't clean up correctly: %s" % instanceFailMsg)
+
+    assert errmsg == '', errmsg
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_enabled()
+@test_utils.run_only_as_root()
+def test_mig_valid_field_info_embedded(handle, gpuIds):
+    helper_test_mig_valid_watch_info(handle, gpuIds)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -350,7 +350,9 @@ std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds mon
                                                    int maxKeepSamples)
 {
     using namespace std::chrono_literals;
-    auto const samplesDuration    = maxKeepSamples * monitorFrequency;
+    auto const samplesDurationWithoutSlack = maxKeepSamples * monitorFrequency;
+    // Allow 10% slack for computation time
+    auto const samplesDuration    = samplesDurationWithoutSlack + (samplesDurationWithoutSlack / 10);
     auto const normalizedMaxAge   = std::max(maxAge, 1000ms);
     auto const normalizedDuration = std::max(samplesDuration, 1000ms);
     if (samplesDuration.count() == 0)

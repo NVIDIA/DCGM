@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,6 +84,8 @@ std::string statusToStr(dcgmModuleStatus_t status)
             return "Loaded";
         case DcgmModuleStatusUnloaded:
             return "Unloaded";
+        case DcgmModuleStatusPaused:
+            return "Paused";
 
             // No default case in the hopes the compiler will complain about missing cases
     }

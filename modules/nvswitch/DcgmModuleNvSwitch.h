@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <dcgm_core_structs.h>
 
 #include "DcgmNvSwitchManager.h"
+#include "MessageGuard.hpp"
 #include "dcgm_nvswitch_structs.h"
 
 namespace DcgmNs
@@ -65,10 +66,16 @@ private:
                                                      the TryRunOnce method.  */
     timelib64_t m_lastLinkStatusUpdateUsec;     /* When we last rescanned link statuses in usec since 1970 */
 
+    using PauseResumeMessage = DcgmNs::MessageGuard<dcgm_core_msg_pause_resume_v1, dcgm_core_msg_pause_resume_version1>;
+    using WatchFieldMessage
+        = DcgmNs::MessageGuard<dcgm_nvswitch_msg_watch_field_v1, dcgm_nvswitch_msg_watch_field_version1>;
+    using UnwatchFieldMessage
+        = DcgmNs::MessageGuard<dcgm_nvswitch_msg_unwatch_field_v1, dcgm_nvswitch_msg_unwatch_field_version1>;
+
     /*************************************************************************/
     dcgmReturn_t ProcessGetSwitchIds(dcgm_nvswitch_msg_get_switches_v1 *moduleCommand);
-    dcgmReturn_t ProcessWatchField(const dcgm_nvswitch_msg_watch_field_t *const msg);
-    dcgmReturn_t ProcessUnwatchField(const dcgm_nvswitch_msg_unwatch_field_t *const msg);
+    dcgmReturn_t ProcessWatchField(WatchFieldMessage msg);
+    dcgmReturn_t ProcessUnwatchField(UnwatchFieldMessage msg);
     dcgmReturn_t ProcessSetEntityNvLinkLinkState(dcgm_nvswitch_msg_set_link_state_t *msg);
     dcgmReturn_t ProcessGetAllLinkStates(dcgm_nvswitch_msg_get_all_link_states_t *msg);
     dcgmReturn_t ProcessGetLinkStates(dcgm_nvswitch_msg_get_link_states_t *msg);
@@ -76,6 +83,7 @@ private:
     dcgmReturn_t ProcessGetEntityStatus(dcgm_nvswitch_msg_get_entity_status_t *msg);
     dcgmReturn_t ProcessClientDisconnect(dcgm_core_msg_client_disconnect_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
+    dcgmReturn_t ProcessPauseResumeMessage(PauseResumeMessage msg);
     std::chrono::system_clock::time_point TryRunOnce(bool forceRun);
 
     /*

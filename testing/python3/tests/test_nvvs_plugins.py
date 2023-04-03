@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import threading
 import time
 
 from dcgm_field_injection_helpers import inject_value
+
+injection_offset = 3
 
 ################# General helpers #################
 def check_diag_result_fail(response, gpuIndex, testIndex):
@@ -182,14 +184,14 @@ def helper_check_software_page_retirements_fail_on_pending_retirements(handle, g
                              "Please verify whether the GPU is healthy." % gpuId)
 
     # Inject some pending page retirements
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 1, -30, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 1, injection_offset, True)
     response = test_utils.diag_execute_wrapper(dd, handle)
     # Ensure software test failed due to pending page retirments
     assert check_software_result_fail(response, dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT), \
         "Expected software test to fail due to pending page retirements in the GPU"
 
     # Reset injected value
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 0, -30, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 0, injection_offset, True)
     # Ensure diag passes now
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert check_software_result_pass(response, dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT), \
@@ -216,22 +218,22 @@ def helper_check_software_page_retirements_fail_total_retirements(handle, gpuId)
                              "Please verify whether the GPU is healthy." % gpuId)
 
     # Inject enough page retirements to cause failure
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, 33, -30, True)
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 33, -30, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, 33, injection_offset, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 33, injection_offset, True)
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert check_software_result_fail(response, dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT), \
            "Expected software test to fail due to 60 total page retirements in the GPU"
 
     # Ensure 59 pages pass injected value
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 25, -30, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 25, injection_offset, True)
     # Ensure diag passes now
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert check_software_result_pass(response, dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT), \
            "Expected software test to pass since there are less than 60 total retired pages"
 
     # Reset retired pages count and verify pass
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, 0, -30, True)
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 0, -30, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, 0, injection_offset, True)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE, 0, injection_offset, True)
     # Ensure diag still passes
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert check_software_result_pass(response, dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT), \

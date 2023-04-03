@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,9 +51,16 @@ bool IsSmallFrameBufferModeSet(void);
 /********************************************************************/
 /*
  * Initializes the plugin to be able to write logs to the NVVS log file.
+ * This is a macro that allows each plugin to initialize its own locally visible instance of the logger singleton.
+ * If this were a function, each plugin would initialize the logger in the common plugin address space.
+ * However, when actual log_* functions are called, the logger from the local plugin address space would be used.
  */
-void InitializeLoggingCallbacks(DcgmLoggingSeverity_t loggingSeverity,
-                                hostEngineAppenderCallbackFp_t loggingCallback,
-                                const std::string &pluginName);
+#define InitializeLoggingCallbacks(severity, callback, pluginName) \
+    do                                                             \
+    {                                                              \
+        InitLogToHostengine(severity);                             \
+        LoggingSetHostEngineCallback(callback);                    \
+        LoggingSetHostEngineComponentName(pluginName);             \
+    } while (0)
 
 #endif // _NVVS_NVVS_Plugin_common_H_

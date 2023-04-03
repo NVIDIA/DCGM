@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 from ctypes import *
 from ctypes.util import find_library
 import dcgm_agent
+import dcgm_fields
 import dcgm_structs
 import dcgm_structs_internal
 
@@ -126,11 +127,12 @@ def dcgmSetEntityNvLinkLinkState(dcgmHandle, entityGroupId, entityId, linkId, li
     return ret
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmGetCacheManagerFieldInfo(dcgmHandle, gpuId, fieldId):
+def dcgmGetCacheManagerFieldInfo(dcgmHandle, entityId, entityGroupId, fieldId):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetCacheManagerFieldInfo")
-    cmfi = dcgm_structs_internal.dcgmCacheManagerFieldInfo_v3()
+    cmfi = dcgm_structs_internal.dcgmCacheManagerFieldInfo_v4()
 
-    cmfi.gpuId = gpuId
+    cmfi.entityId = entityId
+    cmfi.entityGroupId = entityGroupId
     cmfi.fieldId = fieldId
 
     ret = fn(dcgmHandle, byref(cmfi))
@@ -211,5 +213,19 @@ def dcgmGetVgpuInstanceAttributes(dcgm_handle, vgpuId):
 def dcgmStopDiagnostic(dcgm_handle):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmStopDiagnostic")
     ret = fn(dcgm_handle)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+def dcgmPauseTelemetryForDiag(dcgmHandle):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmPauseTelemetryForDiag")
+    ret = fn(dcgmHandle)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+def dcgmResumeTelemetryForDiag(dcgmHandle):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmResumeTelemetryForDiag")
+    ret = fn(dcgmHandle)
     dcgm_structs._dcgmCheckReturn(ret)
     return ret

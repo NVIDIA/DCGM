@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ TestFramework::TestFramework()
     , m_validGpuId(0)
     , m_skipLibraryList()
 {
-    output = new Output();
+    m_output = new Output();
 
     InitSkippedLibraries();
 }
@@ -75,7 +75,7 @@ TestFramework::TestFramework(bool jsonOutput, GpuSet *gpuSet)
     : m_testList()
     , testGroup()
     , dlList()
-    , output(0)
+    , m_output(0)
     , skipRest(false)
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
@@ -94,11 +94,11 @@ TestFramework::TestFramework(bool jsonOutput, GpuSet *gpuSet)
 
     if (jsonOutput)
     {
-        output = new JsonOutput(gpuIndices);
+        m_output = new JsonOutput(gpuIndices);
     }
     else
     {
-        output = new Output();
+        m_output = new Output();
     }
 
     if (!gpuIndices.empty())
@@ -118,6 +118,7 @@ TestFramework::TestFramework(bool jsonOutput, GpuSet *gpuSet)
 void TestFramework::InitSkippedLibraries()
 {
     m_skipLibraryList.push_back("libcurand.so");
+    m_skipLibraryList.push_back("libcupti.so");
 }
 
 /*****************************************************************************/
@@ -133,7 +134,7 @@ TestFramework::~TestFramework()
         if (*itr)
             dlclose(*itr);
 
-    delete output;
+    delete m_output;
 }
 
 std::string TestFramework::GetPluginBaseDir()
@@ -489,6 +490,8 @@ void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
         std::vector<Test *> testList;
         std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
 
+        m_output->AddGpusAndDriverVersion(gpuList);
+
         testList = gpuSet->m_softwareTestObjs;
         if (testList.size() > 0)
         {
@@ -520,7 +523,7 @@ void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
         }
     }
 
-    output->print();
+    m_output->print();
 }
 
 /*****************************************************************************/
@@ -550,7 +553,7 @@ void TestFramework::GetAndOutputHeader(Test::testClasses_enum classNum)
             header = "Custom";
             break;
     }
-    output->header(header);
+    m_output->header(header);
 }
 
 /*****************************************************************************/
@@ -700,11 +703,11 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 snprintf(error.msg, sizeof(error.msg), "Unable to find plugin '%s'", name.c_str());
                 errors.push_back(error);
 
-                output->Result(NVVS_RESULT_FAIL, perGpuResults, errors, info);
+                m_output->Result(NVVS_RESULT_FAIL, perGpuResults, errors, info);
                 continue;
             }
 
-            output->prep(name);
+            m_output->prep(name);
             if (!skipRest && !main_should_stop)
             {
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
@@ -747,10 +750,10 @@ void TestFramework::goList(Test::testClasses_enum classNum,
 
                 m_plugins[pluginIndex]->RunTest(600, tp);
 
-                output->Result(m_plugins[pluginIndex]->GetResult(),
-                               m_plugins[pluginIndex]->GetResults(),
-                               m_plugins[pluginIndex]->GetErrors(),
-                               m_plugins[pluginIndex]->GetInfo());
+                m_output->Result(m_plugins[pluginIndex]->GetResult(),
+                                 m_plugins[pluginIndex]->GetResults(),
+                                 m_plugins[pluginIndex]->GetErrors(),
+                                 m_plugins[pluginIndex]->GetInfo());
 
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
                 {
@@ -763,10 +766,10 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 /* If the test hasn't been run (test->go() was not called), test->GetResults() returns
                  * empty results, which is treated as the test being skipped.
                  */
-                output->Result(m_plugins[pluginIndex]->GetResult(),
-                               m_plugins[pluginIndex]->GetResults(),
-                               m_plugins[pluginIndex]->GetErrors(),
-                               m_plugins[pluginIndex]->GetInfo());
+                m_output->Result(m_plugins[pluginIndex]->GetResult(),
+                                 m_plugins[pluginIndex]->GetResults(),
+                                 m_plugins[pluginIndex]->GetErrors(),
+                                 m_plugins[pluginIndex]->GetInfo());
             }
 
             DCGM_LOG_DEBUG << "Test " << name << " had over result " << m_plugins[pluginIndex]->GetResult()
@@ -784,7 +787,7 @@ void TestFramework::goList(Test::testClasses_enum classNum,
 
 void TestFramework::addInfoStatement(const std::string &info)
 {
-    output->addInfoStatement(info);
+    m_output->addInfoStatement(info);
 }
 
 

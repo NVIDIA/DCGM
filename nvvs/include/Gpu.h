@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,11 @@ public:
     std::string getDeviceName()
     {
         return m_attributes.identifiers.deviceName;
+    }
+
+    std::string GetDriverVersion() const
+    {
+        return m_attributes.identifiers.driverVersion;
     }
 
     std::string getDeviceId()

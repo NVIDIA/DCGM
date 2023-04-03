@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #include <nvml_injection.h>
+#include <ranges>
 #endif
 
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
@@ -650,7 +651,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId
     }
 
     /* Lock the host engine so states don't change under us */
-    Lock();
+    auto lock = Lock();
 
     /* React to this based on the current module status */
     switch (m_modules[moduleId].status)
@@ -659,7 +660,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId
             break; /* Will be added to the denylist below */
 
         case DcgmModuleStatusDenylisted:
-            Unlock();
             DCGM_LOG_DEBUG << "Module ID " << moduleId << " is already on the denylist.";
             return DCGM_ST_OK;
 
@@ -668,7 +668,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId
             break;
 
         case DcgmModuleStatusLoaded:
-            Unlock();
+        case DcgmModuleStatusPaused:
             DCGM_LOG_WARNING << "Could not add module " << moduleId << " to the denylist as it was already loaded.";
             return DCGM_ST_IN_USE;
 
@@ -682,7 +682,6 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId
     DCGM_LOG_INFO << "Module " << moduleId << " added to the denylist";
     m_modules[moduleId].status = DcgmModuleStatusDenylisted;
 
-    Unlock();
     return DCGM_ST_OK;
 }
 
@@ -821,13 +820,12 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    Lock();
+    auto lock = Lock();
 
     requestIt = m_watchedRequests.find(requestId);
     if (requestIt == m_watchedRequests.end())
     {
         log_error("SendRawMessageToEmbeddedClient unable to find requestId {}", requestId);
-        Unlock();
         return DCGM_ST_BADPARAM;
     }
 
@@ -841,7 +839,6 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
     memcpy(msgBytes->data(), msgData, msgLength);
 
     requestIt->second->ProcessMessage(std::move(msg));
-    Unlock();
     return DCGM_ST_OK;
 }
 
@@ -915,12 +912,18 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommand(dcgm_module_command_hea
         }
     }
 
+    if (moduleCommand->moduleId == DcgmModuleIdCore && moduleCommand->subCommand == DCGM_CORE_SR_PAUSE_RESUME)
+    {
+        /* Pause and resume command are dispatched to all modules in specific order */
+        return ProcessPauseResume(reinterpret_cast<dcgm_core_msg_pause_resume_v1 *>(moduleCommand));
+    }
+
     /* Dispatch the message */
     return SendModuleMessage(moduleCommand->moduleId, moduleCommand);
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHostEngineHandler::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_t *fieldInfo)
+dcgmReturn_t DcgmHostEngineHandler::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_v4_t *fieldInfo)
 {
     return mpCacheManager->GetCacheManagerFieldInfo(fieldInfo);
 }
@@ -1562,7 +1565,8 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
         DCGM_LOG_ERROR << "Unknown exception caught in DcgmHostEngineHandler::~DcgmHostEngineHandler()";
     }
 
-    Lock();
+    auto lock = Lock();
+
     /* Free sub-modules before we unload core modules */
     for (auto &m_module : m_modules)
     {
@@ -1579,7 +1583,7 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
 
         /* wait until after ~CacheManager() to close the modules */
     }
-    Unlock();
+    Unlock(std::move(lock));
 
     deleteNotNull(mpCacheManager);
     deleteNotNull(mpFieldGroupManager);
@@ -1620,6 +1624,19 @@ dcgmReturn_t DcgmHostEngineHandler::SendModuleMessage(dcgmModuleId_t id, dcgm_mo
     return m_modules[id].msgCB(m_modules[id].ptr, moduleCommand);
 }
 
+namespace
+{
+char const *ModuleIdToName(dcgmModuleId_t moduleId)
+{
+    char const *moduleName;
+    if (auto ret = dcgmModuleIdToName(moduleId, &moduleName); ret != DCGM_ST_OK)
+    {
+        return "Unknown";
+    }
+    return moduleName;
+}
+} //namespace
+
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
 {
@@ -1643,12 +1660,12 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     }
 
     /* Get the lock so we don't try to load the module from two threads */
-    Lock();
+
+    auto lock = Lock();
 
     if (m_modules[moduleId].ptr != nullptr)
     {
         /* Module was loaded by another thread while we were getting the lock */
-        Unlock();
         return DCGM_ST_OK;
     }
 
@@ -1656,7 +1673,6 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     if (m_modules[moduleId].filename == nullptr)
     {
         m_modules[moduleId].status = DcgmModuleStatusFailed;
-        Unlock();
         log_error("Failed to load module {} - no filename", moduleId);
         return DCGM_ST_MODULE_NOT_LOADED;
     }
@@ -1673,7 +1689,6 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     if (m_modules[moduleId].dlopenPtr == nullptr)
     {
         m_modules[moduleId].status = DcgmModuleStatusFailed;
-        Unlock();
         log_error(
             "Failed to load module {} - dlopen({}) returned: {}", moduleId, m_modules[moduleId].filename, dlerror());
         return DCGM_ST_MODULE_NOT_LOADED;
@@ -1696,7 +1711,6 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
         m_modules[moduleId].status = DcgmModuleStatusFailed;
         dlclose(m_modules[moduleId].dlopenPtr);
         m_modules[moduleId].dlopenPtr = nullptr;
-        Unlock();
         return DCGM_ST_MODULE_NOT_LOADED;
     }
 
@@ -1725,30 +1739,54 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
         log_info("Loaded module {}", moduleId);
     }
 
-    Unlock();
-
     if (m_modules[moduleId].status == DcgmModuleStatusLoaded)
     {
+        /*
+         * If the DCGM was paused, we instantly pause any loaded module.
+         * If pausing the module fails, we unload the module as it's dangerous to leave in a loaded and running state
+         * when the rest of the DCGM is supposed to be paused.
+         */
+        if (m_modules[DcgmModuleIdCore].status == DcgmModuleStatusPaused)
+        {
+            if (auto ret = PauseModule(moduleId); ret != DCGM_ST_OK)
+            {
+                char const *moduleName = ModuleIdToName(moduleId);
+                log_error(
+                    "Unable to pause the module ({}){} on load: ({}){}", moduleId, moduleName, ret, errorString(ret));
+                log_error("The module ({}){} will be unloaded", moduleId, moduleName);
+
+                m_modules[moduleId].status = DcgmModuleStatusFailed;
+                dlclose(m_modules[moduleId].dlopenPtr);
+                m_modules[moduleId].dlopenPtr = nullptr;
+                return DCGM_ST_MODULE_NOT_LOADED;
+            }
+        }
         return DCGM_ST_OK;
     }
-    {
-        return DCGM_ST_MODULE_NOT_LOADED;
-    }
+
+    return DCGM_ST_MODULE_NOT_LOADED;
 }
 
 
 /*****************************************************************************/
-int DcgmHostEngineHandler::Lock()
+DcgmLockGuard DcgmHostEngineHandler::Lock()
 {
-    m_lock.lock();
-    return DCGM_ST_OK;
+    auto result = DcgmLockGuard(&m_lock);
+    return result;
 }
 
 /*****************************************************************************/
-int DcgmHostEngineHandler::Unlock()
+void DcgmHostEngineHandler::Unlock(DcgmLockGuard /*guard*/)
 {
-    m_lock.unlock();
-    return DCGM_ST_OK;
+    /*
+     * This function is intentionally empty as the whole logic is to take the DcgmLockGuard ownership and call its
+     * destructor. To do so, it's enough to get the DcgmLockGuard by value as an argument.
+     * The DcgmLockGuard is not copyable and the only way to call this function is not move previously acquired lock
+     * into this function like Unlock(std::move(lock));
+     *
+     * This functionality is needed to allow releasing a lock inside a scope earlier than the lock drops out of scope
+     * and destroyed automatically.
+     */
 }
 
 /*
@@ -2089,6 +2127,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     /* Zero the structures */
     memset(&pidInfo->gpus[0], 0, sizeof(pidInfo->gpus));
     memset(&pidInfo->summary, 0, sizeof(pidInfo->summary));
+    pidInfo->numGpus = 0;
 
     /* Initialize summary information */
     pidInfo->summary.pcieRxBandwidth      = blankSummary64;
@@ -2555,7 +2594,8 @@ dcgmReturn_t DcgmHostEngineHandler::JobStartStats(std::string const &jobId, unsi
     jobIdMap_t::iterator it;
 
     /* If the entry already exists return error to provide unique key. Override it with */
-    Lock();
+    auto lock = Lock();
+
     it = mJobIdMap.find(jobId);
     if (it == mJobIdMap.end())
     {
@@ -2565,11 +2605,9 @@ dcgmReturn_t DcgmHostEngineHandler::JobStartStats(std::string const &jobId, unsi
         record.endTime   = 0;
         record.groupId   = groupId;
         mJobIdMap.insert(make_pair(jobId, record));
-        Unlock();
     }
     else
     {
-        Unlock();
         log_error("Duplicate JobId as input : {}", jobId.c_str());
         /* Implies that the entry corresponding to the job id already exists */
         return DCGM_ST_DUPLICATE_KEY;
@@ -2585,19 +2623,17 @@ dcgmReturn_t DcgmHostEngineHandler::JobStopStats(std::string const &jobId)
     jobIdMap_t::iterator it;
 
     /* If the entry already exists return error to provide unique key. Override it with */
-    Lock();
+    auto lock = Lock();
+
     it = mJobIdMap.find(jobId);
     if (it == mJobIdMap.end())
     {
-        Unlock();
         log_error("Can't find entry corresponding to the Job Id : {}", jobId.c_str());
         return DCGM_ST_NO_DATA;
     }
 
     jobRecord_t *pRecord = &(it->second);
     pRecord->endTime     = timelib_usecSince1970();
-
-    Unlock();
 
     return DCGM_ST_OK;
 }
@@ -2670,11 +2706,11 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     }
 
     /* If entry can't be found then return error back to the caller */
-    Lock();
+    auto lock = Lock();
+
     it = mJobIdMap.find(jobId);
     if (it == mJobIdMap.end())
     {
-        Unlock();
         log_error("Can't find entry corresponding to the Job Id : {}", jobId.c_str());
         return DCGM_ST_NO_DATA;
     }
@@ -2691,7 +2727,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     {
         endTime = (long long)pRecord->endTime;
     }
-    Unlock();
+    Unlock(std::move(lock));
 
     if (startTime > endTime)
     {
@@ -3330,17 +3366,16 @@ dcgmReturn_t DcgmHostEngineHandler::JobRemove(std::string const &jobId)
     jobIdMap_t::iterator it;
 
     /* If the entry already exists return error to provide unique key. Override it with */
-    Lock();
+    auto lock = Lock();
+
     it = mJobIdMap.find(jobId);
     if (it == mJobIdMap.end())
     {
-        Unlock();
         log_error("JobRemove: Can't find jobId : {}", jobId);
         return DCGM_ST_NO_DATA;
     }
 
     mJobIdMap.erase(it);
-    Unlock();
 
     log_debug("JobRemove: Removed jobId {}", jobId);
     return DCGM_ST_OK;
@@ -3352,9 +3387,9 @@ dcgmReturn_t DcgmHostEngineHandler::JobRemoveAll()
     jobIdMap_t::iterator it;
 
     /* If the entry already exists return error to provide unique key. Override it with */
-    Lock();
+    auto lock = Lock();
+
     mJobIdMap.clear();
-    Unlock();
 
     log_debug("JobRemoveAll: Removed all jobs");
     return DCGM_ST_OK;
@@ -3684,7 +3719,7 @@ dcgmReturn_t DcgmHostEngineHandler::AddRequestWatcher(std::unique_ptr<DcgmReques
         return DCGM_ST_BADPARAM;
     }
 
-    Lock();
+    auto lock = Lock();
 
     m_nextWatchedRequestId++;
 
@@ -3703,7 +3738,6 @@ dcgmReturn_t DcgmHostEngineHandler::AddRequestWatcher(std::unique_ptr<DcgmReques
 
     /* Log while we still have the lock */
     DCGM_LOG_DEBUG << "Assigned requestId " << m_nextWatchedRequestId << " to request " << std::hex << request.get();
-    Unlock();
 
     return DCGM_ST_OK;
 }
@@ -3714,7 +3748,7 @@ void DcgmHostEngineHandler::NotifyRequestOfCompletion(dcgm_connection_id_t conne
     if (connectionId == DCGM_CONNECTION_ID_NONE)
     {
         /* Local request. Just remove our object */
-        Lock();
+        auto lock = Lock();
 
         watchedRequests_t::iterator it = m_watchedRequests.find(requestId);
         if (it == m_watchedRequests.end())
@@ -3726,7 +3760,6 @@ void DcgmHostEngineHandler::NotifyRequestOfCompletion(dcgm_connection_id_t conne
             m_watchedRequests.erase(it);
             log_debug("Removed requestId {}", requestId);
         }
-        Unlock();
         return;
     }
 
@@ -3742,9 +3775,8 @@ dcgmReturn_t DcgmHostEngineHandler::RemoveAllTrackedRequests()
 {
     log_debug("Entering RemoveAllTrackedRequests");
 
-    Lock();
+    auto lock = Lock();
     m_watchedRequests.clear();
-    Unlock();
 
     return DCGM_ST_OK;
 }
@@ -3865,4 +3897,123 @@ std::string const &DcgmHostEngineHandler::GetServiceAccount() const
 bool DcgmHostEngineHandler::UsingInjectionNvml() const
 {
     return m_usingInjectionNvml;
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ProcessPauseResume(dcgm_core_msg_pause_resume_v1 *msg)
+{
+    if (msg == nullptr)
+    {
+        log_error("Invalid parameter: msg is nullptr");
+        return DCGM_ST_BADPARAM;
+    }
+    if (msg->header.version != dcgm_core_msg_pause_resume_version1)
+    {
+        log_error("Invalid parameter: msg version is %d, expected %d",
+                  msg->header.version,
+                  dcgm_core_msg_pause_resume_version1);
+        return DCGM_ST_BADPARAM;
+    }
+    return msg->pause ? Pause() : Resume();
+}
+
+dcgmReturn_t DcgmHostEngineHandler::Pause()
+{
+    bool allPaused = true;
+
+    /* The core module should be the last one to pause */
+    for (auto &module : m_modules | std::views::filter([](auto const &m) { return m.id != DcgmModuleIdCore; }))
+    {
+        if (auto ret = PauseModule(module.id); ret != DCGM_ST_OK)
+        {
+            allPaused = false;
+        }
+    }
+
+    if (auto ret = PauseModule(DcgmModuleIdCore); ret != DCGM_ST_OK)
+    {
+        allPaused = false;
+    }
+
+    return allPaused ? DCGM_ST_OK : DCGM_ST_GENERIC_ERROR;
+}
+
+dcgmReturn_t DcgmHostEngineHandler::Resume()
+{
+    bool allResumed = true;
+
+    for (auto &module : m_modules)
+    {
+        /* The core module must be resumed first */
+        if (auto ret = ResumeModule(module.id); ret != DCGM_ST_OK)
+        {
+            allResumed = false;
+        }
+    }
+
+    return allResumed ? DCGM_ST_OK : DCGM_ST_GENERIC_ERROR;
+}
+
+dcgmReturn_t DcgmHostEngineHandler::PauseModule(dcgmModuleId_t moduleId)
+{
+    auto &module = m_modules[moduleId];
+
+    if (module.status != DcgmModuleStatusLoaded)
+    {
+        return DCGM_ST_OK;
+    }
+
+    dcgm_core_msg_pause_resume_v1 msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.header.length       = sizeof(msg);
+    msg.header.moduleId     = DcgmModuleIdCore;
+    msg.header.version      = dcgm_core_msg_pause_resume_version1;
+    msg.header.subCommand   = DCGM_CORE_SR_PAUSE_RESUME;
+    msg.pause               = true;
+    msg.header.connectionId = 0; // Not used
+
+    if (auto const ret = SendModuleMessage(module.id, &msg.header); ret != DCGM_ST_OK)
+    {
+        if (ret == DCGM_ST_UNINITIALIZED)
+        {
+            log_debug("Skipping pause of module {} because it is not initialized", module.id);
+            return DCGM_ST_OK;
+        }
+
+        log_error("Failed to send pause message to module {}: ({}){}", module.id, ret, errorString(ret));
+        return ret;
+    }
+
+    module.status = DcgmModuleStatusPaused;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ResumeModule(dcgmModuleId_t moduleId)
+{
+    auto &module = m_modules[moduleId];
+
+    if (module.status != DcgmModuleStatusPaused)
+    {
+        log_debug("Skip resume of module {} because it is not paused", module.id);
+        return DCGM_ST_OK;
+    }
+
+    dcgm_core_msg_pause_resume_v1 msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.header.length       = sizeof(msg);
+    msg.header.moduleId     = DcgmModuleIdCore;
+    msg.header.version      = dcgm_core_msg_pause_resume_version1;
+    msg.header.subCommand   = DCGM_CORE_SR_PAUSE_RESUME;
+    msg.pause               = false;
+    msg.header.connectionId = 0; // Not used
+
+    if (auto ret = SendModuleMessage(module.id, &msg.header); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to send resume message to module {}: ({}){}", module.id, ret, errorString(ret));
+        return ret;
+    }
+
+    module.status = DcgmModuleStatusLoaded;
+
+    return DCGM_ST_OK;
 }

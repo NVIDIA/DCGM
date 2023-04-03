@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 
 REGISTRY ?= nvidia
 
-DCGM_VERSION   := 3.1.6
+DCGM_VERSION   := 3.1.7
 FULL_VERSION   := $(DCGM_VERSION)-1
 OUTPUT         := type=image
 PLATFORMS      := linux/amd64,linux/arm64

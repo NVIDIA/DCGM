@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -949,7 +949,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
                     prevOccupancy,
                     howFarIn,
                     now - startTime,
-                    (unsigned int)(howFarIn * m_attributes.m_multiProcessorCount),
+                    (unsigned int)(howFarIn * m_attributes.m_maxThreadsPerMultiProcessor),
                     m_attributes.m_maxThreadsPerMultiProcessor);
 
             tick = now + m_reportInterval;

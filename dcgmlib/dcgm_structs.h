@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,6 +208,11 @@
 #define DCGM_MAX_STR_LENGTH 256
 
 /**
+ * Default maximum age of samples kept (usec)
+ */
+#define DCGM_MAX_AGE_USEC_DEFAULT 30000000
+
+/**
  * Max number of clocks supported for a device
  */
 #define DCGM_MAX_CLOCKS 256
@@ -344,6 +349,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_NVVS_ISOLATE_ERROR    = -51, //!< The diagnostic returned an error that indicates the need for isolation
     DCGM_ST_NVVS_BINARY_NOT_FOUND = -52, //!< The NVVS binary was not found in the specified location
     DCGM_ST_NVVS_KILLED           = -53, //!< The NVVS process was killed by a signal
+    DCGM_ST_PAUSED                = -54, //!< The hostengine and all modules are paused
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -2418,6 +2424,9 @@ typedef enum dcgmSoftwareTest_enum
     DCGM_SWTEST_INFOROM              = 9, //!< test for inforom corruption
 } dcgmSoftwareTest_t;
 
+#define DCGM_DEVICE_ID_LEN 5
+#define DCGM_VERSION_LEN   12
+
 /**
  * Global diagnostics result structure v8
  *
@@ -2432,7 +2441,10 @@ typedef struct
     dcgmDiagTestResult_v2 levelOneResults[LEVEL_ONE_MAX_RESULTS];    //!< Basic, system-wide test results.
     dcgmDiagResponsePerGpu_v4 perGpuResponses[DCGM_MAX_NUM_DEVICES]; //!< per GPU test results
     dcgmDiagErrorDetail_t systemError;                               //!< System-wide error reported from NVVS
-    char _unused[1024];                                              //!< No longer used
+    char devIds[DCGM_MAX_NUM_DEVICES][DCGM_DEVICE_ID_LEN];           //!< The SKU device id for each GPU
+    char dcgmVersion[DCGM_VERSION_LEN];                              //!< A string representing DCGM's version
+    char driverVersion[DCGM_MAX_STR_LENGTH];                         //!< A string representing the driver version
+    char _unused[596];                                               //!< No longer used
 } dcgmDiagResponse_v8;
 
 /**
@@ -2909,6 +2921,9 @@ typedef enum
     DcgmModuleStatusFailed     = 2, //!< Loading the module failed
     DcgmModuleStatusLoaded     = 3, //!< Module has been loaded
     DcgmModuleStatusUnloaded   = 4, //!< Module has been unloaded, happens during shutdown
+    DcgmModuleStatusPaused     = 5, /*!< Module has been paused. This is a temporary state that will
+                                         move to DcgmModuleStatusLoaded once the module is resumed.
+                                         This status implies that the module is loaded. */
 } dcgmModuleStatus_t;
 
 /**

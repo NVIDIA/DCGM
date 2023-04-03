@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -2775,3 +2775,153 @@ skus:
       is_allowed: true
       # memory bandwidth test shows ~746850. Multiply by .75 to get ~560100
       minimum_bandwidth: 560100
+  # Nvidia L40
+  - name: Nvidia L40
+    id: 26b5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 30000
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at 40200, multiply by .75 to get ~30000
+      target_stress: 30000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~65400. Multiply by .75 to get ~49050
+      minimum_bandwidth: 49050
+    pulse_test:
+      is_allowed: true
+  # Scout H100 94GB HBM2e
+  - name: H100 94GB
+    id: 2339
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 40000
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at 52200, multiply by .75 to get ~40000
+      target_stress: 40000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~270200. Multiply by .75 to get ~202000.00
+      minimum_bandwidth: 2020000.00
+    pulse_test:
+      is_allowed: true
+  # Nvidia H800 80GB
+  - name: H800 80GB
+    id: 2324
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 299.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 40000
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at 52200, multiply by .75 to get ~40000
+      target_stress: 40000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~2560000. Multiply by .75 to get ~1920000
+      minimum_bandwidth: 1920000.00
+    pulse_test:
+      is_allowed: true
+  # Nvidia L4
+  - name: Nvidia L4
+    id: 27b8
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 75.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 8700
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at ~11600, multiply by .75 to get ~8700
+      target_stress: 8700.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~264610. Multiply by .75 to get ~198500
+      minimum_bandwidth: 198500

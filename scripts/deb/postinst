@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-serviceUser=nvidia-dcgm
-useradd -r -M -s /usr/sbin/nologin ${serviceUser}
+# set -e added below so we don't quit on an existing user
+set -uf
+
+service_user=nvidia-dcgm
+default_log_dir=/var/log/nvidia-dcgm
+
+# Options:
+# -U: always create group, regardless of login.defs configuration
+# -r: system user (implies -M, no home directory)
+# -s: specify shell
+useradd -Urs /usr/sbin/nologin ${service_user}
 retcode=$?
+
+# From this point on, automatically exit on error
+set -e
 
 if [ $retcode -ne 0 ] && [ $retcode -ne 9 ]; then
     exit $retcode
 fi
 
-defaultLogDir=/var/log/nvidia-dcgm
-mkdir -p ${defaultLogDir}
-chown ${serviceUser}:${serviceUser} ${defaultLogDir}
-retcode=$?
-if [ $retcode -ne 0 ]; then
-    exit $retcode
-fi
-chmod 755 ${defaultLogDir}
-retcode=$?
-if [ $retcode -ne 0 ]; then
-    exit $retcode
-fi
-
+mkdir -p ${default_log_dir}
+chown ${service_user}:${service_user} ${default_log_dir}
+chmod 755 ${default_log_dir}

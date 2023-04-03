@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ import dcgm_agent
 import dcgm_structs
 import dcgm_fields
 import dcgm_field_helpers
+from DcgmHandle import DcgmHandle
+
 
 class DcgmGroupConfig:
     def __init__(self, dcgmHandle, groupId, dcgmGroup):
@@ -516,19 +518,28 @@ class DcgmGroupAction:
 
 class DcgmGroupProfiling:
     def __init__(self, dcgmHandle, groupId, dcgmGroup):
+        """
+
+        Parameters
+        ----------
+        dcgmHandle : DcgmHandle
+        groupId : int
+        dcgmGroup : DcgmGroup
+        """
         self._dcgmHandle = dcgmHandle
         self._groupId = groupId
         self._dcgmGroup = dcgmGroup
 
-    '''
-    Get a list of the profiling metric groups available for this group of entities
-
-    Returns a dcgm_structs.c_dcgmProfGetMetricGroups_v2 instance
-    '''
     def GetSupportedMetricGroups(self):
+        """
+         Get a list of the profiling metric groups available for this group of entities
+
+         :return: dcgm_structs.c_dcgmProfGetMetricGroups_v3
+         :throws: dcgm_structs.DCGMError on error
+         """
         gpuIds = self._dcgmGroup.GetGpuIds()
         if len(gpuIds) < 1:
-            return dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED
+            raise dcgm_structs.DCGMError_ProfilingNotSupported
 
         ret = dcgm_agent.dcgmProfGetSupportedMetricGroups(self._dcgmHandle.handle, gpuIds[0])
         return ret

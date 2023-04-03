@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -563,10 +563,12 @@ inline auto ToJson(Category const &value) -> ::Json::Value
 
 struct DiagnosticResults
 {
-    double version = 0.0;
+    std::optional<std::string> version;
     std::optional<std::string> runtimeError;
     std::optional<std::string> warning;
+    std::optional<std::string> driverVersion;
     std::optional<std::vector<Category>> categories;
+    std::optional<std::vector<std::string>> devIds;
     friend auto operator<=>(DiagnosticResults const &, DiagnosticResults const &) = default;
 };
 
@@ -591,6 +593,11 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
                                                     : std::move(other.warning);
     }
 
+    if (other.driverVersion.has_value() && !result.driverVersion.has_value())
+    {
+        result.driverVersion = std::move(other.driverVersion);
+    }
+
     if (other.categories.has_value())
     {
         if (result.categories.has_value())
@@ -603,6 +610,11 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
         {
             result.categories = std::move(other.categories);
         }
+    }
+
+    if (other.devIds.has_value() && !result.devIds.has_value())
+    {
+        result.devIds = std::move(other.devIds);
     }
 
     return true;
@@ -651,7 +663,7 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
         return std::nullopt;
     }
 
-    if (!json[NVVS_VERSION_STR].isDouble())
+    if (json[NVVS_VERSION_STR].isString())
     {
         if (!json[NVVS_VERSION_STR].isString())
         {
@@ -659,21 +671,14 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
             log_debug("JSON: {}", json.toStyledString());
             return std::nullopt;
         }
-        // Fallback to string parsing
-        try
-        {
-            diagnosticResults.version = std::stod(RemoveSingleQuotes(json[NVVS_VERSION_STR].asString()));
-        }
-        catch (std::exception const &e)
-        {
-            log_error("Failed to parse JSON: {} is not a double: {}", NVVS_VERSION_STR, e.what());
-            log_debug("JSON: {}", json.toStyledString());
-            return std::nullopt;
-        }
+
+        diagnosticResults.version = json[NVVS_VERSION_STR].asString();
     }
     else
     {
-        diagnosticResults.version = json[NVVS_VERSION_STR].asDouble();
+        log_error("Failed to parse JSON: {} is not a string", NVVS_VERSION_STR);
+        log_debug("JSON: {}", json.toStyledString());
+        return std::nullopt;
     }
 
     if (json.isMember(NVVS_RUNTIME_ERROR))
@@ -713,6 +718,20 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
         }
     }
 
+    if (json.isMember(NVVS_GPU_DEV_IDS))
+    {
+        diagnosticResults.devIds = std::vector<std::string> {};
+        for (auto const &devId : json[NVVS_GPU_DEV_IDS])
+        {
+            (*diagnosticResults.devIds).push_back(devId.asString());
+        }
+    }
+
+    if (json.isMember(NVVS_DRIVER_VERSION))
+    {
+        diagnosticResults.driverVersion = json[NVVS_DRIVER_VERSION].asString();
+    }
+
     return diagnosticResults;
 }
 
@@ -723,7 +742,10 @@ inline auto ToJson(DiagnosticResults const &value) -> ::Json::Value
 
     auto &json = result[NVVS_NAME];
 
-    json[NVVS_VERSION_STR] = value.version;
+    if (value.version.has_value())
+    {
+        json[NVVS_VERSION_STR] = *value.version;
+    }
 
     if (value.runtimeError.has_value())
     {
@@ -735,12 +757,26 @@ inline auto ToJson(DiagnosticResults const &value) -> ::Json::Value
         json[NVVS_GLOBAL_WARN] = *value.warning;
     }
 
+    if (value.driverVersion.has_value())
+    {
+        json[NVVS_DRIVER_VERSION] = *value.driverVersion;
+    }
+
     if (value.categories.has_value())
     {
         json[NVVS_HEADERS] = ::Json::arrayValue;
         for (auto const &category : *value.categories)
         {
             json[NVVS_HEADERS].append(Serialize(category));
+        }
+    }
+
+    if (value.devIds.has_value())
+    {
+        json[NVVS_GPU_DEV_IDS] = ::Json::arrayValue;
+        for (auto const &gpuDevId : *value.devIds)
+        {
+            json[NVVS_GPU_DEV_IDS].append(gpuDevId);
         }
     }
     return result;

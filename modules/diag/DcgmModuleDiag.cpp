@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,6 +140,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessCoreMessage(dcgm_module_command_header_t *mo
             OnLoggingSeverityChange((dcgm_core_msg_logging_changed_t *)moduleCommand);
             break;
 
+        case DCGM_CORE_SR_PAUSE_RESUME:
+            log_debug("Received Pause/Resume subcommand");
+            m_isPaused.store(((dcgm_core_msg_pause_resume_v1 *)moduleCommand)->pause, std::memory_order_relaxed);
+            break;
+
         default:
             DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
             return DCGM_ST_FUNCTION_NOT_FOUND;
@@ -164,25 +169,37 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
     }
     else
     {
+        /*
+         * If the module is paused, we prevent accidental running of the diagnostic.
+         * This is a safety net for EUD that pauses all DCGM modules before running the EUD binary
+         * to prevent unwanted side effects.
+         * Commands other than SR_RUN are still allowed so that we are able to interrupt a diagnostic even if the
+         * module is paused. The use case is to be able to interrupt EUD tests.
+         */
         switch (moduleCommand->subCommand)
         {
             case DCGM_DIAG_SR_RUN:
-
-                if (moduleCommand->version == dcgm_diag_msg_run_version6)
+                if (m_isPaused.load(std::memory_order_relaxed))
                 {
-                    retSt = ProcessRun_v6((dcgm_diag_msg_run_v6 *)moduleCommand);
-                }
-                else if (moduleCommand->version == dcgm_diag_msg_run_version5)
-                {
-                    retSt = ProcessRun_v5((dcgm_diag_msg_run_v5 *)moduleCommand);
+                    log_info("The Diag module is paused. Ignoring the run command.");
+                    retSt = DCGM_ST_PAUSED;
                 }
                 else
                 {
-                    DCGM_LOG_ERROR << "Version mismatch " << moduleCommand->version
-                                   << " != " << dcgm_diag_msg_run_version;
-                    return retSt;
+                    if (moduleCommand->version == dcgm_diag_msg_run_version6)
+                    {
+                        retSt = ProcessRun_v6((dcgm_diag_msg_run_v6 *)moduleCommand);
+                    }
+                    else if (moduleCommand->version == dcgm_diag_msg_run_version5)
+                    {
+                        retSt = ProcessRun_v5((dcgm_diag_msg_run_v5 *)moduleCommand);
+                    }
+                    else
+                    {
+                        log_error("Version mismatch {} != {}", moduleCommand->version, dcgm_diag_msg_run_version);
+                        retSt = DCGM_ST_VER_MISMATCH;
+                    }
                 }
-
                 break;
 
             case DCGM_DIAG_SR_STOP:
@@ -190,8 +207,8 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
                 break;
 
             default:
-                DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
-                return DCGM_ST_FUNCTION_NOT_FOUND;
+                log_debug("Unknown subcommand: {}", moduleCommand->subCommand);
+                retSt = DCGM_ST_FUNCTION_NOT_FOUND;
                 break;
         }
     }

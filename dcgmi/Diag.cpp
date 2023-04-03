@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ char DIAG_HEADER[] = "+---------------------------+-----------------------------
 
 char DIAG_DATA[] = "| <DATA_NAME              > | <DATA_INFO                                   > |\n";
 
+const char DIAG_INFO[] = "|-----  Metadata  ----------+------------------------------------------------|\n";
 
 char DIAG_FOOTER[] = "+---------------------------+------------------------------------------------+\n";
 
@@ -363,6 +364,11 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
             "Error: Diagnostic could not be run because the Tesla recommended driver is not being used.", result);
         return result;
     }
+    else if (result == DCGM_ST_PAUSED)
+    {
+        HelperDisplayFailureMessage("Error: Diagnostic could not be run while DCGM is paused.", result);
+        return result;
+    }
     else if (result != DCGM_ST_OK)
     {
         std::stringstream errMsg;
@@ -420,6 +426,8 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
         std::cout << "Successfully ran diagnostic for group." << std::endl;
 
         std::cout << DIAG_HEADER;
+
+        HelperDisplayVersionAndDevIds(diagResult);
 
         HelperDisplayDeployment(diagResult);
 
@@ -555,6 +563,40 @@ void Diag::HelperDisplayDeploymentResult(CommandOutputController &cmdView,
         if (result.error.msg[0] != '\0')
             DisplayVerboseInfo(cmdView, "Error", result.error.msg);
     }
+}
+
+void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_t &diagResult)
+{
+    CommandOutputController cmdView = CommandOutputController();
+
+    std::cout << DIAG_INFO;
+
+    cmdView.setDisplayStencil(DIAG_DATA);
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "DCGM Version");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, diagResult.dcgmVersion);
+    cmdView.display();
+
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "Driver Version Detected");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, diagResult.driverVersion);
+    cmdView.display();
+
+    std::stringstream ss;
+
+    for (unsigned int i = 0; i < diagResult.gpuCount; i++)
+    {
+        if (i == 0)
+        {
+            ss << diagResult.devIds[i];
+        }
+        else
+        {
+            ss << "," << diagResult.devIds[i];
+        }
+    }
+
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "GPU Device IDs Detected");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
+    cmdView.display();
 }
 
 void Diag::HelperDisplayDeployment(dcgmDiagResponse_t &diagResult)
@@ -1086,6 +1128,14 @@ void Diag::HelperJsonBuildOutput(Json::Value &output,
             else
                 buf << i;
         }
+    }
+
+    output[NVVS_VERSION_STR]    = diagResult.dcgmVersion;
+    output[NVVS_DRIVER_VERSION] = diagResult.driverVersion;
+
+    for (unsigned int i = 0; i < diagResult.gpuCount; i++)
+    {
+        output[NVVS_GPU_DEV_IDS][i] = diagResult.devIds[i];
     }
 
     HelperJsonAddBasicTests(output, categoryIndex, diagResult);

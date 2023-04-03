@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,10 @@
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 
-static long long g_timestamp = 0;
+static long long g_timestamp         = 0;
+static dcgmReturn_t g_watchFieldsRet = DCGM_ST_OK;
+static dcgmFieldGrp_t g_fieldGroupId = 0;
+static dcgmGpuGrp_t g_groupId        = 0;
 
 long long initializeDataCommon(dcgmTimeseriesInfo_t &data, unsigned short fieldId)
 {
@@ -186,4 +189,60 @@ SCENARIO("int DcgmRecorder::GetValueIndex(unsigned short fieldId)")
     CHECK(dr.GetValueIndex(DCGM_FI_DEV_ECC_SBE_VOL_TOTAL) == 2);
     CHECK(dr.GetValueIndex(256) == 0);
     CHECK(dr.GetValueIndex(DCGM_FI_DEV_THERMAL_VIOLATION) == 1);
+}
+
+dcgmReturn_t dcgmGroupCreate(dcgmHandle_t handle, dcgmGroupType_t type, const char *groupName, dcgmGpuGrp_t *groupId)
+{
+    if (groupId != nullptr)
+    {
+        *groupId = g_groupId;
+    }
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t handle,
+                                  int numFieldIds,
+                                  unsigned short *fieldIdArray,
+                                  const char *name,
+                                  dcgmFieldGrp_t *m_fieldGroupId)
+{
+    if (m_fieldGroupId != nullptr)
+    {
+        *m_fieldGroupId = g_fieldGroupId;
+    }
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmGroupAddDevice(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, unsigned int gpuId)
+{
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmWatchFields(dcgmHandle_t pDcgmHandle,
+                             dcgmGpuGrp_t groupId,
+                             dcgmFieldGrp_t fieldGroupId,
+                             long long updateFreq,
+                             double maxKeepAge,
+                             int maxKeepSamples)
+{
+    return g_watchFieldsRet;
+}
+
+SCENARIO("AddWatches")
+{
+    DcgmRecorder dr((dcgmHandle_t)1);
+    std::vector<unsigned short> fieldIds;
+    std::vector<unsigned int> gpuIds;
+
+    // Fail with empty field ids
+    CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_BADPARAM);
+    fieldIds.push_back(DCGM_FI_DEV_GPU_TEMP);
+    // Fail with empty gpu IDs
+    CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_BADPARAM);
+    gpuIds.push_back(0);
+
+    g_groupId        = 1;
+    g_fieldGroupId   = 1;
+    g_watchFieldsRet = DCGM_ST_GPU_IS_LOST;
+    CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_GPU_IS_LOST);
 }

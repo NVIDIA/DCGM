@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -356,5 +356,15 @@ class DcgmSystem:
                 return ctypes.c_void_p(allGroups.fieldGroups[i].fieldGroupId)
 
         return None
+
+    def PauseTelemetryForDiag(self):
+        """Pause DCGM modules from updating field values."""
+        import dcgm_agent_internal
+        dcgm_agent_internal.dcgmPauseTelemetryForDiag(self._dcgmHandle.handle)
+
+    def ResumeTelemetryForDiag(self):
+        """Resume previously paused DCGM modules so that they can update field values."""
+        import dcgm_agent_internal
+        dcgm_agent_internal.dcgmResumeTelemetryForDiag(self._dcgmHandle.handle)
 
 

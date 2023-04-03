@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,6 @@ void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
 
     if (m_version == dcgmDiagResponse_version8)
     {
-        // Version 5
         m_response.v8ptr->version           = dcgmDiagResponse_version;
         m_response.v8ptr->levelOneTestCount = DCGM_SWTEST_COUNT;
 
@@ -98,7 +97,6 @@ void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
     }
     else if (m_version == dcgmDiagResponse_version7)
     {
-        // Version 5
         m_response.v7ptr->version           = dcgmDiagResponse_version;
         m_response.v7ptr->levelOneTestCount = DCGM_SWTEST_COUNT;
 
@@ -450,4 +448,43 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion7(dcgmDiagResponse_v7 *response)
     m_response.v7ptr = response;
 
     return DCGM_ST_OK;
+}
+
+void DcgmDiagResponseWrapper::RecordDcgmVersion(const std::string &version)
+{
+    if (m_version == dcgmDiagResponse_version8)
+    {
+        snprintf(m_response.v8ptr->dcgmVersion, sizeof(m_response.v8ptr->dcgmVersion), "%s", version.c_str());
+    }
+    else
+    {
+        log_debug("Ignoring DCGM Diagnostic version for response struct version {}", m_version);
+    }
+}
+
+void DcgmDiagResponseWrapper::RecordDevIds(const std::vector<std::string> &devIds)
+{
+    if (m_version == dcgmDiagResponse_version8)
+    {
+        for (size_t i = 0; i < devIds.size() && i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            snprintf(m_response.v8ptr->devIds[i], sizeof(m_response.v8ptr->devIds[i]), "%s", devIds.at(i).c_str());
+        }
+    }
+    else
+    {
+        log_debug("Ignoring GPU device ids for response struct version {}", m_version);
+    }
+}
+
+void DcgmDiagResponseWrapper::RecordDriverVersion(const std::string &driverVersion)
+{
+    if (m_version == dcgmDiagResponse_version8)
+    {
+        snprintf(m_response.v8ptr->driverVersion, sizeof(m_response.v8ptr->driverVersion), "%s", driverVersion.c_str());
+    }
+    else
+    {
+        log_debug("Ignoring detected driver version for response struct version {}", m_version);
+    }
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -393,7 +393,7 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
 
     # Make sure we've set the monitor frequency to less than 35 seconds - that will make us around 
     # half or less of the 60 seconds we give the data before calling it stale.
-    cmFieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING)
+    cmFieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING)
     assert cmFieldInfo.monitorIntervalUsec < 35000000
 
 @test_utils.run_with_standalone_host_engine(120)
@@ -1163,7 +1163,7 @@ def helper_health_set_version2(handle, gpuIds):
     groupObj.health.Set(newSystems, watchInterval, maxKeepAge)
     
     for gpuId in gpuIds:
-        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         assert cmfi.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED, "x%X" % cmfi.flags
         assert cmfi.monitorIntervalUsec == watchInterval, "%d != %d" % (cmfi.monitorIntervalUsec, watchInterval)
         assert cmfi.maxAgeUsec == maxKeepAgeUsec, "%d != %d" % (cmfi.maxAgeUsec, maxKeepAgeUsec)

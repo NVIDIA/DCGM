@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2225,9 +2225,18 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     TCLAP::SwitchArg inject("", "inject", "Inject values into cache.", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
 
+    TCLAP::SwitchArg pause("",
+                           "pause",
+                           "Pause all metrics collection. All active watchers will start getting N/A "
+                           "values.",
+                           false);
+    TCLAP::SwitchArg resume("", "resume", "Resume metrics collection previously paused with --pause", false);
+
     std::vector<TCLAP::Arg *> xors;
     xors.push_back(&introspect);
     xors.push_back(&inject);
+    xors.push_back(&pause);
+    xors.push_back(&resume);
     cmd.xorAdd(xors);
 
     helpOutput.addToGroup("1", &hostAddress);
@@ -2241,6 +2250,9 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     helpOutput.addToGroup("2", &fieldId);
     helpOutput.addToGroup("2", &injectValue);
 
+    helpOutput.addToGroup("3", &pause);
+    helpOutput.addToGroup("4", &resume);
+
     // add an option here if there is anything other than DCGM_STATS_FILE_TYPE_JSON possible
     cmd.parse(argc, argv);
 
@@ -2248,6 +2260,21 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(gpuId, "gpuid");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(timeVal, "offset");
+
+    if (pause.isSet() && resume.isSet())
+    {
+        throw TCLAP::CmdLineParseException(
+            "Both pause and resume are specified. Only one of the options must be present");
+    }
+
+    if (pause.isSet())
+    {
+        return ModulesPauseResume(hostAddress.getValue(), true).Execute();
+    }
+    if (resume.isSet())
+    {
+        return ModulesPauseResume(hostAddress.getValue(), false).Execute();
+    }
 
     if (gpuId.isSet() && groupId.isSet())
     {

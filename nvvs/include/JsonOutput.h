@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,14 +43,15 @@ public:
     void updatePluginProgress(unsigned int progress, bool clear) override;
     void print() override;
     void addInfoStatement(const std::string &info) override;
+    void AddGpusAndDriverVersion(std::vector<Gpu *> &gpuList) override;
 
     /***************************PRIVATE**********************************/
 private:
-    Json::Value jv;
+    Json::Value m_root;
     unsigned int m_testIndex { 0 };
     unsigned int headerIndex { 0 };
     int m_gpuId { -1 };
-    int globalInfoCount { 0 };
+    int m_globalInfoCount { 0 };
     std::string gpuList;
     std::vector<unsigned int> m_gpuIndices;
     bool softwareTest { false };

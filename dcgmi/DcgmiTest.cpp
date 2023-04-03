@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
                                         bool isGroup)
 {
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmCacheManagerFieldInfo_t fieldInfo;
+    dcgmCacheManagerFieldInfo_v4_t fieldInfo;
     dcgmGroupInfo_t stNvcmGroupInfo;
     unsigned int gpuIds[DCGM_MAX_NUM_DEVICES];
     unsigned int numGpus = 0;
@@ -79,8 +79,8 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
 
     // get field info
     DcgmFieldsInit();
-    memset(&fieldInfo, 0, sizeof(dcgmCacheManagerFieldInfo_t));
-    fieldInfo.version = dcgmCacheManagerFieldInfo_version;
+    memset(&fieldInfo, 0, sizeof(dcgmCacheManagerFieldInfo_v4_t));
+    fieldInfo.version = dcgmCacheManagerFieldInfo_version4;
     result            = HelperParseForFieldId(fieldId, fieldInfo.fieldId, mDcgmHandle);
 
     if (result != DCGM_ST_OK)
@@ -91,13 +91,14 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
 
     for (unsigned int i = 0; i < numGpus; i++)
     {
-        fieldInfo.gpuId = (unsigned int)(uintptr_t)gpuIds[i];
+        fieldInfo.entityId      = (unsigned int)(uintptr_t)gpuIds[i];
+        fieldInfo.entityGroupId = DCGM_FE_GPU;
 
         result = dcgmGetCacheManagerFieldInfo(mDcgmHandle, &fieldInfo);
 
         if (DCGM_ST_OK != result)
         {
-            std::cout << "Error: Unable to get field info for GPU ID: " << fieldInfo.gpuId
+            std::cout << "Error: Unable to get field info for entity ID: " << fieldInfo.entityId
                       << ". Return: " << errorString(result) << std::endl;
             return result;
         }
@@ -154,7 +155,7 @@ dcgmReturn_t DcgmiTest::InjectCache(dcgmHandle_t mDcgmHandle,
     return DCGM_ST_OK;
 }
 
-void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo)
+void DcgmiTest::HelperDisplayField(dcgmCacheManagerFieldInfo_v4_t &fieldInfo)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -370,4 +371,29 @@ InjectCache::InjectCache(std::string hostname,
 dcgmReturn_t InjectCache::DoExecuteConnected()
 {
     return adminObj.InjectCache(m_dcgmHandle, mGId, mFieldId, mSecondsInFuture, mInjectValue);
+}
+
+/*****************************************************************************/
+dcgmReturn_t ModulesPauseResume::DoExecuteConnected()
+{
+    auto const *action = m_pause ? "pause" : "resume";
+    log_debug("Executing {} command", action);
+    if (auto const ret = m_pause ? dcgmPauseTelemetryForDiag(m_dcgmHandle) : dcgmResumeTelemetryForDiag(m_dcgmHandle);
+        ret != DCGM_ST_OK)
+    {
+        log_error("Error: unable to execute {} command: ({}){}", action, ret, errorString(ret));
+        fmt::print(stderr, "Error: unable to execute {} command: ({}){}", action, ret, errorString(ret));
+        return ret;
+    }
+
+    auto const msg = fmt::format("Successfully {}d metrics monitoring", action);
+    log_debug(msg);
+    fmt::print("{}\n", msg);
+    return DCGM_ST_OK;
+}
+
+ModulesPauseResume::ModulesPauseResume(std::string hostname, bool pause)
+    : m_pause(pause)
+{
+    m_hostName = std::move(hostname);
 }

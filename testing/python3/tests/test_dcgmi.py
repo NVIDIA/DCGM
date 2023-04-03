@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -951,4 +951,13 @@ def test_dcgmi_test_inject(handle, gpuIds):
             ["test", "--inject", "-g", "11001001"],
             ["test", "--inject", "--group", "11001001"],
             ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", "10000000", "--value", '45'], #Bad fieldId
+    ])
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+def test_dcgmi_dmon_pause_resume(handle):
+    _test_valid_args([
+        ['test', '--pause'],
+        ['test', '--resume'],
     ])

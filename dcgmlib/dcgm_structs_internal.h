@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,11 +214,12 @@ typedef struct dcgm_cm_field_info_watcher_t
  */
 #define DCGM_CM_FIELD_INFO_NUM_WATCHERS 10
 
-typedef struct dcgmCacheManagerFieldInfo_v3_t
+typedef struct dcgmCacheManagerFieldInfo_v4_t
 {
     unsigned int version;          /* Version. Check against dcgmCacheManagerInfo_version */
     unsigned int flags;            /* Bitmask of DCGM_CMI_F_? #defines that apply to this field */
-    unsigned int gpuId;            /* ID of the GPU for this field */
+    unsigned int entityId;         /* ordinal id for this entity */
+    unsigned int entityGroupId;    /* the type of entity, see dcgm_field_entity_group_t */
     unsigned short fieldId;        /* Field ID of this field */
     short lastStatus;              /* Last nvml status returned for this field when taking a sample */
     long long oldestTimestamp;     /* Timestamp of the oldest record. 0=no records or single
@@ -235,11 +236,9 @@ typedef struct dcgmCacheManagerFieldInfo_v3_t
     int numWatchers;               /* Number of watchers that are valid in watchers[] */
     dcgm_cm_field_info_watcher_t watchers[DCGM_CM_FIELD_INFO_NUM_WATCHERS]; /* Who are the first 10
                                                                            watchers of this field? */
-} dcgmCacheManagerFieldInfo_v3_t, *dcgmCacheManagerFieldInfo_v3_p;
+} dcgmCacheManagerFieldInfo_v4_t, *dcgmCacheManagerFieldInfo_v4_p;
 
-typedef dcgmCacheManagerFieldInfo_v3_t dcgmCacheManagerFieldInfo_t;
-#define dcgmCacheManagerFieldInfo_version3 MAKE_DCGM_VERSION(dcgmCacheManagerFieldInfo_v3_t, 3)
-#define dcgmCacheManagerFieldInfo_version  dcgmCacheManagerFieldInfo_version3
+#define dcgmCacheManagerFieldInfo_version4 MAKE_DCGM_VERSION(dcgmCacheManagerFieldInfo_v4_t, 4)
 
 /**
  * The maximum number of topology elements possible given DCGM_MAX_NUM_DEVICES
@@ -681,15 +680,15 @@ typedef struct
 typedef dcgmInjectFieldValueMsg_v1 dcgmInjectFieldValueMsg_t;
 
 /**
- * Version 1 of dcgmGetCacheManagerFieldInfo_t
+ * Version 2 of dcgmGetCacheManagerFieldInfo_t
  */
 typedef struct
 {
-    dcgmCacheManagerFieldInfo_t
+    dcgmCacheManagerFieldInfo_v4_t
         fieldInfo;       //!< IN/OUT: Structure to populate. fieldInfo->gpuId and fieldInfo->fieldId must
                          //           be populated on calling for this call to work
     unsigned int cmdRet; //!< OUT: Error code generated
-} dcgmGetCacheManagerFieldInfo_v1;
+} dcgmGetCacheManagerFieldInfo_v2;
 
 typedef struct
 {

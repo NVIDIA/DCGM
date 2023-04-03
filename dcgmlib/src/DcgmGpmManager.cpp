@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 
 #include "DcgmGpmManager.hpp"
+#include <DcgmUtilities.h>
+#include <TimeLib.hpp>
+
+#include <ranges>
 
 
 /****************************************************************************/
@@ -29,6 +33,7 @@ void DcgmGpmManagerEntity::AddWatcher(unsigned short fieldId,
 {
     m_watchTable.AddWatcher(
         m_entityPair.entityGroupId, m_entityPair.entityId, fieldId, watcher, updateIntervalUsec, maxAgeUsec, false);
+    m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
 }
 
 /****************************************************************************/
@@ -51,6 +56,43 @@ dcgmReturn_t DcgmGpmManagerEntity::RemoveConnectionWatches(dcgm_connection_id_t 
 }
 
 /****************************************************************************/
+DcgmGpmSample DcgmGpmManagerEntity::reuseOrAllocateSample()
+{
+    if (m_freedGpmSamples.empty())
+    {
+        return DcgmGpmSample();
+    }
+
+    auto sample = std::move(m_freedGpmSamples.back());
+    m_freedGpmSamples.pop_back();
+    return sample;
+}
+
+/****************************************************************************/
+void DcgmGpmManagerEntity::PruneOldSamples(timelib64_t now)
+{
+    using namespace std::ranges;
+    using namespace DcgmNs::Timelib;
+    using DcgmNs::Utils::GetMaxAge;
+    using std::chrono::milliseconds;
+
+    const milliseconds monitorFrequency = FromLegacyTimestamp<milliseconds>(m_maxUpdateInterval);
+    const milliseconds maxAge           = milliseconds(0);
+    const int maxKeepSamples            = 2;
+    timelib64_t maxAgeUsec              = ToLegacyTimestamp(GetMaxAge(monitorFrequency, maxAge, maxKeepSamples));
+
+    timelib64_t cutOffMinimumExclusive = now - maxAgeUsec;
+    auto upperBound                    = m_gpmSamples.upper_bound(cutOffMinimumExclusive);
+
+    move(subrange(begin(m_gpmSamples), upperBound) | views::values, std::back_inserter(m_freedGpmSamples));
+
+    m_gpmSamples.erase(m_gpmSamples.begin(), upperBound);
+
+    log_debug("Pruned old samples. gpmSamples.size = {}. freedGpmSamples.size = {}",
+              m_gpmSamples.size(),
+              m_freedGpmSamples.size());
+}
+/****************************************************************************/
 dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
                                                        DcgmGpuInstance *const pGpuInstance,
                                                        timelib64_t now,
@@ -70,7 +112,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
 
     /* Fetch a new sample, insert it, and return its iterator */
 
-    latestSampleIt = m_gpmSamples.try_emplace(now, DcgmGpmSample()).first;
+    latestSampleIt = m_gpmSamples.try_emplace(now, reuseOrAllocateSample()).first;
 
     bool isMigSample        = m_entityPair.entityGroupId == DCGM_FE_GPU_I;
     nvmlReturn_t nvmlReturn = NVML_SUCCESS;
@@ -133,6 +175,10 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     {
         now = timelib_usecSince1970();
     }
+
+    // First prune samples older than maxAge. This is done here rather than
+    // in a separate thread in order to avoid requiring a mutex
+    PruneOldSamples(now);
 
     dcgmSampleMap::iterator latestSampleIt;
     dcgmReturn = MaybeFetchNewSample(nvmlDevice, pGpuInstance, now, updateInterval, latestSampleIt);

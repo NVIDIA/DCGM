@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,6 +214,10 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
 
             case DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY:
                 dcgmReturn = ProcessNvmlCreateFakeEntity(*(dcgm_core_msg_nvml_create_injection_gpu_t *)moduleCommand);
+                break;
+
+            case DCGM_CORE_SR_PAUSE_RESUME:
+                dcgmReturn = ProcessPauseResume(*(dcgm_core_msg_pause_resume_v1 *)moduleCommand);
                 break;
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
@@ -1284,7 +1288,7 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
 
 dcgmReturn_t DcgmModuleCore::ProcessGetCacheManagerFieldInfo(dcgm_core_msg_get_cache_manager_field_info_t &msg)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_cache_manager_field_info_version);
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_cache_manager_field_info_version2);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "Version mismatch";
@@ -2135,4 +2139,19 @@ dcgmReturn_t DcgmModuleCore::ProcessDeleteMigEntity(dcgm_core_msg_delete_mig_ent
 dcgmModuleProcessMessage_f DcgmModuleCore::GetMessageProcessingCallback() const
 {
     return m_processMsgCB;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &msg)
+{
+    if (m_cacheManager == nullptr)
+    {
+        log_error("m_cacheManager not initialized");
+        return DCGM_ST_UNINITIALIZED;
+    }
+    if (auto const ret = CheckVersion(&msg.header, dcgm_core_msg_pause_resume_version1); ret != DCGM_ST_OK)
+    {
+        log_error("Version mismatch");
+        return ret;
+    }
+    return msg.pause ? m_cacheManager->Pause() : m_cacheManager->Resume();
 }

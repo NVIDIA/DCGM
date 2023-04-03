@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ macro(declare_nvvs_plugin plugin_name dirpath)
         aux_source_directory(${AUX_SRC_DIR} LOCAL_SRCS)
         target_sources(${lib_name} PRIVATE ${LOCAL_SRCS})
         target_link_libraries(${lib_name} PUBLIC nvvs_plugins_${plugin_name}_interface)
-        target_link_libraries(${lib_name} PRIVATE ${ARGN} dcgm_mutex dcgm_thread)
+        target_link_libraries(${lib_name} PRIVATE ${ARGN} dcgm_mutex dcgm_thread dcgm_logging)
         target_include_directories(${lib_name} PRIVATE ${AUX_SRC_DIR})
     endfunction()
 

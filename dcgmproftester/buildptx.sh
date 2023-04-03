@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,4 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-/usr/local/cuda/bin/nvcc -ptx -m64 --gpu-architecture compute_70 -o DcgmProfTesterKernels.ptx DcgmProfTesterKernels.cu || die "Failed to compile DcgmProfTesterKernels.cu"
+CUDA_IMAGE=nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04
+COMPUTE=compute_70
+
+docker run \
+    --rm \
+    -v $(pwd):/work \
+    -w /work \
+    ${CUDA_IMAGE} \
+    /bin/bash -c "/usr/local/cuda/bin/nvcc -ptx -m64 --gpu-architecture $COMPUTE -o DcgmProfTesterKernels.ptx DcgmProfTesterKernels.cu || die 'Failed to compile DcgmProfTesterKernels.cu'"

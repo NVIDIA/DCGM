@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -117,6 +117,9 @@ DCGM_ST_3RD_PARTY_LIBRARY_ERROR     = -48  # Detected an error in a 3rd-party li
 DCGM_ST_INSUFFICIENT_RESOURCES      = -49  # Not enough resources available
 DCGM_ST_PLUGIN_EXCEPTION            = -50  # Exception thrown from a diagnostic plugin
 DCGM_ST_NVVS_ISOLATE_ERROR          = -51  # The diagnostic returned an error that indicates the need for isolation
+DCGM_ST_NVVS_BINARY_NOT_FOUND       = -52  # The NVVS binary was not found in the specified location
+DCGM_ST_NVVS_KILLED                 = -53  # The NVVS process was killed by a signal
+DCGM_ST_PAUSED                      = -54  # The hostengine and all modules are paused
 
 DCGM_GROUP_DEFAULT = 0  # All the GPUs on the node are added to the group
 DCGM_GROUP_EMPTY   = 1  # Creates an empty group
@@ -1996,6 +1999,8 @@ DcgmModuleStatusNotLoaded   = 0 # Module has not been loaded yet
 DcgmModuleStatusDenylisted  = 1 # Module has been added to the denylist so it can't be loaded
 DcgmModuleStatusFailed      = 2 # Loading the module failed
 DcgmModuleStatusLoaded      = 3 # Module has been loaded
+DcgmModuleStatusUnloaded    = 4 # Module has been unloaded
+DcgmModuleStatusPaused      = 5 # Module has been paused. Implies it's been loaded
 
 DCGM_MODULE_STATUSES_CAPACITY = 16
 

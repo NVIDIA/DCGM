@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,9 @@
 namespace DcgmNs
 {
 
-using phys_id_t      = uint32_t;
-using uuid_p         = nscq_uuid_t *;
-using label_t        = nscq_label_t;
-using link_id_t      = uint8_t;
-using lane_vc_id_t   = uint8_t;
-using nvlink_state_t = nscq_nvlink_state_t;
+using uuid_p       = nscq_uuid_t *;
+using link_id_t    = uint8_t;
+using lane_vc_id_t = uint8_t;
 
 class DcgmNvSwitchFieldWatch
 {
@@ -63,7 +60,7 @@ public:
     using nvlink_state_t = nscq_nvlink_state_t;
 
     /*************************************************************************/
-    DcgmNvSwitchManager(dcgmCoreCallbacks_t *dcc);
+    explicit DcgmNvSwitchManager(dcgmCoreCallbacks_t *dcc);
 
     /*************************************************************************/
     ~DcgmNvSwitchManager();
@@ -117,8 +114,8 @@ public:
     /**
      * Set field watch for NVSWITCH
      *
-     * @param entityGroupId[in]       - Type of entity targetted. Must be DCGM_FE_SWITCH
-     * @param entityId[in]            - Entity ID of targetted switch
+     * @param entityGroupId[in]       - Type of entity targeted. Must be DCGM_FE_SWITCH
+     * @param entityId[in]            - Entity ID of targeted switch
      * @param numFieldIds[in]         - The number of field IDs in the fieldIds buffer below
      * @param fieldIds[in]            - Field IDs to watch
      * @param updateIntervalUsec[in]  - Interval between updates in microseconds
@@ -130,11 +127,11 @@ public:
      * @return DCGM_ST_OK:            Field watches successfully set
      *         DCGM_ST_BADPARAM:      Bad input parameter. Check logs for details
      */
-    dcgmReturn_t WatchField(const dcgm_field_entity_group_t entityGroupId,
-                            const unsigned int entityId,
-                            const unsigned int numFieldIds,
-                            const unsigned short *const fieldIds,
-                            const timelib64_t updateIntervalUsec,
+    dcgmReturn_t WatchField(dcgm_field_entity_group_t entityGroupId,
+                            unsigned int entityId,
+                            unsigned int numFieldIds,
+                            const unsigned short *fieldIds,
+                            timelib64_t updateIntervalUsec,
                             DcgmWatcherType_t watcherType,
                             dcgm_connection_id_t connectionId,
                             bool forceWatch);
@@ -226,6 +223,29 @@ public:
      */
     dcgmReturn_t Init();
 
+    /**
+     * @brief Pauses the Switch Manager.
+     *
+     * When paused, the Switch Manager will detach from NSCQ and not update any fields.
+     * The paused state is not considered as uninitialized and any update function will return \c DCGM_ST_STALE_DATA
+     * instead of \c DCGM_ST_UNINITIALIZED.
+     *
+     *
+     * @return \c DCGM_ST_OK:            Successfully paused
+     * @return \c DCGM_ST_UNINITIALIZED: Switch Manager is not initialized
+     */
+    dcgmReturn_t Pause();
+    /**
+     * @brief Resumes the Switch Manager.
+     *
+     * When resumed, the Switch Manager will reattach to NSCQ.
+     *
+     *
+     * @return \c DCGM_ST_OK:           Successfully resumed
+     * @return Error code similar to \c Init() otherwise
+     */
+    dcgmReturn_t Resume();
+
 protected:
     unsigned int m_numNvSwitches;                             // Number of entries in m_nvSwitches that are valid
     dcgm_nvswitch_info_t m_nvSwitches[DCGM_MAX_NUM_SWITCHES]; // All of the NvSwitches we know about
@@ -236,6 +256,7 @@ protected:
     nscq_session_t m_nscqSession;                             // NSCQ session for communicating with driver
     bool m_attachedToNscq = false;                            // Have we attached to nscq yet? */
     DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES];   // Fatal errors. Max 1 per switch
+    bool m_paused = false;                                    // Is the Switch Manager paused?
 
     /*************************************************************************/
     /**
@@ -282,19 +303,6 @@ protected:
 
     /*************************************************************************/
     /**
-     * Read switch status for m_nvSwitches[index] and update switch information
-     */
-    dcgmReturn_t ReadNvSwitchStatus(unsigned int index);
-
-    /*************************************************************************/
-    /**
-     * Read link status for each link belonging to m_nvSwitches[index] and
-     * update switch information accordingly
-     */
-    dcgmReturn_t ReadLinkStates(unsigned int index);
-
-    /*************************************************************************/
-    /**
      * Read link status for each link belonging to any switch and update switch
      * information accordingly
      */
@@ -320,14 +328,29 @@ protected:
                                         DcgmFvBuffer &buf,
                                         const std::vector<dcgm_field_update_info_t> &entities);
 
+    enum class ConnectionStatus
+    {
+        Ok,           //!< The NvSwitch Module is connected to the NSCQ
+        Disconnected, //!< The NvSwitch Module is not connected to the NSCQ (not initialized)
+        Paused,       //!< The NvSwitch Module is paused and not connected to the NSCQ
+    };
+
+    /**
+     * @brief Returns the connection status of the Switch Manager.
+     * @return \c ConnectionStatus::Ok:           The Switch Manager is connected to the NSCQ
+     * @return \c ConnectionStatus::Disconnected: The Switch Manager is not connected to the NSCQ
+     * @return \c ConnectionStatus::Paused:       The Switch Manager is paused and not connected to the NSCQ
+     */
+    ConnectionStatus CheckConnectionStatus() const;
+
 public:
     /*************************************************************************/
     /*
      * Here we define Index lookup functions to check if an index matches
      * any of the supplied entities. The index is a tuple composed of the
-     * various indicies provided in an NSCQ lambda callback and it is expected
+     * various indices provided in an NSCQ lambda callback, and it is expected
      * this function will be fully specialized for each index case of multiple
-     * indicies (switch, link, lane, etc.)
+     * indices (switch, link, lane, etc.)
      */
     template <typename... indexTypes>
     std::optional<dcgmGroupEntityPair_t> Find(unsigned short fieldId,

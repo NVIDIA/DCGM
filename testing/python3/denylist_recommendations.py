@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -221,7 +221,7 @@ def check_gpu_diagnostic(handleObj, settings):
                 if response.perGpuResponses[gpuIndex].results[testIndex].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
                     gpuId = response.perGpuResponses[gpuIndex].gpuId
                     mark_entity_unhealthy(g_gpus, gpuId, BR_ST_FAILED_ACTIVE_HEALTH,
-                                              response.perGpuResponses[gpuIndex].results[testIndex].warning)
+                                              response.perGpuResponses[gpuIndex].results[testIndex].result.error.msg)
 
                     # NVVS marks all subsequent tests as failed so there's no point in continuing
                     break 

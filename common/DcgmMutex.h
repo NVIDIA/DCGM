@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ private:
  * RAII style locking mechanism.  Meant to be similar to C++11 lock_guard.
  * Non-copyable.
  */
-class DcgmLockGuard
+class [[nodiscard]] DcgmLockGuard
 {
 public:
     explicit DcgmLockGuard(DcgmMutex *mutex) noexcept

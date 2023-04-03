@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,15 @@ public:
 
     /*****************************************************************************/
     void SetGpuCount(unsigned int gpuCount) const;
+
+    /*****************************************************************************/
+    void RecordDcgmVersion(const std::string &version);
+
+    /*****************************************************************************/
+    void RecordDevIds(const std::vector<std::string> &devIds);
+
+    /*****************************************************************************/
+    void RecordDriverVersion(const std::string &driverVersion);
 
     /*****************************************************************************/
     static unsigned int GetBasicTestResultIndex(std::string_view const &testname);

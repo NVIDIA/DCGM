@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,9 +65,9 @@ void JsonOutput::header(const std::string &headerString)
     }
     else
     {
-        jv[NVVS_VERSION_STR] = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
+        m_root[NVVS_VERSION_STR] = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
     }
-    jv[NVVS_HEADERS][headerIndex][NVVS_HEADER] = headerString;
+    m_root[NVVS_HEADERS][headerIndex][NVVS_HEADER] = headerString;
 }
 
 bool isSoftwareTest(const std::string &testName)
@@ -94,7 +94,7 @@ void JsonOutput::prep(const std::string &testString)
             m_gpuId = -1;
         }
 
-        jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_TEST_NAME] = testString;
+        m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_TEST_NAME] = testString;
     }
     else
     {
@@ -118,7 +118,7 @@ void JsonOutput::prep(const std::string &testString)
         }
         m_gpuId = nextGpuId;
 
-        jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_TEST_NAME] = testName;
+        m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_TEST_NAME] = testName;
     }
 }
 
@@ -297,7 +297,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
                 }
             }
 
-            jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][m_gpuIndices[i]] = resultField;
+            m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][m_gpuIndices[i]] = resultField;
         }
         m_testIndex++;
     }
@@ -319,7 +319,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
             AppendInfo(info[i], resultField);
         }
 
-        jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][0] = resultField;
+        m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][0] = resultField;
         m_testIndex++;
     }
     else
@@ -364,7 +364,7 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
             resultField[NVVS_STATUS]  = resultEnumToString(gpuResult);
             resultField[NVVS_GPU_IDS] = gpuId;
 
-            jv[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][gpuId] = resultField;
+            m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][gpuId] = resultField;
         }
     }
 
@@ -382,7 +382,7 @@ void JsonOutput::updatePluginProgress(unsigned int /*progress*/, bool /*clear*/)
 void JsonOutput::print()
 {
     Json::Value complete;
-    complete[NVVS_NAME] = jv;
+    complete[NVVS_NAME] = m_root;
     if (!nvvsCommon.fromDcgm)
     {
         complete[NVVS_GLOBAL_WARN] = DEPRECATION_WARNING;
@@ -393,22 +393,42 @@ void JsonOutput::print()
 
 void JsonOutput::addInfoStatement(const std::string &info)
 {
-    if (jv[NVVS_INFO].empty())
+    if (m_root[NVVS_INFO].empty())
     {
         Json::Value infoArray;
-        infoArray[globalInfoCount] = RemoveNewlines(info);
+        infoArray[m_globalInfoCount] = RemoveNewlines(info);
 
-        jv[NVVS_INFO] = infoArray;
+        m_root[NVVS_INFO] = infoArray;
     }
     else
     {
-        jv[NVVS_INFO][globalInfoCount] = RemoveNewlines(info);
+        m_root[NVVS_INFO][m_globalInfoCount] = RemoveNewlines(info);
     }
 
-    globalInfoCount++;
+    m_globalInfoCount++;
 }
 
 JsonOutput::JsonOutput(std::vector<unsigned int> gpuIndices)
     : gpuList(fmt::to_string(fmt::join(gpuIndices, ",")))
     , m_gpuIndices(std::move(gpuIndices))
 {}
+
+void JsonOutput::AddGpusAndDriverVersion(std::vector<Gpu *> &gpuList)
+{
+    Json::Value gpuDevIds;
+    int index = 0;
+
+    for (auto gpu : gpuList)
+    {
+        if (index == 0)
+        {
+            m_root[NVVS_DRIVER_VERSION] = gpu->GetDriverVersion();
+        }
+
+        std::string devid = gpu->getDevicePciDeviceId();
+        gpuDevIds[index]  = devid;
+        index++;
+    }
+
+    m_root[NVVS_GPU_DEV_IDS] = gpuDevIds;
+}

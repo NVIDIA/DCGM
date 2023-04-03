@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -114,6 +114,44 @@ def test_dcgm_modules_denylist_health(handle):
     #Try to lazy load the introspection module which is on the denylist
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
+
+
+@test_utils.run_with_embedded_host_engine()
+def test_dcgm_modules_paused(handle):
+    """
+    Make sure that a module is loaded in the paused state if the DCGM is paused
+    And that it is resumed when DCGM is resumed
+    """
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetDefaultGroup()
+    moduleId = dcgm_structs.DcgmModuleIdHealth
+
+    # First make sure the module is not loaded
+    ms = dcgmSystem.modules.GetStatuses()
+    status = ms.statuses[moduleId].status
+    assert status == dcgm_structs.DcgmModuleStatusNotLoaded, "{} != {}".format(status,
+                                                                               dcgm_structs.DcgmModuleStatusNotLoaded)
+
+    dcgmSystem.PauseTelemetryForDiag()
+
+    # Lazy load the health module
+    dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
+
+    # Make sure the module was loaded
+    ms = dcgmSystem.modules.GetStatuses()
+    status = ms.statuses[moduleId].status
+    assert status == dcgm_structs.DcgmModuleStatusPaused, "{} != {}".format(status,
+                                                                            dcgm_structs.DcgmModuleStatusPaused)
+
+    dcgmSystem.ResumeTelemetryForDiag()
+
+    # Make sure the module was resumed
+    ms = dcgmSystem.modules.GetStatuses()
+    status = ms.statuses[moduleId].status
+    assert status == dcgm_structs.DcgmModuleStatusLoaded, "{} != {}".format(status,
+                                                                            dcgm_structs.DcgmModuleStatusLoaded)
+
 
 @test_utils.run_only_if_checking_libraries()
 def test_dcgm_library_existence():

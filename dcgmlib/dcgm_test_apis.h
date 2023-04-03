@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -343,7 +343,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmInjectFieldValue(dcgmHandle_t pDcgmHandle,
  *
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle,
-                                                          dcgmCacheManagerFieldInfo_t *fieldInfo);
+                                                          dcgmCacheManagerFieldInfo_v4_t *fieldInfo);
 
 /**
  * This method returns the status of the gpu
@@ -408,6 +408,41 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmCreateMigEntity(dcgmHandle_t dcgmHandle, dcgmCr
  *        - \ref DCGM_ST_REQUIRES_ROOT     if the hostengine is not running as root
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmDeleteMigEntity(dcgmHandle_t dcgmHandle, dcgmDeleteMigEntity_t *dme);
+
+/**
+ * @brief Pauses all DCGM modules from updating field values
+ *
+ * This method sends a pause message to each loaded module.
+ * It's up to the module to decide whether to handle or ignore the message.
+ *
+ * @param[in] pDcgmHandle DCGM Handle of an active connection
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_* on error
+ *
+ * @note If this function fails, the modules may be in an inconsistent state.
+ * @note You may call \ref dcgmModuleGetStatuses to see which modules are paused.
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPauseTelemetryForDiag(dcgmHandle_t pDcgmHandle);
+
+/**
+ * @brief Resumes all DCGM modules to updating field values
+ *
+ * This method sends a resume message to each loaded module.
+ * It's up to the module to decide whether to handle or ignore the message.
+ *
+ * @param[in] pDcgmHandle DCGM Handle of an active connection
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_* on error
+ *
+ * @note If this function fails, the modules may be in an inconsistent state.
+ * @note You may call \ref dcgmModuleGetStatuses to see which modules are resumed. The satus of the resumed modules
+ *       should be \ref dcgmModuleStatus_t::DcgmModuleStatusLoaded.
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmResumeTelemetryForDiag(dcgmHandle_t pDcgmHandle);
 
 #ifdef __cplusplus
 }
