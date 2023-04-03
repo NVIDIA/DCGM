@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,7 @@ public:
     dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gpu_instance_hierarchy_t &msg);
     dcgmReturn_t ProcessProfGetMetricGroups(dcgm_core_msg_get_metric_groups_t &msg);
     dcgmReturn_t ProcessNvmlInjectFieldValue(dcgm_core_msg_nvml_inject_field_value_t &msg);
+    dcgmReturn_t ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &msg);
 #ifdef INJECTION_LIBRARY_AVAILABLE
     dcgmReturn_t ProcessNvmlInjectDevice(dcgm_core_msg_nvml_inject_device_t &msg);
 #endif

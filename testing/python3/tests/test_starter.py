@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ def test_dcgm_engine_watch_field_values(handle):
     gpuId = 0
     
     try:
-        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersBefore = fieldInfo.numWatchers
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_WATCHED) as e:
         numWatchersBefore = 0
@@ -159,7 +159,7 @@ def test_dcgm_engine_watch_field_values(handle):
     ret = dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuId, fieldId, 10000000, 86400.0, 0)
     assert(ret == dcgm_structs.DCGM_ST_OK)
 
-    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
     assert fieldInfo.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED, "Expected watch. got flags %08X" % fieldInfo.flags
 
     numWatchersAfter = fieldInfo.numWatchers
@@ -178,7 +178,7 @@ def test_dcgm_engine_unwatch_field_value(handle):
     ret = dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuId, fieldId, 10000000, 86400.0, 0)
     assert(ret == dcgm_structs.DCGM_ST_OK)
 
-    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
     numWatchersBefore = fieldInfo.numWatchers
 
     # Unwatch field 
@@ -186,7 +186,7 @@ def test_dcgm_engine_unwatch_field_value(handle):
     ret = dcgm_agent_internal.dcgmUnwatchFieldValue(handle, gpuId, fieldId, clearCache)
     assert(ret == dcgm_structs.DCGM_ST_OK)
 
-    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
     numWatchersAfter = fieldInfo.numWatchers
 
     assert numWatchersAfter == numWatchersBefore - 1, "Expected 1 fewer watcher. Before %d. After %d" % (numWatchersBefore, numWatchersAfter)
@@ -216,7 +216,7 @@ def helper_unwatch_field_values_public(handle, gpuIds):
     #Get watch info before our test begins
     for gpuId in gpuIds:
         try:
-            fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
+            fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
             numWatchersBefore[gpuId] = fieldInfo.numWatchers
         except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_WATCHED) as e:
             numWatchersBefore[gpuId] = 0
@@ -226,7 +226,7 @@ def helper_unwatch_field_values_public(handle, gpuIds):
 
     #Get watcher info after our watch and check it against before our watch
     for gpuId in gpuIds:
-        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
+        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersWithWatch[gpuId] = fieldInfo.numWatchers
         assert numWatchersWithWatch[gpuId] == numWatchersBefore[gpuId] + 1,\
                "Watcher mismatch at gpuId %d, numWatchersWithWatch[gpuId] %d != numWatchersBefore[gpuId] %d + 1" %\
@@ -237,7 +237,7 @@ def helper_unwatch_field_values_public(handle, gpuIds):
 
     #Get watcher count after our unwatch. This should match our original watch count
     for gpuId in gpuIds:
-        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
+        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersAfter[gpuId] = fieldInfo.numWatchers
 
     assert numWatchersBefore == numWatchersAfter, "Expected numWatchersBefore (%s) to match numWatchersAfter %s" %\
@@ -281,7 +281,7 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
 
     #Get watcher info after our watch and verify that the updateFrequency matches
     for gpuId in gpuIds:
-        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
+        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersWithWatch[gpuId] = fieldInfo.numWatchers
         assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
                (fieldInfo.monitorIntervalUsec, updateFreq)
@@ -292,7 +292,7 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
 
     #Get watcher info after our second watch and verify that the updateFrequency matches
     for gpuId in gpuIds:
-        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, fieldId)
+        fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersAfter[gpuId] = fieldInfo.numWatchers
         assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
                (fieldInfo.monitorIntervalUsec, updateFreq)

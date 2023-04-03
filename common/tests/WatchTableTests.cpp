@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,4 +189,47 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     CHECK(grActiveCount
           == 0); /* This is expected because the section before this already updated the profiling fields */
     CHECK(earliestNextUpdate == now + 1); /* Expects, DCGM_FI_PROF_GR_ENGINE_ACTIVE, which updates every usec */
+}
+
+TEST_CASE("WatchTable: Removing watches recalculates updateInterval")
+{
+    DcgmWatchTable wt;
+    auto ret = DcgmFieldsInit();
+    REQUIRE(ret == DCGM_ST_OK);
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    const unsigned int gpuId      = 0;
+    const unsigned int maxAgeUsec = 1000000;
+    std::unordered_map<timelib64_t, DcgmWatcher> watchers;
+
+    for (timelib64_t updateIntervalUsec = 1; updateIntervalUsec <= 4; updateIntervalUsec++)
+    {
+        watchers[updateIntervalUsec] = DcgmWatcher(DcgmWatcherTypeCacheManager, updateIntervalUsec);
+        wt.AddWatcher(DCGM_FE_GPU,
+                      gpuId,
+                      updateIntervalUsec,
+                      watchers[updateIntervalUsec],
+                      updateIntervalUsec,
+                      maxAgeUsec,
+                      false);
+    }
+
+    timelib64_t minUpdateInterval = 0;
+    timelib64_t maxUpdateInterval = 0;
+
+    wt.GetMinAndMaxUpdateInterval(minUpdateInterval, maxUpdateInterval);
+    CHECK(minUpdateInterval == 1);
+    CHECK(maxUpdateInterval == 4);
+
+    // Remove the updateIntervalUsec = 1 watcher
+    wt.RemoveWatcher(DCGM_FE_GPU, gpuId, 1, watchers[1], nullptr);
+    wt.GetMinAndMaxUpdateInterval(minUpdateInterval, maxUpdateInterval);
+    CHECK(minUpdateInterval == 2);
+    CHECK(maxUpdateInterval == 4);
+
+    // Remove the updateIntervalUsec = 4 watcher
+    wt.RemoveWatcher(DCGM_FE_GPU, gpuId, 4, watchers[4], nullptr);
+    wt.GetMinAndMaxUpdateInterval(minUpdateInterval, maxUpdateInterval);
+    CHECK(minUpdateInterval == 2);
+    CHECK(maxUpdateInterval == 3);
 }

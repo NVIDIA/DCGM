@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -404,7 +404,19 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     // We don't need to set this up for the software or eud plugin
     if (m_pluginName != "software" && m_pluginName != "eud")
     {
-        m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
+        dcgmReturn_t dcgmRet = m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
+        if (dcgmRet != DCGM_ST_OK)
+        {
+            dcgmDiagEvent_t error;
+            error.errorCode = DCGM_FR_DCGM_API;
+            error.gpuId     = -1;
+
+            std::string errorMsg(fmt::format("DCGM error during plugin setup: ({}) {}", dcgmRet, errorString(dcgmRet)));
+            snprintf(error.msg, sizeof(error.msg), "%s", errorMsg.c_str());
+            log_error(errorMsg);
+            m_errors.push_back(error);
+            return;
+        }
     }
 
     /********************************************************************/

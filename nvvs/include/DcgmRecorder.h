@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,24 +63,26 @@ public:
      *
      * Returns an empty string on SUCCESS or a string with an error message in it on failure
      */
-    std::string AddWatches(const std::vector<unsigned short> &fieldIds,
-                           const std::vector<unsigned int> &gpuIds,
-                           bool allGpus,
-                           const std::string &fieldGroupName,
-                           const std::string &groupName,
-                           double testDuration);
+    dcgmReturn_t AddWatches(const std::vector<unsigned short> &fieldIds,
+                            const std::vector<unsigned int> &gpuIds,
+                            bool allGpus,
+                            const std::string &fieldGroupName,
+                            const std::string &groupName,
+                            double testDuration);
+
+    /*
+     * Initialize by connecting to the hostengine at the specified hostname
+     */
+    dcgmReturn_t Init(const std::string &hostname);
+
+    /*
+     * Initialize by accepting the pre-existing handle to DCGM
+     */
+    void Init(dcgmHandle_t handle);
 
     /*
      */
-    std::string Init(const std::string &hostname);
-
-    /*
-     */
-    std::string Init(dcgmHandle_t handle);
-
-    /*
-     */
-    std::string Shutdown();
+    dcgmReturn_t Shutdown();
 
     /*
      * Iterate over data
@@ -316,6 +318,13 @@ public:
      */
     long long DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp);
 
+    /*
+     * Convert the dcgm return code to a string
+     *
+     * @return a string representing the DCGM return code
+     */
+    std::string ErrorAsString(dcgmReturn_t ret);
+
 private:
     std::vector<unsigned short> m_fieldIds;
     std::vector<unsigned int> m_gpuIds;
@@ -356,7 +365,7 @@ private:
     /*
      * Helper method to create a group in DCGM
      */
-    std::string CreateGroup(const std::vector<unsigned int> &gpuIds, bool allGpus, const std::string &groupName);
+    dcgmReturn_t CreateGroup(const std::vector<unsigned int> &gpuIds, bool allGpus, const std::string &groupName);
 
     /*
      * Helper method to get an error string from a dcgmReturn_t

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ protected:
 
 private:
     /* Helper function to display field info to stdout */
-    void HelperDisplayField(dcgmCacheManagerFieldInfo_t &fieldInfo);
+    void HelperDisplayField(dcgmCacheManagerFieldInfo_v4_t &fieldInfo);
 
     /* Helper function to initialize and populate the needed data in the field value */
     dcgmReturn_t HelperInitFieldValue(dcgmInjectFieldValue_t &injectFieldValue, std::string &injectValue);
@@ -101,4 +101,16 @@ private:
     std::string mFieldId;
     unsigned int mSecondsInFuture = 0; /* Number of seconds in the future to inject the value */
     std::string mInjectValue;
+};
+
+class ModulesPauseResume : public Command
+{
+public:
+    ModulesPauseResume(std::string hostname, bool pause);
+
+protected:
+    dcgmReturn_t DoExecuteConnected() override;
+
+private:
+    bool m_pause;
 };

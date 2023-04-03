@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1195,6 +1195,21 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::Diagnost
     std::unordered_set<unsigned int> gpuIdSet;
     response.InitializeResponseStruct(numGpus);
 
+    if (results.version.has_value())
+    {
+        response.RecordDcgmVersion(*results.version);
+    }
+
+    if (results.devIds.has_value())
+    {
+        response.RecordDevIds(*results.devIds);
+    }
+
+    if (results.driverVersion.has_value())
+    {
+        response.RecordDriverVersion(*results.driverVersion);
+    }
+
     if (results.runtimeError.has_value())
     {
         response.RecordSystemError((*results.runtimeError));
@@ -1203,14 +1218,6 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::Diagnost
     }
     else if (results.categories.has_value())
     {
-        // Get nvvs version
-        double nvvsVersion = results.version;
-        if (nvvsVersion < 1.7)
-        {
-            log_error("Unsupported NVVS response version. Should be at least 1.7 with per-GPU results");
-            return DCGM_ST_DIAG_BAD_JSON;
-        }
-
         for (auto const &category : (*results.categories))
         {
             for (auto const &test : category.tests)

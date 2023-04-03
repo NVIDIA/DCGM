@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,6 +206,10 @@ dcgmReturn_t DcgmModuleHealth::ProcessCoreMessage(dcgm_module_command_header_t *
 
         case DCGM_CORE_SR_FIELD_VALUES_UPDATED:
             ProcessFieldValuesUpdated((dcgm_core_msg_field_values_updated_t *)moduleCommand);
+            break;
+
+        case DCGM_CORE_SR_PAUSE_RESUME:
+            log_debug("Received Pause/Resume message");
             break;
 
         default:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,8 +138,11 @@ void DcgmWatchTable::GetMinAndMaxUpdateInterval(timelib64_t &minUpdateInterval, 
 
     for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
     {
-        maxInterval = std::max(watchInfo.updateIntervalUsec, maxInterval);
-        minInterval = std::min(watchInfo.updateIntervalUsec, minInterval);
+        if (watchInfo.updateIntervalUsec != DCGM_INT64_BLANK)
+        {
+            maxInterval = std::max(watchInfo.updateIntervalUsec, maxInterval);
+            minInterval = std::min(watchInfo.updateIntervalUsec, minInterval);
+        }
     }
 
     minUpdateInterval = DCGM_INT64_IS_BLANK(minInterval) ? 0 : minInterval;
@@ -214,45 +217,32 @@ dcgmReturn_t DcgmWatchTable::UpdateWatchFromWatchers(dcgm_watch_info_t &watchInf
 {
     bool watched = false;
     /* Don't update watchInfo's value here because we don't want non-locking readers to them in a temporary state */
-    timelib64_t minUpdateIntervalUsec = 0;
-    timelib64_t minMaxAgeUsec         = 0;
+    timelib64_t minUpdateIntervalUsec = DCGM_INT64_BLANK;
+    timelib64_t minMaxAgeUsec         = DCGM_MAX_AGE_USEC_DEFAULT;
     bool hasSubscribedWatchers        = false;
 
     for (auto &&watcher : watchInfo.watchers)
     {
-        if (minUpdateIntervalUsec != 0)
-        {
-            minUpdateIntervalUsec = std::min(minUpdateIntervalUsec, watcher.updateIntervalUsec);
-        }
-        else
-        {
-            minUpdateIntervalUsec = watcher.updateIntervalUsec;
-        }
-        if (minMaxAgeUsec != 0)
-        {
-            minMaxAgeUsec = std::min(minMaxAgeUsec, watcher.maxAgeUsec);
-        }
-        else
-        {
-            minMaxAgeUsec = watcher.maxAgeUsec;
-        }
+        minUpdateIntervalUsec = std::min(minUpdateIntervalUsec, watcher.updateIntervalUsec);
+        minMaxAgeUsec         = std::min(minMaxAgeUsec, watcher.maxAgeUsec);
 
         if (watcher.isSubscribed)
         {
             hasSubscribedWatchers = true;
         }
+
         watched = true;
     }
+
+    watchInfo.updateIntervalUsec    = minUpdateIntervalUsec;
+    watchInfo.maxAgeUsec            = minMaxAgeUsec;
+    watchInfo.hasSubscribedWatchers = hasSubscribedWatchers;
 
     if (watched == false)
     {
         watchInfo.hasSubscribedWatchers = 0;
         return DCGM_ST_NOT_WATCHED;
     }
-
-    watchInfo.updateIntervalUsec    = minUpdateIntervalUsec;
-    watchInfo.maxAgeUsec            = minMaxAgeUsec;
-    watchInfo.hasSubscribedWatchers = hasSubscribedWatchers;
 
     DCGM_LOG_DEBUG << "UpdateWatchFromWatchers minUpdateIntervalUsec " << minUpdateIntervalUsec << ", minMaxAgeUsec "
                    << minMaxAgeUsec << ", hsw " << watchInfo.hasSubscribedWatchers;

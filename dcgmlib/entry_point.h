@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ DCGM_ENTRY_POINT(dcgmInjectFieldValue,
 
 DCGM_ENTRY_POINT(dcgmGetCacheManagerFieldInfo,
                  tsapiEngineGetCacheManagerFieldInfo,
-                 (dcgmHandle_t pDcgmHandle, dcgmCacheManagerFieldInfo_t *fieldInfo),
+                 (dcgmHandle_t pDcgmHandle, dcgmCacheManagerFieldInfo_v4_t *fieldInfo),
                  "({} {})",
                  pDcgmHandle,
                  fieldInfo)
@@ -952,5 +952,9 @@ DCGM_ENTRY_POINT(dcgmInjectNvmlDevice,
                  extraKeyCount,
                  value)
 #endif
+
+DCGM_ENTRY_POINT(dcgmPauseTelemetryForDiag, tsapiPause, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmResumeTelemetryForDiag, tsapiResume, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
 
 /*****************************************************************************/

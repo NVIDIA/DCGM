@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,61 +91,55 @@ DcgmRecorder::~DcgmRecorder()
     Shutdown();
 }
 
-std::string DcgmRecorder::CreateGroup(const std::vector<unsigned int> &gpuIds,
-                                      bool /*allGpus*/,
-                                      const std::string &groupName)
+dcgmReturn_t DcgmRecorder::CreateGroup(const std::vector<unsigned int> &gpuIds,
+                                       bool /*allGpus*/,
+                                       const std::string &groupName)
 {
-    dcgmReturn_t ret;
-    std::string errStr;
-
     if (m_dcgmHandle.GetHandle() == 0)
-        return "Must connect to DCGM before creating a group";
+    {
+        return DCGM_ST_CONNECTION_NOT_VALID;
+    }
 
-    ret = m_dcgmGroup.Init(m_dcgmHandle.GetHandle(), groupName, gpuIds);
-
-    if (ret != DCGM_ST_OK)
-        errStr = m_dcgmHandle.RetToString(ret);
-
-    return errStr;
+    return m_dcgmGroup.Init(m_dcgmHandle.GetHandle(), groupName, gpuIds);
 }
 
-std::string DcgmRecorder::AddWatches(const std::vector<unsigned short> &fieldIds,
-                                     const std::vector<unsigned int> &gpuIds,
-                                     bool allGpus,
-                                     const std::string &fieldGroupName,
-                                     const std::string &groupName,
-                                     double testDuration)
+dcgmReturn_t DcgmRecorder::AddWatches(const std::vector<unsigned short> &fieldIds,
+                                      const std::vector<unsigned int> &gpuIds,
+                                      bool allGpus,
+                                      const std::string &fieldGroupName,
+                                      const std::string &groupName,
+                                      double testDuration)
 
 {
     dcgmReturn_t ret;
-    std::string errStr;
     m_fieldIds = fieldIds;
     m_gpuIds   = gpuIds;
 
     if (fieldIds.size() == 0 || fieldIds.size() > DCGM_FI_MAX_FIELDS)
-        return "Field Ids must contain at least 1 field id";
+    {
+        log_error("Invalid number of field ids {} is not in range 0-{}", fieldIds.size(), DCGM_FI_MAX_FIELDS);
+        return DCGM_ST_BADPARAM;
+    }
 
     if (gpuIds.size() == 0)
-        return "Gpu Ids must contain at least 1 gpu id";
+    {
+        log_error("Gpu Ids must contain at least 1 gpu id");
+        return DCGM_ST_BADPARAM;
+    }
 
-    errStr = CreateGroup(gpuIds, allGpus, groupName);
-    if (errStr.size() != 0)
-        return errStr;
+    ret = CreateGroup(gpuIds, allGpus, groupName);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
 
     ret = m_dcgmGroup.FieldGroupCreate(fieldIds, fieldGroupName);
     if (ret != DCGM_ST_OK)
     {
-        GetErrorString(ret, errStr);
-        return errStr;
+        return ret;
     }
 
-    ret = m_dcgmGroup.WatchFields(defaultFrequency, testDuration + 30);
-    if (ret != DCGM_ST_OK)
-    {
-        GetErrorString(ret, errStr);
-    }
-
-    return errStr;
+    return m_dcgmGroup.WatchFields(defaultFrequency, testDuration + 30);
 }
 
 void DcgmRecorder::GetErrorString(dcgmReturn_t ret, std::string &err)
@@ -162,38 +156,32 @@ void DcgmRecorder::GetErrorString(dcgmReturn_t ret, std::string &err)
         err = tmp;
 }
 
-std::string DcgmRecorder::Init(const std::string &hostname)
+dcgmReturn_t DcgmRecorder::Init(const std::string &hostname)
 {
-    std::string errStr;
     dcgmReturn_t ret;
 
     ret = m_dcgmHandle.ConnectToDcgm(hostname);
 
-    if (ret != DCGM_ST_OK)
-        errStr = m_dcgmHandle.GetLastError();
-    else
+    if (ret == DCGM_ST_OK)
     {
         m_dcgmSystem.Init(m_dcgmHandle.GetHandle());
     }
 
-    return errStr;
+    return ret;
 }
 
-std::string DcgmRecorder::Init(dcgmHandle_t handle)
+void DcgmRecorder::Init(dcgmHandle_t handle)
 {
     m_dcgmSystem.Init(handle);
     m_dcgmHandle = handle;
-    return "";
 }
 
-std::string DcgmRecorder::Shutdown()
+dcgmReturn_t DcgmRecorder::Shutdown()
 {
-    std::string errStr;
-
     if (m_dcgmHandle.GetHandle() == 0)
     {
         m_fieldGroupId = 0;
-        return errStr;
+        return DCGM_ST_OK;
     }
 
     if (m_fieldGroupId != 0)
@@ -205,7 +193,7 @@ std::string DcgmRecorder::Shutdown()
 
     m_dcgmGroup.Cleanup();
 
-    return errStr;
+    return DCGM_ST_OK;
 }
 
 void DcgmRecorder::GetTagFromFieldId(unsigned short fieldId, std::string &tag)
@@ -1061,4 +1049,15 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
     }
 
     return errors;
+}
+
+std::string DcgmRecorder::ErrorAsString(dcgmReturn_t ret)
+{
+    const char *str = errorString(ret);
+    if (str == nullptr)
+    {
+        return fmt::format("Unknown error code {}", ret);
+    }
+
+    return str;
 }

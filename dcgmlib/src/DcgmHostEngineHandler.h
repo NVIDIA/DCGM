@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -236,14 +236,14 @@ public:
        maintain thread safety */
     void SetPersistAfterDisconnect(dcgm_connection_id_t connectionId)
     {
-        std::scoped_lock lock(m_lock);
+        auto lock = Lock();
 
         m_persistAfterDisconnect.insert(connectionId);
     }
 
     bool GetPersistAfterDisconnect(dcgm_connection_id_t connectionId)
     {
-        std::scoped_lock lock(m_lock);
+        auto lock = Lock();
 
         auto it = m_persistAfterDisconnect.find(connectionId);
         return it != m_persistAfterDisconnect.end();
@@ -307,14 +307,65 @@ public:
 
     dcgmReturn_t NvmlInjectFieldValue(dcgm_field_eid_t gpuId, const nvmlFieldValue_t &value);
 
+    dcgmReturn_t ProcessPauseResume(dcgm_core_msg_pause_resume_v1 *msg);
+
+    /**
+     * @brief Pauses all modules
+     *
+     * @return
+     *      - \ref DCGM_ST_OK               All modules successfully handled the Pause message
+     *      - \ref DCGM_ST_GENERIC_ERROR    At least one module failed to handle the Pause message
+     */
+    dcgmReturn_t Pause();
+
+    /**
+     * @brief Resumes all modules
+     * @return
+     *      - \ref DCGM_ST_OK               All modules successfully handled the Resume message
+     *      - \ref DCGM_ST_GENERIC_ERROR    At least one module failed to handle the Resume message
+     */
+    dcgmReturn_t Resume();
+
+    /**
+     * @brief Pauses a loaded module.
+     * @param[in] moduleId Module ID to pause
+     * @return
+     *      - \ref DCGM_ST_OK   A module successfully handled the pause message or the module is not loaded or not
+     *                          initialized.
+     *      - \ref DCGM_ST_*    An error occurred while trying to pause the module.
+     */
+    dcgmReturn_t PauseModule(dcgmModuleId_t moduleId);
+
+    /**
+     * @brief Resumes a loaded module.
+     * @param[in] moduleId Module ID to resume
+     * @return
+     *      - \ref DCGM_ST_OK   A module successfully handled the resume message or the module is not loaded or not
+     *                          initialized.
+     *      - \ref DCGM_ST_*    An error occurred while trying to resume the module.
+     */
+    dcgmReturn_t ResumeModule(dcgmModuleId_t moduleId);
+
 private:
-    std::mutex m_lock; /* Lock used for accessing table of job stats and the objects within them */
+    DcgmMutex m_lock = DcgmMutex(0);
 
     /**************************************************************************
      * Lock/Unlocks methods
      **************************************************************************/
-    int Lock();
-    int Unlock();
+    DcgmLockGuard Lock();
+    /**
+     * @brief Takes a previously acquired lock guard and releases it by calling its destructor.
+     * @param[in] lock  The lock guard that needs to be released.
+     * @note This function is only necessary if you want to release the lock before it goes out of a scope
+     *       and gets destroyed/released automatically.
+     * @code{cpp}
+     * {
+     *  auto lock = Lock(); // acquiring the lock guard
+     *  Unlock(std::move(lock));    // release the lock earlier that the scope (code block) is ended
+     * } // here the lock would have been released if the Unlock function hasn't been called
+     * @endcode
+     */
+    static void Unlock(DcgmLockGuard lock);
 
     /*****************************************************************************
      Deletes an object if it is not null then sets its pointer to null
@@ -325,7 +376,7 @@ private:
     /*****************************************************************************
      * This method is get information for a field in the cache manager
      *****************************************************************************/
-    dcgmReturn_t GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_t *fieldInfo);
+    dcgmReturn_t GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_v4_t *fieldInfo);
 
     /*****************************************************************************
      * This method is used to try to load a module of DCGM
@@ -407,7 +458,7 @@ private:
 
     void ClearPersistAfterDisconnect(dcgm_connection_id_t connectionId)
     {
-        std::scoped_lock lock(m_lock);
+        auto lock = Lock();
 
         auto it = m_persistAfterDisconnect.find(connectionId);
         if (it != m_persistAfterDisconnect.end())
@@ -439,7 +490,7 @@ private:
     DcgmHostEngineHandler()
         : m_dcgmIpc(DCGM_HE_NUM_WORKERS)
     {}
-    DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params);
+    explicit DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params);
     virtual ~DcgmHostEngineHandler();
 
     /* This data structure is used to store user provided job id information and associates start
@@ -452,33 +503,33 @@ private:
 
     static DcgmHostEngineHandler *mpHostEngineHandlerInstance; // HostEngine Handler Instance
 
-    DcgmCacheManager *mpCacheManager;
-    DcgmGroupManager *mpGroupManager;
-    DcgmCoreCommunication m_communicator; // The object which processes module core requests
-    dcgmCoreCallbacks_t m_coreCallbacks;  // The callback function passed to modules for core requests
-    DcgmFieldGroupManager *mpFieldGroupManager;
+    DcgmCacheManager *mpCacheManager {};
+    DcgmGroupManager *mpGroupManager {};
+    DcgmCoreCommunication m_communicator;   // The object which processes module core requests
+    dcgmCoreCallbacks_t m_coreCallbacks {}; // The callback function passed to modules for core requests
+    DcgmFieldGroupManager *mpFieldGroupManager {};
 
     DcgmIpc m_dcgmIpc; /* IPC object */
 
     /* Field Groups */
-    dcgmFieldGrp_t mFieldGroup1Sec;
-    dcgmFieldGrp_t mFieldGroup30Sec;
-    dcgmFieldGrp_t mFieldGroupHourly;
-    dcgmFieldGrp_t mFieldGroupPidAndJobStats;
+    dcgmFieldGrp_t mFieldGroup1Sec {};
+    dcgmFieldGrp_t mFieldGroup30Sec {};
+    dcgmFieldGrp_t mFieldGroupHourly {};
+    dcgmFieldGrp_t mFieldGroupPidAndJobStats {};
 
     void HandleAddWatchError(int ret, std::string field);
 
     /* This data structure stores pluggable modules for handling client requests */
-    dcgmhe_module_info_t m_modules[DcgmModuleIdCount];
+    dcgmhe_module_info_t m_modules[DcgmModuleIdCount] {};
 
     /* Watched requests. Currently used to track policy management callbacks. Protected by Lock()/Unlock() */
-    dcgm_request_id_t m_nextWatchedRequestId;
+    dcgm_request_id_t m_nextWatchedRequestId {};
     typedef std::unordered_map<dcgm_request_id_t, std::unique_ptr<DcgmRequest>> watchedRequests_t;
     watchedRequests_t m_watchedRequests;
 
-    unsigned int m_hostengineHealth;
+    unsigned int m_hostengineHealth {};
     std::string m_serviceAccount;
-    bool m_usingInjectionNvml;
+    bool m_usingInjectionNvml {};
 };
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

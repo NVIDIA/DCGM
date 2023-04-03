@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ while True:
         for fieldId in fieldIds:
             watchInfo = None
             try:
-                watchInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(dcgmHandle.handle, gpuId, fieldId)
+                watchInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
             except:
                 pass
             

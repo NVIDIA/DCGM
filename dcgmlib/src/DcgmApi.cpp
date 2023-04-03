@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1920,7 +1920,7 @@ dcgmReturn_t helperInjectFieldValue(dcgmHandle_t pDcgmHandle,
 }
 
 /*****************************************************************************/
-dcgmReturn_t tsapiEngineGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmCacheManagerFieldInfo_t *fieldInfo)
+dcgmReturn_t tsapiEngineGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmCacheManagerFieldInfo_v4_t *fieldInfo)
 {
     if (!fieldInfo)
     {
@@ -1932,10 +1932,10 @@ dcgmReturn_t tsapiEngineGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmC
     msg.header.length     = sizeof(msg);
     msg.header.moduleId   = DcgmModuleIdCore;
     msg.header.subCommand = DCGM_CORE_SR_GET_CACHE_MANAGER_FIELD_INFO;
-    msg.header.version    = dcgm_core_msg_get_cache_manager_field_info_version;
+    msg.header.version    = dcgm_core_msg_get_cache_manager_field_info_version2;
 
     memcpy(&msg.fi.fieldInfo, fieldInfo, sizeof(msg.fi.fieldInfo));
-    msg.fi.fieldInfo.version = dcgmCacheManagerFieldInfo_version;
+    msg.fi.fieldInfo.version = dcgmCacheManagerFieldInfo_version4;
     // coverity[overrun-buffer-arg]
     dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
 
@@ -1950,7 +1950,7 @@ dcgmReturn_t tsapiEngineGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHandle, dcgmC
         return (dcgmReturn_t)msg.fi.cmdRet;
     }
 
-    memcpy(fieldInfo, &msg.fi.fieldInfo, sizeof(dcgmCacheManagerFieldInfo_t));
+    memcpy(fieldInfo, &msg.fi.fieldInfo, sizeof(dcgmCacheManagerFieldInfo_v4_t));
 
     return (dcgmReturn_t)msg.fi.cmdRet;
 }
@@ -4630,14 +4630,14 @@ dcgmReturn_t tsapiProfUnwatchFields(dcgmHandle_t dcgmHandle, dcgmProfUnwatchFiel
 /*****************************************************************************/
 static dcgmReturn_t helperProfPauseResume(dcgmHandle_t dcgmHandle, bool pause)
 {
-    dcgm_profiling_msg_pause_resume_t msg;
+    dcgm_core_msg_pause_resume_v1 msg;
     dcgmReturn_t dcgmReturn;
 
     memset(&msg, 0, sizeof(msg));
     msg.header.length     = sizeof(msg);
     msg.header.moduleId   = DcgmModuleIdProfiling;
     msg.header.subCommand = DCGM_PROFILING_SR_PAUSE_RESUME;
-    msg.header.version    = dcgm_profiling_msg_pause_resume_version;
+    msg.header.version    = dcgm_core_msg_pause_resume_version1;
     msg.pause             = pause;
 
     // coverity[overrun-buffer-arg]
@@ -5440,7 +5440,9 @@ dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
         { DcgmModuleIdProfiling, MODULE_PROFILING_NAME },
     };
 
-    auto it = moduleNames.find(id);
+    assert(moduleNames.size() == DcgmModuleIdCount);
+
+    auto const it = moduleNames.find(id);
     if (it == moduleNames.end())
     {
         return DCGM_ST_BADPARAM;
@@ -5448,6 +5450,32 @@ dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
 
     *name = it->second;
     return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+static dcgmReturn_t HelperDcgmPauseResume(dcgmHandle_t pDcgmHandle, bool pause)
+{
+    dcgm_core_msg_pause_resume_v1 msg;
+
+    memset(&msg, 0, sizeof(msg));
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_PAUSE_RESUME;
+    msg.header.version    = dcgm_core_msg_pause_resume_version1;
+    msg.pause             = pause;
+
+    // coverity[overrun-buffer-arg]
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiPause(dcgmHandle_t pDcgmHandle)
+{
+    return HelperDcgmPauseResume(pDcgmHandle, true);
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiResume(dcgmHandle_t pDcgmHandle)
+{
+    return HelperDcgmPauseResume(pDcgmHandle, false);
 }
 
 /*****************************************************************************/

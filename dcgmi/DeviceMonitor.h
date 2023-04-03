@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #define DEVICEMONITOR_H_
 
 #include "Command.h"
+#include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgmi_common.h"
 
@@ -124,4 +125,5 @@ private:
     void PopulateFieldDetails();
     void DisplayFieldDetails();
 };
+
 #endif /* DEVICEMONITOR_H_ */

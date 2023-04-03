@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,15 +103,16 @@ typedef std::map<timelib64_t, DcgmGpmSample> dcgmSampleMap;
  */
 class DcgmGpmManagerEntity
 {
-    dcgmSampleMap m_gpmSamples;         /* map of of nvmlGpmSample_t *'s, sorted by timestamp */
-    DcgmWatchTable m_watchTable;        /* Table of watchers of GPM fields for this entity */
-    dcgmGroupEntityPair_t m_entityPair; /* Entity pair this class instance represents */
-    timelib64_t m_minUpdateInterval;    /* Minimum update interval contained in m_watchTable.
-                                           this is used for determining how often to update from
-                                           NVML */
-    timelib64_t m_maxUpdateInterval;    /* Maximum update interval contained in m_watchTable.
-                                           this is used for determining how long to keep samples
-                                           in m_gpmSamples */
+    dcgmSampleMap m_gpmSamples;                   /* map of of nvmlGpmSample_t *'s, sorted by timestamp */
+    std::vector<DcgmGpmSample> m_freedGpmSamples; /* map of of nvmlGpmSample_t *'s, sorted by timestamp */
+    DcgmWatchTable m_watchTable;                  /* Table of watchers of GPM fields for this entity */
+    dcgmGroupEntityPair_t m_entityPair;           /* Entity pair this class instance represents */
+    timelib64_t m_minUpdateInterval;              /* Minimum update interval contained in m_watchTable.
+                                                     this is used for determining how often to update from
+                                                     NVML */
+    timelib64_t m_maxUpdateInterval;              /* Maximum update interval contained in m_watchTable.
+                                                     this is used for determining how long to keep samples
+                                                     in m_gpmSamples */
 
 
 public:
@@ -122,6 +123,19 @@ public:
     {}
 
 private:
+    /*************************************************************************/
+    /*
+     * Get a previously pruned GPM sample if we have one available; otherwise
+     * allocate and return a new GPM sample
+     */
+    DcgmGpmSample reuseOrAllocateSample();
+
+    /*************************************************************************/
+    /*
+     * Delete samples in m_gpmSamples older than maxAgeUsec
+     */
+    void PruneOldSamples(timelib64_t now);
+
     /*************************************************************************/
     /*
      * First, checks to see if the latest sample in our sample buffer is new enough. If not,

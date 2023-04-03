@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -111,7 +111,8 @@ DCGM_FR_EUD_ZOMBIE                          = 93 # EUD process remains running a
 DCGM_FR_EUD_NON_ZERO_EXIT_CODE              = 94 # EUD process exited with a non-zero exit code
 DCGM_FR_EUD_TEST_FAILED                     = 95 # EUD test failed
 DCGM_FR_FILE_CREATE_PERMISSIONS             = 96 # We cannot write a file in this directory.
-DCGM_FR_ERROR_SENTINEL                      = 97 # MUST BE THE LAST ERROR CODE
+DCGM_FR_PAUSE_RESUME_FAILED                 = 97 # Pause/Resume failed
+DCGM_FR_ERROR_SENTINEL                      = 98 # MUST BE THE LAST ERROR CODE
 
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."

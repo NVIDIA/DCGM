@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ protected:
     std::vector<Test *> m_testList;
     std::map<std::string, std::vector<Test *>> testGroup;
     std::list<void *> dlList;
-    Output *output;
+    Output *m_output;
     bool skipRest;
     mode_t m_nvvsBinaryMode;
     uid_t m_nvvsOwnerUid;

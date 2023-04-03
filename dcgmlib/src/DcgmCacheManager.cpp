@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2099,7 +2099,7 @@ dcgmcm_watch_info_p DcgmCacheManager::AllocWatchInfo(dcgm_entity_key_t entityKey
     retInfo->lastStatus            = NVML_SUCCESS;
     retInfo->lastQueriedUsec       = 0;
     retInfo->monitorIntervalUsec   = 0;
-    retInfo->maxAgeUsec            = 0;
+    retInfo->maxAgeUsec            = DCGM_MAX_AGE_USEC_DEFAULT;
     retInfo->execTimeUsec          = 0;
     retInfo->fetchCount            = 0;
     retInfo->timeSeries            = 0;
@@ -4795,7 +4795,8 @@ dcgmReturn_t DcgmCacheManager::AppendSamples(DcgmFvBuffer *fvBuffer)
     InitAndClearThreadCtx(&threadCtx);
 
     /* Lock the mutex for every FV so we only take it once */
-    dcgmMutexReturn_t mutexSt = dcgm_mutex_lock(m_mutex);
+
+    DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
     timelib64_t now = timelib_usecSince1970();
     dcgmBufferedFv_t *fv;
@@ -4815,13 +4816,16 @@ dcgmReturn_t DcgmCacheManager::AppendSamples(DcgmFvBuffer *fvBuffer)
             watchInfo = GetGlobalWatchInfo(fv->fieldId, 1);
         else
         {
-            watchInfo = GetEntityWatchInfo((dcgm_field_entity_group_t)fv->entityGroupId, fv->entityId, fv->fieldId, 1);
+            /* This CoreCommunication API is only used by DCGM modules (profiling, nvswitch, etc),
+               If no watchInfo is already created by other methods (fieldgroup, dmon, etc) then
+               don't accept the values being sent by those modules */
+            watchInfo = GetEntityWatchInfo((dcgm_field_entity_group_t)fv->entityGroupId, fv->entityId, fv->fieldId, 0);
         }
 
         if (watchInfo == nullptr)
         {
-            DCGM_LOG_ERROR << "Got watchInfo == null from GetEntityWatchInfo";
-            return DCGM_ST_GENERIC_ERROR;
+            log_warning("Got watchInfo == null from GetEntityWatchInfo");
+            continue;
         }
 
         timelib64_t expireTime = 0;
@@ -4857,9 +4861,6 @@ dcgmReturn_t DcgmCacheManager::AppendSamples(DcgmFvBuffer *fvBuffer)
                 break;
         }
     }
-
-    if (mutexSt == DCGM_MUTEX_ST_OK)
-        dcgm_mutex_unlock(m_mutex);
 
     return DCGM_ST_OK;
 }
@@ -5732,7 +5733,7 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
         if (fv->nvmlReturn != NVML_SUCCESS)
         {
             /* Store an appropriate error for the destination type */
-            timelib64_t maxAgeUsec = 0;
+            timelib64_t maxAgeUsec = DCGM_MAX_AGE_USEC_DEFAULT;
             if (watchInfo[i])
                 maxAgeUsec = watchInfo[i]->maxAgeUsec;
             InsertNvmlErrorValue(threadCtx, fieldMeta[i]->fieldType, fv->nvmlReturn, maxAgeUsec);
@@ -5773,7 +5774,7 @@ void DcgmCacheManager::ClearWatchInfo(dcgmcm_watch_info_p watchInfo, int clearCa
     watchInfo->isWatched           = 0;
     watchInfo->pushedByModule      = false;
     watchInfo->monitorIntervalUsec = 0;
-    watchInfo->maxAgeUsec          = 0;
+    watchInfo->maxAgeUsec          = DCGM_MAX_AGE_USEC_DEFAULT;
     watchInfo->lastQueriedUsec     = 0;
     if (watchInfo->timeSeries && clearCache)
     {
@@ -5983,7 +5984,7 @@ void DcgmCacheManager::run(void)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_t *fieldInfo)
+dcgmReturn_t DcgmCacheManager::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInfo_v4_t *fieldInfo)
 {
     dcgmcm_watch_info_p watchInfo = 0;
     dcgm_field_meta_p fieldMeta   = 0;
@@ -5992,11 +5993,11 @@ dcgmReturn_t DcgmCacheManager::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInf
     if (!fieldInfo)
         return DCGM_ST_BADPARAM;
 
-    if (fieldInfo->version != dcgmCacheManagerFieldInfo_version)
+    if (fieldInfo->version != dcgmCacheManagerFieldInfo_version4)
     {
         log_error("Got GetCacheManagerFieldInfo ver {} != expected {}",
                   (int)fieldInfo->version,
-                  (int)dcgmCacheManagerFieldInfo_version);
+                  (int)dcgmCacheManagerFieldInfo_version4);
         return DCGM_ST_VER_MISMATCH;
     }
 
@@ -6010,13 +6011,8 @@ dcgmReturn_t DcgmCacheManager::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInf
 
     if (fieldMeta->scope == DCGM_FS_ENTITY)
     {
-        if (fieldInfo->gpuId >= m_numGpus)
-        {
-            log_error("Invalid gpuId {} passed to GetCacheManagerFieldInfo", fieldInfo->gpuId);
-            return DCGM_ST_BADPARAM;
-        }
-
-        watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, fieldInfo->gpuId, fieldMeta->fieldId, 0);
+        watchInfo = GetEntityWatchInfo(
+            (dcgm_field_entity_group_t)fieldInfo->entityGroupId, fieldInfo->entityId, fieldMeta->fieldId, 0);
     }
     else
     {
@@ -6036,7 +6032,7 @@ dcgmReturn_t DcgmCacheManager::GetCacheManagerFieldInfo(dcgmCacheManagerFieldInf
     if (watchInfo->isWatched)
         fieldInfo->flags |= DCGM_CMI_F_WATCHED;
 
-    fieldInfo->version             = dcgmCacheManagerFieldInfo_version;
+    fieldInfo->version             = dcgmCacheManagerFieldInfo_version4;
     fieldInfo->lastStatus          = (short)watchInfo->lastStatus;
     fieldInfo->maxAgeUsec          = watchInfo->maxAgeUsec;
     fieldInfo->monitorIntervalUsec = watchInfo->monitorIntervalUsec;
@@ -7002,7 +6998,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
     now = timelib_usecSince1970();
 
-    /* Expiration is either measured in absolute time or 0 */
+    /* Expiration is measured in absolute time */
     if (watchInfo && watchInfo->maxAgeUsec)
         expireTime = now - watchInfo->maxAgeUsec;
 
@@ -11442,9 +11438,14 @@ void DcgmCacheManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
     for (void *hashIter = hashtable_iter(m_entityWatchHashTable); hashIter;
          hashIter       = hashtable_iter_next(m_entityWatchHashTable, hashIter))
     {
-        watchInfo = (dcgmcm_watch_info_p)hashtable_iter_value(hashIter);
-        /* RemoveWatcher will log any failures */
-        RemoveWatcher(watchInfo, &watcherInfo);
+        watchInfo                         = (dcgmcm_watch_info_p)hashtable_iter_value(hashIter);
+        const bool clearCache             = false;
+        const dcgm_entity_key_t &watchKey = watchInfo->watchKey;
+        RemoveFieldWatch(static_cast<dcgm_field_entity_group_t>(watchKey.entityGroupId),
+                         watchKey.entityId,
+                         watchKey.fieldId,
+                         clearCache,
+                         dcgmWatcher);
     }
 
     dcgm_mutex_unlock(m_mutex);

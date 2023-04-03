@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,22 +17,24 @@
 #ifndef _NVVS_NVVS_JsonStrings_H
 #define _NVVS_NVVS_JsonStrings_H
 
-#define NVVS_HEADERS       "test_categories"
-#define NVVS_HEADER        "category"
-#define NVVS_TESTS         "tests"
-#define NVVS_TEST_NAME     "name"
-#define NVVS_RESULTS       "results"
-#define NVVS_STATUS        "status"
-#define NVVS_WARNINGS      "warnings"
-#define NVVS_WARNING       "warning"
-#define NVVS_INFO          "info"
-#define NVVS_VERSION_STR   "version"
-#define NVVS_RUNTIME_ERROR "runtime_error"
-#define NVVS_GPU_IDS       "gpu_ids"
-#define NVVS_NAME          "DCGM GPU Diagnostic"
-#define NVVS_GLOBAL_WARN   "Warning"
-#define NVVS_ERROR_ID      "error_id"
-#define NVVS_ITERATIONS    "iterations"
-#define NVVS_RESULT        "Overall Result"
+#define NVVS_HEADERS        "test_categories"
+#define NVVS_HEADER         "category"
+#define NVVS_TESTS          "tests"
+#define NVVS_TEST_NAME      "name"
+#define NVVS_RESULTS        "results"
+#define NVVS_STATUS         "status"
+#define NVVS_WARNINGS       "warnings"
+#define NVVS_WARNING        "warning"
+#define NVVS_INFO           "info"
+#define NVVS_VERSION_STR    "version"
+#define NVVS_RUNTIME_ERROR  "runtime_error"
+#define NVVS_GPU_IDS        "gpu_ids"
+#define NVVS_NAME           "DCGM GPU Diagnostic"
+#define NVVS_GLOBAL_WARN    "Warning"
+#define NVVS_ERROR_ID       "error_id"
+#define NVVS_ITERATIONS     "iterations"
+#define NVVS_RESULT         "Overall Result"
+#define NVVS_GPU_DEV_IDS    "GPU Device IDs"
+#define NVVS_DRIVER_VERSION "Driver Version Detected"
 
 #endif

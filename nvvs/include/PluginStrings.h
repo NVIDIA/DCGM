@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -326,6 +326,8 @@
 #define PULSE_TEST_STR_CURRENT_ITERATION "current_iteration"
 #define PULSE_TEST_STR_TOTAL_ITERATIONS  "total_iterations"
 #define PULSE_TEST_STR_TEST_DURATION     "test_duration"
+#define PULSE_TEST_STR_DISPLAY_PATTERNS  "display_patterns"
+#define PULSE_TEST_STR_PATTERNS          "patterns"
 
 /****************************************************************************
  * EUD PLUGIN

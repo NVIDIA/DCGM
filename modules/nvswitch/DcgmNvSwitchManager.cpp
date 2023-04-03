@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 
 #include "FieldIds.h"
 #include "NvSwitchData.h"
-//#include "FieldDefinitions.h"
 #include "UpdateFunctions.h"
 
 #include "DcgmNvSwitchManager.h"
@@ -424,7 +423,7 @@ dcgmReturn_t DcgmNvSwitchManager::WatchField(const dcgm_field_entity_group_t ent
         return DCGM_ST_OK;
     }
 
-    timelib64_t maxAgeUsec = 1; // Value is irrelevant because we don't store the data here
+    timelib64_t maxAgeUsec = DCGM_MAX_AGE_USEC_DEFAULT; // Value is irrelevant because we don't store the data here
     DcgmWatcher watcher(watcherType, connectionId);
 
     for (unsigned int i = 0; i < numFieldIds; i++)
@@ -500,7 +499,7 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFatalErrorsAllSwitches()
         ret = m_coreProxy.AppendSamples(&buf);
         if (ret != DCGM_ST_OK)
         {
-            log_error("Failed to append NvSwitch Samples to the cache: {}", errorString(ret));
+            log_warning("Failed to append NvSwitch Samples to the cache: {}", errorString(ret));
         }
     }
     return ret;
@@ -550,7 +549,7 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
                   errorString(ret));
     }
 
-    if (toUpdate.size() < 1)
+    if (toUpdate.empty())
     {
         log_debug("No fields to update");
 
@@ -566,30 +565,30 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
      */
     fieldEntityMapType fieldEntityMap;
 
-    for (size_t i = 0; i < toUpdate.size(); i++)
+    for (auto const &fieldInfo : toUpdate)
     {
-        unsigned short fieldId = toUpdate[i].fieldMeta->fieldId;
-
-        if (fieldEntityMap.find(fieldId) == fieldEntityMap.end())
-        {
-            fieldEntityMap[fieldId] = std::vector<dcgm_field_update_info_t>();
-        }
-
-        fieldEntityMap[fieldId].push_back(toUpdate[i]);
+        fieldEntityMap[fieldInfo.fieldMeta->fieldId].push_back(fieldInfo);
     }
 
     for (const auto &[fieldId, entities] : fieldEntityMap)
     {
+        if (m_paused)
+        {
+            log_debug("The NvSwitch module is paused. Filling fieldId {} with blank values", fieldId);
+            BufferBlankValueForAllEntities(fieldId, buf, entities);
+            continue;
+        }
+
         const FieldIdControlType<DCGM_FI_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
 
         if (internalFieldId == nullptr)
         {
             // Not yet supported from NSCQ.
             BufferBlankValueForAllEntities(fieldId, buf, entities);
-
             continue;
         }
 
+        assert(m_paused == false);
         ret = (this->*internalFieldId->UpdateFunc())(fieldId, buf, entities, now);
 
         if (ret != DCGM_ST_OK)
@@ -598,7 +597,8 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
         }
     }
 
-    size_t size, count;
+    size_t size;
+    size_t count;
 
     ret = buf.GetSize(&size, &count);
 
@@ -616,7 +616,7 @@ dcgmReturn_t DcgmNvSwitchManager::UpdateFields(timelib64_t &nextUpdateTime)
 
         if (ret != DCGM_ST_OK)
         {
-            log_error("Failed to append NvSwitch/NvLink Samples to the cache: {}", errorString(ret));
+            log_warning("Failed to append NvSwitch/NvLink Samples to the cache: {}", errorString(ret));
         }
     }
 
@@ -922,7 +922,7 @@ dcgmReturn_t DcgmNvSwitchManager::AttachNvSwitches()
     }
 
     dcgmReturn_t st = ReadNvSwitchStatusAllSwitches();
-    if (st != DCGM_ST_OK)
+    if (st != DCGM_ST_OK && st != DCGM_ST_PAUSED)
     {
         log_error("Could not read NvSwitch status");
         return st;
@@ -962,10 +962,16 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchStatusAllSwitches()
 {
     log_debug("Reading switch status for all switches");
 
-    if (!m_attachedToNscq)
+    switch (CheckConnectionStatus())
     {
-        log_error("Not attached to NvSwitches. Aborting");
-        return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Disconnected:
+            log_error("Not attached to NvSwitches. Aborting");
+            return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Paused:
+            log_debug("The nvswitch manager is paused. No actual data is available.");
+            return DCGM_ST_PAUSED;
+        default:
+            break;
     }
 
     const char nscqPath[] = "/drv/nvswitch/{device}/blacklisted"; // RELINGO_IGNORE until the driver is updated
@@ -1044,10 +1050,16 @@ dcgmReturn_t DcgmNvSwitchManager::ReadLinkStatesAllSwitches()
 {
     log_debug("Reading NvLink states for all switches");
 
-    if (!m_attachedToNscq)
+    switch (CheckConnectionStatus())
     {
-        log_error("Not attached to NvSwitches. Aborting");
-        return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Disconnected:
+            log_error("Not attached to NvSwitches. Aborting");
+            return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Paused:
+            log_debug("The nvswitch manager is paused. No actual data is available.");
+            return DCGM_ST_PAUSED;
+        case ConnectionStatus::Ok:
+            break;
     }
 
     dcgmReturn_t dcgmRet = DCGM_ST_NO_DATA;
@@ -1176,10 +1188,16 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchFatalErrorsAllSwitches()
 
     const char *nscqPath = nscq_nvswitch_port_error_fatal;
 
-    if (!m_attachedToNscq)
+    switch (CheckConnectionStatus())
     {
-        log_error("Not attached to NvSwitches. Aborting");
-        return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Disconnected:
+            log_error("Not attached to NvSwitches. Aborting");
+            return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Paused:
+            log_debug("The nvswitch manager is paused. No actual data is available.");
+            return DCGM_ST_PAUSED;
+        case ConnectionStatus::Ok:
+            break;
     }
 
     struct TempData
@@ -1251,6 +1269,69 @@ dcgmReturn_t DcgmNvSwitchManager::ReadNvSwitchFatalErrorsAllSwitches()
     }
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvSwitchManager::Pause()
+{
+    if (m_paused)
+    {
+        log_debug("Calling Pause on already paused module");
+        return DCGM_ST_OK;
+    }
+    if (!m_attachedToNscq)
+    {
+        log_error("Not attached to NvSwitches. Aborting");
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    if (auto const ret = DetachFromNscq(); ret != DCGM_ST_OK)
+    {
+        log_error("Unable to pause the NVSwitch module: ({}){}", ret, errorString(ret));
+        return ret;
+    }
+
+    log_debug("Pausing the module");
+    m_paused = true;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvSwitchManager::Resume()
+{
+    if (!m_paused)
+    {
+        log_debug("Calling Resume on already running module");
+        return DCGM_ST_OK;
+    }
+
+    log_debug("Resuming the module");
+    /*
+     * We need to remove the m_paused flag before calling the Init(), otherwise the values will not be read and
+     * validated once the module connects to the NSCQ inside the Init sequence.
+     */
+    m_paused = false;
+
+    if (auto const ret = Init(); ret != DCGM_ST_OK)
+    {
+        log_error("Unable to resume the NVSwitch module: ({}){}", ret, errorString(ret));
+        m_paused = true;
+        return ret;
+    }
+
+    return DCGM_ST_OK;
+}
+
+DcgmNvSwitchManager::ConnectionStatus DcgmNvSwitchManager::CheckConnectionStatus() const
+{
+    if (m_paused)
+    {
+        return ConnectionStatus::Paused;
+    }
+    if (m_attachedToNscq)
+    {
+        return ConnectionStatus::Ok;
+    }
+    return ConnectionStatus::Disconnected;
 }
 
 /*************************************************************************/

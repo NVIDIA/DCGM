@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,14 +72,13 @@
 #define DCGM_CORE_SR_FIELDGROUP_GET_ALL               49 /* Get all fieldgroup info */
 #define DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY       50 /* Get gpu instance hierarchy */
 #define DCGM_CORE_SR_PROF_GET_METRIC_GROUPS           51 /* Get profiling metric groups */
-#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2                    \
-    52 /* Get the latest field values for the specified entities (v2) \
-        */
+#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2    52 /* Get the latest field values for the specified entities */
 #define DCGM_CORE_SR_WATCH_FIELD_VALUE_V2             53 /* Watch a gpu's field value (DCGM 3.x+) */
 #define DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2 54 /* Get multiples values for a given field (V2) */
 #define DCGM_CORE_SR_NVML_CREATE_FAKE_ENTITY          55 /* Create an entity in the injection NVML library */
 #define DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE          56 /* Inject a value into injection NVML */
 #define DCGM_CORE_SR_NVML_INJECT_DEVICE               57 /* Inject a value for an NVML device */
+#define DCGM_CORE_SR_PAUSE_RESUME                     58 /* Pause/Resume all metrics collection */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -392,14 +391,13 @@ typedef dcgm_core_msg_inject_field_value_v1 dcgm_core_msg_nvml_inject_field_valu
 typedef struct
 {
     dcgm_module_command_header_t header;
-    dcgmGetCacheManagerFieldInfo_v1 fi;
-} dcgm_core_msg_get_cache_manager_field_info_v1;
+    dcgmGetCacheManagerFieldInfo_v2 fi;
+} dcgm_core_msg_get_cache_manager_field_info_v2;
 
-#define dcgm_core_msg_get_cache_manager_field_info_version1 \
-    MAKE_DCGM_VERSION(dcgm_core_msg_get_cache_manager_field_info_v1, 1)
-#define dcgm_core_msg_get_cache_manager_field_info_version dcgm_core_msg_get_cache_manager_field_info_version1
+#define dcgm_core_msg_get_cache_manager_field_info_version2 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_get_cache_manager_field_info_v2, 2)
 
-typedef dcgm_core_msg_get_cache_manager_field_info_v1 dcgm_core_msg_get_cache_manager_field_info_t;
+typedef dcgm_core_msg_get_cache_manager_field_info_v2 dcgm_core_msg_get_cache_manager_field_info_t;
 
 typedef struct
 {
@@ -628,6 +626,17 @@ typedef struct
 
 typedef dcgm_core_msg_nvml_create_injection_gpu_v1 dcgm_core_msg_nvml_create_injection_gpu_t;
 
+typedef struct dcgm_core_msg_pause_resume_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+    bool pause;                          /* True if we should pause metrics collection. False if not (resume) */
+} dcgm_core_msg_pause_resume_v1;
+
+#define dcgm_core_msg_pause_resume_version1 MAKE_DCGM_VERSION(dcgm_core_msg_pause_resume_v1, 1)
+#define dcgm_core_msg_pause_resume_version  dcgm_core_msg_pause_resume_version1
+
+typedef dcgm_core_msg_pause_resume_v1 dcgm_core_msg_pause_resume_t;
+
 #ifdef INJECTION_LIBRARY_AVAILABLE
 typedef struct
 {
@@ -664,7 +673,7 @@ DCGM_CASSERT(dcgm_core_msg_watch_field_value_version1 == (long)0x1000040, 1);
 DCGM_CASSERT(dcgm_core_msg_update_all_fields_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_unwatch_field_value_version1 == (long)0x100002c, 1);
 DCGM_CASSERT(dcgm_core_msg_inject_field_value_version1 == (long)0x1001040, 1);
-DCGM_CASSERT(dcgm_core_msg_get_cache_manager_field_info_version1 == (long)0x1000158, 1);
+DCGM_CASSERT(dcgm_core_msg_get_cache_manager_field_info_version2 == (long)0x2000160, 1);
 DCGM_CASSERT(dcgm_core_msg_watch_fields_version1 == (long)0x1000038, 1);
 DCGM_CASSERT(dcgm_core_msg_get_topology_version1 == (long)0x10026e8, 1);
 DCGM_CASSERT(dcgm_core_msg_get_topology_affinity_version1 == (long)0x1000930, 1);

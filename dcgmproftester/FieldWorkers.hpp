@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,11 +98,97 @@ public:
     virtual void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) = 0;
 
     /*************************************************************************/
+    struct CudaKernelDimensions
+    {
+        dim3 blockDim;
+        dim3 gridDim;
+    };
+
+    /**
+     * @brief Computes proper CUDA kernel dimensions for a given workload.
+     *
+     * The following function is a helper function that computes the number of threads per SM.
+     * The \a desiredNumberOfThreadsPerSm will be used to compute the load ratio. This ratio is preserved when a
+     * rebalance happens.
+     *
+     * Example:
+     *  On an AD10x, the maximum number of threads per SM is 1536 and the number of SMs is 58.
+     *  While the \a desiredNumberOfThreadsPerSm is less than 1024, this function is a no-op the result will be
+     *      blockDimX = \a desiredNumberOfThreadsPerSm and gridDimX = 58.
+     *  Once the \a desiredNumberOfThreadsPerSm is greater than 1024, the function will compute the load ratio
+     *      as loadRatio = \a desiredNumberOfThreadsPerSm / 1536 and will split the load into blocks of 128*loadRatio
+     *      threads. At the same time, the grid size will be increased to 58*(1536/128).
+     *  So the result blockDimX = 128*loadRatio and gridDimX = 58*(1536/128).
+     *
+     * @note Use this function carefully if you need to change the \a desiredNumberOfSms to a value different than the
+     *      value reported by \c cuGetDeviceAttribute().
+     *
+     * @param desiredNumberOfSms            Number of SMs to saturate.
+     * @param desiredNumberOfThreadsPerSm   Number of threads per SM to saturate.
+     * @return CudaKernelDimensions
+     */
+    CudaKernelDimensions ComputeProperCudaDimensions(unsigned int const desiredNumberOfSms,
+                                                     unsigned int const desiredNumberOfThreadsPerSm)
+    {
+        // The common divisor of 1024, 2048, and 1536 was chosen to be 128 to properly saturate the FP32 pipeline on
+        // AD10x
+        static const unsigned int s_gcdThreadsPerSmLimit     = 128;
+        static const unsigned int s_cudaThreadsPerBlockLimit = 1024; // CUDA limitation
+        CudaKernelDimensions result {};
+
+        unsigned int gridDimX  = desiredNumberOfSms;
+        unsigned int blockDimX = desiredNumberOfThreadsPerSm;
+
+        /*
+            Block size is limited to 1024 threads per SM - that's a CUDA limitation.
+            Current hardware has 2048, 1024, or 1536 threads per SM.
+            To reach maximum utilization, we need to have a block size equal to 128 or 256 to saturate SMs.
+        */
+        if (desiredNumberOfThreadsPerSm > s_cudaThreadsPerBlockLimit)
+        {
+            assert(m_cudaDevice.m_maxThreadsPerMultiProcessor >= s_cudaThreadsPerBlockLimit);
+
+            // If we change the block size, we need to adjust the number of blocks launched to the desired load target.
+            auto const loadRatio = (1.0 * desiredNumberOfThreadsPerSm) / m_cudaDevice.m_maxThreadsPerMultiProcessor;
+
+            // For 2048 threads per SM and 128 threads per block, we would need to launch 16 blocks per SM
+            // For 1536 threads per SM and 128 threads per block, we would need to launch 12 blocks per SM
+            // For 1024 threads per SM and 128 threads per block, we would need to launch 8 blocks per SM
+            auto const numOfBlocksPerSm = m_cudaDevice.m_maxThreadsPerMultiProcessor / s_gcdThreadsPerSmLimit;
+            assert(numOfBlocksPerSm > 1);
+
+            gridDimX = desiredNumberOfSms * numOfBlocksPerSm;
+
+            blockDimX = s_gcdThreadsPerSmLimit * loadRatio;
+
+            log_debug("Changing block size: "
+                      "m_cudaDevice.m_maxThreadsPerMultiProcessor={}; "
+                      "desiredNumberOfThreadsPerSm={}; "
+                      "loadRatio={}; "
+                      "blockDimX={}; "
+                      "gridDimX={};"
+                      "m_cudaDevice.m_multiProcessorCount={};"
+                      "desiredNumberOfSms={}; "
+                      "numOfBlocksPerSm={}",
+                      m_cudaDevice.m_maxThreadsPerMultiProcessor,
+                      desiredNumberOfThreadsPerSm,
+                      loadRatio,
+                      blockDimX,
+                      gridDimX,
+                      m_cudaDevice.m_multiProcessorCount,
+                      desiredNumberOfSms,
+                      numOfBlocksPerSm);
+        }
+
+        result.gridDim.x  = gridDimX;
+        result.blockDim.x = blockDimX;
+
+        return result;
+    }
+    /*************************************************************************/
     dcgmReturn_t RunSleepKernel(unsigned int numSms, unsigned int threadsPerSm, unsigned int runForUsec)
     {
         CUresult cuSt;
-        dim3 blockDim; /* Defaults to 1,1,1 */
-        dim3 gridDim;  /* Defaults to 1,1,1 */
         void *kernelParams[2];
         unsigned int sharedMemBytes = 0;
 
@@ -112,19 +198,7 @@ public:
             return DCGM_ST_BADPARAM;
         }
 
-        gridDim.x = numSms;
-
-        /* blockDim.x has a limit of 1024. m_maxThreadsPerMultiProcessor is 2048 on
-        current hardware. So if we're > 1024, just divide by 2 and double the
-        number of blocks we launch.
-        */
-        if (threadsPerSm > 1024)
-        {
-            blockDim.x = threadsPerSm / 2;
-            gridDim.x *= 2;
-        }
-        else
-            blockDim.x = threadsPerSm;
+        auto const [blockDim, gridDim] = ComputeProperCudaDimensions(numSms, threadsPerSm);
 
         uint64_t *d_a   = NULL;
         kernelParams[0] = &d_a;
@@ -132,6 +206,15 @@ public:
         uint32_t waitInNs = runForUsec * 1000;
         kernelParams[1]   = &waitInNs;
 
+        log_debug("Running sleep kernel with gridDim({},{},{}), blockDim({},{},{}), sharedMemBytes={}, waitInNs={}",
+                  gridDim.x,
+                  gridDim.y,
+                  gridDim.z,
+                  blockDim.x,
+                  blockDim.y,
+                  blockDim.z,
+                  sharedMemBytes,
+                  waitInNs);
         cuSt = cuLaunchKernel(m_cudaDevice.m_cuFuncWaitNs,
                               gridDim.x,
                               gridDim.y,
@@ -156,8 +239,6 @@ public:
     {
         CUresult cuSt;
         CUfunction function;
-        dim3 blockDim; /* Defaults to 1,1,1 */
-        dim3 gridDim;  /* Defaults to 1,1,1 */
         void *kernelParams[2];
         unsigned int sharedMemBytes = 0;
 
@@ -166,8 +247,6 @@ public:
             DCGM_LOG_ERROR << "numSms " << numSms << " must be 1 <= X <= " << m_cudaDevice.m_multiProcessorCount;
             return DCGM_ST_BADPARAM;
         }
-
-        gridDim.x = numSms;
 
         switch (m_fieldId)
         {
@@ -188,19 +267,7 @@ public:
                 return DCGM_ST_BADPARAM;
         }
 
-        /* blockDim.x has a limit of 1024. m_maxThreadsPerMultiProcessor is 2048 on
-        current hardware. So if we're > 1024, just divide by 2 and double the
-        number of blocks we launch.
-        */
-        if (threadsPerSm > 1024)
-        {
-            blockDim.x = threadsPerSm / 2;
-            gridDim.x *= 2;
-        }
-        else
-        {
-            blockDim.x = threadsPerSm;
-        }
+        auto const [blockDim, gridDim] = ComputeProperCudaDimensions(numSms, threadsPerSm);
 
         /* This parameter is just in the cuda kernel to trick nvcc into thinking our function has side effects
            so it doesn't get optimized out. Pass nullptr */
@@ -210,6 +277,15 @@ public:
         uint64_t waitInNs = runForUsec * 1000;
         kernelParams[1]   = &waitInNs;
 
+        log_debug("Running load kernel with gridDim({},{},{}), blockDim({},{},{}), sharedMemBytes={}, waitInNs={}",
+                  gridDim.x,
+                  gridDim.y,
+                  gridDim.z,
+                  blockDim.x,
+                  blockDim.y,
+                  blockDim.z,
+                  sharedMemBytes,
+                  waitInNs);
         cuSt = cuLaunchKernel(function,
                               gridDim.x,
                               gridDim.y,

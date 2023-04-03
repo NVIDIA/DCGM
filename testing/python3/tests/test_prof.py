@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -198,7 +198,7 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
         dcgmGroup.profiling.GetSupportedMetricGroups()
 
         # validate watch freq, quota, and watched flags
-        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         assert (cmfi.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED) != 0, "gpuId %u, fieldId %u not watched" % (gpuId, fieldId)
         assert cmfi.numSamples > 0
         assert cmfi.numWatchers == 1, "numWatchers %d" % cmfi.numWatchers
@@ -216,7 +216,7 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
         fieldGroup.Delete()
 
         #Validate watch flags after unwatch
-        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fieldId)
+        cmfi = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         assert (cmfi.flags & dcgm_structs_internal.DCGM_CMI_F_WATCHED) == 0, "gpuId %u, fieldId %u still watched. flags x%X" % (gpuId, fieldId, cmfi.flags)
         assert cmfi.numWatchers == 0, "numWatchers %d" % cmfi.numWatchers
 
@@ -739,3 +739,76 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
     app.wait()
     app.validate() #Validate here so that errors are printed when they occur instead of at the end of the test
 
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgm_prof_global_pause_resume_values(handle, gpuIds):
+    """
+    Test that we get valid values when DCGM is resumed and BLANK values when DCGM is paused
+    """
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    # GPM-enabled GPUs would get DCP metrics from the NVML instead of the paused profiling module and will return
+    # valid values when DCGM is paused until we implement full driver detach/reattach on pause/resume.
+    if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
+        test_utils.skip_test("Skipping test for GPM-enabled GPUs")
+
+    helper_check_profiling_environment(dcgmGroup)
+
+    fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
+    assert fieldIds is not None
+
+    # 10 ms watches so we can test quickly
+    watchIntervalUsec = 10000
+    sleepIntervalSec = 0.1 * len(gpuIds)  # 100 ms per GPU
+    # Start paused. All the other tests start unpaused
+    dcgmSystem.PauseTelemetryForDiag()
+
+    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group_0", fieldIds)
+    dcgmGroup.samples.WatchFields(fieldGroup, watchIntervalUsec, 60.0, 0)
+
+    gpuId = gpuIds[0]
+
+    fieldValues = dcgm_agent.dcgmEntityGetLatestValues(handle, dcgm_fields.DCGM_FE_GPU, gpuId, fieldIds)
+    assert len(fieldValues) == len(fieldIds), "%d != %d" % (len(fieldValues), len(fieldIds))
+
+    # All should be blank
+    for i, fieldValue in enumerate(fieldValues):
+        fv = dcgm_field_helpers.DcgmFieldValue(fieldValue)
+        assert fv.isBlank, "Got nonblank fv index %d" % i
+
+    # Resume. All should be valid
+    dcgmSystem.ResumeTelemetryForDiag()
+
+    time.sleep(sleepIntervalSec)
+
+    fieldValues = dcgm_agent.dcgmEntityGetLatestValues(handle, dcgm_fields.DCGM_FE_GPU, gpuId, fieldIds)
+    assert len(fieldValues) == len(fieldIds), "%d != %d" % (len(fieldValues), len(fieldIds))
+
+    # All should be non-blank
+    for i, fieldValue in enumerate(fieldValues):
+        fv = dcgm_field_helpers.DcgmFieldValue(fieldValue)
+        assert not fv.isBlank, "Got blank fv index %d" % i
+
+    # Pause again. All should be blank
+    dcgmSystem.PauseTelemetryForDiag()
+
+    time.sleep(sleepIntervalSec)
+
+    fieldValues = dcgm_agent.dcgmEntityGetLatestValues(handle, dcgm_fields.DCGM_FE_GPU, gpuId, fieldIds)
+    assert len(fieldValues) == len(fieldIds), "%d != %d" % (len(fieldValues), len(fieldIds))
+
+    # All should be blank
+    for i, fieldValue in enumerate(fieldValues):
+        fv = dcgm_field_helpers.DcgmFieldValue(fieldValue)
+        assert fv.isBlank, "Got nonblank fv index %d" % i
+
+    # This shouldn't fail
+    dcgmSystem.ResumeTelemetryForDiag()
+
+    dcgmGroup.samples.UnwatchFields(fieldGroup)
+    fieldGroup.Delete()

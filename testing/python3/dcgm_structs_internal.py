@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,11 +120,13 @@ class c_dcgm_cm_field_info_watcher_t(dcgm_structs._PrintableStructure):
         ('maxAgeUsec', c_int64)
     ]
 
-class dcgmCacheManagerFieldInfo_v3(dcgm_structs._PrintableStructure):
+
+class dcgmCacheManagerFieldInfo_v4(dcgm_structs._PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
         ('flags', c_uint32),
-        ('gpuId', c_uint32),
+        ('entityId', c_uint32),
+        ('entityGroupId', c_uint32),
         ('fieldId', c_uint16),
         ('lastStatus', c_int16),
         ('oldestTimestamp', c_int64),
@@ -138,7 +140,7 @@ class dcgmCacheManagerFieldInfo_v3(dcgm_structs._PrintableStructure):
         ('watchers', c_dcgm_cm_field_info_watcher_t * DCGM_CM_FIELD_INFO_NUM_WATCHERS)
     ]
 
-dcgmCacheManagerFieldInfo_version3 = dcgm_structs.make_dcgm_version(dcgmCacheManagerFieldInfo_v3, 3)
+dcgmCacheManagerFieldInfo_version4 = dcgm_structs.make_dcgm_version(dcgmCacheManagerFieldInfo_v4, 4)
 
 class c_dcgmCreateFakeEntities_v2(dcgm_structs._PrintableStructure):
     _fields_ = [

@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,13 +57,13 @@ def test_dcgm_injection_agent(handle, gpuIds):
     fvGood.ts = get_usec_since_1970()
     fvGood.value.i64 = 1
 
-    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fvGood.fieldId)
+    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countBefore = fieldInfoBefore.numSamples
 
     #This will throw an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
-    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fvGood.fieldId)
+    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countAfter = fieldInfoAfter.numSamples
 
     assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (countAfter, countBefore)
@@ -117,13 +117,13 @@ def test_dcgm_injection_remote(handle, gpuIds):
     fvGood.ts = get_usec_since_1970()
     fvGood.value.i64 = 1
 
-    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fvGood.fieldId)
+    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countBefore = fieldInfoBefore.numSamples
 
     #This will throw an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
-    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, fvGood.fieldId)
+    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countAfter = fieldInfoAfter.numSamples
 
     assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (countAfter, countBefore)

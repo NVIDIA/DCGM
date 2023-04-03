@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,15 +42,8 @@ PluginCoreFunctionality::PluginCoreFunctionality(PluginCoreFunctionality &&other
 
 void PluginCoreFunctionality::Init(dcgmHandle_t handle)
 {
-    std::string errorStr = m_dcgmRecorder.Init(handle);
-    if (errorStr.empty())
-    {
-        m_initialized = true;
-    }
-    else
-    {
-        DCGM_LOG_ERROR << "Unable to initialize the DCGM recorder: " << errorStr;
-    }
+    m_dcgmRecorder.Init(handle);
+    m_initialized = true;
 }
 
 void PluginCoreFunctionality::PopulateFieldIds(const std::vector<unsigned short> &additionalFields,
@@ -109,19 +102,16 @@ dcgmReturn_t PluginCoreFunctionality::PluginPreStart(const std::vector<unsigned 
     fieldGroupName += pluginName;
     std::string groupName("nvvs-group-");
     groupName += pluginName;
-    m_pluginIndex      = GetTestIndex(pluginName);
-    std::string errStr = m_dcgmRecorder.AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 600);
-    m_startTime        = timelib_usecSince1970();
+    m_pluginIndex        = GetTestIndex(pluginName);
+    dcgmReturn_t dcgmRet = m_dcgmRecorder.AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 600);
+    m_startTime          = timelib_usecSince1970();
 
-    if (errStr.empty())
+    if (dcgmRet != DCGM_ST_OK)
     {
-        return DCGM_ST_OK;
+        log_error("Could not watch fields in DCGM: ({}) {}", dcgmRet, m_dcgmRecorder.ErrorAsString(dcgmRet));
     }
-    else
-    {
-        DCGM_LOG_ERROR << "Could not watch fields in DCGM: " << errStr;
-        return DCGM_ST_GENERIC_ERROR;
-    }
+
+    return dcgmRet;
 }
 
 void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int logFileType, nvvsPluginResult_t result)

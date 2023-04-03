@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -407,7 +407,7 @@ def test_dcgm_vgpu_config_power_enforce_standalone(handle, gpuIds):
     gpuId = gpuIds[0]
 
     #Make sure that the power management limit is updating fast enough to look at
-    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT)
+    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT)
     sleepTime = 1.2 * (fieldInfo.monitorIntervalUsec / 1000000.0)
 
     ## Get Min and Max Power limit on the group

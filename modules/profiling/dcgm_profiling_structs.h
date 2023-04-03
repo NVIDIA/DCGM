@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,22 +76,6 @@ typedef struct dcgm_profiling_msg_unwatch_fields_v1
 #define dcgm_profiling_msg_unwatch_fields_version  dcgm_profiling_msg_unwatch_fields_version1
 
 typedef dcgm_profiling_msg_unwatch_fields_v1 dcgm_profiling_msg_unwatch_fields_t;
-
-/*****************************************************************************/
-/**
- * Subrequest DCGM_PROFILING_SR_PAUSE_RESUME
- */
-typedef struct dcgm_profiling_msg_pause_resume_v1
-{
-    dcgm_module_command_header_t header; /* Command header */
-
-    bool pause; /* True if we should pause profiling. False if not (resume) */
-} dcgm_profiling_msg_pause_resume_v1;
-
-#define dcgm_profiling_msg_pause_resume_version1 MAKE_DCGM_VERSION(dcgm_profiling_msg_pause_resume_v1, 1)
-#define dcgm_profiling_msg_pause_resume_version  dcgm_profiling_msg_pause_resume_version1
-
-typedef dcgm_profiling_msg_pause_resume_v1 dcgm_profiling_msg_pause_resume_t;
 
 /*****************************************************************************/
 

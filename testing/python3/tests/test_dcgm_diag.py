@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -959,3 +959,33 @@ def test_dcgm_diag_output(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_short_diagnostic_run(handle, gpuIds):
     helper_test_dcgm_short_diagnostic_run(handle, gpuIds)
+
+
+def helper_test_dcgm_diag_paused(handle, gpuIds):
+    """
+    Test that DCGM_ST_PAUSED is returned when the host engine is paused
+    """
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="1")
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    try:
+        dcgmSystem.PauseTelemetryForDiag()
+        response = test_utils.diag_execute_wrapper(dd, handle)
+        dcgmSystem.ResumeTelemetryForDiag()
+
+    except dcgm_structs.DCGMError as e:
+        assert e.value == dcgm_structs.DCGM_ST_PAUSED, "Expected DCGM_ST_PAUSED error"
+
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_diag_paused_embedded(handle, gpuIds):
+    helper_test_dcgm_diag_paused(handle, gpuIds)
+
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_diag_paused_standalone(handle, gpuIds):
+    helper_test_dcgm_diag_paused(handle, gpuIds)

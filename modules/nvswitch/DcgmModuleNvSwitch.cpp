@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,14 +285,8 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessGetSwitchIds(dcgm_nvswitch_msg_get_switc
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModuleNvSwitch::ProcessWatchField(const dcgm_nvswitch_msg_watch_field_t *const msg)
+dcgmReturn_t DcgmModuleNvSwitch::ProcessWatchField(WatchFieldMessage msg)
 {
-    if (msg == nullptr)
-    {
-        DCGM_LOG_ERROR << "Received msg = nullptr";
-        return DCGM_ST_BADPARAM;
-    }
-
     if (msg->numFieldIds >= NVSWITCH_MSG_MAX_WATCH_FIELD_IDS)
     {
         DCGM_LOG_ERROR << "Invalid numFieldIds";
@@ -310,14 +304,8 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessWatchField(const dcgm_nvswitch_msg_watch
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModuleNvSwitch::ProcessUnwatchField(const dcgm_nvswitch_msg_unwatch_field_t *const msg)
+dcgmReturn_t DcgmModuleNvSwitch::ProcessUnwatchField(UnwatchFieldMessage msg)
 {
-    if (msg == nullptr)
-    {
-        DCGM_LOG_ERROR << "Received msg = nullptr";
-        return DCGM_ST_BADPARAM;
-    }
-
     return m_switchMgr.UnwatchField(msg->watcherType, msg->connectionId);
 }
 
@@ -373,6 +361,10 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessCoreMessage(dcgm_module_command_header_t
             OnLoggingSeverityChange((dcgm_core_msg_logging_changed_t *)moduleCommand);
             break;
 
+        case DCGM_CORE_SR_PAUSE_RESUME:
+            retSt = ProcessPauseResumeMessage(moduleCommand);
+            break;
+
         default:
             DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
             return DCGM_ST_FUNCTION_NOT_FOUND;
@@ -386,8 +378,8 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
 {
     dcgmReturn_t dcgmReturn;
     timelib64_t nextUpdateTimeUsec;
-    timelib64_t untilNextLinkStatusUsec;                 /* How long until our next switch status rescan */
-    timelib64_t linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
+    timelib64_t untilNextLinkStatusUsec;                       /* How long until our next switch status rescan */
+    timelib64_t const linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
 
     /* Update link statuses every 30 seconds */
     timelib64_t now         = timelib_usecSince1970();
@@ -396,7 +388,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     {
         DCGM_LOG_DEBUG << "Rescanning switch states";
         dcgmReturn = m_switchMgr.ReadNvSwitchStatusAllSwitches();
-        if (dcgmReturn != DCGM_ST_OK)
+        if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED)
         {
             DCGM_LOG_WARNING << "ReadNvSwitchStatusAllSwitches() returned " << errorString(dcgmReturn);
         }
@@ -413,10 +405,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
 
     /* Adjust our nextUpdateTimeUsec for whichever is sooner between when watches will
       update again or when we need to rescan links */
-    if (untilNextLinkStatusUsec > 0)
-    {
-        nextUpdateTimeUsec = std::min(nextUpdateTimeUsec, untilNextLinkStatusUsec);
-    }
+    nextUpdateTimeUsec = std::min(nextUpdateTimeUsec, untilNextLinkStatusUsec);
 
     DCGM_LOG_VERBOSE << "Next update " << nextUpdateTimeUsec;
     return nextUpdateTimeUsec / 1000;
@@ -448,6 +437,11 @@ void DcgmModuleNvSwitch::run()
 
         TryRunOnce(false);
     }
+}
+dcgmReturn_t DcgmModuleNvSwitch::ProcessPauseResumeMessage(PauseResumeMessage msg)
+{
+    log_debug("Got {} message", (msg->pause ? "pause" : "resume"));
+    return msg->pause ? m_switchMgr.Pause() : m_switchMgr.Resume();
 }
 
 extern "C" {

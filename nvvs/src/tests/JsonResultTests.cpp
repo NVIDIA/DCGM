@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -172,9 +172,10 @@ TEST_CASE("JsonResult: JsonSerialize DiagnosticResults")
     using namespace DcgmNs::JsonSerialize;
 
     DiagnosticResults const diagnosticResults {
-        .version = 1.7,
-        .runtimeError = "Runtime error message",
-        .warning = "Deprecation message",
+        .version       = "3.1.2",
+        .runtimeError  = "Runtime error message",
+        .warning       = "Deprecation message",
+        .driverVersion = "525.75",
         .categories = std::vector<Category>{
             {
                 .category  = "software",
@@ -193,6 +194,7 @@ TEST_CASE("JsonResult: JsonSerialize DiagnosticResults")
                 },
             },
         },
+        .devIds = std::nullopt,
     };
 
     auto json = Serialize(diagnosticResults);
@@ -207,10 +209,12 @@ TEST_CASE("JsonResult: JsonSerialize Diagnostic Runtime Error")
     using namespace DcgmNs::JsonSerialize;
 
     DiagnosticResults const diagnosticResults {
-        .version      = 1.7,
-        .runtimeError = "runtime error",
-        .warning      = std::nullopt,
-        .categories   = std::nullopt,
+        .version       = "1.7.1",
+        .runtimeError  = "runtime error",
+        .warning       = std::nullopt,
+        .driverVersion = "525.75",
+        .categories    = std::nullopt,
+        .devIds        = std::nullopt,
     };
 
     auto json = Serialize(diagnosticResults);
@@ -225,10 +229,12 @@ TEST_CASE("JsonResult: Bad Diagnostic Result")
     using namespace DcgmNs::JsonSerialize;
 
     DiagnosticResults const diagnosticResults {
-        .version      = 1.7,
-        .runtimeError = std::nullopt,
-        .warning      = std::nullopt,
-        .categories   = std::nullopt,
+        .version       = "3.2.0",
+        .runtimeError  = std::nullopt,
+        .warning       = std::nullopt,
+        .driverVersion = "525.75",
+        .categories    = std::nullopt,
+        .devIds        = std::nullopt,
     };
 
     auto json = Serialize(diagnosticResults);
@@ -408,5 +414,5 @@ TEST_CASE("JsonResult: Deserialize real output")
     REQUIRE(json[0] == '{');
 
     DiagnosticResults results = Deserialize<DiagnosticResults>(json);
-    REQUIRE(results.version == 3.1);
+    REQUIRE(results.version == "3.1.0");
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,8 @@ typedef enum dcgmError_enum
     DCGM_FR_EUD_NON_ZERO_EXIT_CODE       = 94, //!< EUD process exited with a non-zero exit code
     DCGM_FR_EUD_TEST_FAILED              = 95, //!< EUD test failed
     DCGM_FR_FILE_CREATE_PERMISSIONS      = 96, //!< We cannot create a file in this directory.
-    DCGM_FR_ERROR_SENTINEL               = 97, //!< MUST BE THE LAST ERROR CODE
+    DCGM_FR_PAUSE_RESUME_FAILED          = 97, //!< Pause/Resume failed
+    DCGM_FR_ERROR_SENTINEL               = 98, //!< MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -364,7 +365,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_EUD_TEST_FAILED_MSG              "" /* See message inplace */
 #define DCGM_FR_FILE_CREATE_PERMISSIONS_MSG \
     "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
-#define DCGM_FR_ERROR_SENTINEL_MSG "" /* See message inplace */
+#define DCGM_FB_PAUSE_RESUME_FAILED_MSG "" /* See message inplace */
+#define DCGM_FR_ERROR_SENTINEL_MSG      "" /* See message inplace */
 
 /*
  * Suggestions for next steps for the corresponding error message
@@ -509,6 +511,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT                                                                 \
     "Please restart the hostengine with parameter --home-dir to specify a different home directory for the " \
     "diagnostic or change permissions in the current directory to allow the user to write files there."
+#define DCGM_FR_PAUSE_RESUME_NEXT   "" /* See message inplace */
 #define DCGM_FR_ERROR_SENTINEL_NEXT "" /* See message inplace */
 
 #ifdef __cplusplus
