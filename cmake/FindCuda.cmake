@@ -26,7 +26,7 @@ macro (load_cuda cuda_version)
         list(APPEND Cuda${cuda_version}_LIB_PATHS "${CMAKE_FIND_ROOT_PATH}/${prefix}/lib" "${CMAKE_FIND_ROOT_PATH}/${prefix}/lib64")
     endforeach ()
 
-    find_path(CUDA${cuda_version}_INCLUDE_DIR cuda.h PATHS ${Cuda${cuda_version}_INCLUDE_PATHS} NO_DEFAULT_PATHS)
+    find_path(CUDA${cuda_version}_INCLUDE_DIR cuda.h PATHS ${Cuda${cuda_version}_INCLUDE_PATHS} NO_DEFAULT_PATH)
     if (CUDA${cuda_version}_INCLUDE_DIR)
         # Dereference symbolic links
         get_absolute_path(${CUDA${cuda_version}_INCLUDE_DIR} CUDA${cuda_version}_INCLUDE_DIR)
