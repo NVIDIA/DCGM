@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set(CTEST_USE_LAUNCHERS 1)
 
-CUDA_IMAGE=nvcr.io/nvidia/cuda:10.2-devel-ubuntu18.04
-COMPUTE=compute_70
+find_package(Catch2 REQUIRED)
 
-docker run \
-    --rm \
-    -v $(pwd):/work \
-    -w /work \
-    ${CUDA_IMAGE} \
-    /bin/bash -c "/usr/local/cuda/bin/nvcc -ptx -m64 --gpu-architecture $COMPUTE -o DcgmProfTesterKernels.ptx DcgmProfTesterKernels.cu || die 'Failed to compile DcgmProfTesterKernels.cu'"
+include(CTest)
+include(Catch)
+
+if (BUILD_TESTING)
+    add_executable(dcgm_stub_tests)
+    target_sources(dcgm_stub_tests PRIVATE main.cpp test_maps_tokens.cpp ../GetNthMapsToken.c)
+
+
+    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
+        catch_discover_tests(dcgm_stub_tests EXTRA_ARGS --use-colour yes)
+    endif ()
+
+endif ()
+

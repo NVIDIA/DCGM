@@ -185,13 +185,15 @@ auto EraseAndNotifyIf(Container &container, Pred pred, Callback callback) -> typ
  * @param[in] monitorFrequency  Polling frequency in milliseconds.
  * @param[in] maxAge            Max age of a record to keep in milliseconds.
  * @param[in] maxKeepSamples    Max number of samples to keep.
+ * @param[in] slackMultiplier   Multiplier to calculate slack as a product of max age
  * @return  How long a record to should be kept. In milliseconds.
  * @note This function returns smallest non-zero value from \c maxAge and <tt>monitorFrequency*maxKeepSamples</tt> but
  *       not smaller than 1000ms
  */
 std::chrono::milliseconds GetMaxAge(std::chrono::milliseconds monitorFrequency,
                                     std::chrono::milliseconds maxAge,
-                                    int maxKeepSamples);
+                                    int maxKeepSamples,
+                                    double slackMultiplier = 0.1);
 
 namespace Hash
 {

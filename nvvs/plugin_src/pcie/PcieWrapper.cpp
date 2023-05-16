@@ -62,6 +62,7 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED,
                                      PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED,
                                      PCIE_STR_TEST_NVLINK_STATUS,
+                                     PCIE_STR_TEST_BROKEN_P2P,
                                      nullptr };
 
     const dcgmPluginValue_t paramTypes[]
@@ -71,7 +72,7 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
             DcgmPluginParamInt,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamNone };
+            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

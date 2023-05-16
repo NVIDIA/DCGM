@@ -12,7 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 add_library(dcgm_stub STATIC)
-target_sources(dcgm_stub PRIVATE dcgm_stub_static.c)
-target_link_libraries(dcgm_stub PUBLIC dcgm_interface nvmli_interface)
+
+configure_file(version_config.h.in ${CMAKE_CURRENT_BINARY_DIR}/version_config.h USE_SOURCE_PERMISSIONS @ONLY)
+target_include_directories(dcgm_stub PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_sources(dcgm_stub PRIVATE dcgm_stub_static.c GetNthMapsToken.c)
+target_link_libraries(dcgm_stub PRIVATE dcgm_interface nvmli_interface)
 target_link_libraries(dcgm_stub PRIVATE dl rt)
 target_compile_definitions(dcgm_stub PRIVATE DCGM_API_EXPORT=1)
+
+install(TARGETS dcgm_stub ARCHIVE DESTINATION ${DCGM_LIB_INSTALL_PREFIX} COMPONENT DCGM)
+
+add_subdirectory(tests)

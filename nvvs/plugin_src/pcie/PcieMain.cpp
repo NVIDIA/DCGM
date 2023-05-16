@@ -1968,6 +1968,26 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
      * that ends BusGrind. Test condition failures are not fatal
      */
 
+    // Test broken p2p first - we will get unpredictable results / hangs if P2P is broken
+    if (bgGlobals->test_broken_p2p && !bg_should_stop(bgGlobals))
+    {
+        if (bgGlobals->test_p2p_on)
+        {
+            size_t size = bgGlobals->testParameters->GetSubTestDouble(PCIE_SUBTEST_BROKEN_P2P,
+                                                                      PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB);
+            size *= 1024; // convert to bytes
+            Brokenp2p p2p(bgGlobals->busGrind, bgGlobals->gpu, size);
+            if (p2p.RunTest() == NVVS_RESULT_FAIL)
+            {
+                goto NO_MORE_TESTS;
+            }
+        }
+        else
+        {
+            log_debug("Skipping the broken_p2p test because test_p2p_on is set to false.");
+        }
+    }
+
     /******************Host/Device Tests**********************/
     if (bgGlobals->test_pinned && !bg_should_stop(bgGlobals))
     {
@@ -2091,15 +2111,6 @@ int main_entry_wrapped(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t
         {
             goto NO_MORE_TESTS;
         }
-    }
-
-    if (bgGlobals->test_broken_p2p && !bg_should_stop(bgGlobals))
-    {
-        size_t size
-            = bgGlobals->testParameters->GetSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB);
-        size *= 1024; // convert to bytes
-        Brokenp2p p2p(bgGlobals->busGrind, bgGlobals->gpu, size);
-        p2p.RunTest();
     }
 
 /* This should come after all of the tests have run */

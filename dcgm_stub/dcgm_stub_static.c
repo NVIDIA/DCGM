@@ -13,122 +13,119 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "dcgm_agent.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
-#include "dcgm_structs_internal.h"
+#include "GetNthMapsToken.h"
+
+#include <version_config.h>
+
+#include <dcgm_agent.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
+#include <nvml_injection_structs.h>
+
 #include <dlfcn.h>
+#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 
-#ifdef INJECTION_LIBRARY_AVAILABLE
-#include <nvml_injection.h>
-#endif
 
 static void *lib_handle = NULL;
 
+static const char *s_libName              = DCGM_LIB_SONAME;
+static const char s_wrongLibraryMessage[] = "Wrong version of the DCGM library is linked:";
+static const size_t s_libPathColumn       = 6;
 
-static const char wrongLibraryMessage[]
-    = "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-      "WARNING:\n"
-      "\n"
-      "Wrong libdcgm.so installed\n"
-      "\n"
-      "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
-
-static void dcgmCheckLinkedLibrary(void)
+static void printSharedLibraryPath(FILE *outStream, char const *libName)
 {
-#if defined(NV_LINUX)
-    FILE *f;
-    char command_line[512];
-    char buff[256];
+    char fileName[512];
+    sprintf(fileName, "/proc/%d/maps", getpid());
 
-    /**
-     * Check if the commands (lsof, tr and cut) exists on the underlying platform
-     */
-    sprintf(command_line,
-            "command -v lsof >/dev/null 2>&1 && command -v tr >/dev/null 2>&1"
-            " && command -v cut >/dev/null 2>&1  && echo 'true' || echo 'false'");
-    if (!(f = popen(command_line, "r")))
+    FILE *fMaps = fopen(fileName, "r");
+    if (NULL == fMaps)
     {
+        fprintf(outStream, "Failed to open %s\n", fileName);
         return;
     }
 
-    while (fgets(buff, sizeof(buff), f) != NULL)
+    // Read the file line by line
+    bool found = false;
+    char line[1024];
+    while (fgets(line, sizeof(line), fMaps))
     {
-        char *p;
-        if ((p = strstr(buff, "false")) != NULL)
+        char *libPath = GetNthMapsToken(line, s_libPathColumn);
+        if (libPath == NULL)
         {
-            pclose(f);
-            return;
+            continue;
         }
-    }
-
-    pclose(f);
-
-    pid_t pid = getpid();
-    sprintf(command_line, "lsof -p %d | tr -s ' ' | cut -d ' ' -f 9 ", pid);
-    if (!(f = popen(command_line, "r")))
-    {
-        return;
-    }
-
-    while (fgets(buff, sizeof(buff), f) != NULL)
-    {
-        char *p;
-        if ((p = strstr(buff, "libdcgm")) != NULL)
+        char *p = strstr(libPath, libName);
+        if (p == NULL)
         {
-            printf("Linked to libdcgm library at wrong path : %s\n", buff);
-            break;
+            continue;
         }
+        fprintf(outStream, "Linked to the %s at path %s\n", libName, libPath);
+        found = true;
+        break;
     }
 
-    pclose(f);
-#endif
+    if (!found)
+    {
+        fprintf(outStream, "Unable to find %s\n", libName);
+    }
+    fclose(fMaps);
 }
 
-#define DCGM_DYNAMIC_WRAP(newName, libFunctionName, argtypes, ...) \
-    dcgmReturn_t newName argtypes                                  \
-    {                                                              \
-        dcgmReturn_t(*fn) argtypes;                                \
-        if (lib_handle)                                            \
-        {                                                          \
-            fn = dlsym(lib_handle, __FUNCTION__);                  \
-            return (*fn)(__VA_ARGS__);                             \
-        }                                                          \
-        else                                                       \
-        {                                                          \
-            printf("%s", wrongLibraryMessage);                     \
-            return DCGM_ST_UNINITIALIZED;                          \
-        }                                                          \
+
+#define DCGM_DYNAMIC_WRAP(newName, libFunctionName, argtypes, ...)                     \
+    dcgmReturn_t newName argtypes                                                      \
+    {                                                                                  \
+        dcgmReturn_t(*fn) argtypes;                                                    \
+        if (lib_handle)                                                                \
+        {                                                                              \
+            fn = dlsym(lib_handle, __FUNCTION__);                                      \
+            if (fn == NULL)                                                            \
+            {                                                                          \
+                fprintf(stderr, "Failed to find %s in %s\n", __FUNCTION__, s_libName); \
+                printSharedLibraryPath(stderr, s_libName);                             \
+                return DCGM_ST_UNINITIALIZED;                                          \
+            }                                                                          \
+            return (*fn)(__VA_ARGS__);                                                 \
+        }                                                                              \
+        else                                                                           \
+        {                                                                              \
+            fprintf(stderr, "%s\n", s_wrongLibraryMessage);                            \
+            printSharedLibraryPath(stderr, s_libName);                                 \
+            return DCGM_ST_UNINITIALIZED;                                              \
+        }                                                                              \
     }
 
 #define DCGM_ENTRY_POINT(dcgmFuncname, tsapiFuncname, argtypes, fmt, ...) \
     DCGM_DYNAMIC_WRAP(dcgmFuncname, dcgmFuncname, argtypes, ##__VA_ARGS__)
 
-//#define DCGM_INT_ENTRY_POINT(dcgmFuncname, tsapiFuncname, argtypes, fmt, ...)
 #include "entry_point.h"
-//#undef DCGM_INT_ENTRY_POINT
+
 #undef DCGM_ENTRY_POINT
+
 
 dcgmReturn_t dcgmInit(void)
 {
     dcgmReturn_t (*fn)(void);
-    lib_handle = dlopen("libdcgm.so.3", RTLD_LAZY);
+    lib_handle = dlopen(s_libName, RTLD_LAZY);
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmInit");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find dcgmInit in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return DCGM_ST_UNINITIALIZED;
+        }
         return (*fn)();
     }
-    else
-    {
-        printf("%s", wrongLibraryMessage);
-        dcgmCheckLinkedLibrary();
-        return DCGM_ST_UNINITIALIZED;
-    }
+
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return DCGM_ST_UNINITIALIZED;
 }
 
 dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmHandle_t *pDcgmHandle)
@@ -138,14 +135,18 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded(dcgmOperationMode_t opMode, dcgmH
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmStartEmbedded");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find dcgmStartEmbedded in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return DCGM_ST_UNINITIALIZED;
+        }
         return (*fn)(opMode, pDcgmHandle);
     }
-    else
-    {
-        printf("%s", wrongLibraryMessage);
-        dcgmCheckLinkedLibrary();
-        return DCGM_ST_UNINITIALIZED;
-    }
+
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return DCGM_ST_UNINITIALIZED;
 }
 
 dcgmReturn_t DCGM_PUBLIC_API dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
@@ -155,14 +156,18 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStopEmbedded(dcgmHandle_t pDcgmHandle)
     if (lib_handle)
     {
         fn = dlsym(lib_handle, "dcgmStopEmbedded");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find dcgmStopEmbedded in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return DCGM_ST_UNINITIALIZED;
+        }
         return (*fn)(pDcgmHandle);
     }
-    else
-    {
-        printf("%s", wrongLibraryMessage);
-        dcgmCheckLinkedLibrary();
-        return DCGM_ST_UNINITIALIZED;
-    }
+
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return DCGM_ST_UNINITIALIZED;
 }
 
 dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown(void)
@@ -171,17 +176,21 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown(void)
     dcgmReturn_t (*fn)(void);
     if (lib_handle)
     {
-        fn         = dlsym(lib_handle, "dcgmShutdown");
+        fn = dlsym(lib_handle, "dcgmShutdown");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find dcgmShutdown in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return DCGM_ST_UNINITIALIZED;
+        }
         dcgmResult = (*fn)();
-    }
-    else
-    {
-        printf("%s", wrongLibraryMessage);
-        return DCGM_ST_UNINITIALIZED;
-    }
-    if (lib_handle)
         dlclose(lib_handle);
-    return dcgmResult;
+        return dcgmResult;
+    }
+
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return DCGM_ST_UNINITIALIZED;
 }
 
 #if 0  
@@ -191,7 +200,21 @@ DCGM_DYNAMIC_WRAP(dcgmInternalGetExportTable, dcgmInternalGetExportTable,
         ppExportTable, pExportTableId)
 #endif
 
-const char *dcgmErrorString(dcgmReturn_t result)
+const char *errorString(dcgmReturn_t result)
 {
-    return wrongLibraryMessage;
+    const char *(*fn)(dcgmReturn_t);
+    if (lib_handle)
+    {
+        fn = dlsym(lib_handle, "errorString");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find errorString in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return NULL;
+        }
+        return (*fn)(result);
+    }
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return NULL;
 }
