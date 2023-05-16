@@ -29,6 +29,7 @@
 ./usr/lib/powerpc64le-linux-gnu/libdcgm_cublas_proxy10.so
 ./usr/lib/powerpc64le-linux-gnu/libdcgm_cublas_proxy11.so
 ./usr/lib/powerpc64le-linux-gnu/libdcgm_cublas_proxy12.so
+./usr/lib/powerpc64le-linux-gnu/libdcgm_stub.a
 ./usr/lib/powerpc64le-linux-gnu/libdcgmmoduleconfig.so
 ./usr/lib/powerpc64le-linux-gnu/libdcgmmoduleconfig.so.${VERSION}
 ./usr/lib/powerpc64le-linux-gnu/libdcgmmoduleconfig.so.3

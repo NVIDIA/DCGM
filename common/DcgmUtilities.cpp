@@ -347,14 +347,16 @@ std::optional<UserCredentials> ChangeUser(ChangeUserPolicy policy,
 
 std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds monitorFrequency,
                                                    std::chrono::milliseconds maxAge,
-                                                   int maxKeepSamples)
+                                                   int maxKeepSamples,
+                                                   double slackMultiplier)
 {
     using namespace std::chrono_literals;
-    auto const samplesDurationWithoutSlack = maxKeepSamples * monitorFrequency;
-    // Allow 10% slack for computation time
-    auto const samplesDuration    = samplesDurationWithoutSlack + (samplesDurationWithoutSlack / 10);
-    auto const normalizedMaxAge   = std::max(maxAge, 1000ms);
-    auto const normalizedDuration = std::max(samplesDuration, 1000ms);
+    auto const samplesDurationWithoutSlack
+        = std::chrono::duration_cast<std::chrono::duration<double>>(maxKeepSamples * monitorFrequency);
+    auto const samplesDurationDouble = samplesDurationWithoutSlack + (samplesDurationWithoutSlack * slackMultiplier);
+    auto const samplesDuration       = std::chrono::duration_cast<std::chrono::milliseconds>(samplesDurationDouble);
+    auto const normalizedMaxAge      = std::max(maxAge, 1000ms);
+    auto const normalizedDuration    = std::max(samplesDuration, 1000ms);
     if (samplesDuration.count() == 0)
     {
         return normalizedMaxAge;

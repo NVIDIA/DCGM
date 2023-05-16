@@ -350,11 +350,17 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned int> dcgmGpuIds;
 
+    if (gpuAffinity.numGpus > DCGM_MAX_NUM_DEVICES)
+    {
+        log_error("Invalid gpuAffinity.numGpus: {}", gpuAffinity.numGpus);
+        return DCGM_ST_BADPARAM;
+    }
+
     /* Verify group id is valid */
     dcgmReturn = mpGroupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
     {
-        log_error("Error: Bad group id parameter");
+        log_error("Error: Bad group id parameter: {}", groupId);
         return dcgmReturn;
     }
 

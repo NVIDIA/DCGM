@@ -283,8 +283,8 @@ __global__ void doWorkloadFP16(__half *pretendSideEffect, uint64_t runForNs)
 {
     uint64_t startNs = __globaltimer();
 
-    __half dummyValue = __double2half((double)getFlatIdx());
-    __half incrementBy = __double2half((double)1);
+    __half dummyValue = __float2half((float)getFlatIdx());
+    __half incrementBy = __float2half((float)1);
     
     while (startNs + runForNs > __globaltimer())
     {

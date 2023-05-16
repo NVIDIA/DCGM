@@ -33,6 +33,7 @@
 ./usr/lib/x86_64-linux-gnu/libdcgm_cublas_proxy10.so
 ./usr/lib/x86_64-linux-gnu/libdcgm_cublas_proxy11.so
 ./usr/lib/x86_64-linux-gnu/libdcgm_cublas_proxy12.so
+./usr/lib/x86_64-linux-gnu/libdcgm_stub.a
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleconfig.so
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleconfig.so.${VERSION}
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleconfig.so.3

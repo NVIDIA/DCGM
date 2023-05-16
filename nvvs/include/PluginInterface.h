@@ -134,10 +134,12 @@ typedef struct
     dcgmDiagCustomStat_t stats[DCGM_DIAG_MAX_CUSTOM_STATS]; // !< the stats
 } dcgmDiagCustomStats_t;
 
-#define DCGM_EVENT_MSG_LEN   1024
-#define DCGM_DIAG_MAX_ERRORS 32
-#define DCGM_DIAG_MAX_INFO   32
-#define DCGM_DIAG_MAX_SKIP   32
+#define DCGM_EVENT_MSG_LEN 1024
+/* Pcie test can generate at least (NUM_GPUs * 6) entries */
+/* NOTE: dcgmi condenses discreet entries into per-gpu output */
+#define DCGM_DIAG_MAX_ERRORS 128
+#define DCGM_DIAG_MAX_INFO   128
+#define DCGM_DIAG_MAX_SKIP   128
 
 #define DCGM_DIAG_ALL_GPUS -1
 

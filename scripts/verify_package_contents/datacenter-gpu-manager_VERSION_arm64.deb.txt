@@ -27,6 +27,7 @@
 ./usr/lib/aarch64-linux-gnu/libdcgm.so.3
 ./usr/lib/aarch64-linux-gnu/libdcgm_cublas_proxy11.so
 ./usr/lib/aarch64-linux-gnu/libdcgm_cublas_proxy12.so
+./usr/lib/aarch64-linux-gnu/libdcgm_stub.a
 ./usr/lib/aarch64-linux-gnu/libdcgmmoduleconfig.so
 ./usr/lib/aarch64-linux-gnu/libdcgmmoduleconfig.so.${VERSION}
 ./usr/lib/aarch64-linux-gnu/libdcgmmoduleconfig.so.3

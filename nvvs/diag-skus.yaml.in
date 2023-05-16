@@ -1730,6 +1730,10 @@ skus:
       use_dgemm: false
     pcie:
       is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_width: 4.0
+      h2d_d2h_single_unpinned:
+        min_pci_width: 4.0
     memory:
       is_allowed: true
       l1cache_size_kb_per_sm: 192.0
@@ -2347,11 +2351,9 @@ skus:
     pcie:
       is_allowed: true
       h2d_d2h_single_pinned:
-        min_pci_generation: 4.0
-        min_pci_width: 8.0
+        min_pci_width: 4.0
       h2d_d2h_single_unpinned:
-        min_pci_generation: 4.0
-        min_pci_width: 8.0
+        min_pci_width: 4.0
     memory:
       is_allowed: true
       l1cache_size_kb_per_sm: 192.0
@@ -2925,3 +2927,75 @@ skus:
       is_allowed: true
       # memory bandwidth test shows ~264610. Multiply by .75 to get ~198500
       minimum_bandwidth: 198500
+  # Scout H100 64GB HBM2e
+  - name: H100 64GB
+    id: 2337
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 700.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 40000
+    sm_stress:
+      is_allowed: true
+      # sm stress measures at 52200, multiply by .75 to get ~40000
+      target_stress: 40000.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~163000. Multiply by .75 to get ~122250.00
+      minimum_bandwidth: 122250.00
+    pulse_test:
+      is_allowed: true
+  - name: AX800
+    id: 20fd
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 349.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      # Testing captures ~15700, multiply by .75 to get 11775
+      target_stress: 11775.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1570000. Multiply by .75 to get ~1177500
+      minimum_bandwidth: 1177500.0
+    pulse_test:
+      is_allowed: true

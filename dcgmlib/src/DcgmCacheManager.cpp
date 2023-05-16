@@ -11420,25 +11420,36 @@ dcgmReturn_t DcgmCacheManager::GetEntityWatchInfoSnapshot(dcgm_field_entity_grou
 
     return retSt;
 }
+/*****************************************************************************/
+void DcgmCacheManager::GetAllWatchObjects(std::vector<dcgmcm_watch_info_p> &watchers)
+{
+    DcgmLockGuard dlg(m_mutex);
 
+    watchers.clear();
+    watchers.reserve(m_entityWatchHashTable->size);
+
+    for (void *hashIter = hashtable_iter(m_entityWatchHashTable); hashIter;
+         hashIter       = hashtable_iter_next(m_entityWatchHashTable, hashIter))
+    {
+        watchers.push_back((dcgmcm_watch_info_p)hashtable_iter_value(hashIter));
+    }
+}
+
+/*****************************************************************************/
 void DcgmCacheManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
 {
-    dcgmcm_watch_info_p watchInfo;
-    DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
-    dcgm_watch_watcher_info_t watcherInfo;
-    watcherInfo.watcher = dcgmWatcher;
-
     /* Since most users of DCGM have a single daemon / user, it's easy enough just
        to walk every watch in existence and see if the connectionId in question has
        any watches. If we ever have a lot of different remote clients at once, we can
        reevaluate doing this and possibly track watches for each user */
 
-    dcgm_mutex_lock(m_mutex);
+    std::vector<dcgmcm_watch_info_p> watchers;
+    GetAllWatchObjects(watchers);
 
-    for (void *hashIter = hashtable_iter(m_entityWatchHashTable); hashIter;
-         hashIter       = hashtable_iter_next(m_entityWatchHashTable, hashIter))
+    DcgmWatcher dcgmWatcher(DcgmWatcherTypeClient, connectionId);
+
+    for (const auto &watchInfo : watchers)
     {
-        watchInfo                         = (dcgmcm_watch_info_p)hashtable_iter_value(hashIter);
         const bool clearCache             = false;
         const dcgm_entity_key_t &watchKey = watchInfo->watchKey;
         RemoveFieldWatch(static_cast<dcgm_field_entity_group_t>(watchKey.entityGroupId),
@@ -11447,9 +11458,9 @@ void DcgmCacheManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
                          clearCache,
                          dcgmWatcher);
     }
-
-    dcgm_mutex_unlock(m_mutex);
 }
+
+/*****************************************************************************/
 
 void DcgmCacheManager::WatchVgpuFields(nvmlVgpuInstance_t vgpuId)
 {

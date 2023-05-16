@@ -2419,7 +2419,6 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
                                   << ", dcgm ";
 
                     ValuesDump(values, ValueType::Int64, 1000.0 * 1000.0);
-                    //<< dcgmValue RSH - i64 / 10^6
 
                     info_reporter << " MiB/sec (";
 
@@ -2951,10 +2950,22 @@ dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
 
                 double value;
 
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                                    && Validate(limit, 0.9, value, howFarIn, worker.GetValidated()));
+                /**
+                 * We compute a hard maximum permitted value limited to 1.0.
+                 */
+                double maxValue = 1.0;
 
-                ////prevValue = value;
+                if (m_parameters.m_percentTolerance)
+                {
+                    maxValue /= (1.0 + m_parameters.m_tolerance / 100.0);
+                }
+                else
+                {
+                    maxValue -= m_parameters.m_tolerance;
+                }
+
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                                    && Validate(limit, maxValue, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(0.0, value);
             }

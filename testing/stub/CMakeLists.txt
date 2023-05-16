@@ -13,5 +13,5 @@
 # limitations under the License.
 add_executable(stub_library_test)
 target_sources(stub_library_test PRIVATE stub_library_test.c)
-target_link_libraries(stub_library_test PRIVATE dcgm_stub)
+target_link_libraries(stub_library_test PRIVATE dcgm_stub dcgm_interface)
 target_link_libraries(stub_library_test PRIVATE dl rt)

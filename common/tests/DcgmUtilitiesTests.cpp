@@ -33,6 +33,9 @@ TEST_CASE("Utils: GetMaxAge")
     auto maxAge = DcgmNs::Utils::GetMaxAge(100ms, 10s, 10);
     REQUIRE(maxAge == 1100ms);
 
+    maxAge = DcgmNs::Utils::GetMaxAge(100ms, 10s, 10, 2);
+    REQUIRE(maxAge == 3000ms);
+
     maxAge = DcgmNs::Utils::GetMaxAge(0ms, 10s, 10);
     REQUIRE(maxAge == 10s);
 

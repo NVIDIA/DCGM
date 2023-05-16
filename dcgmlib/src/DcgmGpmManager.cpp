@@ -79,7 +79,8 @@ void DcgmGpmManagerEntity::PruneOldSamples(timelib64_t now)
     const milliseconds monitorFrequency = FromLegacyTimestamp<milliseconds>(m_maxUpdateInterval);
     const milliseconds maxAge           = milliseconds(0);
     const int maxKeepSamples            = 2;
-    timelib64_t maxAgeUsec              = ToLegacyTimestamp(GetMaxAge(monitorFrequency, maxAge, maxKeepSamples));
+    const double slackMultiplier        = 2; // 200% slack
+    timelib64_t maxAgeUsec = ToLegacyTimestamp(GetMaxAge(monitorFrequency, maxAge, maxKeepSamples, slackMultiplier));
 
     timelib64_t cutOffMinimumExclusive = now - maxAgeUsec;
     auto upperBound                    = m_gpmSamples.upper_bound(cutOffMinimumExclusive);

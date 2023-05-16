@@ -1758,6 +1758,17 @@ private:
 
     /*************************************************************************/
     /*
+     * Cache a snapshot of all valid watch objects so we don't need to hold
+     * the cache manager mutex while we iterate over them. This is useful in
+     * avoiding deadlocks if you'll be RPCing out of the cache manager.
+     *
+     * NOTE: You still need to hold the cache manager mutex to modify any entry.
+     *
+     */
+    void GetAllWatchObjects(std::vector<dcgmcm_watch_info_p> &watchers);
+
+    /*************************************************************************/
+    /*
      * Update the update update frequency and quota based on the minimum values
      * from all of our watchers
      *

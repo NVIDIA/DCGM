@@ -24,6 +24,7 @@
 /usr/lib64/libdcgm_cublas_proxy10.so
 /usr/lib64/libdcgm_cublas_proxy11.so
 /usr/lib64/libdcgm_cublas_proxy12.so
+/usr/lib64/libdcgm_stub.a
 /usr/lib64/libdcgmmoduleconfig.so
 /usr/lib64/libdcgmmoduleconfig.so.${VERSION}
 /usr/lib64/libdcgmmoduleconfig.so.3
