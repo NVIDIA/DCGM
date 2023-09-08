@@ -448,11 +448,12 @@ def test_dcgmi_diag(handle, gpuIds):
     allGpusCsv = ",".join(map(str,gpuIds))
     ## keep args in this order. Changing it may break the test
 
-    pciTestParameters = "pcie.h2d_d2h_single_unpinned.min_pci_width=4"
+    pciTestParameters = "pcie.h2d_d2h_single_unpinned.min_pci_width=1"
+    pciTestParameters += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
     #Need to skip checks for down NvLinks or QA will file bugs
     if test_utils.are_any_nvlinks_down:
         pciTestParameters += ";pcie.test_nvlink_status=false"
-
+        
     pciTestCmdLineArgs = ["diag", "--run", "pcie", "-p", pciTestParameters, "-i", str(gpuIds[0])]
 
     _test_valid_args([

@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-#include "CudaWorkerThread.hpp"
+#include "CudaWorker/CudaWorkerThread.hpp"
 
 /* DCGM Distributed Cuda Context
  *
@@ -194,9 +194,17 @@ public:
      */
 
     /**
-     * \brief Reinitialize reinitializes the worker. Called on main side.
+     * \brief Reinitialize reinitializes the worker with existing entities. Called on main side.
+     *
      */
-    void ReInitialize(std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>>, const std::string &);
+    void ReInitialize(void);
+
+    /**
+     * \brief Reinitialize reinitializes the worker. Called on main side.
+     *
+     * @param entities Entities specifying target.
+     */
+    void ReInitialize(std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities);
 
     /**
      * \brief Initialize worker side.
@@ -480,10 +488,44 @@ public:
      * @{
      */
 
-    // Retrieve field group values
+    /**
+     * \brief Retrieve field group values
+     *
+     * Returns the field group values.
+     */
     dcgmReturn_t GetLatestDcgmValues(std::map<Entity, dcgmFieldValue_v1> &);
 
     /**@}*/
+
+    /**@{*/
+
+    /** @name Attribute structure and Getter.
+     * Manages worker attributes.
+     */
+
+    struct Attributes
+    {
+        int m_maxThreadsPerMultiProcessor {}; //!< threads per multiprocessor
+        int m_multiProcessorCount {};         //!< multiprocessors
+        int m_sharedMemPerMultiprocessor {};  //!< shared mem per multiprocessor
+        int m_computeCapabilityMajor {};      //!< compute capability major num.
+        int m_computeCapabilityMinor {};      //!< compute capability minor num.
+        int m_computeCapability {};           //!< combined compute capability
+        int m_memoryBusWidth {};              //!< memory bus bandwidth
+        int m_maxMemoryClockMhz {};           //!< max. memory clock rate (MHz)
+        double m_maxMemBandwidth {};          //!< max. memory bandwidth
+        int m_eccSupport {};                  //!< ECC support enabled.
+    };
+
+    /**
+     * \brief Retrieve worker attributes
+     *
+     * Returns the worker attributes.
+     */
+    const Attributes &GetAttributes(void) const;
+
+    /**@}**/
+
 
 private:
     /** @name ExceptionClass
@@ -681,19 +723,7 @@ private:
     CUdevice m_device { 0 }; //!< Cuda ordinal of the device to use
 
     // Simple attributes, computed by Init().
-    struct
-    {
-        int m_maxThreadsPerMultiProcessor {}; //!< threads per multiprocessor
-        int m_multiProcessorCount {};         //!< multiprocessors
-        int m_sharedMemPerMultiprocessor {};  //!< shared mem per multiprocessor
-        int m_computeCapabilityMajor {};      //!< compute capability major num.
-        int m_computeCapabilityMinor {};      //!< compute capability minor num.
-        int m_computeCapability {};           //!< combined compute capability
-        int m_memoryBusWidth {};              //!< memory bus bandwidth
-        int m_maxMemoryClockMhz {};           //!< max. memory clock rate (MHz)
-        double m_maxMemBandwidth {};          //!< max. memory bandwidth
-        int m_eccSupport {};                  //!< ECC support enabled.
-    } m_attributes;
+    Attributes m_attributes;
 
     //<! Entity that describes GPU (non-MIG) or GI (MIG)
     dcgmGroupEntityPair_t m_entity;

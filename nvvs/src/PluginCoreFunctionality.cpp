@@ -148,6 +148,7 @@ dcgmReturn_t PluginCoreFunctionality::PluginEnded(const std::string &statsfile,
         return DCGM_ST_UNINITIALIZED;
     }
 
+    log_info("Checking for common errors");
     CheckCommonErrors(tp, result);
 
     m_dcgmRecorder.AddDiagStats(customStats);

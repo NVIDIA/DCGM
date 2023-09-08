@@ -182,6 +182,7 @@ class DcgmReader(object):
         self.m_updateFreq = updateFrequency # default / redundant
 
         self.m_fieldGroupName = fieldGroupName
+        self.m_fieldGroup = None
         self.m_publishFields = {}
 
         if fieldIntervalMap is not None:
@@ -422,8 +423,8 @@ class DcgmReader(object):
             delFieldGroup.Delete()
             del(delFieldGroup)
 
-        self.m_fieldGroup = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, allFieldIds)
-
+        if len(allFieldIds) > 0:
+            self.m_fieldGroup = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, allFieldIds)
 
     ###########################################################################
     '''

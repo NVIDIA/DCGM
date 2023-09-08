@@ -19,21 +19,61 @@ DIR=$(dirname $(realpath $0))
 
 BASE_DOCKERFILE=base.dockerfile
 DCGMBUILD_IMAGE_NAME=${DCGMBUILD_IMAGE_NAME:-dcgmbuild}
+
+####################
+#### Versioning ####
+####################
+
 DCGMBUILD_BASE_VERSION=gcc11-$(sha256sum ${BASE_DOCKERFILE} | head -c6)
 DCGMBUILD_BASE_TAG="${DCGMBUILD_IMAGE_NAME}:base-${DCGMBUILD_BASE_VERSION}"
 
-DOCKER_BUILD_OPTIONS=--compress
+###############
+#### Logic ####
+###############
+
+DOCKER_BUILD_OPTIONS="--compress --platform=linux/amd64 --load --network=host"
 
 function docker_build() {
-   docker buildx build ${DOCKER_BUILD_OPTIONS} "$@"
+    docker buildx build ${DOCKER_BUILD_OPTIONS} "$@"
 }
 
 function image_exists() {
-   [[ -n $(docker images -q "$1" 2> /dev/null) ]]
+    docker inspect --type=image --format="ignore" "$1" >/dev/null 2>&1
+    return $?
 }
 
-if ! image_exists ${DCGMBUILD_BASE_TAG}; then
-    docker_build -t ${DCGMBUILD_BASE_TAG} -f ${BASE_DOCKERFILE} ${DIR}
+function get_image_sha256() {
+    docker inspect --type=image --format="{{.Id}}" "$1" 2>/dev/null
+}
+
+default_targets=("x86_64" "aarch64" "powerpc64le")
+
+if [[ $# -gt 0 ]]; then
+    targets=("$@")
+else
+    targets=("${default_targets[@]}")
 fi
 
-docker_build -t ${DCGMBUILD_IMAGE_NAME} --build-arg BASE_IMAGE=${DCGMBUILD_BASE_TAG} ${DIR}
+echo "Building for targets: ${targets[@]}"
+
+for target in "${targets[@]}"; do
+    CURRENT_BASE_TAG=${DCGMBUILD_BASE_TAG}-${target}
+    CURRENT_CHILD_TAG=${DCGMBUILD_IMAGE_NAME}-${target}
+
+    if ! image_exists ${CURRENT_BASE_TAG}; then
+        echo Unable to find ${CURRENT_BASE_TAG}. Building ...
+        docker_build -t ${CURRENT_BASE_TAG} \
+            --build-arg TARGET=${target} \
+            -f ${BASE_DOCKERFILE} \
+            ${DIR}
+    else
+        echo ${CURRENT_BASE_TAG} already exists locally: $(get_image_sha256 ${CURRENT_BASE_TAG})
+    fi
+
+    BASE_IMAGE=${CURRENT_BASE_TAG}
+
+    docker_build -t ${CURRENT_CHILD_TAG} \
+        --build-arg BASE_IMAGE=${BASE_IMAGE} \
+        --build-arg BASE_IMAGE_TARGET=${target} \
+        ${DIR}
+done

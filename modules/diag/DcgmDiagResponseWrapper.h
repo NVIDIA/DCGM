@@ -89,6 +89,13 @@ public:
                                 dcgmDiagResult_t result);
 
     /*****************************************************************************/
+    dcgmReturn_t AddInfoDetail(unsigned int gpuIndex,
+                               unsigned int testIndex,
+                               const std::string &testname,
+                               dcgmDiagErrorDetail_t &ed,
+                               dcgmDiagResult_t result);
+
+    /*****************************************************************************/
     bool IsValidGpuIndex(unsigned int gpuIndex);
 
 private:

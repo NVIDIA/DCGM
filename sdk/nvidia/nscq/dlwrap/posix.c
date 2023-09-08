@@ -107,6 +107,7 @@ void nscq_dl_unload(void) {
 int nscq_dl_get(void) {
     if (pthread_rwlock_rdlock(&nscq_dl.rwlock) == 0) {
         if (nscq_dl.handle != NULL) {
+            // coverity[missing_unlock] - Intentionally leaving locked. See comment above
             return nscq_dl.cycle;
         }
 

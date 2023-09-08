@@ -46,10 +46,18 @@ public:
         unsigned int m_gi;
         unsigned int m_ci;
 
+        entity_id_t()  = delete; // No default constructor.
+        ~entity_id_t() = default;
+
         entity_id_t(unsigned int gi, unsigned int ci)
             : m_gi(gi)
             , m_ci(ci)
         {}
+
+        bool operator<(const struct entity_id_t other) const
+        {
+            return (m_gi == other.m_gi) ? (m_ci < other.m_ci) : (m_gi < other.m_gi);
+        }
     };
 
     /*************************************************************************/
@@ -313,7 +321,13 @@ private:
     /* CUDA contexts (one per MIG slice or one per whole GPU) */
     std::vector<std::shared_ptr<DistributedCudaContext>> m_dcgmCudaContexts;
 
-    unsigned int m_workers { 0 }; /* Worker Slices added */
+    /**
+     * CUDA contexts not used since we have a CI under the same GI and are
+     * not testing multiple CIs per GI.
+     */
+    std::map<entity_id_t, std::shared_ptr<DistributedCudaContext>> m_inactiveCudaContexts = {};
+
+    unsigned int m_workers { 0 }; /* Active worker Slices added */
 
     dcgmHandle_t m_dcgmHandle { (uintptr_t) nullptr }; /* Host Engine handle */
     dcgmDeviceAttributes_t m_dcgmDeviceAttr {};        /* DCGM device attributes for this GPU */

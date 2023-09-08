@@ -1040,6 +1040,32 @@ void DcgmIpcConnection::SetConnectionState(DcgmIpcConnectionState_t state)
 }
 
 /*****************************************************************************/
+std::unique_ptr<DcgmMessage> DcgmIpcConnection::GetDcgmMessage(void)
+{
+    if (m_reuseMessages.size() > 0)
+    {
+        std::unique_ptr<DcgmMessage> retVal = std::move(m_reuseMessages.top());
+        m_reuseMessages.pop();
+        return retVal;
+    }
+    else
+    {
+        return std::make_unique<DcgmMessage>();
+    }
+}
+
+/*****************************************************************************/
+void DcgmIpcConnection::CacheOrFreeDcgmMessage(std::unique_ptr<DcgmMessage> msg)
+{
+    if (m_reuseMessages.size() < MAX_REUSE_MESSAGES_COUNT)
+    {
+        m_reuseMessages.emplace(std::move(msg));
+    }
+
+    /* Otherwise the message goes out of scope and is freed */
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
                                              std::vector<std::unique_ptr<DcgmMessage>> &messages)
 {
@@ -1102,8 +1128,8 @@ dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
         }
 
         /* Allocate a new DCGM Message */
-        std::unique_ptr<DcgmMessage> dcgmMessage = std::make_unique<DcgmMessage>(&m_readHeader);
-        dcgmMessage->SetRequestId(m_readHeader.requestId);
+        std::unique_ptr<DcgmMessage> dcgmMessage = GetDcgmMessage();
+        *(dcgmMessage->GetMessageHdr())          = m_readHeader;
 
         auto msgBytes = dcgmMessage->GetMsgBytesPtr();
 
@@ -1270,6 +1296,9 @@ dcgmReturn_t DcgmIpcConnection::SendMessage(std::unique_ptr<DcgmMessage> dcgmMes
         DCGM_LOG_ERROR << "Got error from first or second write " << st << ", " << st2;
         return DCGM_ST_CONNECTION_NOT_VALID;
     }
+
+    /* Possibly save the message object for reuse */
+    CacheOrFreeDcgmMessage(std::move(dcgmMessage));
 
     return DCGM_ST_OK;
 }

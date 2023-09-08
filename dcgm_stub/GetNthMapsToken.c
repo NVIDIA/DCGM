@@ -21,7 +21,8 @@
 char *GetNthMapsToken(char *line, int n)
 {
     char *context = NULL;
-    char *token   = strtok_r(line, " ", &context);
+    // coverity[var_deref_model] Yes, we're using strtok_r correctly
+    char *token = strtok_r(line, " ", &context);
     while (token && --n > 0)
     {
         token = strtok_r(NULL, " ", &context);

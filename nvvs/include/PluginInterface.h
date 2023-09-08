@@ -31,6 +31,12 @@ extern "C" {
 #define FAIL_CHECK_INTERVAL "fail_check_interval"
 
 #define DCGM_MAX_PLUGIN_FIELD_IDS 96
+
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* 2.4.0 -> 3.1.7 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* Current version - 3.1.8 and later */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3
+
 /* IMPORTANT:
  *
  * If you change any of the following struct or callback definitions, you need to increment
@@ -53,7 +59,7 @@ typedef struct
 
 #define DCGM_MAX_PLUGIN_DESC_LEN       128
 #define DCGM_MAX_PLUGIN_NAME_LEN       20
-#define DCGM_MAX_PARAMETERS_PER_PLUGIN 32
+#define DCGM_MAX_PARAMETERS_PER_PLUGIN 64
 #define DCGM_MAX_PARAMETER_NAME_LEN    50
 #define DCGM_DIAG_MAX_VALUE_LEN        50
 

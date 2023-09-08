@@ -36,7 +36,7 @@ NvvsCommon::NvvsCommon()
     , configless(false)
     , statsOnlyOnFail(false)
     , errorMask(0)
-    , mainReturnCode(MAIN_RET_OK)
+    , mainReturnCode(NVVS_ST_SUCCESS)
     , pluginPath()
     , desiredTest()
     , indexString()
@@ -135,7 +135,7 @@ void NvvsCommon::Init()
     configless             = false;
     statsOnlyOnFail        = false;
     errorMask              = 0;
-    mainReturnCode         = MAIN_RET_OK;
+    mainReturnCode         = NVVS_ST_SUCCESS;
     pluginPath             = "";
     desiredTest.clear();
     indexString    = "";

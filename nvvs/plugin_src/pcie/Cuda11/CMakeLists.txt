@@ -12,3 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 define_plugin(Pcie 11)
+
+define_bw_checker(BwChecker 11)

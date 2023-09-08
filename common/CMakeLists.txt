@@ -14,6 +14,7 @@
 find_package(fmt REQUIRED)
 add_subdirectory(DcgmThread)
 add_subdirectory(serialize)
+add_subdirectory(CudaWorker)
 
 add_subdirectory(transport)
 add_subdirectory(tests)
@@ -84,6 +85,7 @@ target_link_libraries(dcgm_common PUBLIC
     buildinfo_objects
     sdk_nvml_essentials_objects
     fmt::fmt
+    dl
 )
 
 add_library(common_watch_objects STATIC)

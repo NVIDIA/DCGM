@@ -53,6 +53,7 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PUBLIC pluginCommon_${CUDA_VER})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE pluginCudaCommon_${CUDA_VER})
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE dcgm_logging)
+    target_link_libraries(${PLUGIN_NAME}_${CUDA_VER} PRIVATE dcgm_common ${JSONCPP_STATIC_LIBS})
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES LIBRARY_OUTPUT_NAME "${PLUGIN_NAME}")
     update_lib_ver(${PLUGIN_NAME}_${CUDA_VER})
     set_target_properties(${PLUGIN_NAME}_${CUDA_VER} PROPERTIES INSTALL_TO_DIR ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda${CUDA_VER})
@@ -73,6 +74,7 @@ ENDIF()
 LIST(SORT SUPPORTED_CUDA_VERSIONS)
 
 LIST(APPEND NVVS_PLUGINS "")
+LIST(APPEND BW_CHECKERS "")
 
 add_subdirectory(common)
 add_subdirectory(cuda_common)
@@ -82,7 +84,7 @@ add_subdirectory(targetedpower)
 add_subdirectory(contextcreate)
 add_subdirectory(diagnostic)
 add_subdirectory(memory)
-add_subdirectory(smstress)
+#add_subdirectory(smstress)
 add_subdirectory(software)
 add_subdirectory(memtest)
 add_subdirectory(test_common)
@@ -92,6 +94,35 @@ foreach(plugin ${NVVS_PLUGINS})
         LIBRARY DESTINATION $<TARGET_PROPERTY:${plugin},INSTALL_TO_DIR>
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
         COMPONENT DCGM)
+endforeach()
+
+# Install the BwChecker binary
+foreach(bwchecker ${BW_CHECKERS})
+    install(TARGETS ${bwchecker}
+        RUNTIME DESTINATION $<TARGET_PROPERTY:${bwchecker},INSTALL_TO_DIR>
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        COMPONENT DCGM)
+
+    set_target_properties(${bwchecker} PROPERTIES INSTALL_RPATH "${DCGM_RPATH}:$ORIGIN/../../../../apps/${DCGM_TESTS_ARCH}")
+
+    get_target_property(INSTALL_TO_DIR ${bwchecker} INSTALL_TO_DIR)
+    string(
+        REPLACE
+            "${DCGM_NVVS_PLUGINS_INSTALL_DIR}"
+            "${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins"
+            INSTALL_TO
+            ${INSTALL_TO_DIR}
+    )
+    install(TARGETS ${bwchecker}
+        RUNTIME DESTINATION ${INSTALL_TO}
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        COMPONENT Tests)
+endforeach()
+
+file(COPY ${DCGMPROFTESTER_PTX} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+foreach(cuda_ver IN LISTS SUPPORTED_CUDA_VERSIONS)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda${cuda_ver} COMPONENT DCGM)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda${cuda_ver} COMPONENT Tests)
 endforeach()
 
 set(NVVS_PLUGINS ${NVVS_PLUGINS} PARENT_SCOPE)

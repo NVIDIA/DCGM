@@ -28,6 +28,7 @@
 #define NVVS_INFO           "info"
 #define NVVS_VERSION_STR    "version"
 #define NVVS_RUNTIME_ERROR  "runtime_error"
+#define NVVS_ERROR_CODE     "error_code"
 #define NVVS_GPU_IDS        "gpu_ids"
 #define NVVS_NAME           "DCGM GPU Diagnostic"
 #define NVVS_GLOBAL_WARN    "Warning"

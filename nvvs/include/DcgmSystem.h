@@ -114,8 +114,22 @@ public:
      */
     bool IsInitialized() const;
 
+    /*
+     * @return: an integer representing the CUDA major version or 0 if it can't be
+     * identified.
+     */
+    unsigned int GetCudaMajorVersion();
+
+    /*
+     * @return: an integer representing the CUDA minor version or 0 if it can't be
+     * identified.
+     */
+    unsigned int GetCudaMinorVersion();
+
 private:
     dcgmHandle_t m_handle; // We use this handle but we do not own it.
+    unsigned int m_cudaMajorVersion;
+    unsigned int m_cudaMinorVersion;
 };
 
 #endif

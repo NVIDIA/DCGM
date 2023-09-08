@@ -23,8 +23,10 @@
 #include "ParsingUtility.h"
 #include "PluginStrings.h"
 #include "dcgm_structs_internal.h"
+#include <DcgmBuildInfo.hpp>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
+#include <NvvsException.hpp>
 #include <PluginInterface.h>
 #include <cstdlib>
 #include <iostream>
@@ -469,7 +471,9 @@ void NvidiaValidationSuite::banner()
 {
     if (nvvsCommon.jsonOutput == false)
     {
-        std::cout << std::endl << NVVS_NAME << " (version " << DRIVER_MAJOR_VERSION << ")\n" << std::endl;
+        std::cout << std::endl
+                  << NVVS_NAME << " (version " << std::string(DcgmNs::DcgmBuildInfo().GetVersion()) << ")\n"
+                  << std::endl;
     }
 }
 
@@ -730,6 +734,11 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                 found = true;
                 suite = NVVS_SUITE_XLONG;
             }
+            else if (compareTestName == "production_testing")
+            {
+                found = true;
+                suite = NVVS_SUITE_PRODUCTION_TESTING;
+            }
 
             if (found)
             {
@@ -804,7 +813,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                 ss << "Error: requested test \"" << requestedTestName << "\" was not found among possible test choices."
                    << std::endl;
                 log_error(ss.str());
-                throw std::runtime_error(ss.str());
+                throw NvvsException(ss.str(), NVVS_ST_TEST_NOT_FOUND);
             }
         }
     }
@@ -834,9 +843,9 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             type = SOFTWARE_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_HARDWARE:
-            if (suite == NVVS_SUITE_MEDIUM || suite == NVVS_SUITE_LONG)
+            if (suite >= NVVS_SUITE_MEDIUM)
                 testNames.push_back(MEMORY_PLUGIN_NAME);
-            if (suite == NVVS_SUITE_LONG)
+            if (suite >= NVVS_SUITE_LONG)
             {
                 testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
                 if (DcgmNs::Utils::IsRunningAsRoot())
@@ -844,26 +853,20 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                     testNames.push_back(EUD_PLUGIN_NAME);
                 }
             }
-            if (suite == NVVS_SUITE_XLONG)
+            if (suite >= NVVS_SUITE_XLONG)
             {
-                testNames.push_back(MEMORY_PLUGIN_NAME);
-                testNames.push_back(DIAGNOSTIC_PLUGIN_NAME);
                 testNames.push_back(MEMTEST_PLUGIN_NAME);
                 testNames.push_back(PULSE_TEST_PLUGIN_NAME);
-                if (DcgmNs::Utils::IsRunningAsRoot())
-                {
-                    testNames.push_back(EUD_PLUGIN_NAME);
-                }
             }
             type = HARDWARE_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_INTEGRATION:
-            if (suite == NVVS_SUITE_MEDIUM || suite == NVVS_SUITE_LONG || suite == NVVS_SUITE_XLONG)
+            if (suite >= NVVS_SUITE_MEDIUM)
                 testNames.push_back(PCIE_PLUGIN_NAME);
             type = INTEGRATION_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_PERFORMANCE:
-            if (suite == NVVS_SUITE_LONG || suite == NVVS_SUITE_XLONG)
+            if (suite >= NVVS_SUITE_LONG)
             {
                 testNames.push_back(MEMBW_PLUGIN_NAME);
                 testNames.push_back(TS_PLUGIN_NAME);
@@ -890,8 +893,10 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             testIt = FindTestName(testClass, SW_PLUGIN_NAME);
             if (testIt == testVect.end())
             {
-                throw std::runtime_error(
-                    "The software deployment program was not properly loaded. Please check the plugin path and that the plugins are valid.");
+                throw NvvsException(
+                    "The software deployment program was not properly loaded. Please check the plugin path and that "
+                    "the plugins are valid.",
+                    NVVS_ST_TEST_NOT_FOUND);
             }
         }
 
@@ -1056,7 +1061,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                 if (pv.IsValidTestName(testName) == false)
                 {
                     buf << "test '" << testName << "' does not match any loaded tests. Check logs for plugin failures.";
-                    throw std::runtime_error(buf.str());
+                    throw NvvsException(buf.str(), NVVS_ST_TEST_NOT_FOUND);
                 }
 
                 size_t subtestDot = parmName.find('.');
@@ -1123,7 +1128,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
 
     try
     {
-        TCLAP::CmdLine cmd(NVVS_NAME, ' ', DRIVER_VERSION);
+        TCLAP::CmdLine cmd(NVVS_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
         NVVSOutput nvout;
         cmd.setOutput(&nvout);
         // add this so it displays as part of help but it is effectively ignored

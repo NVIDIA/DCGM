@@ -18,6 +18,9 @@
 
 #include "Plugin.h"
 
+#define RUN_CUDA_KERNEL_REC \
+    "Please check if a CUDA sample program can be run successfully on this host. Refer to https://github.com/nvidia/cuda-samples"
+
 /********************************************************************/
 /*
  * Sets the result for the GPU based on the value of 'passed'. Logs warnings from 'errorList' if the result is fail.

@@ -206,11 +206,13 @@ function run_cmake() {
     if [[ ${packs} -eq 1 ]]; then
         cpack -G TGZ
 
-        pushd dcgm_config
-        cmake ${CMAKE_COMMON_ARGS} . "$@"
-        cpack -G TGZ
-        mv *.tar.gz ${output_dir}
-        popd
+        if [[ ! ${vmware} -eq 1 ]]; then
+            pushd dcgm_config
+            cmake ${CMAKE_COMMON_ARGS} . "$@"
+            cpack -G TGZ
+            mv *.tar.gz ${output_dir}
+            popd
+        fi
     fi
 
     if [[ ${makedeb} -eq 1 ]]; then
@@ -218,12 +220,14 @@ function run_cmake() {
         cmake --build . -j${NPROC}
         cpack -G DEB
 
-        pushd dcgm_config
-        cmake ${CMAKE_COMMON_ARGS} . "$@"
-        cmake --build . -j${NPROC}
-        cpack -G DEB
-        mv *.deb ${output_dir}
-        popd
+        if [[ ! ${vmware} -eq 1 ]]; then
+            pushd dcgm_config
+            cmake ${CMAKE_COMMON_ARGS} . "$@"
+            cmake --build . -j${NPROC}
+            cpack -G DEB
+            mv *.deb ${output_dir}
+            popd
+        fi
     fi
 
     if [[ ${makerpm} -eq 1 ]]; then
@@ -231,12 +235,14 @@ function run_cmake() {
         cmake --build . -j${NPROC}
         cpack -G RPM
 
-        pushd dcgm_config
-        cmake ${CMAKE_COMMON_ARGS} . "$@"
-        cmake --build . -j${NPROC}
-        cpack -G RPM
-        mv *.rpm ${output_dir}
-        popd
+        if [[ ! ${vmware} -eq 1 ]]; then
+            pushd dcgm_config
+            cmake ${CMAKE_COMMON_ARGS} . "$@"
+            cmake --build . -j${NPROC}
+            cpack -G RPM
+            mv *.rpm ${output_dir}
+            popd
+        fi
     fi
 
     popd
@@ -365,7 +371,7 @@ function dcgm_build_using_docker() {
         static_analysis_mount="--mount source=dcgm_coverity,target=/coverity"
     fi
 
-    local dcgm_docker_image=$($(dirname $(realpath "${0}"))/intodocker.sh -n)
+    local dcgm_docker_image=$($(dirname $(realpath "${0}"))/intodocker.sh -n -a ${arch})
 
     local remote_args="--arch ${arch} --sa-mode ${static_analysis}"
     if [[ ${debug} -eq 1 ]]; then

@@ -40,7 +40,7 @@ def test_send_to_telegraf():
     assert(namespace.message == 'message')
     assert(namespace.dest == ('FAKE_HOST', 101010))
 
-def test_custom_json_handler():
+def test_telegraph_custom_json_handler():
     namespace = Struct(arg=None)
 
     def MySendToTelegraf(json):

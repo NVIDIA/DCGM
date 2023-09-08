@@ -117,7 +117,7 @@ def setup_environment():
         have_recreated_log_dir = True #We set this boolean here so we don't incorrectly remove this directory if this function is called again
         if os.path.isdir(log_dir):
             shutil.rmtree(log_dir, ignore_errors=True)
-
+        
         try:
             os.mkdir(log_dir)
         except OSError:

@@ -50,6 +50,7 @@ SCENARIO("void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcg
 
     // Then a non-zero
     fv.value.i64 = 33;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     // Now we test retrieving the value
@@ -74,10 +75,12 @@ SCENARIO("void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcg
 
     // First we inject a zero
     fv.value.dbl = 0.0;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     // Then a non-zero
     fv.value.dbl = 33.0;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     memset(&fv, 0, sizeof(fv));
@@ -109,6 +112,7 @@ SCENARIO("void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jso
     timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     fv.value.i64 = 1;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 1, fv);
 
     // DOUBLE
@@ -116,9 +120,11 @@ SCENARIO("void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jso
     fv.fieldType = DCGM_FT_DOUBLE;
 
     fv.value.dbl = 0.0;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     fv.value.dbl = 1.0;
+    fv.ts += 1;
     timeSeries.AddValue(DCGM_FE_GPU, 0, 2, fv);
 
     timeSeries.AddToJson(jv, jsonIndex);
@@ -173,6 +179,7 @@ SCENARIO("void DcgmValuesSinceHolder::GetFirstNonZero(dcgm_field_entity_group_t 
     dvsh.AddValue(DCGM_FE_GPU, 0, fieldId, fv);
 
     fv.value.i64 = 1;
+    fv.ts += 1;
     dvsh.AddValue(DCGM_FE_GPU, 0, fieldId, fv);
 
     memset(&fv, 0, sizeof(fv));
@@ -273,11 +280,13 @@ SCENARIO("bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned s
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
 
     fv.value.i64 = 1;
+    fv.ts += 1;
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
 
     CHECK(!dvsh.DoesValuePassPerSecondThreshold(fieldId, threshold, entityId, "field name", errorList, 0));
 
     fv.value.i64 = 3;
+    fv.ts += 1;
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
     CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, threshold, entityId, "field name", errorList, 0));
 
@@ -295,11 +304,13 @@ SCENARIO("bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned s
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
 
     fv.value.dbl = 1.0;
+    fv.ts += 1;
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
 
     CHECK(!dvsh.DoesValuePassPerSecondThreshold(fieldId, threshold, entityId, "field name", errorList, 0));
 
     fv.value.dbl = 3.0;
+    fv.ts += 1;
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
     CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, threshold, entityId, "field name", errorList, 0));
 }

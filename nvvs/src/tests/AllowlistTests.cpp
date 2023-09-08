@@ -182,17 +182,14 @@ SCENARIO("Allowlist provides default values for device", "[.]")
             const std::string id       = "102d";
             const std::string testName = SMSTRESS_PLUGIN_NAME;
 
-
             // For some amazing reason, when we are getting the test parameters, we
             // free the memory too... so without setting them first, we get a segfault
-            tp.AddString(SMSTRESS_STR_IS_ALLOWED, "False");
             tp.AddDouble(SMSTRESS_STR_TARGET_PERF, 0.0);
             tp.AddString(SMSTRESS_STR_USE_DGEMM, "True");
             tp.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 0.0);
 
             wl.getDefaultsByDeviceId(testName, id, &tp);
 
-            CHECK(tp.GetString(SMSTRESS_STR_IS_ALLOWED) == "True");
             CHECK(tp.GetDouble(SMSTRESS_STR_TARGET_PERF) == 950.0);
             CHECK(tp.GetString(SMSTRESS_STR_USE_DGEMM) == "False");
             CHECK(tp.GetDouble(SMSTRESS_STR_TEMPERATURE_MAX) == 0.0);

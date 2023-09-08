@@ -22,11 +22,6 @@
 #include <unordered_map>
 #include <vector>
 
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* 2.4.0 -> 3.1.7 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* Current version - 3.1.8 and later */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3
-
 class PluginLib
 {
 public:

@@ -23,6 +23,8 @@
 
 DcgmSystem::DcgmSystem()
     : m_handle(0)
+    , m_cudaMajorVersion(0)
+    , m_cudaMinorVersion(0)
 {}
 
 DcgmSystem::~DcgmSystem()
@@ -239,4 +241,44 @@ dcgmReturn_t DcgmSystem::GetLatestValuesForGpus(const std::vector<unsigned int> 
 bool DcgmSystem::IsInitialized() const
 {
     return m_handle != 0;
+}
+
+unsigned int DcgmSystem::GetCudaMajorVersion()
+{
+    if (m_cudaMajorVersion != 0)
+    {
+        return m_cudaMajorVersion;
+    }
+
+    dcgmFieldValue_v2 cudaDriverValue = {};
+    unsigned int flags                = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
+
+    dcgmReturn_t ret = GetGpuLatestValue(0, DCGM_FI_CUDA_DRIVER_VERSION, flags, cudaDriverValue);
+
+    switch (ret)
+    {
+        case DCGM_ST_OK:
+            break;
+        default:
+        {
+            log_error("Unable to detect Cuda version: {}. Please verify that libcuda.so is present on the system.",
+                      errorString(ret));
+            return 0;
+        }
+    }
+
+    m_cudaMajorVersion = cudaDriverValue.value.i64 / 1000;
+    m_cudaMinorVersion = (cudaDriverValue.value.i64 - m_cudaMajorVersion * 1000) / 10;
+
+    return m_cudaMajorVersion;
+}
+
+unsigned int DcgmSystem::GetCudaMinorVersion()
+{
+    if (m_cudaMinorVersion == 0)
+    {
+        GetCudaMajorVersion();
+    }
+
+    return m_cudaMinorVersion;
 }

@@ -1482,10 +1482,37 @@ class RunDcgmi():
                             if diagTest:
                                 nsc = nvidia_smi_utils.NvidiaSmiJob()
                                 nsc.start()
-                                dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(), runMode=diagTest, gpuIds=gpuIds)
+                                paramsStr = "pcie.test_nvlink_status=false"
+                                paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=2"
+                                paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=2"
+
+                                dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(), runMode=diagTest, gpuIds=gpuIds, paramsStr=paramsStr)
                                 diagPassed = not dd.Run()
+                                if dd.failed_list:
+                                    """
+                                    Diag may have passed if all errors are
+                                    DCGM_FI_DEV_CLOCK_THROTTLE_REASONS
+                                    """
+                                    diagPassed = True
+                                    logCooling = False
+                                    for failure in dd.failed_list:
+                                        if failure.m_fieldId == dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS:
+                                            logCooling = True;
+                                        else:
+                                            diagPassed = False
+
+                                    if logCooling:
+                                        self.log.write("Please check cooling on this machine.")
+
                                 nsc.m_shutdownFlag.set()
                                 nsc.join()
+                                throttleReasons = nsc.GetAnyThermalThrottlingReasons()
+                                if len(throttleReasons):
+                                    self.log.write("Ignoring diagnostic failure due to thermal throttling.")
+                                    for throttleReason in throttleReasons:
+                                        self.log.write("Found thermal throttling: %s" % str(throttleReasons))
+                                    diagPassed = True
+
                                 fout.write(str(dd.lastStdout))
                                 fout.write(str(dd.lastStderr))
                                 rc = dd.diagRet

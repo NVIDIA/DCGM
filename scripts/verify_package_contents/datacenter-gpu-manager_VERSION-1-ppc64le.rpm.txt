@@ -81,6 +81,8 @@
 /usr/local/dcgm/bindings/python3/dcgmvalue.py
 /usr/local/dcgm/bindings/python3/denylist_recommendations.py
 /usr/local/dcgm/bindings/python3/pydcgm.py
+/usr/local/dcgm/scripts
+/usr/local/dcgm/scripts/gather-dcgm-logs.sh
 /usr/local/dcgm/sdk_samples
 /usr/local/dcgm/sdk_samples/c_src
 /usr/local/dcgm/sdk_samples/c_src/CMakeLists.txt
@@ -122,6 +124,8 @@
 /usr/share/nvidia-validation-suite/nvvs
 /usr/share/nvidia-validation-suite/plugins
 /usr/share/nvidia-validation-suite/plugins/cuda10
+/usr/share/nvidia-validation-suite/plugins/cuda10/BwChecker_10
+/usr/share/nvidia-validation-suite/plugins/cuda10/DcgmProfTesterKernels.ptx
 /usr/share/nvidia-validation-suite/plugins/cuda10/libContextCreate.so
 /usr/share/nvidia-validation-suite/plugins/cuda10/libContextCreate.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda10/libContextCreate.so.3
@@ -140,9 +144,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so
 /usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda10/libPcie.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda10/libSmStress.so
-/usr/share/nvidia-validation-suite/plugins/cuda10/libSmStress.so.${VERSION}
-/usr/share/nvidia-validation-suite/plugins/cuda10/libSmStress.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda10/libSoftware.so
 /usr/share/nvidia-validation-suite/plugins/cuda10/libSoftware.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda10/libSoftware.so.3
@@ -156,6 +157,8 @@
 /usr/share/nvidia-validation-suite/plugins/cuda10/libpluginCommon.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda10/libpluginCommon.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda11
+/usr/share/nvidia-validation-suite/plugins/cuda11/BwChecker_11
+/usr/share/nvidia-validation-suite/plugins/cuda11/DcgmProfTesterKernels.ptx
 /usr/share/nvidia-validation-suite/plugins/cuda11/libContextCreate.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libContextCreate.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libContextCreate.so.3
@@ -174,9 +177,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda11/libSmStress.so
-/usr/share/nvidia-validation-suite/plugins/cuda11/libSmStress.so.${VERSION}
-/usr/share/nvidia-validation-suite/plugins/cuda11/libSmStress.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so.3
@@ -190,6 +190,8 @@
 /usr/share/nvidia-validation-suite/plugins/cuda11/libpluginCommon.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libpluginCommon.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda12
+/usr/share/nvidia-validation-suite/plugins/cuda12/BwChecker_12
+/usr/share/nvidia-validation-suite/plugins/cuda12/DcgmProfTesterKernels.ptx
 /usr/share/nvidia-validation-suite/plugins/cuda12/libContextCreate.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libContextCreate.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libContextCreate.so.3
@@ -208,9 +210,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda12/libSmStress.so
-/usr/share/nvidia-validation-suite/plugins/cuda12/libSmStress.so.${VERSION}
-/usr/share/nvidia-validation-suite/plugins/cuda12/libSmStress.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so.3

@@ -159,10 +159,13 @@ def test_dcgm_library_existence():
         'libdcgmmoduleconfig.so',
         'libdcgmmodulehealth.so',
         'libdcgmmodulenvswitch.so',
+        'libdcgmmoduleprofiling.so',
         'libdcgm_cublas_proxy11.so',
         'libdcgmmodulediag.so',
         'libdcgmmoduleintrospect.so',
         'libdcgmmodulepolicy.so',
+        'libdcgmmodulevgpu.so',
+        'libnvperf_dcgm_host.so',
     ]
 
     name_to_found = {}
@@ -183,4 +186,3 @@ def test_dcgm_library_existence():
 
     for name in name_to_found:
         assert name_to_found[name] == True, "Didn't find required library '%s' in library path '%s'" % (name, lib_path)
-

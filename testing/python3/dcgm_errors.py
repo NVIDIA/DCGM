@@ -112,7 +112,11 @@ DCGM_FR_EUD_NON_ZERO_EXIT_CODE              = 94 # EUD process exited with a non
 DCGM_FR_EUD_TEST_FAILED                     = 95 # EUD test failed
 DCGM_FR_FILE_CREATE_PERMISSIONS             = 96 # We cannot write a file in this directory.
 DCGM_FR_PAUSE_RESUME_FAILED                 = 97 # Pause/Resume failed
-DCGM_FR_ERROR_SENTINEL                      = 98 # MUST BE THE LAST ERROR CODE
+DCGM_FR_PCIE_REPLAYS                        = 98 # Pause/Resume failed
+DCGM_FR_GPU_EXPECTED_NVLINKS_UP             = 99 # Expected nvlinks up per gpu */
+DCGM_FR_NVSWITCH_EXPECTED_NVLINKS_UP        = 100 # Expected nvlinks up per nvswitch */
+DCGM_FR_XID_ERROR                           = 101 # XID error detected
+DCGM_FR_ERROR_SENTINEL                      = 102 # MUST BE THE LAST ERROR CODE
 
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
@@ -268,7 +272,9 @@ DCGM_FR_PENDING_ROW_REMAP_MSG         = "GPU %u has pending row remappings"
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
 DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG      = "NVSwitch %u's NvLink %u is down."
+DCGM_FR_PCIE_REPLAYS                  = "GPU %u had correctable PCIe errors, see dmesg for more information." 
 DCGM_FR_FILE_CREATE_PERMISSIONS_MSG   = "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
+DCGM_FR_XID_ERROR_MSG                 = "Detected XID %u for GPU %u"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -381,6 +387,8 @@ DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT     = "Please check fabric manager and initialization logs to figure out why the link is down. You may also need to run a field diagnostic."
 DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT  = "Please restart the hostengine with parameter --home-dir to specify a different home directory for the " \
     "diagnostic or change permissions in the current directory to allow the user to write files there."
+DCGM_FR_PCIE_REPLAYS_NEXT             = ""
+DCGM_FR_XID_ERROR_NEXT                = "Please consult the documentation for details of this XID."
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

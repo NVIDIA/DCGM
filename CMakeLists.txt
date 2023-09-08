@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 3.1.8)
+project(dcgm VERSION 3.2.5)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -31,7 +31,7 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
-set(DCGM_CXX_FLAGS "-Werror -Wpedantic -Wno-sign-compare -Wno-unused-parameter -Wall -Wextra")
+set(DCGM_CXX_FLAGS "-Werror -Wpedantic -Wno-sign-compare -Wno-unused-parameter -Wall -Wextra -fmax-errors=1")
 
 include(CheckCCompilerFlag)
 check_c_compiler_flag("-Wno-cast-function-type" CC_HAS_WNO_CAST_FUNCTION_TYPE)
@@ -141,11 +141,11 @@ endif()
 mark_as_advanced(DCGM_LIB_INSTALL_PREFIX)
 message("DCGM_LIB_INSTALL_PREFIX=${DCGM_LIB_INSTALL_PREFIX}")
 
-set(DCGM_RPATH "$ORIGIN/:$ORIGIN/../${DCGM_LIB_INSTALL_PREFIX}")
+set(DCGM_RPATH "\$ORIGIN/:\$ORIGIN/../${DCGM_LIB_INSTALL_PREFIX}")
 set(CMAKE_INSTALL_RPATH ${DCGM_RPATH})
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath,${DCGM_RPATH}")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath,${DCGM_RPATH}")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+# If this is set, the RPATH of the binaries in _out/build/... directory will be set to $ORIGIN:/$ORIGIN/../lib as well
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 set(DCGM_NVVS_CONFIG_DIR "${CMAKE_INSTALL_SYSCONFDIR}/nvidia-validation-suite")
 set(DCGM_NVVS_INSTALL_DIR "${CMAKE_INSTALL_DATAROOTDIR}/nvidia-validation-suite")
@@ -154,6 +154,7 @@ set(DCGM_TESTS_INSTALL_DIR "${CMAKE_INSTALL_DATAROOTDIR}/dcgm_tests")
 set(DCGM_BINDINGS_INSTALL_DIR "local/dcgm/bindings")
 set(DCGM_DOCS_INSTALL_DIR "local/dcgm")
 set(DCGM_SAMPLES_INSTALL_DIR "local/dcgm/sdk_samples")
+set(DCGM_SCRIPTS_INSTALL_DIR "local/dcgm/scripts")
 
 if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
     set(DCGM_TESTS_ARCH "amd64")
@@ -291,17 +292,18 @@ add_subdirectory(modules/vgpu)
 
 add_subdirectory(hostengine)
 # add_subdirectory(cuda_loader)
+add_subdirectory(dcgmproftester)
 add_subdirectory(nvvs/plugin_src)
 add_subdirectory(nvvs/src)
 add_subdirectory(dcgmi)
 add_subdirectory(testing)
-add_subdirectory(dcgmproftester)
 add_subdirectory(dcgm_stub)
 
 add_subdirectory(testing/python3/apps/cuda_ctx_create)
 add_subdirectory(sdk_samples)
 
 add_subdirectory(config-files)
+add_subdirectory(scripts)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt

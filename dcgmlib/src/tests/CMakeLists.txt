@@ -30,6 +30,7 @@ if (BUILD_TESTING)
             MigManagerTests.cpp
             ApiTests.cpp
             GpuInstanceTests.cpp
+            dcgm_error_tests.cpp
     )
 
     target_link_libraries(dcgmlibtests PRIVATE

@@ -419,6 +419,18 @@ private:
 
 /*************************************************************************/
 /*
+ * Attempts to load the specified function from the specified library
+ *
+ * @param libHandle - the handle to the library
+ * @param funcName - the name of the function to load
+ * @param libName - the name of the library we are loading the function from
+ *
+ * @return a pointer to the function, or nullptr if it couldn't be found
+ */
+void *LoadFunction(void *libHandle, const std::string &funcName, const std::string &libName);
+
+/*************************************************************************/
+/*
  * Creates a child process and executes the command given by args where args is an argv style array of strings.
  *
  * @param args: (IN) argv style args given as a vector of strings. The program to execute is the first element of the
@@ -443,7 +455,21 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
                          FileHandle *outfp,
                          FileHandle *errfp,
                          bool stderrToStdout,
-                         const char *userName);
+                         char const *userName,
+                         const std::array<unsigned long long, 4> *nodeSet);
+
+/*************************************************************************/
+/*
+ * Reads the output in the specified FileHandle and populates stdoutStream with the data.
+ *
+ * @param outputFd: (IN)
+ * @param stdoutStream: (OUT)
+ *
+ * @return: the return code.
+ *           0 if the output was successfully read and the buffer was populated
+ *          -1 if an error occurred.
+ */
+int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd);
 
 bool IsRunningAsRoot();
 

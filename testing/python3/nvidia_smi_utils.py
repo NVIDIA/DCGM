@@ -42,6 +42,8 @@ AGGREGATE_FN     = "aggregate"
 TOTAL_FN         = "total"
 DB_FN            = 'double_bit'
 SB_FN            = 'single_bit'
+PCI_FN           = "pci"
+PCI_DEVICE_ID_FN = "pci_device_id"
 
 # list of relevant throttle reasons
 relevant_throttling = ["clocks_throttle_reason_hw_slowdown",
@@ -179,6 +181,10 @@ class NvidiaSmiJob(threading.Thread):
                         self.ParseRetiredPagesCount(grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE)
                     elif grandchild.tag == RETIRED_DBE_FN:
                         self.ParseRetiredPagesCount(grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE)
+            elif child.tag == PCI_FN:
+                for grandchild in child:
+                    if grandchild.tag == PCI_DEVICE_ID_FN:
+                         gpudata[dcgm_fields.DCGM_FI_DEV_PCI_COMBINED_ID] = grandchild.text
 
         if gpu_id not in self.m_data:
             self.m_data[gpu_id] = {}
@@ -260,6 +266,15 @@ class NvidiaSmiJob(threading.Thread):
                 self.m_data[gpu_id][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION] = []
 
             self.m_data[gpu_id][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION].append(violation)
+
+    ################################################################################
+    def GetAnyThermalThrottlingReasons(self):
+        throttling = []
+        for gpuId in self.m_data:
+            if dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION in self.m_data[gpuId]:
+                throttling.append(self.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION])
+
+        return throttling
 
     ################################################################################
     def CheckInforom(self):

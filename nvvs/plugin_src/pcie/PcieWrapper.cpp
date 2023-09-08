@@ -29,7 +29,6 @@ unsigned int GetPluginInterfaceVersion(void)
 
 dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
 {
-    // TODO: Add a version check
     // parameterNames must be null terminated
     const char *parameterNames[] = { PCIE_STR_TEST_PINNED,
                                      PCIE_STR_TEST_UNPINNED,
@@ -63,6 +62,18 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED,
                                      PCIE_STR_TEST_NVLINK_STATUS,
                                      PCIE_STR_TEST_BROKEN_P2P,
+                                     SMSTRESS_STR_TEST_DURATION,
+                                     SMSTRESS_STR_TARGET_PERF,
+                                     SMSTRESS_STR_TEMPERATURE_MAX,
+                                     SMSTRESS_STR_USE_DGEMM,
+                                     SMSTRESS_STR_MATRIX_DIM,
+                                     PCIE_STR_AER_THRESHOLD,
+                                     PCIE_STR_TEST_WITH_GEMM,
+                                     PCIE_STR_DISABLE_TESTS,
+                                     PCIE_STR_GPU_NVLINKS_EXPECTED_UP,
+                                     PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP,
+                                     PCIE_STR_PARALLEL_BW_CHECK_DURATION,
+                                     PCIE_STR_DONT_BIND_NUMA,
                                      nullptr };
 
     const dcgmPluginValue_t paramTypes[]
@@ -72,7 +83,10 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
             DcgmPluginParamInt,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamNone };
+            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamInt,
+            DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamString,
+            DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamNone };
+
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
@@ -160,6 +174,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     *userData    = bg;
 
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, bg->GetDisplayName());
+    bg->Init(gpuInfo);
     return DCGM_ST_OK;
 }
 

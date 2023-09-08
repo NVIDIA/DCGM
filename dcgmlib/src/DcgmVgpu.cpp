@@ -421,11 +421,13 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             }
             if (NVML_SUCCESS != nvmlReturn)
             {
-                DCGM_LOG_ERROR << fmt::format(
-                    "nvmlVgpuInstanceGetLicenseInfo_v2 for vgpuId {} failed with error: ({}) {}",
-                    vgpuId,
-                    nvmlReturn,
-                    nvmlErrorString(nvmlReturn));
+                if (nvmlReturn != NVML_ERROR_DRIVER_NOT_LOADED)
+                {
+                    log_error("nvmlVgpuInstanceGetLicenseInfo_v2 for vgpuId {} failed with error: ({}) {}",
+                              vgpuId,
+                              nvmlReturn,
+                              nvmlErrorString(nvmlReturn));
+                }
                 SafeCopyTo(licenseState, (char const *)"Not Available");
                 cm.AppendEntityString(threadCtx, licenseState, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -467,12 +469,11 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                         = cm.UpdateFieldWatch(watchInfo, 20000000, 20.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
                     if (DCGM_ST_OK != status)
                     {
-                        DCGM_LOG_ERROR << fmt::format(
-                            "UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
-                            vgpuId,
-                            fieldMeta->fieldId,
-                            status,
-                            errorString(status));
+                        log_error("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
+                                  vgpuId,
+                                  fieldMeta->fieldId,
+                                  status,
+                                  errorString(status));
                         return status;
                     }
                 }
@@ -489,12 +490,11 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                         = cm.UpdateFieldWatch(watchInfo, 1000000, 600.0, 600, DcgmWatcher(DcgmWatcherTypeCacheManager));
                     if (DCGM_ST_OK != status)
                     {
-                        DCGM_LOG_ERROR << fmt::format(
-                            "UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
-                            vgpuId,
-                            fieldMeta->fieldId,
-                            status,
-                            errorString(status));
+                        log_error("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
+                                  vgpuId,
+                                  fieldMeta->fieldId,
+                                  status,
+                                  errorString(status));
                         return status;
                     }
                 }
@@ -515,11 +515,14 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             }
             if (NVML_SUCCESS != nvmlReturn)
             {
-                DCGM_LOG_ERROR << fmt::format(
-                    "nvmlVgpuInstanceGetFrameRateLimit for vgpuId {} failed with error: ({}) {}",
-                    vgpuId,
-                    nvmlReturn,
-                    nvmlErrorString(nvmlReturn));
+                // Not Supported returned, if vGPU scheduler is enabled. Don't log.
+                if (nvmlReturn != NVML_ERROR_NOT_SUPPORTED)
+                {
+                    log_error("nvmlVgpuInstanceGetFrameRateLimit for vgpuId {} failed with error: ({}) {}",
+                              vgpuId,
+                              nvmlReturn,
+                              nvmlErrorString(nvmlReturn));
+                }
                 cm.AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }

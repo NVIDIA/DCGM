@@ -16,9 +16,10 @@
 #ifndef DCGM_VALUES_SINCE_HOLDER_H
 #define DCGM_VALUES_SINCE_HOLDER_H
 
-#include <map>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DcgmError.h"
@@ -34,11 +35,11 @@ class DcgmEntityTimeSeries
 public:
     // Constructors
     DcgmEntityTimeSeries();
-    DcgmEntityTimeSeries(dcgm_field_eid_t entityId);
+    explicit DcgmEntityTimeSeries(dcgm_field_eid_t entityId);
     DcgmEntityTimeSeries(const DcgmEntityTimeSeries &ets);
 
     DcgmEntityTimeSeries &operator=(const DcgmEntityTimeSeries &ets);
-    bool operator==(const DcgmEntityTimeSeries &ets);
+    bool operator==(const DcgmEntityTimeSeries &ets) const;
 
     /*
      */
@@ -50,7 +51,7 @@ public:
     /*
      * Return true if this fieldId has already been recorded in this timeseries
      */
-    bool IsFieldStored(unsigned short fieldId);
+    bool IsFieldStored(unsigned short fieldId) const;
 
     /*
      * Returns the first non-zero value in the cache for the specified field id.
@@ -67,9 +68,14 @@ public:
     friend class DcgmValuesSinceHolder;
 
 private:
-    dcgm_field_eid_t m_entityId; // entity id that we're dealing with
+    dcgm_field_eid_t m_entityId = { 0 }; //!< entity id that we're dealing with
     // Map of fieldIds to values in timeseries order
-    std::map<unsigned short, DcgmFvBuffer> m_fieldValueTimeSeries;
+    std::unordered_map<unsigned short, DcgmFvBuffer> m_fieldValueTimeSeries;
+    // Map of fieldIds to the timestamps we've seen for that fieldId
+    std::unordered_map<unsigned short, std::unordered_set<timelib64_t>> m_seenTimestamps;
+
+    inline bool IsValueInCache(unsigned short fieldId, dcgmFieldValue_v1 const &value);
+    inline void AddValueToCache(unsigned short fieldId, dcgmFieldValue_v1 const &value);
 };
 
 class DcgmValuesSinceHolder
@@ -122,7 +128,7 @@ public:
 
 private:
     // Map of entity types to a map of entity ids mapped to their fields and values held in an object
-    std::map<dcgm_field_entity_group_t, std::map<dcgm_field_eid_t, DcgmEntityTimeSeries>> m_values;
+    std::unordered_map<dcgm_field_entity_group_t, std::unordered_map<dcgm_field_eid_t, DcgmEntityTimeSeries>> m_values;
 };
 
 #endif

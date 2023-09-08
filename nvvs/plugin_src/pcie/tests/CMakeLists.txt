@@ -17,13 +17,12 @@ find_package(Catch2 REQUIRED)
 find_package(Yaml REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Cuda REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
 
 if (BUILD_TESTING)
-    add_compile_definitions(PCIE_UNIT_TESTING=1)
-
     add_executable(pcietests)
     target_sources(pcietests
         PRIVATE
@@ -51,6 +50,7 @@ if (BUILD_TESTING)
             nvvs_without_main_objects
             Catch2::Catch2
             testing_cuda_stubs
+            testing_dcgm_cublas_stubs
             cuda_common_interface
     )
 

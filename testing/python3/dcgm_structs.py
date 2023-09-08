@@ -565,27 +565,34 @@ def _LoadDcgmLibrary(libDcgmPath=None):
         try:
             # ensure the library still isn't loaded
             if dcgmLib is None:
-                try:
-                    if sys.platform[:3] == "win":
-                        # cdecl calling convention
-                        # load nvml.dll from %ProgramFiles%/NVIDIA Corporation/NVSMI/nvml.dll
-                        dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
-                    else:
-                        if libDcgmPath:
-                            lib_file = os.path.join(libDcgmPath, "libdcgm.so.3")
-                        else:
-                            # Try Debian-based distros
-                            lib_file = '/usr/lib/{}-linux-gnu/libdcgm.so.3'.format(platform.machine())
-                            if not os.path.isfile(lib_file):
-                                # Presume Redhat-based distros
-                                lib_file = '/usr/lib64/libdcgm.so.3'
+                if sys.platform[:3] == "win":
+                    # cdecl calling convention
+                    # load nvml.dll from %ProgramFiles%/NVIDIA Corporation/NVSMI/nvml.dll
+                    dcgmLib = CDLL(os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
+                else:
+                    libPaths = []
+                    if libDcgmPath:
+                        libPaths.append(os.path.join(libDcgmPath, "libdcgm.so.3"))
+                    if 'LD_LIBRARY_PATH' in os.environ:
+                        envLibPaths = os.environ['LD_LIBRARY_PATH'].split(':')
+                        for envLibPath in envLibPaths:
+                            libPaths.append('{}/libdcgm.so.3'.format(envLibPath))
+                    libPaths.append('/usr/lib/{}-linux-gnu/libdcgm.so.3'.format(platform.machine()))
+                    libPaths.append('/usr/lib64/libdcgm.so.3')
 
-                    dcgmLib = CDLL(lib_file)
-                        
-                except OSError as ose:
-                    _dcgmCheckReturn(DCGM_ST_LIBRARY_NOT_FOUND)
+                    for lib_file in libPaths:
+                        if os.path.isfile(lib_file):
+                            try:
+                                dcgmLib = CDLL(lib_file)
+                                if dcgmLib:
+                                    break
+                            except OSError as ose:
+                                continue
+
                 if dcgmLib is None:
                     _dcgmCheckReturn(DCGM_ST_LIBRARY_NOT_FOUND)
+        except OSError as ose:
+            _dcgmCheckReturn(DCGM_ST_LIBRARY_NOT_FOUND)
         finally:
             # lock is always freed
             libLoadLock.release()
@@ -681,6 +688,9 @@ class c_dcgmGroupEntityPair_t(_PrintableStructure):
         ('entityGroupId', c_uint32), #Entity Group ID entity belongs to
         ('entityId', c_uint32) #Entity ID of the entity
     ]
+
+    def __eq__(self, other):
+        return (self.entityGroupId == other.entityGroupId) and (self.entityId == other.entityId)
 
 # /**
 #  * Structure to store information for DCGM group (v2)

@@ -780,6 +780,10 @@ void MemtestWorker::run()
         if (tot_num_blocks <= 0)
         {
             DCGM_LOG_ERROR << "cannot allocate any memory from GPU";
+            if (ptr)
+            {
+                cudaFree(ptr);
+            }
             return;
         }
         if (m_useMappedMemory)

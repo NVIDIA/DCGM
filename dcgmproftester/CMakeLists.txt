@@ -36,6 +36,7 @@ macro(define_dcgmproftester cuda_version)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_common)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cublas_proxy${cuda_version})
+    target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cuda_worker${cuda_version})
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_STATIC_LIBS})
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_LIBS})
     target_sources(
@@ -45,8 +46,6 @@ macro(define_dcgmproftester cuda_version)
         DcgmProfTester.h
         DistributedCudaContext.cpp
         DistributedCudaContext.h
-        CudaWorkerThread.cpp
-        CudaWorkerThread.hpp
         Entity.h
         Entity.cpp
         PhysicalGpu.cpp
@@ -58,9 +57,7 @@ macro(define_dcgmproftester cuda_version)
         ${COMMON_SRCS}
     )
 
-    if (${cuda_version} GREATER 10)
-        target_sources(${dcgmproftester_exec} PRIVATE DcgmDgemm.cpp)
-    else()
+    if (${cuda_version} EQUAL 10)
         target_compile_options(${dcgmproftester_exec} PRIVATE -Wno-volatile)
     endif()
 
@@ -80,3 +77,5 @@ set(DCGMPROFTESTER ${DCGMPROFTESTER_TARGETS} PARENT_SCOPE)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION bin COMPONENT DCGM)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests)
+
+set(DCGMPROFTESTER_PTX ${CMAKE_CURRENT_SOURCE_DIR}/DcgmProfTesterKernels.ptx PARENT_SCOPE)

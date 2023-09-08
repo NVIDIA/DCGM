@@ -19,14 +19,10 @@
 
 #include <sstream>
 
-DcgmEntityTimeSeries::DcgmEntityTimeSeries()
-    : m_entityId(0)
-    , m_fieldValueTimeSeries()
-{}
+DcgmEntityTimeSeries::DcgmEntityTimeSeries() = default;
 
 DcgmEntityTimeSeries::DcgmEntityTimeSeries(dcgm_field_eid_t entityId)
     : m_entityId(entityId)
-    , m_fieldValueTimeSeries()
 {}
 
 DcgmEntityTimeSeries::DcgmEntityTimeSeries(
@@ -46,7 +42,7 @@ DcgmEntityTimeSeries &DcgmEntityTimeSeries::operator=(const DcgmEntityTimeSeries
     return *this;
 }
 
-bool DcgmEntityTimeSeries::operator==(const DcgmEntityTimeSeries &ets)
+bool DcgmEntityTimeSeries::operator==(const DcgmEntityTimeSeries &ets) const
 {
     return m_entityId == ets.m_entityId;
 }
@@ -56,13 +52,29 @@ void DcgmEntityTimeSeries::AddValue(dcgm_field_entity_group_t entityGroupId,
                                     unsigned short fieldId,
                                     dcgmFieldValue_v1 &val)
 {
+    if (IsValueInCache(fieldId, val))
+    {
+        IF_PLOG(plog::debug)
+        {
+            log_debug("Skipping duplicate value for field {}", fieldId);
+            auto const valString = val.fieldType == DCGM_FT_DOUBLE  ? fmt::format("{}", val.value.dbl)
+                                   : val.fieldType == DCGM_FT_INT64 ? fmt::format("{}", val.value.i64)
+                                                                    : "Non-numeric field type";
+            log_debug("Value: {{ ts: {}, val: {} }}", val.ts, valString);
+        }
+        return;
+    }
     m_fieldValueTimeSeries[fieldId].SetGrowExponentially(true);
-    m_fieldValueTimeSeries[fieldId].AddFV1Value(entityGroupId, entityId, &val);
+    auto const *ptr = m_fieldValueTimeSeries[fieldId].AddFV1Value(entityGroupId, entityId, &val);
+    if (ptr != nullptr)
+    {
+        AddValueToCache(fieldId, val);
+    }
 }
 
-bool DcgmEntityTimeSeries::IsFieldStored(unsigned short fieldId)
+bool DcgmEntityTimeSeries::IsFieldStored(unsigned short fieldId) const
 {
-    return (m_fieldValueTimeSeries.find(fieldId) != m_fieldValueTimeSeries.end());
+    return m_fieldValueTimeSeries.contains(fieldId);
 }
 
 void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcgmFieldValue_v1 &dfv, uint64_t mask)
@@ -74,9 +86,8 @@ void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcgmFieldValu
     fvBuffer.GetSize(&bufferSize, &elementCount);
 
     dcgmBufferedFvCursor_t fvCursor = 0;
-    dcgmBufferedFv_t *fv            = nullptr;
 
-    for (fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
+    for (auto *fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
     {
         switch (fv->fieldType)
         {
@@ -105,8 +116,6 @@ void DcgmEntityTimeSeries::GetFirstNonZero(unsigned short fieldId, dcgmFieldValu
                 return;
         }
     }
-
-    return;
 }
 
 void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jsonIndex)
@@ -126,9 +135,8 @@ void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jsonIndex)
         fvBuffer.GetSize(&bufferSize, &elementCount);
 
         dcgmBufferedFvCursor_t fvCursor = 0;
-        dcgmBufferedFv_t *fv            = nullptr;
 
-        for (fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
+        for (auto const *fv = fvBuffer.GetNextFv(&fvCursor); fv != nullptr; fv = fvBuffer.GetNextFv(&fvCursor))
         {
             Json::Value entry;
             entry["timestamp"] = fv->timestamp;
@@ -141,11 +149,31 @@ void DcgmEntityTimeSeries::AddToJson(Json::Value &jv, unsigned int jsonIndex)
                 case DCGM_FT_DOUBLE:
                     entry["value"] = fv->value.dbl;
                     break;
+
+                default:
+                    log_debug("Unsupported field type {} for field {}", fv->fieldType, iter.first);
+                    continue;
             }
 
             jv[GPUS][jsonIndex][tag].append(entry);
         }
     }
+}
+
+bool DcgmEntityTimeSeries::IsValueInCache(unsigned short fieldId, const dcgmFieldValue_v1 &value)
+{
+    auto iter = m_seenTimestamps.find(fieldId);
+    if (iter == m_seenTimestamps.end())
+    {
+        return false;
+    }
+
+    return iter->second.contains(value.ts);
+}
+
+void DcgmEntityTimeSeries::AddValueToCache(unsigned short fieldId, const dcgmFieldValue_v1 &value)
+{
+    m_seenTimestamps[fieldId].insert(value.ts);
 }
 
 void DcgmValuesSinceHolder::GetFirstNonZero(dcgm_field_entity_group_t entityGroupId,
@@ -188,19 +216,16 @@ void DcgmValuesSinceHolder::ClearCache()
 
 void DcgmValuesSinceHolder::AddToJson(Json::Value &jv)
 {
-    std::map<dcgm_field_entity_group_t, std::map<dcgm_field_eid_t, DcgmEntityTimeSeries>>::iterator typeIter;
     unsigned int jsonIndex = 0;
 
-    for (typeIter = m_values.begin(); typeIter != m_values.end(); typeIter++)
+    for (auto &m_value : m_values)
     {
-        for (std::map<dcgm_field_eid_t, DcgmEntityTimeSeries>::iterator entityIter = typeIter->second.begin();
-             entityIter != typeIter->second.end();
-             entityIter++)
+        for (auto &entityIter : m_value.second)
         {
-            entityIter->second.m_entityId = entityIter->first; // Make sure the entity id is set
+            entityIter.second.m_entityId = entityIter.first; // Make sure the entity id is set
             // Make the jsonIndex separate from the entityId to avoid NULL entries in the JSON if we
             // are running on non-consecutive GPU ids.
-            entityIter->second.AddToJson(jv, jsonIndex);
+            entityIter.second.AddToJson(jv, jsonIndex);
             jsonIndex++;
         }
     }
@@ -220,13 +245,12 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
     values.GetSize(&bufferSize, &elementCount);
 
     dcgmBufferedFvCursor_t fvCursor = 0;
-    dcgmBufferedFv_t *fv            = nullptr;
-    dcgmBufferedFv_t *prevFv        = nullptr;
+    dcgmBufferedFv_t const *prevFv  = nullptr;
 
     /* We're doing differences so skip the first element and set it to previous */
     prevFv = values.GetNextFv(&fvCursor);
 
-    for (fv = values.GetNextFv(&fvCursor); fv != nullptr; prevFv = fv, fv = values.GetNextFv(&fvCursor))
+    for (auto const *fv = values.GetNextFv(&fvCursor); fv != nullptr; prevFv = fv, fv = values.GetNextFv(&fvCursor))
     {
         // These values are watched with a refresh of once per second, so comparing with the previous value
         // should be sufficient.
@@ -237,7 +261,7 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
                 double delta = fv->value.dbl - prevFv->value.dbl;
                 if (delta >= dfv.value.dbl)
                 {
-                    double timeDelta = (fv->timestamp - startTime) / 1000000.0;
+                    double timeDelta = double(fv->timestamp - startTime) / 1000000.0;
                     DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS_DBL, d, fieldName, dfv.value.dbl, delta, timeDelta);
@@ -249,10 +273,10 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
 
             case DCGM_FT_INT64:
             {
-                int delta = fv->value.i64 - prevFv->value.i64;
+                int64_t delta = fv->value.i64 - prevFv->value.i64;
                 if (delta >= dfv.value.i64)
                 {
-                    double timeDelta = (fv->timestamp - startTime) / 1000000.0;
+                    double timeDelta = double(fv->timestamp - startTime) / 1000000.0;
                     DcgmError d { gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(
                         DCGM_FR_FIELD_THRESHOLD_TS, d, fieldName, dfv.value.i64, delta, timeDelta);
@@ -261,6 +285,10 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
                 }
                 break;
             }
+
+            default:
+                log_debug("Unsupported field type {} for field {}", dfv.fieldType, fieldId);
+                continue;
         }
     }
 

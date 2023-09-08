@@ -410,6 +410,26 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_VBIOS_VERSION 85
 
 /**
+ * Device Memory node affinity, 0-63
+ */
+#define DCGM_FI_DEV_MEM_AFFINITY_0 86
+
+/**
+ * Device Memory node affinity, 64-127
+ */
+#define DCGM_FI_DEV_MEM_AFFINITY_1 87
+
+/**
+ * Device Memory node affinity, 128-191
+ */
+#define DCGM_FI_DEV_MEM_AFFINITY_2 88
+
+/**
+ * Device Memory node affinity, 192-255
+ */
+#define DCGM_FI_DEV_MEM_AFFINITY_3 89
+
+/**
  * Total BAR1 of the GPU in MB
  */
 #define DCGM_FI_DEV_BAR1_TOTAL 90
@@ -514,6 +534,11 @@ typedef unsigned int dcgm_field_eid_t;
  * Total energy consumption for the GPU in mJ since the driver was last reloaded
  */
 #define DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION 156
+
+/**
+ * Current instantaneous power usage of the device in Watts
+ */
+#define DCGM_FI_DEV_POWER_USAGE_INSTANT 157
 
 /**
  * Slowdown temperature for the device
@@ -841,6 +866,31 @@ typedef unsigned int dcgm_field_eid_t;
  * Note: monotonically increasing
  */
 #define DCGM_FI_DEV_ECC_DBE_AGG_TEX 333
+
+/**
+ * Historical max available spare memory rows per memory bank
+ */
+#define DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX 385
+
+/**
+ * Historical high mark of available spare memory rows per memory bank
+ */
+#define DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH 386
+
+/**
+ * Historical mark of partial available spare memory rows per memory bank
+ */
+#define DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL 387
+
+/**
+ * Historical low mark of available spare memory rows per memory bank
+ */
+#define DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW 388
+
+/**
+ * Historical marker of memory banks with no available spare memory rows
+ */
+#define DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE 389
 
 /**
  * Number of retired pages because of single bit errors
@@ -1431,6 +1481,26 @@ typedef unsigned int dcgm_field_eid_t;
  * Starting field ID of the NVSwitch instance
  */
 #define DCGM_FI_FIRST_NVSWITCH_FIELD_ID 700
+
+/**
+ * NvSwitch voltage
+ */
+#define DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT 701
+
+/**
+ * NvSwitch Current IDDQ
+ */
+#define DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ 702
+
+/**
+ * NvSwitch Current IDDQ Rev
+ */
+#define DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV 703
+
+/**
+ * NvSwitch Current IDDQ Rev DVDD
+ */
+#define DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD 704
 
 /**
  * <p>NVSwitch Tx Throughput Counter for ports 0-17</p>

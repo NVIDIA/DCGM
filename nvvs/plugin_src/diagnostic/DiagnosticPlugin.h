@@ -27,6 +27,7 @@
 
 #include <cublas_proxy.hpp>
 #include <cuda.h>
+#include <fmt/format.h>
 
 #define PERF_STAT_NAME "perf_gflops"
 
@@ -59,13 +60,15 @@ public:
             cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
             {
-                snprintf(buf,
-                         sizeof(buf),
-                         ": '%s' (%d)%s",
-                         errorString,
-                         static_cast<int>(cuSt),
-                         GetAdditionalCuInitDetail(cuSt));
-                d.AddDetail(buf);
+                d.AddDetail(fmt::format(": '{}' ({}){}. {}",
+                                        errorString,
+                                        static_cast<int>(cuSt),
+                                        GetAdditionalCuInitDetail(cuSt),
+                                        RUN_CUDA_KERNEL_REC));
+            }
+            else
+            {
+                d.AddDetail(fmt::format(": {}", RUN_CUDA_KERNEL_REC));
             }
             throw d;
         }

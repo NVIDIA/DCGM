@@ -105,17 +105,11 @@ def test_collectd_basic_integration(handle, gpuIds):
             assert fieldTag in gpuDict
             assert gpuDict[fieldTag] == fieldValues[i]
 
-
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
-def test_collectd_config_integration(handle, gpuIds):
+def helper_collectd_config(gpuIds, config, verify_fields = True):
     """
-    Verifies that we can parse config and get specified fields back.
+    Verify config via dcgm plugin. Verify fields parsed, if desired.
     """
-    config = Config()
 
-    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1'])]
     gvars = collectd_tester_globals.gvars
 
     assert 'config' in gvars
@@ -133,22 +127,77 @@ def test_collectd_config_integration(handle, gpuIds):
     assert 'shutdown' in gvars
     gvars['shutdown']()
 
-    # Verify that we can read back the fields we watch.
-    fieldTags = [ 'sm_clock', 'memory_clock', 'video_clock' ]
+    if (verify_fields):
+        # Verify that we can read back the fields we watch.
+        fieldTags = [ 'sm_clock', 'memory_clock', 'video_clock' ]
 
-    for gpuId in gpuIds:
-        assert str(gpuId) in outDict
+        for gpuId in gpuIds:
+            assert str(gpuId) in outDict
 
-        gpuDict = outDict[str(gpuId)]
+            gpuDict = outDict[str(gpuId)]
 
-        for fieldTag in fieldTags:
-            assert fieldTag in gpuDict
-            # We don't actually verify the value here, just the field tag name.
-            # This verifies that we parsed the fields properly, set the
-            # watches, and actually retrieves values for those fields. The
-            # value will likely be zero on an initial read, but we can't
-            # guarantee this. The basic test checks reading back expected
-            # values.
-#           assert gpuDict[fieldTag] == fieldValues[i]
+            for fieldTag in fieldTags:
+                assert fieldTag in gpuDict
+                # We don't actually verify the value here, just the field tag
+                # name.
+                #
+                # This verifies that we parsed the fields properly, set the
+                # watches, and actually retrieves values for those fields. The
+                # value will likely be zero on an initial read, but we can't
+                # guarantee this. The basic test checks reading back expected
+                # values.
+                # assert gpuDict[fieldTag] == fieldValues[i]
 
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_collectd_config_integration(handle, gpuIds):
+    """ 
+    Verifies that we can parse config and get specified fields back.
+    """
+    config = Config()
 
+    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1'])]
+
+    helper_collectd_config(gpuIds, config)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_collectd_config_bad_alpha_field(handle, gpuIds):
+    """ 
+    Verifies that we can parse config and get specified fields back, despite a
+    bad alpha field.
+    """
+    config = Config()
+
+    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1,foo_clock:1'])]
+
+    helper_collectd_config(gpuIds, config)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_collectd_config_bad_numeric_field(handle, gpuIds):
+    """ 
+    Verifies that we can parse config and get specified fields back despite a
+    bad numeric field.
+    """
+    config = Config()
+
+    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1,1010:1'])]
+
+    helper_collectd_config(gpuIds, config)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_collectd_config_no_fields(handle, gpuIds):
+    """ 
+    Verifies that we can parse config if no fields are specified.
+    """
+    config = Config()
+
+    config.children = [Config('Interval', ['2'])]
+
+    helper_collectd_config(gpuIds, config, False)

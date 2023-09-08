@@ -82,8 +82,8 @@ SCENARIO("GetPluginBaseDir returns plugin directory relative to current process'
     if (st != 0)
     {
         // This has fail at this point. The checks below are only to aid in debugging the failure
-        CHECK("" == pluginDir);
-        CHECK("" == std::string { strerror(errno) });
+        CHECK(std::string { "" } == pluginDir);
+        CHECK(std::string { "" } == std::string { strerror(errno) });
     }
     CHECK(tf.WrapperGetPluginBaseDir() == pluginDir);
 }

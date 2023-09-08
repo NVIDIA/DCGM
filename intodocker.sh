@@ -28,6 +28,7 @@ function usage() {
     echo "Handling DCGM docker build image
 Usage: ${0} [options] [command]
     Where options are:
+        -a | --arch            : Architecture to build for (amd64|x86_64, aarch64|arm64, ppc64le|powerpc64le|ppc)
         -n | --name            : Print docker image name and exit
         -h | --help            : Print this help and exit
 
@@ -35,8 +36,8 @@ Usage: ${0} [options] [command]
 "
 }
 
-LONG_OPTS=name
-SHORT_OPTS=n
+LONG_OPTS=name,arch:
+SHORT_OPTS=n,a:
 
 ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -46,6 +47,8 @@ fi
 
 eval set -- "${PARSED}"
 
+TARGET_ARCH=$(uname -m) # Default to host architecture
+PRINT_NAME_ONLY=0
 while true; do
     case "${1}" in
         -h | --help)
@@ -53,8 +56,12 @@ while true; do
             exit 0
             ;;
         -n | --name)
-            echo ${DCGM_DOCKER_IMAGE}
-            exit 0
+            PRINT_NAME_ONLY=1
+            shift
+            ;;
+        -a | --arch)
+            TARGET_ARCH="${2}"
+            shift 2
             ;;
         --)
             shift
@@ -65,6 +72,30 @@ done
 
 if [[ -t 0 ]]; then
     DOCKER_ARGS=-it
+fi
+
+case "${TARGET_ARCH}" in
+    amd64|x86_64|x64)
+        TARGET_ARCH="x86_64"
+        ;;
+    aarch64|arm64|arm)
+        TARGET_ARCH="aarch64"
+        ;;
+    ppc64le|powerpc64le|ppc)
+        TARGET_ARCH="powerpc64le"
+        ;;
+    *)
+        echo "Unknown architecture ${TARGET_ARCH}"
+        exit 1
+        ;;
+
+esac
+
+DCGM_DOCKER_IMAGE=${DCGM_DOCKER_IMAGE}-${TARGET_ARCH}
+
+if [[ ${PRINT_NAME_ONLY} -eq 1 ]]; then
+    echo ${DCGM_DOCKER_IMAGE}
+    exit
 fi
 
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-} -ne 1 ]]; then

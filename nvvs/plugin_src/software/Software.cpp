@@ -463,8 +463,8 @@ int Software::checkPersistenceMode()
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PERSISTENCE_MODE, d, gpuId);
-                AddError(d);
-                SetResult(NVVS_RESULT_FAIL);
+                AddWarning(d.GetMessage());
+                SetResult(NVVS_RESULT_WARN);
                 break;
             }
         }

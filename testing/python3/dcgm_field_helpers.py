@@ -156,7 +156,7 @@ class DcgmFieldValueCollection:
                 self.values[gpuId][value.fieldId] = DcgmFieldValueTimeSeries()
 
             self.values[gpuId][value.fieldId].InsertValue(value)
-
+    
     '''
     Helper function called by the callback py_helper_dcgm_field_values_since_callback_v2 to process individual field values
     '''

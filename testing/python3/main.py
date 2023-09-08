@@ -202,7 +202,7 @@ class TestFrameworkSetup(object):
 
 def main():
 
-    with TestFrameworkSetup():
+    with TestFrameworkSetup():    
         if not option_parser.options.no_env_check:
             if not test_utils.is_test_environment_sane():
                 logger.warning("The test environment does not seem to be healthy, test framework cannot continue.")

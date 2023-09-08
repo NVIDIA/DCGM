@@ -109,6 +109,11 @@ public:
     static void GetTagFromFieldId(unsigned short fieldId, std::string &tag);
 
     /*
+     * Returns an integer representing the major CUDA version
+     */
+    unsigned int GetCudaMajorVersion();
+
+    /*
      * Adds a custom timeseries statistic for GPU gpuId with the specified name and value
      */
     void SetGpuStat(unsigned int gpuId, const std::string &name, double value);
@@ -354,7 +359,7 @@ private:
                                 timelib64_t startTime,
                                 int64_t intValue,
                                 double dblValue,
-                                const char *fieldName,
+                                const std::string &fieldName,
                                 std::vector<DcgmError> &errorList);
 
     /*
@@ -371,6 +376,26 @@ private:
      * Helper method to get an error string from a dcgmReturn_t
      */
     void GetErrorString(dcgmReturn_t ret, std::string &err);
+
+protected:
+    /**
+     * Formats the DcgmError according to the field ID for the violation.
+     * A few fields have specific error codes, others use the generic message.
+     *
+     * @param d - the DcgmError being formatted
+     * @param fieldId - the field ID for the violation
+     * @param gpuId - the GPU that has this violation
+     * @param intValue - either DCGM_INT64_BLANK (this field has fp64 values) or the value flagged as a violation.
+     * @param dblValue - either DCGM_FP64_BLANK (this field uses int64 values) or the value flagged as a violation.
+     * @param fieldName - the field's name
+     */
+    void FormatFieldViolationError(DcgmError &d,
+                                   unsigned short fieldId,
+                                   unsigned int gpuId,
+                                   timelib64_t startTime,
+                                   int64_t intValue,
+                                   double dblValue,
+                                   const std::string &fieldName);
 };
 
 

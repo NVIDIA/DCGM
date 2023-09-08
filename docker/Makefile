@@ -19,7 +19,7 @@
 
 REGISTRY ?= nvidia
 
-DCGM_VERSION   := 3.1.8
+DCGM_VERSION   := 3.2.5
 FULL_VERSION   := $(DCGM_VERSION)-1
 OUTPUT         := type=image
 PLATFORMS      := linux/amd64,linux/arm64

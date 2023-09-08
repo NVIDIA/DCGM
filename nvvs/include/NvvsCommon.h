@@ -30,22 +30,18 @@
 
 #define NVVS_ENV_LOG_PREFIX "__NVVS_DBG"
 
-/* Main return codes */
-#define MAIN_RET_OK 0
-#define MAIN_RET_ERROR                                                                            \
-    1 /* Return a single code for now. In the future, we could use the standard sysexits.h codes, \
-                             but those are pretty ambiguous as well */
-
 /* Has the user requested a stop? 1=yes. 0=no. Defined in main.cpp */
 extern std::atomic_int32_t main_should_stop;
 
+/* Each suite adds additional tests to the previous level with XLONG being the superset */
 enum suiteNames_enum
 {
+    NVVS_SUITE_CUSTOM,
     NVVS_SUITE_QUICK,
     NVVS_SUITE_MEDIUM,
     NVVS_SUITE_LONG,
+    NVVS_SUITE_PRODUCTION_TESTING,
     NVVS_SUITE_XLONG,
-    NVVS_SUITE_CUSTOM,
 };
 
 
@@ -76,12 +72,11 @@ typedef std::map<unsigned int, std::vector<std::string>> nvvsPluginGpuMessages_t
 typedef std::map<unsigned int, std::vector<DcgmError>> nvvsPluginGpuErrors_t;
 
 /* Internal function return codes */
-typedef enum nvvsReturn_enum
+typedef enum nvvsReturn_enum : unsigned char
 {
-    NVVS_ST_SUCCESS       = 0,
-    NVVS_ST_BADPARAM      = -1, // A bad parameter was passed to a function
-    NVVS_ST_GENERIC_ERROR = -2, // A generic, unspecified error
-    NVVS_ST_REQUIRES_ROOT = -3, // This function or one of its children requires root to run
+    NVVS_ST_SUCCESS        = 0,
+    NVVS_ST_GENERIC_ERROR  = 1,
+    NVVS_ST_TEST_NOT_FOUND = 2,
 } nvvsReturn_t;
 
 class NvvsCommon

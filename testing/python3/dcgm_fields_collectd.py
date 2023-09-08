@@ -354,7 +354,15 @@ def GetFieldByName(name):
     global __fieldDict
 
     if name.isnumeric():
-        return int(name)
+        item = CollectdMetadataDict[int(name)]
+
+        if item == None:
+            return -1
+
+        if item.used:
+            return int(name)
+
+        return -1
 
     if __fieldDict == None:
         __fieldDict = {}

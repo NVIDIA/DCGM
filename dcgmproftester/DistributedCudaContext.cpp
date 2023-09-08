@@ -20,10 +20,6 @@
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
 
-#if (CUDA_VERSION_USED >= 11)
-#include "DcgmDgemm.hpp"
-#endif
-
 #include <algorithm>
 #include <cerrno>
 #include <cstdarg>
@@ -68,8 +64,16 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    if (m_cudaVisibleDevices.length() > 0)
+    if (GetPhysicalGpu()->IsMIG())
     {
+        /**
+         * With MIG, we have to use CUDA_VISIBLE_DEVICES to identify the MIG
+         * partition "device", along with a device ID of 0. We can not run
+         * NvLink tests with MIG and we check to ensure we do not try.
+         */
+
+        int st;
+
         st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
 
         if (st != 0)
@@ -78,12 +82,16 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
             return DCGM_ST_GENERIC_ERROR;
         }
+
+        m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
+
+        m_device = 0;
     }
 
     cuSt = cuInit(0);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -92,10 +100,12 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    if (m_cudaVisibleDevices.length() < 1)
+    if (!GetPhysicalGpu()->IsMIG())
     {
-        /* CUDA_VISIBLE_DEVICES was not provided. We need to resolve the cuda device ID based on
-           the PCI bus ID */
+        /**
+         * Without MIG, we can get the physical device ID.
+         */
+
         std::string busId = GetPhysicalGpu()->GetGpuBusId().c_str();
 
         cuSt = cuDeviceGetByPCIBusId(&m_device, busId.c_str());
@@ -115,7 +125,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         &m_attributes.m_maxThreadsPerMultiProcessor, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -129,7 +139,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -142,7 +152,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         &m_attributes.m_sharedMemPerMultiprocessor, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -155,7 +165,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         &m_attributes.m_computeCapabilityMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -168,7 +178,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         &m_attributes.m_computeCapabilityMinor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -183,7 +193,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
     cuSt = cuDeviceGetAttribute(&m_attributes.m_memoryBusWidth, CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -195,7 +205,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
     cuSt = cuDeviceGetAttribute(&m_attributes.m_maxMemoryClockMhz, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -217,7 +227,7 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
     cuSt = cuDeviceGetAttribute(&m_attributes.m_eccSupport, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, m_device);
     if (cuSt)
     {
-        const char *errorString;
+        const char *errorString { nullptr };
 
         cuGetErrorString(cuSt, &errorString);
 
@@ -230,6 +240,12 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
     m_isInitialized = true;
     return DCGM_ST_OK;
+}
+
+// Return worker attributes
+const DistributedCudaContext::Attributes &DistributedCudaContext::GetAttributes(void) const
+{
+    return m_attributes;
 }
 
 
@@ -609,9 +625,10 @@ DistributedCudaContext::DistributedCudaContext(
     const dcgmGroupEntityPair_t &entity,
     const std::string &cudaVisibleDevices)
     : m_physicalGpu(physicalGpu)
+    , m_cudaVisibleDevices(cudaVisibleDevices)
     , m_entity(entity)
 {
-    ReInitialize(entities, cudaVisibleDevices);
+    ReInitialize(entities);
 }
 
 
@@ -641,14 +658,16 @@ DistributedCudaContext::~DistributedCudaContext()
 }
 
 
-void DistributedCudaContext::ReInitialize(
-    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities,
-    const std::string &cudaVisibleDevices)
+void DistributedCudaContext::ReInitialize()
 {
-    m_entities           = std::move(entities);
-    m_cudaVisibleDevices = cudaVisibleDevices;
-    m_device             = 0;
+    CreateDcgmGroups();
+}
 
+
+void DistributedCudaContext::ReInitialize(
+    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities)
+{
+    m_entities = std::move(entities);
     CreateDcgmGroups();
 }
 
@@ -1324,12 +1343,16 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 
     double startTime, now; //, endTime;
 
+    m_cudaWorker.SetWorkerToIdle();
+
     /* Get our best peer to do NvLink copies to. Copy in rest of request line
      * and parse it.
      */
     std::string PeerBusId;
     m_input >> PeerBusId;
     m_cudaWorker.SetPeerByBusId(PeerBusId);
+
+    m_cudaWorker.SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
@@ -1426,11 +1449,12 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
         utilRate             = perSecond / m_attributes.m_maxMemBandwidth;
         perSecond /= 1000000000.0;
 
-        Respond("T %0.3f %0.3f %0.3f %0.3f %1u\n",
+        Respond("T %0.3f %0.3f %0.3f %0.3f %0.3f %1u\n",
                 howFarIn,
                 prevDramAct,
                 utilRate,
                 prevPerSecond,
+                m_attributes.m_maxMemBandwidth,
                 eccAffectsBandwidth ? 1 : 0);
 
         bool earlyQuit { false };

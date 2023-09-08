@@ -283,22 +283,22 @@ def test_memory_bandwidth_with_error(handle, gpuIds):
     with_error_run(handle, gpuIds, "memory_bandwidth", "memory bandwidth", "memory bandwidth.is_allowed=true")
 
 
-# sm perf / sm stress
+# memtest
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
-def test_sm_perf_no_errors(handle, gpuIds):
-    no_errors_run(handle, gpuIds, "sm_perf", "sm stress")
+def test_memtest_no_errors(handle, gpuIds):
+    no_errors_run(handle, gpuIds, "memtest", "memtest")
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
-def test_sm_perf_with_error(handle, gpuIds):
-    with_error_run(handle, gpuIds, "sm_perf", "sm stress")
+def test_memtest_with_error(handle, gpuIds):
+    with_error_run(handle, gpuIds, "memtest", "memtest")
 
 
 # short

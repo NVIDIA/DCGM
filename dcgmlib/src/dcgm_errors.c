@@ -111,13 +111,20 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_PENDING_ROW_REMAP, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BROKEN_P2P_MEMORY_DEVICE, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BROKEN_P2P_WRITER_DEVICE, DCGM_ERROR_ISOLATE),
-    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVLINK_DOWN, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVSWITCH_NVLINK_DOWN, DCGM_ERROR_ISOLATE),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_BINARY_PERMISSIONS, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_NON_ROOT_USER, DCGM_ERROR_MONITOR),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_SPAWN_FAILURE, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_TIMEOUT, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_ZOMBIE, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_NON_ZERO_EXIT_CODE, DCGM_ERROR_MONITOR),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EUD_TEST_FAILED, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_FILE_CREATE_PERMISSIONS, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_PAUSE_RESUME_FAILED, DCGM_ERROR_ISOLATE),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_PCIE_REPLAYS, DCGM_ERROR_MONITOR),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_EXPECTED_NVLINKS_UP, DCGM_ERROR_MONITOR),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVSWITCH_EXPECTED_NVLINKS_UP, DCGM_ERROR_MONITOR),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_XID_ERROR, DCGM_ERROR_ISOLATE),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)
@@ -248,7 +255,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "The diagnostic returned an error that indicates the need to drain the GPU";
         case DCGM_ST_NVVS_BINARY_NOT_FOUND:
             return "The NVVS binary was not found in the specified location; please install it to "
-                   "/usr/share/nvidia-validation-suite/ or set environment variable NVVS_BIN_PATH to the directory containing nvvs.";
+                   "/usr/share/nvidia-validation-suite/ or set environment variable NVVS_BIN_PATH to the directory containing nvvs."
+                   " If you set NVVS_BIN_PATH, please restart the DCGM service (nv-hostengine) if it is active.";
         case DCGM_ST_NVVS_KILLED:
             return "The DCGM diagnostic was killed by a signal";
         default:
@@ -259,5 +267,9 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
 
 const dcgm_error_meta_t *dcgmGetErrorMeta(dcgmError_t error)
 {
+    if (error < DCGM_FR_OK || error >= DCGM_FR_ERROR_SENTINEL)
+    {
+        return 0;
+    }
     return &dcgmErrorMeta[error];
 }
