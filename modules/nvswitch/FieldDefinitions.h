@@ -765,6 +765,94 @@ public:
 };
 
 template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvlink_voltage_info_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_nvlink_voltage_info;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvlink_current_info_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_nvlink_current_info;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvlink_current_info_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_nvlink_current_info;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvlink_current_info_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_nvlink_current_info;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
 class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0;
@@ -1202,6 +1290,84 @@ public:
     {
         return UpdateLaneScalarFieldType<fieldId>::updateFunc;
     }
+};
+
+/**
+ * Here we define the three storage type to extract returned NSCQ voltage callback data.
+ */
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.voltage_mvolt)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+/**
+ * Here we define 3 storage types to extract returned NSCQ current callback data.
+ */
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.iddq)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.iddq_rev)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.iddq_dvdd)
+    {}
+
+    ~FieldIdStorageType() = default;
 };
 
 /**

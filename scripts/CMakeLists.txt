@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-declare_nvvs_plugin(smstress .)
 
-
-set(LOCAL_NVVS_PLUGINS "")
-
-foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
-    add_subdirectory(Cuda${CUDA_VER})
-endforeach()
-
-set(NVVS_PLUGINS "${NVVS_PLUGINS};${LOCAL_NVVS_PLUGINS}" PARENT_SCOPE)
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/gather-dcgm-logs.sh
+    DESTINATION
+        ${DCGM_SCRIPTS_INSTALL_DIR}
+    COMPONENT DCGM)

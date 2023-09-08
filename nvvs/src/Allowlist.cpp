@@ -273,7 +273,7 @@ void Allowlist::UpdateGlobalsForDeviceId(const std::string &deviceId)
      * in order to avoid false positive test failures */
 
     // Tesla K80 ("Stella Duo" Gemini) and Tesla T4 - TU104_PG183_SKU200 or RTX 6000/8000 passive
-    if ("102d" == deviceId || "1eb8" == deviceId || "1e78" == deviceId)
+    if (deviceId == "102d" || deviceId == "1eb8" || deviceId == "1e78")
     {
         // K80 expects some throttling issues - see bug2454355/DCGM-865 for details
         if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
@@ -284,7 +284,7 @@ void Allowlist::UpdateGlobalsForDeviceId(const std::string &deviceId)
         return;
     }
     // V100S experiences SW throttling
-    else if ("1df6" == deviceId)
+    else if (deviceId == "1df6")
     {
         if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
         {
@@ -292,7 +292,7 @@ void Allowlist::UpdateGlobalsForDeviceId(const std::string &deviceId)
         }
     }
     // RTX 6000 experiences HW throttling
-    else if ("1e30" == deviceId)
+    else if (deviceId == "1e30")
     {
         if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
         {

@@ -26,6 +26,7 @@ import stats
     
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_initialized_client()
+@test_utils.run_only_on_architecture('amd64|ppc64le')
 def test_dcgm_standalone_metadata_memory_get_hostengine_sane(handle):
     """
     Sanity test for API that gets memory usage of the hostengine process

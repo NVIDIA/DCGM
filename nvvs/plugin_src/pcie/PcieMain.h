@@ -28,52 +28,29 @@
 #define PCIE_MAX_GPUS 16
 
 /*****************************************************************************/
-
-/* Struct to hold global information for this test */
-class BusGrindGlobals
-{
-public:
-    TestParameters *testParameters; /* Parameters passed in from the framework */
-
-    /* Cached parameters */
-    bool test_pinned;
-    bool test_unpinned;
-    bool test_p2p_on;
-    bool test_p2p_off;
-    bool test_broken_p2p;
-    bool test_nvlink_status;
-
-    BusGrind *busGrind; /* Plugin handle for setting status */
-
-    std::vector<PluginDevice *> gpu; /* Per-gpu information */
-    DcgmRecorder *m_dcgmRecorder;
-
-    bool m_dcgmCommErrorOccurred;
-    bool m_printedConcurrentGpuErrorMessage;
-
-    BusGrindGlobals()
-        : testParameters(nullptr)
-        , test_pinned(false)
-        , test_unpinned(false)
-        , test_p2p_on(false)
-        , test_p2p_off(false)
-        , test_broken_p2p(true)
-        , test_nvlink_status(true)
-        , busGrind(nullptr)
-        , gpu()
-        , m_dcgmRecorder(nullptr)
-        , m_dcgmCommErrorOccurred(false)
-        , m_printedConcurrentGpuErrorMessage(false)
-    {}
-};
+int main_init(BusGrind &bg, const dcgmDiagPluginGpuList_t &gpuInfo);
 
 /*****************************************************************************/
-int main_entry(const dcgmDiagPluginGpuList_t &gpuList, BusGrind *busGrind, TestParameters *testParameters);
+int main_entry(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo);
 
 /*****************************************************************************/
 bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginGpuList_t &gpuInfo);
 
 /*****************************************************************************/
-void pcie_check_nvlink_status(BusGrindGlobals *bgGlobals, const dcgmDiagPluginGpuList_t &gpuInfo, dcgmHandle_t handle);
+void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo);
+
+typedef struct
+{
+    pid_t pid;
+    std::string stdoutStr;
+    int readOutputRet;
+    unsigned int outputFdIndex;
+} dcgmChildInfo_t;
+
+/*****************************************************************************/
+// Declared here for unit tests
+unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
+                                    BusGrind &bg,
+                                    const std::string &groupName);
 
 #endif // PCIEMAIN_H

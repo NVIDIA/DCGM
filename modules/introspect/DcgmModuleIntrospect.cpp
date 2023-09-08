@@ -175,10 +175,8 @@ dcgmReturn_t DcgmModuleIntrospect::ProcessInTaskRunnerWithAttempts(int attempts,
 
     while (true)
     {
-        auto fut = Enqueue(
-            make_task_with_attempts("Introspect Task with attempts", attempts, [action = std::move(action)]() mutable {
-                return std::invoke(action);
-            }));
+        auto fut = Enqueue(make_task_with_attempts(
+            "Introspect Task with attempts", attempts, [action = action]() mutable { return std::invoke(action); }));
         if (!fut.has_value())
         {
             --attempts;

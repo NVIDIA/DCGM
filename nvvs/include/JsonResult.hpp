@@ -569,6 +569,7 @@ struct DiagnosticResults
     std::optional<std::string> driverVersion;
     std::optional<std::vector<Category>> categories;
     std::optional<std::vector<std::string>> devIds;
+    std::optional<nvvsReturn_t> errorCode;
     friend auto operator<=>(DiagnosticResults const &, DiagnosticResults const &) = default;
 };
 
@@ -576,7 +577,9 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
 {
     if (result.version != other.version)
     {
-        log_error("Failed to merge results: version mismatch");
+        log_error("Failed to merge results: version mismatch. Destination version: {}, Source version: {}",
+                  result.version.has_value() ? (*result.version) : "nullopt",
+                  other.version.has_value() ? (*other.version) : "nullopt");
         return false;
     }
 
@@ -585,6 +588,21 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
         result.runtimeError = result.runtimeError.has_value()
                                   ? (*result.runtimeError) + "\n" + std::move(*other.runtimeError)
                                   : std::move(other.runtimeError);
+    }
+
+    if (other.errorCode.has_value() && !result.errorCode.has_value())
+    {
+        if (!result.errorCode.has_value())
+        {
+            result.errorCode = other.errorCode;
+        }
+        else
+        {
+            log_debug(
+                "Skipping errorCode assignment because it is already set. Result errorCode: {}, other errorCode: {}",
+                *result.errorCode,
+                *other.errorCode);
+        }
     }
 
     if (other.warning.has_value())
@@ -665,13 +683,6 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
 
     if (json[NVVS_VERSION_STR].isString())
     {
-        if (!json[NVVS_VERSION_STR].isString())
-        {
-            log_error("Failed to parse JSON: {} is not a double", NVVS_VERSION_STR);
-            log_debug("JSON: {}", json.toStyledString());
-            return std::nullopt;
-        }
-
         diagnosticResults.version = json[NVVS_VERSION_STR].asString();
     }
     else
@@ -684,6 +695,11 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
     if (json.isMember(NVVS_RUNTIME_ERROR))
     {
         diagnosticResults.runtimeError = json[NVVS_RUNTIME_ERROR].asString();
+    }
+
+    if (json.isMember(NVVS_ERROR_CODE))
+    {
+        diagnosticResults.errorCode = static_cast<nvvsReturn_t>(json[NVVS_ERROR_CODE].asInt());
     }
 
     if (json.isMember(NVVS_GLOBAL_WARN))
@@ -750,6 +766,11 @@ inline auto ToJson(DiagnosticResults const &value) -> ::Json::Value
     if (value.runtimeError.has_value())
     {
         json[NVVS_RUNTIME_ERROR] = *value.runtimeError;
+    }
+
+    if (value.errorCode.has_value())
+    {
+        json[NVVS_ERROR_CODE] = static_cast<int>(*value.errorCode);
     }
 
     if (value.warning.has_value())

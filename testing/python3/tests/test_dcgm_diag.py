@@ -40,7 +40,7 @@ from dcgm_field_injection_helpers import inject_value, inject_nvml_value
 import dcgm_field_injection_helpers
 
 
-# Most injection tests use SmStress plugin, which also sleeps for 3 seconds
+# Most injection tests use memtest plugin, which also sleeps for 3 seconds
 
 # These are used on all architectures but are specific to each.
 injection_offset = 3
@@ -170,7 +170,7 @@ def test_dcgm_run_diag_backwards_compatibility_standalone(handle, gpuIds):
 
 checked_gpus = {} # Used to track that a GPU has been verified as passing
 # Makes sure a very basic diagnostic passes and returns a DcgmDiag object
-def helper_verify_diag_passing(handle, gpuIds, testNames="SM Stress", testIndex=dcgm_structs.DCGM_SM_STRESS_INDEX, params="sm stress.test_duration=15", version=dcgm_structs.dcgmRunDiag_version, useFakeGpus=False):
+def helper_verify_diag_passing(handle, gpuIds, testNames="memtest", testIndex=dcgm_structs.DCGM_MEMTEST_INDEX, params="memtest.test_duration=15", version=dcgm_structs.dcgmRunDiag_version, useFakeGpus=False):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=testNames, paramsStr=params, version=version)
     dd.SetThrottleMask(0) # We explicitly want to fail for throttle reasons since this test inserts throttling errors 
                           # for verification
@@ -182,7 +182,7 @@ def helper_verify_diag_passing(handle, gpuIds, testNames="SM Stress", testIndex=
     for gpuId in gpuIds:
         if gpuId in checked_gpus:
             if checked_gpus[gpuId] == False:
-                test_utils.skip_test("Skipping because GPU %s does not pass SM Perf test. "
+                test_utils.skip_test("Skipping because GPU %s does not pass memtest Perf test. "
                                      "Please verify whether the GPU is supported and healthy." % gpuId)
         else:
             runDiag = True
@@ -228,11 +228,12 @@ def helper_test_thermal_violations_in_seconds(handle):
 
     testIndex = dcgm_structs.DCGM_DIAGNOSTIC_INDEX
     errmsg = response.perGpuResponses[gpuIds[0]].results[testIndex].error.msg
-    # Check for hermal instead of thermal because sometimes it's capitalized
+    # Check for 'hermal' instead of thermal because sometimes it's capitalized
     if errmsg.find("hermal violations") != -1: 
         foundError = True
-        assert errmsg.find("totaling 2.3 seconds") != -1, \
-            "Expected 2.3 seconds of thermal violations but found %s" % errmsg
+        import re
+        match = re.search(r"totaling.*?seconds", errmsg)
+        assert match, "Expected to find 'totaling <seconds> seconds' in error message but found %s" % errmsg
     else:
         # Didn't find an error
         assert False, "Thermal violations were injected but not found in error message: '%s'." % errmsg
@@ -261,7 +262,7 @@ def perform_diag_with_throttle_mask_and_verify(dd, handle, gpuId, inserted_error
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     # Check for pass or failure as per the shouldPass parameter
-    throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX)
+    throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_MEMTEST_INDEX)
     if shouldPass:    
         assert throttled == False, "Expected to not have a throttling error but found %s" % errMsg
     else:
@@ -360,6 +361,19 @@ def helper_test_throttle_mask_fail_double_inject_ignore_one_string(handle, gpuId
 def test_dcgm_diag_context_create(handle, gpuIds):
     helper_verify_diag_passing(handle, gpuIds, "context_create", dcgm_structs.DCGM_CONTEXT_CREATE_INDEX, params="")
 
+@test_utils.run_with_standalone_host_engine(120, heEnv={'__DCGM_PCIE_AER_COUNT' : '100'})
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgm_diag_pcie_failure(handle, gpuIds):
+    if test_utils.get_build_type() != "Debug":
+        test_utils.skip_test("Debug test only")
+
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr="pcie", paramsStr="pcie.test_duration=60;pcie.test_with_gemm=true",
+                           version=dcgm_structs.dcgmRunDiag_version7)
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert check_diag_result_fail(response, gpuIds[0], dcgm_structs.DCGM_PCI_INDEX), "No failure detected in diagnostic"
+
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
@@ -420,11 +434,11 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     signal.
     """
     # First check whether the GPU is healthy/supported
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="SM Stress", paramsStr="sm stress.test_duration=2",
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=2",
                            version=dcgm_structs.dcgmRunDiag_version7)
     response = test_utils.diag_execute_wrapper(dd, handle)
-    if not check_diag_result_pass(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX):
-        test_utils.skip_test("Skipping because GPU %s does not pass SM Stress test. "
+    if not check_diag_result_pass(response, gpuId, dcgm_structs.DCGM_MEMTEST_INDEX):
+        test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
                              "Please verify whether the GPU is supported and healthy." % gpuId)
 
     # paths to dcgmi executable
@@ -454,7 +468,7 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
                 # should be rare and last only for a short amount of time
                 time.sleep(1.5)
 
-        diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "SM Stress", "-i", "%s" % gpuId,
+        diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "%s" % gpuId,
                                               "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"])
         # Start the diag
         diagApp.start(timeout=40)
@@ -523,7 +537,7 @@ def test_dcgm_diag_stop_on_signal_standalone(handle, gpuIds):
     helper_check_diag_stop_on_interrupt_signals(handle, gpuIds[0])
 
 def helper_verify_log_file_creation(handle, gpuIds):
-    dd = helper_verify_diag_passing(handle, gpuIds, testNames="sm stress", testIndex=dcgm_structs.DCGM_SM_STRESS_INDEX, params="sm stress.test_duration=10", useFakeGpus=True)
+    dd = helper_verify_diag_passing(handle, gpuIds, testNames="memtest", testIndex=dcgm_structs.DCGM_MEMTEST_INDEX, params="memtest.test_duration=10", useFakeGpus=True)
     logname = '/tmp/tmp_test_debug_log'
     dd.SetDebugLogFile(logname)
     dd.SetDebugLevel(5)
@@ -534,13 +548,13 @@ def helper_verify_log_file_creation(handle, gpuIds):
         passedCount = 0
         errors = ""
         for gpuId in gpuIds:
-            resultType = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_SM_STRESS_INDEX].result
+            resultType = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_MEMTEST_INDEX].result
             if resultType not in [dcgm_structs.DCGM_DIAG_RESULT_SKIP, dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN]:
                 skippedAll = False
                 if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
                     passedCount = passedCount + 1
                 else:
-                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_SM_STRESS_INDEX].error.msg
+                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_MEMTEST_INDEX].error.msg
                     if len(warning):
                         errors = "%s, GPU %d failed: %s" % (errors, gpuId, warning)
 
@@ -565,18 +579,18 @@ def test_dcgm_diag_verify_log_file_creation_standalone(handle, gpuIds):
 def helper_throttling_masking_failures(handle, gpuId):
     #####
     # First check whether the GPU is healthy
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="SM Stress", paramsStr="sm stress.test_duration=2",
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=2",
                            version=dcgm_structs.dcgmRunDiag_version)
     dd.SetThrottleMask(0) # We explicitly want to fail for throttle reasons since this test inserts throttling errors 
                           # for verification
     dd.UseFakeGpus()
     response = test_utils.diag_execute_wrapper(dd, handle)
-    if not check_diag_result_pass(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX):
-        test_utils.skip_test("Skipping because GPU %s does not pass SM Perf test. "
+    if not check_diag_result_pass(response, gpuId, dcgm_structs.DCGM_MEMTEST_INDEX):
+        test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
                              "Please verify whether the GPU is supported and healthy." % gpuId)
     
     #####
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="SM Stress", paramsStr="sm stress.test_duration=15",
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=15",
                            version=dcgm_structs.dcgmRunDiag_version)
     dd.SetThrottleMask(0)
     dd.UseFakeGpus()
@@ -603,7 +617,7 @@ def helper_throttling_masking_failures(handle, gpuId):
     assert dcgm_internal_helpers.verify_field_value(gpuId, fieldId, insertedError, checkInterval=0.1, numMatches=1, maxWait=8), \
             "Expected inserted errors to be visible in DCGM"
                 
-    throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX)
+    throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_MEMTEST_INDEX)
     assert throttled, "Expected to find throttling failure, but did not: (%s)" % errMsg
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
@@ -623,7 +637,7 @@ def test_dcgm_diag_handle_concurrency_standalone(handle, gpuIds):
 
     gpuId = gpuIds[0]
 
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="SM Stress", paramsStr="sm stress.test_duration=%d" % diagDuration,
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=%d" % diagDuration,
                            version=dcgm_structs.dcgmRunDiag_version)
 
     dd.UseFakeGpus()
@@ -673,8 +687,7 @@ def helper_per_gpu_responses_api(handle, gpuIds, testDir):
     failGpuId = gpuIds[0]
     dd = helper_verify_diag_passing(handle, gpuIds, useFakeGpus=True)
 
-
-    dd = DcgmDiag.DcgmDiag(gpuIds=[failGpuId], testNamesStr="SM Stress", paramsStr="sm stress.test_duration=15", version=dcgm_structs.dcgmRunDiag_version)
+    dd = DcgmDiag.DcgmDiag(gpuIds=[failGpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=15", version=dcgm_structs.dcgmRunDiag_version)
     dd.SetThrottleMask(0) # We explicitly want to fail for throttle reasons since this test inserts throttling errors 
                           # for verification
     dd.UseFakeGpus()
@@ -697,7 +710,7 @@ def helper_per_gpu_responses_api(handle, gpuIds, testDir):
                                                                                                      
     # Verify that responses are reported on a per gpu basis. Ensure the first GPU failed, and all others passed
     for gpuId in gpuIds:
-        throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_SM_STRESS_INDEX)
+        throttled, errMsg = find_throttle_failure(response, gpuId, dcgm_structs.DCGM_MEMTEST_INDEX)
         if gpuId == failGpuId:
             assert throttled, "Expected throttling error but found none (%s)" % errMsg
         else:
@@ -760,16 +773,16 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
     logger.info("Verifying stdout output")
     verify_successful_dcgmi_run(dcgmiApp)
     # Verify dcgmi output shows per gpu results (crude approximation of verifying correct console output)
-    stress_header_found = False
+    memtest_header_found = False
     fail_gpu_found = False
     fail_gpu_text = "Fail - GPU: %s" % gpuIds[0]
     check_for_warning = False
     warning_found = False
     for line in dcgmiApp.stdout_lines:
-        if not stress_header_found:
-            if "Stress" not in line:
+        if not memtest_header_found:
+            if "Memtest" not in line:
                 continue
-            stress_header_found = True
+            memtest_header_found = True
             continue
         if not fail_gpu_found:
             if fail_gpu_text not in line:
@@ -782,11 +795,11 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
                 warning_found = True
             break
 
-    if not (stress_header_found and fail_gpu_found and warning_found):
+    if not (memtest_header_found and fail_gpu_found and warning_found):
         logger.info("dcgmi output:")
         print_output(dcgmiApp)
 
-    assert stress_header_found, "Expected to see 'Stress' header in output"
+    assert memtest_header_found, "Expected to see 'Memtest' header in output"
     assert fail_gpu_found, "Expected to see %s in output" % fail_gpu_text
     assert warning_found, "Expected to see 'Warning' in output after GPU failure text"
 
@@ -807,21 +820,24 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
 
     # Verify per GPU results
     json_output = "\n".join(dcgmiApp.stdout_lines)
+
     output = json.loads(json_output)
-    verifed = False
+    verified = False
+
     if (len(output.get("DCGM GPU Diagnostic", {}).get("test_categories", [])) == 2
             and output["DCGM GPU Diagnostic"]["test_categories"][1].get("category", None) == "Stress"
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["name"] == testName
             and len(output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"]) >= 2
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["gpu_ids"] == str(gpuIds[0])
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["status"] == "Fail"
+            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["error_id"] == dcgm_errors.DCGM_FR_TEMP_VIOLATION
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][1]["status"] == "Pass"):
-        verifed = True
+        verified = True
 
-    if not verifed:
+    if not verified:
         print_output(dcgmiApp)
 
-    assert verifed, "dcgmi JSON output did not pass verification"
+    assert verified, "dcgmi JSON output did not pass verification"
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
@@ -834,7 +850,7 @@ def test_dcgm_diag_per_gpu_responses_standalone_api(handle, gpuIds):
         test_utils.skip_test("Skipping because this SKU ignores the throttling we inject for this test")
 
     logger.info("Starting test for per gpu responses (API call)")
-    outputFile = "stats_sm_stress.json"
+    outputFile = "stats_memtest.json"
     try:
         testDirectory = tempfile.mkdtemp()
     except OSError:
@@ -858,7 +874,7 @@ def test_dcgm_diag_per_gpu_responses_standalone_dcgmi(handle, gpuIds):
         test_utils.skip_test("Skipping because this SKU ignores the throttling we inject for this test")
 
     logger.info("Starting test for per gpu responses (dcgmi output)")
-    helper_per_gpu_responses_dcgmi(handle, gpuIds, "SM Stress", "sm stress.test_duration=5,pcie.max_pcie_replays=1")
+    helper_per_gpu_responses_dcgmi(handle, gpuIds, "Memtest", "memtest.test_duration=5,pcie.max_pcie_replays=1")
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()

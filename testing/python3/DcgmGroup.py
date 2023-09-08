@@ -177,7 +177,7 @@ class DcgmGroupSamples:
 
     Returns DcgmFieldValueEntityCollection object. Use its .values[entityGroupId][entityId][fieldId][*].value to access values
     '''
-    def GetAllSinceLastCall_v2(self, dvfec, fieldGroup):
+    def GetAllSinceLastCall_v2(self, dfvec, fieldGroup):
         if dfvec == None:
             dfvec = dcgm_field_helpers.DcgmFieldValueEntityCollection(self._dcgmHandle.handle, self._groupId)
             dfvec.GetLastestValues_v2(fieldGroup)

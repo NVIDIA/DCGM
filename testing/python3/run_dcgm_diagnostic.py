@@ -359,9 +359,12 @@ def main(cmdArgs):
         dcgmHandle = None
     else:
         gpuIdStr = settings['dev_id']
-
+    
     #Need to skip checks for down NvLinks or QA will file bugs
     paramsStr = "pcie.test_nvlink_status=false"
+    paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=2"
+    paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=2"
+
 
     dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=3, 
                 debugLevel=5, debugFile=debugFile)

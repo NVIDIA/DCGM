@@ -44,7 +44,7 @@ BR_ST_FAILED_ACTIVE_HEALTH  = 0x0004
 
 BR_HEALTH_WATCH_BITMAP   = dcgm_structs.DCGM_HEALTH_WATCH_ALL
 
-DIAG_SM_STRESS_DURATION       = 90.0
+DIAG_MEMTEST_DURATION       = 90.0
 DIAG_CONSTANT_POWER_DURATION  = 120.0
 DIAG_CONSTANT_STRESS_DURATION = 120.0
 DIAG_DIAGNOSTIC_DURATION      = 300.0
@@ -108,12 +108,12 @@ def setTestDurations(runDiagInfo, timePercentage):
     if runDiagInfo.validate != 3:
         return
 
-    stressDuration = int(DIAG_SM_STRESS_DURATION * timePercentage)
+    stressDuration = int(DIAG_MEMTEST_DURATION * timePercentage)
     powerDuration = int(DIAG_CONSTANT_POWER_DURATION * timePercentage)
     constantStressDuration = int(DIAG_CONSTANT_STRESS_DURATION * timePercentage)
     diagDuration = int(DIAG_DIAGNOSTIC_DURATION * timePercentage)
 
-    smParam = "sm stress.test_duration=%d" % (stressDuration)
+    smParam = "memtest.test_duration=%d" % (stressDuration)
     powerParam = "targeted power.test_duration=%d" % (powerDuration)
     constantStressParam = "targeted stress.test_duration=%d" % (constantStressDuration)
     diagParam = "diagnostic.test_duration=%d" % (diagDuration)

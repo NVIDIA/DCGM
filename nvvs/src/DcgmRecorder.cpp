@@ -466,59 +466,82 @@ int DcgmRecorder::GetValueIndex(unsigned short fieldId)
     return index;
 }
 
+void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
+                                             unsigned short fieldId,
+                                             unsigned int gpuId,
+                                             timelib64_t startTime,
+                                             int64_t intValue,
+                                             double dblValue,
+                                             const std::string &fieldName)
+{
+    switch (fieldId)
+    {
+        case DCGM_FI_DEV_THERMAL_VIOLATION:
+        {
+            dcgmReturn_t ret = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_THERMAL_VIOLATION, startTime, false);
+            dcgmFieldValue_v1 dfv;
+            memset(&dfv, 0, sizeof(dfv));
+            double seconds = intValue / 1000000000.0; // The violation is reported in nanoseconds.
+
+            if (ret == DCGM_ST_OK)
+            {
+                m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dfv, 0);
+            }
+
+            if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
+            {
+                double timeDiff = (dfv.ts - startTime) / 1000000.0;
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS_TS, d, seconds, timeDiff, gpuId);
+            }
+            else
+            {
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS, d, seconds, gpuId);
+            }
+            break;
+        }
+
+        case DCGM_FI_DEV_XID_ERRORS:
+        {
+            if (intValue == 95)
+            {
+                // XID 95 has its own error message
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCONTAINED_ERROR, d);
+            }
+            else
+            {
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_XID_ERROR, d, intValue, gpuId);
+            }
+            break;
+        }
+
+        default:
+        {
+            if (DCGM_INT64_IS_BLANK(intValue))
+            {
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_VIOLATION_DBL, d, dblValue, fieldName.c_str(), gpuId);
+            }
+            else
+            {
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_VIOLATION, d, intValue, fieldName.c_str(), gpuId);
+            }
+            break;
+        }
+    }
+}
+
 void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
                                           unsigned int gpuId,
                                           timelib64_t startTime,
                                           int64_t intValue,
                                           double dblValue,
-                                          const char *fieldName,
+                                          const std::string &fieldName,
                                           std::vector<DcgmError> &errorList)
 {
     DcgmError d { gpuId };
-    bool loggedError = false;
 
-    // Thermal violation errors are logged in a special way
-    if (fieldId == DCGM_FI_DEV_THERMAL_VIOLATION)
-    {
-        dcgmReturn_t ret = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_THERMAL_VIOLATION, startTime, false);
-        dcgmFieldValue_v1 dfv;
-        memset(&dfv, 0, sizeof(dfv));
-        double seconds = intValue / 1000000000.0; // The violation is reported in nanoseconds.
+    FormatFieldViolationError(d, fieldId, gpuId, startTime, intValue, dblValue, fieldName);
 
-        if (ret == DCGM_ST_OK)
-        {
-            m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dfv, 0);
-        }
-
-        if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
-        {
-            double timeDiff = (dfv.ts - startTime) / 1000000.0;
-            DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS_TS, d, seconds, timeDiff, gpuId);
-            errorList.push_back(d);
-            loggedError = true;
-        }
-        else
-        {
-            DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS, d, seconds, gpuId);
-            errorList.push_back(d);
-            loggedError = true;
-        }
-    }
-
-    if (loggedError == false)
-    {
-        if (DCGM_INT64_IS_BLANK(intValue))
-        {
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_VIOLATION_DBL, d, dblValue, fieldName, gpuId);
-        }
-        else
-        {
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_VIOLATION, d, intValue, fieldName, gpuId);
-        }
-        errorList.push_back(d);
-    }
+    errorList.push_back(d);
 }
 
 int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
@@ -1060,4 +1083,9 @@ std::string DcgmRecorder::ErrorAsString(dcgmReturn_t ret)
     }
 
     return str;
+}
+
+unsigned int DcgmRecorder::GetCudaMajorVersion()
+{
+    return m_dcgmSystem.GetCudaMajorVersion();
 }

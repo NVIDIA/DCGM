@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <iostream>
 #include <locale>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>

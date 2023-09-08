@@ -18,9 +18,9 @@
 #include "DcgmError.h"
 #include "cuda_runtime.h"
 #include <NvvsCommon.h>
+#include <PluginCommon.h>
 
 #include <fmt/format.h>
-
 
 std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
 {
@@ -77,7 +77,11 @@ std::string AddAPIError(Plugin *p,
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL_GPU, d, callName, gpuId, errorText);
     }
 
-    if (bytes != 0U)
+    if (!strcmp(callName, "cuInit"))
+    {
+        d.AddDetail(RUN_CUDA_KERNEL_REC);
+    }
+    else if (bytes != 0U)
     {
         d.AddDetail(fmt::format("(for {} bytes", bytes));
     }
@@ -125,7 +129,7 @@ std::string AddCudaError(Plugin *p,
     {
         if (strcmp(callName, "cuInit") == 0)
         {
-            errorBuf = fmt::format("{}{}", errorText, GetAdditionalCuInitDetail(cuSt));
+            errorBuf = fmt::format("{}{}. {}", errorText, GetAdditionalCuInitDetail(cuSt), RUN_CUDA_KERNEL_REC);
         }
         else
         {

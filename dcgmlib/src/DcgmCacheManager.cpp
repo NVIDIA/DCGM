@@ -4435,7 +4435,6 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
     }
 
     dcgm_field_entity_group_t watchEntityGroupId = entityGroupId;
-    unsigned int watchEntityId                   = entityId;
 
     DcgmLockGuard dlg(m_mutex);
 
@@ -4451,13 +4450,13 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
     if (watchEntityGroupId == DCGM_FE_NONE)
         watchInfo = GetGlobalWatchInfo(fieldMeta->fieldId, 0);
     else
-        watchInfo = GetEntityWatchInfo(watchEntityGroupId, watchEntityId, fieldMeta->fieldId, 0);
+        watchInfo = GetEntityWatchInfo(watchEntityGroupId, entityId, fieldMeta->fieldId, 0);
 
     st = PrecheckWatchInfoForSamples(watchInfo);
     if (st != DCGM_ST_OK)
     {
         if (fvBuffer)
-            fvBuffer->AddInt64Value(watchEntityGroupId, watchEntityId, dcgmFieldId, 0, 0, st);
+            fvBuffer->AddInt64Value(entityGroupId, entityId, dcgmFieldId, 0, 0, st);
         return st;
     }
 
@@ -4477,7 +4476,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
             retSt = DCGM_ST_NO_DATA;
 
         if (fvBuffer)
-            fvBuffer->AddInt64Value(watchEntityGroupId, watchEntityId, dcgmFieldId, 0, 0, retSt);
+            fvBuffer->AddInt64Value(entityGroupId, entityId, dcgmFieldId, 0, 0, retSt);
         return retSt;
     }
 
@@ -4490,8 +4489,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
     /* If the user provided a FV buffer, append our sample to it */
     if (fvBuffer)
     {
-        st = DcgmcmWriteTimeSeriesEntryToFvBuffer(
-            watchEntityGroupId, watchEntityId, dcgmFieldId, entry, fvBuffer, timeseries);
+        st    = DcgmcmWriteTimeSeriesEntryToFvBuffer(entityGroupId, entityId, dcgmFieldId, entry, fvBuffer, timeseries);
         retSt = st;
     }
 
@@ -7141,6 +7139,44 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                         DCGM_LOG_ERROR << "A MIG related fields is requested for GPU without enabled MIG";
                         return DCGM_ST_NOT_SUPPORTED;
                     }
+#if defined(NV_VMWARE)
+                    std::string migName;
+                    std::vector<std::string> migTempName;
+                    char nameBuf[NVML_DEVICE_NAME_BUFFER_SIZE] = { 0 };
+                    nvmlReturn                                 = NVML_ERROR_INVALID_ARGUMENT;
+
+                    nvmlDevice_t instanceDevice = GetComputeInstanceNvmlDevice(
+                        gpuId,
+                        static_cast<dcgm_field_entity_group_t>(threadCtx->entityKey.entityGroupId),
+                        threadCtx->entityKey.entityId);
+                    if (instanceDevice != nullptr)
+                    {
+                        nvmlReturn = nvmlDeviceGetName(instanceDevice, nameBuf, sizeof(buf));
+                    }
+                    if (watchInfo)
+                    {
+                        watchInfo->lastStatus = nvmlReturn;
+                    }
+                    if (nvmlReturn != NVML_SUCCESS)
+                    {
+                        AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
+                        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+
+                    // Extract MIG device name from the full device name. These are prefixed with "MIG".
+                    migName = strstr(nameBuf, "MIG");
+                    if (migName.empty())
+                    {
+                        snprintf(buf, sizeof(buf), "%s", DCGM_STR_BLANK);
+                    }
+                    else
+                    {
+                        // Remove the MIG prefix from the name.
+                        dcgmTokenizeString(migName, " ", migTempName);
+                        snprintf(buf, NVML_DEVICE_NAME_BUFFER_SIZE, "%s", migTempName[1].c_str());
+                    }
+                    AppendEntityString(threadCtx, buf, now, expireTime);
+#else
                     DcgmNs::Mig::GpuInstanceId gpuInstanceId {};
                     ret = m_migManager.GetInstanceIdFromComputeInstanceId(DcgmNs::Mig::ComputeInstanceId { entityId },
                                                                           gpuInstanceId);
@@ -7165,6 +7201,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                     }
 
                     AppendEntityString(threadCtx, buf, now, expireTime);
+#endif
                     break;
                 }
 
@@ -7306,6 +7343,40 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             saveValue = values[affinityIndex];
 
             AppendEntityInt64(threadCtx, saveValue, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_MEM_AFFINITY_0:
+        case DCGM_FI_DEV_MEM_AFFINITY_1:
+        case DCGM_FI_DEV_MEM_AFFINITY_2:
+        case DCGM_FI_DEV_MEM_AFFINITY_3:
+        {
+            long long values[4] = { 0 };
+            unsigned int Nlongs = (sizeof(long) == 8) ? 4 : 8;
+            int affinityIndex   = fieldMeta->fieldId - DCGM_FI_DEV_MEM_AFFINITY_0;
+
+            if (nvmlDevice == nullptr)
+            {
+                nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+            }
+            else
+            {
+                nvmlReturn = nvmlDeviceGetMemoryAffinity(
+                    nvmlDevice, Nlongs, (unsigned long *)&values[0], NVML_AFFINITY_SCOPE_NODE);
+            }
+
+            if (watchInfo)
+            {
+                watchInfo->lastStatus = nvmlReturn;
+            }
+
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            AppendEntityInt64(threadCtx, values[affinityIndex], 0, now, expireTime);
             break;
         }
 
@@ -7695,6 +7766,28 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
 
             powerDbl = ((double)powerUint) / 1000.0; /* Convert to watts */
+            AppendEntityDouble(threadCtx, powerDbl, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_POWER_USAGE_INSTANT:
+        {
+            double powerDbl;
+
+            nvmlFieldValue_t value = {};
+            value.fieldId          = NVML_FI_DEV_POWER_INSTANT;
+
+            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                 : nvmlDeviceGetFieldValues(nvmlDevice, 1, &value);
+            if (watchInfo)
+                watchInfo->lastStatus = nvmlReturn;
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                AppendEntityDouble(threadCtx, NvmlErrorToDoubleValue(nvmlReturn), 0, now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            powerDbl = ((double)value.value.uiVal) / 1000.0; /* Convert to watts */
             AppendEntityDouble(threadCtx, powerDbl, 0, now, expireTime);
             break;
         }
@@ -9167,7 +9260,36 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
         case DCGM_FI_DEV_MIG_MODE:
         {
+#if defined(NV_VMWARE)
+            if (m_gpus[gpuId].migEnabled == false)
+            {
+                unsigned int currentMode = 0;
+                unsigned int pendingMode = 0;
+                nvmlReturn_t nvmlRet     = nvmlDeviceGetMigMode(nvmlDevice, &currentMode, &pendingMode);
+                if (nvmlRet == NVML_SUCCESS)
+                {
+                    AppendEntityInt64(threadCtx, currentMode, 0, now, expireTime);
+                }
+                else if (nvmlRet == NVML_ERROR_NOT_SUPPORTED)
+                {
+                    // Older hardware or some GPUs may not support this query
+                    log_debug("Cannot check for MIG devices: {}", nvmlErrorString(nvmlRet));
+                    AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlRet), 0, now, expireTime);
+                }
+                else
+                {
+                    log_error("Error {} from nvmlDeviceGetMigMode", nvmlErrorString(nvmlRet));
+                    AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlRet), 0, now, expireTime);
+                    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlRet);
+                }
+            }
+            else
+            {
+                AppendEntityInt64(threadCtx, m_gpus[gpuId].migEnabled, 0, now, expireTime);
+            }
+#else
             AppendEntityInt64(threadCtx, m_gpus[gpuId].migEnabled, 0, now, expireTime);
+#endif
             break;
         }
 
@@ -9356,7 +9478,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                     {
                         continue;
                     }
-                    nvmlReturn = nvmlDeviceGetAttributes(migDevice, migAttrs.data());
+                    nvmlReturn = nvmlDeviceGetAttributes_v2(migDevice, migAttrs.data());
                     if (watchInfo != nullptr)
                     {
                         watchInfo->lastStatus = nvmlReturn;
@@ -9668,6 +9790,48 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
 
             AppendEntityInt64(threadCtx, (long long)pageCount, 0, now, expireTime);
+
+            break;
+        }
+
+        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX:
+        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH:
+        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL:
+        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW:
+        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE:
+        {
+            nvmlRowRemapperHistogramValues_t hist = {};
+            unsigned int value                    = 0;
+
+            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                 : nvmlDeviceGetRowRemapperHistogram(nvmlDevice, &hist);
+            if (watchInfo)
+                watchInfo->lastStatus = nvmlReturn;
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            switch (fieldMeta->fieldId)
+            {
+                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX:
+                    value = hist.max;
+                    break;
+                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH:
+                    value = hist.high;
+                    break;
+                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL:
+                    value = hist.partial;
+                    break;
+                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW:
+                    value = hist.low;
+                    break;
+                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE:
+                    value = hist.none;
+                    break;
+            }
+            AppendEntityInt64(threadCtx, (long long)value, 0, now, expireTime);
 
             break;
         }
@@ -10438,7 +10602,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             DcgmGpuInstance *pGpuInstance  = nullptr;
             nvmlDevice_t nvmlDeviceToQuery = nvmlDevice;
 
-            switch (entityGroupId)
+            switch (watchInfo->watchKey.entityGroupId)
             {
                 case DCGM_FE_GPU_I:
                 {

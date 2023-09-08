@@ -108,7 +108,7 @@ void Test::getOut(std::string error)
 {
     // Create error message for the exception
     std::string errMsg        = "\"" + GetTestDisplayName(m_index) + "\" test: " + error;
-    nvvsCommon.mainReturnCode = MAIN_RET_ERROR; /* Return error code to console */
+    nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Return error code to console */
     throw std::runtime_error(errMsg);
 }
 

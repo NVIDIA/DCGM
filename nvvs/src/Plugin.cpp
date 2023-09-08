@@ -78,6 +78,14 @@ void Plugin::InitializeForGpuList(const dcgmDiagPluginGpuList_t &gpuInfo)
 
 /* Logging */
 /*************************************************************************/
+void Plugin::AddWarning(const std::string &error)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error;
+    m_warnings.push_back(error);
+}
+
+/*************************************************************************/
 void Plugin::AddError(const DcgmError &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
@@ -281,8 +289,9 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
 
     for (auto &&warning : m_warnings)
     {
-        if (infoFull)
+        if (results->numInfo == DCGM_DIAG_MAX_INFO)
         {
+            infoFull = true;
             break;
         }
 

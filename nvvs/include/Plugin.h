@@ -201,6 +201,14 @@ public:
 
     /*************************************************************************/
     /*
+     * Adds a warning for this plugin
+     *
+     * Thread-safe.
+     */
+    void AddWarning(const std::string &error);
+
+    /*************************************************************************/
+    /*
      * Adds an error for this plugin
      *
      * Thread-safe.

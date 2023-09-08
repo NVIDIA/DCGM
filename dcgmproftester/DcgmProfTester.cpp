@@ -30,10 +30,6 @@
 #include <cuda.h>
 #include <dcgm_agent.h>
 
-#if (CUDA_VERSION_USED >= 11)
-#include "DcgmDgemm.hpp"
-#endif
-
 #include <tclap/Arg.h>
 #include <tclap/CmdLine.h>
 #include <tclap/SwitchArg.h>
@@ -262,7 +258,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn_t dcgmReturn = dcgmInit();
     if (dcgmReturn != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "dcgmInit() returned " << dcgmReturn << ".";
+        std::cout << "dcgmInit() returned " << dcgmReturn << ".";
 
         return dcgmReturn;
     }
@@ -270,7 +266,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_dcgmHandle);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "dcgmStartEmbedded() returned " << dcgmReturn << ".";
+        std::cout << "dcgmStartEmbedded() returned " << dcgmReturn << ".";
 
         return dcgmReturn;
     }
@@ -457,7 +453,7 @@ dcgmReturn_t DcgmProfTester::Init(int argc, char *argv[])
     dcgmReturn = ParseCommandLine(argc, argv);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "Command line parsing failed.";
+        std::cout << "Command line parsing failed.";
 
         return dcgmReturn;
     }
@@ -604,12 +600,12 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
             entity.entityId      = gpuInstance.m_gpuId;
         }
 
-
-        /* Don't set CUDA_VISIBLE_DEVICES for NvLink bandwidth since the child will also need to be able to
-           see our peer GPU. Worry not since the child process will fall back to PCI BusId, which works for
-           non-MIG. NvLink is mutually exclusive with MIG, so we're good. */
-
-        if (testFieldId != DCGM_FI_PROF_NVLINK_RX_BYTES && testFieldId != DCGM_FI_PROF_NVLINK_TX_BYTES)
+        /**
+         * We always save a prospective value for CUDA_VISIBLE_DEVICES in the
+         * dcgmproftester main thread. The dcgmproftester worker thread will set
+         * it in the MIG case to ensure we work on the right MIG slice. In the
+         * non-MIG case, we can actually get the physical GPU Device ID.
+         */
         {
             dcgmFieldValue_v2 value {};
 
@@ -621,8 +617,8 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
                 AbortOtherChildren(gpuInstance.m_gpuId);
 
                 DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
-                               << "] to CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
-                               << value.status;
+                               << "] to prospective CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn
+                               << "), " << value.status;
 
                 return DCGM_ST_GENERIC_ERROR;
             }
@@ -1053,6 +1049,7 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
  */
 dcgmReturn_t DcgmProfTester::ShutdownGpuInstances(void)
 {
+    m_entities.clear();
     m_gpuInstances.clear();
 
     return DCGM_ST_OK;
@@ -1090,7 +1087,7 @@ void DcgmProfTester::InitializeLogging(std::string logFile, DcgmLoggingSeverity_
 /*****************************************************************************/
 static void signalHandler(int signal)
 {
-    std::cerr << "Received signal " << signal << std::endl;
+    std::cout << "Received signal " << signal << std::endl;
     g_signalCaught = true;
 }
 
@@ -1107,7 +1104,7 @@ int main(int argc, char **argv)
         auto cuResult  = cuDriverGetVersion(&cudaLoaded);
         if (cuResult != CUDA_SUCCESS)
         {
-            DCGM_LOG_FATAL << "Unable to validate Cuda version. cuDriverGetVersion returned " << cuResult << ".";
+            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << cuResult << ".";
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1117,8 +1114,8 @@ int main(int argc, char **argv)
 
         if (majorCudaVersionLoaded != CUDA_VERSION_USED)
         {
-            DCGM_LOG_FATAL << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
-                           << ". Installed Cuda version is " << majorCudaVersionLoaded << ".";
+            std::cout << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
+                      << ". Installed Cuda version is " << majorCudaVersionLoaded << ".";
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1135,7 +1132,7 @@ int main(int argc, char **argv)
         sa.sa_flags = 0;
         if (sigaction(SIGCHLD, &sa, 0) == -1)
         {
-            DCGM_LOG_FATAL << "Could not ignore SIGCHLD from worker threads.";
+            std::cout << "Could not ignore SIGCHLD from worker threads.";
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1143,12 +1140,15 @@ int main(int argc, char **argv)
         dcgmReturn = dpt->Init(argc, argv);
         if (dcgmReturn)
         {
-            DCGM_LOG_FATAL << "Error " << dcgmReturn << " from Init(). Exiting.";
+            std::cout << "Error " << dcgmReturn << " from Init(). Exiting.";
 
             return dcgmReturn;
         }
 
         dcgmReturn = dpt->Process([dpt](std::shared_ptr<DcgmNs::ProfTester::Arguments_t> arguments) -> dcgmReturn_t {
+            /**
+             * This is the normal logging initialization.
+             */
             dpt->InitializeLogging(arguments->m_parameters.m_logFile.c_str(), arguments->m_parameters.m_logLevel);
 
             dcgmReturn_t dcgmReturn = dpt->InitializeGpus(*arguments);
@@ -1167,7 +1167,7 @@ int main(int argc, char **argv)
 
             if (st != DCGM_ST_OK)
             {
-                DCGM_LOG_ERROR << "Error " << dcgmReturn << " from RunTests(). Exiting.";
+                DCGM_LOG_ERROR << "Error " << st << " from RunTests(). Exiting.";
             }
 
             dcgmReturn = dpt->ShutdownGpus();
@@ -1196,13 +1196,13 @@ int main(int argc, char **argv)
     }
     catch (std::runtime_error const &ex)
     {
-        DCGM_LOG_FATAL << "Uncaught runtime exception occured: " << ex.what();
+        DCGM_LOG_ERROR << "Uncaught runtime exception occured: " << ex.what();
 
         return DCGM_ST_GENERIC_ERROR;
     }
     catch (...)
     {
-        DCGM_LOG_FATAL << "Uncaught unexpected exception occured.";
+        DCGM_LOG_ERROR << "Uncaught unexpected exception occured.";
 
         return DCGM_ST_GENERIC_ERROR;
     }

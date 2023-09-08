@@ -239,11 +239,7 @@ def parse_config(config):
                 else:
                     interval = int(float(interval_str[1:]) * c_ONE_SEC_IN_USEC) # strip :
 
-                # We keep a set of fields for each unique interval
-                if interval not in g_fieldIntervalMap.keys():
-                    g_fieldIntervalMap[interval] = []
-
-                # Here we parse out either miltiple fields sharing an
+                # Here we parse out either multiple fields sharing an
                 # interval, or a single field.
                 if fields[0:1] == "(": # a true field set
                     fields = fields[1:-1]
@@ -253,11 +249,23 @@ def parse_config(config):
                         # We map any field names to field numbers, and add
                         # them to the list for the interval
                         field = dcgm_fields_collectd.GetFieldByName(field_group.group(2))
-                        g_fieldIntervalMap[interval] += [field]
+                        if (field >= 0):
+                            # We keep a set of fields for each unique interval
+                            if interval not in g_fieldIntervalMap.keys():
+                                g_fieldIntervalMap[interval] = []
+                            g_fieldIntervalMap[interval] += [field]
+                        else:
+                            collectd.error("Field " + field_group.group(2) + " does not exist.")
                 else: # just one field
                     # Map field name to number.                    
                     field = dcgm_fields_collectd.GetFieldByName(fields)
-                    g_fieldIntervalMap[interval] += [field]
+                    if (field >= 0):
+                        # We keep a set of fields for each unique interval
+                        if interval not in g_fieldIntervalMap.keys():
+                            g_fieldIntervalMap[interval] = []
+                        g_fieldIntervalMap[interval] += [field]
+                    else:
+                        collectd.error("Field " + fields + " does not exist.")
     
 
 ###############################################################################
@@ -278,8 +286,8 @@ def config_dcgm(config = None):
         Import "dcgm_collectd_plugin"
         <Module dcgm_collectd_plugin>
             Interval 2
-            FieldIds "(1001,tensor_active):5,1002:10,1004:.1,1010:"
-            FieldIds "1007"
+            FieldIds "(1001,tensor_active):5,1002:10,1004:.1,1005:"
+            FieldIds "1013"
         </Module>
     </Plugin>
 
@@ -328,7 +336,10 @@ def shutdown_dcgm():
 
 ###############################################################################
 def read_dcgm(data=None):
-    g_dcgmCollectd.Process()
+    if g_dcgmCollectd.m_fieldGroup is None:
+        collectd.error('No DCGM fields collected: Did you forget FieldIds collectd DCGM config entries or not start nv-hostengine?')
+    else:
+        g_dcgmCollectd.Process()
 
 def register_collectd_callbacks():
     collectd.register_config(config_dcgm, name="dcgm_collectd_plugin")  # pylint: disable=no-member

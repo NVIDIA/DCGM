@@ -19,12 +19,15 @@ import dcgm_fields
 import dcgm_internal_helpers
 import DcgmDiag
 import option_parser
+import os
+import subprocess
 
 import signal
 import threading
 import time
 
 from dcgm_field_injection_helpers import inject_value
+from shutil import which as find_executable
 
 injection_offset = 3
 
@@ -107,13 +110,6 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
         assert extraTestResult == dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN, \
             "Expected the extra test to be skipped since the first test failed.\nGot results: %s" % \
             (extraTestResult)
-
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
-@test_utils.run_with_initialized_client()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_nvvs_plugin_fail_early_sm_stress_standalone(handle, gpuIds):
-    verify_early_fail_checks_for_test(handle, gpuIds[0], "SM Stress", dcgm_structs.DCGM_SM_STRESS_INDEX, None)
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
@@ -256,3 +252,57 @@ def test_nvvs_plugin_software_inforom_embedded(handle, gpuIds):
     for gpuId in gpuIds:
         result = response.levelOneResults[dcgm_structs.DCGM_SWTEST_INFOROM].result
         assert(result == dcgm_structs.DCGM_DIAG_RESULT_PASS or result == dcgm_structs.DCGM_DIAG_RESULT_SKIP)
+
+def test_nvvs_plugins_required_symbols():
+    nmPath = find_executable('nm')
+    if nmPath is None:
+        test_utils.skip_test("'nm' is not installed on the system.")
+    
+    pluginPath = os.path.join(os.environ['NVVS_BIN_PATH'], 'plugins')
+    numErrors = 0
+
+    requiredSymbols = [
+        'GetPluginInterfaceVersion', 
+        'GetPluginInfo',
+        'InitializePlugin',
+        'RunTest',
+        'RetrieveCustomStats',
+        'RetrieveResults'
+    ]
+
+    skipLibraries = [
+        'libpluginCommon.so',
+        'libcurand.so'
+    ]
+    
+    for cudaDirName in os.listdir(pluginPath):
+        cudaPluginPath = os.path.join(pluginPath, cudaDirName)
+        for soName in os.listdir(cudaPluginPath):
+            soPath = os.path.join(cudaPluginPath, soName)
+            #Skip symlinks
+            if os.path.islink(soPath):
+                continue
+            #Skip non-libraries
+            if not ".so" in soPath:
+                continue
+            
+            #Skip some helper libraries that aren't plugin entry points
+            skip = False
+            for sl in skipLibraries:
+                if sl in soPath:
+                    skip = True
+            if skip:
+                continue
+            
+            args = [nmPath, soPath]
+            output = str(subprocess.check_output(args, stderr=subprocess.STDOUT))
+
+            if ': no symbols' in output:
+                test_utils.skip_test("The installed nm is unable to see symbols within our plugins.")
+            
+            for rs in requiredSymbols:
+                if not rs in output:
+                    logger.error("library %s is missing symbol %s" % (soPath, rs))
+                    numErrors += 1
+    
+    assert numErrors == 0, "Some plugins were missing symbols. See errors above."

@@ -17,6 +17,7 @@
 
 #include "DcgmLogging.h"
 
+#include <Defer.hpp>
 #include <cstdio>
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -25,12 +26,14 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 #include <grp.h>
 #include <iterator>
 #include <linux/prctl.h>
 #include <pthread.h>
 #include <pwd.h>
 #include <string>
+#include <sys/epoll.h>
 #include <sys/prctl.h>
 #include <unistd.h>
 
@@ -371,6 +374,120 @@ std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds mon
 
 namespace DcgmNs::Utils
 {
+
+void *LoadLibNuma()
+{
+    std::vector<std::string> libnumaPaths = { "/usr/lib/x86_64-linux-gnu",
+                                              "/usr/lib/usr/lib/x86_64-linux-gnu",
+                                              "/usr/lib/aarch64-linux-gnu",
+                                              "/usr/lib",
+                                              "/usr/lib64",
+                                              "/usr/local/lib",
+                                              "/usr/local/lib64" };
+    void *libnuma;
+
+    for (auto &path : libnumaPaths)
+    {
+        std::string numaPath = fmt::format("{}/libnuma.so.1", path).c_str();
+        libnuma              = dlopen(numaPath.c_str(), RTLD_LAZY);
+        if (libnuma != nullptr)
+        {
+            // Found
+            return libnuma;
+        }
+    }
+
+    // Didn't find libnuma.so.1
+    return nullptr;
+}
+
+typedef struct bitmask *(*numa_bitmask_alloc_fn)(unsigned int);
+typedef int (*numa_num_possible_nodes_fn)();
+typedef struct bitmask *(*numa_bitmask_clearall_fn)(struct bitmask *);
+typedef struct bitmask *(*numa_bitmask_setbit_fn)(struct bitmask *, unsigned int);
+typedef void (*numa_bind_fn)(struct bitmask *);
+
+void *LoadFunction(void *libHandle, const std::string &funcname, const std::string &libName)
+{
+    dlerror();
+    void *f = dlsym(libHandle, funcname.c_str());
+
+    if (f == nullptr)
+    {
+        std::string error = dlerror();
+        if (error.empty())
+        {
+            log_error("Couldn't load a definition for {} from {}", funcname, libName);
+        }
+        else
+        {
+            log_error("Couldn't load a definition for {} from {}: '{}'", funcname, libName, error);
+        }
+    }
+
+    return f;
+}
+
+void BindToNumaNodes(const std::array<unsigned long long, 4> &nodeSet)
+{
+    void *libnumaHandle = LoadLibNuma();
+
+    numa_bitmask_alloc_fn numa_bitmask_alloc;
+    numa_num_possible_nodes_fn numa_num_possible_nodes;
+    numa_bitmask_clearall_fn numa_bitmask_clearall;
+    numa_bitmask_setbit_fn numa_bitmask_setbit;
+    numa_bind_fn numa_bind;
+
+    if (libnumaHandle != nullptr)
+    {
+        std::string libName("libnuma");
+        numa_bitmask_alloc = (numa_bitmask_alloc_fn)LoadFunction(libnumaHandle, "numa_bitmask_alloc", libName);
+        numa_num_possible_nodes
+            = (numa_num_possible_nodes_fn)LoadFunction(libnumaHandle, "numa_num_possible_nodes", libName);
+        numa_bitmask_clearall = (numa_bitmask_clearall_fn)LoadFunction(libnumaHandle, "numa_bitmask_clearall", libName);
+        numa_bitmask_setbit   = (numa_bitmask_setbit_fn)LoadFunction(libnumaHandle, "numa_bitmask_setbit", libName);
+        numa_bind             = (numa_bind_fn)LoadFunction(libnumaHandle, "numa_bind", libName);
+
+        if (numa_bitmask_alloc == nullptr || numa_num_possible_nodes == nullptr || numa_bitmask_clearall == nullptr
+            || numa_bitmask_setbit == nullptr || numa_bind == nullptr)
+        {
+            log_error("Cannot load symbols from libnuma; not binding to NUMA nodes!");
+            return;
+        }
+    }
+    else
+    {
+        log_error("Cannot load libnuma.so: not binding to NUMA nodes!");
+        return;
+    }
+
+    /* Set the affinity for this forked child */
+    struct bitmask *nodemask = numa_bitmask_alloc(numa_num_possible_nodes());
+    numa_bitmask_clearall(nodemask);
+
+    for (size_t i = 0; i < nodeSet.size(); i++)
+    {
+        unsigned long partialNodeSet = nodeSet.at(i);
+        log_debug("Binding part {} of 4 to nodes {:x}", i + 1, partialNodeSet);
+
+        // Initialize j to the bit we want to start working from
+        unsigned int j = 0 + i * (sizeof(partialNodeSet) * 8);
+        while (partialNodeSet != 0)
+        {
+            if (partialNodeSet & 0x1)
+            {
+                numa_bitmask_setbit(nodemask, j);
+            }
+
+            j++;
+            partialNodeSet = partialNodeSet >> 1;
+        }
+        break;
+    }
+
+    numa_bind(nodemask);
+}
+
 /***********************************************************************************************/
 /*
 Execute a process where args is a vector of arguments for the process and args[0] is the name of the
@@ -388,7 +505,8 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
                          FileHandle *outfp,
                          FileHandle *errfp,
                          bool stderrToStdout,
-                         const char *userName)
+                         const char *userName,
+                         const std::array<unsigned long long, 4> *nodeSet)
 {
     // Ensure outfp is not null
     if (outfp == nullptr)
@@ -561,6 +679,11 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
             }
         }
 
+        if (nodeSet != nullptr)
+        {
+            BindToNumaNodes(*nodeSet);
+        }
+
         // Convert args to argv style char** for execvp
         std::vector<const char *> argv(args.size() + 1);
         for (unsigned int i = 0; i < args.size(); i++)
@@ -603,6 +726,82 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
     }
 
     return pid;
+}
+
+int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd)
+{
+    std::array<char, 1024> buff = {};
+
+    int epollFd = epoll_create1(EPOLL_CLOEXEC);
+    if (epollFd < 0)
+    {
+        auto const err = errno;
+        DCGM_LOG_ERROR << "epoll_create1 failed. errno " << err;
+        return err;
+    }
+    auto cleanupEpollFd = DcgmNs::Defer { [&]() {
+        close(epollFd);
+    } };
+
+    struct epoll_event event = {};
+
+    event.events  = EPOLLIN | EPOLLHUP;
+    event.data.fd = outputFd.Get();
+    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, outputFd.Get(), &event) < 0)
+    {
+        auto const err = errno;
+        DCGM_LOG_ERROR << "epoll_ctl failed. errno " << err;
+        return err;
+    }
+
+    int pipesLeft = 1;
+    while (pipesLeft > 0)
+    {
+        int numEvents = epoll_wait(epollFd, &event, 1, -1);
+        if (numEvents < 0)
+        {
+            auto const err = errno;
+            DCGM_LOG_ERROR << "epoll_wait failed. errno " << err;
+            return err;
+        }
+
+        if (numEvents == 0)
+        {
+            // Timeout
+            continue;
+        }
+
+        if (event.data.fd == outputFd.Get())
+        {
+            auto const bytesRead = read(outputFd.Get(), buff.data(), buff.size());
+            if (bytesRead < 0)
+            {
+                auto const err = errno;
+                if (err == EAGAIN || err == EINTR)
+                {
+                    continue;
+                }
+                DCGM_LOG_ERROR << "read from stdout failed. errno " << err;
+                return err;
+            }
+            if (bytesRead == 0)
+            {
+                if (epoll_ctl(epollFd, EPOLL_CTL_DEL, outputFd.Get(), nullptr) < 0)
+                {
+                    auto const err = errno;
+                    DCGM_LOG_ERROR << "epoll_ctl to remove outputFd failed. errno " << err;
+                    return err;
+                }
+                pipesLeft -= 1;
+            }
+            else
+            {
+                stdoutStream.append(buff.data(), buff.data() + bytesRead);
+            }
+        }
+    }
+
+    return 0;
 }
 
 FileHandle::FileHandle() noexcept

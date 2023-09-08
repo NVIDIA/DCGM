@@ -26,6 +26,21 @@ static dcgmReturn_t g_watchFieldsRet = DCGM_ST_OK;
 static dcgmFieldGrp_t g_fieldGroupId = 0;
 static dcgmGpuGrp_t g_groupId        = 0;
 
+class WrapperDcgmRecorder : protected DcgmRecorder
+{
+public:
+    WrapperDcgmRecorder(dcgmHandle_t handle)
+        : DcgmRecorder(handle)
+    {}
+    void WrapperFormatFieldViolationError(DcgmError &d,
+                                          unsigned short fieldId,
+                                          unsigned int gpuId,
+                                          timelib64_t start,
+                                          int64_t intValue,
+                                          double dblValue,
+                                          const std::string &fieldName);
+};
+
 long long initializeDataCommon(dcgmTimeseriesInfo_t &data, unsigned short fieldId)
 {
     g_timestamp++;
@@ -245,4 +260,50 @@ SCENARIO("AddWatches")
     g_fieldGroupId   = 1;
     g_watchFieldsRet = DCGM_ST_GPU_IS_LOST;
     CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_GPU_IS_LOST);
+}
+
+void WrapperDcgmRecorder::WrapperFormatFieldViolationError(DcgmError &d,
+                                                           unsigned short fieldId,
+                                                           unsigned int gpuId,
+                                                           timelib64_t startTime,
+                                                           int64_t intValue,
+                                                           double dblValue,
+                                                           const std::string &fieldName)
+{
+    FormatFieldViolationError(d, fieldId, gpuId, startTime, intValue, dblValue, fieldName);
+}
+
+SCENARIO("FormatFieldViolationError")
+{
+    WrapperDcgmRecorder dr((dcgmHandle_t)1);
+    unsigned int gpuId = 2;
+    std::string fieldName("bob");
+
+    for (unsigned int fieldId = DCGM_FR_UNKNOWN; fieldId < DCGM_FR_ERROR_SENTINEL; fieldId++)
+    {
+        DcgmError d { gpuId };
+        dr.WrapperFormatFieldViolationError(d, fieldId, gpuId, 14, 6, DCGM_FP64_BLANK, fieldName);
+        switch (fieldId)
+        {
+            case DCGM_FI_DEV_THERMAL_VIOLATION:
+            {
+                CHECK(d.GetCode() == DCGM_FR_THERMAL_VIOLATIONS);
+                break;
+            }
+            case DCGM_FI_DEV_XID_ERRORS:
+            {
+                CHECK(d.GetCode() == DCGM_FR_XID_ERROR);
+                break;
+            }
+            default:
+            {
+                CHECK(d.GetCode() == DCGM_FR_FIELD_VIOLATION);
+                // FormatFieldViolation trusts the caller on whether or not the field is a double. When the int
+                // value is blank, it formats a double.
+                dr.WrapperFormatFieldViolationError(d, fieldId, gpuId, 14, DCGM_INT64_BLANK, 10.0, fieldName);
+                CHECK(d.GetCode() == DCGM_FR_FIELD_VIOLATION_DBL);
+                break;
+            }
+        }
+    }
 }

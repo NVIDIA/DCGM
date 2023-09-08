@@ -195,6 +195,7 @@ TEST_CASE("JsonResult: JsonSerialize DiagnosticResults")
             },
         },
         .devIds = std::nullopt,
+        .errorCode = NVVS_ST_GENERIC_ERROR,
     };
 
     auto json = Serialize(diagnosticResults);
@@ -215,6 +216,7 @@ TEST_CASE("JsonResult: JsonSerialize Diagnostic Runtime Error")
         .driverVersion = "525.75",
         .categories    = std::nullopt,
         .devIds        = std::nullopt,
+        .errorCode     = NVVS_ST_GENERIC_ERROR,
     };
 
     auto json = Serialize(diagnosticResults);
@@ -235,6 +237,7 @@ TEST_CASE("JsonResult: Bad Diagnostic Result")
         .driverVersion = "525.75",
         .categories    = std::nullopt,
         .devIds        = std::nullopt,
+        .errorCode     = std::nullopt,
     };
 
     auto json = Serialize(diagnosticResults);

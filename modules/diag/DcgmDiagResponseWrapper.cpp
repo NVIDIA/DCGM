@@ -290,6 +290,72 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmDiagResponseWrapper::AddInfoDetail(unsigned int gpuIndex,
+                                                    unsigned int testIndex,
+                                                    const std::string &testname,
+                                                    dcgmDiagErrorDetail_t &ed,
+                                                    dcgmDiagResult_t result)
+{
+    if (!StateIsValid())
+    {
+        DCGM_LOG_ERROR << "ERROR: Must initialize DcgmDiagResponseWrapper before using.";
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    unsigned int l1Index = 0;
+    if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
+    {
+        l1Index = GetBasicTestResultIndex(testname);
+        if (l1Index >= DCGM_SWTEST_COUNT)
+        {
+            log_error("Test index {} indicates a level one test, but testname '{}' is not found.", testIndex, testname);
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+
+    if (m_version == dcgmDiagResponse_version8)
+    {
+        // version 6
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
+        {
+            // We are looking at the l1 tests
+            snprintf(m_response.v8ptr->levelOneResults[l1Index].info,
+                     sizeof(m_response.v8ptr->levelOneResults[l1Index].info),
+                     "%s",
+                     ed.msg);
+        }
+        else
+        {
+            snprintf(m_response.v8ptr->perGpuResponses[gpuIndex].results[testIndex].info,
+                     sizeof(m_response.v8ptr->perGpuResponses[gpuIndex].results[testIndex].info),
+                     "%s",
+                     ed.msg);
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version7)
+    {
+        // version 7
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V7)
+        {
+            // We are looking at the l1 tests
+            SafeCopyTo(m_response.v7ptr->levelOneResults[l1Index].info, ed.msg);
+        }
+        else
+        {
+            SafeCopyTo(m_response.v7ptr->perGpuResponses[gpuIndex].results[testIndex].info, ed.msg);
+        }
+    }
+
+    else
+    {
+        DCGM_LOG_ERROR << "Version " << m_version << " is not handled.";
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
 void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
                                                const std::string &msg,
                                                unsigned int gpuIndex,

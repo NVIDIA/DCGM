@@ -106,7 +106,7 @@ skus:
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
-      target_power: 500.0
+      target_power: 700.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -157,6 +157,7 @@ skus:
       use_dgemm: false
     pcie:
       is_allowed: true
+      target_stress: 29250.0
       h2d_d2h_single_pinned:
         min_pci_generation: 3.0
         min_pci_width: 16.0
@@ -1443,6 +1444,7 @@ skus:
       target_stress: 9750.0
       use_dgemm: false
     pcie:
+      target_stress: 9750.0
       is_allowed: true
       h2d_d2h_single_pinned:
         min_pci_generation: 3.0
@@ -1544,6 +1546,7 @@ skus:
       use_dgemm: true
     pcie:
       is_allowed: true
+      target_stress: 13725.0
       h2d_d2h_single_pinned:
         min_pci_generation: 3.0
         min_pci_width: 16.0
@@ -1872,6 +1875,43 @@ skus:
     sm_stress:
       is_allowed: true
       # dcgmproftester -t 1007 =~ 9400. 9400 * 0.75 = 7050
+      target_stress: 7050.5
+      matrix_dim: 1024.
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~780000 MiB/sec. Multiply by .75 to get 585000
+      minimum_bandwidth: 585000.0
+  # A30LC P1001 SKU #215
+  - name: A30LC 
+    id: 20b71804
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 164.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm perf target
+      target_stress: 7050.0
+    sm_stress:
+      is_allowed: true
+      # Performance measured at ~9300. 9300 * 0.75 = 6975
       target_stress: 7050.5
       matrix_dim: 1024.
       use_dgemm: false
@@ -2548,6 +2588,7 @@ skus:
       use_dgemm: false
     pcie:
       is_allowed: true
+      target_stress: 15375.0
       h2d_d2h_single_pinned:
         min_pci_generation: 3.0
         min_pci_width: 16.0
@@ -2821,7 +2862,7 @@ skus:
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
-      target_power: 299.0
+      target_power: 700.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2859,7 +2900,7 @@ skus:
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
-      target_power: 299.0
+      target_power: 700.0
       use_dgemm: false
     targeted_stress:
       is_allowed: true
@@ -2997,5 +3038,81 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows ~1570000. Multiply by .75 to get ~1177500
       minimum_bandwidth: 1177500.0
+    pulse_test:
+      is_allowed: true
+  - name: H100NVL
+    id: 2321
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 399.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 25575
+    sm_stress:
+      is_allowed: true
+      # This was measured at ~34100, multiply by .75 to get ~25575
+      target_stress: 25575.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~2725000. Multiply by .75 to get ~2043000
+      minimum_bandwidth: 2043000
+    pulse_test:
+      is_allowed: true
+  - name: SkinnyJoe
+    id: 237f
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 700.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 33075
+    sm_stress:
+      is_allowed: true
+      # This was measured at ~44100, multiply by .75 to get ~33075
+      target_stress: 33075.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      target_stress: 35575.0
+      matrix_dim: 1024.0
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~4425000. Multiply by .75 to get ~4425000
+      minimum_bandwidth: 3318750
     pulse_test:
       is_allowed: true

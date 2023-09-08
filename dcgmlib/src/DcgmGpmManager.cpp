@@ -18,6 +18,7 @@
 #include <DcgmUtilities.h>
 #include <TimeLib.hpp>
 
+#include <cmath>
 #include <ranges>
 
 
@@ -163,6 +164,29 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
 
     value = DCGM_FP64_BLANK;
 
+    dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldId);
+
+    switch (m_entityPair.entityGroupId)
+    {
+        case DCGM_FE_GPU:
+            // All GPM metrics supported at the GPU level
+            break;
+        case DCGM_FE_GPU_I:
+            if (fieldMeta->entityLevel != DCGM_FE_GPU_I && fieldMeta->entityLevel != DCGM_FE_GPU_CI)
+            {
+                return DCGM_ST_NO_DATA;
+            }
+            break;
+        case DCGM_FE_GPU_CI:
+            if (fieldMeta->entityLevel != DCGM_FE_GPU_CI)
+            {
+                return DCGM_ST_NO_DATA;
+            }
+            break;
+        default:
+            return DCGM_ST_NO_DATA;
+    }
+
     timelib64_t updateInterval
         = m_watchTable.GetUpdateIntervalUsec(m_entityPair.entityGroupId, m_entityPair.entityId, fieldId);
     if (updateInterval == 0)
@@ -232,7 +256,11 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     /* Success! */
     value = mg.metrics[0].value;
 
-    if (isPercentageField)
+    if (std::isnan(value))
+    {
+        value = DCGM_FP64_BLANK;
+    }
+    else if (isPercentageField)
     {
         value /= 100.0; /* Convert from percentage to activity level */
     }

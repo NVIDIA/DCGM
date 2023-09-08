@@ -362,7 +362,8 @@ def run_only_on_architecture(arch):
         @wraps(fn)
         def wrapper(*args, **kwds):
             framework_path = utils.get_testing_framework_library_path()
-            if framework_path.find(arch) == -1:
+            match = re.search(arch, framework_path)
+            if match is None:
                 skip_test("The plugin we're testing doesn't exist on this platform.")
             else:
                 result = fn(*args, **kwds)
@@ -522,6 +523,22 @@ class assert_raises(object):
                 )
         return isinstance(exception, self.expected_exception)
 
+def helper_check_for_duplicate_test_names(test_content):
+    '''
+    Iterates over every test in the list that will be returned from get_test_content and
+    throws an exception if any duplicate test names are detected. This is needed because
+    DVS-SC only knows about the test name, not the module + test name. 
+    '''
+    seenTestNames = {}
+
+    for module in test_content:
+        for testObj in module[1]:
+            testName = testObj.__name__
+            if testName in seenTestNames:
+                raise Exception("Found duplicate test name %s in module %s. Change the name to something unique." % (testName, module[0]))
+            seenTestNames[testName] = True
+
+
 def get_test_content():
     '''
     Searches for all modules with name "test*" and all functions with name "test*" in each module.
@@ -567,6 +584,10 @@ def get_test_content():
 
     # return modules with at least one test function
     test_content = [x for x in test_content if x[1] != []]
+
+    #Check for duplicate test names
+    helper_check_for_duplicate_test_names(test_content)
+    
     return test_content
 
 class TestSkipped(Exception):
@@ -1643,6 +1664,48 @@ def exclude_non_compute_gpus():
         return wrapper
     return decorator
 
+def exclude_confidential_compute_gpus():
+    '''
+    Exclude Confidential Compute GPUs.
+
+    This decorator must come after a decorator that provides a list of gpuIds
+    like run_only_with_live_gpus. It may exclude ALL of them, and this should
+    be tested for in an other decorator.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            gpuIds = []
+            for gpuId in kwds['gpuIds']:
+                deviceAttrib = dcgm_agent.dcgmGetDeviceAttributes(kwds['handle'], gpuId)
+                if deviceAttrib.settings.confidentialComputeMode == 0:
+                    gpuIds.append(gpuId)
+
+            if len(gpuIds) == 0:
+                logger.warning("All selected GPUs have the confidential compute mode enabled, which is not supported by this test. Therefore, all GPUs are excluded from the test.")
+                
+            kwds['gpuIds'] = gpuIds
+            fn(*args, **kwds)
+            return
+
+        return wrapper
+    return decorator
+
+def run_only_if_gpus_available():
+    '''
+    Decorator to skip tests if kwds['gpuIds'] is missing or empty.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'gpuIds' in kwds and len(kwds['gpuIds']) > 0:
+                result = fn(*args, **kwds)
+            else:
+                skip_test("this test does nothing if no GPUs are available")
+        return wrapper
+    return decorator
+
+
 def for_all_same_sku_gpus():
     '''
     Run a test multiple times, passing a list of gpuIds that are the same SKU each time
@@ -1884,6 +1947,19 @@ def is_nvidia_fabricmanager_running():
         return True
     else:
         return False
+
+def get_build_type():
+    """
+    Return the build type: Debug or Release
+    """
+    rawVersionInfo = dcgm_agent.dcgmVersionInfo()
+    for kv in str.split(rawVersionInfo.rawBuildInfoString, ';'):
+        if (kv):
+            key, value = str.split(kv, ':', 1)
+            if key == "buildtype":
+                return value
+
+    return ""
 
 def is_framework_compatible():
     """
@@ -2161,3 +2237,41 @@ def gpu_supports_gpm(handle, gpuId):
     else:
         return False
 
+
+def filter_sku(skus):
+    """
+    This decorator gets gpuIds list and excludes GPUs which are in the string
+    of skus.
+
+    This decorator must come after a decorator that provides a list of gpuIds
+    like run_only_with_live_gpus.
+
+    :type skus: [string]
+    :return: decorated function
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            gpuIds = kwargs['gpuIds']
+            filteredGpuIds = []
+            nvidiaSmi = nvidia_smi_utils.NvidiaSmiJob()
+            nvidiaSmi.QueryNvidiaSmiXml()
+
+            for gpuId in gpuIds:
+                if gpuId in nvidiaSmi.m_data:
+                    if dcgm_fields.DCGM_FI_DEV_PCI_COMBINED_ID in nvidiaSmi.m_data[gpuId]:
+                        sku = nvidiaSmi.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_PCI_COMBINED_ID][0][0:4]
+                        if sku in skus:
+                            logger.info("GPU %d sku %s can't participate in the test." % (gpuId, sku))
+                            continue
+
+                        filteredGpuIds.append(gpuId);
+
+            kwargs['gpuIds'] = filteredGpuIds
+
+            fn(*args, **kwargs)
+            return
+
+        return wrapper
+
+    return decorator

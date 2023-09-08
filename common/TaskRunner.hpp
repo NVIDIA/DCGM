@@ -359,8 +359,6 @@ public:
 
         std::vector<std::unique_ptr<ITask>> tasks;
         std::vector<std::unique_ptr<ITask>> deferredTasks;
-        tasks.reserve(1024);
-        deferredTasks.reserve(1024);
 
         while (waitResult == Semaphore::TimedWaitResult::Ok && !m_stop.load(std::memory_order_relaxed))
         {

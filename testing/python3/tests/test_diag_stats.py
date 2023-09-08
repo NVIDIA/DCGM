@@ -72,12 +72,12 @@ def helper_basic_stats_file_check(statsFile, gpuIds, statName):
     for gpuId in gpuIds:
         assert gpuId in foundGpuIds, "Couldn't find GPU %d in the stats file (found %s)" % (gpuId, str(foundGpuIds))
 
-def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, pluginIndex, statName=None):
+def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, pluginIndex, paramStr, statName=None):
     
     #Run on a single GPU since we're just testing the stats file output
     gpuIds = [gpuIds[0], ]
 
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr='%s.test_duration=10' % pluginName) # was 20
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=pluginName, paramsStr=paramStr) # was 20
 
     dd.SetStatsPath('/tmp/')
 
@@ -136,7 +136,7 @@ def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, plu
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_file_present_standalone_with_service_account(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, statName='perf_gflops')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10", statName='perf_gflops')
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -144,14 +144,14 @@ def test_dcgm_action_stats_file_present_standalone_with_service_account(handle, 
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_file_present_standalone(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, statName='perf_gflops')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10", statName='perf_gflops')
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_file_present_embedded(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, statName='perf_gflops')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10", statName='perf_gflops')
 
 @test_utils.run_only_as_root()
 @test_utils.with_service_account('dcgm-tests-service-account')
@@ -161,7 +161,7 @@ def test_dcgm_action_stats_file_present_embedded(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_string_stats_file_present_standalone_with_service_account(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10")
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -169,21 +169,21 @@ def test_dcgm_action_string_stats_file_present_standalone_with_service_account(h
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_string_stats_file_present_standalone(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10")
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_string_stats_file_present_embedded(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, True, 'diagnostic', dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "diagnostic.test_duration=10")
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_power_embedded(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX, "targeted power.test_duration=10")
 
 @test_utils.run_only_as_root()
 @test_utils.with_service_account('dcgm-tests-service-account')
@@ -193,7 +193,7 @@ def test_dcgm_action_stats_basics_targeted_power_embedded(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_power_standalone_with_service_account(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX, "targeted power.test_duration=10")
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -201,14 +201,14 @@ def test_dcgm_action_stats_basics_targeted_power_standalone_with_service_account
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_power_standalone(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX)
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted power', dcgm_structs.DCGM_TARGETED_POWER_INDEX, "targeted power.test_duration=10")
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_stress_embedded(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, statName='flops_per_op')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, "targeted stress.test_duration=10", statName='flops_per_op')
 
 @test_utils.run_only_as_root()
 @test_utils.with_service_account('dcgm-tests-service-account')
@@ -218,7 +218,7 @@ def test_dcgm_action_stats_basics_targeted_stress_embedded(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_stress_standalone_with_service_account(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, statName='flops_per_op')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, "targeted stress.test_duration=10", statName='flops_per_op')
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -226,14 +226,14 @@ def test_dcgm_action_stats_basics_targeted_stress_standalone_with_service_accoun
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_action_stats_basics_targeted_stress_standalone(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, statName='flops_per_op')
+    helper_test_stats_file_basics(handle, gpuIds, False, 'targeted stress', dcgm_structs.DCGM_TARGETED_STRESS_INDEX, "targeted stress.test_duration=10", statName='flops_per_op')
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_action_stats_basics_sm_stress_embedded(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'sm stress', dcgm_structs.DCGM_SM_STRESS_INDEX, statName='perf_gflops')
+def test_dcgm_action_stats_basics_pcie_embedded(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'pcie', dcgm_structs.DCGM_PCI_INDEX, "pcie.test_duration=10;pcie.test_with_gemm=true", statName='perf_gflops')
 
 @test_utils.run_only_as_root()
 @test_utils.with_service_account('dcgm-tests-service-account')
@@ -242,16 +242,16 @@ def test_dcgm_action_stats_basics_sm_stress_embedded(handle, gpuIds):
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_action_stats_basics_sm_stress_standalone_with_service_account(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'sm stress', dcgm_structs.DCGM_SM_STRESS_INDEX, statName='perf_gflops')
+def test_dcgm_action_stats_basics_pcie_standalone_with_service_account(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'pcie', dcgm_structs.DCGM_PCI_INDEX, "pcie.test_duration=10;pcie.test_with_gemm=true", statName='perf_gflops')
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_action_stats_basics_sm_stress_standalone(handle, gpuIds):
-    helper_test_stats_file_basics(handle, gpuIds, False, 'sm stress', dcgm_structs.DCGM_SM_STRESS_INDEX, statName='perf_gflops')
+def test_dcgm_action_stats_basics_pcie_standalone(handle, gpuIds):
+    helper_test_stats_file_basics(handle, gpuIds, False, 'pcie', dcgm_structs.DCGM_PCI_INDEX, "pcie.test_duration=10;pcie.test_with_gemm=true", statName='perf_gflops')
 
 def helper_test_bad_statspath(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=20')

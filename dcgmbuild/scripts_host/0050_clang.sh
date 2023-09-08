@@ -22,13 +22,20 @@ mkdir -p ${HOME}/.build/clang
 pushd ${HOME}/.build/clang
 
 export DEBIAN_FRONTEND=noninteractive
+LLVM_VERSION=16
+
+wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
 
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-./llvm.sh 15 all
+./llvm.sh ${LLVM_VERSION} all
 
-find /usr/bin -iname 'clang*15' | while read -r file; do
-    ln -f $file /usr/bin/$(basename $file | sed 's/-15//')
+find /usr/bin -iname "clang*${LLVM_VERSION}" | while read -r file; do
+    ln -f $file /usr/bin/$(basename $file | sed "s/-$LLVM_VERSION//")
+done
+
+find /usr/bin -iname "llvm*${LLVM_VERSION}" | while read -r file; do
+    ln -f $file /usr/bin/$(basename $file | sed "s/-$LLVM_VERSION//")
 done
 
 popd

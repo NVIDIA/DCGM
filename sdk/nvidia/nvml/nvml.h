@@ -1606,7 +1606,26 @@ typedef struct nvmlGpuDynamicPstatesInfo_st
 #define NVML_FI_DEV_NVLINK_GET_SPEED                  164
 #define NVML_FI_DEV_NVLINK_GET_STATE                  165
 #define NVML_FI_DEV_NVLINK_GET_VERSION                166
-#define NVML_FI_MAX 167 //!< One greater than the largest field ID defined above
+
+/**
+ * Retrieves power usage for this GPU in milliwatts.
+ * It is only available if power management mode is supported. See \ref nvmlDeviceGetPowerManagementMode and
+ * \ref nvmlDeviceGetPowerUsage.
+ *
+ * scopeId needs to be specified. It signifies:
+ * 0 - GPU Only Scope - Metrics for GPU are retrieved
+ * 1 - Module scope - Metrics for the module (e.g. CPU + GPU) are retrieved.
+ * Note: CPU here refers to NVIDIA CPU (e.g. Grace). x86 or non-NVIDIA ARM is not supported
+ */
+#define NVML_FI_DEV_POWER_AVERAGE                     185 //!< GPU power averaged over 1 sec interval, supported on Ampere (except GA100) or newer architectures.
+#define NVML_FI_DEV_POWER_INSTANT                     186 //!< Current GPU power, supported on all architectures.
+#define NVML_FI_DEV_POWER_MIN_LIMIT                   187 //!< Minimum power limit in milliwatts.
+#define NVML_FI_DEV_POWER_MAX_LIMIT                   188 //!< Maximum power limit in milliwatts.
+#define NVML_FI_DEV_POWER_DEFAULT_LIMIT               189 //!< Default power limit in milliwatts (limit which device boots with).
+#define NVML_FI_DEV_POWER_CURRENT_LIMIT               190 //!< Limit currently enforced in milliwatts (This includes other limits set elsewhere. E.g. Out-of-band).
+#define NVML_FI_DEV_ENERGY                            191 //!< Total energy consumption (in mJ) since the driver was last reloaded. Same as \ref NVML_FI_DEV_TOTAL_ENERGY_CONSUMPTION for the GPU.
+#define NVML_FI_DEV_POWER_REQUESTED_LIMIT             192 //!< Power limit requested by NVML or any other userspace client.
+#define NVML_FI_MAX 193 //!< One greater than the largest field ID defined above
 
 /**
  * Information for a Field Value Sample

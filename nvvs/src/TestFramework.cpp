@@ -207,30 +207,14 @@ std::string TestFramework::GetPluginBaseDir()
 
 std::string TestFramework::GetPluginDirExtension() const
 {
-    dcgmFieldValue_v2 cudaDriverValue = {};
-    unsigned int flags                = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
-
-    dcgmReturn_t ret = dcgmSystem.GetGpuLatestValue(0, DCGM_FI_CUDA_DRIVER_VERSION, flags, cudaDriverValue);
-
-    switch (ret)
+    unsigned int cudaMajorVersion = dcgmSystem.GetCudaMajorVersion();
+    unsigned int cudaMinorVersion = dcgmSystem.GetCudaMinorVersion();
+    if (cudaMajorVersion == 0)
     {
-        case DCGM_ST_OK:
-            break;
-        default:
-        {
-            std::stringstream buf;
-            buf << "Unable to detect Cuda version: " << errorString(ret)
-                << ". Please verify that libcuda.so is present on the system.";
-            DCGM_LOG_ERROR << buf.str();
-            throw std::runtime_error(buf.str());
-        }
-    };
+        throw std::runtime_error("Unable to detect Cuda version. Please verify that libcuda.so is on the system.");
+    }
 
-    const int cudaMajorVersion = cudaDriverValue.value.i64 / 1000;
-    const int cudaMinorVersion = (cudaDriverValue.value.i64 - cudaMajorVersion * 1000) / 10;
-
-    DCGM_LOG_DEBUG << "The following Cuda version will be used for plugins: " << cudaDriverValue.value.i64 << "("
-                   << cudaMajorVersion << "." << cudaMinorVersion << ")";
+    log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
 
     static const std::string CUDA_12_EXTENSION("/cuda12/");
     static const std::string CUDA_11_EXTENSION("/cuda11/");
@@ -245,9 +229,12 @@ std::string TestFramework::GetPluginDirExtension() const
         case 12:
             return CUDA_12_EXTENSION;
         default:
-            DCGM_LOG_ERROR << "Detected unsupported Cuda version: " << cudaMajorVersion << "." << cudaMinorVersion;
+            log_error("Detected unsupported Cuda version: {}.{}", cudaMajorVersion, cudaMinorVersion);
             throw std::runtime_error("Detected unsupported Cuda version");
     }
+
+    // NOT-REACHED
+    return "";
 }
 
 std::string TestFramework::GetPluginDir()

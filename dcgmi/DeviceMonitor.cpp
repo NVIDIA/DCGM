@@ -284,6 +284,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
         // Including a switch statement here for handling different
         // types of values (except binary blobs).
         dcgm_field_meta_p field = DcgmFieldGetById(values[i].fieldId);
+
         if (field == nullptr)
         {
             SHOW_AND_LOG_ERROR << fmt::format("Unknown Field ID: {}\n", values[i].fieldId);
@@ -319,6 +320,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                     SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
                     entityStats[entityKey].emplace_back(cNA);
                 }
+
                 break;
             }
             case DCGM_FT_INT64:
@@ -343,6 +345,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                     SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
                     entityStats[entityKey].emplace_back(cNA);
                 }
+
                 break;
             }
             case DCGM_FT_STRING:
@@ -432,6 +435,11 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
             if (parent.entityGroupId == DCGM_FE_GPU && seenGpus.insert(parent.entityId).second)
             {
                 sortedEntities.push_back({ parent.entityGroupId, parent.entityId });
+                /**
+                 * Some global entity values indicate a GPU entity but are global.
+                 * This matches them.
+                 */
+                sortedEntities.push_back({ DCGM_FE_NONE, parent.entityId });
             }
 
             sortedEntities.push_back({ entity.entityGroupId, entity.entityId });
@@ -636,6 +644,7 @@ dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
 
     /* Create a group based on this list of entities */
     dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &m_myGroupId, entityList);
+
     return dcgmReturn;
 }
 

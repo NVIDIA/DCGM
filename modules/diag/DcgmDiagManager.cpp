@@ -563,7 +563,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
 
     if (statSt = stat(filename.c_str(), &fileStat); statSt != 0)
     {
-        DCGM_LOG_ERROR << "stat of " << filename << " failed. errno " << statSt << ": " << strerror(statSt);
+        DCGM_LOG_ERROR << "stat of " << filename << " failed. errno " << errno << ": " << strerror(errno);
         return DCGM_ST_NVVS_BINARY_NOT_FOUND;
     }
 
@@ -602,8 +602,8 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                         (*serviceAccount),
                         filename,
                         traverseSoFar.string(),
-                        statSt,
-                        strerror(statSt));
+                        errno,
+                        strerror(errno));
                     DCGM_LOG_ERROR << msg;
                     *stderrStr = msg;
                     return DCGM_ST_GENERIC_ERROR;
@@ -642,7 +642,8 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                                                 &stdoutFd,
                                                 &stderrFd,
                                                 false,
-                                                serviceAccount.has_value() ? (*serviceAccount).c_str() : nullptr);
+                                                serviceAccount.has_value() ? (*serviceAccount).c_str() : nullptr,
+                                                nullptr);
         // Update the nvvs pid
         myTicket = GetTicket();
         UpdateChildPID(pid, myTicket);
@@ -865,13 +866,33 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
                                      SanitizedString(stderrStr));
         log_error(msg);
         response.RecordSystemError({ msg.data(), msg.size() });
+        log_debug("Sanitized raw NVVS output: {}", SanitizedString(stdoutStr));
 
         return { DCGM_ST_NVVS_ERROR, std::nullopt };
+    }
+    else
+    {
+        log_debug("NVVS parsed JSON: {}", SanitizeNvvsJson(stdoutStr));
     }
 
     result.results = std::move(*tmpResults);
 
     return result;
+}
+
+/**
+ * @brief Checks if the plugin is missing from the NVVS JSON results
+ * @param results Parsed NVVS results
+ * @return true if the error code indicates that the plugin is missing (NVVS_ST_TEST_NOT_FOUND), false otherwise
+ */
+bool IsPluginMissing(DcgmNs::Nvvs::Json::DiagnosticResults const &results)
+{
+    if (results.errorCode.has_value() && results.errorCode.value() == NVVS_ST_TEST_NOT_FOUND)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 } // namespace
@@ -1002,11 +1023,27 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
                             return eudResults.ret;
                         }
 
-                        if (!DcgmNs::Nvvs::Json::MergeResults(*nvvsResults.results, std::move(*eudResults.results)))
+                        if (!eudResults.results.has_value())
                         {
-                            log_error("Failed to merge the NVVS JSON output");
-                            response.RecordSystemError("Unable to merge JSON results for regular Diag and EUD tests");
-                            return DCGM_ST_NVVS_ERROR;
+                            log_error("EUD results are missing (empty optional)");
+                        }
+                        else
+                        {
+                            if (!IsPluginMissing(*eudResults.results))
+                            {
+                                if (!DcgmNs::Nvvs::Json::MergeResults(*nvvsResults.results,
+                                                                      std::move(*eudResults.results)))
+                                {
+                                    log_error("Failed to merge the NVVS JSON output");
+                                    response.RecordSystemError(
+                                        "Unable to merge JSON results for regular Diag and EUD tests");
+                                    return DCGM_ST_NVVS_ERROR;
+                                }
+                            }
+                            else
+                            {
+                                log_warning("EUD plugin is missing");
+                            }
                         }
                     }
                 }
@@ -1101,6 +1138,14 @@ static void PopulateErrorDetail(std::vector<DcgmNs::Nvvs::Json::Warning> const &
     ed.code = errCode;
 }
 
+static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Info const &info, dcgmDiagErrorDetail_t &ed)
+{
+    int errCode = DCGM_FR_OK;
+    fmt::format_to_n(ed.msg, sizeof(ed.msg), "{}", fmt::join(info.messages, ","));
+
+    ed.code = errCode;
+}
+
 dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult)
 {
     switch (nvvsResult)
@@ -1149,11 +1194,18 @@ void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
         {
             // Software test
             dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
+
             if (result.warnings.has_value())
             {
                 ::PopulateErrorDetail(*result.warnings, ed);
             }
             response.AddErrorDetail(0, testIndex, test.name, ed, ret);
+
+            if (result.info.has_value())
+            {
+                ::PopulateErrorDetail(*result.info, ed);
+            }
+            response.AddInfoDetail(0, testIndex, test.name, ed, ret);
 
             for (auto const gpuId : result.gpuIds.ids)
             {

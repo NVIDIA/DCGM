@@ -40,7 +40,7 @@ def test_send_to_fluentd():
     assert(namespace.message == 'message')
     assert(namespace.dest == ('FAKE_HOST', 101010))
 
-def test_custom_json_handler():
+def test_fluentd_custom_json_handler():
     namespace = Struct(arg=None)
 
     def MySendToFluentd(json):

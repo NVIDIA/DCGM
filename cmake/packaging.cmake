@@ -49,8 +49,8 @@ IF (CPACK_GENERATOR MATCHES "DEB")
         "${DCGM_CONFIG_PKG}_${CPACK_PACKAGE_VERSION}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb"
     )
 
-    set(CPACK_DEBIAN_DCGM_PACKAGE_DEPENDS "libc6 (>= 2.17), libgomp1 (>= 4.8)")
-    set(CPACK_DEBIAN_TESTS_PACKAGE_DEPENDS "libc6 (>= 2.17), libgomp1 (>= 4.8)")
+    set(CPACK_DEBIAN_DCGM_PACKAGE_DEPENDS "libc6 (>= 2.17)")
+    set(CPACK_DEBIAN_TESTS_PACKAGE_DEPENDS "libc6 (>= 2.17)")
     # Not actually necessary, but CMake prints a warning if there are no dependencies
     set(CPACK_DEBIAN_CONFIG_PACKAGE_DEPENDS "libc6 (>= 2.17)")
 
@@ -114,8 +114,8 @@ ELSEIF(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_CONFIG_FILE_NAME
         "${DCGM_CONFIG_PKG}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}-${CPACK_RPM_PACKAGE_ARCHITECTURE}.rpm")
 
-    set(CPACK_RPM_DCGM_PACKAGE_REQUIRES "glibc >= 2.17, libgomp.so.1()(64bit)")
-    set(CPACK_RPM_TESTS_PACKAGE_REQUIRES "glibc >= 2.17, libgomp.so.1()(64bit)")
+    set(CPACK_RPM_DCGM_PACKAGE_REQUIRES "glibc >= 2.17")
+    set(CPACK_RPM_TESTS_PACKAGE_REQUIRES "glibc >= 2.17")
 
     set(CPACK_RPM_CONFIG_PACKAGE_DESCRIPTION "Auxiliary definitions for NVIDIA® Datacenter GPU Management Tools")
 

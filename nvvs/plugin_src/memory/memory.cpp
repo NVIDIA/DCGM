@@ -23,6 +23,8 @@
 #include <cuda.h>
 #include <string.h>
 
+#include <fmt/format.h>
+
 #define PCIE_ONE_BW   250.0f  /* PCIe 1.0 - 250 MB/s per lane */
 #define PCIE_TWO_BW   500.0f  /* PCIe 2.x - 500 MB/s per lane */
 #define PCIE_THREE_BW 1000.0f /* PCIe 3.0 - 1 GB/s per lane */
@@ -368,8 +370,7 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
         std::string error = AppendCudaDriverError("Unable to initialize CUDA library", cuRes);
-        error += GetAdditionalCuInitDetail(cuRes);
-        d.AddDetail(error);
+        d.AddDetail(fmt::format("{} {}. {}", error, GetAdditionalCuInitDetail(cuRes), RUN_CUDA_KERNEL_REC));
         memGlobals->memory->AddError(d);
         return 1;
     }

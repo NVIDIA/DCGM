@@ -52,6 +52,10 @@
 #define PCIE_STR_NVSWITCH_NON_FATAL_CHECK "check_non_fatal"
 #define PCIE_STR_TEST_BROKEN_P2P          "test_broken_p2p"
 #define PCIE_STR_TEST_NVLINK_STATUS       "test_nvlink_status"
+#define PCIE_STR_TEST_WITH_GEMM           "test_with_gemm"
+#define PCIE_STR_DISABLE_TESTS            "disable_tests"
+#define PCIE_STR_AER_THRESHOLD            "aer_threshold" /* max pci aer errors before test fails */
+#define PCIE_STR_DONT_BIND_NUMA           "dont_bind_numa"
 
 /* Private parameters */
 #define PCIE_STR_IS_ALLOWED "is_allowed" /* Is the busgrind plugin allowed to run? */
@@ -95,6 +99,12 @@
 #define PCIE_STR_CRC_ERROR_THRESHOLD                                             \
     "nvlink_crc_error_threshold" /* threshold at which CRC errors should cause a \
                                                                    failure */
+/* time in seconds to run the parallel bw check */
+#define PCIE_STR_PARALLEL_BW_CHECK_DURATION "parallel_bw_check_duration"
+
+#define PCIE_STR_GPU_NVLINKS_EXPECTED_UP "gpu_nvlinks_expected_up" /* number of nvlinks expected up for each GPU */
+#define PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP \
+    "nvswitch_nvlinks_expected_up" /* number of nvlinks expected up for each NvSwitch */
 
 /* Sub tests tags */
 #define PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED   "h2d_d2h_single_pinned"
@@ -256,32 +266,19 @@
 #define HARDWARE_PLUGIN_INTERNAL_NAME "hardware"
 
 /******************************************************************************
- * SM STRESS PLUGIN
+ * SM STRESS PLUGIN - included as part of PCIe
  *****************************************************************************/
 #define SMSTRESS_PLUGIN_NAME "sm_stress"
 
 /* Public parameters - we expect users to change these */
-#define SMSTRESS_STR_TEST_DURATION         "test_duration"
-#define SMSTRESS_STR_TARGET_PERF           "target_stress"
-#define SMSTRESS_STR_TARGET_PERF_MIN_RATIO "target_perf_min_ratio"
-#define SMSTRESS_STR_TEMPERATURE_MAX       "temperature_max"
-#define SMSTRESS_STR_SBE_ERROR_THRESHOLD   "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
+#define SMSTRESS_STR_TEST_DURATION   "test_duration"
+#define SMSTRESS_STR_TARGET_PERF     "target_stress"
+#define SMSTRESS_STR_TEMPERATURE_MAX "temperature_max"
 
 /* Private parameters - we can have users change these but we don't need to
  * document them until users will change them
  */
-#define SMSTRESS_STR_IS_ALLOWED "is_allowed" /* Is the sm stress plugin allowed to run? */
 #define SMSTRESS_STR_USE_DGEMM  "use_dgemm"
-// #define SM_STRESS_STR_CUDA_STREAMS_PER_GPU "cuda_streams_per_gpu"
-// #define SM_STRESS_STR_CUDA_OPS_PER_STREAM  "ops_per_stream_queue"
-
-#define SMSTRESS_STR_MAX_MEMORY_CLOCK                                                                              \
-    "max_memory_clock" /* Maximum memory clock in MHZ to use when locking application clocks to max while smstress \
-                        * runs.                                                                                    \
-                        */
-#define SMSTRESS_STR_MAX_GRAPHICS_CLOCK                                                                                \
-    "max_graphics_clock" /* Maximum graphics clock in MHZ to use when locking application clocks to max while smstress \
-                            runs */
 #define SMSTRESS_STR_MATRIX_DIM "matrix_dim" /* The dimension of the matrix used for S/Dgemm */
 
 /****************************************************************************

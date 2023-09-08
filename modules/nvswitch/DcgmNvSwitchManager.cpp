@@ -788,7 +788,14 @@ dcgmReturn_t DcgmNvSwitchManager::AttachToNscq()
 
     if (dlwrap_ret < 0)
     {
-        log_error("Could not load NSCQ. dlwrap_attach ret: {} ({})", strerror(-dlwrap_ret), dlwrap_ret);
+        std::string extraDetail;
+        if (-dlwrap_ret == ELIBACC)
+        {
+            extraDetail = ": If this system has NvSwitches, please ensure that the package libnvidia-nscq is "
+                          "installed on your system and that the service user has permissions to access it.";
+        }
+
+        log_error("Could not load NSCQ. dlwrap_attach ret: {} ({}){}", strerror(-dlwrap_ret), dlwrap_ret, extraDetail);
         return DCGM_ST_LIBRARY_NOT_FOUND;
     }
 

@@ -133,7 +133,10 @@ class FailedTestInfo():
 
     ################################################################################
     def IsAnError(self):
-        return not self.m_isAnError
+        """
+        Simply return the error status in m_isAnError.
+        """
+        return self.m_isAnError
 
 
 ################################################################################

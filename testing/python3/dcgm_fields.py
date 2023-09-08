@@ -141,6 +141,10 @@ DCGM_FI_DEV_INFOROM_IMAGE_VER   = 82  #Inforom image version
 DCGM_FI_DEV_INFOROM_CONFIG_CHECK = 83 #Inforom configuration checksum
 DCGM_FI_DEV_INFOROM_CONFIG_VALID = 84 #Reads the infoROM from the flash and verifies the checksums
 DCGM_FI_DEV_VBIOS_VERSION       = 85  #VBIOS version of the device
+DCGM_FI_DEV_MEM_AFFINITY_0      = 86  #Device MEM affinity. part 1/4 = nodes 0 - 63
+DCGM_FI_DEV_MEM_AFFINITY_1      = 87  #Device MEM affinity. part 1/4 = nodes 64 - 127
+DCGM_FI_DEV_MEM_AFFINITY_2      = 88  #Device MEM affinity. part 1/4 = nodes 128 - 191
+DCGM_FI_DEV_MEM_AFFINITY_3      = 89  #Device MEM affinity. part 1/4 = nodes 192 - 255
 DCGM_FI_DEV_BAR1_TOTAL          = 90  #Total BAR1 of the GPU
 DCGM_FI_SYNC_BOOST              = 91  #Deprecated - Sync boost settings on the node
 DCGM_FI_DEV_BAR1_USED           = 92  #Used BAR1 of the GPU in MB
@@ -163,6 +167,7 @@ DCGM_FI_DEV_MEM_MAX_OP_TEMP     = 151 #Maximum operating temperature for the mem
 DCGM_FI_DEV_GPU_MAX_OP_TEMP     = 152 #Maximum operating temperature for this GPU
 DCGM_FI_DEV_POWER_USAGE         = 155 #Power usage for the device in Watts
 DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION = 156 #Total energy consumption for the GPU in mJ since the driver was last reloaded
+DCGM_FI_DEV_POWER_USAGE_INSTANT = 157 #Current instantaneous power usage of the device in Watts
 DCGM_FI_DEV_SLOWDOWN_TEMP       = 158 #Slowdown temperature for the device
 DCGM_FI_DEV_SHUTDOWN_TEMP       = 159 #Shutdown temperature for the device
 DCGM_FI_DEV_POWER_MGMT_LIMIT    = 160 #Current Power limit for the device
@@ -228,6 +233,12 @@ DCGM_FI_DEV_ECC_SBE_AGG_REG     = 330 #Register File single bit aggregate (persi
 DCGM_FI_DEV_ECC_DBE_AGG_REG     = 331 #Register File double bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_SBE_AGG_TEX     = 332 #Texture memory single bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_DBE_AGG_TEX     = 333 #Texture memory double bit aggregate (persistent) ecc errors
+# Remap availability histogram for each memory bank on the GPU.
+DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX     = 385
+DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH    = 386
+DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL = 387
+DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW     = 388
+DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE    = 389
 DCGM_FI_DEV_RETIRED_SBE         = 390 #Number of retired pages because of single bit errors
 DCGM_FI_DEV_RETIRED_DBE         = 391 #Number of retired pages because of double bit errors
 DCGM_FI_DEV_RETIRED_PENDING     = 392 #Number of pages pending retirement
@@ -370,6 +381,10 @@ DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID      = 534  #GPU Instance Id of the vGPU ins
 #Internal fields reserve the range 600..699
 #below fields related to NVSwitch
 DCGM_FI_FIRST_NVSWITCH_FIELD_ID                  = 700 #Starting field ID of the NVSwitch instance
+DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT               = 701
+DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ                = 702
+DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV            = 703
+DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD           = 704
 DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX          = 780
 DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX          = 781
 DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS           = 782

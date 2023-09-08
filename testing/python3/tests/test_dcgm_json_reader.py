@@ -89,7 +89,7 @@ def test_custom_data_handler():
     assert expected == namespace.result
 
 @maybemock.patch.multiple('logging', info=maybemock.DEFAULT, warning=maybemock.DEFAULT)
-def test_custom_json_handler(info, warning):
+def test_json_reader_custom_json_handler(info, warning):
     dr = DcgmJsonReader()
     dr.CustomJsonHandler(1)
     info.assert_called_with(1)

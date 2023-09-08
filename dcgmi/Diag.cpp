@@ -48,6 +48,7 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
+#include <DcgmBuildInfo.hpp>
 
 /* Process Info */
 char DIAG_HEADER[] = "+---------------------------+------------------------------------------------+\n"
@@ -321,6 +322,7 @@ void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t r
     if (m_jsonOutput)
     {
         Json::Value output;
+        output[NVVS_NAME][NVVS_VERSION_STR]   = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
         output[NVVS_NAME][NVVS_RUNTIME_ERROR] = errMsg;
         std::cout << output.toStyledString() << std::endl;
     }
@@ -562,6 +564,8 @@ void Diag::HelperDisplayDeploymentResult(CommandOutputController &cmdView,
         cmdView.display();
         if (result.error.msg[0] != '\0')
             DisplayVerboseInfo(cmdView, "Error", result.error.msg);
+        if (result.info[0] != '\0')
+            DisplayVerboseInfo(cmdView, "Info", result.info);
     }
 }
 
@@ -1062,7 +1066,10 @@ bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
     resultEntry[NVVS_STATUS]  = HelperDisplayDiagResult(gpuResult.results[testIndex].status);
 
     if (gpuResult.results[testIndex].error.msg[0] != '\0')
+    {
         resultEntry[NVVS_WARNINGS] = gpuResult.results[testIndex].error.msg;
+        resultEntry[NVVS_ERROR_ID] = gpuResult.results[testIndex].error.code;
+    }
 
     if (gpuResult.results[testIndex].info[0] != '\0')
         resultEntry[NVVS_INFO] = gpuResult.results[testIndex].info;

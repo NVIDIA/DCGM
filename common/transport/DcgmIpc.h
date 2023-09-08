@@ -29,6 +29,7 @@
 #include <functional>
 #include <future>
 #include <optional>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -78,6 +79,15 @@ private:
     bool m_shouldReadHeader;            /* Should we read the message header next (true) or the message body (false) */
     dcgm_message_header_t m_readHeader; /* Header of the message we are currently reading. This gets updated
                                            by ReadMessages */
+    std::stack<std::unique_ptr<DcgmMessage>> m_reuseMessages; /* Reuse messages rather than allocating and freeing them.
+                                                                 Capacity is controlled with MAX_REUSE_MESSAGES_COUNT */
+
+    static const size_t MAX_REUSE_MESSAGES_COUNT
+        = 10; /* Maximum number of DcgmMessages we're willing to keep cached for reuse */
+
+    /* Helpers to get/free a DcgmMessage object, possibly using the m_reuseMessages cache */
+    std::unique_ptr<DcgmMessage> GetDcgmMessage(void);
+    void CacheOrFreeDcgmMessage(std::unique_ptr<DcgmMessage> msg);
 
 public:
     /* Promise used for async connect. Making this public for ease of use as a private class */

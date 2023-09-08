@@ -275,6 +275,7 @@ def main():
 
     prometheus_obj = DcgmPrometheus()
 
+    logging.critical("dcgm_prometheus has been deprecated and will be removed in a future release. Please use DCGM exporter for Prometheus integration")
     logging.info("Starting Prometheus server on port " + str(g_settings['prometheusPort']))
 
     #start prometheus client server.

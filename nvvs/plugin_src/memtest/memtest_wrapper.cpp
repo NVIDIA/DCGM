@@ -88,7 +88,7 @@ void MemtestPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
-        sleep(1);
+        sleep(3); // Sync with test_dcgm_diag.py->injection_offset for error injection
         SetResult(NVVS_RESULT_PASS);
         return;
     }
