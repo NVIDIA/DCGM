@@ -386,6 +386,11 @@ def launch_nccl_tests(args, node_list):
             (bOutput, bError) = runner.communicate()
             output = bOutput.decode("utf-8")
             error = bError.decode("utf-8")
+            returncode = runner.returncode
+            if runner.returncode:
+                errors.append("Command %s exit with non zero error code %d" \
+                              % (command, runner.returncode))
+                return errors, True
             if len(error):
                 print("Stderr: %s" % error)
 
@@ -625,6 +630,7 @@ def main():
 
     nccl_errors, abort = launch_nccl_tests(args, node_list)
     system_errors = []
+    diag_error_map = {}
 
     if not abort:
         diag_error_map = launch_dcgm_diagnostics(args, node_list)
