@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Execution PYTHONPATH=/usr/local/dcgm/bindings/python3 python3 multi-node/health_check.py
 
 import argparse
 import json
@@ -239,7 +241,7 @@ def parse_nccl_output(raw_output, minBandwidthRequired, minAlgBandwidthRequired)
     maxBusBW = [0, 0]
     numWrong = [0, 0]
 
-'''
+    '''
     Each line in the output will have 13 tokens; Here's what each token / position is:
 size  = 0
 count = 1
