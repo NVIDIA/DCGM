@@ -342,7 +342,7 @@ def create_nccl_command(args, node_list, operation):
                 nodes_str = tmp
             total_np = total_np + node_counts[node]
 
-        cmd = "mpirun -np %d --oversubscribe --bind-to numa -H %s -x NCCL_DEBUG=WARN --mca btl tcp,self %s %s -g1" % \
+        cmd = "mpirun -np %d --bind-to none -H %s -x NCCL_DEBUG=WARN --mca btl tcp,self %s %s -g1" % \
                (total_np, nodes_str, get_binary_name(args, operation), args.ncclArgs)
         return cmd
     else:
