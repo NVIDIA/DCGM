@@ -61,7 +61,7 @@ public:
      * and std::string
      **/
     double GetDouble();
-    std::string GetString();
+    std::string GetString() const;
 
     /*************************************************************************/
 
@@ -105,7 +105,7 @@ public:
     /* Getters. Call these from within the plugin */
     std::string GetString(std::string_view key) const;
     double GetDouble(std::string_view key) const;
-    int GetBoolFromString(std::string key);
+    int GetBoolFromString(std::string key) const;
     std::string GetSubTestString(std::string subTest, std::string key);
     double GetSubTestDouble(std::string subTest, std::string key);
     int GetBoolFromSubTestString(std::string subTest, std::string key);

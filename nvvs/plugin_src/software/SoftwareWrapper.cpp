@@ -31,9 +31,10 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
-    const char *parameterNames[] = { SW_STR_DO_TEST, SW_STR_REQUIRE_PERSISTENCE, nullptr };
+    const char *parameterNames[] = { SW_STR_DO_TEST, SW_STR_REQUIRE_PERSISTENCE, SW_STR_SKIP_DEVICE_TEST, nullptr };
 
-    const dcgmPluginValue_t paramTypes[] = { DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamNone };
+    const dcgmPluginValue_t paramTypes[]
+        = { DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

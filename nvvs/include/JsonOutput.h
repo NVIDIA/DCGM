@@ -38,7 +38,8 @@ public:
     void Result(nvvsPluginResult_t overallResult,
                 const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
                 const std::vector<dcgmDiagEvent_t> &errors,
-                const std::vector<dcgmDiagEvent_t> &info) override;
+                const std::vector<dcgmDiagEvent_t> &info,
+                const std::optional<std::any> &pluginSpecificData = std::nullopt) override;
     void prep(const std::string &testString) override;
     void updatePluginProgress(unsigned int progress, bool clear) override;
     void print() override;

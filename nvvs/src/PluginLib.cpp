@@ -30,6 +30,7 @@ PluginLib::PluginLib()
     , m_runTestCB(nullptr)
     , m_retrieveStatsCB(nullptr)
     , m_retrieveResultsCB(nullptr)
+    , m_shutdownPluginCB(nullptr)
     , m_userData(nullptr)
     , m_pluginName()
     , m_customStats()
@@ -54,6 +55,7 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     , m_runTestCB(other.m_runTestCB)
     , m_retrieveStatsCB(other.m_retrieveStatsCB)
     , m_retrieveResultsCB(other.m_retrieveResultsCB)
+    , m_shutdownPluginCB(other.m_shutdownPluginCB)
     , m_userData(other.m_userData)
     , m_pluginName(other.m_pluginName)
     , m_customStats(other.m_customStats)
@@ -73,6 +75,7 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     other.m_runTestCB                   = nullptr;
     other.m_retrieveStatsCB             = nullptr;
     other.m_retrieveResultsCB           = nullptr;
+    other.m_shutdownPluginCB            = nullptr;
     other.m_userData                    = nullptr;
 }
 
@@ -89,6 +92,7 @@ PluginLib &PluginLib::operator=(PluginLib &&other) noexcept
         m_runTestCB                   = other.m_runTestCB;
         m_retrieveStatsCB             = other.m_retrieveStatsCB;
         m_retrieveResultsCB           = other.m_retrieveResultsCB;
+        m_shutdownPluginCB            = other.m_shutdownPluginCB;
         m_userData                    = other.m_userData;
         m_pluginName                  = other.m_pluginName;
         m_customStats                 = std::move(other.m_customStats);
@@ -162,6 +166,12 @@ dcgmReturn_t PluginLib::LoadPlugin(const std::string &path, const std::string &n
         return DCGM_ST_GENERIC_ERROR;
     }
 
+    m_shutdownPluginCB = (dcgmDiagShutdownPlugin_f)LoadFunction("ShutdownPlugin");
+    if (m_shutdownPluginCB == nullptr)
+    {
+        log_debug("Plugin does not have a ShutdownPlugin function. This is not an error.");
+    }
+
 
     if (m_getPluginInfoCB == nullptr || m_initializeCB == nullptr || m_runTestCB == nullptr
         || m_retrieveStatsCB == nullptr || m_retrieveResultsCB == nullptr)
@@ -197,6 +207,13 @@ PluginLib::~PluginLib() noexcept
 {
     if (m_pluginPtr != nullptr)
     {
+        if (m_shutdownPluginCB != nullptr)
+        {
+            m_shutdownPluginCB(m_userData);
+            m_userData         = nullptr;
+            m_shutdownPluginCB = nullptr;
+        }
+
         dlclose(m_pluginPtr);
         m_pluginPtr = nullptr;
     }
@@ -503,6 +520,52 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         {
             m_results.push_back(results.perGpuResults[i]);
         }
+
+        if (results.auxData.version == dcgmDiagAuxData_version1)
+        {
+            if (results.auxData.type != JSON_VALUE_AUX_DATA_TYPE)
+            {
+                log_warning("Plugin returned unknown type of aux data. Expected JSON_VALUE_AUX_DATA_TYPE ({}), got {}",
+                            JSON_VALUE_AUX_DATA_TYPE,
+                            results.auxData.type);
+            }
+            else if (results.auxData.size == 0 || results.auxData.data == nullptr)
+            {
+                log_warning("Plugin returned empty aux data.");
+            }
+            else
+            {
+                std::string_view auxData(static_cast<char *>(results.auxData.data), results.auxData.size);
+
+                ::Json::CharReaderBuilder builder;
+                ::Json::String errors;
+
+                builder["collectComments"]     = false;
+                builder["allowComments"]       = true;
+                builder["allowTrailingCommas"] = true;
+                builder["allowSingleQuotes"]   = true;
+                builder["failIfExtra"]         = true;
+                builder["rejectDupKeys"]       = true;
+                builder["allowSpecialFloats"]  = true;
+                builder["skipBom"]             = false;
+                ::Json::Value auxObj;
+                if (builder.newCharReader()->parse(auxData.data(), auxData.data() + auxData.size(), &auxObj, &errors))
+                {
+                    log_debug("Plugin returned aux data: {}", auxObj.toStyledString());
+                    m_auxData = auxObj;
+                }
+                else
+                {
+                    log_error("Plugin returned invalid aux data: {}", errors);
+                }
+            }
+        }
+        else
+        {
+            log_warning("Plugin returned unknown version of aux data. Expected {}, got {}",
+                        dcgmDiagAuxData_version1,
+                        results.auxData.version);
+        }
     }
     catch (std::runtime_error &e)
     {
@@ -661,4 +724,8 @@ nvvsPluginResult_t PluginLib::GetResult() const
     }
 
     return result;
+}
+const std::optional<std::any> &PluginLib::GetAuxData() const
+{
+    return m_auxData;
 }

@@ -37,5 +37,5 @@
 #define NVVS_RESULT         "Overall Result"
 #define NVVS_GPU_DEV_IDS    "GPU Device IDs"
 #define NVVS_DRIVER_VERSION "Driver Version Detected"
-
+#define NVVS_AUX_DATA       "aux_data"
 #endif

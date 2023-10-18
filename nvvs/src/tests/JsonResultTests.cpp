@@ -78,6 +78,7 @@ TEST_CASE("JsonResult: JsonSerialize Single Result")
                                                .error_code = 2,
                                            } },
         .info     = Info { .messages = { "message1", "message2" } },
+        .auxData  = ::Json::Value::nullSingleton(),
     };
 
     auto json = Serialize(result);
@@ -108,6 +109,7 @@ DcgmNs::Nvvs::Json::Result GenerateRandomResult()
                                                .error_code = rand(),
                                            } },
         .info     = Info { .messages = { "info message 1", "info message 2" } },
+        .auxData  = ::Json::Value::nullSingleton(),
     };
 
     for (int i = 0; i < 10; i++)
@@ -142,6 +144,8 @@ TEST_CASE("JsonResult: JsonSerialize Single Test")
 
     auto const test2 = Deserialize<Test>(json);
     REQUIRE(test == test2);
+    REQUIRE_FALSE(test < test2);
+    REQUIRE_FALSE(test > test2);
 }
 
 
@@ -164,6 +168,8 @@ TEST_CASE("JsonResult: JsonSerialize Single Category")
 
     auto const category2 = Deserialize<Category>(json);
     REQUIRE(category == category2);
+    REQUIRE_FALSE(category < category2);
+    REQUIRE_FALSE(category > category2);
 }
 
 TEST_CASE("JsonResult: JsonSerialize DiagnosticResults")

@@ -18,6 +18,8 @@
 #include "PluginInterface.h"
 #include "TestParameters.h"
 
+#include <any>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -88,6 +90,8 @@ public:
     /*****************************************************************************/
     bool VerifyTerminated(const char *str, unsigned int bufSize);
 
+    const std::optional<std::any> &GetAuxData() const;
+
 private:
     void *m_pluginPtr;
     bool m_initialized;
@@ -97,6 +101,7 @@ private:
     dcgmDiagRunTest_f m_runTestCB;
     dcgmDiagRetrieveCustomStats_f m_retrieveStatsCB;
     dcgmDiagRetrieveResults_f m_retrieveResultsCB;
+    dcgmDiagShutdownPlugin_f m_shutdownPluginCB;
     void *m_userData;
     std::string m_pluginName;
     std::vector<dcgmDiagCustomStats_t> m_customStats;
@@ -110,6 +115,7 @@ private:
     TestParameters m_testParameters;
     std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfo;
     PluginCoreFunctionality m_coreFunctionality;
+    std::optional<std::any> m_auxData;
 
     void *LoadFunction(const char *funcname);
 

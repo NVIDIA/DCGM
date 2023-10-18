@@ -103,7 +103,7 @@ double TestParameterValue::GetDouble(void)
 }
 
 /*****************************************************************************/
-std::string TestParameterValue::GetString(void)
+std::string TestParameterValue::GetString(void) const
 {
     /* Possibly coerce the value into the other type */
     if (m_valueType == TP_T_STRING)
@@ -377,10 +377,15 @@ static int bool_string_to_bool(std::string str)
 }
 
 /*****************************************************************************/
-int TestParameters::GetBoolFromString(std::string key)
+int TestParameters::GetBoolFromString(std::string key) const
 {
-    std::string str = m_globalParameters[key]->GetString();
-    return bool_string_to_bool(str);
+    if (auto it = m_globalParameters.find(key); it != m_globalParameters.end())
+    {
+        std::string str = (*it).second->GetString();
+        return bool_string_to_bool(str);
+    }
+
+    return 0;
 }
 
 /*****************************************************************************/

@@ -21,6 +21,7 @@
 
 #include <DcgmJsonSerialize.hpp>
 #include <DcgmLogging.h>
+#include <ThreeWayCmpDefault.hpp>
 
 #include <charconv>
 #include <optional>
@@ -318,6 +319,7 @@ struct Result
     Status status;
     std::optional<std::vector<Warning>> warnings;
     std::optional<Info> info;
+    std::optional<::Json::Value> auxData;
     friend auto operator<=>(Result const &, Result const &) = default;
 };
 
@@ -408,6 +410,11 @@ auto inline ParseJson(::Json::Value const &json, DcgmNs::JsonSerialize::To<Resul
         result.info = *parsedInfo;
     }
 
+    if (json.isMember("AUX"))
+    {
+        result.auxData = json["AUX"];
+    }
+
     return result;
 }
 
@@ -427,6 +434,10 @@ inline auto ToJson(Result const &value) -> ::Json::Value
     if (value.info.has_value())
     {
         json[NVVS_INFO] = Serialize(*value.info);
+    }
+    if (value.auxData.has_value())
+    {
+        json["AUX"] = *value.auxData;
     }
     return json;
 }
@@ -640,12 +651,9 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
 
 inline auto RemoveSingleQuotes(std::string_view str) -> std::string
 {
-    if (str.size() > 1)
+    if (str.size() > 1 && ((str.front() == '\'' && str.back() == '\'') || (str.front() == '"' && str.back() == '"')))
     {
-        if ((str.front() == '\'' && str.back() == '\'') || (str.front() == '"' && str.back() == '"'))
-        {
-            return std::string { str.substr(1, str.size() - 2) };
-        }
+        return std::string { str.substr(1, str.size() - 2) };
     }
     return std::string { str };
 }

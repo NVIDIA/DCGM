@@ -38,6 +38,7 @@
 #define SW_STR_REQUIRE_PERSISTENCE "require_persistence_mode"
 #define SW_PLUGIN_NAME             "software"
 #define SW_STR_CHECK_FILE_CREATION "check_file_creation"
+#define SW_STR_SKIP_DEVICE_TEST    "skip_device_test"
 
 /******************************************************************************
  * PCIE PLUGIN
@@ -333,6 +334,7 @@
 #define EUD_FULL_PROFILE     "full_profile"     /*!< Run the full MODS profile or not */
 #define EUD_PASSTHROUGH_ARGS "passthrough_args" /*!< Arguments to pass to the EUD binary */
 #define EUD_TMP_DIR          "tmp_dir"          /*!< Temporary directory to use for EUD */
+#define EUD_MLE_PARSE        "parse_mle"        /*!< Parse the MLE or not */
 
 /*****************************************************************************
  * PER PLUGIN ERROR DEFINITIONS AND THEIR BITMASKS

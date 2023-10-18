@@ -105,6 +105,7 @@ def test_collectd_basic_integration(handle, gpuIds):
             assert fieldTag in gpuDict
             assert gpuDict[fieldTag] == fieldValues[i]
 
+
 def helper_collectd_config(gpuIds, config, verify_fields = True):
     """
     Verify config via dcgm plugin. Verify fields parsed, if desired.

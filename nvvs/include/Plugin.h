@@ -253,7 +253,7 @@ public:
      *
      * @param results - the struct in which results are stored
      */
-    dcgmReturn_t GetResults(dcgmDiagResults_t *results);
+    virtual dcgmReturn_t GetResults(dcgmDiagResults_t *results);
 
     /*
      * Adds a custom timeseries statistic for GPU gpuId with the specified name and value

@@ -49,6 +49,7 @@ Software::Software(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddString(PS_RUN_IF_GOM_ENABLED, "True");
     tp->AddString(SW_STR_DO_TEST, "None");
     tp->AddString(SW_STR_REQUIRE_PERSISTENCE, "True");
+    tp->AddString(SW_STR_SKIP_DEVICE_TEST, "False");
     m_infoStruct.defaultTestParameters = tp;
 
     if (gpuInfo == nullptr)
@@ -83,7 +84,8 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
         checkDenylist();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "permissions")
     {
-        checkPermissions(testParameters.GetBoolFromString(SW_STR_CHECK_FILE_CREATION));
+        checkPermissions(testParameters.GetBoolFromString(SW_STR_CHECK_FILE_CREATION),
+                         testParameters.GetBoolFromString(SW_STR_SKIP_DEVICE_TEST));
     }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "libraries_nvml")
         checkLibraries(CHECK_NVML);
@@ -135,7 +137,7 @@ bool Software::CountDevEntry(const std::string &entryName)
     return false;
 }
 
-bool Software::checkPermissions(bool checkFileCreation)
+bool Software::checkPermissions(bool checkFileCreation, bool skipDeviceTest)
 {
     // check how many devices we see reporting and compare to
     // the number of devices listed in /dev
@@ -157,39 +159,51 @@ bool Software::checkPermissions(bool checkFileCreation)
 
     // everything below here is not necessarily a failure
     SetResult(NVVS_RESULT_PASS);
-    dir = opendir(dirName.c_str());
-
-    if (NULL == dir)
-        return false;
-
-    ent = readdir(dir);
-    while (NULL != ent)
+    if (skipDeviceTest == false)
     {
-        std::string entryName = ent->d_name;
-        if (CountDevEntry(entryName))
-        {
-            deviceCount++;
-            std::stringstream ss;
-            ss << dirName << "/" << entryName;
-            if (access(ss.str().c_str(), R_OK) != 0)
-            {
-                DcgmError d { DcgmError::GpuIdTag::Unknown };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NO_ACCESS_TO_FILE, d, ss.str().c_str(), strerror(errno));
-                AddError(d);
-                SetResult(NVVS_RESULT_WARN);
-            }
-        }
+        dir = opendir(dirName.c_str());
+
+        if (NULL == dir)
+            return false;
 
         ent = readdir(dir);
-    }
-    closedir(dir);
 
-    if (deviceCount != gpuCount)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DEVICE_COUNT_MISMATCH, d);
-        AddError(d);
-        SetResult(NVVS_RESULT_WARN);
+        std::vector<DcgmError> accessWarnings;
+
+        while (NULL != ent)
+        {
+            std::string entryName = ent->d_name;
+            if (CountDevEntry(entryName))
+            {
+                std::stringstream ss;
+                ss << dirName << "/" << entryName;
+                if (access(ss.str().c_str(), R_OK) != 0)
+                {
+                    DcgmError d { DcgmError::GpuIdTag::Unknown };
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NO_ACCESS_TO_FILE, d, ss.str().c_str(), strerror(errno));
+                    accessWarnings.emplace_back(d);
+                }
+                else
+                {
+                    deviceCount++;
+                }
+            }
+
+            ent = readdir(dir);
+        }
+        closedir(dir);
+
+        if (deviceCount < gpuCount)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DEVICE_COUNT_MISMATCH, d);
+            AddError(d);
+            for (auto &warning : accessWarnings)
+            {
+                AddError(warning);
+            }
+            SetResult(NVVS_RESULT_WARN);
+        }
     }
 
     if (checkFileCreation)

@@ -333,6 +333,10 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
         results->numResults++;
     }
 
+    results->auxData = dcgmDiagAuxData_t {
+        .version = dcgmDiagAuxData_version1, .type = UNINITIALIZED_AUX_DATA_TYPE, .size = 0, .data = nullptr
+    };
+
     return DCGM_ST_OK;
 }
 

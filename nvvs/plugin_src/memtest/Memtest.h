@@ -151,7 +151,7 @@ private:
      * Returns: 0 on success
      *         <0 on error
      */
-    int Init(const dcgmDiagPluginGpuList_t &gpuList);
+    dcgmReturn_t Init(const dcgmDiagPluginGpuList_t &gpuList);
 
     /*************************************************************************/
     /*
@@ -222,9 +222,8 @@ private:
     int m_shouldStop; /* Global boolean variable to tell all workers to
                          exit early. 1=exit early. 0=keep running */
 
-    DcgmRecorder *m_dcgmRecorder;
-    int m_Ndevices;                                              /* Number of device[] entries that are value */
-    std::array<memtest_device_t, DCGM_MAX_NUM_DEVICES> m_device; /* Per-device data */
+    std::unique_ptr<DcgmRecorder> m_dcgmRecorder;
+    std::vector<memtest_device_t> m_device; /* Per-device data */
 };
 
 /*****************************************************************************/

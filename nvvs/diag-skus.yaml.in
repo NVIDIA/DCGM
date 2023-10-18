@@ -2731,10 +2731,10 @@ skus:
       is_allowed: true
       h2d_d2h_single_pinned:
         min_pci_generation: 3.0
-        min_pci_width: 16.0
+        min_pci_width: 8.0
       h2d_d2h_single_unpinned:
         min_pci_generation: 3.0
-        min_pci_width: 16.0
+        min_pci_width: 8.0
     memory:
       is_allowed: true
       l1cache_size_kb_per_sm: 192.0
@@ -3114,5 +3114,101 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows ~4425000. Multiply by .75 to get ~4425000
       minimum_bandwidth: 3318750
+    pulse_test:
+      is_allowed: true
+  - name: H100NVL
+    id: 233a
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 400.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Measured ~31600 from the diagnostic. Multiply by .75 to get 23700
+      target_stress: 23700
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~2740000. Multiply by .75 to get ~2055000
+      minimum_bandwidth: 2055000
+    pulse_test:
+      is_allowed: true
+  - name: GH100-88K-A1
+    id: 2345
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 700.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 40000
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~2820000. Multiply by .75 to get ~2115000.00
+      minimum_bandwidth: 2115000.00
+    pulse_test:
+      is_allowed: true
+  - name: NVIDIA L40S
+    id: 26b9
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 350.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 30000
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 4.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # memory bandwidth test shows ~700000. Multiply by .75 to get ~525000
+      minimum_bandwidth: 525000.00
     pulse_test:
       is_allowed: true
