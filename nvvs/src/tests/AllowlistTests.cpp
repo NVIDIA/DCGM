@@ -20,6 +20,7 @@
 #include <fstream>
 #include <stdexcept>
 
+#include <any>         // It must be included here before the hacky define below
 #define private public // Hack to directly manipulate private members
 #include <Allowlist.h>
 

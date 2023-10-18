@@ -34,8 +34,9 @@ extern "C" {
 
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* 2.4.0 -> 3.1.7 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* Current version - 3.1.8 and later */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* Current version - 3.1.8 -> 3.2.3 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* Current version - 3.2.5 and later */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4
 
 /* IMPORTANT:
  *
@@ -163,6 +164,28 @@ typedef struct
     nvvsPluginResult_t result; //!< The result (PASS, SKIP, FAIL)
 } dcgmDiagSimpleResult_t;
 
+enum dcgmDiagAuxDataType
+{
+    UNINITIALIZED_AUX_DATA_TYPE = 0, //!< The data type is not initialized (AUX data does not exist). Ver: 1
+    JSON_VALUE_AUX_DATA_TYPE,        //!< The data is a string that can be parsed as JSON. Ver: 1
+};
+
+/**
+ * @brief Auxiliary data for a diagnostic result
+ * This is used to pass back arbitrary data from a diagnostic plugin to the caller
+ * It's up to the caller to know upfront what the data is and how to interpret it.
+ */
+typedef struct dcgmDiagAuxData_tag
+{
+    unsigned int version;     //!< Version of this structure. Set to dcgmDiagAuxData_version. Ver: 1
+    dcgmDiagAuxDataType type; //!< Type of data in this structure. Ver: 1
+    size_t size;              //!< Size of the buffer pointed to by data. Ver: 1
+    void *data;               //!< Pointer to the data. Ver: 1
+} dcgmDiagAuxData_t;
+
+#define dcgmDiagAuxData_version1 MAKE_DCGM_VERSION(dcgmDiagAuxData_t, 1)
+#define dcgmDiagAuxData_version  = dcgmDiagAuxData_version1
+
 typedef struct
 {
     unsigned int numResults;
@@ -171,6 +194,7 @@ typedef struct
     dcgmDiagEvent_t errors[DCGM_DIAG_MAX_ERRORS];
     unsigned int numInfo;
     dcgmDiagEvent_t info[DCGM_DIAG_MAX_INFO];
+    dcgmDiagAuxData_t auxData; //!< Auxiliary data for this result
 } dcgmDiagResults_t;
 
 /**
@@ -230,6 +254,7 @@ typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    void **userData,
                                                    DcgmLoggingSeverity_t loggingSeverity,
                                                    hostEngineAppenderCallbackFp_t loggingCallback);
+typedef dcgmReturn_t (*dcgmDiagShutdownPlugin_f)(void *userData);
 
 /*
  * Function called to run the test.

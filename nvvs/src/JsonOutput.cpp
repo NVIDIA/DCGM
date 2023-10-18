@@ -275,7 +275,8 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
 void JsonOutput::Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
                         const std::vector<dcgmDiagEvent_t> &errors,
-                        const std::vector<dcgmDiagEvent_t> &info)
+                        const std::vector<dcgmDiagEvent_t> &info,
+                        const std::optional<std::any> &pluginSpecificData)
 {
     std::string resultStr = resultEnumToString(overallResult);
 
@@ -320,6 +321,20 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
         }
 
         m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][0] = resultField;
+
+        if (pluginSpecificData)
+        {
+            try
+            {
+                auto auxData = std::any_cast<Json::Value>(*pluginSpecificData);
+                m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_AUX_DATA] = auxData;
+            }
+            catch (std::bad_any_cast const &e)
+            {
+                log_debug("Failed to cast plugin specific data to json: {}", e.what());
+            }
+        }
+
         m_testIndex++;
     }
     else
@@ -365,6 +380,19 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
             resultField[NVVS_GPU_IDS] = gpuId;
 
             m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][gpuId] = resultField;
+        }
+
+        if (pluginSpecificData)
+        {
+            try
+            {
+                auto auxData = std::any_cast<Json::Value>(*pluginSpecificData);
+                m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_AUX_DATA] = auxData;
+            }
+            catch (std::bad_any_cast const &e)
+            {
+                log_debug("Failed to cast plugin specific data to json: {}", e.what());
+            }
         }
     }
 

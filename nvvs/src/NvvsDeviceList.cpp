@@ -152,9 +152,7 @@ int NvvsDevice::Init(unsigned int gpuId)
 
     /* Save initial state */
     m_savedState.populated = 0;
-    SaveState(&m_savedState);
-
-    return 0;
+    return SaveState(&m_savedState);
 }
 
 /*****************************************************************************/

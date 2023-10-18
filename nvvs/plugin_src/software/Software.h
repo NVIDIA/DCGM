@@ -66,7 +66,7 @@ private:
     dcgmDiagPluginGpuList_t m_gpuInfo;
 
     // methods
-    bool checkPermissions(bool checkFileCreation);
+    bool checkPermissions(bool checkFileCreation, bool skipDevTest);
     bool checkLibraries(libraryCheck_t libs);
     bool checkDenylist();
     bool findLib(std::string, std::string &error);

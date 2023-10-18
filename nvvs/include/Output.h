@@ -18,7 +18,9 @@
 
 #include "NvvsCommon.h"
 #include "PluginInterface.h"
+#include <any>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <vector>
 
@@ -51,7 +53,8 @@ public:
     virtual void Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
                         const std::vector<dcgmDiagEvent_t> &errors,
-                        const std::vector<dcgmDiagEvent_t> &info);
+                        const std::vector<dcgmDiagEvent_t> &info,
+                        const std::optional<std::any> &pluginSpecificData = std::nullopt);
     virtual void prep(const std::string &testString);
     virtual void updatePluginProgress(unsigned int progress, bool clear);
     virtual void print();

@@ -932,7 +932,7 @@ int DcgmRecorder::GetLatestValuesForWatchedFields(unsigned int flags, std::vecto
     if (ret != DCGM_ST_OK)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "all watched fields", m_gpuIds[0]);
+        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "all watched fields", DcgmError::GpuIdTag::Unknown);
         errorList.push_back(d);
         return DR_COMM_ERROR;
     }

@@ -491,6 +491,71 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     return ret;
 }
 
+std::string DcgmHealthWatch::GetHealthSystemAsString(dcgmHealthSystems_t system)
+{
+    switch (system)
+    {
+        case DCGM_HEALTH_WATCH_PCIE:
+            return "PCIe";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_NVLINK:
+            return "NVLink";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_PMU:
+            return "PMU";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_MCU:
+            return "MCU";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_MEM:
+            return "Memory";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_SM:
+            return "SM";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_INFOROM:
+            return "Inforom";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_THERMAL:
+            return "Thermal";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_POWER:
+            return "Power";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_DRIVER:
+            return "Driver";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL:
+            return "NVSwitch non-fatal errors";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_NVSWITCH_FATAL:
+            return "NVSwitch fatal errors";
+            break; // NOT REACHED
+        default:
+            return "Unknown";
+            break; // NOT REACHED
+    }
+}
+
+std::string DcgmHealthWatch::GetHealthResultAsString(dcgmHealthWatchResults_t result)
+{
+    switch (result)
+    {
+        case DCGM_HEALTH_RESULT_PASS:
+            return "PASS";
+            break; // NOT REACHED
+        case DCGM_HEALTH_RESULT_WARN:
+            return "WARNING";
+            break; // NOT REACHED
+        case DCGM_HEALTH_RESULT_FAIL:
+            return "FAILURE";
+            break; // NOT REACHED
+        default:
+            return "UNKNOWN";
+            break; // NOT REACHED
+    }
+}
+
 /*****************************************************************************/
 void DcgmHealthWatch::SetResponse(dcgm_field_entity_group_t entityGroupId,
                                   dcgm_field_eid_t entityId,
@@ -503,6 +568,10 @@ void DcgmHealthWatch::SetResponse(dcgm_field_entity_group_t entityGroupId,
     snprintf(error.msg, sizeof(error.msg), "%s", d.GetMessage().c_str());
     error.code = d.GetCode();
     response.AddIncident(system, status, error, entityGroupId, entityId);
+    log_error("Detected a {} in health system {}: '{}'",
+              GetHealthResultAsString(status),
+              GetHealthSystemAsString(system),
+              d.GetMessage());
 }
 
 /*****************************************************************************/

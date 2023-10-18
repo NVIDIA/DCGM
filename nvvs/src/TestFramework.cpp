@@ -740,7 +740,8 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 m_output->Result(m_plugins[pluginIndex]->GetResult(),
                                  m_plugins[pluginIndex]->GetResults(),
                                  m_plugins[pluginIndex]->GetErrors(),
-                                 m_plugins[pluginIndex]->GetInfo());
+                                 m_plugins[pluginIndex]->GetInfo(),
+                                 m_plugins[pluginIndex]->GetAuxData());
 
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
                 {
@@ -756,7 +757,8 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 m_output->Result(m_plugins[pluginIndex]->GetResult(),
                                  m_plugins[pluginIndex]->GetResults(),
                                  m_plugins[pluginIndex]->GetErrors(),
-                                 m_plugins[pluginIndex]->GetInfo());
+                                 m_plugins[pluginIndex]->GetInfo(),
+                                 m_plugins[pluginIndex]->GetAuxData());
             }
 
             DCGM_LOG_DEBUG << "Test " << name << " had over result " << m_plugins[pluginIndex]->GetResult()
@@ -785,7 +787,15 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
     for (unsigned int i = 0; i < m_plugins.size(); i++)
     {
         std::string Name = GetCompareName(Test::NVVS_CLASS_CUSTOM, m_plugins[i]->GetName(), true);
-        parms[Name]      = m_plugins[i]->GetParameterInfo();
+        auto &p          = parms[Name];
+        p                = m_plugins[i]->GetParameterInfo();
+        //
+        // Add parameters common for all subtests
+        //
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_SUITE_LEVEL, DcgmPluginParamInt });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE, DcgmPluginParamString });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
     }
 
     return parms;

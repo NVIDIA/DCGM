@@ -40,11 +40,14 @@
 
 #include "Memtest.h"
 #include "CudaCommon.h"
+#include "DcgmUtilities.h"
 #include "PluginStrings.h"
 #include "inc/tests.h"
 #include <PluginCommon.h>
 #include <chrono>
+#include <fmt/ostream.h>
 #include <random>
+#include <span>
 
 const unsigned int NUM_ITERATIONS = 1000;
 
@@ -146,10 +149,8 @@ dcgmReturn_t allocate_small_mem(void)
 /*****************************************************************************/
 Memtest::Memtest(TestParameters *testParameters, Plugin *plugin)
     : m_shouldStop(0)
-    , m_dcgmRecorder(0)
-    , m_Ndevices(0)
-    , m_device()
 {
+    m_device.reserve(DCGM_MAX_NUM_DEVICES);
     m_testParameters = testParameters;
 
     if (!m_testParameters)
@@ -189,71 +190,58 @@ Memtest::~Memtest()
 }
 
 /*****************************************************************************/
-void Memtest::Cleanup(void)
+void Memtest::Cleanup()
 {
     /* This code should be callable multiple times since exit paths and the
      * destructor will call this */
 
-    CUresult cuSt;
-
-    int deviceIdx;
-    memtest_device_p gpu = 0;
-
-    for (deviceIdx = 0; deviceIdx < m_Ndevices; deviceIdx++)
+    for (auto &gpu : m_device)
     {
-        gpu = &m_device[deviceIdx];
-
-        /* Restore device settings */
-        if (gpu->nvvsDevice)
+        if (gpu.nvvsDevice)
         {
             try
             {
-                gpu->nvvsDevice->RestoreState();
+                gpu.nvvsDevice->RestoreState();
             }
-            catch (std::exception &e)
+            catch (std::exception const &e)
             {
-                DCGM_LOG_ERROR << "Caught exception in destructor. Swallowing " << e.what();
+                log_error("Caught exception in destructor. Swallowing {}", e.what());
             }
         }
     }
 
     /* Do not delete m_testParameters. We don't own it */
-    if (m_dcgmRecorder)
-    {
-        delete (m_dcgmRecorder);
-        m_dcgmRecorder = 0;
-    }
+    m_dcgmRecorder.reset();
 
-    /* Unload our cuda context for each gpu in the current process. We enumerate all GPUs because
-       cuda opens a context on all GPUs, even if we don't use them */
-    for (deviceIdx = 0; deviceIdx < m_Ndevices; deviceIdx++)
+    for (auto &gpu : m_device)
     {
-        gpu = &m_device[deviceIdx];
-
-        if (gpu->cuModule)
+        if (gpu.cuModule != nullptr)
         {
-            cuModuleUnload(gpu->cuModule);
-            gpu->cuModule = 0;
+            if (auto cuSt = cuModuleUnload(gpu.cuModule); cuSt != CUDA_SUCCESS)
+            {
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuModuleUnload", cuSt, gpu.gpuId);
+            }
+            gpu.cuModule = nullptr;
+        }
+        if (gpu.cuContext != nullptr)
+        {
+            /* Unload our context and reset the default context so that the next plugin gets a clean state */
+            if (auto cuSt = cuCtxDestroy(gpu.cuContext); cuSt != CUDA_SUCCESS)
+            {
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxDestroy", cuSt, gpu.gpuId);
+            }
+            gpu.cuContext = nullptr;
         }
 
-        /* Unload our context and reset the default context so that the next plugin gets a clean state */
-        cuSt = cuCtxDestroy(gpu->cuContext);
-        if (cuSt)
+        if (auto cuSt = cuDevicePrimaryCtxReset(gpu.cuDevice); cuSt != CUDA_SUCCESS)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxDestroy", cuSt, gpu->gpuId);
-        }
-        gpu->cuContext = 0;
-
-        cuSt = cuDevicePrimaryCtxReset(gpu->cuDevice);
-        if (cuSt)
-        {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDevicePrimaryCtxReset", cuSt, gpu->gpuId);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDevicePrimaryCtxReset", cuSt, gpu.gpuId);
         }
     }
 
-    DCGM_LOG_DEBUG << "Cleaned up cuda contexts";
+    m_device.clear();
 
-    m_Ndevices = 0;
+    log_debug("Cleaned up cuda contexts");
 }
 
 /*****************************************************************************/
@@ -443,140 +431,104 @@ int Memtest::LoadCudaModule(memtest_device_p gpu)
 }
 
 /*****************************************************************************/
-int Memtest::CudaInit(void)
+int Memtest::CudaInit()
 {
-    int st, deviceIdx, count;
-    CUresult cuSt;
-    memtest_device_p gpu = 0;
-
-    cuSt = cuDeviceGetCount(&count);
-    if (cuSt)
-    {
-        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDeviceGetCount", cuSt, 0, 0, false);
-        return -1;
-    }
-
     /* Do per-device initialization */
-    for (deviceIdx = 0; deviceIdx < m_Ndevices; deviceIdx++)
+    for (auto &gpu : m_device)
     {
-        gpu = &m_device[deviceIdx];
-
-        cuSt = cuCtxCreate(&gpu->cuContext, 0, gpu->cuDevice);
-        if (cuSt)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxCreate", cuSt, gpu->gpuId);
-            return -1;
-        }
+            if (auto cuSt = cuCtxCreate(&gpu.cuContext, 0, gpu.cuDevice); cuSt != CUDA_SUCCESS)
+            {
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxCreate", cuSt, gpu.gpuId);
+                return -1;
+            }
 
-        /* The modules must be loaded after we've created our contexts */
-        st = LoadCudaModule(gpu);
-        if (st)
-        {
-            DCGM_LOG_ERROR << "LoadCudaModule failed, see log for more information";
-            return -1;
+            /* The modules must be loaded after we've created our contexts */
+            if (LoadCudaModule(&gpu) != 0)
+            {
+                DCGM_LOG_ERROR << "LoadCudaModule failed, see log for more information";
+                return -1;
+            }
         }
     }
-
     return 0;
 }
 
 /*****************************************************************************/
-int Memtest::Init(const dcgmDiagPluginGpuList_t &gpuList)
+dcgmReturn_t Memtest::Init(const dcgmDiagPluginGpuList_t &gpuList)
 {
-    int st;
-    memtest_device_p memtestDevice = 0;
-    CUresult cuSt;
-
     /* Need to call cuInit before we call cuDeviceGetByPCIBusId */
-    cuSt = cuInit(0);
-    if (cuSt)
+    if (auto const cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuInit", cuSt, 0, 0, false);
-        return -1;
+        return DCGM_ST_INIT_ERROR;
     }
 
-    for (unsigned int gpuListIndex = 0; gpuListIndex < gpuList.numGpus; gpuListIndex++)
+    for (auto const &gpu : std::span { gpuList.gpus, gpuList.numGpus })
     {
-        memtestDevice = &m_device[m_Ndevices];
+        log_debug("Initializing GPU {}, PCI Bus ID: {}", gpu.gpuId, gpu.attributes.identifiers.pciBusId);
+        memtest_device_t memtestDevice {};
+        memtestDevice.gpuId      = gpu.gpuId;
+        memtestDevice.nvvsDevice = std::make_unique<NvvsDevice>(m_plugin);
 
-        memtestDevice->gpuId = gpuList.gpus[gpuListIndex].gpuId;
-
-        memtestDevice->nvvsDevice = std::make_unique<NvvsDevice>(m_plugin);
-        st                        = memtestDevice->nvvsDevice->Init(memtestDevice->gpuId);
-        if (st)
+        if (auto st = memtestDevice.nvvsDevice->Init(memtestDevice.gpuId); st != 0)
         {
-            return -1;
+            log_error("Failed to initialize NvvsDevice for GPU {}", gpu.gpuId);
+            return DCGM_ST_INIT_ERROR;
         }
 
-        cuSt = cuDeviceGetByPCIBusId(&memtestDevice->cuDevice,
-                                     gpuList.gpus[gpuListIndex].attributes.identifiers.pciBusId);
-        if (cuSt)
+        if (auto cuSt = cuDeviceGetByPCIBusId(&memtestDevice.cuDevice, gpu.attributes.identifiers.pciBusId);
+            cuSt != CUDA_SUCCESS)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDeviceGetByPCIBusId", cuSt, memtestDevice->gpuId, 0, true);
-            return -1;
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDeviceGetByPCIBusId", cuSt, memtestDevice.gpuId, 0, true);
+            return DCGM_ST_INIT_ERROR;
         }
+
+        m_device.emplace_back(std::move(memtestDevice));
 
         /* At this point, we consider this GPU part of our set */
-        m_Ndevices++;
     }
 
-    return 0;
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
 int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t &gpuList)
 {
-    int st, Nrunning = 0;
-    MemtestWorker *workerThreads[DCGM_MAX_NUM_DEVICES] = { 0 };
+    std::vector<std::unique_ptr<MemtestWorker>> workerThreads;
 
-    st = Init(gpuList);
-    if (st)
+    if (auto const st = Init(gpuList); st != DCGM_ST_OK)
     {
         Cleanup();
         return -1;
     }
 
-    st = CudaInit();
-    if (st)
+    if (auto const st = CudaInit(); st != 0)
     {
         Cleanup();
         return -1;
-    }
-
-    std::vector<unsigned int> gpuVector;
-    for (unsigned int i = 0; i < gpuList.numGpus; i++)
-    {
-        gpuVector.push_back(gpuList.gpus[i].gpuId);
     }
 
     /* Create the stats collection */
     if (!m_dcgmRecorder)
     {
-        m_dcgmRecorder = new DcgmRecorder(handle);
+        m_dcgmRecorder = std::make_unique<DcgmRecorder>(handle);
     }
 
     try /* Catch runtime errors */
     {
         /* Create and start all workers */
-        for (size_t i = 0; i < m_device.size(); i++)
+        for (auto &device : m_device)
         {
-            workerThreads[i] = new MemtestWorker(&m_device[i], *this, m_testParameters, *m_dcgmRecorder);
-            workerThreads[i]->Start();
-            Nrunning++;
+            workerThreads.emplace_back(
+                std::make_unique<MemtestWorker>(&device, *this, m_testParameters, *m_dcgmRecorder));
+            workerThreads.back()->Start();
         }
 
         /* Wait for all workers to finish */
-        while (Nrunning > 0)
+        while (!workerThreads.empty())
         {
-            Nrunning = 0;
-            for (size_t i = 0; i < m_device.size(); i++)
-            {
-                st = workerThreads[i]->Wait(1000);
-                if (st)
-                {
-                    Nrunning++;
-                }
-            }
+            DcgmNs::Utils::EraseIf(workerThreads, [](auto const &worker) { return worker->Wait(1000) == 0; });
         }
     }
     catch (const std::runtime_error &e)
@@ -585,23 +537,20 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t &gpuList)
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         m_plugin->AddError(d);
-        for (size_t i = 0; i < m_device.size(); i++)
+
+        for (auto &workerThread : workerThreads)
         {
-            // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
-            if (workerThreads[i] == NULL)
+            if (!workerThread)
             {
                 continue;
             }
-            // Ask each worker to stop and wait up to 3 seconds for the thread to stop
-            st = workerThreads[i]->StopAndWait(3000);
-            if (st)
+            if (workerThread->StopAndWait(3000) != 0)
             {
-                // Thread did not stop
-                workerThreads[i]->Kill();
+                workerThread->Kill();
             }
-            delete (workerThreads[i]);
-            workerThreads[i] = NULL;
         }
+        workerThreads.clear();
+
         Cleanup();
         // Let the TestFramework report the exception information.
         throw;
@@ -646,25 +595,25 @@ bool Memtest::CheckPassFailSingleGpu(memtest_device_p device, std::vector<DcgmEr
 /*****************************************************************************/
 bool Memtest::CheckPassFail()
 {
-    bool passed, allPassed = true;
+    bool allPassed = true;
     std::vector<DcgmError> errorList;
 
-    for (int i = 0; i < m_Ndevices; i++)
+    for (auto &gpu : m_device)
     {
         errorList.clear();
-        passed = CheckPassFailSingleGpu(&m_device[i], errorList);
+        bool passed = CheckPassFailSingleGpu(&gpu, errorList);
         if (passed)
         {
-            m_plugin->SetResultForGpu(m_device[i].gpuId, NVVS_RESULT_PASS);
+            m_plugin->SetResultForGpu(gpu.gpuId, NVVS_RESULT_PASS);
         }
         else
         {
             allPassed = false;
-            m_plugin->SetResultForGpu(m_device[i].gpuId, NVVS_RESULT_FAIL);
+            m_plugin->SetResultForGpu(gpu.gpuId, NVVS_RESULT_FAIL);
             // Log warnings for this gpu
             for (size_t j = 0; j < errorList.size(); j++)
             {
-                m_plugin->AddErrorForGpu(m_device[i].gpuId, errorList[j]);
+                m_plugin->AddErrorForGpu(gpu.gpuId, errorList[j]);
             }
         }
     }
@@ -733,13 +682,50 @@ int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
 }
 
 
+std::ostream &operator<<(std::ostream &os, cudaUUID_t const &value)
+{
+    os << fmt::format("{:02x}{:02x}{:02x}{:02x}-"
+                      "{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-"
+                      "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                      (unsigned char)value.bytes[0],
+                      (unsigned char)value.bytes[1],
+                      (unsigned char)value.bytes[2],
+                      (unsigned char)value.bytes[3],
+                      (unsigned char)value.bytes[4],
+                      (unsigned char)value.bytes[5],
+                      (unsigned char)value.bytes[6],
+                      (unsigned char)value.bytes[7],
+                      (unsigned char)value.bytes[8],
+                      (unsigned char)value.bytes[9],
+                      (unsigned char)value.bytes[10],
+                      (unsigned char)value.bytes[11],
+                      (unsigned char)value.bytes[12],
+                      (unsigned char)value.bytes[13],
+                      (unsigned char)value.bytes[14],
+                      (unsigned char)value.bytes[15]);
+
+    return os;
+}
+
+template <>
+struct fmt::formatter<cudaUUID_t> : ostream_formatter
+{};
+
 /****************************************************************************/
 void MemtestWorker::run()
 {
     CUresult cuSt;
 
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, m_device->cuDevice);
+    cudaDeviceProp prop {};
+    if (auto cuErr = cudaGetDeviceProperties(&prop, m_device->cuDevice); cuErr != cudaSuccess)
+    {
+        log_error("cudaGetDeviceProperties failed for gpu {} (CUDA device: {:x}) with error: ({}) {}",
+                  m_device->gpuId,
+                  m_device->cuDevice,
+                  cuErr,
+                  cudaGetErrorString(cuErr));
+        return;
+    }
 
     size_t totmem = prop.totalGlobalMem;
 
@@ -759,10 +745,22 @@ void MemtestWorker::run()
         return;
     }
 
-    DCGM_LOG_INFO << "Attached to device " << m_device->gpuId << "successfully.";
+    DCGM_LOG_INFO << "Attached to device " << m_device->gpuId << " successfully.";
+    log_debug("CUDA Device Props: Name={}, UUID={:16s}, PCI={:04x}:{:02x}:{:02x}",
+              prop.name,
+              prop.uuid,
+              prop.pciDomainID,
+              prop.pciBusID,
+              prop.pciDeviceID);
 
-    size_t freeMem, totalMem;
-    cudaMemGetInfo(&freeMem, &totalMem);
+    size_t freeMem  = 0;
+    size_t totalMem = 0;
+    if (auto st = cudaMemGetInfo(&freeMem, &totalMem); st != cudaSuccess)
+    {
+        log_error(
+            "cudaMemGetInfo failed for gpu {} with error: ({}) {}", m_device->gpuId, cuSt, cudaGetErrorString(st));
+        return;
+    }
 
     if (allocate_small_mem() != DCGM_ST_OK)
     {
@@ -802,12 +800,10 @@ void MemtestWorker::run()
     DCGM_LOG_INFO << "Allocated " << tot_num_blocks << " MB";
 
     gpu_errors[m_device->gpuId] = RunTests(ptr, tot_num_blocks);
-
-    return;
 }
 
 
-unsigned int error_checking(const char *msg, unsigned int blockidx)
+unsigned int error_checking(const char * /*msg*/, unsigned int blockidx)
 {
     unsigned int err = 0;
     unsigned long host_err_addr[MAX_ERR_RECORD_COUNT];
@@ -1704,7 +1700,7 @@ int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     paramsReadWrite[6] = &err_expect;
     paramsReadWrite[7] = &err_current;
     paramsReadWrite[8] = &err_second_read;
-    for (int i = 0; i < NUM_ITERATIONS; i++)
+    for (unsigned int i = 0; i < NUM_ITERATIONS; i++)
     {
         cuRes = cuLaunchKernel(gpu->cuFuncTest10ReadWrite,
                                gridDim.x,

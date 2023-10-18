@@ -6,6 +6,7 @@
         RunTest;
         RetrieveCustomStats;
         RetrieveResults;
+        ShutdownPlugin;
 
     local:
         *;

@@ -83,6 +83,20 @@ public:
     */
     void ProcessXidFv(dcgmBufferedFv_t *fv);
 
+    /*
+     * @param system - the system whose name we seek.
+     *
+     * @return - the string name of the specified system
+     */
+    static std::string GetHealthSystemAsString(dcgmHealthSystems_t system);
+
+    /*
+     * @param result - the result whose name we seek.
+     *
+     * @return - the string name of the specified health watch result
+     */
+    static std::string GetHealthResultAsString(dcgmHealthWatchResults_t result);
+
 private:
     DcgmCoreProxy mpCoreProxy;
     /* Map of groupId -> dcgmHealthSystems_t of the watched health systems of a given groupId */
