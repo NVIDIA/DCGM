@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Execution PYTHONPATH=/usr/local/dcgm/bindings/python3 python3 multi-node/health_check.py
 
 import argparse
 import json
@@ -239,7 +241,7 @@ def parse_nccl_output(raw_output, minBandwidthRequired, minAlgBandwidthRequired)
     maxBusBW = [0, 0]
     numWrong = [0, 0]
 
-'''
+    '''
     Each line in the output will have 13 tokens; Here's what each token / position is:
 size  = 0
 count = 1
@@ -300,7 +302,7 @@ Number wrong = 12
 OPERATION_ALL_REDUCE = 0
 OPERATION_ALL_TO_ALL = 1
 
-# These arguments are used for every nccl_tests command
+# Default arguments are used for every nccl_tests command
 NCCL_ARGS = "-b8 -e16G -f2"
 
 def get_node_counts(node_list):
@@ -340,12 +342,12 @@ def create_nccl_command(args, node_list, operation):
                 nodes_str = tmp
             total_np = total_np + node_counts[node]
 
-        cmd = "mpirun -np %d --oversubscribe --bind-to numa -H %s -x NCCL_DEBUG=WARN --mca btl tcp,self %s %s -g1" % \
-               (total_np, nodes_str, get_binary_name(args, operation), NCCL_ARGS)
+        cmd = "mpirun -np %d --bind-to none -H %s -x NCCL_DEBUG=WARN --mca btl tcp,self %s %s -g1" % \
+               (total_np, nodes_str, get_binary_name(args, operation), args.ncclArgs)
         return cmd
     else:
         # Single-node job
-        cmd = '%s %s' % (get_binary_name(args, operation), NCCL_ARGS)
+        cmd = '%s %s' % (get_binary_name(args, operation), args.ncclArgs)
         gpuCount = 0
         if args.gpuIds == 'all':
             global g_dcgmHandle
@@ -384,6 +386,11 @@ def launch_nccl_tests(args, node_list):
             (bOutput, bError) = runner.communicate()
             output = bOutput.decode("utf-8")
             error = bError.decode("utf-8")
+            returncode = runner.returncode
+            if runner.returncode:
+                errors.append("Command %s exit with non zero error code %d" \
+                              % (command, runner.returncode))
+                return errors, True
             if len(error):
                 print("Stderr: %s" % error)
 
@@ -605,6 +612,7 @@ def process_command_line():
     general_group.add_argument('-i', '--gpu-ids', dest='gpuIds', type=str, default='all')
     general_group.add_argument('-t', '--timeout', dest='timeout', type=int)
     general_group.add_argument('--nccl-bin-path', dest='ncclPath', type=str)
+    general_group.add_argument('--nccl-args', dest='ncclArgs', type=str, default=NCCL_ARGS)
     general_group.add_argument('-j', '--json', dest='json', type=bool, default=True)
 
     me_group = parser.add_mutually_exclusive_group(required=True)
@@ -623,6 +631,7 @@ def main():
 
     nccl_errors, abort = launch_nccl_tests(args, node_list)
     system_errors = []
+    diag_error_map = {}
 
     if not abort:
         diag_error_map = launch_dcgm_diagnostics(args, node_list)
