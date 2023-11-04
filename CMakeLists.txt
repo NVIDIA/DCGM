@@ -1,4 +1,8 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
+set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
+include_directories("/usr/local/cuda-12.3/targets/x86_64-linux/include")
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -311,6 +315,8 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(dcgm_decode_db ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt)
+
+
 
 set(DCGM_PRIVATE_DIR "${CMAKE_SOURCE_DIR}/dcgm_private")
 if (EXISTS ${DCGM_PRIVATE_DIR})
