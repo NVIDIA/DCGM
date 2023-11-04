@@ -39,10 +39,11 @@
 #include <vector>
 
 
-using namespace DcgmNs::Nvvs;
 
-inline int format_as(dcgmDiagnosticLevel_t type) {  return static_cast<int>(type);}
-inline int format_as(cudaError_enum type) {  return static_cast<int>(type);}
+using namespace DcgmNs::Nvvs;
+inline int format_as(dcgmEntityStatusType_enum type) {  return static_cast<int>(type);}
+//inline int format_as(dcgmDiagnosticLevel_t type) {  return static_cast<int>(type);}
+//inline int format_as(cudaError_enum type) {  return static_cast<int>(type);}
 DcgmHandle dcgmHandle;
 DcgmSystem dcgmSystem;
 NvvsCommon nvvsCommon __attribute__((visibility("default")));

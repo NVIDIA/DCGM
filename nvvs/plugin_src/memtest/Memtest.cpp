@@ -49,7 +49,11 @@
 #include <random>
 #include <span>
 
-inline int format_as(dcgmDiagnosticLevel_t type) {  return static_cast<int>(type);}
+//inline int format_as(dcgmDiagnosticLevel_t type) {  return static_cast<int>(type);}
+inline int format_as(cudaError_enum type) {  return static_cast<int>(type);}
+inline int format_as(cudaError type) {  return static_cast<int>(type);}
+
+
 const unsigned int NUM_ITERATIONS = 1000;
 
 static __thread unsigned long *err_addr;
