@@ -1,0 +1,18 @@
+[submodule "vendor/Catch2"]
+	path = vendor/Catch2
+	url = https://github.com/catchorg/Catch2
+[submodule "vendor/fmt"]
+	path = vendor/fmt
+	url = https://github.com/fmtlib/fmt
+[submodule "vendor/jsoncpp"]
+	path = vendor/jsoncpp
+	url = https://github.com/open-source-parsers/jsoncpp
+[submodule "vendor/libevent"]
+	path = vendor/libevent
+	url = https://github.com/libevent/libevent
+[submodule "vendor/plog"]
+	path = vendor/plog
+	url = https://github.com/SergiusTheBest/plog
+[submodule "vendor/yaml-cpp"]
+	path = vendor/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp

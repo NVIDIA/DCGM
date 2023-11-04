@@ -1,4 +1,14 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+set (CMAKE_CUDA_ARCHITECTURES "native")
+set (CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-12.3")
+set (CMAKE_CUDA_COMPILER "/usr/local/cuda-12.3/bin/nvcc")
+list(APPEND LIBRARIES ${CUDA_CUBLAS_LIBRARIES})
+enable_language(CUDA)
+
+set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
+set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
+include_directories("/usr/local/cuda-12.3/targets/x86_64-linux/include")
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -312,6 +322,8 @@ add_custom_command(
 )
 add_custom_target(dcgm_decode_db ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt)
 
+
+
 set(DCGM_PRIVATE_DIR "${CMAKE_SOURCE_DIR}/dcgm_private")
 if (EXISTS ${DCGM_PRIVATE_DIR})
     add_subdirectory(${DCGM_PRIVATE_DIR})
@@ -447,3 +459,4 @@ configure_file(
     @ONLY)
 
 include(CPack)
+cmake_minimum_required(VERSION 3.18)
