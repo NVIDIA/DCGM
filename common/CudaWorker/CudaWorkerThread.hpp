@@ -23,9 +23,6 @@ inline int format_as(cudaError_enum type) {
   return static_cast<int>(type);
 }
 
-inline int format_as(cublasStatus_t type) {
-  return static_cast<int>(type);
-}
 
 
 #include "FieldWorkers.hpp"

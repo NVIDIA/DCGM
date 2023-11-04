@@ -20,6 +20,17 @@ macro(define_dcgmproftester cuda_version)
     add_executable(${dcgmproftester_exec})
     list(APPEND DCGMPROFTESTER_TARGETS ${dcgmproftester_exec})
     target_compile_definitions(${dcgmproftester_exec} PRIVATE CUDA_VERSION_USED=${cuda_version})
+
+    target_link_libraries(${dcgmproftester_exec}
+	PRIVATE
+    	"/usr/local/cuda-12.3/lib64/libcublas.so" )
+    target_link_libraries(${dcgmproftester_exec}
+    PRIVATE
+	"/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so" )
+    target_link_libraries(${dcgmproftester_exec}
+	PRIVATE
+	"/usr/lib/x86_64-linux-gnu/libcuda.so" )	
+
     target_link_libraries(
         ${dcgmproftester_exec}
         PRIVATE
@@ -33,6 +44,12 @@ macro(define_dcgmproftester cuda_version)
             fmt::fmt
     )
     target_include_directories(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
+
+    set(cublas_proxy_include_dir "${CMAKE_CURRENT_SOURCE_DIR}/..")
+     get_absolute_path(${cublas_proxy_include_dir} cublas_proxy_include_dir)
+     target_include_directories(${dcgmproftester_exec} PUBLIC $<BUILD_INTERFACE:${cublas_proxy_include_dir}>)
+
+
     target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_common)
     target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cublas_proxy${cuda_version})
@@ -57,19 +74,19 @@ macro(define_dcgmproftester cuda_version)
         ${COMMON_SRCS}
     )
 
-    if (${cuda_version} EQUAL 10)
-        target_compile_options(${dcgmproftester_exec} PRIVATE -Wno-volatile)
-    endif()
+#    if (${cuda_version} EQUAL 10)
+#        target_compile_options(${dcgmproftester_exec} PRIVATE -Wno-volatile)
+#    endif()
 
     find_package(Threads REQUIRED)
     target_link_libraries(${dcgmproftester_exec} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
     target_link_options(${dcgmproftester_exec} PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/proftester.linux_def)
 endmacro()
 
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    define_dcgmproftester(10)
-endif()
-define_dcgmproftester(11)
+#if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+#    define_dcgmproftester(10)
+#endif()
+#define_dcgmproftester(11)
 define_dcgmproftester(12)
 
 set(DCGMPROFTESTER ${DCGMPROFTESTER_TARGETS} PARENT_SCOPE)

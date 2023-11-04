@@ -26,7 +26,7 @@
 #include "dcgm_structs.h"
 #include "timelib.h"
 #include "vector_types.h"
-#include <cublas_proxy.hpp>
+#include "../cublas_proxy/cublas_proxy.hpp"
 #include <cuda.h>
 #include <dcgm_agent.h>
 

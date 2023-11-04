@@ -25,7 +25,8 @@
 #include "dcgm_fields_internal.hpp"
 #include "timelib.h"
 #include "vector_types.h"
-#include <cublas_proxy.hpp>
+//#include <cublas_proxy.hpp>
+#include "../cublas_proxy/cublas_proxy.hpp"
 #include <cuda.h>
 #include <dcgm_agent.h>
 

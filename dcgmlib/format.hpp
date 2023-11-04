@@ -6,7 +6,7 @@ inline int format_as(DcgmWatcherType_t type) {  return static_cast<int>(type);}
 inline int format_as(dcgmChipArchitecture_enum type) {  return static_cast<int>(type);}
 inline int format_as(dcgmConfigType_enum type) {  return static_cast<int>(type);}
 inline int format_as(dcgmDiagnosticLevel_t type) {  return static_cast<int>(type);}
-//inline int format_as(dcgmEntityStatusType_enum type) {  return static_cast<int>(type);}
+
 inline int format_as(dcgmGroupType_enum type) {  return static_cast<int>(type);}
 inline int format_as(dcgmHealthSystems_enum type) {  return static_cast<int>(type);}
 inline int format_as(dcgmModuleId_t type) {  return static_cast<int>(type);}
