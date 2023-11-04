@@ -1,4 +1,10 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+set (CMAKE_CUDA_ARCHITECTURES "native")
+set (CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-12.3")
+set (CMAKE_CUDA_COMPILER "/usr/local/cuda-12.3/bin/nvcc")
+list(APPEND LIBRARIES ${CUDA_CUBLAS_LIBRARIES})
+enable_language(CUDA)
+
 set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
 set(CUDA12_INCLUDE_DIR "/usr/local/cuda-12.3/include")
 include_directories("/usr/local/cuda-12.3/targets/x86_64-linux/include")
@@ -453,3 +459,4 @@ configure_file(
     @ONLY)
 
 include(CPack)
+cmake_minimum_required(VERSION 3.18)

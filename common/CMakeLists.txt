@@ -86,7 +86,11 @@ target_link_libraries(dcgm_common PUBLIC
     sdk_nvml_essentials_objects
     fmt::fmt
     dl
+
 )
+target_link_libraries(dcgm_common  PRIVATE "/usr/local/lib/libevent.so")
+target_link_libraries(dcgm_common  PRIVATE "/usr/local/lib/libevent_pthreads.so")
+
 
 add_library(common_watch_objects STATIC)
 target_sources(common_watch_objects PRIVATE
@@ -97,3 +101,5 @@ target_sources(common_watch_objects PRIVATE
     DcgmWatchTable.h
 )
 target_link_libraries(common_watch_objects PUBLIC common_interface)
+
+

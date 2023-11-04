@@ -28,14 +28,20 @@ macro(define_proxy_lib CUDA_VER)
     set(cublas_proxy_include_dir "${CMAKE_CURRENT_SOURCE_DIR}/..")
     get_absolute_path(${cublas_proxy_include_dir} cublas_proxy_include_dir)
     target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${cublas_proxy_include_dir}>)
+    
     target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${CUDA${CUDA_VER}_INCLUDE_DIR}>)
     target_link_libraries(${lib_name} PRIVATE dl rt)
     target_link_libraries(${lib_name} PRIVATE dcgm dcgm_common dcgm_logging dcgm_mutex)
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_CUBLAS_LIBS})
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_LIBS})
+#    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_CUBLAS_LIBS})
+#    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
+    #    target_link_libraries(${lib_name} PRIVATE ${CUDA_CUBLAS_LIBRARIES}))
+    #set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} 
+    target_link_libraries(${lib_name} PRIVATE  "/usr/local/cuda-12.3/lib64/libcublas.so" )
+    target_link_libraries(${lib_name} PRIVATE  "/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so" )
+    
 
     set(LOCAL_CUBLAS_PROXY "${LOCAL_CUBLAS_PROXY};${lib_name}" PARENT_SCOPE)
+
 
 endmacro()
 

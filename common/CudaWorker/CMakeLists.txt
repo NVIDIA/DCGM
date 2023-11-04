@@ -31,21 +31,21 @@ macro(define_dcgm_cuda_worker cuda_version)
         CudaWorkerThread.hpp
     )
 
-    if (${cuda_version} GREATER 10)
+    #    if (${cuda_version} GREATER 10)
         target_sources(${dcgm_cuda_worker_lib} PRIVATE DcgmDgemm.cpp)
-    else()
-        target_compile_options(${dcgm_cuda_worker_lib} PRIVATE -Wno-volatile)
-    endif()
+    #else()
+    #    target_compile_options(${dcgm_cuda_worker_lib} PRIVATE -Wno-volatile)
+    #endif()
 
     set(LOCAL_DCGM_CUDA_WORKER "${LOCAL_DCGM_CUDA_WORKER};${dcgm_cuda_worker_lib}" PARENT_SCOPE)
 endmacro()
 
 set(LOCAL_DCGM_CUDA_WORKER "")
 
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    define_dcgm_cuda_worker(10)
-endif()
-define_dcgm_cuda_worker(11)
+#if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+#    define_dcgm_cuda_worker(10)
+#endif()
+#define_dcgm_cuda_worker(11)
 define_dcgm_cuda_worker(12)
 
 set(DCGM_CUDA_WORKER ${LOCAL_DCGM_CUDA_WORKER} PARENT_SCOPE)
