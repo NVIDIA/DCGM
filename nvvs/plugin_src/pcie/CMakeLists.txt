@@ -32,6 +32,19 @@ macro(define_bw_checker CHECKER_NAME CUDA_VER)
     )
 
     target_link_libraries(${CHECKER_NAME}_${CUDA_VER} PRIVATE dcgm_cuda_worker12)
+        target_link_libraries(${CHECKER_NAME}_${CUDA_VER} PRIVATE  "/usr/local/cuda-12.3/lib64/libcublas.so" )
+    target_link_libraries(${CHECKER_NAME}_${CUDA_VER}	   PRIVATE  "/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so" )
+
+    target_link_libraries(${CHECKER_NAME}_${CUDA_VER}
+	PRIVATE
+	"/usr/lib/x86_64-linux-gnu/libcuda.so" )
+    target_link_libraries(${CHECKER_NAME}_${CUDA_VER}
+	PRIVATE
+	"/usr/local/cuda-12.3/lib64/libcudart.so.12" )
+
+
+
+
     target_include_directories(${CHECKER_NAME}_${CUDA_VER} PRIVATE ${PCIE_PLUGIN_BASE_DIR}/bw_checker)
     target_include_directories(${CHECKER_NAME}_${CUDA_VER} PRIVATE ${JSONCPP_INCLUDE_DIR})
     target_include_directories(${CHECKER_NAME}_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_INCLUDE_DIR})
@@ -46,9 +59,6 @@ macro(define_bw_checker CHECKER_NAME CUDA_VER)
 
     set_target_properties(${CHECKER_NAME}_${CUDA_VER} PROPERTIES INSTALL_TO_DIR ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda${CUDA_VER})
     
-    if ((${CUDA_VER} EQUAL 10))
-        target_compile_options(${CHECKER_NAME}_${CUDA_VER} PRIVATE -Wno-volatile)
-    endif()
     
     set(LOCAL_BW_CHECKERS "${LOCAL_BW_CHECKERS};${CHECKER_NAME}_${CUDA_VER}" PARENT_SCOPE)
 endmacro()
