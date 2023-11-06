@@ -29,7 +29,8 @@
 #include <CudaCommon.h>
 
 #include <NvvsStructs.h>
-#include <cublas_proxy.hpp>
+//#include <cublas_proxy.hpp>
+#include "../cublas_proxy/cublas_proxy.hpp"
 #include <cuda.h>
 
 #define TP_MAX_DIMENSION 8192 /* Maximum single dimension */

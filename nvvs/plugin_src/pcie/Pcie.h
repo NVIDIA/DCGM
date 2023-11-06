@@ -21,7 +21,8 @@
 #include "PluginDevice.h"
 
 
-#include <cublas_proxy.hpp>
+//#include <cublas_proxy.hpp>
+#include "../cublas_proxy/cublas_proxy.hpp"
 #include <dcgm_structs.h>
 #include <iostream>
 #include <string>

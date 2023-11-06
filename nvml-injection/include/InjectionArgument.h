@@ -2039,12 +2039,18 @@ public:
         return m_value.processInfo_v1Ptr;
     }
 
+  /*
+nvml-injection/include/InjectionArgument.h:2042:5: error: ‘InjectionArgument::InjectionArgument(nvmlProcessInfo_v2_t*)’ cannot be overloaded with ‘InjectionArgument::InjectionArgument(nvmlProcessInfo_t*)’
+ 2042 |     InjectionArgument(nvmlProcessInfo_v2_t *processInfo_v2Ptr)
+      |     ^~~~~~~~~~~~~~~~~
+
     InjectionArgument(nvmlProcessInfo_v2_t *processInfo_v2Ptr)
         : m_type(INJECTION_PROCESSINFO_V2_PTR)
     {
         memset(&m_value, 0, sizeof(m_value));
         m_value.processInfo_v2Ptr = processInfo_v2Ptr;
     }
+  */
     nvmlProcessInfo_v2_t *AsProcessInfo_v2Ptr() const
     {
         return m_value.processInfo_v2Ptr;

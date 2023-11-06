@@ -18,6 +18,13 @@
 
 #include <chrono>
 
+
+inline int format_as(cudaError_enum type) {
+  return static_cast<int>(type);
+}
+
+
+
 #include "FieldWorkers.hpp"
 #include <DcgmTaskRunner.h>
 

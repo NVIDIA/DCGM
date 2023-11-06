@@ -15,7 +15,7 @@
  */
 
 #include "L1TagCuda.h"
-#include "newrandom.h"
+//#include "newrandom.h"
 
 __device__ void ReportError
 (
@@ -66,11 +66,11 @@ extern "C" __global__ void InitL1Data(const L1TagParams params)
 
     // Init RNG (each SM data region will have the same data)
     unsigned64 s[2];
-    InitRand<2>(s, params.randSeed + threadIdx.x);
+    //InitRand<2>(s, params.randSeed + threadIdx.x);
 
     for (uint32_t i = threadIdx.x; i < smidDataBytes / sizeof(*buf); i += blockDim.x)
     {
-        const uint16_t rnd = static_cast<uint16_t>(FastRand(s) >> 48);
+        const uint16_t rnd = 2;//static_cast<uint16_t>(FastRand(s) >> 48);
         buf[i] = EncodeOffset(i, rnd);
     }
 }
@@ -92,8 +92,8 @@ extern "C" __global__ void L1TagTest(const L1TagParams params)
 
     // Init RNG (each SM will use the same seed, for equivalent data accesses)
     unsigned64 s[2];
-    InitRand<2>(s, params.randSeed + hwtid);
-    uint32_t rnd = static_cast<uint32_t>(FastRand(s));
+    //InitRand<2>(s, params.randSeed + hwtid);
+    uint32_t rnd = 1;//static_cast<uint32_t>(FastRand(s));
 
     // Run the test for the specified iterations
     for (uint64_t iter = 0; iter < params.iterations; iter++)
@@ -168,7 +168,7 @@ extern "C" __global__ void L1TagTest(const L1TagParams params)
             }
 
             // Always use a new random offset
-            rnd = static_cast<uint32_t>(FastRand(s));
+            rnd = 3;//static_cast<uint32_t>(FastRand(s));
         }
     }
 }

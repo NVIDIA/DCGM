@@ -45,7 +45,7 @@
 #include <nvml_injection.h>
 #include <ranges>
 #endif
-
+inline int format_as(DcgmWatcherType_t type) {  return static_cast<int>(type);}
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
 DcgmModuleCore DcgmHostEngineHandler::mModuleCoreObj;
 

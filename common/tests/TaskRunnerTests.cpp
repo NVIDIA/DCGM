@@ -288,7 +288,7 @@ TEST_CASE("TaskRunner: Limited Queue")
 
     tr.Stop();
     fmt::print("Wait iterations elapsed: {}\n", cWaitIterations - waitIterations);
-    fmt::print("Iterations: {}\nExecutions: {}\nFailed to add: {}\n", iterations, executed, failedToAdd);
+    fmt::print("Iterations: {}\nExecutions: {}\nFailed to add: {}\n", (int)iterations, (int)executed, (int)failedToAdd);
     REQUIRE(executed >= cTaskRunnerCapacity);
     REQUIRE((failedToAdd + executed) == iterations);
 }
