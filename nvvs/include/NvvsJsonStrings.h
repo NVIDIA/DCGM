@@ -30,12 +30,16 @@
 #define NVVS_RUNTIME_ERROR  "runtime_error"
 #define NVVS_ERROR_CODE     "error_code"
 #define NVVS_GPU_IDS        "gpu_ids"
+#define NVVS_GPU_ID         "gpu_id" // Only used in 'dcgmi diag' output
 #define NVVS_NAME           "DCGM GPU Diagnostic"
 #define NVVS_GLOBAL_WARN    "Warning"
 #define NVVS_ERROR_ID       "error_id"
+#define NVVS_ERROR_CATEGORY "error_category"
+#define NVVS_ERROR_SEVERITY "error_severity"
 #define NVVS_ITERATIONS     "iterations"
 #define NVVS_RESULT         "Overall Result"
 #define NVVS_GPU_DEV_IDS    "GPU Device IDs"
+#define NVVS_GPU_SERIALS    "GPU Device Serials"
 #define NVVS_DRIVER_VERSION "Driver Version Detected"
 #define NVVS_AUX_DATA       "aux_data"
 #endif

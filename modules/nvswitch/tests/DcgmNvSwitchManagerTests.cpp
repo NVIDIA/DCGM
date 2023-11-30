@@ -612,6 +612,30 @@ SCENARIO("Validating Fully Specialized Storage classes")
 
         CHECK(out.value == 30);
     }
+
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_VDD")
+    {
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD> out(in);
+
+        CHECK(out.value == 10);
+    }
+
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_DVDD")
+    {
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD> out(in);
+
+        CHECK(out.value == 20);
+    }
+
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_HVDD")
+    {
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD> out(in);
+
+        CHECK(out.value == 30);
+    }
 }
 
 dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster)

@@ -78,6 +78,51 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
     return dcgmReturn;
 }
 
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
+{
+    dcgmReturn_t dcgmReturn;
+    DcgmDiagResponseWrapper drw;
+
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version7);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+    else
+    {
+        drw.SetVersion9(&msg->diagResponse);
+    }
+
+    /* Sanitize the inputs */
+    dcgmTerminateCharBuffer(msg->runDiag.fakeGpuList);
+    dcgmTerminateCharBuffer(msg->runDiag.gpuList);
+    dcgmTerminateCharBuffer(msg->runDiag.debugLogFile);
+    dcgmTerminateCharBuffer(msg->runDiag.statsPath);
+    dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
+    dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
+    dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
+    dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
+
+    size_t i;
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
+    {
+        dcgmTerminateCharBuffer(msg->runDiag.testNames[i]);
+    }
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testParms); i++)
+    {
+        dcgmTerminateCharBuffer(msg->runDiag.testParms[i]);
+    }
+
+    /* Run the diag */
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("RunDiagAndAction returned {}", dcgmReturn);
+    }
+
+    return dcgmReturn;
+}
+
 dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 {
     dcgmReturn_t dcgmReturn;
@@ -186,7 +231,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
                 }
                 else
                 {
-                    if (moduleCommand->version == dcgm_diag_msg_run_version6)
+                    if (moduleCommand->version == dcgm_diag_msg_run_version7)
+                    {
+                        retSt = ProcessRun_v7((dcgm_diag_msg_run_v7 *)moduleCommand);
+                    }
+                    else if (moduleCommand->version == dcgm_diag_msg_run_version6)
                     {
                         retSt = ProcessRun_v6((dcgm_diag_msg_run_v6 *)moduleCommand);
                     }

@@ -249,13 +249,16 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_t &diagResult)
     {
         if (diagResult.levelOneResults[i].status == DCGM_DIAG_RESULT_FAIL)
         {
-            if (dcgmErrorGetPriorityByCode(diagResult.levelOneResults[i].error.code) == DCGM_ERROR_ISOLATE)
+            for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
             {
-                return DCGM_ST_NVVS_ISOLATE_ERROR;
-            }
-            else
-            {
-                ret = DCGM_ST_NVVS_ERROR;
+                if (dcgmErrorGetPriorityByCode(diagResult.levelOneResults[i].error[j].code) == DCGM_ERROR_ISOLATE)
+                {
+                    return DCGM_ST_NVVS_ISOLATE_ERROR;
+                }
+                else
+                {
+                    ret = DCGM_ST_NVVS_ERROR;
+                }
             }
         }
     }
@@ -267,14 +270,17 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_t &diagResult)
         {
             if (diagResult.perGpuResponses[i].results[j].status == DCGM_DIAG_RESULT_FAIL)
             {
-                if (dcgmErrorGetPriorityByCode(diagResult.perGpuResponses[i].results[j].error.code)
-                    == DCGM_ERROR_ISOLATE)
+                for (unsigned int k = 0; k < DCGM_MAX_ERRORS; k++)
                 {
-                    return DCGM_ST_NVVS_ISOLATE_ERROR;
-                }
-                else
-                {
-                    ret = DCGM_ST_NVVS_ERROR;
+                    if (dcgmErrorGetPriorityByCode(diagResult.perGpuResponses[i].results[j].error[k].code)
+                        == DCGM_ERROR_ISOLATE)
+                    {
+                        return DCGM_ST_NVVS_ISOLATE_ERROR;
+                    }
+                    else
+                    {
+                        ret = DCGM_ST_NVVS_ERROR;
+                    }
                 }
             }
         }
@@ -555,15 +561,19 @@ dcgmReturn_t Diag::RunViewDiag()
 
 void Diag::HelperDisplayDeploymentResult(CommandOutputController &cmdView,
                                          const std::string &nameTag,
-                                         dcgmDiagTestResult_v2 &result)
+                                         dcgmDiagTestResult_v3 &result)
 {
     if (result.status != DCGM_DIAG_RESULT_NOT_RUN)
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, nameTag);
         cmdView.addDisplayParameter(DATA_INFO_TAG, HelperDisplayDiagResult(result.status));
         cmdView.display();
-        if (result.error.msg[0] != '\0')
-            DisplayVerboseInfo(cmdView, "Error", result.error.msg);
+        for (unsigned int i = 0; i < DCGM_MAX_ERRORS; i++)
+        {
+            if (result.error[i].msg[0] != '\0')
+                DisplayVerboseInfo(cmdView, "Error", result.error[i].msg);
+        }
+
         if (result.info[0] != '\0')
             DisplayVerboseInfo(cmdView, "Info", result.info);
     }
@@ -617,7 +627,7 @@ void Diag::HelperDisplayDeployment(dcgmDiagResponse_t &diagResult)
     }
 }
 
-void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -647,7 +657,7 @@ void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v4 *diagResults, const s
 }
 
 /*****************************************************************************/
-void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -657,7 +667,7 @@ void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v4 *diagResults, cons
 }
 
 /*****************************************************************************/
-void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -761,7 +771,7 @@ void Diag::HelperDisplayDetails(bool forceVerbose,
                                 const std::vector<unsigned int> &gpuIndices,
                                 unsigned int testIndex,
                                 CommandOutputController &cmdView,
-                                dcgmDiagResponsePerGpu_v4 *diagResults)
+                                dcgmDiagResponsePerGpu_v5 *diagResults)
 {
     bool displayInfo     = forceVerbose;
     bool displayWarnings = forceVerbose;
@@ -777,9 +787,13 @@ void Diag::HelperDisplayDetails(bool forceVerbose,
         for (unsigned int i = 0; i < gpuIndices.size(); i++)
         {
             unsigned int gpuIndex = gpuIndices[i];
-            if (diagResults[gpuIndex].results[testIndex].error.msg[0] != '\0')
+            for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
             {
-                DisplayVerboseInfo(cmdView, "Warning", Sanitize(diagResults[gpuIndex].results[testIndex].error.msg));
+                if (diagResults[gpuIndex].results[testIndex].error[j].msg[0] != '\0')
+                {
+                    DisplayVerboseInfo(
+                        cmdView, "Warning", Sanitize(diagResults[gpuIndex].results[testIndex].error[j].msg));
+                }
             }
         }
     }
@@ -801,7 +815,7 @@ void Diag::HelperDisplayDetails(bool forceVerbose,
 /*****************************************************************************/
 void Diag::HelperDisplayGpuResults(std::string dataName,
                                    unsigned int testIndex,
-                                   dcgmDiagResponsePerGpu_v4 *diagResults,
+                                   dcgmDiagResponsePerGpu_v5 *diagResults,
                                    const std::vector<unsigned int> &gpuIndices)
 {
     CommandOutputController cmdView = CommandOutputController();
@@ -979,10 +993,19 @@ void Diag::HelperJsonAddBasicTests(Json::Value &output, int &categoryIndex, dcgm
         category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][0][NVVS_STATUS]
             = HelperDisplayDiagResult(diagResult.levelOneResults[testIndex].status);
 
-        if (diagResult.levelOneResults[testIndex].error.msg[0] != '\0')
+        for (unsigned int i = 0; i < DCGM_MAX_ERRORS; i++)
         {
-            category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][0][NVVS_WARNINGS]
-                = diagResult.levelOneResults[testIndex].error.msg;
+            if (diagResult.levelOneResults[testIndex].error[i].msg[0] != '\0')
+            {
+                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_WARNINGS]
+                    = diagResult.levelOneResults[testIndex].error[i].msg;
+                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_ID]
+                    = diagResult.levelOneResults[testIndex].error[i].code;
+                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_CATEGORY]
+                    = diagResult.levelOneResults[testIndex].error[i].category;
+                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_SEVERITY]
+                    = diagResult.levelOneResults[testIndex].error[i].severity;
+            }
         }
     }
 
@@ -1045,7 +1068,7 @@ std::string Diag::HelperGetPluginName(unsigned int index)
 /*
  * Adds the result to this test entry and returns true, or returns false if this gpu didn't run the test.
  */
-bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
+bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v5 &gpuResult,
                                Json::Value &testEntry,
                                unsigned int gpuIndex,
                                unsigned int testIndex,
@@ -1062,13 +1085,22 @@ bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
 
     snprintf(buf, sizeof(buf), "%u", gpuIndex);
 
-    resultEntry[NVVS_GPU_IDS] = buf;
-    resultEntry[NVVS_STATUS]  = HelperDisplayDiagResult(gpuResult.results[testIndex].status);
+    resultEntry[NVVS_GPU_ID] = buf;
+    resultEntry[NVVS_STATUS] = HelperDisplayDiagResult(gpuResult.results[testIndex].status);
 
-    if (gpuResult.results[testIndex].error.msg[0] != '\0')
+    for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
     {
-        resultEntry[NVVS_WARNINGS] = gpuResult.results[testIndex].error.msg;
-        resultEntry[NVVS_ERROR_ID] = gpuResult.results[testIndex].error.code;
+        Json::Value warningEntry;
+
+        if (gpuResult.results[testIndex].error[j].msg[0] != '\0')
+        {
+            warningEntry[NVVS_WARNING]        = gpuResult.results[testIndex].error[j].msg;
+            warningEntry[NVVS_ERROR_ID]       = gpuResult.results[testIndex].error[j].code;
+            warningEntry[NVVS_ERROR_CATEGORY] = gpuResult.results[testIndex].error[j].category;
+            warningEntry[NVVS_ERROR_SEVERITY] = gpuResult.results[testIndex].error[j].severity;
+
+            resultEntry[NVVS_WARNINGS][j] = warningEntry;
+        }
     }
 
     if (gpuResult.results[testIndex].info[0] != '\0')
@@ -1139,6 +1171,14 @@ void Diag::HelperJsonBuildOutput(Json::Value &output,
 
     output[NVVS_VERSION_STR]    = diagResult.dcgmVersion;
     output[NVVS_DRIVER_VERSION] = diagResult.driverVersion;
+
+    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
+    {
+        if (strcmp(diagResult.devSerials[i], DCGM_STR_BLANK))
+        {
+            output[NVVS_GPU_SERIALS][std::to_string(i)] = diagResult.devSerials[i];
+        }
+    }
 
     for (unsigned int i = 0; i < diagResult.gpuCount; i++)
     {

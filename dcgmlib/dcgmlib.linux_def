@@ -8,6 +8,7 @@
         dcgmConfigSet;
         dcgmConnect;
         dcgmConnect_v2;
+        dcgmCpuHierarchyCpuOwnsCore;
         dcgmDisconnect;
         dcgmEngineRun;
         dcgmEntitiesGetLatestValues;
@@ -29,6 +30,7 @@
         dcgmGetLatestValues_v2;
         dcgmGetLatestValuesForFields;
         dcgmGetNvLinkLinkStatus;
+        dcgmGetCpuHierarchy;
         dcgmGetPidInfo;
         dcgmGetValuesSince;
         dcgmGetValuesSince_v2;
@@ -124,6 +126,7 @@
         dcgmCreateMigEntity;
         dcgmDeleteMigEntity;
         dcgmErrorGetPriorityByCode;
+        dcgmErrorGetCategoryByCode;
         dcgmErrorGetFormatMsgByCode;
         dcgmInjectEntityFieldValueToNvml;
         dcgmCreateNvmlInjectionGpu;

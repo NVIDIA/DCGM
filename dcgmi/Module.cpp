@@ -38,6 +38,7 @@
 #define MODULE_CONFIG_NAME     "Config"
 #define MODULE_DIAG_NAME       "Diag"
 #define MODULE_PROFILING_NAME  "Profiling"
+#define MODULE_SYSMON_NAME     "SysMon"
 
 // Commands
 #define DENYLIST_MODULE "Denylist Module"
@@ -114,6 +115,9 @@ dcgmReturn_t Module::moduleIdToName(dcgmModuleId_t moduleId, std::string &str)
             return DCGM_ST_OK;
         case DcgmModuleIdProfiling:
             str = MODULE_PROFILING_NAME;
+            return DCGM_ST_OK;
+        case DcgmModuleIdSysmon:
+            str = MODULE_SYSMON_NAME;
             return DCGM_ST_OK;
         case DcgmModuleIdCount:
             return DCGM_ST_BADPARAM;

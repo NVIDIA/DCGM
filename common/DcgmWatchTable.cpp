@@ -163,6 +163,8 @@ bool DcgmWatchTable::IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t current
             return fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID || fieldId >= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdProfiling:
             return fieldId < DCGM_FI_PROF_FIRST_ID || fieldId > DCGM_FI_PROF_LAST_ID;
+        case DcgmModuleIdSysmon:
+            return fieldId < DCGM_FI_SYSMON_FIRST_ID || fieldId > DCGM_FI_SYSMON_LAST_ID;
         default:
             return true;
     }
@@ -313,10 +315,11 @@ dcgmReturn_t DcgmWatchTable::GetFieldsToUpdate(dcgmModuleId_t currentModule,
 
         // At this point we know we want to update the field
         dcgm_field_update_info_t updateInfo;
-        updateInfo.entityGroupId  = static_cast<dcgm_field_entity_group_t>(watchInfo.watchKey.entityGroupId);
-        updateInfo.entityId       = watchInfo.watchKey.entityId;
-        updateInfo.fieldMeta      = fieldMeta;
-        watchInfo.lastQueriedUsec = now;
+        updateInfo.entityGroupId      = static_cast<dcgm_field_entity_group_t>(watchInfo.watchKey.entityGroupId);
+        updateInfo.entityId           = watchInfo.watchKey.entityId;
+        updateInfo.fieldMeta          = fieldMeta;
+        updateInfo.updateIntervalUsec = watchInfo.updateIntervalUsec;
+        watchInfo.lastQueriedUsec     = now;
         toUpdate.push_back(updateInfo);
     }
 

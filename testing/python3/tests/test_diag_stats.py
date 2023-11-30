@@ -104,7 +104,7 @@ def helper_test_stats_file_basics(handle, gpuIds, statsAsString, pluginName, plu
                     if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
                         passedCount = passedCount + 1
                     else:
-                        warning = response.perGpuResponses[gpuIndex].results[pluginIndex].error.msg
+                        warning = response.perGpuResponses[gpuIndex].results[pluginIndex].error[0].msg
                         if len(warning):
                             errors = "%s GPU %d failed: %s" % (errors, gpuIndex, warning)
 

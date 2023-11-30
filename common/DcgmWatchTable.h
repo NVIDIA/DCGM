@@ -32,6 +32,7 @@ typedef struct
     dcgm_field_entity_group_t entityGroupId;
     unsigned int entityId;
     dcgm_field_meta_p fieldMeta;
+    timelib64_t updateIntervalUsec = 0;
 } dcgm_field_update_info_t;
 
 /*****************************************************************************/
@@ -205,6 +206,7 @@ public:
      * @param watcher[in]             - identifiers for who is watching
      * @param UpdateIntervalUsec[in]  - the interval at which we should update this field
      * @param maxAgeUsec[in]          - the maximum microseconds of values before they are thrown out
+     * @param isSubscribed[in]        - bool indicating whether the watch has "subscribed watchers"
      *
      * @return true if this field was not previously watched, false otherwise
      */
@@ -287,20 +289,19 @@ public:
      */
     bool GetIsSubscribed(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId, unsigned short fieldId);
 
-private:
-    // Track per-entity watches of fields
-    std::unordered_map<dcgm_entity_key_t, dcgm_watch_info_t> m_entityWatchHashTable;
-
     /*****************************************************************************/
     /**
      * Determines if currentModule ignores this field
-     * NOTE: must be called with m_mutex locked
      *
      * @param fieldId[in]       - the id of the field in question
      * @param currentModule[in] - the id of the module considering this field
      * @return true if this module is updated by a different module than current module
      */
     static bool IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t currentModule);
+
+private:
+    // Track per-entity watches of fields
+    std::unordered_map<dcgm_entity_key_t, dcgm_watch_info_t> m_entityWatchHashTable;
 
     /*****************************************************************************/
     /**

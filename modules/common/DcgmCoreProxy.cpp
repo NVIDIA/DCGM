@@ -63,11 +63,17 @@ dcgmReturn_t DcgmCoreProxy::GetGpuIds(int activeOnly, std::vector<unsigned int> 
     return ret;
 }
 
-bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds)
+bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const
 {
     dcgmCoreQueryGpuList_t qg = {};
 
-    for (size_t i = 0; i < gpuIds.size(); i++)
+    size_t end = gpuIds.size();
+    if (end > std::extent_v<decltype(qg.request.gpuIds)>)
+    {
+        end = std::extent_v<decltype(qg.request.gpuIds)>;
+        log_error("Too many GPUs in the list. Only the first {} will be used.", end);
+    }
+    for (size_t i = 0; i < end; i++)
     {
         qg.request.gpuIds[i] = gpuIds[i];
     }
@@ -83,15 +89,12 @@ bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds)
         bool sameSku = (qg.response.uintAnswer != 0);
         return sameSku;
     }
-    else
-    {
-        DCGM_LOG_ERROR << "Error '" << errorString(ret)
-                       << "' while determining if all GPUs in our list are the same SKU";
-        return false;
-    }
+
+    log_error("Error '{}' while determining if all GPUs in our list are the same SKU", errorString(ret));
+    return false;
 }
 
-int DcgmCoreProxy::GetGpuCount(int activeOnly)
+unsigned int DcgmCoreProxy::GetGpuCount(int activeOnly)
 {
     dcgmCoreGetGpuCount_t ggc = {};
     ggc.request.flag          = activeOnly;
@@ -103,7 +106,7 @@ int DcgmCoreProxy::GetGpuCount(int activeOnly)
 
     if (ret == DCGM_ST_OK)
     {
-        int count = ggc.response.uintAnswer;
+        unsigned int count = ggc.response.uintAnswer;
         return count;
     }
     else
@@ -645,7 +648,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId, std::vector<d
 
 dcgmReturn_t DcgmCoreProxy::AreAllTheSameSku(dcgm_connection_id_t connectionId,
                                              unsigned int groupId,
-                                             int *areAllSameSku) const
+                                             bool *areAllSameSku) const
 {
     if (areAllSameSku == nullptr)
     {
@@ -691,6 +694,7 @@ dcgmReturn_t DcgmCoreProxy::GetGroupGpuIds(dcgm_connection_id_t connectionId,
     gpuIds.clear();
     if (ret == DCGM_ST_OK)
     {
+        gpuIds.reserve(ggg.response.gpuCount);
         for (unsigned int i = 0; i < ggg.response.gpuCount; i++)
         {
             gpuIds.push_back(ggg.response.gpuIds[i]);

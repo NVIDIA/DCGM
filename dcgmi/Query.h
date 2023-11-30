@@ -22,6 +22,7 @@
 #define QUERY_H_
 
 #include "Command.h"
+#include <utility>
 #include <vector>
 
 class Query
@@ -41,6 +42,12 @@ public:
      * host engine represented by the DCGM handle
      *****************************************************************************/
     dcgmReturn_t DisplayDeviceInfo(dcgmHandle_t dcgmHandle, unsigned int requestedGpuId, std::string const &attributes);
+
+    /*****************************************************************************
+     * This method is used to display CPU info for the specified device on the
+     * host engine represented by the DCGM handle
+     *****************************************************************************/
+    dcgmReturn_t DisplayCpuInfo(dcgmHandle_t dcgmHandle, unsigned int requestedCpuId, std::string const &attributes);
 
     /*****************************************************************************
      * This method is used to display the gpus in the specified group on the
@@ -118,6 +125,23 @@ private:
 /**
  * Query info invoker class
  */
+class QueryCpuInfo : public Command
+{
+public:
+    QueryCpuInfo(std::string hostname, unsigned int cpu, std::string attributes);
+
+protected:
+    dcgmReturn_t DoExecuteConnected() override;
+
+private:
+    Query queryObj;
+    unsigned int cpuNum;
+    std::string attributes;
+};
+
+/**
+ * Query info invoker class
+ */
 class QueryGroupInfo : public Command
 {
 public:
@@ -160,6 +184,15 @@ private:
     Query m_queryObj;
 };
 
+/*****************************************************************************
+ * Helper method to interpret the CPU->core bitmask as a sequence of ranges
+ *****************************************************************************/
+std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_t *bitmask, uint32_t numBits);
+
+/*****************************************************************************
+ * Helper method to convert the CPU ranges
+ *****************************************************************************/
+std::string HelperBuildCpuListFromRanges(std::vector<std::pair<uint32_t, uint32_t>> ranges);
 
 void TopologicalSort(dcgmMigHierarchy_v2 &hierarchy);
 std::string FormatMigHierarchy(dcgmMigHierarchy_v2 &hierarchy);

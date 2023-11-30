@@ -34,6 +34,7 @@ set(SRCS
     dcgm.c
     dcgm_errors.c
     dcgm_fields.cpp
+    dcgm_helpers.c
 )
 
 set(INCLUDES
@@ -56,20 +57,21 @@ set(DEPS
     public_vgpu_interface
     sdk_nvml_interface
     sdk_nvml_loader
+    sysmon_interface
     transport_interface
     fmt::fmt
 )
 
-add_library(dcgm_mig_types STATIC)
-target_sources(dcgm_mig_types PRIVATE DcgmMigTypes.cpp)
-target_include_directories(dcgm_mig_types PRIVATE ${INCLUDES})
-target_link_libraries(dcgm_mig_types PRIVATE ${DEPS})
+add_library(dcgm_entity_types STATIC)
+target_sources(dcgm_entity_types PRIVATE DcgmEntityTypes.cpp)
+target_include_directories(dcgm_entity_types PRIVATE ${INCLUDES})
+target_link_libraries(dcgm_entity_types PRIVATE ${DEPS})
 
 add_library(dcgm_static_private STATIC)
 target_sources(dcgm_static_private PRIVATE ${SRCS})
 target_include_directories(dcgm_static_private PRIVATE ${INCLUDES})
 target_link_libraries(dcgm_static_private PRIVATE ${DEPS})
-target_link_libraries(dcgm_static_private PRIVATE dcgm_mig_types)
+target_link_libraries(dcgm_static_private PRIVATE dcgm_entity_types)
 
 # add_library(dcgm_static_public STATIC)
 # target_compile_definitions(dcgm_static_public PUBLIC DCGM_API_EXPORT=1)
@@ -91,7 +93,7 @@ target_link_libraries(
     PRIVATE
         ${DEPS}
         modules_objects
-        dcgm_mig_types
+        dcgm_entity_types
         -Wl,--whole-archive
         buildinfo_objects
         module_common_objects

@@ -1486,7 +1486,7 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     /* This has always been full speed. load target is ignored */
-    m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, 1.0, true);
+    m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, 1.0, true, m_physicalGpu->UseCublas());
 
     /* Run our test, noting we started (S\n) and have completed zero sub-parts
      *  of one (D 0 1\n).
@@ -1658,7 +1658,7 @@ int DistributedCudaContext::RunTest(void)
         case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
-            retSt = RunSubtestDataTypeActive();
+            retSt = m_physicalGpu->UseCublas() ? RunSubtestGemmUtil() : RunSubtestDataTypeActive();
             break;
 
         case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:

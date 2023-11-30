@@ -256,7 +256,8 @@ def vtDcgmConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, ver
     return list(c_config_values[0:count])
 
 @test_utils.run_with_embedded_host_engine()
-def test_dcgm_config_get_validate(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_config_get_validate(handle, gpuIds):
 
     """
     Validates structure version
@@ -354,7 +355,7 @@ def test_dcgm_health_check_validate(handle):
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
@@ -370,7 +371,7 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     return response
 
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct
@@ -385,7 +386,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     return response
 
 def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
     response.version = versionTest
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))

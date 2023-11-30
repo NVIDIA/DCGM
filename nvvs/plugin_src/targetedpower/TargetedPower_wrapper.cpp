@@ -17,6 +17,7 @@
 #include <stdint.h>
 
 #include "TargetedPower_wrapper.h"
+#include <fmt/format.h>
 #include <stdexcept>
 
 #include <DcgmThread/DcgmThread.h>
@@ -149,7 +150,15 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 
     for (int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
     {
+        if (gpuInfo->gpus[gpuListIndex].status == DcgmEntityStatusFake
+            || gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciDeviceId == 0)
+        {
+            log_debug("Skipping cuda init for fake gpu {}", gpuInfo->gpus[gpuListIndex].gpuId);
+            continue;
+        }
+
         unsigned int gpuId = gpuInfo->gpus[gpuListIndex].gpuId;
+
         try
         {
             device
@@ -421,7 +430,6 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
                                        timelib64_t earliestStopTime)
 {
     double maxVal;
-    double avg;
     dcgmFieldSummaryRequest_t fsr;
 
     memset(&fsr, 0, sizeof(fsr));
@@ -478,13 +486,10 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
         }
     }
 
-    // Add a message about the average power usage
-    std::stringstream ss;
-    avg = fsr.response.values[1].fp64;
-    ss.setf(std::ios::fixed, std::ios::floatfield);
-    ss.precision(0);
-    ss << "GPU " << device->gpuId << " power average:\t" << avg << " W";
-    AddInfoVerboseForGpu(device->gpuId, ss.str());
+    // Add a message about the max / average power usage
+    std::string infoStr = fmt::format(
+        "GPU {} max power: {:.1f} W average power usage: {:.1f} W", device->gpuId, maxVal, fsr.response.values[1].fp64);
+    AddInfoVerboseForGpu(device->gpuId, infoStr);
 
     return true;
 }
@@ -1056,7 +1061,7 @@ void ConstantPowerWorker::run()
         if (now - lastPrintTime > m_printInterval)
         {
             power = ReadPower();
-            log_debug("DeviceIdx {}, Power {:.2} W. dim: {}. minDim: {}",
+            log_debug("DeviceIdx {}, Power {:.2f} W. dim: {}. minDim: {}",
                       m_device->gpuId,
                       power,
                       matrixDim,

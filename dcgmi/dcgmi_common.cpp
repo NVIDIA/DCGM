@@ -15,6 +15,8 @@
  */
 
 #include <DcgmVariantHelper.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -66,30 +68,43 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
         size_t colonPos = entityIdStr.find_first_of(":");
         if (colonPos != std::string::npos)
         {
-            switch (entityIdStr.at(0))
+            std::string lowered = entityIdStr.substr(0, colonPos);
+            std::transform(
+                lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) { return std::tolower(c); });
+            switch (lowered.at(0))
             {
                 case 'g':
-                case 'G':
                     insertElem.entityGroupId = DCGM_FE_GPU;
                     break;
                 case 'n':
-                case 'N':
                     insertElem.entityGroupId = DCGM_FE_SWITCH;
                     break;
                 case 'v':
-                case 'V':
                     insertElem.entityGroupId = DCGM_FE_VGPU;
                     break;
                 case 'i':
-                case 'I':
                     insertElem.entityGroupId = DCGM_FE_GPU_I;
                     break;
                 case 'c':
-                case 'C':
-                    insertElem.entityGroupId = DCGM_FE_GPU_CI;
+                {
+                    static const std::string CPU("cpu");
+                    static const std::string CORE("core");
+
+                    if (lowered == CPU)
+                    {
+                        insertElem.entityGroupId = DCGM_FE_CPU;
+                    }
+                    else if (lowered == CORE)
+                    {
+                        insertElem.entityGroupId = DCGM_FE_CPU_CORE;
+                    }
+                    else
+                    {
+                        insertElem.entityGroupId = DCGM_FE_GPU_CI;
+                    }
                     break;
+                }
                 case 'l':
-                case 'L':
                     insertElem.entityGroupId = DCGM_FE_LINK;
                     break;
 
@@ -113,15 +128,43 @@ dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vecto
          * They are encoded as a 32 bit unsigned int with a type, GPU ID, and
          * link index. Do we encode them literally for now?
          */
-        if (isdigit(entityIdStr.at(0)))
+
+        if (entityIdStr.at(0) == '{')
         {
-            insertElem.entityId = std::stol(entityIdStr);
-            entityList.push_back(insertElem);
+            size_t closeBracket = entityIdStr.find('}');
+
+            if (closeBracket == std::string::npos)
+            {
+                SHOW_AND_LOG_ERROR << "A malformed range with no close bracket was specified: '" << entityIdStr << "'.";
+                return DCGM_ST_BADPARAM;
+            }
+
+            std::vector<unsigned int> entityIds;
+            dcgmReturn_t ret = DcgmNs::ParseRangeString(entityIdStr.substr(1, closeBracket), entityIds);
+            if (ret != DCGM_ST_OK)
+            {
+                SHOW_AND_LOG_ERROR << "A malformed range was specified: '" << entityIdStr << "'.";
+                return ret;
+            }
+
+            for (const auto &entityId : entityIds)
+            {
+                insertElem.entityId = entityId;
+                entityList.push_back(insertElem);
+            }
         }
         else
         {
-            SHOW_AND_LOG_ERROR << "Error: Expected numerical entityId instead of " << entityIdStr;
-            return DCGM_ST_BADPARAM;
+            if (isdigit(entityIdStr.at(0)))
+            {
+                insertElem.entityId = std::stol(entityIdStr);
+                entityList.push_back(insertElem);
+            }
+            else
+            {
+                SHOW_AND_LOG_ERROR << "Error: Expected numerical entityId instead of " << entityIdStr;
+                return DCGM_ST_BADPARAM;
+            }
         }
     }
 

@@ -22,6 +22,7 @@
 #define DCGM_STRUCTS_H
 
 #include "dcgm_fields.h"
+#include <limits.h>
 #include <stdint.h>
 
 
@@ -188,6 +189,11 @@
 #define DCGM_MAX_NUM_SWITCHES 12
 
 /**
+ * Max number of XID info to store
+ */
+#define DCGM_MAX_XID_INFO 10
+
+/**
  * Number of NvLink links per NvSwitch supported by DCGM
  */
 #define DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH 64
@@ -201,6 +207,16 @@
  * Maximum number of vGPU instances per physical GPU
  */
 #define DCGM_MAX_VGPU_INSTANCES_PER_PGPU 32
+
+/**
+ * Max number of CPU nodes
+ **/
+#define DCGM_MAX_NUM_CPUS 8
+
+/**
+ * Max number of CPUs
+ **/
+#define DCGM_MAX_NUM_CPU_CORES 1024
 
 /**
  * Max length of the DCGM string field
@@ -350,6 +366,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_NVVS_BINARY_NOT_FOUND = -52, //!< The NVVS binary was not found in the specified location
     DCGM_ST_NVVS_KILLED           = -53, //!< The NVVS process was killed by a signal
     DCGM_ST_PAUSED                = -54, //!< The hostengine and all modules are paused
+    DCGM_ST_ALREADY_INITIALIZED   = -55, //!< The object is already initialized
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -672,6 +689,41 @@ typedef struct
 #define dcgmMigHierarchy_version2 MAKE_DCGM_VERSION(dcgmMigHierarchy_v2, 2)
 
 #define dcgmMigHierarchy_version dcgmMigHierarchy_version2
+
+/**
+ * Bitmask indicating which cores are owned by this CPUs
+ */
+#define DCGM_CPU_CORE_BITMASK_COUNT_V1 (DCGM_MAX_NUM_CPU_CORES / sizeof(uint64_t) / CHAR_BIT)
+typedef struct
+{
+    unsigned int version;
+    uint64_t bitmask[DCGM_CPU_CORE_BITMASK_COUNT_V1];
+} dcgmCpuHierarchyOwnedCores_v1;
+
+typedef dcgmCpuHierarchyOwnedCores_v1 dcgmCpuHierarchyOwnedCores_t;
+
+#define dcgmCpuHierarchyOwnedCores_version1 MAKE_DCGM_VERSION(dcgmCpuHierarchyOwnedCores_v1, 1)
+
+/**
+ * Hierarchy of CPUs and their cores
+ */
+typedef struct
+{
+    unsigned int version;
+    unsigned int numCpus;
+    struct dcgmCpuHierarchyCpu_v1
+    {
+        unsigned int cpuId;
+        dcgmCpuHierarchyOwnedCores_v1 ownedCores;
+    } cpus[DCGM_MAX_NUM_CPUS];
+} dcgmCpuHierarchy_v1;
+
+typedef dcgmCpuHierarchy_v1 dcgmCpuHierarchy_t;
+
+/**
+ * Version 1 for dcgmCpuHierarchy_t
+ */
+#define dcgmCpuHierarchy_version1 MAKE_DCGM_VERSION(dcgmCpuHierarchy_v1, 1)
 
 /**
  * Maximum number of field groups that can exist
@@ -2036,6 +2088,21 @@ typedef struct
     unsigned int code;
 } dcgmDiagErrorDetail_t;
 
+#define DCGM_ERR_MSG_LENGTH 512
+/**
+ * Error details
+ *
+ * Since DCGM 3.3
+ */
+typedef struct
+{
+    char msg[DCGM_ERR_MSG_LENGTH];
+    int gpuId;
+    unsigned int code;
+    unsigned int category; //!< See dcgmErrorCategory_t
+    unsigned int severity; //!< See dcgmErrorSeverity_t
+} dcgmDiagErrorDetail_v2;
+
 #define DCGM_HEALTH_WATCH_MAX_INCIDENTS DCGM_GROUP_MAX_ENTITIES
 
 typedef struct
@@ -2144,8 +2211,8 @@ typedef struct
     dcgmStatSummaryInt32_t memoryClock;       //!< Memory clock in MHz
     dcgmStatSummaryInt32_t smClock;           //!< SM clock in MHz
 
-    int numXidCriticalErrors;          //!< Number of valid entries in xidCriticalErrorsTs
-    long long xidCriticalErrorsTs[10]; //!< Timestamps of the critical XID errors that occurred
+    int numXidCriticalErrors;                         //!< Number of valid entries in xidCriticalErrorsTs
+    long long xidCriticalErrorsTs[DCGM_MAX_XID_INFO]; //!< Timestamps of the critical XID errors that occurred
 
     int numOtherComputePids;                              //!< Count of otherComputePids entries that are valid
     unsigned int otherComputePids[DCGM_MAX_PID_INFO_NUM]; //!< Other compute processes that ran. 0=no process
@@ -2223,8 +2290,8 @@ typedef struct
     dcgmStatSummaryInt32_t memoryClock;       //!< Memory clock in MHz
     dcgmStatSummaryInt32_t smClock;           //!< SM clock in MHz
 
-    int numXidCriticalErrors;          //!< Number of valid entries in xidCriticalErrorsTs
-    long long xidCriticalErrorsTs[10]; //!< Timestamps of the critical XID errors that occurred
+    int numXidCriticalErrors;                         //!< Number of valid entries in xidCriticalErrorsTs
+    long long xidCriticalErrorsTs[DCGM_MAX_XID_INFO]; //!< Timestamps of the critical XID errors that occurred
 
     int numComputePids;                                          //!< Count of computePids entries that are valid
     dcgmProcessUtilInfo_t computePidInfo[DCGM_MAX_PID_INFO_NUM]; //!< List of compute processes that ran during the job
@@ -2348,6 +2415,13 @@ typedef struct
     char info[1024];             //!< Information details returned from the test, if any
 } dcgmDiagTestResult_v2;
 
+#define DCGM_MAX_ERRORS 5
+typedef struct
+{
+    dcgmDiagResult_t status;                       //!< The result of the test
+    dcgmDiagErrorDetail_v2 error[DCGM_MAX_ERRORS]; //!< The error message and error code, if any
+    char info[DCGM_ERR_MSG_LENGTH];                //!< Information details returned from the test, if any
+} dcgmDiagTestResult_v3;
 
 /**
  * Diagnostic per gpu tests - fixed indices for dcgmDiagResponsePerGpu_t.results[]
@@ -2394,6 +2468,13 @@ typedef struct
     dcgmDiagTestResult_v2 results[DCGM_PER_GPU_TEST_COUNT_V8]; //!< Array with a result for each per-gpu test
 } dcgmDiagResponsePerGpu_v4;
 
+typedef struct
+{
+    unsigned int gpuId;                                        //!< ID for the GPU this information pertains
+    unsigned int hwDiagnosticReturn;                           //!< Per GPU hardware diagnostic test return code
+    dcgmDiagTestResult_v3 results[DCGM_PER_GPU_TEST_COUNT_V8]; //!< Array with a result for each per-gpu test
+} dcgmDiagResponsePerGpu_v5;
+
 /**
  * Per gpu response structure v3
  *
@@ -2426,6 +2507,27 @@ typedef enum dcgmSoftwareTest_enum
 
 #define DCGM_DEVICE_ID_LEN 5
 #define DCGM_VERSION_LEN   12
+
+/**
+ * Global diagnostics result structure v9
+ *
+ * Since DCGM 3.3
+ */
+typedef struct
+{
+    unsigned int version;           //!< version number (dcgmDiagResult_version)
+    unsigned int gpuCount;          //!< number of valid per GPU results
+    unsigned int levelOneTestCount; //!< number of valid levelOne results
+
+    dcgmDiagTestResult_v3 levelOneResults[LEVEL_ONE_MAX_RESULTS];    //!< Basic, system-wide test results.
+    dcgmDiagResponsePerGpu_v5 perGpuResponses[DCGM_MAX_NUM_DEVICES]; //!< per GPU test results
+    dcgmDiagErrorDetail_v2 systemError;                              //!< System-wide error reported from NVVS
+    char devIds[DCGM_MAX_NUM_DEVICES][DCGM_DEVICE_ID_LEN];           //!< The SKU device id for each GPU
+    char devSerials[DCGM_MAX_NUM_DEVICES][DCGM_MAX_STR_LENGTH];      //!< Serial for the device
+    char dcgmVersion[DCGM_VERSION_LEN];                              //!< A string representing DCGM's version
+    char driverVersion[DCGM_MAX_STR_LENGTH];                         //!< A string representing the driver version
+    char _unused[596];                                               //!< No longer used
+} dcgmDiagResponse_v9;
 
 /**
  * Global diagnostics result structure v8
@@ -2465,9 +2567,14 @@ typedef struct
 } dcgmDiagResponse_v7;
 
 /**
- * Typedef for \ref dcgmDiagResponse_v8
+ * Typedef for \ref dcgmDiagResponse_v9
  */
-typedef dcgmDiagResponse_v8 dcgmDiagResponse_t;
+typedef dcgmDiagResponse_v9 dcgmDiagResponse_t;
+
+/**
+ * Version 9 for \ref dcgmDiagResponse_v9
+ */
+#define dcgmDiagResponse_version9 MAKE_DCGM_VERSION(dcgmDiagResponse_v9, 9)
 
 /**
  * Version 8 for \ref dcgmDiagResponse_v8
@@ -2482,7 +2589,7 @@ typedef dcgmDiagResponse_v8 dcgmDiagResponse_t;
 /**
  * Latest version for \ref dcgmDiagResponse_t
  */
-#define dcgmDiagResponse_version dcgmDiagResponse_version8
+#define dcgmDiagResponse_version dcgmDiagResponse_version9
 
 /**
  * Represents level relationships within a system between two GPUs
@@ -2906,6 +3013,7 @@ typedef enum
     DcgmModuleIdConfig     = 6, //!< Config Module
     DcgmModuleIdDiag       = 7, //!< GPU Diagnostic Module
     DcgmModuleIdProfiling  = 8, //!< Profiling Module
+    DcgmModuleIdSysmon     = 9, //!< System Monitoring Module
 
     DcgmModuleIdCount //!< Always last. 1 greater than largest value above
 } dcgmModuleId_t;
@@ -2959,14 +3067,13 @@ typedef dcgmModuleGetStatuses_v1 dcgmModuleGetStatuses_t;
  */
 typedef struct
 {
-    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version1 */
-    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
-    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
-    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
-    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
-    unsigned int denyListCount;     /*!< IN: Number of modules in denyList[] */
-    dcgmModuleId_t denyList[DcgmModuleIdCount]; /* IN: IDs of modules to add to the denylist */
-    unsigned int unused;                        /*!< IN: Unused. Set to 0. Aligns structure to 8-bytes */
+    unsigned int version;                     /*!< Version number. Use dcgmStartEmbeddedV2Params_version1 */
+    dcgmOperationMode_t opMode;               /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;                  /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;                      /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity;           /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int denyListCount;               /*!< IN: Number of modules in denyList[] */
+    unsigned int denyList[DcgmModuleIdCount]; /* IN: IDs of modules to add to the denylist */
 } dcgmStartEmbeddedV2Params_v1;
 
 /**
@@ -2981,15 +3088,14 @@ typedef struct
  */
 typedef struct
 {
-    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version2 */
-    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
-    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
-    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
-    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
-    unsigned int denyListCount;     /*!< IN: Number of modules to be added to the denylist in denyList[] */
-    const char *serviceAccount;     /*!< IN: Service account for unprivileged processes */
-    dcgmModuleId_t denyList[DcgmModuleIdCount]; /*!< IN: IDs of modules to be added to the denylist */
-    char _padding[4];                           /*!< IN: Unused. Aligns the struct to 8 bytes. */
+    unsigned int version;                     /*!< Version number. Use dcgmStartEmbeddedV2Params_version2 */
+    dcgmOperationMode_t opMode;               /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;                  /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;                      /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity;           /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int denyListCount;               /*!< IN: Number of modules to be added to the denylist in denyList[] */
+    const char *serviceAccount;               /*!< IN: Service account for unprivileged processes */
+    unsigned int denyList[DcgmModuleIdCount]; /*!< IN: IDs of modules to be added to the denylist */
 } dcgmStartEmbeddedV2Params_v2;
 
 /**

@@ -231,8 +231,9 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
         "flags");
     TCLAP::ValueArg<int> gpuId("", "gpuid", "The GPU ID to query.", false, 0, "gpuId", cmd);
     TCLAP::ValueArg<int> groupId("g", "group", "The group ID to query.", false, DCGM_GROUP_ALL_GPUS, "groupId", cmd);
+    TCLAP::ValueArg<int> cpuId("", "cpuid", "The CPU ID to query.", false, 0, "cpuId", cmd);
     TCLAP::SwitchArg verbose("v", "verbose", "Display policy information per GPU.", cmd, false);
-    TCLAP::SwitchArg getList("l", "list", "List all GPUs discovered on the host.", false);
+    TCLAP::SwitchArg getList("l", "list", "List all GPUs and NVIDIA CPUs discovered on the host.", false);
     TCLAP::SwitchArg computeInstances(
         "c", "compute-hierarchy", "List all of the gpu instances and compute instances", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN");
@@ -251,6 +252,7 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
 
     helpOutput.addToGroup("2", &hostAddress);
     helpOutput.addToGroup("2", &getInfo);
+    helpOutput.addToGroup("2", &cpuId);
     helpOutput.addToGroup("2", &groupId);
     helpOutput.addToGroup("2", &verbose);
 
@@ -261,8 +263,9 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     // Check for negative (invalid) inputs
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(gpuId, "gpuid");
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
+    CHECK_TCLAP_ARG_NEGATIVE_VALUE(cpuId, "cpuid");
 
-    if (groupId.isSet() && gpuId.isSet())
+    if (groupId.isSet() && (gpuId.isSet() || cpuId.isSet()))
     {
         throw TCLAP::CmdLineParseException("Both GPU and Group specified at command line");
     }
@@ -288,6 +291,10 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     {
         result
             = QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet()).Execute();
+    }
+    else if (cpuId.isSet())
+    {
+        result = QueryCpuInfo(hostAddress.getValue(), cpuId.getValue(), getInfo.getValue()).Execute();
     }
     else if (getInfo.isSet())
     {
@@ -571,7 +578,7 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
     TCLAP::ValueArg<std::string> addDevice(
         "a",
         "add",
-        "Add device(s) to group. (csv gpuIds or entityIds simlar to gpu:0, instance:1, compute_instance:2, nvswitch:994)",
+        "Add device(s) to group. (csv gpuIds or entityIds simlar to gpu:0, instance:1, compute_instance:2, nvswitch:994, cpu:3, core:4)",
         false,
         "",
         "entityId");
@@ -1938,15 +1945,18 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
 
-    TCLAP::ValueArg<std::string> gpuId("i",
-                                       "gpu-id",
-                                       " The comma separated list of GPU/GPU-I/GPU-CI IDs to run the dmon on. "
-                                       "Default is -1 which runs for all supported GPU. Run dcgmi discovery -c to "
-                                       "check list of available GPU entities",
-                                       false,
-                                       "-1",
-                                       "gpuId",
-                                       cmd);
+    TCLAP::ValueArg<std::string> entityIds("i",
+                                           "entity-id",
+                                           " Comma-separated list of entities to run the dmon on. "
+                                           "Default is -1 which runs for all supported GPU. Run dcgmi discovery -c to "
+                                           "check list of available GPU entities",
+                                           false,
+                                           "-1",
+                                           "entityId",
+                                           cmd);
+
+    // Alias
+    TCLAP::ValueArg<std::string> gpuIds("", "gpu-id", " DEPRECATED Alias for --entity-id. ", false, "-1", "gpuId", cmd);
 
     TCLAP::ValueArg<std::string> groupId(
         "g", "group-id", " The group to query on the specified host.", false, "-1", "groupId", cmd);
@@ -1971,7 +1981,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     // Set help output information
     helpOutput.addDescription("dmon -- Used to monitor GPUs and their stats.");
-    helpOutput.addToGroup("1", &gpuId);
+    helpOutput.addToGroup("1", &entityIds);
     helpOutput.addToGroup("1", &groupId);
     helpOutput.addToGroup("1", &fieldGroupId);
     helpOutput.addToGroup("1", &fieldId);
@@ -1989,10 +1999,28 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     cmd.parse(argc, argv);
 
-    if (groupId.isSet() && gpuId.isSet())
+    std::string entityIdsStr;
+
+    if (gpuIds.isSet())
     {
-        throw TCLAP::CmdLineParseException(
-            "Both gpu-id and group-id are given. Only one of the options must be present");
+        std::string deprecationMsg = "--gpu-id is a deprecated alias for --entity-id. Please use --entity-id";
+        if (entityIds.isSet())
+        {
+            throw TCLAP::CmdLineParseException(deprecationMsg);
+        }
+
+        std::cerr << deprecationMsg << std::endl; // We want to flush immediately
+        entityIdsStr = gpuIds.getValue();
+    }
+    else
+    {
+        entityIdsStr = entityIds.getValue();
+    }
+
+
+    if (groupId.isSet() && (entityIds.isSet() || gpuIds.isSet()))
+    {
+        throw TCLAP::CmdLineParseException("Only one of --entity-id and --group-id can be provided");
     }
 
     if (fieldId.isSet() && fieldGroupId.isSet())
@@ -2002,7 +2030,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
     }
 
     if (list.isSet()
-        && (groupId.isSet() || gpuId.isSet() || fieldId.isSet() || fieldGroupId.isSet() || delay.isSet()
+        && (groupId.isSet() || entityIds.isSet() || fieldId.isSet() || fieldGroupId.isSet() || delay.isSet()
             || count.isSet()))
     {
         throw TCLAP::CmdLineParseException("Invalid parameters with list arg. Usage : dmon -l");
@@ -2011,7 +2039,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
     if (list.isSet())
     {
         return DeviceMonitor(hostAddress.getValue(),
-                             gpuId.getValue(),
+                             entityIdsStr,
                              groupId.getValue(),
                              fieldId.getValue(),
                              fieldGroupId.getValue(),
@@ -2034,7 +2062,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
     }
 
     return DeviceMonitor(hostAddress.getValue(),
-                         gpuId.getValue(),
+                         entityIdsStr,
                          groupId.getValue(),
                          fieldId.getValue(),
                          fieldGroupId.getValue(),
@@ -2072,24 +2100,45 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     xors.push_back(&resumeArg);
     cmd.xorAdd(xors);
 
-    /* A list of GPUs or a groupId could be provided. Otherwise, we assume all GPUs are desired */
-    TCLAP::ValueArg<std::string> gpuIds("i",
-                                        "gpu-id",
-                                        " The comma seperated list of GPU IDs to query. "
-                                        "Default is supported GPUs on the system. Run dcgmi discovery "
-                                        "-l to check list of GPUs available",
-                                        false,
-                                        "-1",
-                                        "gpuId",
-                                        cmd);
+    /* A list of entities or a groupId could be provided. Otherwise, we assume all GPUs are desired */
+    TCLAP::ValueArg<std::string> entityIds("i",
+                                           "entity-id",
+                                           " Comma-seperated list of entity IDs to query. "
+                                           "Default is supported GPUs on the system. Run dcgmi discovery "
+                                           "-l to check list of GPUs available",
+                                           false,
+                                           "-1",
+                                           "entityIds",
+                                           cmd);
+
+    // Alias
+    TCLAP::ValueArg<std::string> gpuIds("", "gpu-id", " DEPRECATED Alias for --entity-id. ", false, "-1", "gpuId", cmd);
     TCLAP::ValueArg<std::string> groupId(
         "g", "group-id", " The group of GPUs to query on the specified host.", false, "-1", "groupId", cmd);
 
     cmd.parse(argc, argv);
 
-    if (groupId.isSet() && gpuIds.isSet())
+    std::string entityIdsStr;
+
+    if (gpuIds.isSet())
     {
-        throw TCLAP::CmdLineParseException("Both GPU and group ID specified. Please use only one at a time");
+        std::string deprecationMsg = "--gpu-id is a deprecated alias for --entity-id. Please use --entity-id";
+        if (entityIds.isSet())
+        {
+            throw TCLAP::CmdLineParseException(deprecationMsg);
+        }
+
+        std::cerr << deprecationMsg << std::endl; // We want to flush immediately
+        entityIdsStr = gpuIds.getValue();
+    }
+    else
+    {
+        entityIdsStr = entityIds.getValue();
+    }
+
+    if (groupId.isSet() && (entityIds.isSet() || gpuIds.isSet()))
+    {
+        throw TCLAP::CmdLineParseException("Both entity and group IDs specified. Please use only one at a time");
     }
 
     if (pauseArg.isSet() && resumeArg.isSet())
@@ -2107,8 +2156,7 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     }
     else if (list.isSet())
     {
-        result = DcgmiProfileList(hostAddress.getValue(), gpuIds.getValue(), groupId.getValue(), json.getValue())
-                     .Execute();
+        result = DcgmiProfileList(hostAddress.getValue(), entityIdsStr, groupId.getValue(), json.getValue()).Execute();
     }
     else
     {
@@ -2150,11 +2198,9 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
 
-    std::vector<TCLAP::Arg *> xors;
     TCLAP::ValueArg<std::string> targetSeverity(
         "", "logging-severity", "Set logging severity", true, "", "targetSeverity", cmd);
     TCLAP::ValueArg<std::string> targetLogger("", "target-logger", loggerHelpMsg, false, "BASE", "targetLogger", cmd);
-    cmd.xorAdd(xors);
 
     cmd.parse(argc, argv);
 
@@ -2224,6 +2270,7 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     TCLAP::SwitchArg introspect("", "introspect", "View values (injected and non injected) in cache.", false);
     TCLAP::SwitchArg inject("", "inject", "Inject values into cache.", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
+
 
     TCLAP::SwitchArg pause("",
                            "pause",

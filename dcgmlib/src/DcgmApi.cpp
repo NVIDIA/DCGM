@@ -32,6 +32,7 @@
 #include "dcgm_nvswitch_structs.h"
 #include "dcgm_policy_structs.h"
 #include "dcgm_profiling_structs.h"
+#include "dcgm_sysmon_structs.h"
 #include <DcgmStringHelpers.h>
 
 #include <fmt/core.h>
@@ -2904,6 +2905,7 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                                  dcgmPolicyAction_t action,
                                  dcgmDiagResponse_t *response)
 {
+    dcgm_diag_msg_run_v7 msg7;
     dcgm_diag_msg_run_v6 msg6;
     dcgm_diag_msg_run_v5 msg5;
     dcgmReturn_t dcgmReturn;
@@ -2931,6 +2933,16 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version9:
+            memset(&msg7, 0, sizeof(msg7));
+            msg7.header.length        = sizeof(msg7);
+            msg7.header.version       = dcgm_diag_msg_run_version7;
+            msg7.diagResponse.version = dcgmDiagResponse_version9;
+            msg7.action               = action;
+            runDiag                   = &(msg7.runDiag);
+            header                    = &(msg7.header);
+            break;
+
         case dcgmDiagResponse_version8:
             memset(&msg6, 0, sizeof(msg6));
             msg6.header.length        = sizeof(msg6);
@@ -2976,10 +2988,14 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     // The diagnostic requires a lengthy timeout
     static const int EIGHT_HOURS_IN_MS = 28800000;
     // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(msg6), nullptr, EIGHT_HOURS_IN_MS);
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(msg7), nullptr, EIGHT_HOURS_IN_MS);
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version9:
+            memcpy(response, &msg7.diagResponse, sizeof(msg7.diagResponse));
+            break;
+
         case dcgmDiagResponse_version8:
             memcpy(response, &msg6.diagResponse, sizeof(msg6.diagResponse));
             break;
@@ -3550,6 +3566,41 @@ dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_
                    << " back. Return: " << msg.info.cmdRet;
 
     return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy)
+{
+    if (!cpuHierarchy)
+        return DCGM_ST_BADPARAM;
+
+    if (cpuHierarchy->version != dcgmCpuHierarchy_version1)
+        return DCGM_ST_VER_MISMATCH;
+
+    dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
+    sysmonMsg.header.length     = sizeof(sysmonMsg);
+    sysmonMsg.header.version    = dcgm_sysmon_msg_get_cpus_version;
+    sysmonMsg.header.moduleId   = DcgmModuleIdSysmon;
+    sysmonMsg.header.subCommand = DCGM_SYSMON_SR_GET_CPUS;
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &sysmonMsg.header, sizeof(sysmonMsg));
+
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        log_error("Received {}", errorString(dcgmReturn));
+        return dcgmReturn;
+    }
+
+    for (unsigned int node = 0; node < sysmonMsg.cpuCount; node++)
+    {
+        const auto &nodeObject = sysmonMsg.cpus[node];
+
+        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
+        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
+        cpuHierarchy->numCpus++;
+    }
+
+    return dcgmReturn;
 }
 
 static dcgmReturn_t tsapiEngineGetDeviceAttributes(dcgmHandle_t pDcgmHandle,
@@ -4995,8 +5046,7 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v2 &params)
                                                .logFile       = params.logFile,
                                                .severity      = params.severity,
                                                .denyListCount = params.denyListCount,
-                                               .denyList      = {},
-                                               .unused        = 0 };
+                                               .denyList      = {} };
 
     memcpy(proxyParams.denyList, params.denyList, sizeof(proxyParams.denyList));
 
@@ -5424,6 +5474,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown()
 #define MODULE_CONFIG_NAME     "Config"
 #define MODULE_DIAG_NAME       "Diag"
 #define MODULE_PROFILING_NAME  "Profiling"
+#define MODULE_SYSMON_NAME     "SysMon"
 
 dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
 {
@@ -5437,7 +5488,7 @@ dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
         { DcgmModuleIdVGPU, MODULE_VGPU_NAME },           { DcgmModuleIdIntrospect, MODULE_INTROSPECT_NAME },
         { DcgmModuleIdHealth, MODULE_HEALTH_NAME },       { DcgmModuleIdPolicy, MODULE_POLICY_NAME },
         { DcgmModuleIdConfig, MODULE_CONFIG_NAME },       { DcgmModuleIdDiag, MODULE_DIAG_NAME },
-        { DcgmModuleIdProfiling, MODULE_PROFILING_NAME },
+        { DcgmModuleIdProfiling, MODULE_PROFILING_NAME }, { DcgmModuleIdSysmon, MODULE_SYSMON_NAME },
     };
 
     assert(moduleNames.size() == DcgmModuleIdCount);

@@ -70,10 +70,10 @@ public:
     const std::vector<dcgmDiagCustomStats_t> &GetCustomStats() const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagEvent_t> &GetErrors() const;
+    const std::vector<dcgmDiagErrorDetail_v2> &GetErrors() const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagEvent_t> &GetInfo() const;
+    const std::vector<dcgmDiagErrorDetail_v2> &GetInfo() const;
 
     /*****************************************************************************/
     const std::vector<dcgmDiagSimpleResult_t> &GetResults() const;
@@ -105,8 +105,8 @@ private:
     void *m_userData;
     std::string m_pluginName;
     std::vector<dcgmDiagCustomStats_t> m_customStats;
-    std::vector<dcgmDiagEvent_t> m_errors;
-    std::vector<dcgmDiagEvent_t> m_info;
+    std::vector<dcgmDiagErrorDetail_v2> m_errors;
+    std::vector<dcgmDiagErrorDetail_v2> m_info;
     std::vector<dcgmDiagSimpleResult_t> m_results;
     std::vector<unsigned short> m_statFieldIds;
     std::string m_testGroup;

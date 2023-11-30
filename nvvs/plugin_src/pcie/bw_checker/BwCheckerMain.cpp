@@ -148,7 +148,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         // coverity[leaked_storage] this macro can exit the function without freeing h_buffer
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
         cudaEventRecord(start[i]);
 
@@ -160,7 +160,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         cudaEventRecord(stop[i]);
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
 
         cudaEventElapsedTime(&time_ms, start[i], stop[i]);
@@ -172,7 +172,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         // H2D bandwidth test
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
         cudaEventRecord(start[i]);
 
@@ -183,7 +183,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         cudaEventRecord(stop[i]);
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
 
         cudaEventElapsedTime(&time_ms, start[i], stop[i]);
@@ -195,7 +195,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         // Bidirectional
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
         cudaEventRecord(start[i]);
 
@@ -208,7 +208,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         cudaEventRecord(stop[i]);
         if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
-            return;
+            goto cleanup;
         }
 
         cudaEventElapsedTime(&time_ms, start[i], stop[i]);
@@ -220,6 +220,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
 
     AppendResultsToJson(results, root);
 
+cleanup:
     // Done, cleaning up
     if (pinned)
     {
@@ -270,64 +271,72 @@ void AppendResultsToJson(std::vector<bwTestResult_t> &results, Json::Value &root
 
 int main(int argc, char *argv[])
 {
-    TCLAP::CmdLine cmd(D2H_NAME, ' ', D2H_VERSION);
-    TCLAP::ValueArg<std::string> gpuIdsArg(
-        "", "gpuIds", "The list of GPU ids whose bandwidth should be checked", true, "", "GPU list", cmd);
-
-    TCLAP::ValueArg<std::string> pciBusIds("",
-                                           "pciBusIds",
-                                           "The list of CUDA device ids whose bandwidth should be checked",
-                                           true,
-                                           "",
-                                           "CUDA device id list",
-                                           cmd);
-
-    TCLAP::ValueArg<unsigned int> iterations(
-        "", "iterations", "The number of times to perform the copy.", false, 1, "iteration count", cmd);
-
-    TCLAP::ValueArg<unsigned int> intsPerCopy(
-        "", "ints-per-copy", "The number of integers to copy per test.", false, 10000000, "ints per copy", cmd);
-
-    TCLAP::ValueArg<bool> pinned("p",
-                                 "pinned",
-                                 "Use pinned memory (1 to Enable, 0 to Disable)",
-                                 false,
-                                 0,
-                                 "0/1",
-                                 cmd); // Option 1 for set command-line
-
-
-    cmd.parse(argc, argv);
-
-    std::vector<std::string> gpuIdArray    = dcgmTokenizeString(gpuIdsArg.getValue(), ",");
-    std::vector<std::string> pciBusIdArray = dcgmTokenizeString(pciBusIds.getValue(), ",");
-    std::vector<unsigned int> gpuIds;
-
-    Json::Value root;
-    int errorIndex = 0;
-
-    if (gpuIdArray.size() != pciBusIdArray.size())
+    try
     {
-        root[BWC_JSON_ERRORS][errorIndex] = fmt::format(
-            "We must have the same number of GPU ids and CUDA device ids, but we have {} and {} respectively",
-            gpuIdArray.size(),
-            pciBusIdArray.size());
-    }
-    else
-    {
-        std::vector<dcgmGpuPciIdPair_t> pairs;
-        dcgmGpuPciIdPair_t pair;
-        for (size_t i = 0; i < pciBusIdArray.size(); i++)
+        TCLAP::CmdLine cmd(D2H_NAME, ' ', D2H_VERSION);
+        TCLAP::ValueArg<std::string> gpuIdsArg(
+            "", "gpuIds", "The list of GPU ids whose bandwidth should be checked", true, "", "GPU list", cmd);
+
+        TCLAP::ValueArg<std::string> pciBusIds("",
+                                               "pciBusIds",
+                                               "The list of CUDA device ids whose bandwidth should be checked",
+                                               true,
+                                               "",
+                                               "CUDA device id list",
+                                               cmd);
+
+        TCLAP::ValueArg<unsigned int> iterations(
+            "", "iterations", "The number of times to perform the copy.", false, 1, "iteration count", cmd);
+
+        TCLAP::ValueArg<unsigned int> intsPerCopy(
+            "", "ints-per-copy", "The number of integers to copy per test.", false, 10000000, "ints per copy", cmd);
+
+        TCLAP::ValueArg<bool> pinned("p",
+                                     "pinned",
+                                     "Use pinned memory (1 to Enable, 0 to Disable)",
+                                     false,
+                                     0,
+                                     "0/1",
+                                     cmd); // Option 1 for set command-line
+
+
+        cmd.parse(argc, argv);
+
+        std::vector<std::string> gpuIdArray    = dcgmTokenizeString(gpuIdsArg.getValue(), ",");
+        std::vector<std::string> pciBusIdArray = dcgmTokenizeString(pciBusIds.getValue(), ",");
+        std::vector<unsigned int> gpuIds;
+
+        Json::Value root;
+        int errorIndex = 0;
+
+        if (gpuIdArray.size() != pciBusIdArray.size())
         {
-            pair.gpuId    = std::stoi(gpuIdArray[i]);
-            pair.pciBusId = pciBusIdArray[i];
-            pairs.push_back(pair);
+            root[BWC_JSON_ERRORS][errorIndex] = fmt::format(
+                "We must have the same number of GPU ids and CUDA device ids, but we have {} and {} respectively",
+                gpuIdArray.size(),
+                pciBusIdArray.size());
+        }
+        else
+        {
+            std::vector<dcgmGpuPciIdPair_t> pairs;
+            dcgmGpuPciIdPair_t pair;
+            for (size_t i = 0; i < pciBusIdArray.size(); i++)
+            {
+                pair.gpuId    = std::stoi(gpuIdArray[i]);
+                pair.pciBusId = pciBusIdArray[i];
+                pairs.push_back(pair);
+            }
+
+            TestHostDeviceBandwidth(pairs, intsPerCopy.getValue(), iterations.getValue(), pinned.getValue(), root);
         }
 
-        TestHostDeviceBandwidth(pairs, intsPerCopy.getValue(), iterations.getValue(), pinned.getValue(), root);
+        // Write Json output to stdout
+        std::cout << root.toStyledString() << std::endl;
     }
-
-    // Write Json output to stdout
-    std::cout << root.toStyledString() << std::endl;
+    catch (TCLAP::ArgException &e)
+    {
+        std::cerr << "Argument parsing exception: " << e.error() << std::endl;
+        return 1;
+    }
 }
 #endif // __BW_CHECKER_TESTS__

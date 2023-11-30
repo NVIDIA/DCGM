@@ -1697,6 +1697,10 @@ bool DcgmCacheManager::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupI
 
             return true;
 
+        case DCGM_FE_CPU:
+            return true;
+        case DCGM_FE_CPU_CORE:
+            return true;
         case DCGM_FE_NONE:
             return true;
 
@@ -5738,7 +5742,7 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
         }
         else /* NVML_SUCCESS */
         {
-            log_debug("fieldId {} got good value", fv->fieldId);
+            log_debug("fieldId {} got good value type {}, value {:#X}", fv->fieldId, fv->valueType, fv->value.ullVal);
 
             /* Store an appropriate error for the destination type */
             switch (fieldMeta[i]->fieldType)
@@ -7704,6 +7708,30 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
 
             AppendEntityInt64(threadCtx, (long long)tempUint, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_MEMORY_TEMP:
+        {
+            unsigned int temp;
+            nvmlFieldValue_t value = {};
+            value.fieldId          = NVML_FI_DEV_MEMORY_TEMP;
+
+            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                 : nvmlDeviceGetFieldValues(nvmlDevice, 1, &value);
+            if (watchInfo)
+                watchInfo->lastStatus = nvmlReturn;
+            if ((nvmlReturn != NVML_SUCCESS) || (value.value.uiVal > 200))
+            {
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            /* Ignore value.valueType, WaR for nvml setting type as double */
+            /* See nvbugs/4300930 affecting r545 */
+            temp = value.value.uiVal;
+            AppendEntityInt64(threadCtx, temp, 0, now, expireTime);
+
             break;
         }
 

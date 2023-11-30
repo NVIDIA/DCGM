@@ -274,8 +274,8 @@ DCGM_PUBLIC_API dcgmReturn_t dcgmModuleIdToName(dcgmModuleId_t id, char const **
 /***************************************************************************************************/
 /** @defgroup DCGMAPI_SYS System
  *  @{
- *  This chapter describes the APIs used to identify set of GPUs on the node, grouping functions to
- *  provide mechanism to operate on a group of GPUs, and status management APIs in
+ *  This chapter describes the APIs used to identify entities on the node, grouping functions to
+ *  provide mechanism to operate on a group of entities, and status management APIs in
  *  order to get individual statuses for each operation. The APIs in System module can be
  *  broken down into following categories:
  */
@@ -404,6 +404,23 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuInstanceHierarchy(dcgmHandle_t dcgmHandle
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v3 *linkStatus);
+
+
+/**
+ * List supported CPUs and their cores present on the system
+ *
+ * This and other CPU APIs only support datacenter NVIDIA CPUs
+ *
+ * @param dcgmHandle   IN: DCGM Handle
+ * @param cpuHierarchy OUT: Structure where the CPUs and their associated cores will be enumerated
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                if the call was successful.
+ *        - \ref DCGM_ST_NOT_SUPPORTED     if the device is unsupported
+ *        - \ref DCGM_ST_MODULE_NOT_LOADED if the sysmon module could not be loaded
+ *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy);
 
 /** @} */
 

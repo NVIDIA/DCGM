@@ -542,10 +542,35 @@ def test_dcgm_prof_pause_resume_values(handle, gpuIds):
     dcgmGroup.samples.UnwatchFields(fieldGroup)
     fieldGroup.Delete()
 
+def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs = None):
+    '''
+    Test that dcgmproftester passes for non-validation run.
+    '''
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
+
+    helper_check_profiling_environment(dcgmGroup)
+
+    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+
+    supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
+
+    # Just test the first GPU of our SKU. Other tests will cover multiple SKUs
+    useGpuIds = [gpuIds[0], ]
+
+    args = ["-d", "5.0", "-r", "0.25", "-t", fieldIdsStr]
+
+    if extraArgs is not None:
+        args.extend(extraArgs)
+
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
+    app.wait()
+
 def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, extraArgs = None):
     '''
-    Test that we can retrieve a valid FV for a profiling field or fields
-    immediately after watching
+    Test that dcgmproftester passes for validation run.
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -571,13 +596,13 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, extraArgs = None):
 
 def helper_test_dpt_field_id(handle, gpuIds, fieldId, extraArgs = None):
     '''
-    Test that we can retrieve a valid FV for a profiling field immediately after watching
+    Test that dcgmproftester passes.
     '''
     helper_test_dpt_field_ids(handle, gpuIds, str(fieldId), extraArgs)
 
 def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, extraArgs = None):
     '''
-    Test that we can retrieve a valid FV for a profiling field immediately after watching
+    Test that dcgmproftester passes in fast mode.
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -644,6 +669,15 @@ def helper_test_dpt_help(handle, gpuIds):
     app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
+@test_utils.run_only_if_gpus_available()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgmproftester_non_validation(handle, gpuIds):
+    helper_test_dpt_sync_count(handle, gpuIds, str(dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE))
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -718,6 +752,15 @@ def test_dcgmproftester_fp64_active(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp32_active(handle, gpuIds):
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE)
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
+@test_utils.run_only_if_gpus_available()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgmproftester_fp32_active_cublas(handle, gpuIds):
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, ["--cublas"])
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()

@@ -141,14 +141,15 @@ def test_dcgm_agent_get_values_for_fields(handle, gpuIds):
 
 
 @test_utils.run_with_embedded_host_engine()
-def test_dcgm_engine_watch_field_values(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_engine_watch_field_values(handle, gpuIds):
     """
     Verifies that cache manager can watch a field value
     """
     
     # Watch field so we can fetch it
     fieldId = dcgm_fields.DCGM_FI_DEV_NAME
-    gpuId = 0
+    gpuId = gpuIds[0]
     
     try:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
@@ -166,14 +167,15 @@ def test_dcgm_engine_watch_field_values(handle):
     assert numWatchersAfter == numWatchersBefore + 1, "Expected 1 extra watcher. Before %d. After %d" % (numWatchersBefore, numWatchersAfter)
     
 @test_utils.run_with_embedded_host_engine()
-def test_dcgm_engine_unwatch_field_value(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_engine_unwatch_field_value(handle, gpuIds):
     """
     Verifies that the cache manager can unwatch a field value
     """
     
     # Watch field so we can fetch it
     fieldId = dcgm_fields.DCGM_FI_DEV_NAME
-    gpuId = 0
+    gpuId = gpuIds[0]
 
     ret = dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuId, fieldId, 10000000, 86400.0, 0)
     assert(ret == dcgm_structs.DCGM_ST_OK)

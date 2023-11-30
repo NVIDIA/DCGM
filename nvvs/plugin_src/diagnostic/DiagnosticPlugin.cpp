@@ -200,6 +200,12 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
     // didn't clean up after itself.
     for (int i = 0; i < gpuInfo.numGpus; i++)
     {
+        if (gpuInfo.gpus[i].status == DcgmEntityStatusFake || gpuInfo.gpus[i].attributes.identifiers.pciDeviceId == 0)
+        {
+            log_debug("Skipping cuda init for fake gpu {}", gpuInfo.gpus[i].gpuId);
+            continue;
+        }
+
         int deviceIdx = 0;
 
         cudaSt = cudaDeviceGetByPCIBusId(&deviceIdx, m_gpuInfo.gpus[i].attributes.identifiers.pciBusId);

@@ -126,6 +126,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
     arguments->m_parameters.m_targetMaxValue    = m_targetMaxValue.Value();
     arguments->m_parameters.m_noDcgmValidation  = m_noDcgmValidation.Value();
     arguments->m_parameters.m_dvsOutput         = m_dvsOutput.Value();
+    arguments->m_parameters.m_cublas            = m_cublas.Value();
 
     double minValue;
     double maxValue;
@@ -477,6 +478,7 @@ dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
             m_targetMaxValue.ArgReset();
             m_noDcgmValidation.ArgReset();
             m_dvsOutput.ArgReset();
+            m_cublas.ArgReset();
             m_fieldIds.ArgReset();
             m_gpuIdString.ArgReset();
             m_modeString.ArgReset();

@@ -78,8 +78,8 @@ void RetrieveResults(dcgmDiagResults_t *results, void *userData)
     if (result == 0 || strcmp(result, "pass"))
     {
         /* fail normally */
-        results->errors[0].errorCode = 1;
-        results->errors[0].gpuId     = g_gpuIds[0];
+        results->errors[0].code  = 1;
+        results->errors[0].gpuId = g_gpuIds[0];
         snprintf(results->errors[0].msg, sizeof(results->errors[0].msg), "we failed hard bruh");
         results->numErrors = 1;
     }

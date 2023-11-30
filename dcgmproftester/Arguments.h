@@ -62,6 +62,7 @@ public:
         bool m_report { true };    // whether to produce report
         bool m_validate { false }; // whether to validate
         bool m_fast { false };     // whether to finish as soon as possible
+        bool m_cublas { false };   // whether to use cublas.
 
         unsigned int m_fieldId; // <value> --- ---  profiling FieldId
     } m_parameters;
@@ -292,6 +293,7 @@ private:
     Argument_t<bool> m_targetMaxValue;
     Argument_t<bool> m_noDcgmValidation;
     Argument_t<bool> m_dvsOutput;
+    Argument_t<bool> m_cublas;
     Argument_t<std::string> m_fieldIds;
     Argument_t<std::string> m_gpuIdString;
     Argument_t<bool> m_reset;
@@ -495,6 +497,15 @@ public:
                       m_shortMap,
                       m_longMap,
                       [](decltype(m_dvsOutput) &arg) { return; })
+        , m_cublas(m_cmd,
+                   false,
+                   false,
+                   std::string(""),
+                   std::string("cublas"),
+                   std::string("Use CUBLAS for FP16, FP32, FP64 tests"),
+                   m_shortMap,
+                   m_longMap,
+                   [](decltype(m_cublas) &arg) { return; })
         ,
 
 #define xstr(s) str(s)
@@ -570,7 +581,7 @@ public:
         ,
 
         m_syncCount(m_cmd,
-                    0,
+                    1,
                     false,
                     std::string(""),
                     std::string("sync-count"),

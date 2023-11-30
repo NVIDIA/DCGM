@@ -38,6 +38,9 @@ import os
 import pprint
 from sys import stdout
 import json
+import subprocess
+import re
+from contextlib import closing
 
 def _run_dcgmi_command(args):
     ''' run a command then return (retcode, stdout_lines, stderr_lines) '''
@@ -259,6 +262,29 @@ def test_dcgmi_group(handle, gpuIds, instanceIds, ciIds):
             ["group", "-g", groupId, "-a", "%d/%d/%d" % (129, instanceIds[0], ciIds[0])],  # Can't add a CI that doesn't exist
             ["group", "-g", groupId, "-r", "%d/%d/%d" % (129, instanceIds[0], ciIds[0])],  # Can't remove a CI that doesn't exist
     ])
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_live_cpus()
+def test_dcgmi_cpu_group(handle, gpuIds, cpuIds):
+    gpuStr = ''
+    cpuStr = ''
+    for gpuId in gpuIds:
+        if gpuStr == '':
+            gpuStr = str(gpuId)
+        else:
+            gpuStr = gpuStr + ",%s" % str(gpuId)
+
+    for cpuId in cpuIds:
+        if cpuStr == '':
+            cpuStr = "cpu:%s" % str(cpuId)
+        else:
+            cpuStr = cpuStr + ",cpu:%s" % str(cpuId)
+    entityStr = "%s,%s" % (gpuStr, cpuStr)
+    createGroupArgs = ["group", "-c", "cpu_test_group", "-a", entityStr ]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(createGroupArgs)
+    _assert_valid_dcgmi_results(createGroupArgs, retValue, stdout_lines, stderr_lines)
  
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
@@ -425,17 +451,31 @@ def test_dcgmi_discovery(handle, gpuIds):
     """
     ## keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["discovery", "--list", ""],                  # list gpus
-            ["discovery", "--info", "aptc"],              # check group info
+            ["discovery", "--list", ""],                   # list gpus
+            ["discovery", "--info", "aptc"],               # check group info
             ["discovery", "--info", "aptc", "--verbose"]  # checl group info verbose
     ])
     
     ## keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["discovery", "--info", "a", "-g", "2"],               # Cant check info on group that doesn't exist
+            ["discovery", "--info", "a", "-g", "2"],              # Cant check info on group that doesn't exist
             ["discovery", "--info", "a", "--gpuid", "123"]        # Cant check info on gpu that doesn't exist
     ])
-     
+
+@test_utils.run_only_on_numa_systems()
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus()
+def test_dcgmi_discovery_cpus(handle, gpuIds):
+    """
+    Test DCGMI discovery 
+    """
+    ## keep args in this order. Changing it may break the test
+    _test_valid_args([
+            ["discovery", "--list", ""],
+            ["discovery", "--info", "a", "--cpuid", "0"]     # check cpu can be specified
+    ])
+
 @test_utils.run_with_persistence_mode_on()
 @test_utils.run_with_standalone_host_engine(320)
 @test_utils.run_with_initialized_client()
@@ -662,7 +702,9 @@ def helper_make_switch_string(switchId):
 @test_utils.run_with_injection_nvswitches(2)
 @test_utils.run_with_injection_gpu_instances(2)
 @test_utils.run_with_injection_gpu_compute_instances(2)
-def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
+@test_utils.run_with_injection_cpus(1)
+@test_utils.run_with_injection_cpu_cores(1)
+def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds, cpuIds, coreIds):
     """
     Test dcgmi to display dmon values
     """
@@ -680,6 +722,7 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
     allSwitchesCsv = ",".join(map(helper_make_switch_string,switchIds))
 
     switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT
+    cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
 
     #Inject a value for a field for each switch so we can retrieve it
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -694,30 +737,30 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
         ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_LINK, linkId, field)
 
     _test_valid_args([
-        ["dmon", "-e", "150,155","-c","1"],                          # run the dmon for default gpu group.
-        ["dmon", "-e", "150,155","-c","1","-g",gpuGroupId],          # run the dmon for a specified gpu group
-        ["dmon", "-e", "150,155","-c","1","-g",'all_gpus'],          # run the dmon for a specified group
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",'all_nvswitches'], # run the dmon for a specified group - Reenable after DCGM-413 is fixed
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",switchGroupId], # run the dmon for a specified group
-        ["dmon", "-e", "150,155","-c","1","-d","2000"],              # run the dmon for delay mentioned and default gpu group. 
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv], # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", "150,155","-c","1"],                                             # run the dmon for default gpu group.
+        ["dmon", "-e", "150,155","-c","1","-g",gpuGroupId],                             # run the dmon for a specified gpu group
+        ["dmon", "-e", "150,155","-c","1","-g",'all_gpus'],                             # run the dmon for a specified group
+        ["dmon", "-e", str(switchFieldId),"-c","1","-g",'all_nvswitches'],              # run the dmon for a specified group - Reenable after DCGM-413 is fixed
+        ["dmon", "-e", str(switchFieldId),"-c","1","-g",switchGroupId],                 # run the dmon for a specified group
+        ["dmon", "-e", "150,155","-c","1","-d","2000"],                                 # run the dmon for delay mentioned and default gpu group.
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv],                 # run the dmon for devices mentioned and mentioned delay.
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allInstancesCsv],
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allCisCsv],
         ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv + "," + allInstancesCsv + "," + allCisCsv],
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*"], # run the dmon for all GPUs via wildcard
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*"], # run the dmon for all GPU Instances via wildcards
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*/*"], # run the dmon for all Compute Instances via wildcards
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*,*/*,*/*/*"], # run the dmon for all entities via wildcards
-        ["dmon", "-e", str(switchFieldId),"-c","1","-d","2000","-i",allSwitchesCsv] # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*"],                        # run the dmon for all GPUs via wildcard
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*"],                      # run the dmon for all GPU Instances via wildcards
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*/*"],                    # run the dmon for all Compute Instances via wildcards
+        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*,*/*,*/*/*"],              # run the dmon for all entities via wildcards
+        ["dmon", "-e", str(switchFieldId),"-c","1","-d","2000","-i",allSwitchesCsv],    # run the dmon for devices mentioned and mentioned delay.
     ])
 
     #Run tests that take a gpuId as an argument
     for gpu in gpuIds:
         _test_valid_args([
-               ["dmon", "-e", "150","-c","1","-i",str(gpu)],                    # run the dmon for one gpu.
-               ["dmon", "-e", "150","-c","1","-i",'gpu:'+str(gpu)],             # run the dmon for one gpu, tagged as gpu:.
-               ["dmon", "-e", "150","-c","1","-i",str(gpu)],                    # run the dmon for mentioned devices and count value.
-               ["dmon", "-e", "150,155","-c","1","-i",str(gpu)]                 # run the dmon for devices mentioned, default delay and field values that are provided.
+               ["dmon", "-e", "150","-c","1","-i",str(gpu)],        # run the dmon for one gpu.
+               ["dmon", "-e", "150","-c","1","-i",'gpu:'+str(gpu)], # run the dmon for one gpu, tagged as gpu:.
+               ["dmon", "-e", "150","-c","1","-i",str(gpu)],        # run the dmon for mentioned devices and count value.
+               ["dmon", "-e", "150,155","-c","1","-i",str(gpu)],    # run the dmon for devices mentioned, default delay and field values that are provided.
         ])
     
     #Run tests that take a nvSwitch as an argument
@@ -729,19 +772,41 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds):
     hugeGpuCsv = ",".join(map(str,list(range(0, dcgm_structs.DCGM_MAX_NUM_DEVICES*2, 1))))
 
     _test_invalid_args([
-           ["dmon","-c","1"],                                                       # run without required fields.
-           ["dmon", "-e", "-150","-c","1","-i","1"],                                # run with invalid field id.
-           ["dmon", "-e", "150","-c","1","-i","-2"],                                # run with invalid gpu id.
-           ["dmon", "-e", "150","-c","1","-i","gpu:999"],                           # run with invalid gpu id.
-           ["dmon", "-e", "150","-c","1","-g","999"],                               # run with invalid group id.
-           ["dmon", "-i", hugeGpuCsv, "-e", "150", "-c", "1"],                      # run with invalid number of devices.
-           ["dmon", "-i", "instance:2000", "-e", "150", "-c", "1"],     # run with invalid gpu_i
-           ["dmon", "-i", "ci:2000", "-e", "150", "-c", "1"],                 # run with invalid gpu_ci
-           ["dmon", "-e", "150","f","0","-c","1","-i","0,1,765"],                   # run with invalid device id (non existing id).
-           ["dmon", "-e", "150","-c","-1","-i","1"],                                # run with invalid count value.
-           ["dmon", "-e", "150","-c","1","-i","1","-d","-1"],                       # run with invalid delay (negative value).
-           ["dmon", "-f", "-9","-c","1","-i","1","-d","10000"],                     # run with invalid field Id.
-           ["dmon", "-f", "150","-c", "1", "-i","0", "-d", "99" ]                   # run with invalid delay value.
+           ["dmon","-c","1"],                                                    # run without required fields.
+           ["dmon", "-e", "-150","-c","1","-i","1"],                             # run with invalid field id.
+           ["dmon", "-e", "150","-c","1","-i","-2"],                             # run with invalid gpu id.
+           ["dmon", "-e", "150","-c","1","-i","gpu:999"],                        # run with invalid gpu id.
+           ["dmon", "-e", "150","-c","1","-g","999"],                            # run with invalid group id.
+           ["dmon", "-i", hugeGpuCsv, "-e", "150", "-c", "1"],                   # run with invalid number of devices.
+           ["dmon", "-i", "instance:2000", "-e", "150", "-c", "1"],              # run with invalid gpu_i
+           ["dmon", "-i", "ci:2000", "-e", "150", "-c", "1"],                    # run with invalid gpu_ci
+           ["dmon", "-e", "150","f","0","-c","1","-i","0,1,765"],                # run with invalid device id (non existing id).
+           ["dmon", "-e", "150","-c","-1","-i","1"],                             # run with invalid count value.
+           ["dmon", "-e", "150","-c","1","-i","1","-d","-1"],                    # run with invalid delay (negative value).
+           ["dmon", "-f", "-9","-c","1","-i","1","-d","10000"],                  # run with invalid field Id.
+           ["dmon", "-f", "150","-c", "1", "-i","0", "-d", "99" ],               # run with invalid delay value.
+           ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-g", "0", "-c", "1"], # run dmon for CPUs and a group
+    ])
+
+    # Run tests that take several entities
+    entityStr = "%d,nvswitch:%d,cpu:%d,core:%d" % (gpuIds[0], switchIds[0], cpuIds[0], coreIds[0])
+    _test_valid_args([
+           ["dmon", "-e", "150,%s" % str(cpuFields), "-i", entityStr, "-c", "1"], # run dmon for CPUs and a group
+    ])
+
+@test_utils.run_only_on_numa_systems()
+@test_utils.run_with_standalone_host_engine()
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
+def test_dcgmi_dmon_cpu(handle, gpuIds):
+    cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
+
+    allGpusCsv = ",".join(map(str,gpuIds))
+    cpuGpuCsv = ",".join(["cpu:0", allGpusCsv])
+
+    _test_valid_args([
+        ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-c", "1"],   # run dmon for CPUs
+        ["dmon", "-e", str(cpuFields), "-i", cpuGpuCsv, "-c", "1"], # run dmon for CPUs and GPUs
     ])
 
 @test_utils.run_with_standalone_host_engine(20)
@@ -962,3 +1027,48 @@ def test_dcgmi_dmon_pause_resume(handle):
         ['test', '--pause'],
         ['test', '--resume'],
     ])
+
+
+@test_utils.run_with_logging_on()
+def test_dcgmi_settings_logging_severity():
+    if test_utils.loggingLevel != 'DEBUG':
+        test_utils.skip_test("Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
+
+    # Env var is automatically set in NvHostEngineApp
+    app = apps.NvHostEngineApp()
+    app.start(timeout=10)
+
+    contents = None
+
+    # Try for 5 seconds
+    for i in range(25):
+        time.sleep(0.2)
+        with closing(open(app.dcgm_trace_fname, encoding='utf-8')) as f:
+            # pylint: disable=no-member
+            contents = f.read()
+            logger.debug("Read %d bytes from %s" % (len(contents), app.dcgm_trace_fname))
+            if 'DEBUG' in contents:
+                break
+
+    set_severity_args = ['set', '--logging-severity', 'VERB']
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(set_severity_args)
+
+    assert retValue == 0, f'retValue = {retValue}, stdout={stdout_lines}'
+
+    passed = False
+
+    for i in range(25):
+        time.sleep(0.2)
+        with closing(open(app.dcgm_trace_fname, encoding='utf-8')) as f:
+            # pylint: disable=no-member
+            contents = f.read()
+            logger.debug("Read %d bytes from %s" % (len(contents), app.dcgm_trace_fname))
+            if 'VERB' in contents:
+                passed = True
+                break
+
+    # Cleaning up
+    app.terminate()
+    app.validate()
+
+    assert passed, "Unable to find 'VERB' in log file"

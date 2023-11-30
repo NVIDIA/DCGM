@@ -281,6 +281,43 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                  */
                 break;
 
+            case DCGM_FE_CPU:
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V2; bitIndex++)
+                {
+                    unsigned int bit = 1 << bitIndex;
+                    switch (bit)
+                    {
+                        case DCGM_HEALTH_WATCH_THERMAL:
+                            tmpRet = SetCpuThermal(entities[i].entityGroupId,
+                                                   entities[i].entityId,
+                                                   (systems & bit) ? true : false,
+                                                   watcher,
+                                                   updateInterval,
+                                                   maxKeepAge);
+                            break;
+                        case DCGM_HEALTH_WATCH_POWER:
+                            tmpRet = SetCpuPower(entities[i].entityGroupId,
+                                                 entities[i].entityId,
+                                                 (systems & bit) ? true : false,
+                                                 watcher,
+                                                 updateInterval,
+                                                 maxKeepAge);
+                            break;
+                        default: // ignore everything else for now
+                            break;
+                    }
+                    if (DCGM_ST_OK != tmpRet)
+                    {
+                        log_error("Error {} from bit {}, entity group {} entityId {}",
+                                  (int)tmpRet,
+                                  bit,
+                                  entities[i].entityGroupId,
+                                  entities[i].entityId);
+                        break; // exit on error
+                    }
+                }
+                break;
+
             default:
                 // NO-OP
                 break;
@@ -461,11 +498,31 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                     break;
                 case DCGM_HEALTH_WATCH_THERMAL:
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
+                    {
                         ret = MonitorThermal(entityGroupId, entityId, startTime, endTime, response);
+                        if (ret != DCGM_ST_OK)
+                        {
+                            break;
+                        }
+                    }
+                    if (bit & healthSystemsMask && entityGroupId == DCGM_FE_CPU)
+                    {
+                        ret = MonitorCpuThermal(entityGroupId, entityId, startTime, endTime, response);
+                    }
                     break;
                 case DCGM_HEALTH_WATCH_POWER:
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
+                    {
                         ret = MonitorPower(entityGroupId, entityId, startTime, endTime, response);
+                        if (ret != DCGM_ST_OK)
+                        {
+                            break;
+                        }
+                    }
+                    if (bit & healthSystemsMask && entityGroupId == DCGM_FE_CPU)
+                    {
+                        ret = MonitorCpuPower(entityGroupId, entityId, startTime, endTime, response);
+                    }
                     break;
                 case DCGM_HEALTH_WATCH_NVLINK:
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
@@ -863,6 +920,55 @@ dcgmReturn_t DcgmHealthWatch::SetPower(dcgm_field_entity_group_t entityGroupId,
                   entityId);
         return ret;
     }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetCpuThermal(dcgm_field_entity_group_t entityGroupId,
+                                            unsigned int entityId,
+                                            bool enable,
+                                            DcgmWatcher watcher,
+                                            long long updateInterval,
+                                            double maxKeepAge)
+{
+    // currently if a watch is removed it removes for the entire system (i.e. no reference counter)
+    // thus ignore the "enable" flag for now
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    if (!enable) // ignore
+        return ret;
+
+    /* Enforce a minimum sample rate of every 30 seconds */
+    updateInterval = std::max(30000000ll, updateInterval);
+
+    ADD_WATCH(DCGM_FI_DEV_CPU_TEMP_CURRENT);
+    ADD_WATCH(DCGM_FI_DEV_CPU_TEMP_WARNING);
+    ADD_WATCH(DCGM_FI_DEV_CPU_TEMP_CRITICAL);
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetCpuPower(dcgm_field_entity_group_t entityGroupId,
+                                          unsigned int entityId,
+                                          bool enable,
+                                          DcgmWatcher watcher,
+                                          long long updateInterval,
+                                          double maxKeepAge)
+{
+    // currently if a watch is removed it removes for the entire system (i.e. no reference counter)
+    // thus ignore the "enable" flag for now
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    if (!enable) // ignore
+        return ret;
+
+    /* Enforce a minimum sample rate of every 30 seconds */
+    updateInterval = std::max(30000000ll, updateInterval);
+
+    ADD_WATCH(DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT);
+    ADD_WATCH(DCGM_FI_DEV_CPU_POWER_LIMIT);
 
     return DCGM_ST_OK;
 }
@@ -1493,6 +1599,113 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
         DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCK_THROTTLE_POWER, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, d, response);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorCpuThermal(dcgm_field_entity_group_t entityGroupId,
+                                                dcgm_field_eid_t entityId,
+                                                long long startTime,
+                                                long long endTime,
+                                                DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+    std::vector<unsigned short> fieldId { DCGM_FI_DEV_CPU_TEMP_CURRENT,
+                                          DCGM_FI_DEV_CPU_TEMP_WARNING,
+                                          DCGM_FI_DEV_CPU_TEMP_CRITICAL };
+    std::unordered_map<unsigned short, dcgmcm_sample_t> startValue {};
+    std::unordered_map<unsigned short, dcgmcm_sample_t> endValue {};
+    int count = 1;
+
+    timelib64_t now              = timelib_usecSince1970();
+    unsigned int oneMinuteInUsec = 60000000;
+
+    /* Update the start and the end time if they are blank */
+    if (!startTime)
+    {
+        startTime = now - oneMinuteInUsec;
+    }
+
+    /* Note: Allow endTime to be in the future. 0 = blank = most recent record in time series */
+
+    /* Get the value at the startTime */
+    for (auto field : fieldId)
+    {
+        ret = mpCoreProxy.GetSamples(
+            entityGroupId, entityId, field, &startValue[field], &count, startTime, endTime, DCGM_ORDER_ASCENDING);
+
+        if (DCGM_ST_NO_DATA == ret)
+            return DCGM_ST_OK;
+        if (DCGM_ST_OK != ret)
+            return ret;
+        if (DCGM_INT64_IS_BLANK(startValue[field].val.i64))
+            return DCGM_ST_OK;
+    }
+
+    /* Get the value at the endTime*/
+    for (auto field : fieldId)
+    {
+        ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, field, &endValue[field], 0);
+
+        if (DCGM_ST_NO_DATA == ret)
+            return DCGM_ST_OK;
+        if (DCGM_ST_OK != ret)
+            return ret;
+        if (DCGM_INT64_IS_BLANK(endValue[field].val.i64))
+            return DCGM_ST_OK;
+    }
+
+    // First check: start and end samples are over the warning threshold (WARN)
+    if (((startValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d + endValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d) / 2)
+        >= endValue[DCGM_FI_DEV_CPU_TEMP_WARNING].val.d)
+    {
+        DcgmError d { entityId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, d, response);
+    }
+    // If the latest sample is over the critical threshold (FAIL)
+    if (endValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d >= endValue[DCGM_FI_DEV_CPU_TEMP_CRITICAL].val.d)
+    {
+        DcgmError d { entityId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_THERMAL, d, response);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorCpuPower(dcgm_field_entity_group_t entityGroupId,
+                                              dcgm_field_eid_t entityId,
+                                              long long startTime,
+                                              long long endTime,
+                                              DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+    std::vector<unsigned short> fieldId { DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT, DCGM_FI_DEV_CPU_POWER_LIMIT };
+    std::unordered_map<unsigned short, dcgmcm_sample_t> currValue {};
+
+    /* Get the value at the endTime*/
+    for (auto field : fieldId)
+    {
+        ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, field, &currValue[field], 0);
+
+        if (DCGM_ST_NO_DATA == ret)
+            return DCGM_ST_OK;
+        if (DCGM_ST_OK != ret)
+            return ret;
+        if (DCGM_INT64_IS_BLANK(currValue[field].val.i64))
+            return DCGM_ST_OK;
+    }
+
+    // If the sample is over the power limit (FAIL)
+    if (currValue[DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT].val.d >= currValue[DCGM_FI_DEV_CPU_POWER_LIMIT].val.d)
+    {
+        DcgmError d { entityId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_POWER, d, response);
     }
 
     return DCGM_ST_OK;

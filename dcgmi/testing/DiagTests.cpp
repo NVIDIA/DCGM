@@ -27,13 +27,13 @@ SCENARIO("Diag::GetFailureResult")
     // Initialized to all zeros should pass
     CHECK(d.GetFailureResult(result) == DCGM_ST_OK);
 
-    result.levelOneTestCount             = 5;
-    result.levelOneResults[4].status     = DCGM_DIAG_RESULT_FAIL;
-    result.levelOneResults[4].error.code = DCGM_FR_VOLATILE_SBE_DETECTED;
+    result.levelOneTestCount                = 5;
+    result.levelOneResults[4].status        = DCGM_DIAG_RESULT_FAIL;
+    result.levelOneResults[4].error[0].code = DCGM_FR_VOLATILE_SBE_DETECTED;
     CHECK(d.GetFailureResult(result) == DCGM_ST_NVVS_ERROR);
 
     // Make sure that a subsequent error will return the worse failure
-    result.perGpuResponses[0].results[0].status     = DCGM_DIAG_RESULT_FAIL;
-    result.perGpuResponses[0].results[0].error.code = DCGM_FR_VOLATILE_DBE_DETECTED;
+    result.perGpuResponses[0].results[0].status        = DCGM_DIAG_RESULT_FAIL;
+    result.perGpuResponses[0].results[0].error[0].code = DCGM_FR_VOLATILE_DBE_DETECTED;
     CHECK(d.GetFailureResult(result) == DCGM_ST_NVVS_ISOLATE_ERROR);
 }

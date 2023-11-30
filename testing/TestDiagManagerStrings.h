@@ -93,7 +93,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "ECC memory on GPU 0 is not currently active. Please use \"nvidia-smi -i 0 -e 1\" to enable and reboot.",
-                                        "error_id" : 55
+                                        "error_id" : 55,
+                                        "error_category" : 11,
+                                        "error_severity" : 2
                                     }
 
                                 ]
@@ -130,7 +132,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 0: Unable to find hardware diagnostic, skipping this test.",
-                                        "error_id" : 1
+                                        "error_id" : 1,
+                                        "error_category" : 0,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -140,7 +144,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 1: Unable to find hardware diagnostic, skipping this test.",
-                                        "error_id" : 1
+                                        "error_id" : 1,
+                                        "error_category" : 0,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -150,7 +156,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 2: Unable to find hardware diagnostic, skipping this test.",
-                                        "error_id" : 1
+                                        "error_id" : 1,
+                                        "error_category" : 0,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -160,7 +168,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 3: Unable to find hardware diagnostic, skipping this test.",
-                                        "error_id" : 1
+                                        "error_id" : 1,
+                                        "error_category" : 0,
+                                        "error_severity" : 1
                                     }
                                 ]
                             }
@@ -238,7 +248,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 0: The memory bandwidth test is skipped for this GPU.",
-                                        "error_id" : 48
+                                        "error_id" : 48,
+                                        "error_category" : 3,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -248,7 +260,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 1: The memory bandwidth test is skipped for this GPU.",
-                                        "error_id" : 48
+                                        "error_id" : 48,
+                                        "error_category" : 3,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -258,7 +272,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 2: The memory bandwidth test is skipped for this GPU.",
-                                        "error_id" : 48
+                                        "error_id" : 48,
+                                        "error_category" : 3,
+                                        "error_severity" : 1
                                     }
                                 ]
                             },
@@ -268,7 +284,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "GPU 3: The memory bandwidth test is skipped for this GPU.",
-                                        "error_id" : 48
+                                        "error_id" : 48,
+                                        "error_category" : 3,
+                                        "error_severity" : 1
                                     }
                                 ]
                             }
@@ -286,7 +304,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "Max stress level of 2128.7 did not exceed desired stress level of 3000.0 for GPU 0",
-                                        "error_id" : 50
+                                        "error_id" : 50,
+                                        "error_severity" : 1,
+                                        "error_category" : 9
                                     }
                                 ]
                             },
@@ -307,7 +327,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                        "warning" : "Max stress level of 1096.5 did not exceed desired stress level of 3000.0 for GPU 2",
-                                       "error_id" : 50
+                                       "error_id" : 50,
+                                       "error_severity" : 1,
+                                       "error_category" : 9
                                     }
                                 ]
                             },
@@ -320,7 +342,9 @@ extern const std::string PER_GPU_JSON = R""(
                                 "warnings": [
                                     {
                                         "warning" : "Max stress level of 1099.7 did not exceed desired stress level of 3000.0 for GPU 3",
-                                        "error_id" : 50
+                                        "error_id" : 50,
+                                        "error_severity" : 1,
+                                        "error_category" : 9
                                     }
                                 ]
                             }

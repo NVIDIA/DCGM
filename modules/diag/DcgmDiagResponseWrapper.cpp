@@ -62,7 +62,41 @@ void DcgmDiagResponseWrapper::InitializeResponseStruct(unsigned int numGpus)
         return;
     }
 
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        m_response.v9ptr->version           = dcgmDiagResponse_version;
+        m_response.v9ptr->levelOneTestCount = DCGM_SWTEST_COUNT;
+
+        // initialize everything as a skip
+        for (unsigned int i = 0; i < DCGM_SWTEST_COUNT; i++)
+        {
+            m_response.v9ptr->levelOneResults[i].status = DCGM_DIAG_RESULT_NOT_RUN;
+        }
+
+        m_response.v9ptr->gpuCount = numGpus;
+
+        for (unsigned int i = 0; i < numGpus; i++)
+        {
+            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
+            {
+                m_response.v9ptr->perGpuResponses[i].results[j].status          = DCGM_DIAG_RESULT_NOT_RUN;
+                m_response.v9ptr->perGpuResponses[i].results[j].info[0]         = '\0';
+                m_response.v9ptr->perGpuResponses[i].results[j].error[0].msg[0] = '\0';
+                m_response.v9ptr->perGpuResponses[i].results[j].error[0].code   = DCGM_FR_OK;
+            }
+
+            // Set correct GPU ids for the valid portion of the response
+            m_response.v9ptr->perGpuResponses[i].gpuId = i;
+        }
+
+        // Set the unused part of the response to have bogus GPU ids
+        for (unsigned int i = numGpus; i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            m_response.v9ptr->perGpuResponses[i].gpuId = DCGM_MAX_NUM_DEVICES;
+            snprintf(m_response.v9ptr->devSerials[i], sizeof(m_response.v9ptr->devSerials[i]), "%s", DCGM_STR_BLANK);
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         m_response.v8ptr->version           = dcgmDiagResponse_version;
         m_response.v8ptr->levelOneTestCount = DCGM_SWTEST_COUNT;
@@ -140,6 +174,9 @@ bool DcgmDiagResponseWrapper::IsValidGpuIndex(unsigned int gpuIndex)
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version9:
+            count = m_response.v9ptr->gpuCount;
+            break;
         case dcgmDiagResponse_version8:
             count = m_response.v8ptr->gpuCount;
             break;
@@ -181,7 +218,21 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
     }
 
     // Only set the results for tests run for each GPU
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
+        {
+            return;
+        }
+
+        // Version 9
+        m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].status = result;
+        if (testIndex == DCGM_DIAGNOSTIC_INDEX)
+        {
+            m_response.v9ptr->perGpuResponses[gpuIndex].hwDiagnosticReturn = rc;
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
         {
@@ -219,7 +270,8 @@ void DcgmDiagResponseWrapper::SetPerGpuResponseState(unsigned int testIndex,
 dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
                                                      unsigned int testIndex,
                                                      const std::string &testname,
-                                                     dcgmDiagErrorDetail_t &ed,
+                                                     dcgmDiagErrorDetail_v2 &ed,
+                                                     unsigned int edIndex,
                                                      dcgmDiagResult_t result)
 {
     if (!StateIsValid())
@@ -240,7 +292,35 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
     }
 
 
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        // version 9
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
+        {
+            // We are looking at the l1 tests
+            snprintf(m_response.v9ptr->levelOneResults[l1Index].error[edIndex].msg,
+                     sizeof(m_response.v9ptr->levelOneResults[l1Index].error[edIndex].msg),
+                     "%s",
+                     ed.msg);
+            m_response.v9ptr->levelOneResults[l1Index].error[edIndex].code     = ed.code;
+            m_response.v9ptr->levelOneResults[l1Index].error[edIndex].category = ed.category;
+            m_response.v9ptr->levelOneResults[l1Index].error[edIndex].severity = ed.severity;
+            m_response.v9ptr->levelOneResults[l1Index].status                  = result;
+        }
+        else
+        {
+            snprintf(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[edIndex].msg,
+                     sizeof(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[edIndex].msg),
+                     "%s",
+                     ed.msg);
+            m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[edIndex].code     = ed.code;
+            m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[edIndex].category = ed.category;
+            m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[edIndex].severity = ed.severity;
+            m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].status                  = result;
+            log_debug("Added Error: code {} category {} severity {}", ed.code, ed.category, ed.severity);
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         // version 6
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
@@ -293,7 +373,7 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddErrorDetail(unsigned int gpuIndex,
 dcgmReturn_t DcgmDiagResponseWrapper::AddInfoDetail(unsigned int gpuIndex,
                                                     unsigned int testIndex,
                                                     const std::string &testname,
-                                                    dcgmDiagErrorDetail_t &ed,
+                                                    dcgmDiagErrorDetail_v2 &ed,
                                                     dcgmDiagResult_t result)
 {
     if (!StateIsValid())
@@ -314,7 +394,26 @@ dcgmReturn_t DcgmDiagResponseWrapper::AddInfoDetail(unsigned int gpuIndex,
     }
 
 
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        // version 9
+        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
+        {
+            // We are looking at the l1 tests
+            snprintf(m_response.v9ptr->levelOneResults[l1Index].info,
+                     sizeof(m_response.v9ptr->levelOneResults[l1Index].info),
+                     "%s",
+                     ed.msg);
+        }
+        else
+        {
+            snprintf(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].info,
+                     sizeof(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].info),
+                     "%s",
+                     ed.msg);
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         // version 6
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
@@ -372,7 +471,25 @@ void DcgmDiagResponseWrapper::AddPerGpuMessage(unsigned int testIndex,
         return;
     }
 
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        // version 9
+        if (warning)
+        {
+            snprintf(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[0].msg,
+                     sizeof(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].error[0].msg),
+                     "%s",
+                     msg.c_str());
+        }
+        else
+        {
+            snprintf(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].info,
+                     sizeof(m_response.v9ptr->perGpuResponses[gpuIndex].results[testIndex].info),
+                     "%s",
+                     msg.c_str());
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         // version 8
         if (warning)
@@ -423,7 +540,11 @@ void DcgmDiagResponseWrapper::SetGpuIndex(unsigned int gpuIndex)
         return;
     }
 
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        m_response.v9ptr->perGpuResponses[gpuIndex].gpuId = gpuIndex;
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         m_response.v8ptr->perGpuResponses[gpuIndex].gpuId = gpuIndex;
     }
@@ -454,7 +575,12 @@ unsigned int DcgmDiagResponseWrapper::GetBasicTestResultIndex(std::string_view c
 /*****************************************************************************/
 void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError) const
 {
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        SafeCopyTo(m_response.v9ptr->systemError.msg, sysError.c_str());
+        m_response.v9ptr->systemError.code = DCGM_FR_INTERNAL;
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         SafeCopyTo(m_response.v8ptr->systemError.msg, sysError.c_str());
         m_response.v8ptr->systemError.code = DCGM_FR_INTERNAL;
@@ -473,7 +599,11 @@ void DcgmDiagResponseWrapper::RecordSystemError(const std::string &sysError) con
 /*****************************************************************************/
 void DcgmDiagResponseWrapper::SetGpuCount(unsigned int gpuCount) const
 {
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        m_response.v9ptr->gpuCount = gpuCount;
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         m_response.v8ptr->gpuCount = gpuCount;
     }
@@ -485,6 +615,21 @@ void DcgmDiagResponseWrapper::SetGpuCount(unsigned int gpuCount) const
     {
         DCGM_LOG_ERROR << "Version mismatch. Version " << m_version << " is not handled.";
     }
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmDiagResponseWrapper::SetVersion9(dcgmDiagResponse_v9 *response)
+{
+    if (m_version != 0)
+    {
+        // We don't support setting the version twice
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    m_version        = dcgmDiagResponse_version9;
+    m_response.v9ptr = response;
+
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -518,7 +663,11 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion7(dcgmDiagResponse_v7 *response)
 
 void DcgmDiagResponseWrapper::RecordDcgmVersion(const std::string &version)
 {
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        snprintf(m_response.v9ptr->dcgmVersion, sizeof(m_response.v9ptr->dcgmVersion), "%s", version.c_str());
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         snprintf(m_response.v8ptr->dcgmVersion, sizeof(m_response.v8ptr->dcgmVersion), "%s", version.c_str());
     }
@@ -530,7 +679,14 @@ void DcgmDiagResponseWrapper::RecordDcgmVersion(const std::string &version)
 
 void DcgmDiagResponseWrapper::RecordDevIds(const std::vector<std::string> &devIds)
 {
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        for (size_t i = 0; i < devIds.size() && i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            snprintf(m_response.v9ptr->devIds[i], sizeof(m_response.v9ptr->devIds[i]), "%s", devIds.at(i).c_str());
+        }
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         for (size_t i = 0; i < devIds.size() && i < DCGM_MAX_NUM_DEVICES; i++)
         {
@@ -543,9 +699,26 @@ void DcgmDiagResponseWrapper::RecordDevIds(const std::vector<std::string> &devId
     }
 }
 
+void DcgmDiagResponseWrapper::RecordGpuSerials(const std::vector<std::pair<unsigned int, std::string>> &serials)
+{
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        for (const auto &serial : serials)
+        {
+            snprintf(m_response.v9ptr->devSerials[serial.first],
+                     sizeof(m_response.v9ptr->devSerials[0]),
+                     (serial.second).c_str());
+        }
+    }
+}
+
 void DcgmDiagResponseWrapper::RecordDriverVersion(const std::string &driverVersion)
 {
-    if (m_version == dcgmDiagResponse_version8)
+    if (m_version == dcgmDiagResponse_version9)
+    {
+        snprintf(m_response.v9ptr->driverVersion, sizeof(m_response.v9ptr->driverVersion), "%s", driverVersion.c_str());
+    }
+    else if (m_version == dcgmDiagResponse_version8)
     {
         snprintf(m_response.v8ptr->driverVersion, sizeof(m_response.v8ptr->driverVersion), "%s", driverVersion.c_str());
     }

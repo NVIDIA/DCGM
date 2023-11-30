@@ -30,6 +30,23 @@
 
 /*****************************************************************************/
 /**
+ * Subrequest DCGM_DIAG_SR_RUN version 7
+ */
+typedef struct dcgm_diag_msg_run_v7
+{
+    dcgm_module_command_header_t header; /* Command header */
+
+    dcgmPolicyAction_t action;        /*  IN: Action to perform after running the diagnostic */
+    dcgmRunDiag_t runDiag;            /*  IN: Parameters for how to run the diagnostic */
+    dcgmDiagResponse_v9 diagResponse; /* OUT: Detailed specifics about how the diag run went */
+} dcgm_diag_msg_run_v7;
+
+#define dcgm_diag_msg_run_version7 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v7, 7)
+
+#define dcgm_diag_msg_run_version dcgm_diag_msg_run_version7
+
+/*****************************************************************************/
+/**
  * Subrequest DCGM_DIAG_SR_RUN version 4
  */
 typedef struct dcgm_diag_msg_run_v6
@@ -57,9 +74,8 @@ typedef struct dcgm_diag_msg_run_v5
 } dcgm_diag_msg_run_v5;
 
 #define dcgm_diag_msg_run_version5 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v5, 5)
-#define dcgm_diag_msg_run_version  dcgm_diag_msg_run_version5
 
-typedef dcgm_diag_msg_run_v5 dcgm_diag_msg_run_t;
+typedef dcgm_diag_msg_run_v7 dcgm_diag_msg_run_t;
 
 /*****************************************************************************/
 /**

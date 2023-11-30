@@ -121,6 +121,8 @@ struct Warning
 {
     std::string message;
     std::optional<int> error_code;
+    std::optional<int> error_category;
+    std::optional<int> error_severity;
 
     friend auto operator<=>(Warning const &, Warning const &) = default;
 };
@@ -182,6 +184,46 @@ inline auto ParseJson(::Json::Value const &json, DcgmNs::JsonSerialize::To<Warni
         return std::nullopt;
     }
 
+    if (json.isMember(NVVS_ERROR_CATEGORY))
+    {
+        if (json[NVVS_ERROR_CATEGORY].isInt())
+        {
+            warning.error_category = json[NVVS_ERROR_CATEGORY].asInt();
+        }
+        else
+        {
+            log_error("Failed to parse JSON: {} is not an integer", NVVS_ERROR_CATEGORY);
+            log_debug("JSON: {}", json.toStyledString());
+            return std::nullopt;
+        }
+    }
+    else
+    {
+        log_error("Failed to parse JSON: {} is missing", NVVS_ERROR_CATEGORY);
+        log_debug("JSON: {}", json.toStyledString());
+        return std::nullopt;
+    }
+
+    if (json.isMember(NVVS_ERROR_SEVERITY))
+    {
+        if (json[NVVS_ERROR_SEVERITY].isInt())
+        {
+            warning.error_severity = json[NVVS_ERROR_SEVERITY].asInt();
+        }
+        else
+        {
+            log_error("Failed to parse JSON: {} is not an integer", NVVS_ERROR_SEVERITY);
+            log_debug("JSON: {}", json.toStyledString());
+            return std::nullopt;
+        }
+    }
+    else
+    {
+        log_error("Failed to parse JSON: {} is missing", NVVS_ERROR_SEVERITY);
+        log_debug("JSON: {}", json.toStyledString());
+        return std::nullopt;
+    }
+
     return warning;
 }
 
@@ -190,8 +232,10 @@ inline auto ToJson(Warning const &value) -> ::Json::Value
     ::Json::Value json;
     if (value.error_code.has_value())
     {
-        json[NVVS_WARNING]  = value.message;
-        json[NVVS_ERROR_ID] = *value.error_code;
+        json[NVVS_WARNING]        = value.message;
+        json[NVVS_ERROR_ID]       = *value.error_code;
+        json[NVVS_ERROR_CATEGORY] = *value.error_category;
+        json[NVVS_ERROR_SEVERITY] = *value.error_severity;
     }
     else
     {
@@ -580,6 +624,7 @@ struct DiagnosticResults
     std::optional<std::string> driverVersion;
     std::optional<std::vector<Category>> categories;
     std::optional<std::vector<std::string>> devIds;
+    std::optional<std::vector<std::pair<unsigned int, std::string>>> devSerials;
     std::optional<nvvsReturn_t> errorCode;
     friend auto operator<=>(DiagnosticResults const &, DiagnosticResults const &) = default;
 };
@@ -644,6 +689,11 @@ inline bool MergeResults(DiagnosticResults &result, DiagnosticResults &&other)
     if (other.devIds.has_value() && !result.devIds.has_value())
     {
         result.devIds = std::move(other.devIds);
+    }
+
+    if (other.devSerials.has_value() && !result.devSerials.has_value())
+    {
+        result.devSerials = std::move(other.devSerials);
     }
 
     return true;
@@ -748,6 +798,20 @@ auto inline ParseJson(::Json::Value const &rootJson, DcgmNs::JsonSerialize::To<D
         for (auto const &devId : json[NVVS_GPU_DEV_IDS])
         {
             (*diagnosticResults.devIds).push_back(devId.asString());
+        }
+    }
+
+    if (json.isMember(NVVS_GPU_SERIALS))
+    {
+        diagnosticResults.devSerials = std::vector<std::pair<unsigned int, std::string>> {};
+        for (auto const &devSerial : json[NVVS_GPU_SERIALS].getMemberNames())
+        {
+            std::pair<unsigned int, std::string> serial = {};
+
+            serial.first  = stoi(devSerial);
+            serial.second = json[NVVS_GPU_SERIALS][devSerial].asString();
+
+            (*diagnosticResults.devSerials).push_back(serial);
         }
     }
 

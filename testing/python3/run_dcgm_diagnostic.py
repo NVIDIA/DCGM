@@ -38,8 +38,6 @@ logFile = "nvvs_diag.log"
 debugFile = "nvvs_debug.log"
 goldenValuesFile = "/tmp/golden_values.yml"
 PASSED_COUNT = 0
-FAILED_COUNT = 0
-WAIVED_COUNT = 0
 
 
 ################################################################################
@@ -152,10 +150,11 @@ class TestRunner():
         ]
 
     ################################################################################
-    def matchesExclusion(self, warning):
+    def matchesExclusion(self, warnings):
         for exclusion in self.exclusions:
-            if warning.find(exclusion[0]) != -1:
-                return exclusion[1]
+            for warning in warnings:
+                if warning['warning'].find(exclusion[0]) != -1:
+                    return exclusion[1]
 
         return None
 
@@ -208,7 +207,6 @@ class TestRunner():
         Helper method to run a give command
         """
 
-        global WAIVED_COUNT
         print("Running command: %s " % " ".join(self.dcgmiDiag.BuildDcgmiCommand()))
         ret = 0
         for runIndex in range(cycles):
@@ -235,20 +233,18 @@ class TestRunner():
             print("Diagnostic test failed with code %d.\n" % ret)
 
             # Popen returns 0 even if diag test fails, so failing here
-            return 1
-        elif exclusionCount > 0:
-            WAIVED_COUNT += 1
-        else:
-            print("Success")
+            return [failCount, exclusionCount]
+        elif exclusionCount == 0:
+             print("Success")
 
-        return 0
+        return [0, exclusionCount]
 
     ################################################################################
     def run(self):
         self.dcgmiDiag.SetRunMode(3)
         self.dcgmiDiag.SetConfigFile(None)
-        ret = self.run_command(self.cycles)
-        return ret
+        failCount, exclusionCount = self.run_command(self.cycles)
+        return [failCount, exclusionCount]
 
 ################################################################################
 def checkCmdLine(cmdArgs, settings):
@@ -360,10 +356,10 @@ def main(cmdArgs):
     else:
         gpuIdStr = settings['dev_id']
     
-    #Need to skip checks for down NvLinks or QA will file bugs
+    # Skip checks for nvlinks and pci width to avoid QA bugs
     paramsStr = "pcie.test_nvlink_status=false"
-    paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=2"
-    paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=2"
+    paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
+    paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
 
     dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=3, 
@@ -373,16 +369,17 @@ def main(cmdArgs):
     run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])
 
     print("\nRunning with the diagnostic... This may take a while, please wait...\n")
-    ret = run_test.run()
-    if ret != 0:
-        print("&&&& FAILED")
-        return ret
+    failedCount, exclusionCount = run_test.run()
 
-    return ret
+    if failedCount != 0:
+        print("&&&& FAILED")
+
+    return [failedCount, exclusionCount]
 
 if __name__ == "__main__":
     cmdArgs = parseCommandLine()
-    ret = main(cmdArgs)
+    failedCount, exclusionCount = main(cmdArgs)
+    ret = 0
 
     if os.path.isfile(logFile):
         with open(logFile, "r") as f:
@@ -390,14 +387,11 @@ if __name__ == "__main__":
             for log in log_content:
                 if "Pass" in log:
                     PASSED_COUNT += 1
-                elif "Fail" in log:
-                    FAILED_COUNT += 1
-                elif "Skip" in log:
-                    WAIVED_COUNT += 1
 
         # QA uses these to count the tests passed
-        if FAILED_COUNT:
+        if failedCount > 0:
             print('&&&& FAILED')
+            ret = 1
         elif PASSED_COUNT == 0:
             print('&&&& SKIPPED')
         else:
@@ -405,9 +399,9 @@ if __name__ == "__main__":
 
         logger.info("\n========== TEST SUMMARY ==========\n")
         logger.info("Passed: {}".format(PASSED_COUNT))
-        logger.info("Failed: {}".format(FAILED_COUNT))
-        logger.info("Waived: {}".format(WAIVED_COUNT))
-        logger.info("Total:  {}".format(PASSED_COUNT + FAILED_COUNT + WAIVED_COUNT))
+        logger.info("Failed: {}".format(failedCount))
+        logger.info("Waived: {}".format(exclusionCount))
+        logger.info("Total:  {}".format(PASSED_COUNT + failedCount + exclusionCount))
         logger.info("Cycles: {}".format(cmdArgs.cycles))
         logger.info("==================================\n\n")
     else:

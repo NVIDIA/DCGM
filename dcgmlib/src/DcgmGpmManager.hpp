@@ -19,8 +19,8 @@
 #include <cstdint>
 #include <map>
 
+#include "DcgmEntityTypes.hpp"
 #include "DcgmGpuInstance.h"
-#include "DcgmMigTypes.hpp"
 #include <DcgmLogging.h>
 #include <DcgmUtilities.h>
 #include <DcgmWatchTable.h>

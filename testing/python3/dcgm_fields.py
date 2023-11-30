@@ -24,13 +24,13 @@ dcgmFP = dcgm_structs._dcgmGetFunctionPointer
 
 # Field Types are a single byte. List these in ASCII order
 DCGM_FT_BINARY      = 'b' # Blob of binary data representing a structure
-DCGM_FT_DOUBLE      = 'd' # 8-byte double precision 
-DCGM_FT_INT64       = 'i' # 8-byte signed integer 
-DCGM_FT_STRING      = 's' # Null-terminated ASCII Character string 
-DCGM_FT_TIMESTAMP   = 't' # 8-byte signed integer usec since 1970 
+DCGM_FT_DOUBLE      = 'd' # 8-byte double precision
+DCGM_FT_INT64       = 'i' # 8-byte signed integer
+DCGM_FT_STRING      = 's' # Null-terminated ASCII Character string
+DCGM_FT_TIMESTAMP   = 't' # 8-byte signed integer usec since 1970
 
 # Field scope. What are these fields associated with
-DCGM_FS_GLOBAL	    = 0              # Field is global (ex: driver version)
+DCGM_FS_GLOBAL      = 0              # Field is global (ex: driver version)
 DCGM_FS_ENTITY      = 1              # Field is associated with an entity (GPU, VGPU, ..etc)
 DCGM_FS_DEVICE      = DCGM_FS_ENTITY # Field is associated with a device. Deprecated. Use DCGM_FS_ENTITY
 
@@ -44,7 +44,7 @@ DCGM_CLOCKS_THROTTLE_REASON_GPU_IDLE = 0x0000000000000001
 # GPU clocks are limited by current setting of applications clocks
 DCGM_CLOCKS_THROTTLE_REASON_CLOCKS_SETTING = 0x0000000000000002
 
-# SW Power Scaling algorithm is reducing the clocks below requested clocks 
+# SW Power Scaling algorithm is reducing the clocks below requested clocks
 DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP = 0x0000000000000004
 
 # HW Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
@@ -90,13 +90,15 @@ DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE = 0x0000000000000080
 DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS = 0x0000000000000100
 
 #Field entity groups. Which type of entity is this field or field value associated with
-DCGM_FE_NONE   = 0 # Field is not associated with an entity. Field scope should be DCGM_FS_GLOBAL
-DCGM_FE_GPU    = 1 # Field is associated with a GPU entity
-DCGM_FE_VGPU   = 2 # Field is associated with a VGPU entity
-DCGM_FE_SWITCH = 3 # Field is associated with a Switch entity
-DCGM_FE_GPU_I  = 4 # Field is associated with a GPU Instance entity
-DCGM_FE_GPU_CI = 5 # Field is associated with a GPU Compute Instance entity
-DCGM_FE_LINK   = 6 # Field is associated with an NVLINK
+DCGM_FE_NONE     = 0 # Field is not associated with an entity. Field scope should be DCGM_FS_GLOBAL
+DCGM_FE_GPU      = 1 # Field is associated with a GPU entity
+DCGM_FE_VGPU     = 2 # Field is associated with a VGPU entity
+DCGM_FE_SWITCH   = 3 # Field is associated with a Switch entity
+DCGM_FE_GPU_I    = 4 # Field is associated with a GPU Instance entity
+DCGM_FE_GPU_CI   = 5 # Field is associated with a GPU Compute Instance entity
+DCGM_FE_LINK     = 6 # Field is associated with an NVLINK
+DCGM_FE_CPU      = 7 # Field is associated with a CPU
+DCGM_FE_CPU_CORE = 8 # Field is associated with a CPU core
 
 c_dcgm_field_eid_t = c_uint32 #Represents an identifier for an entity within a field entity. For instance, this is the gpuId for DCGM_FE_GPU.
 
@@ -186,7 +188,7 @@ DCGM_FI_DEV_MEM_COPY_UTIL       = 204 #Memory Utilization
 DCGM_FI_DEV_ACCOUNTING_DATA     = 205 #Process accounting stats
 DCGM_FI_DEV_ENC_UTIL            = 206 #Encoder utilization
 DCGM_FI_DEV_DEC_UTIL            = 207 #Decoder utilization
-# Fields 210, 211, 220, and 221 are internal-only. see dcgm_fields_internal.py 
+# Fields 210, 211, 220, and 221 are internal-only. see dcgm_fields_internal.py
 DCGM_FI_DEV_XID_ERRORS          = 230 #XID errors. The value is the specific XID error
 DCGM_FI_DEV_PCIE_MAX_LINK_GEN   = 235 #PCIe Max Link Generation
 DCGM_FI_DEV_PCIE_MAX_LINK_WIDTH = 236 #PCIe Max Link Width
@@ -206,6 +208,10 @@ DCGM_FI_DEV_FB_TOTAL            = 250 #Total framebuffer memory in MB
 DCGM_FI_DEV_FB_FREE             = 251 #Total framebuffer used in MB
 DCGM_FI_DEV_FB_USED             = 252 #Total framebuffer free in MB
 DCGM_FI_DEV_FB_RESERVED         = 253 #Total framebuffer reserved in MB
+# C2C Link Information (Grace-Hopper)
+DCGM_FI_DEV_C2C_LINK_COUNT      = 285 # C2C Link Count
+DCGM_FI_DEV_C2C_LINK_STATUS     = 286 # C2C Link Status
+DCGM_FI_DEV_C2C_MAX_BANDWIDTH   = 287 # C2C Link Max Bandwidth
 #Device ECC Counters
 DCGM_FI_DEV_ECC_CURRENT         = 300 #Current ECC mode for the device
 DCGM_FI_DEV_ECC_PENDING         = 301 #Pending ECC mode for the device
@@ -385,6 +391,9 @@ DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT               = 701
 DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ                = 702
 DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV            = 703
 DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD           = 704
+DCGM_FI_DEV_NVSWITCH_POWER_VDD                   = 705
+DCGM_FI_DEV_NVSWITCH_POWER_DVDD                  = 706
+DCGM_FI_DEV_NVSWITCH_POWER_HVDD                  = 707
 DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX          = 780
 DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX          = 781
 DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS           = 782
@@ -435,15 +444,15 @@ DCGM_FI_LAST_NVSWITCH_FIELD_ID                   = 899 #Last field ID of the NVS
 '''
 Profiling Fields
 '''
-DCGM_FI_PROF_GR_ENGINE_ACTIVE                    = 1001 #Ratio of time the graphics engine is active. The graphics engine is 
-                                                        #active if a graphics/compute context is bound and the graphics pipe or 
+DCGM_FI_PROF_GR_ENGINE_ACTIVE                    = 1001 #Ratio of time the graphics engine is active. The graphics engine is
+                                                        #active if a graphics/compute context is bound and the graphics pipe or
                                                         #compute pipe is busy.
 
-DCGM_FI_PROF_SM_ACTIVE                           = 1002 #The ratio of cycles an SM has at least 1 warp assigned 
-                                                        #(computed from the number of cycles and elapsed cycles) 
+DCGM_FI_PROF_SM_ACTIVE                           = 1002 #The ratio of cycles an SM has at least 1 warp assigned
+                                                        #(computed from the number of cycles and elapsed cycles)
 
-DCGM_FI_PROF_SM_OCCUPANCY                        = 1003 #The ratio of number of warps resident on an SM. 
-                                                        #(number of resident as a ratio of the theoretical 
+DCGM_FI_PROF_SM_OCCUPANCY                        = 1003 #The ratio of number of warps resident on an SM.
+                                                        #(number of resident as a ratio of the theoretical
                                                         #maximum number of warps per elapsed cycle)
 
 DCGM_FI_PROF_PIPE_TENSOR_ACTIVE                  = 1004 #The ratio of cycles the any tensor pipe is active
@@ -488,7 +497,7 @@ DCGM_FI_PROF_NVOFA0_ACTIVE = 1033
 '''
 The per-link number of bytes of active NvLink TX (transmit) or RX (transmit) data including both header and payload.
 For example: DCGM_FI_PROF_NVLINK_L0_TX_BYTES -> L0 TX
-To get the bandwidth for a link, add the RX and TX value together like 
+To get the bandwidth for a link, add the RX and TX value together like
 total = DCGM_FI_PROF_NVLINK_L0_TX_BYTES + DCGM_FI_PROF_NVLINK_L0_RX_BYTES
 '''
 DCGM_FI_PROF_NVLINK_L0_TX_BYTES  = 1040
@@ -531,8 +540,22 @@ DCGM_FI_PROF_NVLINK_L17_RX_BYTES = 1075
 DCGM_FI_PROF_NVLINK_THROUGHPUT_FIRST = DCGM_FI_PROF_NVLINK_L0_TX_BYTES
 DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST  = DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
+DCGM_FI_DEV_CPU_UTIL_TOTAL         = 1100 # CPU Utilization, total
+DCGM_FI_DEV_CPU_UTIL_USER          = 1101 # CPU Utilization, user
+DCGM_FI_DEV_CPU_UTIL_NICE          = 1102 # CPU Utilization, nice
+DCGM_FI_DEV_CPU_UTIL_SYS           = 1103 # CPU Utilization, system time
+DCGM_FI_DEV_CPU_UTIL_IRQ           = 1104 # CPU Utilization, interrupt servicing
+DCGM_FI_DEV_CPU_TEMP_CURRENT       = 1110 # CPU temperature
+DCGM_FI_DEV_CPU_TEMP_WARNING       = 1111 # CPU warning temparature
+DCGM_FI_DEV_CPU_TEMP_CRITICAL      = 1112 # CPU critical temparature
+DCGM_FI_DEV_CPU_CLOCK_CURRENT      = 1120 # CPU instantaneous clock speed
+DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT = 1130 # CPU power utilization
+DCGM_FI_DEV_CPU_POWER_LIMIT        = 1131 # CPU power limit
+DCGM_FI_DEV_CPU_VENDOR             = 1140 # CPU vendor name
+DCGM_FI_DEV_CPU_MODEL              = 1141 # CPU model name
+
 #greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS              = 1076
+DCGM_FI_MAX_FIELDS         = 1142
 
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):
@@ -669,6 +692,13 @@ def DcgmFieldGetTagById(fieldId):
     field = DcgmFieldGetById(fieldId)
     if field:
         return field.tag
+    else:
+        return None
+
+def DcgmFieldGetIdByTag(fieldTag):
+    field = DcgmFieldGetByTag(fieldTag)
+    if field:
+        return field.fieldId
     else:
         return None
 

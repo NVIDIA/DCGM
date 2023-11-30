@@ -218,3 +218,22 @@ const char *errorString(dcgmReturn_t result)
     printSharedLibraryPath(stderr, s_libName);
     return NULL;
 }
+
+unsigned int dcgmCpuHierarchyCpuOwnsCore(unsigned int coreId, dcgmCpuHierarchyOwnedCores_v1 const *ownedCores)
+{
+    unsigned int (*fn)(unsigned int, dcgmCpuHierarchyOwnedCores_v1 const *);
+    if (lib_handle)
+    {
+        fn = dlsym(lib_handle, "dcgmCpuHierarchyCpuOwnsCore");
+        if (fn == NULL)
+        {
+            fprintf(stderr, "Failed to find dcgmCpuHierarchyCpuOwnsCore in %s\n", s_libName);
+            printSharedLibraryPath(stderr, s_libName);
+            return 0;
+        }
+        return (*fn)(coreId, ownedCores);
+    }
+    fprintf(stderr, "%s\n", s_wrongLibraryMessage);
+    printSharedLibraryPath(stderr, s_libName);
+    return 0;
+}

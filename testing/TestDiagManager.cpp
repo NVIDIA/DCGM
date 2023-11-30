@@ -616,7 +616,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
     dcgmDiagResponse_t response;
     response.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion8(&response);
+    drw.SetVersion9(&response);
 
     auto nvvsResults
         = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { rawJsonOutput });
@@ -658,12 +658,12 @@ int TestDiagManager::TestErrorsFromLevelOne()
                 return -1;
             }
 
-            if (errorReported != response.levelOneResults[i].error.msg)
+            if (errorReported != response.levelOneResults[i].error[0].msg)
             {
                 fprintf(stderr,
                         "Expected error '%s' but found '%s'\n",
                         errorReported.c_str(),
-                        response.levelOneResults[i].error.msg);
+                        response.levelOneResults[i].error[0].msg);
                 return -1;
             }
         }
@@ -755,7 +755,7 @@ int TestDiagManager::TestFillResponseStructure()
     dcgmDiagResponse_t perGpuResponse;
     perGpuResponse.version = dcgmDiagResponse_version;
     DcgmDiagResponseWrapper perGpuDrw;
-    perGpuDrw.SetVersion8(&perGpuResponse);
+    perGpuDrw.SetVersion9(&perGpuResponse);
 
     fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
 
@@ -800,7 +800,7 @@ int TestDiagManager::TestFillResponseStructure()
         }
 
         // Make sure all of the GPUs except GPU 1 have warnings
-        if ((perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error.msg[0] == '\0') && (i != 1))
+        if ((perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].msg[0] == '\0') && (i != 1))
         {
             fprintf(stderr, "Gpu %d should have a warning for Sm Stress, but doesn't\n", i);
             return -1;
@@ -812,13 +812,13 @@ int TestDiagManager::TestFillResponseStructure()
             return -1;
         }
 
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error.code != DCGM_FR_STRESS_LEVEL
+        if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].code != DCGM_FR_STRESS_LEVEL
             && i != 1)
         {
             fprintf(stderr,
                     "Expected the SM Stress test to have error code %d, but found %d\n",
                     DCGM_FR_STRESS_LEVEL,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error.code);
+                    perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].code);
             return -1;
         }
 
@@ -831,13 +831,13 @@ int TestDiagManager::TestFillResponseStructure()
             return -1;
         }
 
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error.code != 1)
+        if (perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error[0].code != 1)
         {
             // Code 1 is used above because the error reported is from old, saved json and doesn't correspond
             // to an error it's actually possible to get today. I manually added it.
             fprintf(stderr,
                     "Expected the diagnostic test to have error code 1, but found %d\n",
-                    perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error.code);
+                    perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error[0].code);
             return -1;
         }
 
@@ -859,12 +859,13 @@ int TestDiagManager::TestFillResponseStructure()
             return -1;
         }
 
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error.code != DCGM_FR_TEST_DISABLED)
+        if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error[0].code
+            != DCGM_FR_TEST_DISABLED)
         {
             fprintf(stderr,
                     "Expected the Memory Bandwidth test to have error code %d, but found %d.\n",
                     DCGM_FR_TEST_DISABLED,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error.code);
+                    perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error[0].code);
             return -1;
         }
 
@@ -901,12 +902,12 @@ int TestDiagManager::TestFillResponseStructure()
         }
     }
 
-    if (perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error.code != DCGM_FR_ECC_DISABLED)
+    if (perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error[0].code != DCGM_FR_ECC_DISABLED)
     {
         fprintf(stderr,
                 "Expected to find error code %d but found %d\n",
                 DCGM_FR_ECC_DISABLED,
-                perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error.code);
+                perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error[0].code);
         return -1;
     }
 

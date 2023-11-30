@@ -112,11 +112,19 @@ DCGM_FR_EUD_NON_ZERO_EXIT_CODE              = 94 # EUD process exited with a non
 DCGM_FR_EUD_TEST_FAILED                     = 95 # EUD test failed
 DCGM_FR_FILE_CREATE_PERMISSIONS             = 96 # We cannot write a file in this directory.
 DCGM_FR_PAUSE_RESUME_FAILED                 = 97 # Pause/Resume failed
-DCGM_FR_PCIE_REPLAYS                        = 98 # Pause/Resume failed
+DCGM_FR_PCIE_H_REPLAY_VIOLATION             = 98 # Host PCIe replay count violation
 DCGM_FR_GPU_EXPECTED_NVLINKS_UP             = 99 # Expected nvlinks up per gpu */
 DCGM_FR_NVSWITCH_EXPECTED_NVLINKS_UP        = 100 # Expected nvlinks up per nvswitch */
 DCGM_FR_XID_ERROR                           = 101 # XID error detected
-DCGM_FR_ERROR_SENTINEL                      = 102 # MUST BE THE LAST ERROR CODE
+DCGM_FR_SBE_VIOLATION                       = 102,
+DCGM_FR_DBE_VIOLATION                       = 103,
+DCGM_FR_PCIE_REPLAY_VIOLATION               = 104,
+DCGM_FR_SBE_THRESHOLD_VIOLATION             = 105,
+DCGM_FR_DBE_THRESHOLD_VIOLATION             = 106,
+DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION     = 107,
+DCGM_FR_CUDA_FM_NOT_INITIALIZED             = 108,
+DCGM_FR_SXID_ERROR                          = 109,
+DCGM_FR_ERROR_SENTINEL                      = 110 # MUST BE THE LAST ERROR CODE
 
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
@@ -125,9 +133,30 @@ DEBUG_COOLING_MSG = "Verify that the cooling on this machine is functional, incl
 BUG_REPORT_MSG = "Please capture an nvidia-bug-report and send it to NVIDIA."
 
 # Define DCGM error priorities
-DCGM_ERROR_MONITOR     = 0 # Can perform workload, but needs to be monitored.
-DCGM_ERROR_ISOLATE     = 1 # Cannot perform workload. GPU should be isolated.
-DCGM_ERROR_UNKNOWN     = 2 # This error code is not recognized
+DCGM_ERROR_NONE        = 0
+DCGM_ERROR_MONITOR     = 1 # Can perform workload, but needs to be monitored.
+DCGM_ERROR_ISOLATE     = 2 # Cannot perform workload. GPU should be isolated.
+DCGM_ERROR_UNKNOWN     = 3 # This error code is not recognized
+DCGM_ERROR_TRIAGE      = 4 # This error should be triaged
+DCGM_ERROR_CONFIG      = 5 # This error can be configured
+
+DCGM_FR_EC_NONE              = 0
+DCGM_FR_EC_PERF_THRESHOLD    = 1
+DCGM_FR_EC_PERF_VIOLATION    = 2
+DCGM_FR_EC_SOFTWARE_CONFIG   = 3
+DCGM_FR_EC_SOFTWARE_LIBRARY  = 4
+DCGM_FR_EC_SOFTWARE_XID      = 5
+DCGM_FR_EC_SOFTWARE_CUDA     = 6
+DCGM_FR_EC_SOFTWARE_EUD      = 7
+DCGM_FR_EC_SOFTWARE_OTHER    = 8
+DCGM_FR_EC_HARDWARE_THERMAL  = 9
+DCGM_FR_EC_HARDWARE_MEMORY   = 10
+DCGM_FR_EC_HARDWARE_NVLINK   = 11
+DCGM_FR_EC_HARDWARE_NVSWITCH = 12
+DCGM_FR_EC_HARDWARE_PCIE     = 13
+DCGM_FR_EC_HARDWARE_POWER    = 14
+DCGM_FR_EC_HARDWARE_OTHER    = 15
+DCGM_FR_EC_INTERNAL_OTHER    = 16
 
 
 # Messages for the error codes. All messages must be defined in the ERROR_CODE_MSG <msg> format
@@ -272,9 +301,17 @@ DCGM_FR_PENDING_ROW_REMAP_MSG         = "GPU %u has pending row remappings"
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
 DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG      = "NVSwitch %u's NvLink %u is down."
-DCGM_FR_PCIE_REPLAYS                  = "GPU %u had correctable PCIe errors, see dmesg for more information." 
+DCGM_FR_PCIE_H_REPLAY_VIOLATION       = "GPU %u host-side correctable PCIe replay count violation, see dmesg for more information."
 DCGM_FR_FILE_CREATE_PERMISSIONS_MSG   = "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
 DCGM_FR_XID_ERROR_MSG                 = "Detected XID %u for GPU %u"
+DCGM_FR_SBE_VIOLATION_MSG                   = "Detected SBE violation for GPU %u"
+DCGM_FR_DBE_VIOLATION_MSG                   = "Detected DBE violation for GPU %u"
+DCGM_FR_PCIE_REPLAY_VIOLATION_MSG           = "Detected PCIe replay violation for GPU %u"
+DCGM_FR_SBE_THRESHOLD_VIOLATION_MSG         = "Detected SBE threshold violation for GPU %u"
+DCGM_FR_DBE_THRESHOLD_VIOLATION_MSG         = "Detected DBE threshold violation for GPU %u"
+DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_MSG = "Detected PCIe replay violation for GPU %u"
+DCGM_FR_SXID_ERROR_MSG                      = "Detected fatal NvSwitch SXID %u"
+DCGM_FR_CUDA_FM_NOT_INITIALIZED_MSG         = "FabricManager not initialized"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -387,11 +424,24 @@ DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT     = "Please check fabric manager and initialization logs to figure out why the link is down. You may also need to run a field diagnostic."
 DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT  = "Please restart the hostengine with parameter --home-dir to specify a different home directory for the " \
     "diagnostic or change permissions in the current directory to allow the user to write files there."
-DCGM_FR_PCIE_REPLAYS_NEXT             = ""
+DCGM_FR_PCIE_H_REPLAY_VIOLATION_NEXT  = ""
 DCGM_FR_XID_ERROR_NEXT                = "Please consult the documentation for details of this XID."
+DCGM_FR_SBE_VIOLATION_NEXT                   = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_DBE_VIOLATION_NEXT                   = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_PCIE_REPLAY_VIOLATION_NEXT           = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_SBE_THRESHOLD_VIOLATION_NEXT         = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_DBE_THRESHOLD_VIOLATION_NEXT         = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_NEXT = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT         = "Ensure that the FabricManager is running without errors."
+DCGM_FR_SXID_ERROR_NEXT                      = ""
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")
+    ret = fn(code)
+    return ret
+
+def dcgmErrorGetCategoryByCode(code):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetCategoryByCode")
     ret = fn(code)
     return ret
 

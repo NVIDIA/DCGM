@@ -665,7 +665,10 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                            << args[0];
             kill(pid, SIGKILL);
             // Prevent zombie child
-            waitpid(pid, nullptr, 0);
+            if (waitpid(pid, nullptr, 0) == -1)
+            {
+                log_error("waitpid returned -1 for pid {}", pid);
+            }
             DCGM_LOG_DEBUG << "The child process has been killed.";
             UpdateChildPID(-1, myTicket);
             pid = -1;
@@ -833,8 +836,8 @@ static std::string_view SanitizeNvvsJson(std::string_view stdoutStr)
  *         If the ret field is \c DCGM_ST_OK, the results field is guaranteed to be populated.
  * @note This function fills in the response system error information in case of an error.
  */
-auto ExecuteAndParseNvvs(DcgmDiagManager &self,
-                         DcgmDiagResponseWrapper &response,
+auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
+                         DcgmDiagResponseWrapper const &response,
                          dcgmRunDiag_t *drd,
                          std::string const &gpuIds,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
@@ -870,10 +873,8 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
 
         return { DCGM_ST_NVVS_ERROR, std::nullopt };
     }
-    else
-    {
-        log_debug("NVVS parsed JSON: {}", SanitizeNvvsJson(stdoutStr));
-    }
+
+    log_debug("NVVS parsed JSON: {}", SanitizeNvvsJson(stdoutStr));
 
     result.results = std::move(*tmpResults);
 
@@ -895,84 +896,143 @@ bool IsPluginMissing(DcgmNs::Nvvs::Json::DiagnosticResults const &results)
     return false;
 }
 
+/**
+ * @brief Parses a comma-separated list of GPU IDs and filters out invalid IDs.
+ * @param[in] input A string containing comma-separated GPU IDs.
+ * @return A vector of valid GPU IDs parsed from the input string.
+ */
+std::vector<std::uint32_t> ParseAndFilterGpuList(std::string_view input)
+{
+    std::vector<std::uint32_t> gpuList;
+    gpuList.reserve(DCGM_MAX_NUM_DEVICES);
+    for (auto const &str : DcgmNs::Split(input, ','))
+    {
+        std::uint32_t parsedInt {};
+        auto [p, ecc] = std::from_chars(str.data(), str.data() + str.size(), parsedInt);
+        if (ecc == std::errc())
+        {
+            gpuList.push_back(parsedInt);
+        }
+        else
+        {
+            log_error("Failed to parse GPU ID from string '{}'. Will be skipped", str);
+        }
+    }
+    return gpuList;
+}
+
+/**
+ * @brief Executes EUD with root permissions if the service account does not have root permissions
+ * @param[in] diagManager DiagManager instance
+ * @param[in] drd Diagnostic request data
+ * @param[in] response Response wrapper
+ * @param[in] serviceAccount Service account name
+ * @param[in] indexList Comma-separated list of GPU IDs
+ * @param[in,out] nvvsResults NVVS results of previously run tests. The EUD results will be merged into this structure
+ * @return DCGM_ST_OK if the EUD was executed successfully, an error code otherwise
+ */
+dcgmReturn_t ExecuteEudAsRoot(DcgmDiagManager const &diagManager,
+                              dcgmRunDiag_t const *drd,
+                              DcgmDiagResponseWrapper const &response,
+                              char const *serviceAccount,
+                              std::string const &indexList,
+                              std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> &nvvsResults)
+{
+    if (auto serviceAccountCredentials = GetUserCredentials(serviceAccount);
+        !serviceAccountCredentials.has_value() || (*serviceAccountCredentials).gid == 0
+        || (*serviceAccountCredentials).uid == 0 || std::ranges::count((*serviceAccountCredentials).groups, 0) > 0)
+    {
+        log_debug("Skip second EUD if the service account has root permissions");
+        return DCGM_ST_OK;
+    }
+
+    log_debug("Run EUD with root permissions");
+    auto eudDrd     = *drd;
+    eudDrd.validate = DCGM_POLICY_VALID_NONE;
+    memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
+    SafeCopyTo(eudDrd.testNames[0], (char const *)"eud");
+
+    auto eudResults = ExecuteAndParseNvvs(
+        diagManager, response, &eudDrd, indexList, DcgmDiagManager::ExecuteWithServiceAccount::No);
+
+    if (eudResults.ret != DCGM_ST_OK)
+    {
+        // Do not overwrite the response system error here
+        return eudResults.ret;
+    }
+
+    if (!eudResults.results.has_value())
+    {
+        log_warning("EUD results are missing (empty optional)");
+        return DCGM_ST_OK;
+    }
+
+    if (IsPluginMissing(*eudResults.results))
+    {
+        log_warning("EUD plugin is missing");
+        return DCGM_ST_OK;
+    }
+
+    auto tmpResult = nvvsResults.value_or(DcgmNs::Nvvs::Json::DiagnosticResults {});
+
+    if (!DcgmNs::Nvvs::Json::MergeResults(tmpResult, std::move(*eudResults.results)))
+    {
+        log_error("Failed to merge the NVVS JSON output");
+        nvvsResults = std::move(tmpResult);
+        response.RecordSystemError("Unable to merge JSON results for regular Diag and EUD tests");
+        return DCGM_ST_NVVS_ERROR;
+    }
+
+    nvvsResults = std::move(tmpResult);
+
+    return DCGM_ST_OK;
+}
+
 } // namespace
 
 dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrapper &response)
 {
-    std::string stdoutStr;
-    std::string stderrStr;
-    dcgmReturn_t ret = DCGM_ST_OK;
-    std::stringstream indexList;
-    int areAllSameSku = 1;
+    dcgmReturn_t ret   = DCGM_ST_OK;
+    bool areAllSameSku = true;
     std::vector<unsigned int> gpuIds;
 
     /* NVVS is only allowed to run on a single SKU at a time. Returning this error gives
      * users a deterministic response. See bug 1714115 and its related bugs for details
      */
-    if (strlen(drd->fakeGpuList) != 0u)
+    if (strlen(drd->fakeGpuList) != 0U)
     {
-        // Check just the supplied list
-        std::vector<std::string> gpuIdStrs;
-        dcgmTokenizeString(drd->fakeGpuList, ",", gpuIdStrs);
-
-        for (size_t i = 0; i < gpuIdStrs.size(); i++)
-        {
-            gpuIds.push_back(strtol(gpuIdStrs[i].c_str(), NULL, 10));
-        }
-
+        log_debug("Parsing fake GPU list: {}", drd->fakeGpuList);
+        gpuIds        = ParseAndFilterGpuList(drd->fakeGpuList);
         areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
-
-        indexList << drd->fakeGpuList;
     }
-    else if (strlen(drd->gpuList) != 0u)
+    else if (strlen(drd->gpuList) != 0U)
     {
-        // Check just the supplied list
-        std::vector<std::string> gpuIdStrs;
-        dcgmTokenizeString(drd->gpuList, ",", gpuIdStrs);
-
-        for (size_t i = 0; i < gpuIdStrs.size(); i++)
-        {
-            gpuIds.push_back(strtol(gpuIdStrs[i].c_str(), NULL, 10));
-        }
-
+        log_debug("Parsing GPU list: {}", drd->gpuList);
+        gpuIds        = ParseAndFilterGpuList(drd->gpuList);
         areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
-
-        indexList << drd->gpuList;
     }
     else
     {
-        bool foundGpus = false;
         // Check the group
-        ret = m_coreProxy.AreAllTheSameSku(0, (unsigned long long)drd->groupId, &areAllSameSku);
-
+        ret = m_coreProxy.AreAllTheSameSku(0, static_cast<unsigned int>(drd->groupId), &areAllSameSku);
         if (ret != DCGM_ST_OK)
         {
             log_error("Got st {} from AreAllTheSameSku()", (int)ret);
             return ret;
         }
 
-        ret = m_coreProxy.GetGroupGpuIds(0, (unsigned long long)drd->groupId, gpuIds);
+        ret = m_coreProxy.GetGroupGpuIds(0, static_cast<unsigned int>(drd->groupId), gpuIds);
         if (ret != DCGM_ST_OK)
         {
             log_error("Got st {} from GetGroupGpuIds()", (int)ret);
             return ret;
         }
+    }
 
-        for (unsigned int i = 0; i < gpuIds.size(); i++)
-        {
-            unsigned int gpuId = gpuIds[i];
-            indexList << gpuId;
-            if (i != gpuIds.size() - 1)
-                indexList << ",";
-
-            foundGpus = true;
-        }
-
-        if (foundGpus == false)
-        {
-            log_debug("Cannot perform diag: {}", errorString(DCGM_ST_GROUP_IS_EMPTY));
-            return DCGM_ST_GROUP_IS_EMPTY;
-        }
+    if (gpuIds.empty())
+    {
+        log_debug("Cannot perform diag: {}", errorString(DCGM_ST_GROUP_IS_EMPTY));
+        return DCGM_ST_GROUP_IS_EMPTY;
     }
 
     if (!areAllSameSku)
@@ -981,82 +1041,73 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_t *drd, DcgmDiagResponseWrappe
         return DCGM_ST_GROUP_INCOMPATIBLE;
     }
 
+    std::string indexList = fmt::format("{}", fmt::join(gpuIds, ","));
+    log_debug("Running diag on GPUs: {}", indexList);
+
     if ((drd->validate == DCGM_POLICY_VALID_NONE) && (strlen(drd->testNames[0]) == 0))
     {
         return DCGM_ST_OK;
     }
-    else
+
+    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, indexList);
+    if (nvvsResults.ret != DCGM_ST_OK)
     {
-        auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, indexList.str());
-        if (nvvsResults.ret != DCGM_ST_OK)
-        {
-            // Do not overwrite the response system error here as it should already have more specific information
-            return nvvsResults.ret;
-        }
+        // Do not overwrite the response system error here as it should already have more specific information
+        return nvvsResults.ret;
+    }
 
-        /*
-         * For long and xlong tests, we need to run NVVS again with EUD enabled if previously NVVS was not run as root.
-         * So we validate if a service account was provided and that was did not have root privileges.
-         */
-        if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG)
+    /*
+     * EUD plugins requires root permissions to run even if the service account is specified.
+     * At this moment, the EUD is included into long/xlong/production_testing and if specified directly via -r eud.
+     * The nvvs binary skips EUD tests if run as non-root.
+     * So we need to run EUD separately if the service account is specified, and it does not have root permissions.
+     *
+     * The production_testing is not a validation level and rather a "meta" test name. If individual tests are
+     * specified, the validate is equal to none, and we need to check the test names manually.
+     *
+     * It should be forbidden to have validation level other than none if the test names are specified.
+     */
+    std::unordered_set<std::string_view> testNames;
+    if (drd->validate == DCGM_POLICY_VALID_NONE)
+    {
+        for (auto const &testName : drd->testNames)
         {
-            if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
+            if (testName[0] != '\0')
             {
-                auto serviceAccountCredentials = GetUserCredentials((*serviceAccount).c_str());
-                if (serviceAccountCredentials.has_value())
-                {
-                    if ((*serviceAccountCredentials).gid != 0 && (*serviceAccountCredentials).uid != 0
-                        && std::ranges::count((*serviceAccountCredentials).groups, 0) <= 0)
-                    {
-                        // Run EUD only with root permissions
-                        auto eudDrd     = *drd;
-                        eudDrd.validate = DCGM_POLICY_VALID_NONE;
-                        memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
-                        SafeCopyTo(eudDrd.testNames[0], (char const *)"eud");
-
-                        auto eudResults = ExecuteAndParseNvvs(
-                            *this, response, &eudDrd, indexList.str(), ExecuteWithServiceAccount::No);
-
-                        if (eudResults.ret != DCGM_ST_OK)
-                        {
-                            // Do not overwrite the response system error here
-                            return eudResults.ret;
-                        }
-
-                        if (!eudResults.results.has_value())
-                        {
-                            log_error("EUD results are missing (empty optional)");
-                        }
-                        else
-                        {
-                            if (!IsPluginMissing(*eudResults.results))
-                            {
-                                if (!DcgmNs::Nvvs::Json::MergeResults(*nvvsResults.results,
-                                                                      std::move(*eudResults.results)))
-                                {
-                                    log_error("Failed to merge the NVVS JSON output");
-                                    response.RecordSystemError(
-                                        "Unable to merge JSON results for regular Diag and EUD tests");
-                                    return DCGM_ST_NVVS_ERROR;
-                                }
-                            }
-                            else
-                            {
-                                log_warning("EUD plugin is missing");
-                            }
-                        }
-                    }
-                }
+                testNames.insert(testName);
             }
         }
+    }
 
-        ret = FillResponseStructure(*nvvsResults.results, response, drd->groupId, ret);
-        if (ret != DCGM_ST_OK && !stderrStr.empty())
+    if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG
+        || testNames.contains("eud") || testNames.contains("production_testing"))
+    {
+        if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
         {
-            DCGM_LOG_ERROR << fmt::format("Error happened during JSON parsing of NVVS output: {}", errorString(ret));
-            DCGM_LOG_ERROR << fmt::format("NVVS stderr:\n{}", SanitizedString(stderrStr));
-            // Do not overwrite the response system error here as there may be a more specific one already
+            if (auto eudRet
+                = ExecuteEudAsRoot(*this, drd, response, (*serviceAccount).c_str(), indexList, nvvsResults.results);
+                eudRet != DCGM_ST_OK)
+            {
+                return eudRet;
+            }
         }
+    }
+
+    /*
+     * The FillResponseStructure function may return DCGM_ST_NVVS_ERROR if the results contain runtime errors.
+     * Otherwise, the oldRet (ret) is returned.
+     * In this execution branch the ret is never touched and is always DCGM_ST_OK as the previous non-OK results
+     * are returned and logged immediately.
+     *
+     * If we see the ret == DCGM_ST_NVVS_ERROR here, that means we got some runtime errors in the nvvs execution
+     * and we are reporting such errors back to the user.
+     */
+    ret = FillResponseStructure(
+        nvvsResults.results.value_or(DcgmNs::Nvvs::Json::DiagnosticResults {}), response, drd->groupId, ret);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << fmt::format("Error happened during JSON parsing of NVVS output: {}", errorString(ret));
+        // Do not overwrite the response system error here as there may be a more specific one already
     }
 
     return ret;
@@ -1110,35 +1161,27 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
     return index;
 }
 
-static void PopulateErrorDetail(std::vector<DcgmNs::Nvvs::Json::Warning> const &warnings, dcgmDiagErrorDetail_t &ed)
+static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Warning const &warning, dcgmDiagErrorDetail_v2 &ed)
 {
-    namespace rv = std::ranges::views;
-    int errCode  = DCGM_FR_OK;
-    fmt::format_to_n(
-        ed.msg,
-        sizeof(ed.msg),
-        "{}",
-        fmt::join(rv::transform(warnings,
-                                [&errCode](auto const &w) {
-                                    if (w.error_code.has_value() && dcgmError_t(*w.error_code) != DCGM_FR_OK)
-                                    {
-                                        if (errCode == DCGM_FR_OK
-                                            || (dcgmErrorGetPriorityByCode(*w.error_code) == DCGM_ERROR_ISOLATE
-                                                && dcgmErrorGetPriorityByCode(errCode) != DCGM_ERROR_ISOLATE))
-                                        {
-                                            /*
-                                             * We either preserve first non-OK error code or first isolate-level code.
-                                             */
-                                            errCode = *w.error_code;
-                                        }
-                                    }
-                                    return w.message;
-                                }),
-                  ", "));
-    ed.code = errCode;
+    if (warning.error_code.has_value())
+    {
+        ed.code = *warning.error_code;
+    }
+
+    if (warning.error_severity.has_value())
+    {
+        ed.severity = *warning.error_severity;
+    }
+
+    if (warning.error_category.has_value())
+    {
+        ed.category = *warning.error_category;
+    }
+
+    snprintf(ed.msg, sizeof(ed.msg), "%s", warning.message.c_str());
 }
 
-static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Info const &info, dcgmDiagErrorDetail_t &ed)
+static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Info const &info, dcgmDiagErrorDetail_v2 &ed)
 {
     int errCode = DCGM_FR_OK;
     fmt::format_to_n(ed.msg, sizeof(ed.msg), "{}", fmt::join(info.messages, ","));
@@ -1193,24 +1236,37 @@ void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
         if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
         {
             // Software test
-            dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
-
-            if (result.warnings.has_value())
-            {
-                ::PopulateErrorDetail(*result.warnings, ed);
-            }
-            response.AddErrorDetail(0, testIndex, test.name, ed, ret);
-
-            if (result.info.has_value())
-            {
-                ::PopulateErrorDetail(*result.info, ed);
-            }
-            response.AddInfoDetail(0, testIndex, test.name, ed, ret);
-
             for (auto const gpuId : result.gpuIds.ids)
             {
+                dcgmDiagErrorDetail_v2 id = { { 0 }, 0, 0, 0, 0 };
                 response.SetGpuIndex(gpuId);
                 gpuIdSet.insert(gpuId);
+
+                if (result.info.has_value())
+                {
+                    ::PopulateErrorDetail(*result.info, id);
+                }
+
+                response.AddInfoDetail(0, testIndex, test.name, id, ret);
+
+                if (!result.warnings.has_value())
+                {
+                    /* Populate empty error details */
+                    dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
+                    response.AddErrorDetail(0, testIndex, test.name, ed, 0, ret);
+                    continue;
+                }
+
+                unsigned int edIndex = 0;
+
+                for (auto const &warning : *result.warnings)
+                {
+                    dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
+
+                    ::PopulateErrorDetail(warning, ed);
+                    response.AddErrorDetail(0, testIndex, test.name, ed, edIndex, ret);
+                    edIndex++;
+                }
             }
 
             continue; // To next test.results item
@@ -1218,32 +1274,52 @@ void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
 
         for (auto const gpuId : result.gpuIds.ids)
         {
+            unsigned int edIndex = 0;
             response.SetGpuIndex(gpuId);
             gpuIdSet.insert(gpuId);
             response.SetPerGpuResponseState(testIndex, ret, gpuId);
-
-            if (result.warnings.has_value() && !(*result.warnings).empty())
-            {
-                dcgmDiagErrorDetail_t ed = { { 0 }, 0 };
-                ::PopulateErrorDetail(*result.warnings, ed);
-                response.AddErrorDetail(gpuId, testIndex, "", ed, ret);
-            }
 
             if (result.info.has_value() && !(*result.info).messages.empty())
             {
                 std::string info = InfoToCsvString(*result.info);
                 response.AddPerGpuMessage(testIndex, info, gpuId, false);
             }
+
+            if (!result.warnings.has_value())
+            {
+                continue;
+            }
+
+            for (auto const &warning : *result.warnings)
+            {
+                dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
+                ::PopulateErrorDetail(warning, ed);
+                response.AddErrorDetail(gpuId, testIndex, "", ed, edIndex, ret);
+
+                edIndex++;
+            }
         }
     }
 }
 
+
+/**
+ * @brief Fills the response structure from the parsed NVVS results
+ *
+ * @param[in] results Parsed NVVS results
+ * @param[out] response Diag response
+ * @param[in] groupId Group ID to get the GPU count from
+ * @param[in] oldRet Previous return code
+ *
+ * @return \a oldRet if the results do not contain runtime errors
+ *         \ref DCGM_ST_NVVS_ERROR otherwise
+ */
 dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::DiagnosticResults const &results,
                                                     DcgmDiagResponseWrapper &response,
                                                     int groupId,
                                                     dcgmReturn_t oldRet)
 {
-    unsigned int numGpus = m_coreProxy.GetGpuCount(groupId);
+    unsigned int const numGpus = m_coreProxy.GetGpuCount(groupId);
     std::unordered_set<unsigned int> gpuIdSet;
     response.InitializeResponseStruct(numGpus);
 
@@ -1255,6 +1331,11 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::Diagnost
     if (results.devIds.has_value())
     {
         response.RecordDevIds(*results.devIds);
+    }
+
+    if (results.devSerials.has_value())
+    {
+        response.RecordGpuSerials(*results.devSerials);
     }
 
     if (results.driverVersion.has_value())

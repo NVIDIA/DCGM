@@ -13,7 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmMigTypes.hpp"
+#include "DcgmEntityTypes.hpp"
+
+std::ostream &DcgmNs::Cpu::operator<<(std::ostream &os, DcgmNs::Cpu::CpuId const &val)
+{
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Cpu::CpuId>, "DcgmNs::Cpu::CpuId should be trivially copyable");
+    os << "CPU(" << val.id << ")";
+    return os;
+}
+
+std::ostream &DcgmNs::Cpu::operator<<(std::ostream &os, DcgmNs::Cpu::CoreId const &val)
+{
+    static_assert(std::is_trivially_copyable_v<DcgmNs::Cpu::CoreId>,
+                  "DcgmNs::Cpu::CoreId should be trivially copyable");
+    os << "CPU_CORE(" << val.id << ")";
+    return os;
+}
 
 std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::GpuInstanceId const &val)
 {
@@ -22,6 +37,7 @@ std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::GpuInstance
     os << "GPU_I(" << val.id << ")";
     return os;
 }
+
 std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::ComputeInstanceId const &val)
 {
     static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::ComputeInstanceId>,
@@ -29,6 +45,7 @@ std::ostream &DcgmNs::Mig::operator<<(std::ostream &os, DcgmNs::Mig::ComputeInst
     os << "GPU_CI(" << val.id << ")";
     return os;
 }
+
 std::ostream &DcgmNs::Mig::Nvml::operator<<(std::ostream &os, DcgmNs::Mig::Nvml::GpuInstanceId const &val)
 {
     static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::Nvml::GpuInstanceId>,
@@ -36,6 +53,7 @@ std::ostream &DcgmNs::Mig::Nvml::operator<<(std::ostream &os, DcgmNs::Mig::Nvml:
     os << "NVML_GI(" << val.id << ")";
     return os;
 }
+
 std::ostream &DcgmNs::Mig::Nvml::operator<<(std::ostream &os, DcgmNs::Mig::Nvml::ComputeInstanceId const &val)
 {
     static_assert(std::is_trivially_copyable_v<DcgmNs::Mig::Nvml::ComputeInstanceId>,

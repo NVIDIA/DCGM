@@ -72,12 +72,16 @@ public:
     void RecordDevIds(const std::vector<std::string> &devIds);
 
     /*****************************************************************************/
+    void RecordGpuSerials(const std::vector<std::pair<unsigned int, std::string>> &devSerials);
+
+    /*****************************************************************************/
     void RecordDriverVersion(const std::string &driverVersion);
 
     /*****************************************************************************/
     static unsigned int GetBasicTestResultIndex(std::string_view const &testname);
 
     /*****************************************************************************/
+    dcgmReturn_t SetVersion9(dcgmDiagResponse_v9 *response);
     dcgmReturn_t SetVersion8(dcgmDiagResponse_v8 *response);
     dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
 
@@ -85,14 +89,15 @@ public:
     dcgmReturn_t AddErrorDetail(unsigned int gpuIndex,
                                 unsigned int testIndex,
                                 const std::string &testname,
-                                dcgmDiagErrorDetail_t &ed,
+                                dcgmDiagErrorDetail_v2 &ed,
+                                unsigned int edIndex,
                                 dcgmDiagResult_t result);
 
     /*****************************************************************************/
     dcgmReturn_t AddInfoDetail(unsigned int gpuIndex,
                                unsigned int testIndex,
                                const std::string &testname,
-                               dcgmDiagErrorDetail_t &ed,
+                               dcgmDiagErrorDetail_v2 &ed,
                                dcgmDiagResult_t result);
 
     /*****************************************************************************/
@@ -101,6 +106,7 @@ public:
 private:
     union
     {
+        dcgmDiagResponse_v9 *v9ptr; // A pointer to the version8 struct
         dcgmDiagResponse_v8 *v8ptr; // A pointer to the version8 struct
         dcgmDiagResponse_v7 *v7ptr; // A pointer to the version7 struct
     } m_response;

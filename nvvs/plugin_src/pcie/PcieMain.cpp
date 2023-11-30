@@ -780,7 +780,7 @@ std::string GetBwCheckerPath(BusGrind &bg)
     char buf[DCGM_PATH_LEN * 4];
     char szTmp[DCGM_PATH_LEN];
     snprintf(szTmp, sizeof(szTmp), "/proc/%d/exe", getpid());
-    size_t len = readlink(szTmp, buf, sizeof(buf) - 1);
+    ssize_t len = readlink(szTmp, buf, sizeof(buf) - 1);
     if (len > 0)
     {
         buf[len] = '\0';
@@ -1573,7 +1573,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
     int numElems = (int)bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_INTS_PER_COPY);
     int repeat   = (int)bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_ITERATIONS);
 
-    std::barrier myBarrier(bg->gpu.size());
+    std::barrier myBarrier(numGPUs);
 
     auto worker = [&myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, &start, &stop, numGPUs](int d) {
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
@@ -1792,7 +1792,7 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         enableP2P(bg);
     }
 
-    std::barrier myBarrier(bg->gpu.size());
+    std::barrier myBarrier(numGPUs);
 
     auto worker = [&myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](int d) {
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
@@ -2200,7 +2200,6 @@ bool bg_check_error_conditions(BusGrind *bg,
     std::vector<dcgmTimeseriesInfo_t> failureThresholds;
 
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
 

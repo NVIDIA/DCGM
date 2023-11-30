@@ -118,6 +118,13 @@ bool ConstantPerf::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 
     for (unsigned int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
     {
+        if (gpuInfo->gpus[gpuListIndex].status == DcgmEntityStatusFake
+            || gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciDeviceId == 0)
+        {
+            log_debug("Skipping cuda init for fake gpu {}", gpuInfo->gpus[gpuListIndex].gpuId);
+            continue;
+        }
+
         try
         {
             cpDevice = new CPerfDevice(

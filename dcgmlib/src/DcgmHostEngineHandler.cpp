@@ -27,8 +27,10 @@
 #include "DcgmSettings.h"
 #include "DcgmStatus.h"
 #include "dcgm_health_structs.h"
+#include "dcgm_helpers.h"
 #include "dcgm_nvswitch_structs.h"
 #include "dcgm_profiling_structs.h"
+#include "dcgm_sysmon_structs.h"
 #include "dcgm_util.h"
 #include "dlfcn.h" //dlopen, dlsym..etc
 #include "nvcmvalue.h"
@@ -183,41 +185,103 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
                                                                 dcgm_field_entity_group_t entityGroupId,
                                                                 std::vector<dcgmGroupEntityPair_t> &entities)
 {
-    if (entityGroupId == DCGM_FE_SWITCH)
+    switch (entityGroupId)
     {
-        dcgm_nvswitch_msg_get_switches_t nvsMsg {};
-        nvsMsg.header.length     = sizeof(nvsMsg);
-        nvsMsg.header.version    = dcgm_nvswitch_msg_get_switches_version;
-        nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
-        nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_SWITCH_IDS;
-
-        dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header);
-        if (dcgmReturn != DCGM_ST_OK)
+        case DCGM_FE_SWITCH:
         {
-            DCGM_LOG_ERROR << "ProcessModuleCommand of DCGM_NVSWITCH_SR_GET_SWITCH_IDS returned "
-                           << errorString(dcgmReturn);
+            dcgm_nvswitch_msg_get_switches_t nvsMsg {};
+            nvsMsg.header.length     = sizeof(nvsMsg);
+            nvsMsg.header.version    = dcgm_nvswitch_msg_get_switches_version;
+            nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
+            nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_SWITCH_IDS;
+
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                DCGM_LOG_ERROR << "ProcessModuleCommand of DCGM_NVSWITCH_SR_GET_SWITCH_IDS returned "
+                               << errorString(dcgmReturn);
+                return dcgmReturn;
+            }
+
+            dcgmGroupEntityPair_t entityPair;
+            entityPair.entityGroupId = DCGM_FE_SWITCH;
+
+            for (unsigned int i = 0; i < nvsMsg.switchCount; i++)
+            {
+                entityPair.entityId = nvsMsg.switchIds[i];
+                entities.push_back(entityPair);
+            }
+            return DCGM_ST_OK;
+        }
+        case DCGM_FE_CPU:
+        {
+            dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
+            sysmonMsg.header.length     = sizeof(sysmonMsg);
+            sysmonMsg.header.version    = dcgm_sysmon_msg_get_cpus_version;
+            sysmonMsg.header.moduleId   = DcgmModuleIdSysmon;
+            sysmonMsg.header.subCommand = DCGM_SYSMON_SR_GET_CPUS;
+
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&sysmonMsg.header);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("Received {}", errorString(dcgmReturn));
+                return dcgmReturn;
+            }
+
+            dcgmGroupEntityPair_t entityPair;
+            entityPair.entityGroupId = DCGM_FE_CPU;
+
+            for (unsigned int cpu = 0; cpu < sysmonMsg.cpuCount; cpu++)
+            {
+                const auto &cpuObject = sysmonMsg.cpus[cpu];
+                entityPair.entityId   = cpuObject.cpuId;
+                entities.push_back(entityPair);
+            }
+            return DCGM_ST_OK;
+        }
+        case DCGM_FE_CPU_CORE:
+        {
+            dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
+            sysmonMsg.header.length     = sizeof(sysmonMsg);
+            sysmonMsg.header.version    = dcgm_sysmon_msg_get_cpus_version;
+            sysmonMsg.header.moduleId   = DcgmModuleIdSysmon;
+            sysmonMsg.header.subCommand = DCGM_SYSMON_SR_GET_CPUS;
+
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&sysmonMsg.header);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("Received {}", errorString(dcgmReturn));
+                return dcgmReturn;
+            }
+
+            dcgmGroupEntityPair_t entityPair;
+            entityPair.entityGroupId = DCGM_FE_CPU_CORE;
+
+            for (unsigned int cpu = 0; cpu < sysmonMsg.cpuCount; cpu++)
+            {
+                const auto &cpuObject = sysmonMsg.cpus[cpu];
+                for (unsigned int cpu = 0; cpu < DCGM_MAX_NUM_CPUS; cpu++)
+                {
+                    if (dcgmCpuHierarchyCpuOwnsCore(cpu, &cpuObject.ownedCores))
+                    {
+                        entityPair.entityId = cpu;
+                        entities.push_back(entityPair);
+                    }
+                }
+            }
+            return DCGM_ST_OK;
+        }
+        default:
+
+            dcgmReturn_t dcgmReturn = mpCacheManager->GetAllEntitiesOfEntityGroup(activeOnly, entityGroupId, entities);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                DCGM_LOG_ERROR << "GetAllEntitiesOfEntityGroup(ao " << activeOnly << ", eg " << entityGroupId
+                               << ") returned " << dcgmReturn;
+            }
+
             return dcgmReturn;
-        }
-
-        dcgmGroupEntityPair_t entityPair;
-        entityPair.entityGroupId = DCGM_FE_SWITCH;
-
-        for (unsigned int i = 0; i < nvsMsg.switchCount; i++)
-        {
-            entityPair.entityId = nvsMsg.switchIds[i];
-            entities.push_back(entityPair);
-        }
-        return DCGM_ST_OK;
     }
-
-    dcgmReturn_t dcgmReturn = mpCacheManager->GetAllEntitiesOfEntityGroup(activeOnly, entityGroupId, entities);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        DCGM_LOG_ERROR << "GetAllEntitiesOfEntityGroup(ao " << activeOnly << ", eg " << entityGroupId << ") returned "
-                       << dcgmReturn;
-    }
-
-    return dcgmReturn;
 }
 
 /*****************************************************************************/
@@ -232,6 +296,8 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
         case DCGM_FE_GPU:
         case DCGM_FE_GPU_I:
         case DCGM_FE_GPU_CI:
+        case DCGM_FE_CPU:
+        case DCGM_FE_CPU_CORE:
             return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
 
         case DCGM_FE_LINK:
@@ -626,6 +692,34 @@ dcgmReturn_t DcgmHostEngineHandler::HelperCreateFakeEntities(dcgmCreateFakeEntit
                     DCGM_LOG_ERROR << "Got bad fake compute instance ID DCGM_GPU_ID_BAD from cache manager";
                     return DCGM_ST_GENERIC_ERROR;
                 }
+                break;
+            }
+
+            case DCGM_FE_CPU: // fall-through
+            case DCGM_FE_CPU_CORE:
+            {
+                dcgm_sysmon_msg_create_fake_entities_t smonMsg {};
+
+                smonMsg.header.length     = sizeof(smonMsg);
+                smonMsg.header.moduleId   = DcgmModuleIdSysmon;
+                smonMsg.header.subCommand = DCGM_SYSMON_SR_CREATE_FAKE_ENTITIES;
+                smonMsg.header.version    = dcgm_sysmon_msg_create_fake_entities_version;
+                smonMsg.groupToCreate     = createFakeEntities->entityList[i].entity.entityGroupId;
+                smonMsg.numToCreate       = 1;
+                smonMsg.parent            = createFakeEntities->entityList[i].parent;
+
+                dcgmReturn_t dcgmReturn = ProcessModuleCommand(&smonMsg.header);
+                if (dcgmReturn == DCGM_ST_OK && smonMsg.numCreated == smonMsg.numToCreate)
+                {
+                    createFakeEntities->entityList[i].entity.entityId = smonMsg.ids[0];
+                }
+                else
+                {
+                    log_error("DCGM_SMON_SR_CREATE_FAKE_CPU returned {} numCreated {}", dcgmReturn, smonMsg.numCreated);
+                    /* Use the return unless it was OK. Else return generic error */
+                    return (dcgmReturn == DCGM_ST_OK ? DCGM_ST_GENERIC_ERROR : dcgmReturn);
+                }
+
                 break;
             }
 
@@ -1392,6 +1486,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     m_modules[DcgmModuleIdConfig].filename     = "libdcgmmoduleconfig.so.3";
     m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.3";
     m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.3";
+    m_modules[DcgmModuleIdSysmon].filename     = "libdcgmmodulesysmon.so.3";
 
     /* Apply the denylist that was requested before we possibly load any modules */
     for (unsigned int i = 0; i < params.denyListCount; i++)
@@ -1447,10 +1542,6 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
         ss << "DCGM only supports up to " << DCGM_MAX_NUM_DEVICES << " GPUs. " << nvmlDeviceCount
            << " GPUs were found in the system.";
         throw std::runtime_error(ss.str());
-    }
-    if (nvmlDeviceCount == 0)
-    {
-        throw std::runtime_error("DCGM Failed to find any GPUs on the node.");
     }
 
     mpCacheManager = new DcgmCacheManager();
@@ -3415,6 +3506,86 @@ static void helper_get_prof_field_ids(std::vector<unsigned short> &fieldIds, std
     }
 }
 
+static bool helperIsSysmonField(unsigned short fieldId)
+{
+    return fieldId >= DCGM_FI_SYSMON_FIRST_ID && fieldId <= DCGM_FI_SYSMON_LAST_ID;
+}
+
+static dcgmReturn_t helperFilterSysmonEntitiesAndFields(dcgm_sysmon_msg_watch_fields_t &sysmonMsg,
+                                                        std::vector<dcgmGroupEntityPair_t> const &entities,
+                                                        std::vector<unsigned short> const &fields,
+                                                        DcgmWatcher const &watcher,
+                                                        timelib64_t const updateIntervalUsec,
+                                                        double const maxSampleAge,
+                                                        int const maxKeepSamples)
+{
+    // First check we have CPU entities and fields and that they fit in the message
+
+    std::vector<dcgmGroupEntityPair_t> cpuEntities;
+    std::vector<unsigned short> cpuFields;
+
+    for (auto entity : entities)
+    {
+        if (entity.entityGroupId == DCGM_FE_CPU || entity.entityGroupId == DCGM_FE_CPU_CORE)
+        {
+            cpuEntities.emplace_back(entity);
+        }
+    }
+
+    for (auto field : fields)
+    {
+        if (helperIsSysmonField(field))
+        {
+            cpuFields.emplace_back(field);
+        }
+    }
+
+    if (cpuEntities.empty() || cpuFields.empty())
+    {
+        // Nothing to watch
+        return DCGM_ST_OK;
+    }
+
+    if (cpuEntities.size() > SYSMON_MSG_WATCH_FIELDS_MAX_NUM_ENTITIES)
+    {
+        log_error(
+            "cpuEntities.size {} exceeds max size {}", cpuEntities.size(), SYSMON_MSG_WATCH_FIELDS_MAX_NUM_ENTITIES);
+        return DCGM_ST_INSUFFICIENT_RESOURCES;
+    }
+
+    if (cpuFields.size() > SYSMON_MSG_WATCH_FIELDS_MAX_NUM_FIELDS)
+    {
+        log_error("cpuFields.size {} exceeds max size {}", cpuFields.size(), SYSMON_MSG_WATCH_FIELDS_MAX_NUM_FIELDS);
+        return DCGM_ST_INSUFFICIENT_RESOURCES;
+    }
+
+    sysmonMsg.header.length       = sizeof(sysmonMsg);
+    sysmonMsg.header.moduleId     = DcgmModuleIdSysmon;
+    sysmonMsg.header.subCommand   = DCGM_SYSMON_SR_WATCH_FIELDS;
+    sysmonMsg.header.connectionId = watcher.connectionId;
+    sysmonMsg.header.version      = dcgm_sysmon_msg_watch_fields_version;
+
+    sysmonMsg.updateIntervalUsec = updateIntervalUsec;
+    sysmonMsg.maxKeepAge         = maxSampleAge;
+    sysmonMsg.maxKeepSamples     = maxKeepSamples;
+
+    sysmonMsg.numEntities = cpuEntities.size();
+    for (unsigned int i = 0; i < cpuEntities.size(); i++)
+    {
+        auto const &entity       = cpuEntities[i];
+        sysmonMsg.entityPairs[i] = entity;
+    }
+
+    sysmonMsg.numFieldIds = cpuFields.size();
+    for (unsigned int i = 0; i < cpuFields.size(); i++)
+    {
+        auto const &field     = cpuFields[i];
+        sysmonMsg.fieldIds[i] = field;
+    }
+
+    return DCGM_ST_OK;
+}
+
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
                                                     dcgmFieldGrp_t fieldGroupId,
@@ -3429,7 +3600,8 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned short> fieldIds;
     std::vector<unsigned short> profFieldIds;
-    dcgmReturn_t retSt = DCGM_ST_OK;
+    dcgm_sysmon_msg_watch_fields_t sysmonMsg = {};
+    dcgmReturn_t retSt                       = DCGM_ST_OK;
 
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
@@ -3498,50 +3670,61 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
        quota policy is in place */
     helper_get_prof_field_ids(fieldIds, profFieldIds);
 
-    if (profFieldIds.empty())
+    if (!profFieldIds.empty())
     {
-        return DCGM_ST_OK; /* No prof fields. Just return */
+        dcgm_profiling_msg_watch_fields_t msg;
+        memset(&msg, 0, sizeof(msg));
+
+        if (profFieldIds.size() > DCGM_ARRAY_CAPACITY(msg.watchFields.fieldIds))
+        {
+            log_error("Too many prof field IDs {} for request DCGM_PROFILING_SR_WATCH_FIELDS",
+                      (int)profFieldIds.size());
+
+            retSt = DCGM_ST_GENERIC_ERROR;
+            goto GETOUT;
+        }
+
+        /* Do we need to forward on a profiling watch request to the profiling module */
+        mpCacheManager->GetProfModuleServicedEntities(entities);
+
+        if (!entities.empty())
+        {
+            msg.header.length           = sizeof(msg);
+            msg.header.moduleId         = DcgmModuleIdProfiling;
+            msg.header.subCommand       = DCGM_PROFILING_SR_WATCH_FIELDS;
+            msg.header.connectionId     = watcher.connectionId;
+            msg.header.version          = dcgm_profiling_msg_watch_fields_version;
+            msg.watchFields.version     = dcgmProfWatchFields_version;
+            msg.watchFields.groupId     = (dcgmGpuGrp_t)groupId;
+            msg.watchFields.numFieldIds = profFieldIds.size();
+            memcpy(&msg.watchFields.fieldIds[0],
+                   &profFieldIds[0],
+                   profFieldIds.size() * sizeof(msg.watchFields.fieldIds[0]));
+            msg.watchFields.updateFreq     = monitorIntervalUsec;
+            msg.watchFields.maxKeepAge     = maxSampleAge;
+            msg.watchFields.maxKeepSamples = maxKeepSamples;
+
+            dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("DCGM_PROFILING_SR_WATCH_FIELDS failed with {}", dcgmReturn);
+                retSt = dcgmReturn;
+                goto GETOUT;
+            }
+        }
     }
 
-    dcgm_profiling_msg_watch_fields_t msg;
-    memset(&msg, 0, sizeof(msg));
-
-    if (profFieldIds.size() > DCGM_ARRAY_CAPACITY(msg.watchFields.fieldIds))
+    helperFilterSysmonEntitiesAndFields(
+        sysmonMsg, entities, fieldIds, watcher, monitorIntervalUsec, maxSampleAge, maxKeepSamples);
+    if (sysmonMsg.numEntities > 0 && sysmonMsg.numFieldIds > 0)
     {
-        log_error("Too many prof field IDs {} for request DCGM_PROFILING_SR_WATCH_FIELDS", (int)profFieldIds.size());
-
-        retSt = DCGM_ST_GENERIC_ERROR;
-        goto GETOUT;
-    }
-
-    /* Do we need to forward on a profiling watch request to the profiling module */
-    mpCacheManager->GetProfModuleServicedEntities(entities);
-
-    if (entities.size() < 1)
-    {
-        DCGM_LOG_DEBUG << "No entities were serviced by the profiling module";
-        return DCGM_ST_OK;
-    }
-
-    msg.header.length           = sizeof(msg);
-    msg.header.moduleId         = DcgmModuleIdProfiling;
-    msg.header.subCommand       = DCGM_PROFILING_SR_WATCH_FIELDS;
-    msg.header.connectionId     = watcher.connectionId;
-    msg.header.version          = dcgm_profiling_msg_watch_fields_version;
-    msg.watchFields.version     = dcgmProfWatchFields_version;
-    msg.watchFields.groupId     = (dcgmGpuGrp_t)groupId;
-    msg.watchFields.numFieldIds = profFieldIds.size();
-    memcpy(&msg.watchFields.fieldIds[0], &profFieldIds[0], profFieldIds.size() * sizeof(msg.watchFields.fieldIds[0]));
-    msg.watchFields.updateFreq     = monitorIntervalUsec;
-    msg.watchFields.maxKeepAge     = maxSampleAge;
-    msg.watchFields.maxKeepSamples = maxKeepSamples;
-
-    dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        log_error("DCGM_PROFILING_SR_WATCH_FIELDS failed with {}", dcgmReturn);
-        retSt = dcgmReturn;
-        goto GETOUT;
+        dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&sysmonMsg);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            log_error("DCGM_SYSMON_SR_WATCH_FIELD failed with {}", dcgmReturn);
+            retSt = dcgmReturn;
+            goto GETOUT;
+        }
     }
 
 GETOUT:
@@ -3566,6 +3749,7 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned short> fieldIds;
     std::vector<unsigned short> profFieldIds;
+    dcgm_sysmon_msg_watch_fields_t sysmonMsg = {};
 
     dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
     if (dcgmReturn != DCGM_ST_OK)
@@ -3605,36 +3789,58 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     /* Send a module command to the profiling module to unwatch any fieldIds */
     helper_get_prof_field_ids(fieldIds, profFieldIds);
 
-    if (profFieldIds.empty())
+    if (!profFieldIds.empty())
     {
-        return retSt; /* No prof fields. Just return */
+        /* Do we need to forward on a profiling unwatch request to the profiling module? */
+        mpCacheManager->GetProfModuleServicedEntities(entities);
+
+        if (entities.empty())
+        {
+            DCGM_LOG_DEBUG << "No entities were serviced by the profiling module";
+        }
+        else
+        {
+            dcgm_profiling_msg_unwatch_fields_t msg;
+            memset(&msg, 0, sizeof(msg));
+
+            msg.header.length         = sizeof(msg);
+            msg.header.moduleId       = DcgmModuleIdProfiling;
+            msg.header.subCommand     = DCGM_PROFILING_SR_UNWATCH_FIELDS;
+            msg.header.connectionId   = watcher.connectionId;
+            msg.header.version        = dcgm_profiling_msg_unwatch_fields_version;
+            msg.unwatchFields.version = dcgmProfUnwatchFields_version;
+            msg.unwatchFields.groupId = (dcgmGpuGrp_t)groupId;
+
+            dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("DCGM_PROFILING_SR_UNWATCH_FIELDS failed with {}", dcgmReturn);
+                retSt = dcgmReturn;
+            }
+        }
     }
 
-    /* Do we need to forward on a profiling unwatch request to the profiling module? */
-    mpCacheManager->GetProfModuleServicedEntities(entities);
-
-    if (entities.empty())
+    // Sysmon watches
+    for (auto field : fieldIds)
     {
-        DCGM_LOG_DEBUG << "No entities were serviced by the profiling module";
-        return DCGM_ST_OK;
-    }
+        if (helperIsSysmonField(field))
+        {
+            sysmonMsg.header.length       = sizeof(sysmonMsg);
+            sysmonMsg.header.moduleId     = DcgmModuleIdSysmon;
+            sysmonMsg.header.subCommand   = DCGM_SYSMON_SR_UNWATCH_FIELDS;
+            sysmonMsg.header.connectionId = watcher.connectionId;
+            sysmonMsg.header.version      = dcgm_sysmon_msg_unwatch_fields_version;
+            sysmonMsg.watcher             = watcher;
 
-    dcgm_profiling_msg_unwatch_fields_t msg;
-    memset(&msg, 0, sizeof(msg));
-
-    msg.header.length         = sizeof(msg);
-    msg.header.moduleId       = DcgmModuleIdProfiling;
-    msg.header.subCommand     = DCGM_PROFILING_SR_UNWATCH_FIELDS;
-    msg.header.connectionId   = watcher.connectionId;
-    msg.header.version        = dcgm_profiling_msg_unwatch_fields_version;
-    msg.unwatchFields.version = dcgmProfUnwatchFields_version;
-    msg.unwatchFields.groupId = (dcgmGpuGrp_t)groupId;
-
-    dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&msg);
-    if (dcgmReturn != DCGM_ST_OK)
-    {
-        log_error("DCGM_PROFILING_SR_UNWATCH_FIELDS failed with {}", dcgmReturn);
-        retSt = dcgmReturn;
+            dcgmReturn = ProcessModuleCommand((dcgm_module_command_header_t *)&sysmonMsg);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("DCGM_SYSMON_SR_UNWATCH_FIELD failed with {}", errorString(dcgmReturn));
+                retSt = dcgmReturn;
+            }
+            // Only need to send message once. Exit loop
+            break;
+        }
     }
 
     return retSt;
@@ -3860,6 +4066,27 @@ DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_grou
         if (dcgmReturn == DCGM_ST_OK)
         {
             return nvsMsg.entityStatus;
+        }
+        else
+        {
+            DCGM_LOG_ERROR << "Got " << errorString(dcgmReturn)
+                           << " from DCGM_NVSWITCH_SR_GET_ENTITY_STATUS of entityId " << entityId;
+            return DcgmEntityStatusUnknown;
+        }
+    }
+    if ((entityGroupId == DCGM_FE_CPU) || (entityGroupId == DCGM_FE_CPU_CORE))
+    {
+        dcgm_sysmon_msg_get_entity_status_t msg {};
+        msg.header.length       = sizeof(msg);
+        msg.header.moduleId     = DcgmModuleIdSysmon;
+        msg.header.subCommand   = DCGM_SYSMON_SR_GET_ENTITY_STATUS;
+        msg.header.version      = dcgm_sysmon_msg_get_entity_status_version;
+        msg.entityId            = entityId;
+        msg.entityGroupId       = entityGroupId;
+        dcgmReturn_t dcgmReturn = ProcessModuleCommand(&msg.header);
+        if (dcgmReturn == DCGM_ST_OK)
+        {
+            return msg.entityStatus;
         }
         else
         {

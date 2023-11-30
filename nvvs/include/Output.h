@@ -52,8 +52,8 @@ public:
     virtual void header(const std::string &headerSting);
     virtual void Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
-                        const std::vector<dcgmDiagEvent_t> &errors,
-                        const std::vector<dcgmDiagEvent_t> &info,
+                        const std::vector<dcgmDiagErrorDetail_v2> &errors,
+                        const std::vector<dcgmDiagErrorDetail_v2> &info,
                         const std::optional<std::any> &pluginSpecificData = std::nullopt);
     virtual void prep(const std::string &testString);
     virtual void updatePluginProgress(unsigned int progress, bool clear);
@@ -77,7 +77,7 @@ protected:
 
     std::string RemoveNewlines(const std::string &str);
 
-    void WriteInfo(const std::vector<dcgmDiagEvent_t> &info);
+    void WriteInfo(const std::vector<dcgmDiagErrorDetail_v2> &info);
 };
 
 #endif // NVVS_NVVS_Output_H

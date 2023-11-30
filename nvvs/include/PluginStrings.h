@@ -88,6 +88,10 @@
                                                       while the plugin runs. If more replays \
                                                       occur than this threshold, this plugin \
                                                       will fail */
+
+/* The maximum number of recovery errors that can happen before it's considered an error */
+#define PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS "max_nvlink_recovery_errors"
+
 #define PCIE_STR_MAX_MEMORY_CLOCK                                                              \
     "max_memory_clock" /* Maximum memory clock in MHZ to use when locking                      \
                                                       application clocks to max while busgrind \

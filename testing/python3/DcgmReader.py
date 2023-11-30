@@ -216,6 +216,7 @@ class DcgmReader(object):
         # the sampling was actually started one collectd sampling interval
         # later. We expect this is not an issue.
         self.fvs = None
+        self.egfvs = None
         self.dfvc = None
         self.dfvec = None
 
@@ -504,6 +505,46 @@ class DcgmReader(object):
 
     ###########################################################################
     '''
+    This function gets each value as a dictionary of dictionaries of
+    dictionaries. The dictionary returned is each entity group id mapped to a
+    dictionary of entity ids of a dictionary of it's field values. Each
+    field value dictionary is the field name mapped to the value or the field
+    id mapped to value depending on the parameter mapById.
+    '''
+    def GetLatestEntityValuesAsDict(self, mapById):
+        systemDictionary = {}
+
+        with self.m_lock:
+            try:
+                self.Reconnect()
+                egfvs = self.m_dcgmGroup.samples.GetLatest_v2(self.m_fieldGroup).values
+                for entityGroupId in list(egfvs.keys()):
+                    systemDictionary[entityGroupId] = {} # initialize the entity group's dictionary
+                    efvs = egfvs[entityGroupId]
+
+                    for entityId in list(efvs.keys()):
+                        systemDictionary[entityGroupId][entityId] = {}
+                        fvs = efvs[entityId]
+
+                        for fieldId in list(fvs.keys()):
+                            val = fvs[fieldId][-1]
+
+                            if val.isBlank:
+                                continue
+
+                            if mapById == False:
+                                fieldTag = self.m_fieldIdToInfo[fieldId].tag
+                                systemDictionary[entityGroupId][entityId][fieldTag] = val.value if isinstance(val.value, bytes) else val.value
+                            else:
+                                systemDictionary[entityGroupId][entityId][fieldId] = val.value if isinstance(val.value, bytes) else val.value
+            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.SetDisconnected()
+
+        return systemDictionary
+
+    ###########################################################################
+    '''
     This function gets value as a dictionary of dictionaries of lists. The
     dictionary returned is each gpu id mapped to a dictionary of it's field
     value lists. Each field value dictionary is the field name mapped to the
@@ -549,6 +590,61 @@ class DcgmReader(object):
         return systemDictionary
 
     ###########################################################################
+    '''
+    This function gets each value as a dictionary of dictionaries of
+    dictionaries. The dictionary returned is each entity group id mapped to a
+    dictionary of entity ids of a dictionary of it's field values. Each
+    field value dictionary is the field name mapped to the value or the field
+    id mapped to value depending on the parameter mapById.
+
+    The list of values are the values for each field since the last retrieval.
+    '''
+    def GetAllEntityValuesAsDictSinceLastCall(self, mapById):
+        systemDictionary = {}
+
+        with self.m_lock:
+            try:
+                self.Reconnect()
+                report = self.egfvs is not None
+                self.egfvs = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(self.egfvs, self.m_fieldGroup)
+                if report:
+                    for entityGroupId in list(self.egfvs.values.keys()):
+                        systemDictionary[entityGroupId] = {}
+                        efvs = self.egfvs.values[entityGroupId]
+
+                        for entityId in list(efvs.keys()):
+                            systemDictionary[entityGroupId][entityId] = {}
+                            fvs = efvs[entityId]
+
+                            for fieldId in list(fvs.keys()):
+                                for val in fvs[fieldId]:
+                                    if val.isBlank:
+                                        continue
+
+                                if mapById == False:
+                                    fieldTag = self.m_fieldIdToInfo[fieldId].tag
+                                    if not fieldTag in systemDictionary[entityGroupId][entityId]:
+                                        systemDictionary[entityGroupId][entityId][fieldTag] = []
+                                
+                                    systemDictionary[entityGroupId][entityId][fieldTag].append(val)
+                                else:
+                                    if not fieldId in systemDictionary[entityGroupId][entityId]:
+                                        systemDictionary[entityGroupId][entityId][fieldId] = []
+                                    systemDictionary[entityGroupId][entityId][fieldId].append(val)
+            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.SetDisconnected()
+
+        if self.egfvs is not None:
+            self.egfvs.EmptyValues()
+
+        return systemDictionary
+
+    """
+    Gpu-based convenience calls (mostly for non-MIG)
+    """
+
+    ###########################################################################
     def GetLatestGpuValuesAsFieldIdDict(self):
         return self.GetLatestGpuValuesAsDict(True)
 
@@ -563,3 +659,24 @@ class DcgmReader(object):
     ###########################################################################
     def GetAllGpuValuesAsFieldNameDictSinceLastCall(self):
         return self.GetAllGpuValuesAsDictSinceLastCall(False)
+
+    """
+    Entity-based convenience calls (mostly for MIG)
+    """
+
+    ###########################################################################
+    def GetLatestEntityValuesAsFieldIdDict(self):
+        return self.GetLatestEntityValuesAsDict(True)
+
+    ###########################################################################
+    def GetLatestEntityValuesAsFieldNameDict(self):
+        return self.GetLatestEntityValuesAsDict(False)
+
+    ###########################################################################
+    def GetAllEntityValuesAsFieldIdDictSinceLastCall(self):
+        return self.GetAllEntityValuesAsDictSinceLastCall(True)
+
+    ###########################################################################
+    def GetAllEntityValuesAsFieldNameDictSinceLastCall(self):
+        return self.GetAllEntityValuesAsDictSinceLastCall(False)
+    

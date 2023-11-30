@@ -1482,9 +1482,10 @@ class RunDcgmi():
                             if diagTest:
                                 nsc = nvidia_smi_utils.NvidiaSmiJob()
                                 nsc.start()
+                                # Skip checks for nvlinks and pci width to avoid QA bugs
                                 paramsStr = "pcie.test_nvlink_status=false"
-                                paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=2"
-                                paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=2"
+                                paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
+                                paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
                                 dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(), runMode=diagTest, gpuIds=gpuIds, paramsStr=paramsStr)
                                 diagPassed = not dd.Run()

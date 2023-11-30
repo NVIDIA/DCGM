@@ -517,19 +517,19 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
 
     using DcgmNs::Utils::PipePair;
 
-    auto pStdin = PipePair::Create(PipePair::BlockingType::NonBlocking);
+    auto pStdin = PipePair::Create(PipePair::BlockingType::Blocking);
     if (!pStdin)
     {
         DCGM_LOG_ERROR << "Unable to create stdin pipe for external command";
         return -1;
     }
-    auto pStdout = PipePair::Create(PipePair::BlockingType::NonBlocking);
+    auto pStdout = PipePair::Create(PipePair::BlockingType::Blocking);
     if (!pStdout)
     {
         DCGM_LOG_ERROR << "Unable to create stdout pipe for external command";
         return -1;
     }
-    auto pStderr = PipePair::Create(PipePair::BlockingType::NonBlocking);
+    auto pStderr = PipePair::Create(PipePair::BlockingType::Blocking);
     if (!pStderr)
     {
         DCGM_LOG_ERROR << "Unable to create stderr pipe for external command";
@@ -817,7 +817,8 @@ FileHandle::~FileHandle() noexcept
     if (m_fd != -1)
     {
         while ((close(m_fd) == -1) && (errno == EINTR))
-        {}
+        {
+        }
         m_fd = -1;
     }
 }

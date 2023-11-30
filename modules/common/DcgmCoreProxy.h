@@ -17,7 +17,7 @@
 
 #include "DcgmProtocol.h"
 
-#include <DcgmMigTypes.hpp>
+#include <DcgmEntityTypes.hpp>
 #include <DcgmWatchTable.h>
 #include <dcgm_core_communication.h>
 #include <dcgm_module_structs.h>
@@ -43,12 +43,12 @@ public:
     /**
      * @param[in] gpuIds - the list of GPU ids to check
      */
-    bool AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds);
+    bool AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const;
 
     /**
      * @param[in] activeOnly - if true, get a count of only the active GPUs, otherwise count all visible GPUs
      */
-    int GetGpuCount(int activeOnly);
+    unsigned int GetGpuCount(int activeOnly);
 
     /**
      * @param[out] gpuInfo - a list of all the GPU information
@@ -244,7 +244,7 @@ public:
      * @param[in]  groupId - the id of the group we're checking
      * @param[out] areAllSameSku - set to true if all GPUs in this group and the same SKU, false otherwise.
      */
-    dcgmReturn_t AreAllTheSameSku(dcgm_connection_id_t connectionId, unsigned int groupId, int *areAllSameSku) const;
+    dcgmReturn_t AreAllTheSameSku(dcgm_connection_id_t connectionId, unsigned int groupId, bool *areAllSameSku) const;
 
     /**
      * @param[in]  connectionId - the id of the connection

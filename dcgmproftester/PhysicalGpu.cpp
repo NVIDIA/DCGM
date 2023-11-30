@@ -925,7 +925,7 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
         case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
-            rtSt = RunSubtestDataTypeActive();
+            rtSt = UseCublas() ? RunSubtestGemmUtil() : RunSubtestDataTypeActive();
             break;
 
         case DCGM_FI_PROF_NVLINK_RX_BYTES:
@@ -1536,6 +1536,11 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 bool PhysicalGpu::IsMIG(void) const
 {
     return (m_dcgmDeviceAttr.settings.migModeEnabled != 0);
+}
+
+bool PhysicalGpu::UseCublas(void) const
+{
+    return (m_parameters.m_cublas);
 }
 
 unsigned int PhysicalGpu::GetGpuId(void) const
