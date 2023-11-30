@@ -251,7 +251,8 @@ void Health::AddErrorMessage(DcgmiOutputBoxer &outErrors, const std::string &inE
 
             // Don't print whitespace at the beginning of this section
             for (; errorMsg.at(start) == ' ' && start < errorMsg.length(); start++)
-            {}
+            {
+            }
 
             // Don't print a new line if all that was left was whitespace
             if (start >= errorMsg.length())

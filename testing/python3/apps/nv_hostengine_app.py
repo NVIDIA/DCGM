@@ -51,7 +51,7 @@ class NvHostEngineApp(app_runner.AppRunner):
             ]
     supported_profile_tools = ['callgrind', 'massif']
     
-    def __init__(self, args=None, profile_dir=None, heEnv=None):
+    def __init__(self, args=None, profile_dir=None, heEnv=None, pid_dir=None):
         '''
         args: special args to execute nv-hostengine with
         profile_dir: output directory to create which will contain 
@@ -63,7 +63,10 @@ class NvHostEngineApp(app_runner.AppRunner):
         self.nv_hostengine = None
         self._pid = None
         self._retvalue = None
-        if test_utils.noLogging:
+
+        if pid_dir is not None:
+            self._pidFilename = os.path.join(pid_dir, 'nv-hostengine.pid')
+        elif test_utils.noLogging:
             self._pidFilename = os.path.join(os.getcwd(), 'nv-hostengine.pid')
         else:
             self._pidFilename = os.path.join(logger.log_dir, 'nv-hostengine.pid')

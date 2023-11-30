@@ -61,22 +61,14 @@ Allowlist::~Allowlist()
 /*****************************************************************************/
 bool Allowlist::IsAllowlisted(const std::string deviceId, const std::string ssid)
 {
-    std::map<std::string, std::map<std::string, TestParameters *>>::const_iterator outerIt = m_featureDb.find(deviceId);
-    std::set<std::string>::const_iterator globalChangesIt = m_globalChanges.find(deviceId);
+    std::map<std::string, std::map<std::string, TestParameters *>>::const_iterator outerIt
+        = m_featureDb.find(deviceId + ssid);
+    std::set<std::string>::const_iterator globalChangesIt = m_globalChanges.find(deviceId + ssid);
 
     if (outerIt == m_featureDb.end() && globalChangesIt == m_globalChanges.end())
     {
-        // Also search for deviceId + ssid
-        outerIt         = m_featureDb.find(deviceId + ssid);
-        globalChangesIt = m_globalChanges.find(deviceId + ssid);
-        if (outerIt == m_featureDb.end() && globalChangesIt == m_globalChanges.end())
-        {
-            DCGM_LOG_INFO << "DeviceId " << deviceId.c_str() << " is NOT allowlisted";
-            return false;
-        }
-
-        DCGM_LOG_INFO << "DeviceId " << deviceId.c_str() << " is allowlisted";
-        return true;
+        DCGM_LOG_INFO << "DeviceId " << deviceId.c_str() << " is NOT allowlisted";
+        return false;
     }
     else
     {

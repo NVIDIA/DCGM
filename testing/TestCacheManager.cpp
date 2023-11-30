@@ -1215,6 +1215,7 @@ int TestCacheManager::TestManageVgpuList()
                 fprintf(stderr,
                         "GetLatestSample returned unexpected sample. "
                         "Expected 'nvidia'\n");
+                //coverity[checked-return]
                 cacheManager->FreeSamples(&sample, 1, fieldMeta->fieldId);
                 retSt = 100;
                 goto CLEANUP;

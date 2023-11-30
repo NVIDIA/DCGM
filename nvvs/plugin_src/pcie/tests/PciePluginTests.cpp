@@ -167,6 +167,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     childInfo.stdoutStr     = testJson3;
     childInfo.pid           = 23981;
     childInfo.readOutputRet = 12;
+    childInfo.outputFdIndex = 0;
     childrenInfo.push_back(childInfo);
 
     double minBw = 10.0;

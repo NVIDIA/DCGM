@@ -20,6 +20,7 @@
 #include "dcgm_test_apis.h"
 
 #include <DcgmLogging.h>
+#include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 
 #include <thread>
@@ -66,6 +67,12 @@ struct fmt::formatter<dcgm_field_entity_group_t> : fmt::formatter<fmt::string_vi
                 break;
             case DCGM_FE_LINK:
                 val = "LINK";
+                break;
+            case DCGM_FE_CPU:
+                val = "CPU";
+                break;
+            case DCGM_FE_CPU_CORE:
+                val = "CPU Core";
                 break;
             case DCGM_FE_NONE:
             case DCGM_FE_COUNT:
@@ -625,27 +632,43 @@ void DeviceMonitor::SetHeaderForOutput(unsigned short fieldIds[], unsigned int c
     m_headerUnit = fmt::to_string(unitBuffer);
 }
 
+std::vector<dcgmGroupEntityPair_t> helperParseCpuEntities(std::string const &inputCpuIds)
+{
+    std::vector<dcgmGroupEntityPair_t> cpuIds;
+    auto cpuIdStrings = DcgmNs::Split(inputCpuIds, ',');
+    for (auto cpu : cpuIdStrings)
+    {
+        unsigned int cpuId = strtoul(std::string(cpu).c_str(), nullptr, 10);
+        cpuIds.emplace_back(dcgmGroupEntityPair_t { DCGM_FE_CPU, cpuId });
+    }
+    return cpuIds;
+}
+
 dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
 {
-    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, m_requestedEntityIds);
+    std::vector<dcgmGroupEntityPair_t> entityList;
 
-    // Fallback to old method
-
-    std::vector<dcgmGroupEntityPair_t> oldEntityList;
-
-    /* Convert the string to a list of entities */
-    auto dcgmReturn = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
-    if (dcgmReturn != DCGM_ST_OK)
+    if (m_requestedEntityIds != "-1")
     {
-        return dcgmReturn;
+        auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, m_requestedEntityIds);
+
+        // Fallback to old method
+
+        std::vector<dcgmGroupEntityPair_t> oldEntityList;
+
+        /* Convert the string to a list of entities */
+        auto dcgmReturn = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            return dcgmReturn;
+        }
+
+        std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityList));
+        std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
     }
 
-    std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
-
     /* Create a group based on this list of entities */
-    dcgmReturn = dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &m_myGroupId, entityList);
-
-    return dcgmReturn;
+    return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &m_myGroupId, entityList);
 }
 
 dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()

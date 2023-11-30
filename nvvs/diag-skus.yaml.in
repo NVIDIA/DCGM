@@ -2675,6 +2675,41 @@ skus:
       minimum_bandwidth: 971000.0
     pulse_test:
       is_allowed: true
+  - name: A800-SXM4-80GB Watercooled
+    id: 20f3179C
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 499.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~18600. Multiply by .75 to get ~13950
+      target_stress: 13950.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      target_stress: 13950.0
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 8.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1566000. Multiply by .75 to get ~1175000
+      minimum_bandwidth: 971000.0
+    pulse_test:
+      is_allowed: true
   - name: A800-SXM4-80GB
     id: 20f3
     targeted_power:
@@ -2968,6 +3003,8 @@ skus:
       is_allowed: true
       # memory bandwidth test shows ~264610. Multiply by .75 to get ~198500
       minimum_bandwidth: 198500
+    pulse_test:
+      is_allowed: true
   # Scout H100 64GB HBM2e
   - name: H100 64GB
     id: 2337
@@ -3210,5 +3247,116 @@ skus:
       is_allowed: true
       # memory bandwidth test shows ~700000. Multiply by .75 to get ~525000
       minimum_bandwidth: 525000.00
+    pulse_test:
+      is_allowed: true
+  - name: SkinnyJoe A02
+    id: 2342
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 900.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 37075
+    sm_stress:
+      is_allowed: true
+      # This was measured at ~50000, multiply by .75 to get ~37075
+      target_stress: 37075.0
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      target_stress: 37075
+      matrix_dim: 1024.0
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~2840000. Multiply by .75 to get ~2130000
+      minimum_bandwidth: 2130000
+    pulse_test:
+      is_allowed: true
+  - name: A800-20bd
+    id: 20bd
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 399.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 14100
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~18800. Multiply by .75 to get 14100
+      target_stress: 14100
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 164.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~1300000. Multiply by .75 to get ~975000
+      minimum_bandwidth: 975000.0
+    pulse_test:
+      is_allowed: true
+  - name: L20
+    id: 26b7
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 275.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 27000
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~36000. Multiply by .75 to get 27000
+      target_stress: 27000
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 164.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~655000. Multiply by .75 to get ~491250
+      minimum_bandwidth: 491250
     pulse_test:
       is_allowed: true

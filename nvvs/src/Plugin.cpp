@@ -68,7 +68,7 @@ void Plugin::InitializeForGpuList(const dcgmDiagPluginGpuList_t &gpuInfo)
         m_verboseInfoPerGPU[gpuInfo.gpus[i].gpuId];
         m_resultsPerGPU[gpuInfo.gpus[i].gpuId] = NVVS_RESULT_PASS; // default result should be pass
         m_gpuList.push_back(gpuInfo.gpus[i].gpuId);
-        if (gpuInfo.gpus[i].status == DcgmEntityStatusFake)
+        if (gpuInfo.gpus[i].status == DcgmEntityStatusFake || gpuInfo.gpus[i].attributes.identifiers.pciDeviceId == 0)
         {
             /* set to true if ANY gpu is fake */
             m_fakeGpus = true;
@@ -213,8 +213,10 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
 
     for (auto &&error : m_errors)
     {
-        results->errors[results->numErrors].errorCode = error.GetCode();
-        results->errors[results->numErrors].gpuId     = -1;
+        results->errors[results->numErrors].code     = error.GetCode();
+        results->errors[results->numErrors].category = error.GetCategory();
+        results->errors[results->numErrors].severity = error.GetSeverity();
+        results->errors[results->numErrors].gpuId    = -1;
         snprintf(results->errors[results->numErrors].msg,
                  sizeof(results->errors[results->numErrors].msg),
                  "%s",
@@ -242,8 +244,10 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
                 break;
             }
 
-            results->errors[results->numErrors].errorCode = error.GetCode();
-            results->errors[results->numErrors].gpuId     = gpuId;
+            results->errors[results->numErrors].code     = error.GetCode();
+            results->errors[results->numErrors].category = error.GetCategory();
+            results->errors[results->numErrors].severity = error.GetSeverity();
+            results->errors[results->numErrors].gpuId    = gpuId;
             snprintf(results->errors[results->numErrors].msg,
                      sizeof(results->errors[results->numErrors].msg),
                      "%s",

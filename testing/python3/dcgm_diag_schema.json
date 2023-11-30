@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "properties": {
+    "DCGM GPU Diagnostic": {
+      "type": "object",
+      "properties": {
+        "test_categories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": [
+            {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "tests": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "uniqueItems": true,
+                  "items": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "results": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 32,
+                          "uniqueItems": true,
+                          "items": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "type": "string"
+                                },
+                                "gpu_id": {
+                                  "type": "string"
+                                },
+                                "info": {
+                                  "type": "string"
+                                },
+                                "warnings": {
+                                  "type": "array",
+                                  "items": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "error_category": {
+                                          "type": "integer"
+                                        },
+                                        "error_id": {
+                                          "type": "integer"
+                                        },
+                                        "error_severity": {
+                                          "type": "integer"
+                                        },
+                                        "warning": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "status"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "results"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "category",
+                "tests"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "test_categories"
+      ]
+    },
+    "Driver Version Detected": {
+      "type": "string"
+    },
+    "GPU Device IDs": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "GPU Device Serials": {
+      "type": "object",
+      "properties": {
+        "0": {
+          "type": "string"
+        }
+      }
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "DCGM GPU Diagnostic",
+    "Driver Version Detected",
+    "GPU Device IDs",
+    "GPU Device Serials",
+    "version"
+  ]
+}

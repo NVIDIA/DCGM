@@ -74,6 +74,7 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP,
                                      PCIE_STR_PARALLEL_BW_CHECK_DURATION,
                                      PCIE_STR_DONT_BIND_NUMA,
+                                     PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS,
                                      nullptr };
 
     const dcgmPluginValue_t paramTypes[]
@@ -85,7 +86,8 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
             DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamInt,
             DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamString,
-            DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamNone };
+            DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamInt,
+            DcgmPluginParamNone };
 
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);

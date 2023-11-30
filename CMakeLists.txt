@@ -13,7 +13,7 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.21.0)
-project(dcgm VERSION 3.2.6)
+project(dcgm VERSION 3.3.1)
 set(DCGM_CONFIG_REVISION 0)
 set(DCGM_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
@@ -288,6 +288,7 @@ add_subdirectory(modules/profiling)
 add_subdirectory(modules/config)
 add_subdirectory(modules/diag)
 add_subdirectory(modules/nvswitch)
+add_subdirectory(modules/sysmon)
 add_subdirectory(modules/vgpu)
 
 add_subdirectory(hostengine)
@@ -304,6 +305,7 @@ add_subdirectory(sdk_samples)
 
 add_subdirectory(config-files)
 add_subdirectory(scripts)
+add_subdirectory(multi-node)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt
@@ -327,6 +329,7 @@ set(DCGM_INSTALL_TARGETS
     dcgmmoduleintrospect
     dcgmmodulenvswitch
     dcgmmodulepolicy
+    dcgmmodulesysmon
     ${DCGM_CUBLAS_PROXY}
     ${DCGMPROFTESTER}
 )

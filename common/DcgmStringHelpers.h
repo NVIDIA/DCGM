@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <dcgm_structs.h>
 #include <fmt/format.h>
 #include <string>
 #include <vector>
@@ -81,6 +82,7 @@ void SafeCopyTo(char (&dst)[N], char const *src)
 
 namespace DcgmNs
 {
+/*****************************************************************************/
 /**
  * Splits a string view into substrings using the specified delimiter.
  * @param[in] value         original string to split
@@ -90,6 +92,18 @@ namespace DcgmNs
  *       returned vector. It's read-after-free error otherwise.
  */
 std::vector<std::string_view> Split(std::string_view value, char delimiter);
+
+/*****************************************************************************/
+/*
+ * Takes a range string \d[,\d[-\d]]... and populates a vector with the indices
+ *
+ * @param rangeStr - the string representing the range we're adding
+ * @param indices  - the vector we are populating with the numbers in the range
+ *
+ * @return DCGM_ST_OK on success
+ *         DCGM_ST_BADPARAM on a malformed range
+ */
+dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned int> &indices);
 
 template <typename TIterator>
 std::string Join(TIterator start, TIterator end, std::string_view separator = "")

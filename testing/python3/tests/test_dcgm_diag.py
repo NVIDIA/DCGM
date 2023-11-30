@@ -22,6 +22,7 @@ import dcgm_internal_helpers
 import option_parser
 import DcgmDiag
 import dcgm_errors
+import dcgmvalue
 
 import threading
 import time
@@ -55,7 +56,7 @@ def diag_result_assert_fail(response, gpuIndex, testIndex, msg, errorCode):
     # Instead of checking that it failed, just make sure it didn't pass because we want to ignore skipped
     # tests or tests that did not run.
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_PASS, msg
-    if response.version == dcgm_structs.dcgmDiagResponse_version8:
+    if response.version == dcgm_structs.dcgmDiagResponse_version9:
         codeMsg = "Failing test expected error code %d, but found %d" % \
                     (errorCode, response.perGpuResponses[gpuIndex].results[testIndex].error.code)
         assert response.perGpuResponses[gpuIndex].results[testIndex].error.code == errorCode, codeMsg
@@ -64,7 +65,7 @@ def diag_result_assert_pass(response, gpuIndex, testIndex, msg):
     # Instead of checking that it passed, just make sure it didn't fail because we want to ignore skipped
     # tests or tests that did not run.
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_FAIL, msg
-    if response.version == dcgm_structs.dcgmDiagResponse_version8:
+    if response.version == dcgm_structs.dcgmDiagResponse_version9:
         codeMsg = "Passing test somehow has a non-zero error code!"
         assert response.perGpuResponses[gpuIndex].results[testIndex].error.code == 0, codeMsg
 
@@ -101,7 +102,7 @@ def diag_assert_error_found(response, gpuId, testIndex, errorStr):
     if response.perGpuResponses[gpuId].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_SKIP and \
        response.perGpuResponses[gpuId].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
         
-        warningFound = response.perGpuResponses[gpuId].results[testIndex].error.msg
+        warningFound = response.perGpuResponses[gpuId].results[testIndex].error[0].msg
 
         assert warningFound.find(errorStr) != -1, "Expected to find '%s' as a warning, but found '%s'" % (errorStr, warningFound)
 
@@ -109,7 +110,7 @@ def diag_assert_error_not_found(response, gpuId, testIndex, errorStr):
     if response.perGpuResponses[gpuId].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_SKIP and \
        response.perGpuResponses[gpuId].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
         
-        warningFound = response.perGpuResponses[gpuId].results[testIndex].error.msg
+        warningFound = response.perGpuResponses[gpuId].results[testIndex].error[0].msg
         assert warningFound.find(errorStr) == -1, "Expected not to find '%s' as a warning, but found it: '%s'" % (errorStr, warningFound)
 
 def helper_check_diag_thermal_violation(handle, gpuIds):
@@ -122,6 +123,27 @@ def helper_check_diag_thermal_violation(handle, gpuIds):
     assert response.gpuCount == len(gpuIds), "Expected %d gpus, but found %d reported" % (len(gpuIds), response.gpuCount)
     for gpuIndex in range(response.gpuCount):
         diag_assert_error_not_found(response, gpuIndex, dcgm_structs.DCGM_DIAGNOSTIC_INDEX, "Thermal violations")
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(2)
+def test_multiple_xid_errors(handle, gpuIds):
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr='diagnostic', paramsStr='diagnostic.test_duration=10')
+
+    gpuId = gpuIds[0]
+    # kick off a thread to inject the failing value while I run the diag
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 98, 0, repeatCount=3, repeatOffset=5)
+
+    response = test_utils.diag_execute_wrapper(dd, handle)
+
+    num_errors = 0
+
+    for error in response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_DIAGNOSTIC_INDEX].error:
+        if error.code == dcgm_errors.DCGM_FR_XID_ERROR:
+            num_errors += 1
+
+    assert num_errors == 2, "Expected 2 errors but found %d" % (num_errors)
 
 """
 @test_utils.run_with_injection_nvml()
@@ -203,11 +225,9 @@ def helper_verify_diag_passing(handle, gpuIds, testNames="memtest", testIndex=dc
 
 def find_throttle_failure(response, gpuId, pluginIndex):
     if response.perGpuResponses[gpuId].results[pluginIndex].result != dcgm_structs.DCGM_DIAG_RESULT_PASS:
-        error = response.perGpuResponses[gpuId].results[pluginIndex].error.msg
-        if error.find('clock throttling') != -1:
-            return True, "%s (%s)" % (error, response.perGpuResponses[gpuId].results[pluginIndex].error.msg)
-        else:
-            return False, error
+        for error_detail in response.perGpuResponses[gpuId].results[pluginIndex].error:
+            if error_detail.msg.find('clock throttling') != -1:
+                return True, "%s" % (error_detail.msg)
 
     return False, ""
 
@@ -227,7 +247,7 @@ def helper_test_thermal_violations_in_seconds(handle):
     response = dd.Execute(handle)
 
     testIndex = dcgm_structs.DCGM_DIAGNOSTIC_INDEX
-    errmsg = response.perGpuResponses[gpuIds[0]].results[testIndex].error.msg
+    errmsg = response.perGpuResponses[gpuIds[0]].results[testIndex].error[0].msg
     # Check for 'hermal' instead of thermal because sometimes it's capitalized
     if errmsg.find("hermal violations") != -1: 
         foundError = True
@@ -532,6 +552,7 @@ def test_dcgm_diag_stop_on_signal_embedded(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus() #CC makes this too slow
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_diag_stop_on_signal_standalone(handle, gpuIds):
     helper_check_diag_stop_on_interrupt_signals(handle, gpuIds[0])
@@ -554,7 +575,7 @@ def helper_verify_log_file_creation(handle, gpuIds):
                 if resultType == dcgm_structs.DCGM_DIAG_RESULT_PASS:
                     passedCount = passedCount + 1
                 else:
-                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_MEMTEST_INDEX].error.msg
+                    warning = response.perGpuResponses[gpuId].results[dcgm_structs.DCGM_MEMTEST_INDEX].error[0].msg
                     if len(warning):
                         errors = "%s, GPU %d failed: %s" % (errors, gpuId, warning)
 
@@ -742,7 +763,7 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
             test_utils.skip_test("Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
 
         # dcgm returns DCGM_ST_NVVS_ERROR on diag failure (which is expected here).
-        expected_retcode = c_uint8(dcgm_structs.DCGM_ST_NVVS_ISOLATE_ERROR).value
+        expected_retcode = c_uint8(dcgm_structs.DCGM_ST_NVVS_ERROR).value
         if retcode != expected_retcode:
             if app.stderr_lines or app.stdout_lines:
                     logger.info("dcgmi output:")
@@ -822,15 +843,18 @@ def helper_per_gpu_responses_dcgmi(handle, gpuIds, testName, testParams):
     json_output = "\n".join(dcgmiApp.stdout_lines)
 
     output = json.loads(json_output)
+    test_utils.diag_verify_json(output)
     verified = False
 
     if (len(output.get("DCGM GPU Diagnostic", {}).get("test_categories", [])) == 2
             and output["DCGM GPU Diagnostic"]["test_categories"][1].get("category", None) == "Stress"
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["name"] == testName
             and len(output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"]) >= 2
-            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["gpu_ids"] == str(gpuIds[0])
+            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["gpu_id"] == str(gpuIds[0])
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["status"] == "Fail"
-            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["error_id"] == dcgm_errors.DCGM_FR_TEMP_VIOLATION
+            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["warnings"][0]["error_id"] == dcgm_errors.DCGM_FR_TEMP_VIOLATION
+            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["warnings"][0]["error_category"] == dcgm_errors.DCGM_FR_EC_HARDWARE_THERMAL
+            and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][0]["warnings"][0]["error_severity"] == dcgm_errors.DCGM_ERROR_MONITOR
             and output["DCGM GPU Diagnostic"]["test_categories"][1]["tests"][0]["results"][1]["status"] == "Pass"):
         verified = True
 
@@ -965,6 +989,9 @@ def test_dcgm_diag_output(handle, gpuIds):
 
         assert response.perGpuResponses[1].results[dcgm_structs.DCGM_MEMTEST_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, \
                         "GPU 1 should NOT have passed the 15 second diagnostic"
+
+        for gpuId in gpuIds:
+            assert response.devSerials[gpuId] != dcgmvalue.DCGM_STR_BLANK, "Invalid gpu serial detected for gpu " % gpuId
     finally:
         del os.environ['__DCGM_DIAG_MEMTEST_FAIL_GPU']
 

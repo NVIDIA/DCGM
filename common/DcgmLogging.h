@@ -250,6 +250,21 @@ constexpr auto log_helper_create_format(format_string<TArgs...> format, TArgs &&
 namespace
 {
 template <class... TArgs>
+inline void log_verbose(details::format_string<TArgs...> format, TArgs &&...args)
+{
+    details::log<BASE_LOGGER, plog::verbose>(format, std::forward<TArgs>(args)...);
+}
+
+template <class T>
+    requires std::is_convertible_v<T, std::string_view>
+inline void log_verbose(T &&msg, std::source_location loc = std::source_location::current())
+{
+    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
+    format.loc  = loc;
+    log_verbose(format, std::forward<T>(msg));
+}
+
+template <class... TArgs>
 inline void log_info(details::format_string<TArgs...> format, TArgs &&...args)
 {
     details::log<BASE_LOGGER, plog::info>(format, std::forward<TArgs>(args)...);

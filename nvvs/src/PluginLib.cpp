@@ -424,9 +424,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         dcgmReturn_t dcgmRet = m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
         if (dcgmRet != DCGM_ST_OK)
         {
-            dcgmDiagEvent_t error;
-            error.errorCode = DCGM_FR_DCGM_API;
-            error.gpuId     = -1;
+            dcgmDiagErrorDetail_v2 error;
+            error.code  = DCGM_FR_DCGM_API;
+            error.gpuId = -1;
 
             std::string errorMsg(fmt::format("DCGM error during plugin setup: ({}) {}", dcgmRet, errorString(dcgmRet)));
             snprintf(error.msg, sizeof(error.msg), "%s", errorMsg.c_str());
@@ -446,9 +446,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
     catch (std::runtime_error &e)
     {
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an exception while trying to execute the test: %s", e.what());
         m_errors.push_back(error);
         DCGM_LOG_ERROR << "Caught exception from plugin " << GetName()
@@ -457,9 +457,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
     catch (...)
     {
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to execute the test");
         m_errors.push_back(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
@@ -479,9 +479,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
     catch (std::runtime_error &e)
     {
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(
             error.msg, sizeof(error.msg), "Caught an exception while trying to retrieve custom stats: %s", e.what());
         m_errors.push_back(error);
@@ -493,9 +493,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     {
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to retrieve custom stats";
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve custom stats.");
         m_errors.push_back(error);
         return;
@@ -569,9 +569,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
     catch (std::runtime_error &e)
     {
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(
             error.msg, sizeof(error.msg), "Caught an exception while trying to retrieve the results: %s", e.what());
         m_errors.push_back(error);
@@ -581,9 +581,9 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
     }
     catch (...)
     {
-        dcgmDiagEvent_t error;
-        error.errorCode = 1;
-        error.gpuId     = -1;
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve the results.");
         m_errors.push_back(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
@@ -598,9 +598,11 @@ void PluginLib::RunTest(unsigned int timeout, TestParameters *tp)
         std::vector<DcgmError> coreErrors = m_coreFunctionality.GetErrors();
         for (auto &&error : coreErrors)
         {
-            dcgmDiagEvent_t errStruct;
-            errStruct.errorCode = error.GetCode();
-            errStruct.gpuId     = error.GetGpuId();
+            dcgmDiagErrorDetail_v2 errStruct;
+            errStruct.code     = error.GetCode();
+            errStruct.category = error.GetCategory();
+            errStruct.severity = error.GetSeverity();
+            errStruct.gpuId    = error.GetGpuId();
             snprintf(errStruct.msg, sizeof(errStruct.msg), "%s", error.GetMessage().c_str());
             m_errors.push_back(errStruct);
         }
@@ -651,13 +653,13 @@ const std::vector<dcgmDiagCustomStats_t> &PluginLib::GetCustomStats() const
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagEvent_t> &PluginLib::GetErrors() const
+const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetErrors() const
 {
     return m_errors;
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagEvent_t> &PluginLib::GetInfo() const
+const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetInfo() const
 {
     return m_info;
 }

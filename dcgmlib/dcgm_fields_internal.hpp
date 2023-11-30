@@ -79,5 +79,9 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 #define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_ACTIVE
 #define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
+/* Sysmon field IDs */
+#define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_TOTAL
+#define DCGM_FI_SYSMON_LAST_ID  DCGM_FI_DEV_CPU_MODEL
+
 /* Macro to get whether a given fieldId is a profiling field or not */
 #define DCGM_FIELD_ID_IS_PROF_FIELD(fieldId) ((fieldId) >= DCGM_FI_PROF_FIRST_ID && (fieldId) <= DCGM_FI_PROF_LAST_ID)

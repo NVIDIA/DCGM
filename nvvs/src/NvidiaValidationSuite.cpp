@@ -535,18 +535,20 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 
         /* Find out if this device is supported, which is any of the following:
            1. On the NVVS allowlist explicitly
+             1.a Search for specific "ID + SSID" first
+             1.b Search for generic "ID" second
            2. A Kepler or newer Tesla part
            3. a Maxwell or newer part of any other brand (Quadro, GeForce, Titan, Grid)
         */
 
-        if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId()))
-        {
-            isAllowlisted = true;
-        }
-        else if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId(), gpu->getDevicePciSubsystemId()))
+        if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId(), gpu->getDevicePciSubsystemId()))
         {
             isAllowlisted = true;
             gpu->setUseSsid(true);
+        }
+        else if (m_allowlist->IsAllowlisted(gpu->getDevicePciDeviceId()))
+        {
+            isAllowlisted = true;
         }
         else
         {

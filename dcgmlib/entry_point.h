@@ -144,6 +144,13 @@ DCGM_ENTRY_POINT(dcgmGetNvLinkLinkStatus,
                  dcgmHandle,
                  linkStatus)
 
+DCGM_ENTRY_POINT(dcgmGetCpuHierarchy,
+                 tsapiGetCpuHierarchy,
+                 (dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy),
+                 "({} {})",
+                 dcgmHandle,
+                 cpuHierarchy)
+
 DCGM_ENTRY_POINT(dcgmGetVgpuDeviceAttributes,
                  tsapiEngineGetVgpuDeviceAttributes,
                  (dcgmHandle_t pDcgmHandle, unsigned int gpuId, dcgmVgpuDeviceAttributes_t *pDcgmVgpuDeviceAttr),

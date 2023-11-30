@@ -128,6 +128,7 @@ public:
     void NukeChildren(bool force = false);        // Call after test start.
 
     bool IsMIG(void) const;                     // Are we MIG mode (call Init first)
+    bool UseCublas(void) const;                 // Use Cublas for FP tests?
     unsigned int GetGpuId(void) const;          // Return GPU Id.
     std::string GetGpuBusId(void) const;        // Get the BUS ID of our GPU
     dcgmHandle_t GetHandle(void) const;         // return DCGM handle

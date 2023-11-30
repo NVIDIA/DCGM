@@ -51,7 +51,7 @@ public:
     void HelperJsonBuildOutput(Json::Value &output,
                                dcgmDiagResponse_t &diagResult,
                                const std::vector<unsigned int> &gpuIndices);
-    bool HelperJsonAddResult(dcgmDiagResponsePerGpu_v4 &gpuResult,
+    bool HelperJsonAddResult(dcgmDiagResponsePerGpu_v5 &gpuResult,
                              Json::Value &testEntry,
                              unsigned int gpuIndex,
                              unsigned int testIndex,
@@ -63,17 +63,17 @@ public:
 
 private:
     void HelperDisplayDeployment(dcgmDiagResponse_t &diagResult);
-    void HelperDisplayHardware(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayIntegration(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayPerformance(dcgmDiagResponsePerGpu_v4 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayHardware(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayIntegration(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices);
+    void HelperDisplayPerformance(dcgmDiagResponsePerGpu_v5 *diagResults, const std::vector<unsigned int> &gpuIndices);
     void HelperDisplayDeploymentResult(CommandOutputController &cmdView,
                                        const std::string &nameTag,
-                                       dcgmDiagTestResult_v2 &result);
+                                       dcgmDiagTestResult_v3 &result);
     std::string HelperDisplayDiagResult(dcgmDiagResult_t val);
 
     void HelperDisplayGpuResults(std::string dataName,
                                  unsigned int testIndex,
-                                 dcgmDiagResponsePerGpu_v4 *diagResults,
+                                 dcgmDiagResponsePerGpu_v5 *diagResults,
                                  const std::vector<unsigned int> &gpuIndices);
 
     dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_t &diagResult, const std::vector<unsigned int> &gpuIndices);
@@ -83,7 +83,7 @@ private:
                               const std::vector<unsigned int> &gpuIndices,
                               unsigned int testIndex,
                               CommandOutputController &cmdView,
-                              dcgmDiagResponsePerGpu_v4 *diagResults);
+                              dcgmDiagResponsePerGpu_v5 *diagResults);
 
     void HelperDisplayVersionAndDevIds(dcgmDiagResponse_t &diagResult);
 

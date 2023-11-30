@@ -123,16 +123,18 @@ void JsonOutput::prep(const std::string &testString)
 }
 
 /*****************************************************************************/
-void JsonOutput::AppendError(const dcgmDiagEvent_t &error, Json::Value &resultField, const std::string &prefix)
+void JsonOutput::AppendError(const dcgmDiagErrorDetail_v2 &error, Json::Value &resultField, const std::string &prefix)
 {
     Json::Value entry;
-    entry[NVVS_WARNING]  = prefix + error.msg;
-    entry[NVVS_ERROR_ID] = error.errorCode;
+    entry[NVVS_WARNING]        = prefix + error.msg;
+    entry[NVVS_ERROR_ID]       = error.code;
+    entry[NVVS_ERROR_CATEGORY] = error.category;
+    entry[NVVS_ERROR_SEVERITY] = error.severity;
     resultField[NVVS_WARNINGS].append(entry);
 }
 
 /*****************************************************************************/
-void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultField, const std::string &prefix)
+void JsonOutput::AppendInfo(const dcgmDiagErrorDetail_v2 &info, Json::Value &resultField, const std::string &prefix)
 {
     resultField[NVVS_INFO].append(prefix + info.msg);
 }
@@ -140,7 +142,7 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
 [[maybe_unused]] static DcgmNs::Nvvs::Json::Result MakeSkipResult(
     nvvsPluginResult_t overallResult,
     const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
-    const std::vector<dcgmDiagEvent_t> &info)
+    const std::vector<dcgmDiagErrorDetail_v2> &info)
 {
     using namespace DcgmNs::Nvvs::Json;
     Result result {};
@@ -169,8 +171,8 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
 
 [[maybe_unused]] static DcgmNs::Nvvs::Json::Result MakeSoftwareResult(nvvsPluginResult_t overallResult,
                                                                       std::string const &gpuIdsStr,
-                                                                      const std::vector<dcgmDiagEvent_t> &errors,
-                                                                      const std::vector<dcgmDiagEvent_t> &info)
+                                                                      const std::vector<dcgmDiagErrorDetail_v2> &errors,
+                                                                      const std::vector<dcgmDiagErrorDetail_v2> &info)
 {
     using namespace DcgmNs::Nvvs::Json;
     Result result {};
@@ -195,7 +197,11 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
     }
     for (const auto &error : errors)
     {
-        (*result.warnings).emplace_back(Warning { .message = error.msg, .error_code = error.errorCode });
+        (*result.warnings)
+            .emplace_back(Warning { .message        = error.msg,
+                                    .error_code     = error.code,
+                                    .error_category = error.category,
+                                    .error_severity = error.severity });
     }
 
     if (!info.empty())
@@ -214,8 +220,8 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
     nvvsPluginResult_t overallResult,
     std::vector<unsigned int> const &gpuIndices,
     const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
-    const std::vector<dcgmDiagEvent_t> &errors,
-    const std::vector<dcgmDiagEvent_t> &info)
+    const std::vector<dcgmDiagErrorDetail_v2> &errors,
+    const std::vector<dcgmDiagErrorDetail_v2> &info)
 {
     using namespace DcgmNs::Nvvs::Json;
     std::vector<Result> result {};
@@ -246,8 +252,10 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
                     gpuResult.warnings = std::vector<Warning> {};
                 }
                 (*gpuResult.warnings)
-                    .emplace_back(Warning { .message    = fmt::format("GPU {}: {}", gpuId, error.msg),
-                                            .error_code = error.errorCode });
+                    .emplace_back(Warning { .message        = fmt::format("GPU {}: {}", gpuId, error.msg),
+                                            .error_code     = error.code,
+                                            .error_category = error.category,
+                                            .error_severity = error.severity });
             }
             gpuResult.status.result = nvvsPluginResult_t::NVVS_RESULT_FAIL;
         }
@@ -274,8 +282,8 @@ void JsonOutput::AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultFiel
 /*****************************************************************************/
 void JsonOutput::Result(nvvsPluginResult_t overallResult,
                         const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
-                        const std::vector<dcgmDiagEvent_t> &errors,
-                        const std::vector<dcgmDiagEvent_t> &info,
+                        const std::vector<dcgmDiagErrorDetail_v2> &errors,
+                        const std::vector<dcgmDiagErrorDetail_v2> &info,
                         const std::optional<std::any> &pluginSpecificData)
 {
     std::string resultStr = resultEnumToString(overallResult);
@@ -444,6 +452,7 @@ JsonOutput::JsonOutput(std::vector<unsigned int> gpuIndices)
 void JsonOutput::AddGpusAndDriverVersion(std::vector<Gpu *> &gpuList)
 {
     Json::Value gpuDevIds;
+    Json::Value gpuSerials;
     int index = 0;
 
     for (auto gpu : gpuList)
@@ -456,7 +465,11 @@ void JsonOutput::AddGpusAndDriverVersion(std::vector<Gpu *> &gpuList)
         std::string devid = gpu->getDevicePciDeviceId();
         gpuDevIds[index]  = devid;
         index++;
+
+        std::string devserial                       = gpu->getDeviceSerial();
+        gpuSerials[std::to_string(gpu->GetGpuId())] = devserial;
     }
 
     m_root[NVVS_GPU_DEV_IDS] = gpuDevIds;
+    m_root[NVVS_GPU_SERIALS] = gpuSerials;
 }

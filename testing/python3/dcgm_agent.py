@@ -166,6 +166,20 @@ def dcgmGetNvLinkLinkStatus(dcgm_handle):
     return linkStatus
 
 @ensure_byte_strings()
+def dcgmGetCpuHierarchy(dcgm_handle):
+    hierarchy = dcgm_structs.c_dcgmCpuHierarchy_v1()
+    hierarchy.version = dcgm_structs.dcgmCpuHierarchy_version1
+    fn = dcgmFP("dcgmGetCpuHierarchy")
+    ret = fn(dcgm_handle, byref(hierarchy))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return hierarchy
+
+@ensure_byte_strings()
+def dcgmCpuHierarchyCpuOwnsCore(core_id, owned_cores):
+    fn = dcgmFP("dcgmCpuHierarchyCpuOwnsCore")
+    return fn(core_id, byref(owned_cores))
+
+@ensure_byte_strings()
 def dcgmGetGpuInstanceHierarchy(dcgm_handle):
     hierarchy = dcgm_structs.c_dcgmMigHierarchy_v2()
     hierarchy.version = dcgm_structs.c_dcgmMigHierarchy_version2
@@ -529,9 +543,9 @@ def helperDiagCheckReturn(ret, response):
 
 @ensure_byte_strings()
 def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version7):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
     runDiagInfo.version = runDiagVersion
-    response.version = dcgm_structs.dcgmDiagResponse_version8
+    response.version = dcgm_structs.dcgmDiagResponse_version9
     fn = dcgmFP("dcgmActionValidate_v2")
     ret = fn(dcgm_handle, byref(runDiagInfo), byref(response))
 
@@ -539,8 +553,8 @@ def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.
 
 @ensure_byte_strings()
 def dcgmActionValidate(dcgm_handle, group_id, validate):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
-    response.version = dcgm_structs.dcgmDiagResponse_version8
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response.version = dcgm_structs.dcgmDiagResponse_version9
     
     # Put the group_id and validate into a dcgmRunDiag struct
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
@@ -555,8 +569,8 @@ def dcgmActionValidate(dcgm_handle, group_id, validate):
 
 @ensure_byte_strings()
 def dcgmRunDiagnostic(dcgm_handle, group_id, diagLevel):
-    response = dcgm_structs.c_dcgmDiagResponse_v8()
-    response.version = dcgm_structs.dcgmDiagResponse_version8
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response.version = dcgm_structs.dcgmDiagResponse_version9
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
 

@@ -17,6 +17,7 @@
 ./usr/include/dcgm_api_export.h
 ./usr/include/dcgm_errors.h
 ./usr/include/dcgm_fields.h
+./usr/include/dcgm_helpers.h
 ./usr/include/dcgm_structs.h
 ./usr/lib/
 ./usr/lib/systemd/
@@ -55,6 +56,9 @@
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleprofiling.so
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleprofiling.so.${VERSION}
 ./usr/lib/x86_64-linux-gnu/libdcgmmoduleprofiling.so.3
+./usr/lib/x86_64-linux-gnu/libdcgmmodulesysmon.so
+./usr/lib/x86_64-linux-gnu/libdcgmmodulesysmon.so.${VERSION}
+./usr/lib/x86_64-linux-gnu/libdcgmmodulesysmon.so.3
 ./usr/lib/x86_64-linux-gnu/libnvml_injection.so
 ./usr/lib/x86_64-linux-gnu/libnvml_injection.so.1
 ./usr/lib/x86_64-linux-gnu/libnvml_injection.so.1.0
@@ -92,6 +96,7 @@
 ./usr/local/dcgm/bindings/python3/denylist_recommendations.py
 ./usr/local/dcgm/bindings/python3/pydcgm.py
 ./usr/local/dcgm/scripts/
+./usr/local/dcgm/scripts/dcgm_multi-node_health_check.py
 ./usr/local/dcgm/scripts/gather-dcgm-logs.sh
 ./usr/local/dcgm/sdk_samples/
 ./usr/local/dcgm/sdk_samples/c_src/

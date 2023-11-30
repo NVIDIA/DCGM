@@ -421,7 +421,7 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDevice(CUdevice device)
 }
 
 /*****************************************************************************/
-std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned int fieldId)
+std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned int fieldId, bool preferCublas)
 {
     switch (fieldId)
     {
@@ -448,7 +448,14 @@ std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned 
         case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
         case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
-            return std::move(std::make_unique<FieldWorkerDataTypeActivity>(m_cudaDevice, fieldId));
+            if (preferCublas)
+            {
+                return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
+            }
+            else
+            {
+                return std::move(std::make_unique<FieldWorkerDataTypeActivity>(m_cudaDevice, fieldId));
+            }
 
         case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
             return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
@@ -462,7 +469,7 @@ std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned 
 }
 
 /*****************************************************************************/
-void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, double loadTarget)
+void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, double loadTarget, bool preferCublas)
 {
     DCGM_LOG_DEBUG << "Changed load target from " << m_loadTarget << " to " << loadTarget;
     m_loadTarget = loadTarget;
@@ -477,7 +484,7 @@ void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, 
     else if (fieldId != m_activeFieldId)
     {
         /* We changed active field IDs. Allocate our object */
-        m_fieldWorker = AllocateFieldWorker(fieldId);
+        m_fieldWorker = AllocateFieldWorker(fieldId, preferCublas);
     }
 
     m_activeFieldId = fieldId;
@@ -494,17 +501,21 @@ void CudaWorkerThread::SetPeerByBusIdFromTaskThread(std::string peerBusId)
 void CudaWorkerThread::SetWorkerToIdle(void)
 {
     using namespace DcgmNs;
-    auto const task = Enqueue(
-        make_task("SetWorkloadAndTarget (idle) in TaskRunner", [this] { SetWorkloadAndTargetFromTaskThread(0, 0.0); }));
+    auto const task = Enqueue(make_task("SetWorkloadAndTarget (idle) in TaskRunner",
+                                        [this] { SetWorkloadAndTargetFromTaskThread(0, 0.0, false); }));
 }
 
 /*****************************************************************************/
-void CudaWorkerThread::SetWorkloadAndTarget(unsigned int fieldId, double loadTarget, bool blockOnCompletion)
+void CudaWorkerThread::SetWorkloadAndTarget(unsigned int fieldId,
+                                            double loadTarget,
+                                            bool blockOnCompletion,
+                                            bool preferCublas)
 {
     using namespace DcgmNs;
-    auto const task = Enqueue(make_task("SetWorkloadAndTarget in TaskRunner", [this, fieldId, loadTarget] {
-        SetWorkloadAndTargetFromTaskThread(fieldId, loadTarget);
-    }));
+    auto const task
+        = Enqueue(make_task("SetWorkloadAndTarget in TaskRunner", [this, fieldId, loadTarget, preferCublas] {
+              SetWorkloadAndTargetFromTaskThread(fieldId, loadTarget, preferCublas);
+          }));
 
     if (blockOnCompletion)
     {

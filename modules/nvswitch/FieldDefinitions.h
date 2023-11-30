@@ -831,6 +831,72 @@ public:
 };
 
 template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvswitch_power_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_power;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvswitch_power_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_power;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+{
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD;
+
+public:
+    using dcgmFieldType = NvSwitch::Data::Uint64Data;
+    using nscqFieldType = nscq_nvswitch_power_t;
+
+    SELF_REF
+
+    const char *NscqPath(void) const override
+    {
+        return nscq_nvswitch_power;
+    }
+
+    UpdateFuncType UpdateFunc(void) const override
+    {
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
+    }
+};
+
+template <>
 class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD;
@@ -1365,6 +1431,63 @@ public:
 
     FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
         : FieldIdControlType<fieldId>::dcgmFieldType(in.iddq_dvdd)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+/**
+ * Here we define 3 storage types to extract returned NSCQ power callback data.
+ */
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.vdd_w)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.dvdd_w)
+    {}
+
+    ~FieldIdStorageType() = default;
+};
+
+template <>
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>::dcgmFieldType
+{
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD;
+
+public:
+    FieldIdStorageType(void)
+        : FieldIdControlType<fieldId>::dcgmFieldType()
+    {}
+
+    FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &in)
+        : FieldIdControlType<fieldId>::dcgmFieldType(in.hvdd_w)
     {}
 
     ~FieldIdStorageType() = default;

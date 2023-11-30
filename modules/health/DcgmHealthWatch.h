@@ -157,6 +157,18 @@ private:
                           DcgmWatcher watcher,
                           long long updateInterval,
                           double maxKeepAge);
+    dcgmReturn_t SetCpuThermal(dcgm_field_entity_group_t entityGroupId,
+                               unsigned int entityId,
+                               bool enable,
+                               DcgmWatcher watcher,
+                               long long updateInterval,
+                               double maxKeepAge);
+    dcgmReturn_t SetCpuPower(dcgm_field_entity_group_t entityGroupId,
+                             unsigned int entityId,
+                             bool enable,
+                             DcgmWatcher watcher,
+                             long long updateInterval,
+                             double maxKeepAge);
     dcgmReturn_t SetNVLink(dcgm_field_entity_group_t entityGroupId,
                            unsigned int entityId,
                            bool enable,
@@ -194,6 +206,16 @@ private:
                               long long startTime,
                               long long endTime,
                               DcgmHealthResponse &response);
+    dcgmReturn_t MonitorCpuThermal(dcgm_field_entity_group_t entityGroupId,
+                                   dcgm_field_eid_t entityId,
+                                   long long startTime,
+                                   long long endTime,
+                                   DcgmHealthResponse &response);
+    dcgmReturn_t MonitorCpuPower(dcgm_field_entity_group_t entityGroupId,
+                                 dcgm_field_eid_t entityId,
+                                 long long startTime,
+                                 long long endTime,
+                                 DcgmHealthResponse &response);
     dcgmReturn_t MonitorNVLink(dcgm_field_entity_group_t entityGroupId,
                                dcgm_field_eid_t entityId,
                                long long startTime,

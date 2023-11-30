@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/cuda:12.1.1-base-ubuntu20.04
+FROM nvcr.io/nvidia/cuda:12.2.0-base-ubuntu20.04
 
 LABEL io.k8s.display-name="NVIDIA DCGM"
 LABEL name="NVIDIA DCGM"

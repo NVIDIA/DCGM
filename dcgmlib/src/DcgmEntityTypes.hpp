@@ -20,8 +20,7 @@
 #include <ostream>
 #include <utility>
 
-
-namespace DcgmNs::Mig
+namespace DcgmNs::EntityTypes
 {
 /**
  * Helper class to provide std::hash compatible implementation
@@ -66,6 +65,41 @@ protected:
         return std::hash<IdType> {}(id);
     }
 };
+
+} // namespace DcgmNs::EntityTypes
+
+namespace DcgmNs::Cpu
+{
+using DcgmNs::EntityTypes::BaseId;
+
+struct CpuId : BaseId<std::uint64_t>
+{
+    using BaseType::BaseType;
+    using BaseType::operator==;
+};
+
+std::ostream &operator<<(std::ostream &os, CpuId const &val);
+
+struct CoreId : BaseId<std::uint64_t>
+{
+    using BaseType::BaseType;
+    using BaseType::operator==;
+};
+
+std::ostream &operator<<(std::ostream &os, CoreId const &val);
+} // namespace DcgmNs::Cpu
+
+template <>
+struct std::hash<DcgmNs::Cpu::CpuId> : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Cpu::CpuId::BaseType>
+{};
+
+template <>
+struct std::hash<DcgmNs::Cpu::CoreId> : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Cpu::CoreId::BaseType>
+{};
+
+namespace DcgmNs::Mig
+{
+using DcgmNs::EntityTypes::BaseId;
 
 namespace Nvml
 {
@@ -112,18 +146,20 @@ std::ostream &operator<<(std::ostream &os, GpuInstanceId const &val);
 } // namespace DcgmNs::Mig
 
 template <>
-struct std::hash<DcgmNs::Mig::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::GpuInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::GpuInstanceId> : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Mig::GpuInstanceId::BaseType>
 {};
 
 template <>
-struct std::hash<DcgmNs::Mig::Nvml::GpuInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::Nvml::GpuInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::Nvml::GpuInstanceId>
+    : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Mig::Nvml::GpuInstanceId::BaseType>
 {};
 
 template <>
 struct std::hash<DcgmNs::Mig::Nvml::ComputeInstanceId>
-    : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::Nvml::ComputeInstanceId::BaseType>
+    : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Mig::Nvml::ComputeInstanceId::BaseType>
 {};
 
 template <>
-struct std::hash<DcgmNs::Mig::ComputeInstanceId> : DcgmNs::Mig::BaseHasher<DcgmNs::Mig::ComputeInstanceId::BaseType>
+struct std::hash<DcgmNs::Mig::ComputeInstanceId>
+    : DcgmNs::EntityTypes::BaseHasher<DcgmNs::Mig::ComputeInstanceId::BaseType>
 {};

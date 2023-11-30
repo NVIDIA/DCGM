@@ -11,6 +11,7 @@
 /usr/include/dcgm_api_export.h
 /usr/include/dcgm_errors.h
 /usr/include/dcgm_fields.h
+/usr/include/dcgm_helpers.h
 /usr/include/dcgm_structs.h
 /usr/lib/systemd/system/dcgm.service
 /usr/lib/systemd/system/nvidia-dcgm.service
@@ -44,6 +45,9 @@
 /usr/lib64/libdcgmmoduleprofiling.so
 /usr/lib64/libdcgmmoduleprofiling.so.${VERSION}
 /usr/lib64/libdcgmmoduleprofiling.so.3
+/usr/lib64/libdcgmmodulesysmon.so
+/usr/lib64/libdcgmmodulesysmon.so.${VERSION}
+/usr/lib64/libdcgmmodulesysmon.so.3
 /usr/lib64/libnvml_injection.so
 /usr/lib64/libnvml_injection.so.1
 /usr/lib64/libnvml_injection.so.1.0
@@ -80,6 +84,7 @@
 /usr/local/dcgm/bindings/python3/denylist_recommendations.py
 /usr/local/dcgm/bindings/python3/pydcgm.py
 /usr/local/dcgm/scripts
+/usr/local/dcgm/scripts/dcgm_multi-node_health_check.py
 /usr/local/dcgm/scripts/gather-dcgm-logs.sh
 /usr/local/dcgm/sdk_samples
 /usr/local/dcgm/sdk_samples/c_src

@@ -25,7 +25,8 @@ import time
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_default(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_default(handle, gpuIds):
     # pylint: disable=undefined-variable
     dr = DcgmReader()
     dr.SetHandle(handle)
@@ -55,7 +56,8 @@ def test_dcgm_reader_default(handle):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_specific_fields(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_specific_fields(handle, gpuIds):
     specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE, dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
     # pylint: disable=undefined-variable
     dr = DcgmReader(fieldIds=specificFields)
@@ -109,6 +111,7 @@ def test_reading_specific_data(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_with_cuda_app()
 def test_reading_pid_fields(handle, gpuIds, cudaApp):
     """
@@ -121,7 +124,7 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     dr = DcgmReader(fieldIds=[ fieldTag ], updateFrequency=100000)
     logger.debug("Trying for 5 seconds")
     exit_loop = False
-    for _ in range(25):
+    for _ in range(45):
         if (exit_loop):
             break
 
@@ -182,25 +185,228 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
                     
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_all_since_last_call_false(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_all_since_last_call_false(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, False)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_all_since_last_call_true(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_all_since_last_call_true(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, False)
         
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_all_since_last_call_false_repeat(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, True)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
-def test_dcgm_reader_all_since_last_call_true_repeat(handle):
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, True)
 
-        
+def helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues):
+    """
+    Helper to inititialize MIG CI field value tests.
+    """
+    
+    # Create a field object to insert into globals, GPUs, GIs, and CIs
+    
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.status = 0
+    field.ts = int((time.time()) * 1000000.0) # now
 
+    # Insert MIC CI data into MIG GPUs
 
+    fieldIds.extend( [ dcgm_fields.DCGM_FI_DEV_FB_FREE,
+                       dcgm_fields.DCGM_FI_DEV_FB_USED,
+                       dcgm_fields.DCGM_FI_DEV_FB_TOTAL ]
+    )
 
+    """
+    These have to be unique and match the field Id above with the same index.
+    """
+    fieldValues.extend([ 30, 40, 70])
+
+    nonGlobalData = []
+
+    for i in range(0, len(fieldIds)):
+        nonGlobalData.append({ "type" : ord(dcgm_fields.DCGM_FT_INT64),
+                               "fieldId" : fieldIds[i],
+                               "value" : fieldValues[i]})
+
+    for ci in ciIds:
+        for data in nonGlobalData:
+            field.fieldType = data["type"]
+            field.fieldId = data["fieldId"]
+            field.value.i64 = data["value"]
+
+            ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_GPU_CI, ci, field)
+            assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    time.sleep(0.050)
+
+def helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, mapById = True):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    fieldIds = []
+    fieldValues = []
+
+    helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues)
+    
+    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupName='allMigs', groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
+    dr = DcgmReader(fieldIds=fieldIds, entities=group.GetEntities())
+    dr.SetHandle(handle)
+
+    """
+    Initialize dictionary
+    """
+    
+    if mapById:
+        latest = dr.GetLatestEntityValuesAsFieldIdDict()
+    else:
+        latest = dr.GetLatestEntityValuesAsFieldNameDict()
+
+    """
+        latest = dr.GetLatestEntityValuesAsDict(mapById)
+    """
+
+    foundValues = 0;
+
+    for entityGroupId in latest:
+        if entityGroupId != dcgm_fields.DCGM_FE_GPU_CI:
+            continue
+
+        for entityId in latest[entityGroupId]:
+            if entityId not in ciIds:
+                continue;
+
+            foundValues = 0;
+            
+            for fieldId in latest[entityGroupId][entityId]:
+                value = latest[entityGroupId][entityId][fieldId]
+
+                if not mapById:
+                    fieldId = dcgm_fields.DcgmFieldGetIdByTag(fieldId)
+
+                if fieldId not in fieldIds:
+                    continue
+                
+                assert(fieldValues[fieldIds.index(fieldId)] == value)
+                foundValues += 1
+
+            assert(foundValues == len(fieldValues))
+
+def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, mapById = True):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    fieldIds = []
+    fieldValues = []
+
+    helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues)
+    
+    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle), groupName='allMigs', groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
+    dr = DcgmReader(fieldIds=fieldIds, entities=group.GetEntities())
+    dr.SetHandle(handle)
+
+    """
+    Initialize dictionary
+    """
+    
+    if mapById:
+        dr.GetAllEntityValuesAsFieldIdDictSinceLastCall()
+        latest = dr.GetAllEntityValuesAsFieldIdDictSinceLastCall()
+    else:
+        dr.GetAllEntityValuesAsFieldNameDictSinceLastCall()
+        latest = dr.GetAllEntityValuesAsFieldNameDictSinceLastCall()
+
+    """
+        dr.GetAllEntityValuesAsDictSinceLastCall(mapById)
+        latest = dr.GetAllEntityValuesAsDictSinceLastCall(mapById)
+    """
+
+    foundValues = 0;
+
+    for entityGroupId in latest:
+        if entityGroupId != dcgm_fields.DCGM_FE_GPU_CI:
+            continue
+
+        for entityId in latest[entityGroupId]:
+            if entityId not in ciIds:
+                continue;
+
+            foundValues = 0;
+            
+            for fieldId in latest[entityGroupId][entityId]:
+                fieldId2 = fieldId
+
+                if not mapById:
+                    fieldId2 = dcgm_fields.DcgmFieldGetIdByTag(fieldId2)
+
+                if fieldId2 not in fieldIds:
+                    continue
+                
+                for value in latest[entityGroupId][entityId][fieldId]:
+                    if value.value not in fieldValues:
+                        continue
+
+                    assert(fieldValues[fieldIds.index(fieldId2)] == value.value)
+                    foundValues += 1
+                    break
+
+            assert(foundValues == len(fieldValues))
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpu_instances(1)
+@test_utils.run_with_injection_gpu_compute_instances(4)
+def test_dcgm_reader_latest_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, True)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpu_instances(1)
+@test_utils.run_with_injection_gpu_compute_instances(4)
+def test_dcgm_reader_all_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, True)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpu_instances(1)
+@test_utils.run_with_injection_gpu_compute_instances(4)
+def test_dcgm_reader_latest_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ciIds):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, False)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpu_instances(1)
+@test_utils.run_with_injection_gpu_compute_instances(4)
+def test_dcgm_reader_all_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ciIds):
+    """
+    Test DcgmiReader for MIG CI fields.
+    """
+
+    helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, False)

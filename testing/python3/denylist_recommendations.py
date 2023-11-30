@@ -198,7 +198,7 @@ def check_passive_health_checks(response, activeGpuIds):
     unhealthy = False
     for i in range(0, dcgm_structs.DCGM_SWTEST_COUNT):
         if response.levelOneResults[i].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
-            mark_all_unhealthy(activeGpuIds, response.levelOneResults[i].error.msg)
+            mark_all_unhealthy(activeGpuIds, response.levelOneResults[i].error[0].msg)
             unhealthy = True
             break
 
@@ -221,7 +221,7 @@ def check_gpu_diagnostic(handleObj, settings):
                 if response.perGpuResponses[gpuIndex].results[testIndex].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
                     gpuId = response.perGpuResponses[gpuIndex].gpuId
                     mark_entity_unhealthy(g_gpus, gpuId, BR_ST_FAILED_ACTIVE_HEALTH,
-                                              response.perGpuResponses[gpuIndex].results[testIndex].result.error.msg)
+                                              response.perGpuResponses[gpuIndex].results[testIndex].result.error[0].msg)
 
                     # NVVS marks all subsequent tests as failed so there's no point in continuing
                     break 

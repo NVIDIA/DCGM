@@ -166,6 +166,13 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
 
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldId);
 
+    if (fieldMeta == nullptr)
+    {
+        DCGM_LOG_DEBUG << "DcgmGpmManagerEntity::GetLatestSample field" << fieldId << " does not exist.";
+
+        return DCGM_ST_UNKNOWN_FIELD;
+    }
+
     switch (m_entityPair.entityGroupId)
     {
         case DCGM_FE_GPU:

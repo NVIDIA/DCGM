@@ -44,6 +44,9 @@ DCGM_GRID_LICENSE_BUFFER_SIZE         =   128
 DCGM_MAX_VGPU_TYPES_PER_PGPU          =   32
 DCGM_DEVICE_UUID_BUFFER_SIZE          =   80
 DCGM_MAX_FBC_SESSIONS                 =   256
+DCGM_MAX_NUM_CPUS                = 8
+DCGM_MAX_NUM_CPU_CORES                     = 1024
+DCGM_CHAR_BIT                         = 8
 
 #When more than one value is returned from a query, which order should it be returned in?
 DCGM_ORDER_ASCENDING  = 1
@@ -182,6 +185,8 @@ DCGM_UNUSED4_TEST_INDEX     = 12
 DCGM_UNUSED5_TEST_INDEX     = 13
 DCGM_PER_GPU_TEST_COUNT_V7  = 9
 DCGM_PER_GPU_TEST_COUNT_V8  = 13
+DCGM_MAX_ERRORS             = 5
+DCGM_ERR_MSG_LEN            = 512
 
 # DCGM Diag Level One test indices
 DCGM_SWTEST_DENYLIST             = 0
@@ -1537,6 +1542,15 @@ class c_dcgmDiagErrorDetail_t(_PrintableStructure):
         ('code', c_uint)
     ]
 
+class c_dcgmDiagErrorDetail_v2(_PrintableStructure):
+    _fields_ = [
+        ('msg', c_char * DCGM_ERR_MSG_LEN),
+        ('gpuId', c_int),
+        ('code', c_uint),
+        ('category', c_uint),
+        ('severity', c_uint)
+    ]
+
 DCGM_HEALTH_WATCH_MAX_INCIDENTS = DCGM_GROUP_MAX_ENTITIES
 
 class c_dcgmIncidentInfo_t(_PrintableStructure):
@@ -1706,35 +1720,41 @@ class c_dcgmJobInfo_v3(_PrintableStructure):
 
 dcgmJobInfo_version3 = make_dcgm_version(c_dcgmJobInfo_v3, 3)
 
-class c_dcgmDiagTestResult_v2(_PrintableStructure):
+class c_dcgmDiagTestResult_v3(_PrintableStructure):
     _fields_ = [
         ('result', c_uint),
-        ('error', c_dcgmDiagErrorDetail_t),
-        ('info', c_char * 1024)
+        ('error', c_dcgmDiagErrorDetail_v2 * DCGM_MAX_ERRORS),
+        ('info', c_char * DCGM_ERR_MSG_LEN)
     ]
 
-class c_dcgmDiagResponsePerGpu_v4(_PrintableStructure):
+class c_dcgmDiagResponsePerGpu_v5(_PrintableStructure):
     _fields_ = [
         ('gpuId', c_uint),
         ('hwDiagnosticReturn', c_uint),
-        ('results', c_dcgmDiagTestResult_v2 * DCGM_PER_GPU_TEST_COUNT_V8)
+        ('results', c_dcgmDiagTestResult_v3 * DCGM_PER_GPU_TEST_COUNT_V8)
     ]
 
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
+DCGM_DEVICE_ID_LEN = 5
+DCGM_VERSION_LEN = 12
 
-class c_dcgmDiagResponse_v8(_PrintableStructure):
+class c_dcgmDiagResponse_v9(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('gpuCount', c_uint),
         ('levelOneTestCount', c_uint),
-        ('levelOneResults', c_dcgmDiagTestResult_v2 * LEVEL_ONE_MAX_RESULTS),
-        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v4 * DCGM_MAX_NUM_DEVICES),
-        ('systemError',     c_dcgmDiagErrorDetail_t),
-        ('_unused',     c_char * 1024)
+        ('levelOneResults', c_dcgmDiagTestResult_v3 * LEVEL_ONE_MAX_RESULTS),
+        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v5 * DCGM_MAX_NUM_DEVICES),
+        ('systemError',     c_dcgmDiagErrorDetail_v2),
+        ('devIds', c_char * DCGM_MAX_NUM_DEVICES * DCGM_DEVICE_ID_LEN),
+        ('devSerials', c_char * DCGM_MAX_NUM_DEVICES * DCGM_MAX_STR_LENGTH),
+        ('dcgmVersion', c_char * DCGM_VERSION_LEN),
+        ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
+        ('_unused',     c_char * 596)
     ]
 
-dcgmDiagResponse_version8 = make_dcgm_version(c_dcgmDiagResponse_v8, 8)
+dcgmDiagResponse_version9 = make_dcgm_version(c_dcgmDiagResponse_v9, 9)
 
 DCGM_AFFINITY_BITMASK_ARRAY_SIZE = 8
 
@@ -1765,7 +1785,28 @@ class c_dcgmGroupTopology_v1(_PrintableStructure):
 
 dcgmGroupTopology_version1 = make_dcgm_version(c_dcgmGroupTopology_v1, 1) 
 
+class c_dcgmCpuHierarchyOwnedCores_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('bitmask', c_uint64 * int(DCGM_MAX_NUM_CPU_CORES / sizeof(c_uint64) / DCGM_CHAR_BIT)),
+    ]
 
+dcgmCpuHierarchyOwnedCores_version1 = make_dcgm_version(c_dcgmCpuHierarchyOwnedCores_v1, 1)
+
+class c_dcgmCpuHierarchyCpu_v1(_PrintableStructure):
+    _fields_ = [
+        ('cpuId', c_uint32),
+        ('ownedCores', c_dcgmCpuHierarchyOwnedCores_v1),
+    ]
+
+class c_dcgmCpuHierarchy_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('numCpus', c_uint32),
+        ('cpus', c_dcgmCpuHierarchyCpu_v1 * DCGM_MAX_NUM_CPUS),
+    ]
+
+dcgmCpuHierarchy_version1 = make_dcgm_version(c_dcgmCpuHierarchy_v1, 1)
 
 # Maximum number of field groups that can exist
 DCGM_MAX_NUM_FIELD_GROUPS = 64
@@ -1993,16 +2034,17 @@ class c_dcgmFieldSummaryRequest_v1(_PrintableStructure):
 dcgmFieldSummaryRequest_version1 = make_dcgm_version(c_dcgmFieldSummaryRequest_v1, 1)
 
 # Module IDs
-DcgmModuleIdCore           = 0 # Core DCGM
-DcgmModuleIdNvSwitch       = 1 # NvSwitch Module
-DcgmModuleIdVGPU           = 2 # VGPU Module
-DcgmModuleIdIntrospect     = 3 # Introspection Module
-DcgmModuleIdHealth         = 4 # Health Module
-DcgmModuleIdPolicy         = 5 # Policy Module
-DcgmModuleIdConfig         = 6 # Config Module
-DcgmModuleIdDiag           = 7 # GPU Diagnostic Module
-DcgmModuleIdProfiling      = 8 # Profiling Module
-DcgmModuleIdCount          = 9 # 1 greater than largest ID above
+DcgmModuleIdCore           = 0  # Core DCGM
+DcgmModuleIdNvSwitch       = 1  # NvSwitch Module
+DcgmModuleIdVGPU           = 2  # VGPU Module
+DcgmModuleIdIntrospect     = 3  # Introspection Module
+DcgmModuleIdHealth         = 4  # Health Module
+DcgmModuleIdPolicy         = 5  # Policy Module
+DcgmModuleIdConfig         = 6  # Config Module
+DcgmModuleIdDiag           = 7  # GPU Diagnostic Module
+DcgmModuleIdProfiling      = 8  # Profiling Module
+DcgmModuleIdSysmon         = 9  # System Monitoring Module
+DcgmModuleIdCount          = 10 # 1 greater than largest ID above
 
 # Module Status
 DcgmModuleStatusNotLoaded   = 0 # Module has not been loaded yet

@@ -23,17 +23,6 @@
 #include <dcgm_structs.h>
 
 /*****************************************************************************/
-/*
- * Priority levels for errors. FAILURE indicates that isolation is needed.
- */
-typedef enum dcgmErrorPriority_enum
-{
-    DCGM_FR_LVL_WARNING = 1,
-    DCGM_FR_LVL_FAILURE = 2
-} dcgmErrorPriority_t;
-
-
-/*****************************************************************************/
 class DcgmError
 {
     /***************************PUBLIC***********************************/
@@ -47,7 +36,7 @@ public:
         : m_code(DCGM_FR_OK)
         , m_formatMessage(nullptr)
         , m_nextSteps()
-        , m_priority(DCGM_FR_LVL_WARNING)
+        , m_severity(DCGM_ERROR_NONE)
         , m_message()
         , m_errorDetail()
         , m_fullError()
@@ -59,7 +48,7 @@ public:
         : m_code(DCGM_FR_OK)
         , m_formatMessage(nullptr)
         , m_nextSteps()
-        , m_priority(DCGM_FR_LVL_WARNING)
+        , m_severity(DCGM_ERROR_NONE)
         , m_message()
         , m_errorDetail()
         , m_fullError()
@@ -75,8 +64,20 @@ public:
 
     DcgmError &SetCode(dcgmError_t code)
     {
-        m_code = code;
+        m_code     = code;
+        m_category = dcgmErrorGetCategoryByCode(code);
+        m_severity = dcgmErrorGetPriorityByCode(code);
         return *this;
+    }
+
+    dcgmErrorCategory_t GetCategory() const
+    {
+        return m_category;
+    }
+
+    dcgmErrorSeverity_t GetSeverity() const
+    {
+        return m_severity;
     }
 
     /*****************************************************************************/
@@ -167,12 +168,6 @@ public:
         return m_nextSteps.c_str();
     }
 
-    /*****************************************************************************/
-    dcgmErrorPriority_t GetPriority() const
-    {
-        return m_priority;
-    }
-
     int GetGpuId() const
     {
         return m_gpuId;
@@ -190,7 +185,8 @@ private:
     dcgmError_t m_code          = DCGM_FR_OK;
     const char *m_formatMessage = nullptr;
     std::string m_nextSteps;
-    dcgmErrorPriority_t m_priority = DCGM_FR_LVL_WARNING;
+    dcgmErrorSeverity_t m_severity = DCGM_ERROR_NONE;
+    dcgmErrorCategory_t m_category = DCGM_FR_EC_NONE;
 
     std::string m_message;
     std::string m_errorDetail;

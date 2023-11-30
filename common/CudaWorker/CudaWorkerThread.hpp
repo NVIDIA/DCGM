@@ -53,7 +53,10 @@ public:
     /**
      * Set the workload fieldId and load target for this worker thread
      */
-    void SetWorkloadAndTarget(unsigned int fieldId, double loadTarget, bool blockOnCompletion = false);
+    void SetWorkloadAndTarget(unsigned int fieldId,
+                              double loadTarget,
+                              bool blockOnCompletion = false,
+                              bool preferCublas      = false);
 
     /*************************************************************************/
     /**
@@ -120,7 +123,7 @@ private:
      * Helper to set the workload and target that should be queued to the task
      * thread via Enqueue()
      */
-    void SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, double loadTarget);
+    void SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, double loadTarget, bool preferCublas);
 
     /*************************************************************************/
     /**
@@ -138,7 +141,7 @@ private:
     /**
      * Helper to allocate a FieldWorkerBase instance based on fieldId
      */
-    std::unique_ptr<FieldWorkerBase> AllocateFieldWorker(unsigned int fieldId);
+    std::unique_ptr<FieldWorkerBase> AllocateFieldWorker(unsigned int fieldId, bool preferCublas = false);
 
     /*************************************************************************/
     /**

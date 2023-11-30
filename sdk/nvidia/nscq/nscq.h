@@ -1,5 +1,5 @@
 //
-// Copyright 2022 NVIDIA Corporation.  All rights reserved.
+// Copyright 2020-2022 NVIDIA Corporation.  All rights reserved.
 //
 // NOTICE TO USER:
 //
@@ -52,7 +52,7 @@ extern "C" {
 
 #define NSCQ_API_VERSION_CODE \
     NSCQ_API_VERSION(2, 0, 0)
-#define NSCQ_API_VERSION_DEVEL "g322905c"
+#define NSCQ_API_VERSION_DEVEL "g7aa2171"
 
 extern const uint32_t nscq_api_version;
 extern const char nscq_api_version_devel[];
@@ -96,6 +96,7 @@ extern const char nscq_api_version_devel[];
 typedef int8_t nscq_rc_t;
 typedef struct nscq_session_st* nscq_session_t;
 typedef struct nscq_observer_st* nscq_observer_t;
+typedef struct nscq_writer_st* nscq_writer_t;
 
 // All function callbacks (e.g., used for path observers) are passed using a single type.
 // These are cast internally to the appropriate function types internally before use.
@@ -139,6 +140,24 @@ typedef int8_t nscq_nvlink_state_t;
 
 typedef uint8_t nscq_device_type_t;
 
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_UNKNOWN      (-1)
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_HIGH_SPEED_1 (0)
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_SINGLE_LANE  (1)
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_TRAINING     (2)
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_SAFE_MODE    (3)
+#define NSCQ_NVLINK_STATUS_SUBLINK_RX_STATE_OFF          (4)
+
+typedef int8_t nscq_nvlink_rx_sublink_state_t;
+
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_UNKNOWN (-1)
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_HIGH_SPEED_1 (0)
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_SINGLE_LANE  (1)
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_TRAINING     (2)
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_SAFE_MODE    (3)
+#define NSCQ_NVLINK_STATUS_SUBLINK_TX_STATE_OFF          (4)
+
+typedef int8_t nscq_nvlink_tx_sublink_state_t;
+
 typedef struct {
     int16_t driver;
     int16_t device;
@@ -157,6 +176,12 @@ typedef struct {
 #define NSCQ_DEVICE_BLACKLIST_REASON_UNSPEC_DEVICE_FAILURE_PEER (9)
 
 typedef int8_t nscq_blacklist_reason_t;
+
+#define NSCQ_ARCH_SV10  (0)
+#define NSCQ_ARCH_LR10  (1)
+#define NSCQ_ARCH_LS10  (2)
+
+typedef int8_t nscq_arch_t;
 
 typedef struct {
     uint32_t domain;
@@ -232,6 +257,18 @@ typedef struct
     uint64_t panic;
     uint64_t count;
 } nscq_vc_latency_t;
+
+typedef struct {
+    uint32_t vdd_mvolt;
+    uint32_t dvdd_mvolt;
+    uint32_t hvdd_mvolt;
+} nscq_nvswitch_voltage_t;
+
+typedef struct {
+    uint32_t vdd_w;
+    uint32_t dvdd_w;
+    uint32_t hvdd_w;
+} nscq_nvswitch_power_t;
 
 typedef struct
 {
@@ -312,6 +349,7 @@ typedef struct {
 
 _NSCQ_RESULT_TYPE(nscq_session_t, session);
 _NSCQ_RESULT_TYPE(nscq_observer_t, observer);
+_NSCQ_RESULT_TYPE(nscq_writer_t, writer);
 
 nscq_rc_t nscq_uuid_to_label(const nscq_uuid_t*, nscq_label_t*, uint32_t);
 
@@ -324,6 +362,7 @@ nscq_rc_t nscq_session_mount(nscq_session_t, const nscq_uuid_t*, uint32_t);
 void nscq_session_unmount(nscq_session_t, const nscq_uuid_t*);
 
 nscq_rc_t nscq_session_path_observe(nscq_session_t, const char*, nscq_fn_t, void*, uint32_t);
+nscq_rc_t nscq_session_path_write(nscq_session_t, const char*, void*, uint32_t);
 
 #define NSCQ_SESSION_PATH_REGISTER_OBSERVER_WATCH (0x1u)
 
@@ -354,6 +393,23 @@ enum {
 #define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_PAGE(input)    ((input >> 15) & 0xFF)
 #define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_OFFSET(input)  ((input >> 7) & 0xFF)
 #define NSCQ_SESSION_PATH_OBSERVE_CMIS_INPUT_GET_LENGTH(input)  ((input & 0x7F) + 1)
+
+#define NSCQ_NVLINK_ERROR_THRESHOLD_CASE_ID_MIN 1
+#define NSCQ_NVLINK_ERROR_THRESHOLD_CASE_ID_MAX 5
+
+#define NSCQ_NVLINK_ERROR_THRESHOLD_THD_MAN_IDX 0
+#define NSCQ_NVLINK_ERROR_THRESHOLD_THD_EXP_IDX 1
+#define NSCQ_NVLINK_ERROR_THRESHOLD_TS_MAN_IDX  2
+#define NSCQ_NVLINK_ERROR_THRESHOLD_TS_EXP_IDX  3
+#define NSCQ_NVLINK_ERROR_THRESHOLD_MAX_IDX     4
+
+typedef struct
+{
+    uint32_t errorThresholdId;
+    bool bInterruptEn;
+    bool bInterruptTrigerred;
+    bool bReset;
+} nscq_nvlink_error_threshold_t;
 
 nscq_observer_result_t nscq_session_path_register_observer(nscq_session_t, const char*, nscq_fn_t,
                                                            void*, uint32_t);

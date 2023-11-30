@@ -29,6 +29,7 @@ import apps
 from dcgm_structs import dcgmExceptionClass
 import utils
 import os
+from ctypes import *
 
 g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE,
@@ -801,27 +802,29 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     #Some field IDs don't generate data by default. For instance, accounting data only works if accounting
     #mode is enabled and processes are running. Field IDs in this list fall into this category and have
     #already been confirmed to generate data within the cache manager
-    exceptionFieldIds = [dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS,
-                         dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA,
-                         dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS,
-                         dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_VM_ID,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_VM_NAME,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_TYPE,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_UUID,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_DRIVER_VERSION,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_MEMORY_USAGE,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_PCI_ID,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_ENC_STATS,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_FBC_STATS,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO,
-                         dcgm_fields.DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID,
-                         dcgm_fields.DCGM_FI_DEV_GPU_NVLINK_ERRORS,
-                         dcgm_fields_internal.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
-                         dcgm_fields_internal.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES]
+    exceptionFieldIds = [
+        dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS,
+        dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA,
+        dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS,
+        dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_VGPU_VM_ID,
+        dcgm_fields.DCGM_FI_DEV_VGPU_VM_NAME,
+        dcgm_fields.DCGM_FI_DEV_VGPU_TYPE,
+        dcgm_fields.DCGM_FI_DEV_VGPU_UUID,
+        dcgm_fields.DCGM_FI_DEV_VGPU_DRIVER_VERSION,
+        dcgm_fields.DCGM_FI_DEV_VGPU_MEMORY_USAGE,
+        dcgm_fields.DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
+        dcgm_fields.DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT,
+        dcgm_fields.DCGM_FI_DEV_VGPU_PCI_ID,
+        dcgm_fields.DCGM_FI_DEV_VGPU_ENC_STATS,
+        dcgm_fields.DCGM_FI_DEV_VGPU_ENC_SESSIONS_INFO,
+        dcgm_fields.DCGM_FI_DEV_VGPU_FBC_STATS,
+        dcgm_fields.DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO,
+        dcgm_fields.DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID,
+        dcgm_fields.DCGM_FI_DEV_GPU_NVLINK_ERRORS,
+        dcgm_fields_internal.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
+        dcgm_fields_internal.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES,
+    ]
     exceptionFieldIds.extend(g_profilingFieldIds)
 
     migFieldIds = [dcgm_fields.DCGM_FI_DEV_MIG_GI_INFO,
@@ -888,6 +891,10 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         if fieldId >= dcgm_fields.DCGM_FI_FIRST_NVSWITCH_FIELD_ID and fieldId <= dcgm_fields.DCGM_FI_LAST_NVSWITCH_FIELD_ID:
             continue
 
+        # Skip values populated by SysMon
+        if fieldId >= dcgm_fields_internal.DCGM_FI_SYSMON_FIRST_ID and fieldId <= dcgm_fields_internal.DCGM_FI_SYSMON_LAST_ID:
+            continue
+
         if fieldValue.status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
             #It's ok for fields to not be supported. We got a useful error code
             logger.info("field %s (id %d) returned st DCGM_ST_NOT_SUPPORTED (OK)" % (fieldIdName, fieldId))
@@ -904,13 +911,12 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
 
     assert numErrors == 0, "Got %d errors" % numErrors
 
-
+@test_utils.run_only_with_gpus_present()
 def test_dcgm_verify_manual_mode_behavior():
     """  
     Test to verify that field values cannot be
     retrieved automatically in manual operation mode
     """
-
     # Gets the handle and set operation mode to manual
     handleObj = pydcgm.DcgmHandle(ipAddress=None, opMode=dcgm_structs.DCGM_OPERATION_MODE_MANUAL)
 
@@ -952,20 +958,21 @@ def test_dcgm_verify_manual_mode_behavior():
     assert firstTimestamp != latestTimestamp, "Fields did not get updated after manually trigerring an update"
 
 
+@test_utils.run_only_with_gpus_present()
 def test_dcgm_verify_auto_mode_behavior():
     """  
     Test to verify that field values can be retrieved
     automatically in manual operation mode
     """
-
     # Gets the handle and set operation mode to automatic
     handleObj = pydcgm.DcgmHandle(ipAddress=None, opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+    if handleObj.handle == c_void_p(None):
+        test_utils.skip_test("Couldn't launch the hostengine - skipping")
 
     # Creates a default group with all GPUs
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetDefaultGroup()
     gpuId = groupObj.GetGpuIds()[0]
-
 
     fieldId = dcgm_fields.DCGM_FI_DEV_POWER_USAGE
     updateFreq = 100000 #100 miliseconds
@@ -1100,7 +1107,8 @@ def helper_nvswitch_monitoring(handle, switchIds):
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_nvswitches(switchCount=2)
-def test_nvswitch_monitoring_embedded(handle, switchIds):
+@test_utils.run_only_with_live_gpus()
+def test_nvswitch_monitoring_embedded(handle, switchIds, gpuIds):
     helper_nvswitch_monitoring(handle, switchIds)
 
 @test_utils.run_with_standalone_host_engine(30)

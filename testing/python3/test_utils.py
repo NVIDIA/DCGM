@@ -14,6 +14,7 @@
 from functools import wraps
 import inspect
 import os
+import json
 import platform
 import string
 import traceback
@@ -54,6 +55,7 @@ noLogging = True
 noLoggingBackup = noLogging
 reRunning = False
 loggingLevel = "DEBUG" #Level to use for logging. These come from DcgmLogging.h
+g_dcgmGpuCount = None
 
 DIAG_SMALL_FB_MODE_VAR = '__DCGM_DIAG_SMALL_FB_MODE'
 smallFbModeEnv = {DIAG_SMALL_FB_MODE_VAR : '1'}
@@ -1164,8 +1166,10 @@ def run_with_injection_nvml():
         def wrapper(*args, **kwds):
             # This environment variable tells DCGM to load injection NVML
             os.environ[INJECTION_MODE_VAR] = 'True' 
-            fn(*args, **kwds)
-            del os.environ[INJECTION_MODE_VAR]
+            try:
+                fn(*args, **kwds)
+            finally:
+                del os.environ[INJECTION_MODE_VAR]
             return
         return wrapper
     return decorator
@@ -1274,6 +1278,7 @@ def run_only_with_live_gpus():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
+                
             if 'handle' in kwds:
                 gpuIds = get_live_gpu_ids(kwds['handle'])
             else:
@@ -1283,6 +1288,41 @@ def run_only_with_live_gpus():
                 logger.warning("Skipping test that requires live GPUs. None were found")
             else:
                 kwds['gpuIds'] = gpuIds
+                fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
+def get_live_cpu_ids(handle):
+    """
+    Get the gpu ids of live GPUs on the system. This works in embedded or remote mode
+    """
+    cpuIds = []
+    try:
+        cpuHierarchy = dcgm_agent.dcgmGetCpuHierarchy(handle)
+        for i in range(0,cpuHierarchy.numCpus):
+            cpuIds.append(cpuHierarchy.cpus[i].cpuId)
+    except Exception as e:
+        pass
+    
+    return cpuIds
+
+def run_only_with_live_cpus():
+    """
+    Only run this test with live cpus
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                cpuIds = get_live_cpu_ids(kwds['handle'])
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if len(cpuIds) < 1:
+                logger.warning("Skipping test that requires live CPUs. None were found")
+            else:
+                kwds['cpuIds'] = cpuIds
                 fn(*args, **kwds)
             return
         return wrapper
@@ -1353,7 +1393,7 @@ def run_with_injection_gpu_instances(totalInstances=1):
 
 def run_with_injection_gpu_compute_instances(totalCIs=1):
     """
-    Run this test with <totalCIs> compute instances
+    Run this test with <totalCIs> fake compute instances
 
     This does not inject hierarchy now but should in the future
     """
@@ -1389,6 +1429,83 @@ def run_with_injection_gpu_compute_instances(totalCIs=1):
             for i in range(0, updated.numToCreate):
                 ciIds.append(updated.entityList[i].entity.entityId)
             kwds['ciIds'] = ciIds
+            fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
+CPU_IDS_STR = 'cpuIds'
+def run_with_injection_cpus(totalCpus=1):
+    """
+    Run this test with <totalCpus> fake CPUs
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
+            cfe.numToCreate = totalCpus
+
+            for i in range(0, totalCpus):
+                cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_CPU
+
+            try:
+                updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
+                cpuIds = []
+                for i in range(0, updated.numToCreate):
+                    cpuIds.append(updated.entityList[i].entity.entityId)
+                kwds[CPU_IDS_STR] = cpuIds
+            except dcgm_structs.DCGMError as e:
+                skip_test("Unable to create a fake CPU: %s" % str(e))
+
+            fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
+def run_with_injection_cpu_cores(totalCores=1):
+    """
+    Run this test with <totalCores> fake CPUs
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if CPU_IDS_STR not in kwds:
+                raise Exception("Injecting CPUs requires CPU IDs")
+
+            cpuIds          = kwds[CPU_IDS_STR]
+            cfe             = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
+            cfe.numToCreate = totalCores
+
+            cpuIndex  = 0
+            numCpus   = len(cpuIds)
+            amtPerNode    = totalCores
+            thisNodeCount = 0
+
+            if numCpus > 1:
+                amtPerNode = amtPerNode / numCpus
+            for i in range(0, totalCores):
+                cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_CPU_CORE
+                # Set the parents so that this compute instance has a parent that is part of the test
+                cfe.entityList[i].parent.entityGroupId = dcgm_fields.DCGM_FE_CPU
+                cfe.entityList[i].parent.entityId = cpuIds[cpuIndex]
+
+                thisNodeCount = thisNodeCount + 1
+                if cpuIndex + 1 < numCpus and thisNodeCount >= amtPerNode:
+                    cpuIndex = cpuIndex + 1
+            try:
+                updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
+                coreIds = []
+                for i in range(0, updated.numToCreate):
+                    coreIds.append(updated.entityList[i].entity.entityId)
+                kwds['coreIds'] = coreIds
+            except dcgm_structs.DCGMError as e:
+                skip_test("Unable to create a fake CPU core: %s" % str(e))
             fn(*args, **kwds)
             return
         return wrapper
@@ -1669,8 +1786,7 @@ def exclude_confidential_compute_gpus():
     Exclude Confidential Compute GPUs.
 
     This decorator must come after a decorator that provides a list of gpuIds
-    like run_only_with_live_gpus. It may exclude ALL of them, and this should
-    be tested for in an other decorator.
+    like run_only_with_live_gpus.
     '''
     def decorator(fn):
         @wraps(fn)
@@ -1682,7 +1798,7 @@ def exclude_confidential_compute_gpus():
                     gpuIds.append(gpuId)
 
             if len(gpuIds) == 0:
-                logger.warning("All selected GPUs have the confidential compute mode enabled, which is not supported by this test. Therefore, all GPUs are excluded from the test.")
+                skip_test("All selected GPUs have the confidential compute mode enabled, which is not supported by this test. Therefore, all GPUs are excluded from the test.")
                 
             kwds['gpuIds'] = gpuIds
             fn(*args, **kwds)
@@ -2131,6 +2247,17 @@ def is_mig_incompatible_failure(failure_msg):
     # Return true if this is the end of the error string
     return pos != -1 and pos + len(mig_incompatible_str) == len(failure_msg) - 1
 
+def diag_verify_json(jsonOutput):
+    try:
+        import jsonschema
+        f = open('dcgm_diag_schema.json')
+        schema = json.load(f)
+        jsonschema.validate(jsonOutput, schema)
+    except ImportError:
+        logger.info('Could not import jsonschema, json schema validation disabled')
+    except FileNotFoundError:
+        logger.info('Could not load \'dcgm_diag_schema.json\', json schema validation disabled')
+
 def diag_execute_wrapper(dd, handle):
     try:
         response = dd.Execute(handle)
@@ -2220,6 +2347,34 @@ def with_service_account(serviceAccountName):
         return wrapper
     return decorator
 
+def is_numa_system():
+    try:
+        with open('/sys/devices/system/node/has_cpu') as f:
+            node_contents = f.read()
+        if not node_contents:
+            return False
+
+        int_nodes = list(map(int, node_contents.split('-')))
+
+        with open(f'/sys/devices/system/node/node{int_nodes[0]}/cpulist') as f:
+            cpulist_contents = f.read()
+        if not cpulist_contents:
+            return False
+
+    except:
+        return False
+
+    return True
+
+def run_only_on_numa_systems():
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if not is_numa_system():
+                skip_test("This test only runs on NUMA-supported systems")
+            fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def gpu_supports_gpm(handle, gpuId):
     """
@@ -2274,4 +2429,62 @@ def filter_sku(skus):
 
         return wrapper
 
+    return decorator
+
+def helper_read_file(filename):
+    with open(filename) as f:
+        return f.read()
+
+g_numa_hierarchy = None
+def helper_read_numa_hierarchy():
+    global g_numa_hierarchy
+    (first_node, lastNode) = (None, None)
+    local_numa_hierarchy = {}
+
+    if not g_numa_hierarchy:
+        str_nodes = helper_read_file('/sys/devices/system/node/has_cpu')
+        int_nodes = list(map(int, str_nodes.split('-')))
+        assert len(int_nodes) >= 1 and len(int_nodes) <= 2, f'int_nodes: {int_nodes}'
+
+        first_node = int_nodes[0]
+        last_node = int_nodes[1] if len(int_nodes) == 2 else int_nodes[0]
+
+        for node in range(first_node, last_node + 1):
+            str_cpus = helper_read_file(f'/sys/devices/system/node/node{node}/cpulist')
+
+            cpu_ranges = str_cpus.split(',')
+
+            node_obj = { 'node_id': node, 'cpus': set() }
+            local_numa_hierarchy[node] = node_obj
+
+            for _range in cpu_ranges:
+                int_cpus = list(map(int, _range.split('-')))
+                assert len(int_cpus) >= 1 and len(int_cpus) <= 2, f'int_cpus: {int_cpus}'
+
+                first_cpu = int_cpus[0]
+                last_cpu = int_cpus[1] if len(int_cpus) == 2 else int_cpus[0]
+
+                for cpu in range(first_cpu, last_cpu + 1):
+                    node_obj['cpus'].add(cpu)
+
+        g_numa_hierarchy = local_numa_hierarchy
+
+    return g_numa_hierarchy
+
+def save_gpu_count(gpuCount):
+    global g_dcgmGpuCount
+    g_dcgmGpuCount = gpuCount
+
+def get_gpu_count():
+    global g_dcgmGpuCount
+    return g_dcgmGpuCount
+
+def run_only_with_gpus_present():
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if get_gpu_count() == 0:
+                skip_test("This test requires there be GPUs present on the system")
+            fn(*args, **kwargs)
+        return wrapper
     return decorator

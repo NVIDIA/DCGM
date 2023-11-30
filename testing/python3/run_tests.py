@@ -110,24 +110,22 @@ def run_tests():
                 logger.warning("Make sure that you've installed driver with both 64bit and 32bit binaries (e.g. not -internal.run or -no-compact32.run)")
             raise
 
+        dcgmGpuCount = 0
         if option_parser.options.use_running_hostengine:
             with test_utils.RunStandaloneHostEngine() as handle:
                 dcgmGpuCount = test_utils.log_gpu_information(handle)
-                if dcgmGpuCount < 1:
-                    logger.error("No GPUs on DCGM's GPU allowlist found. Skipping tests.")
-                    return
         else:
             with test_utils.RunEmbeddedHostEngine() as handle:
                 dcgmGpuCount = test_utils.log_gpu_information(handle)
-                if dcgmGpuCount < 1:
-                    logger.error("No GPUs on DCGM's GPU allowlist found. Skipping tests.")
-                    return
 
         # Persistence mode is required
-        (_, error) = nvidia_smi_utils.enable_persistence_mode()
-        if error:
-            logger.error(error)
-            return
+        if dcgmGpuCount > 0:
+            (_, error) = nvidia_smi_utils.enable_persistence_mode()
+            if error:
+                logger.error(error)
+                return
+
+        test_utils.save_gpu_count(dcgmGpuCount)
         
         with test_utils.SubTest("restore state", quiet=True):
             test_utils.RestoreDefaultEnvironment.restore() # restore the nvml settings

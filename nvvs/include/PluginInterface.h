@@ -152,14 +152,6 @@ typedef struct
 
 typedef struct
 {
-    int errorCode;                /* !< Error code. < 0 is a DCGM error code, 0 is no error, and > 0 is some other error
-                                        Note that the error code will be ignored if this is in the info field */
-    int gpuId;                    //!< -1 is all GPUs, >= 0 is a GPU id
-    char msg[DCGM_EVENT_MSG_LEN]; //!< Text explaining the error
-} dcgmDiagEvent_t;
-
-typedef struct
-{
     int gpuId;                 //!< The GPU id for this result
     nvvsPluginResult_t result; //!< The result (PASS, SKIP, FAIL)
 } dcgmDiagSimpleResult_t;
@@ -191,9 +183,9 @@ typedef struct
     unsigned int numResults;
     dcgmDiagSimpleResult_t perGpuResults[DCGM_MAX_NUM_DEVICES];
     unsigned int numErrors;
-    dcgmDiagEvent_t errors[DCGM_DIAG_MAX_ERRORS];
+    dcgmDiagErrorDetail_v2 errors[DCGM_DIAG_MAX_ERRORS];
     unsigned int numInfo;
-    dcgmDiagEvent_t info[DCGM_DIAG_MAX_INFO];
+    dcgmDiagErrorDetail_v2 info[DCGM_DIAG_MAX_INFO];
     dcgmDiagAuxData_t auxData; //!< Auxiliary data for this result
 } dcgmDiagResults_t;
 

@@ -16,7 +16,7 @@
 #ifndef _DCGM_GPU_INSTANCE_H_
 #define _DCGM_GPU_INSTANCE_H_
 
-#include "DcgmMigTypes.hpp"
+#include "DcgmEntityTypes.hpp"
 
 #include <dcgm_nvml.h>
 #include <dcgm_structs.h>

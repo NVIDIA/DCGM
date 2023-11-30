@@ -17,6 +17,7 @@ import pydcgm
 import dcgm_structs 
 import dcgm_fields
 import logger
+import apps
 import time
 import dcgm_agent
 import datetime
@@ -201,3 +202,32 @@ def test_dcgm_connection_domain_socket_default():
     and you can do basic queries against it
     '''
     _test_connection_helper(defaultSocketFilename)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1)
+def test_multiple_hostengine_connections(handle, gpuIds):
+
+    he2app = apps.NvHostEngineApp(args=["-p 7777"], pid_dir="/tmp")
+    he2app.start(timeout=10)
+
+    remotehostStr = "127.0.0.1:7777"
+
+    he2 = dcgm_structs.c_dcgmConnectV2Params_v2()
+    he2.version = dcgm_structs.c_dcgmConnectV2Params_version2
+    he2handle = dcgm_agent.dcgmConnect_v2(remotehostStr, he2, dcgm_structs.c_dcgmConnectV2Params_version2)
+
+    #Do multiple basic requests with each handle to verify handle consistency
+    he1gpus = dcgm_agent.dcgmGetAllSupportedDevices(handle)
+    he2gpus = dcgm_agent.dcgmGetAllSupportedDevices(he2handle)
+    assert len(he1gpus) > len(he2gpus), "number of gpus should be greater"
+
+    he1gpus = dcgm_agent.dcgmGetAllSupportedDevices(handle)
+    he2gpus = dcgm_agent.dcgmGetAllSupportedDevices(he2handle)
+    assert len(he1gpus) > len(he2gpus), "number of gpus should be greater"
+
+    he1gpus = dcgm_agent.dcgmGetAllSupportedDevices(handle)
+    he2gpus = dcgm_agent.dcgmGetAllSupportedDevices(he2handle)
+    assert len(he1gpus) > len(he2gpus), "number of gpus should be greater"
+
+    he2app.terminate()

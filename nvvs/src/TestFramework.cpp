@@ -682,11 +682,11 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 // Error! Didn't find the named plugin. Report fake results for it
                 DCGM_LOG_ERROR << "Couldn't find the plugin '" << name << "'";
                 std::vector<dcgmDiagSimpleResult_t> perGpuResults;
-                std::vector<dcgmDiagEvent_t> errors;
-                std::vector<dcgmDiagEvent_t> info;
-                dcgmDiagEvent_t error = {};
-                error.errorCode       = -1;
-                error.gpuId           = -1;
+                std::vector<dcgmDiagErrorDetail_v2> errors;
+                std::vector<dcgmDiagErrorDetail_v2> info;
+                dcgmDiagErrorDetail_v2 error = {};
+                error.code                   = -1;
+                error.gpuId                  = -1;
                 snprintf(error.msg, sizeof(error.msg), "Unable to find plugin '%s'", name.c_str());
                 errors.push_back(error);
 

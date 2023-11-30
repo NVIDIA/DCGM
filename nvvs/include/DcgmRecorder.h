@@ -362,6 +362,15 @@ private:
                                 const std::string &fieldName,
                                 std::vector<DcgmError> &errorList);
 
+    void AddFieldThresholdViolationError(unsigned short fieldId,
+                                         unsigned int gpuId,
+                                         timelib64_t startTime,
+                                         int64_t intValue,
+                                         int64_t thresholdValue,
+                                         double dblValue,
+                                         const std::string &fieldName,
+                                         std::vector<DcgmError> &errorList);
+
     /*
      * Helper method to get the watched fields as a json object
      */
@@ -376,6 +385,8 @@ private:
      * Helper method to get an error string from a dcgmReturn_t
      */
     void GetErrorString(dcgmReturn_t ret, std::string &err);
+
+    int CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
 
 protected:
     /**

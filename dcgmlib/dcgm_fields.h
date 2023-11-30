@@ -187,6 +187,8 @@ typedef enum dcgm_field_entity_group_t
     DCGM_FE_GPU_I,    /*!< Field is associated with a GPU Instance entity */
     DCGM_FE_GPU_CI,   /*!< Field is associated with a GPU Compute Instance entity */
     DCGM_FE_LINK,     /*!< Field is associated with an NVLink */
+    DCGM_FE_CPU,      /*!< Field is associated with a CPU node */
+    DCGM_FE_CPU_CORE, /*!< Field is associated with a CPU */
 
     DCGM_FE_COUNT /*!< Number of elements in this enumeration. Keep this entry last */
 } dcgm_field_entity_group_t;
@@ -724,6 +726,24 @@ typedef unsigned int dcgm_field_eid_t;
  * Percentage used of Frame Buffer: 'Used/(Total - Reserved)'. Range 0.0-1.0
  */
 #define DCGM_FI_DEV_FB_USED_PERCENT 254
+
+/**
+ * C2C Link Count
+ */
+#define DCGM_FI_DEV_C2C_LINK_COUNT 285
+
+/**
+ * C2C Link Status
+ * The value of 0 the link is INACTIVE.
+ * The value of 1 the link is ACTIVE.
+ */
+#define DCGM_FI_DEV_C2C_LINK_STATUS 286
+
+/**
+ * C2C Max Bandwidth
+ * The value indicates the link speed in MB/s.
+ */
+#define DCGM_FI_DEV_C2C_MAX_BANDWIDTH 287
 
 /**
  * Current ECC mode for the device
@@ -1503,6 +1523,21 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD 704
 
 /**
+ * NvSwitch Power VDD in watts
+ */
+#define DCGM_FI_DEV_NVSWITCH_POWER_VDD 705
+
+/**
+ * NvSwitch Power DVDD in watts
+ */
+#define DCGM_FI_DEV_NVSWITCH_POWER_DVDD 706
+
+/**
+ * NvSwitch Power HVDD in watts
+ */
+#define DCGM_FI_DEV_NVSWITCH_POWER_HVDD 707
+
+/**
  * <p>NVSwitch Tx Throughput Counter for ports 0-17</p>
  */
 #define DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX 780
@@ -1996,9 +2031,74 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
 /**
+ * CPU Utilization, total
+ */
+#define DCGM_FI_DEV_CPU_UTIL_TOTAL 1100
+
+/**
+ * CPU Utilization, user
+ */
+#define DCGM_FI_DEV_CPU_UTIL_USER 1101
+
+/**
+ * CPU Utilization, nice
+ */
+#define DCGM_FI_DEV_CPU_UTIL_NICE 1102
+
+/**
+ * CPU Utilization, system time
+ */
+#define DCGM_FI_DEV_CPU_UTIL_SYS 1103
+
+/**
+ * CPU Utilization, interrupt servicing
+ */
+#define DCGM_FI_DEV_CPU_UTIL_IRQ 1104
+
+/**
+ * CPU temperature
+ */
+#define DCGM_FI_DEV_CPU_TEMP_CURRENT 1110
+
+/**
+ * CPU Warning Temperature
+ */
+#define DCGM_FI_DEV_CPU_TEMP_WARNING 1111
+
+/**
+ * CPU Critical Temperature
+ */
+#define DCGM_FI_DEV_CPU_TEMP_CRITICAL 1112
+
+/**
+ * CPU instantaneous clock speed
+ */
+#define DCGM_FI_DEV_CPU_CLOCK_CURRENT 1120
+
+/**
+ * CPU power utilization
+ */
+#define DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT 1130
+
+/**
+ * CPU power limit
+ */
+#define DCGM_FI_DEV_CPU_POWER_LIMIT 1131
+
+/**
+ * CPU vendor name
+ */
+#define DCGM_FI_DEV_CPU_VENDOR 1140
+
+/**
+ * CPU model name
+ */
+#define DCGM_FI_DEV_CPU_MODEL 1141
+
+/**
  * 1 greater than maximum fields above. This is the 1 greater than the maximum field id that could be allocated
  */
-#define DCGM_FI_MAX_FIELDS 1076
+#define DCGM_FI_MAX_FIELDS 1142
 
 
 /** @} */

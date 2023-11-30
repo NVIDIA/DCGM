@@ -225,7 +225,7 @@ typedef struct nvmlMemory_st
 
 /**
  * Memory allocation information for a device (v2).
- * 
+ *
  * Version 2 adds versioning for the struct and the amount of system-reserved memory as an output.
  * @note The \ref nvmlMemory_v2_t.used amount also includes the \ref nvmlMemory_v2_t.reserved amount.
  */
@@ -776,7 +776,7 @@ typedef struct nvmlClkMonStatus_status {
     nvmlClkMonFaultInfo_t clkMonList[MAX_CLK_DOMAINS];
 } nvmlClkMonStatus_t;
 
-/** 
+/**
  * ECC bit types.
  *
  * @deprecated See \ref nvmlMemoryErrorType_t for a more flexible type
@@ -1606,6 +1606,10 @@ typedef struct nvmlGpuDynamicPstatesInfo_st
 #define NVML_FI_DEV_NVLINK_GET_SPEED                  164
 #define NVML_FI_DEV_NVLINK_GET_STATE                  165
 #define NVML_FI_DEV_NVLINK_GET_VERSION                166
+
+#define NVML_FI_DEV_C2C_LINK_COUNT                    170 //!< Number of C2C Links present on the device
+#define NVML_FI_DEV_C2C_LINK_GET_STATUS               171 //!< C2C Link Status 0=INACTIVE 1=ACTIVE
+#define NVML_FI_DEV_C2C_LINK_GET_MAX_BW               172 //!< C2C Link Speed in MBps for active links
 
 /**
  * Retrieves power usage for this GPU in milliwatts.
@@ -4399,7 +4403,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetGpuOperationMode(nvmlDevice_t device, nvmlGpuO
  * @note In MIG mode, if device handle is provided, the API returns aggregate
  *       information, only if the caller has appropriate privileges. Per-instance
  *       information can be queried by using specific MIG device handles.
- * 
+ *
  * @note nvmlDeviceGetMemoryInfo_v2 adds additional memory information.
  *
  * @param device                               The identifier of the target device
@@ -5024,7 +5028,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetGraphicsRunningProcesses_v3(nvmlDevice_t devic
  *
  * Keep in mind that information returned by this call is dynamic and the number of elements might change in
  * time. Allocate more space for \a infos table in case new compute processes are spawned.
- * 
+ *
  * @note In MIG mode, if device handle is provided, the API returns aggregate information, only if
  *       the caller has appropriate privileges. Per-instance information can be queried by using
  *       specific MIG device handles.
@@ -5972,8 +5976,8 @@ nvmlReturn_t DECLDIR nvmlDeviceSetApplicationsClocks(nvmlDevice_t device, unsign
  *
  * @param device                               The identifier of the target device
  * @param status                               Reference in which to return the clkmon fault status
- * 
- * @return 
+ *
+ * @return
  *         - \ref NVML_SUCCESS                 if \a status has been set
  *         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
  *         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid or \a status is NULL
@@ -8077,7 +8081,7 @@ typedef struct nvmlGpuInstanceProfileInfo_st
 
 /**
  * GPU instance profile information (v2).
- * 
+ *
  * Version 2 adds the \ref nvmlGpuInstanceProfileInfo_v2_t.version field
  * to the start of the structure, and the \ref nvmlGpuInstanceProfileInfo_v2_t.name
  * field to the end. This structure is not backwards-compatible with
@@ -8158,7 +8162,7 @@ typedef struct nvmlComputeInstanceProfileInfo_st
 
 /**
  * Compute instance profile information (v2).
- * 
+ *
  * Version 2 adds the \ref nvmlComputeInstanceProfileInfo_v2_t.version field
  * to the start of the structure, and the \ref nvmlComputeInstanceProfileInfo_v2_t.name
  * field to the end. This structure is not backwards-compatible with
@@ -8277,7 +8281,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetGpuInstanceProfileInfo(nvmlDevice_t device, un
 /**
  * Versioned wrapper around \ref nvmlDeviceGetGpuInstanceProfileInfo that accepts a versioned
  * \ref nvmlGpuInstanceProfileInfo_v2_t or later output structure.
- * 
+ *
  * @note The caller must set the \ref nvmlGpuInstanceProfileInfo_v2_t.version field to the
  * appropriate version prior to calling this function. For example:
  * \code
@@ -9155,7 +9159,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetConfComputeGpuCertificate(nvmlDevice_t device,
  */
 nvmlReturn_t DECLDIR nvmlDeviceGetConfComputeGpuAttestationReport(nvmlDevice_t device,
                                                                   nvmlConfComputeGpuAttestationReport_t *gpuAtstReport);
-  
+
 /** @} */
 
 /***************************************************************************************************/

@@ -164,6 +164,10 @@ SCENARIO("All valid GPUs are in allowlist", "[.]")
         CHECK(wl.IsAllowlisted("2236", "149d"));
         // A10c/noc
         CHECK(wl.IsAllowlisted("2236", "1482"));
+        // A800 watercooled
+        CHECK(wl.IsAllowlisted("20f3", "179C"));
+        // A800
+        CHECK(wl.IsAllowlisted("20f3"));
     }
     catch (std::runtime_error &e)
     {

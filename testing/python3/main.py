@@ -27,6 +27,16 @@ def _version_check():
         sys.exit(1)
 _version_check()
 
+import importlib.util
+# keep current to a file in this module
+PATH_CHECK_MODNAME = 'test_utils'
+def _path_perms_check():
+    module_spec = importlib.util.find_spec(PATH_CHECK_MODNAME)
+    if module_spec is None:
+        print('Verify access permissions for the root user on all parent dirs of the working directory.')
+        sys.exit(1)
+_path_perms_check()
+
 import os
 import platform
 import test_utils

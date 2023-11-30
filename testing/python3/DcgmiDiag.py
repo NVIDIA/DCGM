@@ -18,6 +18,7 @@ import dcgm_structs
 import dcgm_agent
 import dcgm_fields
 import nvidia_smi_utils
+import test_utils
 
 def trimJsonText(text):
     return text[text.find('{'):text.rfind('}') + 1]
@@ -69,10 +70,11 @@ class FailedTestInfo():
         self.m_suggestion = ''
         self.m_evaluatedMsg = ''
         for errorTuple in errorTuples:
-            if self.m_warning.find(errorTuple[1]) != -1:
-                # Matched, record field ID and suggestion
-                self.m_fieldId = errorTuple[0]
-                self.m_suggestion = errorTuple[2]
+            for warning in self.m_warning:
+                if warning['warning'].find(errorTuple[1]) != -1:
+                    # Matched, record field ID and suggestion
+                    self.m_fieldId = errorTuple[0]
+                    self.m_suggestion = errorTuple[2]
 
     ################################################################################
     def SetInfo(self, info):
@@ -299,6 +301,7 @@ class DcgmiDiag:
         if self.lastStdout:
             try:
                 jsondict = json.loads(trimJsonText(self.lastStdout))
+                test_utils.diag_verify_json(jsondict)
             except ValueError as e:
                 print(("Couldn't parse json from '%s'" % self.lastStdout))
                 return None, 1

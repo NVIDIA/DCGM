@@ -96,14 +96,14 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
             % (test_name, total_time,
                response.perGpuResponses[gpuId].results[testIndex].result,
                response.perGpuResponses[gpuId].results[testIndex].info,
-               response.perGpuResponses[gpuId].results[testIndex].error.msg)
+               response.perGpuResponses[gpuId].results[testIndex].error[0].msg)
     
     # Verify the test failed
     assert check_diag_result_fail(response, gpuId, testIndex), \
         "Expected %s test to fail due to injected dbes.\nGot result: %s (\ninfo: %s,\n warning: %s)" % \
             (test_name, response.perGpuResponses[gpuId].results[testIndex].result,
              response.perGpuResponses[gpuId].results[testIndex].info,
-             response.perGpuResponses[gpuId].results[testIndex].error.msg)
+             response.perGpuResponses[gpuId].results[testIndex].error[0].msg)
 
     if extraTestInfo:
         extraTestResult = response.perGpuResponses[gpuId].results[extraTestInfo[1]].result
@@ -114,6 +114,7 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_diagnostic_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "diagnostic", dcgm_structs.DCGM_DIAGNOSTIC_INDEX, None)
@@ -121,6 +122,7 @@ def test_nvvs_plugin_fail_early_diagnostic_standalone(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_targeted_stress_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "targeted stress", dcgm_structs.DCGM_TARGETED_STRESS_INDEX, None)
@@ -128,6 +130,7 @@ def test_nvvs_plugin_fail_early_targeted_stress_standalone(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_targeted_power_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], "targeted power", dcgm_structs.DCGM_TARGETED_POWER_INDEX, None)
@@ -135,6 +138,7 @@ def test_nvvs_plugin_fail_early_targeted_power_standalone(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_nvvs_plugin_fail_early_two_tests_standalone(handle, gpuIds):
     extraTestInfo = [ "pcie", dcgm_structs.DCGM_PCI_INDEX ]

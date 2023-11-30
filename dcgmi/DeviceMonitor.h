@@ -73,7 +73,8 @@ protected:
     dcgmReturn_t DoExecuteConnected() override;
 
 private:
-    std::string m_requestedEntityIds;          /*!< The Entity Ids requested in the options for command.*/
+    std::string m_requestedEntityIds;          /*!< The Entity Ids requested in the options for command. */
+    std::string m_cpuIds;                      /*!< The CPU Ids requested in the options for command. */
     std::string m_groupIdStr;                  /*!< The group Id mentioned in command. */
     std::string m_fieldIdsStr;                 /*!< The Field Ids to query for. Mentioned in the options.  */
     std::vector<unsigned short> m_fieldIds {}; /*!< The actual field IDs queried, either parsed from m_fieldIdsStr or

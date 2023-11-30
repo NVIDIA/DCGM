@@ -37,8 +37,8 @@ public:
     void header(const std::string &headerSting) override;
     void Result(nvvsPluginResult_t overallResult,
                 const std::vector<dcgmDiagSimpleResult_t> &perGpuResults,
-                const std::vector<dcgmDiagEvent_t> &errors,
-                const std::vector<dcgmDiagEvent_t> &info,
+                const std::vector<dcgmDiagErrorDetail_v2> &errors,
+                const std::vector<dcgmDiagErrorDetail_v2> &info,
                 const std::optional<std::any> &pluginSpecificData = std::nullopt) override;
     void prep(const std::string &testString) override;
     void updatePluginProgress(unsigned int progress, bool clear) override;
@@ -57,8 +57,12 @@ private:
     std::vector<unsigned int> m_gpuIndices;
     bool softwareTest { false };
 
-    static void AppendError(const dcgmDiagEvent_t &error, Json::Value &resultField, const std::string &prefix = "");
-    static void AppendInfo(const dcgmDiagEvent_t &info, Json::Value &resultField, const std::string &prefix = "");
+    static void AppendError(const dcgmDiagErrorDetail_v2 &error,
+                            Json::Value &resultField,
+                            const std::string &prefix = "");
+    static void AppendInfo(const dcgmDiagErrorDetail_v2 &info,
+                           Json::Value &resultField,
+                           const std::string &prefix = "");
 };
 
 #endif // _NVVS_NVVS_JsonOutput_H

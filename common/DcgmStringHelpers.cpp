@@ -55,6 +55,7 @@ std::vector<std::string> dcgmTokenizeString(const std::string &src, const std::s
 
     return tokens;
 }
+
 /*****************************************************************************/
 void dcgmStrncpy(char *destination, const char *source, size_t destinationSize)
 {
@@ -78,6 +79,58 @@ std::vector<std::string_view> Split(std::string_view value, char const separator
     result.push_back(value.substr(prevPos));
 
     return result;
+}
+
+/*****************************************************************************/
+dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned int> &indices)
+{
+    auto cpuRanges = Split(rangeStr, ',');
+
+    for (auto range : cpuRanges)
+    {
+        auto rangeTokens = DcgmNs::Split(range, '-');
+
+        if (rangeTokens.size() == 2)
+        {
+            unsigned int start = 0;
+            unsigned int end   = 0;
+
+            if (rangeTokens[0].empty() || rangeTokens[1].empty())
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            else if (!isdigit(rangeTokens[0].data()[0]) || !isdigit(rangeTokens[1].data()[0]))
+            {
+                return DCGM_ST_BADPARAM;
+            }
+
+            start = strtoul(rangeTokens[0].data(), nullptr, 10);
+            end   = strtoul(rangeTokens[1].data(), nullptr, 10);
+
+            for (unsigned int i = start; i <= end; i++)
+            {
+                indices.push_back(i);
+            }
+        }
+        else if (rangeTokens.size() == 1)
+        {
+            if (rangeTokens[0].empty())
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            else if (!isdigit(rangeTokens[0].data()[0]))
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            indices.push_back(strtoul(rangeTokens[0].data(), nullptr, 10));
+        }
+        else
+        {
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    return DCGM_ST_OK;
 }
 
 } // namespace DcgmNs

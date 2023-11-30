@@ -23,6 +23,7 @@
 #include "DcgmiOutput.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
+#include "dcgmi_common.h"
 #include <ctype.h>
 #include <iostream>
 #include <map>
@@ -42,9 +43,11 @@ const static char c_DeviceInfoTag[] = "Device Information";
 #define GPU_ID_TAG     "<GPUID"
 #define GPU_NAME_TAG   "<GPU_NAME"
 
-static const char c_name[]       = "Name";
-static const char c_busId[]      = "PCI Bus ID";
-static const char c_deviceUuid[] = "Device UUID";
+static const char c_name[]        = "Name";
+static const char c_busId[]       = "PCI Bus ID";
+static const char c_deviceUuid[]  = "Device UUID";
+static const char c_cores[]       = "Cores";
+static const char c_gpuAffinity[] = "GPU Affinity";
 
 #define ERROR_RETURN_TAG  "<ERROR_RETURN_STRING"
 #define ERROR_MESSAGE_TAG "<ERROR_MESSAGE"
@@ -70,6 +73,8 @@ static const char c_gpuId[] = "GPU ID";
 static const char c_info[]  = "Device Information";
 
 static const char c_switchId[] = "Switch ID";
+
+static const char c_cpuId[] = "CPU ID";
 
 /*****************************************************************************************/
 
@@ -168,6 +173,59 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
         }
         std::cout << out.str();
     }
+
+    {
+        dcgmCpuHierarchy_t stCpuHierarchy {};
+        stCpuHierarchy.version = dcgmCpuHierarchy_version1;
+        DcgmiOutputColumns outColumns;
+        DcgmiOutput &out = outColumns;
+
+        DcgmiOutputFieldSelector cpuIdSelector   = DcgmiOutputFieldSelector().child(c_cpuId);
+        DcgmiOutputFieldSelector cpuInfoSelector = DcgmiOutputFieldSelector().child(c_info);
+
+        out.setOption(DCGMI_OUTPUT_OPTIONS_SEPARATE_SECTIONS, true);
+
+        out.addColumn(8, c_cpuId, cpuIdSelector);
+        out.addColumn(70, c_info, cpuInfoSelector);
+
+        /* Display the CPUs in the system */
+        result = HelperGetEntityList(dcgmHandle, DCGM_FE_CPU, entityIds);
+        if (DCGM_ST_OK != result)
+        {
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Cannot get CPU list from remote node. Error: {}: {}", result, errorString(result));
+            return result;
+        }
+
+        result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
+        if (result != DCGM_ST_OK)
+        {
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
+            return result;
+        }
+
+        std::cout << fmt::format("{} CPU{} found.", entityIds.size(), (entityIds.size() == 1 ? "" : "s")) << std::endl;
+        for (auto const &entityId : entityIds)
+        {
+            std::string idStr   = std::to_string(entityId);
+            out[idStr][c_cpuId] = idStr;
+
+            if (entityId >= stCpuHierarchy.numCpus)
+            {
+                out[idStr][c_info].setOrAppend("Error: Entity ID exceeded the number of known CPUs.");
+                log_error("Error: Entity ID {} exceeded the number of known CPUs.", entityId);
+                continue;
+            }
+
+            auto coreMap = HelperBuildCpuListFromRanges(HelperGetCpuRangesFromBitmask(
+                stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
+            out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace TH500");
+            out[idStr][c_info].setOrAppend(coreMap);
+        }
+        std::cout << out.str();
+    }
+
     return DCGM_ST_OK;
 }
 /********************************************************************************/
@@ -243,6 +301,55 @@ dcgmReturn_t Query::DisplayDeviceInfo(dcgmHandle_t dcgmHandle,
                     DCGM_LOG_ERROR << "Unexpected error in querying GPU " << requestedGpuId << ".";
                     break;
             }
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+/********************************************************************************/
+dcgmReturn_t Query::DisplayCpuInfo(dcgmHandle_t dcgmHandle, unsigned int requestedCpuId, std::string const &attributes)
+{
+    dcgmCpuHierarchy_t stCpuHierarchy {};
+    stCpuHierarchy.version          = dcgmCpuHierarchy_version1;
+    CommandOutputController cmdView = CommandOutputController();
+
+    // Check if input attribute flags are valid
+    dcgmReturn_t result = DCGM_ST_OK;
+
+    result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
+    if (result != DCGM_ST_OK)
+    {
+        SHOW_AND_LOG_ERROR << fmt::format("Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
+        return result;
+    }
+    else if (requestedCpuId >= stCpuHierarchy.numCpus)
+    {
+        SHOW_AND_LOG_ERROR << "Requested CPU ID not found: " << requestedCpuId;
+        return DCGM_ST_BADPARAM;
+    }
+
+    auto coreMap = HelperBuildCpuListFromRanges(
+        HelperGetCpuRangesFromBitmask(stCpuHierarchy.cpus[requestedCpuId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
+
+    cmdView.setDisplayStencil(QUERY_DEVICE_HEADER);
+    cmdView.addDisplayParameter(HEADER_TAG, fmt::format("CPU ID: {}", requestedCpuId));
+    cmdView.display();
+    for (char attribute : attributes)
+    {
+        switch (attribute)
+        {
+            // TODO: Requires some work on these codes and deconflicting with GPU info attributes
+            case 'a':
+                cmdView.setDisplayStencil(QUERY_ATTRIBUTE_DATA);
+                cmdView.addDisplayParameter(ATTRIBUTE_TAG, "CPU Ranges");
+                cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, coreMap);
+                cmdView.display();
+                std::cout << QUERY_ATTRIBUTE_FOOTER;
+                break;
+            default:
+                DCGM_LOG_ERROR << "Unexpected error in querying CPU " << requestedCpuId << ".";
+                break;
         }
     }
 
@@ -840,6 +947,75 @@ dcgmReturn_t Query::HelperValidInput(std::string const &attributes)
     return DCGM_ST_OK;
 }
 
+/********************************************************************************/
+std::string HelperBuildCpuListFromRanges(std::vector<std::pair<uint32_t, uint32_t>> ranges)
+{
+    std::string coreMap;
+    for (auto range : ranges)
+    {
+        if (coreMap.empty())
+        {
+            coreMap = fmt::format("Cores: {}-{}", range.first, range.second);
+        }
+        else
+        {
+            coreMap = fmt::format("{},{}-{}", coreMap, range.first, range.second);
+        }
+    }
+    return coreMap;
+}
+
+/********************************************************************************/
+static bool getBit(uint8_t *bitmask, uint32_t bit)
+{
+    uint8_t relativeBitPos = bit % 8;
+    uint8_t *relativeMask  = bitmask + (bit / 8);
+    return 0 != ((*relativeMask) & (1 << relativeBitPos));
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_t *bitmask, uint32_t numBits)
+{
+    const int SENTINEL = -1;
+    int currRangeFirst = SENTINEL;
+    int currRangeLast  = SENTINEL;
+    bool currentBit    = false;
+    std::vector<std::pair<uint32_t, uint32_t>> ranges {};
+    for (int bitIndex = 0; bitIndex < numBits; bitIndex++)
+    {
+        currentBit = getBit((uint8_t *)bitmask, bitIndex);
+
+        if (currRangeFirst == SENTINEL && currentBit == true)
+        {
+            // found the beginning of a range
+            currRangeFirst = bitIndex;
+        }
+        else if (currRangeFirst != SENTINEL && currentBit == false)
+        {
+            // found the end of a range
+            currRangeLast = bitIndex - 1;
+        }
+
+        if (currRangeFirst != SENTINEL && bitIndex == numBits - 1)
+        {
+            // edge case, we aren't going to find an end
+            currRangeLast = bitIndex;
+        }
+        // we don't need to track first==sentinel, currentBit==false because
+        // that means the range hasn't started yet
+        // we don't need to track first!=sentinel, currentBit==true because
+        // that means the range is continuing but hasn't ended yet
+
+        if (currRangeFirst != SENTINEL && currRangeLast != SENTINEL)
+        {
+            // we have a complete range
+            ranges.emplace_back(currRangeFirst, currRangeLast);
+            currRangeFirst = SENTINEL;
+            currRangeLast  = SENTINEL;
+        }
+    }
+    return ranges;
+}
+
 /*****************************************************************************
  *****************************************************************************
  *Query Device Info Invoker
@@ -858,6 +1034,26 @@ QueryDeviceInfo::QueryDeviceInfo(std::string hostname, unsigned int device, std:
 dcgmReturn_t QueryDeviceInfo::DoExecuteConnected()
 {
     return queryObj.DisplayDeviceInfo(m_dcgmHandle, deviceNum, attributes);
+}
+
+/*****************************************************************************
+ *****************************************************************************
+ *Query CPU Info Invoker
+ *****************************************************************************
+ *****************************************************************************/
+
+/*****************************************************************************/
+QueryCpuInfo::QueryCpuInfo(std::string hostname, unsigned int cpu, std::string attributes)
+    : cpuNum(cpu)
+    , attributes(std::move(attributes))
+{
+    m_hostName = std::move(hostname);
+}
+
+/*****************************************************************************/
+dcgmReturn_t QueryCpuInfo::DoExecuteConnected()
+{
+    return queryObj.DisplayCpuInfo(m_dcgmHandle, cpuNum, attributes);
 }
 
 /*****************************************************************************

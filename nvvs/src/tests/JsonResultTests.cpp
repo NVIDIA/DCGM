@@ -36,8 +36,10 @@ TEST_CASE("JsonResult: JsonSerialize Warning")
     using namespace DcgmNs::Nvvs::Json;
     using namespace DcgmNs::JsonSerialize;
     Warning const warning {
-        .message    = "message",
-        .error_code = 1,
+        .message        = "message",
+        .error_code     = 1,
+        .error_category = 1,
+        .error_severity = 1,
     };
 
     auto json = Serialize(warning);
@@ -70,12 +72,16 @@ TEST_CASE("JsonResult: JsonSerialize Single Result")
         .gpuIds   = { .ids = { 1, 2, 3 } },
         .status   = { .result = NVVS_RESULT_PASS },
         .warnings = std::vector<Warning> { {
-                                               .message    = "message",
-                                               .error_code = 1,
+                                               .message        = "message",
+                                               .error_code     = 1,
+                                               .error_category = 1,
+                                               .error_severity = 1,
                                            },
                                            {
-                                               .message    = "message2",
-                                               .error_code = 2,
+                                               .message        = "message2",
+                                               .error_code     = 2,
+                                               .error_category = 1,
+                                               .error_severity = 1,
                                            } },
         .info     = Info { .messages = { "message1", "message2" } },
         .auxData  = ::Json::Value::nullSingleton(),
@@ -101,12 +107,16 @@ DcgmNs::Nvvs::Json::Result GenerateRandomResult()
         .gpuIds   = { .ids = {} },
         .status   = { .result = RandomPluginResult() },
         .warnings = std::vector<Warning> { {
-                                               .message    = "warn message 1",
-                                               .error_code = rand(),
+                                               .message        = "warn message 1",
+                                               .error_code     = rand(),
+                                               .error_category = rand(),
+                                               .error_severity = rand(),
                                            },
                                            {
-                                               .message    = "warn message 2",
-                                               .error_code = rand(),
+                                               .message        = "warn message 2",
+                                               .error_code     = rand(),
+                                               .error_category = rand(),
+                                               .error_severity = rand(),
                                            } },
         .info     = Info { .messages = { "info message 1", "info message 2" } },
         .auxData  = ::Json::Value::nullSingleton(),
@@ -201,6 +211,7 @@ TEST_CASE("JsonResult: JsonSerialize DiagnosticResults")
             },
         },
         .devIds = std::nullopt,
+        .devSerials = std::nullopt,
         .errorCode = NVVS_ST_GENERIC_ERROR,
     };
 
@@ -222,6 +233,7 @@ TEST_CASE("JsonResult: JsonSerialize Diagnostic Runtime Error")
         .driverVersion = "525.75",
         .categories    = std::nullopt,
         .devIds        = std::nullopt,
+        .devSerials    = std::nullopt,
         .errorCode     = NVVS_ST_GENERIC_ERROR,
     };
 
@@ -243,6 +255,7 @@ TEST_CASE("JsonResult: Bad Diagnostic Result")
         .driverVersion = "525.75",
         .categories    = std::nullopt,
         .devIds        = std::nullopt,
+        .devSerials    = std::nullopt,
         .errorCode     = std::nullopt,
     };
 

@@ -180,15 +180,15 @@ class DcgmGroupSamples:
     def GetAllSinceLastCall_v2(self, dfvec, fieldGroup):
         if dfvec == None:
             dfvec = dcgm_field_helpers.DcgmFieldValueEntityCollection(self._dcgmHandle.handle, self._groupId)
-            dfvec.GetLastestValues_v2(fieldGroup)
+            dfvec.GetLatestValues(fieldGroup)
         else:
-            dfvec.GetAllSinceLastCall_v2(fieldGroup)
+            dfvec.GetAllSinceLastCall(fieldGroup)
             # We used to expect at least one value (GetLatestValues), so this
             # ensures we provide one at the risk of repetition. This should not
             # happen if we call this function infrequently enough (slower than
             # the sampling rate).
             if len(dfvec.values) == 0:
-                dfvec.GetLatestValues_v2(fieldGroup)
+                dfvec.GetLatestValues(fieldGroup)
 
         return dfvec
 

@@ -98,7 +98,10 @@ const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
             map_entry(DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV),
-            map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD) };
+            map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD),
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_VDD),
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_DVDD),
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_HVDD) };
 
 #undef map_entry
 

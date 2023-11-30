@@ -38,6 +38,9 @@ errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SB
                                       { DCGM_FI_DEV_THERMAL_VIOLATION, nullptr },
                                       { DCGM_FI_DEV_XID_ERRORS, nullptr },
                                       { DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PCIE_STR_MAX_PCIE_REPLAYS },
+                                      { DCGM_FI_DEV_ROW_REMAP_PENDING, nullptr },
+                                      { DCGM_FI_DEV_ROW_REMAP_FAILURE, nullptr },
+                                      { DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS, nullptr },
                                       { 0, nullptr } };
 
 unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
@@ -476,6 +479,24 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
 {
     switch (fieldId)
     {
+        case DCGM_FI_DEV_ECC_SBE_VOL_TOTAL:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SBE_VIOLATION, d, intValue, fieldName.c_str(), gpuId);
+
+            break;
+
+        case DCGM_FI_DEV_ECC_DBE_VOL_TOTAL:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DBE_VIOLATION, d, intValue, fieldName.c_str(), gpuId);
+
+            break;
+
+        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_REPLAY_VIOLATION, d, intValue, fieldName.c_str(), gpuId);
+
+            break;
+
         case DCGM_FI_DEV_THERMAL_VIOLATION:
         {
             dcgmReturn_t ret = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_THERMAL_VIOLATION, startTime, false);
@@ -514,6 +535,24 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
             break;
         }
 
+        case DCGM_FI_DEV_ROW_REMAP_FAILURE:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d, gpuId);
+
+            break;
+
+        case DCGM_FI_DEV_ROW_REMAP_PENDING:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_ROW_REMAP, d, gpuId);
+
+            break;
+
+        case DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SXID_ERROR, d, intValue);
+
+            break;
+
         default:
         {
             if (DCGM_INT64_IS_BLANK(intValue))
@@ -544,6 +583,79 @@ void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
     errorList.push_back(d);
 }
 
+void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
+                                                   unsigned int gpuId,
+                                                   timelib64_t startTime,
+                                                   int64_t intValue,
+                                                   int64_t thresholdValue,
+                                                   double dblValue,
+                                                   const std::string &fieldName,
+                                                   std::vector<DcgmError> &errorList)
+{
+    DcgmError d { gpuId };
+    switch (fieldId)
+    {
+        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+
+            break;
+
+        case DCGM_FI_DEV_ECC_DBE_VOL_TOTAL:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DBE_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+
+            break;
+
+        case DCGM_FI_DEV_ECC_SBE_VOL_TOTAL:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SBE_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+
+            break;
+
+        default:
+
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD, d, intValue, fieldName, gpuId, thresholdValue);
+
+            break;
+    }
+}
+
+int DcgmRecorder::CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+{
+    int count = DCGM_MAX_XID_INFO;
+    dcgmFieldValue_v1 values[DCGM_MAX_XID_INFO];
+
+    int st = dcgmGetMultipleValuesForField(
+        m_dcgmHandle.GetHandle(), gpuId, DCGM_FI_DEV_XID_ERRORS, &count, startTime, 0, DCGM_ORDER_ASCENDING, values);
+
+    if (st != DCGM_ST_OK)
+    {
+        log_error("Skipping XID check for gpu {} due to error {}.", gpuId, st);
+        return st;
+    }
+
+    std::unordered_set<unsigned int> errors;
+
+    /* gather unique XIDs */
+    for (int i = 0; i < count; i++)
+    {
+        if (!DCGM_INT64_IS_BLANK(values[i].value.i64))
+            errors.insert(values[i].value.i64);
+    }
+
+    for (const auto &error : errors)
+    {
+        DcgmError d { gpuId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_XID_ERROR, d, error, gpuId);
+        errorList.push_back(d);
+        st = DR_VIOLATION;
+    }
+
+    return st;
+}
+
 int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                                    const std::vector<dcgmTimeseriesInfo_t> *failureThresholds,
                                    unsigned int gpuId,
@@ -564,6 +676,12 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
 
     for (size_t i = 0; i < fieldIds.size(); i++)
     {
+        if (fieldIds[i] == DCGM_FI_DEV_XID_ERRORS)
+        {
+            /* XID errors handled in CheckXIDs to avoid "summary" */
+            continue;
+        }
+
         dcgm_field_meta_p fm = DcgmFieldGetById(fieldIds[i]);
         if (fm == 0)
         {
@@ -611,14 +729,14 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
             else if (failureThresholds != 0 && fsr.response.values[valueIndex].i64 > (*failureThresholds)[i].val.i64
                      && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
-                DcgmError d { gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD,
-                                          d,
-                                          fsr.response.values[valueIndex].i64,
-                                          fm->tag,
-                                          gpuId,
-                                          (*failureThresholds)[i].val.i64);
-                errorList.push_back(d);
+                AddFieldThresholdViolationError(fieldIds[i],
+                                                gpuId,
+                                                startTime,
+                                                fsr.response.values[valueIndex].i64,
+                                                (*failureThresholds)[i].val.i64,
+                                                DCGM_FP64_BLANK,
+                                                fm->tag,
+                                                errorList);
                 st = DR_VIOLATION;
             }
         }
@@ -662,6 +780,12 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
     std::string infoMsg;
     long long highTemp;
     int tmpSt = CheckGpuTemperature(gpuId, errorList, maxTemp, infoMsg, startTime, highTemp);
+    if (tmpSt == DR_VIOLATION || (st == DR_SUCCESS && st != tmpSt))
+    {
+        st = tmpSt;
+    }
+
+    tmpSt = CheckXIDs(gpuId, startTime, errorList);
     if (tmpSt == DR_VIOLATION || (st == DR_SUCCESS && st != tmpSt))
     {
         st = tmpSt;

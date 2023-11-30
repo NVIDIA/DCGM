@@ -6,8 +6,8 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "cStandard": "c11",
-            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
             "intelliSenseMode": "linux-gcc-x64",
             "compileCommands": "${workspaceFolder}/compile_commands.json",
             "configurationProvider": "vector-of-bool.cmake-tools"

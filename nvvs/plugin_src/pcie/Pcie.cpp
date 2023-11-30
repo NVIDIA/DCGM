@@ -92,6 +92,7 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddString(PCIE_STR_IS_ALLOWED, "False");
 
     tp->AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0);
+    tp->AddDouble(PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS, 0.0);
 
     tp->AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0);
     tp->AddDouble(PCIE_STR_MAX_GRAPHICS_CLOCK, 0.0);
@@ -326,6 +327,7 @@ bool BusGrind::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 
     if (UsingFakeGpus())
     {
+        log_debug("Skipping cuda init for fake gpus");
         return true;
     }
 
@@ -699,7 +701,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
         if (elapsed >= 1 && (totalCorrectedErrors / elapsed) > limit)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_REPLAYS, d, device->gpuId);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
             AddErrorForGpu(device->gpuId, d);
 
             return false;
@@ -708,7 +710,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
         if (totalCorrectedErrors >= m_maxAer)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_REPLAYS, d, device->gpuId);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
             AddErrorForGpu(device->gpuId, d);
 
             return false;
