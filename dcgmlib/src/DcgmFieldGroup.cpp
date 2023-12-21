@@ -330,7 +330,13 @@ dcgmReturn_t DcgmFieldGroupManager::PopulateFieldGroupInfo(dcgmFieldGroupInfo_t 
             fieldGroupInfo->fieldIds[i] = fieldIds[i];
         }
     }
-    dcgmStrncpy(fieldGroupInfo->fieldGroupName, fieldGrpObj->GetName().c_str(), sizeof(fieldGroupInfo->fieldGroupName));
+
+    if(false == dcgmStrncpy(fieldGroupInfo->fieldGroupName,
+                            fieldGrpObj->GetName().c_str(),
+                            sizeof(fieldGroupInfo->fieldGroupName)))
+    {
+        log_error("String overflow error for the field grp obj.");
+    }
 
     Unlock();
     return DCGM_ST_OK;
@@ -365,9 +371,13 @@ dcgmReturn_t DcgmFieldGroupManager::PopulateFieldGroupGetAll(dcgmAllFieldGroup_t
                 allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldIds[i] = fieldIds[i];
             }
         }
-        dcgmStrncpy(allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldGroupName,
-                    fieldGrpObj->GetName().c_str(),
-                    sizeof(allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldGroupName));
+
+        if(false == dcgmStrncpy(allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldGroupName,
+                                fieldGrpObj->GetName().c_str(), 
+                                sizeof(allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldGroupName)))
+        {
+            log_error("String overflow error for the field grp obj name.");
+        }
 
         allGroupInfo->fieldGroups[allGroupInfo->numFieldGroups].fieldGroupId
             = (dcgmFieldGrp_t)(intptr_t)fieldGrpObj->GetId();

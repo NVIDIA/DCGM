@@ -71,3 +71,21 @@ TEST_CASE("ParseRangeString")
     }
     CHECK(indices[16] == 24);
 }
+
+TEST_CASE("dcgmStrncpy differing src sizes")
+{
+    using namespace DcgmNs;
+    const std::string c_strSmallerThanBuffer = "TestString1";
+    const std::string c_strSizeOfBuffer = "TestString2TestString2!!";
+    const std::string c_strLargerThanBuffer = "TestString3TestString3TestString3";
+    std::vector<char> vDestination(25);
+    
+    REQUIRE(true == dcgmStrncpy(vDestination.data(), c_strSmallerThanBuffer.c_str(), vDestination.size()));
+    REQUIRE(c_strSmallerThanBuffer == std::string(vDestination.begin(), vDestination.end()).c_str());
+
+    REQUIRE(true == dcgmStrncpy(vDestination.data(), c_strSizeOfBuffer.c_str(), vDestination.size()));
+    REQUIRE(c_strSizeOfBuffer == std::string(vDestination.begin(), vDestination.end()).c_str());
+
+    REQUIRE(false == dcgmStrncpy(vDestination.data(), c_strLargerThanBuffer.c_str(), vDestination.size()));
+    REQUIRE(c_strLargerThanBuffer != std::string(vDestination.begin(), vDestination.end()).c_str());
+}

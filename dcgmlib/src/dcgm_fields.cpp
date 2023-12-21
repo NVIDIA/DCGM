@@ -162,7 +162,10 @@ static int DcgmFieldsPopulateOneFieldWithFormatting(unsigned short fieldId,
     fieldMeta->fieldId   = fieldId;
     fieldMeta->fieldType = fieldType;
     fieldMeta->size      = size;
-    dcgmStrncpy(fieldMeta->tag, tag, sizeof(fieldMeta->tag));
+    if (false == dcgmStrncpy(fieldMeta->tag, tag, sizeof(fieldMeta->tag)))
+    {
+        DCGM_LOG_ERROR << "String overflow error for the requested tag.";
+    }
     fieldMeta->scope       = scope;
     fieldMeta->nvmlFieldId = nvmlFieldId;
 
@@ -174,8 +177,16 @@ static int DcgmFieldsPopulateOneFieldWithFormatting(unsigned short fieldId,
     }
     memset(fieldMeta->valueFormat, 0, sizeof(*fieldMeta->valueFormat));
 
-    dcgmStrncpy(fieldMeta->valueFormat->shortName, shortName, sizeof(fieldMeta->valueFormat->shortName));
-    dcgmStrncpy(fieldMeta->valueFormat->unit, unit, sizeof(fieldMeta->valueFormat->unit));
+    if (false == dcgmStrncpy(fieldMeta->valueFormat->shortName, shortName, sizeof(fieldMeta->valueFormat->shortName)))
+    {
+        DCGM_LOG_ERROR << "String overflow error for the requested shortName.";
+    }
+
+    if (false == dcgmStrncpy(fieldMeta->valueFormat->unit, unit, sizeof(fieldMeta->valueFormat->unit)))
+    {
+        DCGM_LOG_ERROR << "String overflow error for the requested unit.";
+    }
+
     fieldMeta->valueFormat->width = width;
     fieldMeta->entityLevel        = entityLevel;
 

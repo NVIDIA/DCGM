@@ -9045,9 +9045,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             {
                 vgpuProcessUtilInfo[i + 1].vgpuProcessUtilInfo.vgpuId = vgpuProcessUtilization[i].vgpuInstance;
                 vgpuProcessUtilInfo[i + 1].pid                        = vgpuProcessUtilization[i].pid;
-                dcgmStrncpy(vgpuProcessUtilInfo[i + 1].processName,
-                            vgpuProcessUtilization[i].processName,
-                            DCGM_VGPU_NAME_BUFFER_SIZE);
+                if(false == dcgmStrncpy(vgpuProcessUtilInfo[i + 1].processName,
+                                        vgpuProcessUtilization[i].processName,
+                                        DCGM_VGPU_NAME_BUFFER_SIZE))
+                {
+                    log_error("String overflow error for the vgpu proces name.");
+                }
                 vgpuProcessUtilInfo[i + 1].smUtil  = vgpuProcessUtilization[i].smUtil;
                 vgpuProcessUtilInfo[i + 1].memUtil = vgpuProcessUtilization[i].memUtil;
                 vgpuProcessUtilInfo[i + 1].encUtil = vgpuProcessUtilization[i].encUtil;

@@ -590,7 +590,12 @@ dcgmReturn_t helperGroupGetInfo(dcgmHandle_t pDcgmHandle,
         return (dcgmReturn_t)msg.gi.cmdRet;
     }
 
-    dcgmStrncpy(pDcgmGroupInfo->groupName, msg.gi.groupInfo.groupName, sizeof(pDcgmGroupInfo->groupName));
+    if (false == dcgmStrncpy(pDcgmGroupInfo->groupName,
+                            msg.gi.groupInfo.groupName,
+                            sizeof(pDcgmGroupInfo->groupName)))
+    {
+        DCGM_LOG_ERROR << "String overflow error for the requested groupInfo groupName field.";
+    }
 
     if (hostEngineTimestamp)
     {
@@ -917,18 +922,12 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_UUID:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.uuid))
+                if (false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.uuid,
+                                        fv->value.str,
+                                        sizeof(pDcgmDeviceAttr->identifiers.uuid)))
                 {
-                    log_error("String overflow error for the requested UUID field");
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.uuid, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.uuid));
-                }
-                else
-                {
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.uuid, fv->value.str, sizeof(pDcgmDeviceAttr->identifiers.uuid));
+                    log_error("String overflow error for the requested UUID field.");
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.uuid, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.uuid));
                 }
 
                 break;
@@ -936,18 +935,12 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_VBIOS_VERSION:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.vbios))
+                if (false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.vbios, 
+                                        fv->value.str,
+                                        sizeof(pDcgmDeviceAttr->identifiers.vbios)))
                 {
-                    log_error("String overflow error for the requested VBIOS field");
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.vbios, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.vbios));
-                }
-                else
-                {
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.vbios, fv->value.str, sizeof(pDcgmDeviceAttr->identifiers.vbios));
+                    log_error("String overflow error for the requested VBIOS field.");
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.vbios, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.vbios));
                 }
 
                 break;
@@ -955,19 +948,13 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_INFOROM_IMAGE_VER:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion))
+                if (false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion,
+                                        fv->value.str, 
+                                        sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion)))
                 {
-                    log_error("String overflow error for the requested Inforom field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion,
-                                fv->value.str,
+                    log_error("String overflow error for the requested Inforom field.");
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion, 
+                                DCGM_STR_BLANK, 
                                 sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion));
                 }
 
@@ -976,19 +963,13 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_BRAND:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.brandName))
+                if (false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.brandName, 
+                                        fv->value.str, 
+                                        sizeof(pDcgmDeviceAttr->identifiers.brandName)))
                 {
-                    log_error("String overflow error for the requested brand name field");
+                    log_error("String overflow error for the requested brand name field.");
                     dcgmStrncpy(pDcgmDeviceAttr->identifiers.brandName,
                                 DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.brandName));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.brandName,
-                                fv->value.str,
                                 sizeof(pDcgmDeviceAttr->identifiers.brandName));
                 }
 
@@ -997,19 +978,13 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_NAME:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.deviceName))
+                if(false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName, 
+                                        fv->value.str, 
+                                        sizeof(pDcgmDeviceAttr->identifiers.deviceName)))
                 {
-                    log_error("String overflow error for the requested device name field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName,
+                    log_error("String overflow error for the requested device name field.");
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName, 
                                 DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.deviceName));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName,
-                                fv->value.str,
                                 sizeof(pDcgmDeviceAttr->identifiers.deviceName));
                 }
 
@@ -1018,20 +993,12 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_SERIAL:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.serial))
+                if(false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial,
+                                        fv->value.str, 
+                                        sizeof(pDcgmDeviceAttr->identifiers.serial)))
                 {
                     log_error("String overflow error for the requested serial field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.serial));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.serial));
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.serial));
                 }
 
                 break;
@@ -1039,20 +1006,12 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DEV_PCI_BUSID:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.pciBusId))
+                if(false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId,
+                                        fv->value.str,
+                                        sizeof(pDcgmDeviceAttr->identifiers.pciBusId)))
                 {
                     log_error("String overflow error for the requested serial field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.pciBusId));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.pciBusId));
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.pciBusId));
                 }
 
                 break;
@@ -1120,22 +1079,15 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
 
             case DCGM_FI_DRIVER_VERSION:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.driverVersion))
+                if(false == dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion,
+                                        fv->value.str, 
+                                        sizeof(pDcgmDeviceAttr->identifiers.driverVersion)))
                 {
                     log_error("String overflow error for the requested driver version field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion,
-                                DCGM_STR_BLANK,
+                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion, 
+                                DCGM_STR_BLANK, 
                                 sizeof(pDcgmDeviceAttr->identifiers.driverVersion));
                 }
-                else
-                {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.driverVersion));
-                }
-
                 break;
             }
 
@@ -1580,32 +1532,22 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
         {
             case DCGM_FI_DEV_VGPU_VM_ID:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vmId))
+                if (false == dcgmStrncpy(pDcgmVgpuInstanceAttr->vmId, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vmId)))
                 {
                     log_error("String overflow error for the requested vGPU instance VM ID field");
                     dcgmStrncpy(pDcgmVgpuInstanceAttr->vmId, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vmId));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmId, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vmId));
                 }
                 break;
             }
 
             case DCGM_FI_DEV_VGPU_VM_NAME:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vmName))
+                if(false == dcgmStrncpy(pDcgmVgpuInstanceAttr->vmName, 
+                                        fv->value.str, 
+                                        sizeof(pDcgmVgpuInstanceAttr->vmName)))
                 {
                     log_error("String overflow error for the requested vGPU instance VM name field");
                     dcgmStrncpy(pDcgmVgpuInstanceAttr->vmName, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vmName));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmName, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vmName));
                 }
                 break;
             }
@@ -1616,38 +1558,24 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
 
             case DCGM_FI_DEV_VGPU_UUID:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vgpuUuid))
+                if(false == dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuUuid,
+                                        fv->value.str,
+                                        sizeof(pDcgmVgpuInstanceAttr->vgpuUuid)))
                 {
                     log_error("String overflow error for the requested vGPU instance UUID field");
-                    dcgmStrncpy(
-                        pDcgmVgpuInstanceAttr->vgpuUuid, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vgpuUuid));
-                }
-                else
-                {
-                    dcgmStrncpy(
-                        pDcgmVgpuInstanceAttr->vgpuUuid, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vgpuUuid));
+                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuUuid, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vgpuUuid));
                 }
                 break;
             }
 
             case DCGM_FI_DEV_VGPU_DRIVER_VERSION:
             {
-                size_t length;
-                length = strlen(fv->value.str);
-                if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion))
+                if(false == dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion,
+                                        fv->value.str,
+                                        sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion)))
                 {
                     log_error("String overflow error for the requested vGPU instance driver version field");
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion));
-                }
-                else
-                {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion,
-                                fv->value.str,
-                                sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion));
+                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion));
                 }
                 break;
             }
@@ -2733,7 +2661,10 @@ dcgmReturn_t tsapiFieldGroupCreate(dcgmHandle_t pDcgmHandle,
     msg.header.version    = dcgm_core_msg_fieldgroup_op_version;
 
     msg.info.fg.version = dcgmFieldGroupInfo_version;
-    dcgmStrncpy(msg.info.fg.fieldGroupName, fieldGroupName, sizeof(msg.info.fg.fieldGroupName) - 1);
+    if(false == dcgmStrncpy(msg.info.fg.fieldGroupName, fieldGroupName, sizeof(msg.info.fg.fieldGroupName) - 1))
+    {
+        DCGM_LOG_ERROR << "String overflow error for the field grp name.";
+    }
     msg.info.fg.numFieldIds = numFieldIds;
     memcpy(msg.info.fg.fieldIds, fieldIds, sizeof(fieldIds[0]) * numFieldIds);
 
