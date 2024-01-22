@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,11 @@ import DcgmReader
 
 import dcgm_field_injection_helpers
 
+# The value for this environment variable doesn't matter
+__DCGM_SYSMON_SKIP_HARDWARE_CHECK__ = "DCGM_SKIP_SYSMON_HARDWARE_CHECK"
+
 @test_utils.run_only_on_numa_systems()
-@test_utils.run_with_standalone_host_engine(5)
+@test_utils.run_with_standalone_host_engine(5, heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "Nomad"})
 @test_utils.run_with_initialized_client()
 def test_dcgm_sysmon_cpu_hierarchy(handle):
     """
@@ -61,7 +64,7 @@ def test_dcgm_sysmon_cpu_hierarchy(handle):
             cpu_owns_core = bool(pydcgm.dcgm_agent.dcgmCpuHierarchyCpuOwnsCore(cpu_index, hierarchy.cpus[node_id].ownedCores))
             assert cpu_owns_core == expected_bool, f'''node {node_id} cpu {cpu_index} cpu_owns_core {cpu_owns_core} expected {expected_bool}'''
 
-@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_embedded_host_engine(heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "Sigzil"})
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
 def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
@@ -108,7 +111,7 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
             assert value.value.dbl == injection_info[index][1], "Expected %f but read %f" % (injection_info[index][1], value.value.dbl)
 
 @test_utils.run_only_on_numa_systems()
-@test_utils.run_with_standalone_host_engine(5)
+@test_utils.run_with_standalone_host_engine(5, heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "The Sunlit Man"})
 @test_utils.run_with_initialized_client()
 def test_dcgm_sysmon_fields_with_dcgmreader(handle):
     """

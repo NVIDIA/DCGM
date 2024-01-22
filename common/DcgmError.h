@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,20 @@ public:
         , m_details()
         , m_gpuId(gpuId)
     {}
+
+    DcgmError(const DcgmError &other)
+        : m_code(other.m_code)
+        , m_formatMessage(other.m_formatMessage)
+        , m_nextSteps(other.m_nextSteps)
+        , m_severity(other.m_severity)
+        , m_category(other.m_category)
+        , m_message(other.m_message)
+        , m_errorDetail(other.m_errorDetail)
+        , m_fullError(other.m_fullError)
+        , m_details(other.m_details)
+        , m_gpuId(other.m_gpuId)
+    {}
+
     /* Getters and Setters */
     /*****************************************************************************/
     dcgmError_t GetCode() const
@@ -177,6 +191,11 @@ public:
     {
         m_gpuId = gpuId;
         return *this;
+    }
+
+    bool operator==(const DcgmError &other) const
+    {
+        return (other.m_code == m_code && other.m_gpuId == m_gpuId && other.m_fullError == m_fullError);
     }
 
     /***************************PRIVATE**********************************/

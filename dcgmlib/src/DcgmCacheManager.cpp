@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3033,7 +3033,9 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
         entityKey.fieldId       = dcgmFieldId;
         if (EntitySupportsGpm(entityKey))
         {
-            dcgmReturn = m_gpmManager.AddWatcher(entityKey, watcher, monitorIntervalUsec, newWatcher.maxAgeUsec);
+            timelib64_t maxSampleAgeUsec = std::uint64_t(maxSampleAge) * 1000000;
+            dcgmReturn
+                = m_gpmManager.AddWatcher(entityKey, watcher, monitorIntervalUsec, maxSampleAgeUsec, maxKeepSamples);
             if (dcgmReturn != DCGM_ST_OK)
             {
                 DCGM_LOG_ERROR << "Unexpected return " << dcgmReturn << " from m_gpmManager->AddWatcher()";

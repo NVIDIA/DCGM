@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,14 @@ void Plugin::AddWarning(const std::string &error)
 void Plugin::AddError(const DcgmError &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
+    for (const auto &existingError : m_errors)
+    {
+        if (existingError == error)
+        {
+            log_debug("Skipping adding a duplicate error '{}' for plugin {}", error.GetMessage(), GetDisplayName());
+            return;
+        }
+    }
     DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
     m_errors.push_back(error);
 }
@@ -112,6 +120,17 @@ void Plugin::AddInfoVerbose(const std::string &info)
 void Plugin::AddErrorForGpu(unsigned int gpuId, const DcgmError &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
+    for (const auto &existingError : m_errorsPerGPU[gpuId])
+    {
+        if (existingError == error)
+        {
+            log_debug("Skipping adding a duplicate error '{}' for GPU {} in plugin {}",
+                      error.GetMessage(),
+                      gpuId,
+                      GetDisplayName());
+            return;
+        }
+    }
     DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage() << " (GPU " << gpuId << ")";
     m_errorsPerGPU[gpuId].push_back(error);
 }

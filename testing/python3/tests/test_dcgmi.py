@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -466,7 +466,8 @@ def test_dcgmi_discovery(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
-def test_dcgmi_discovery_cpus(handle, gpuIds):
+@test_utils.run_only_with_live_cpus()
+def test_dcgmi_discovery_cpus(handle, gpuIds, cpuIds):
     """
     Test DCGMI discovery 
     """
@@ -798,7 +799,8 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds, cpuIds, coreI
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
-def test_dcgmi_dmon_cpu(handle, gpuIds):
+@test_utils.run_only_with_live_cpus()
+def test_dcgmi_dmon_cpu(handle, gpuIds, cpuIds):
     cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
 
     allGpusCsv = ",".join(map(str,gpuIds))

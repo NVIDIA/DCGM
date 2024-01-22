@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3749,7 +3749,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "CPUTP",
                                              "",
-                                             DCGM_FE_CPU_CORE,
+                                             DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_TEMP_WARNING,
@@ -3793,7 +3793,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "CPUPL",
                                              "",
-                                             DCGM_FE_CPU_CORE,
+                                             DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT,
@@ -3804,7 +3804,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "CPUPU",
                                              "",
-                                             DCGM_FE_CPU_CORE,
+                                             DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_VENDOR,
@@ -3815,7 +3815,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "CPUVN",
                                              "",
-                                             DCGM_FE_CPU_CORE,
+                                             DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_MODEL,
@@ -3826,7 +3826,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "CPUMN",
                                              "",
-                                             DCGM_FE_CPU_CORE,
+                                             DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_COUNT,

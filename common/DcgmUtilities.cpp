@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -360,16 +360,8 @@ std::chrono::milliseconds DcgmNs::Utils::GetMaxAge(std::chrono::milliseconds mon
     auto const samplesDuration       = std::chrono::duration_cast<std::chrono::milliseconds>(samplesDurationDouble);
     auto const normalizedMaxAge      = std::max(maxAge, 1000ms);
     auto const normalizedDuration    = std::max(samplesDuration, 1000ms);
-    if (samplesDuration.count() == 0)
-    {
-        return normalizedMaxAge;
-    }
-    if (maxAge.count() == 0)
-    {
-        return normalizedDuration;
-    }
 
-    return std::min(normalizedMaxAge, normalizedDuration);
+    return std::max(normalizedMaxAge, normalizedDuration);
 }
 
 namespace DcgmNs::Utils

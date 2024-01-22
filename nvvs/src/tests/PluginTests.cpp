@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,4 +60,41 @@ TEST_CASE("Plugin Results Reporting")
     CHECK(p.GetResults(&results) == DCGM_ST_OK);
     CHECK(results.numErrors == 3); // it'll still have the first two errors
     CHECK(results.errors[2].gpuId == GPU_ID);
+}
+
+TEST_CASE("Plugin Duplicate Errors")
+{
+    UnitTestPlugin p;
+    unsigned int gpuId = 0;
+    DcgmError d { gpuId };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, 99, gpuId, 95);
+    DcgmError dDup { gpuId };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup, 99, gpuId, 95);
+    p.AddErrorForGpu(gpuId, d);
+    p.AddErrorForGpu(gpuId, dDup);
+
+    dcgmDiagResults_t results {};
+    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(results.numErrors == 1); // it shouldn't have added the second error
+    CHECK(results.errors[0].gpuId == gpuId);
+
+    p.AddError(d);
+    p.AddError(dDup);
+    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(results.numErrors == 2);        // it should only have processed the first AddError, plus the earlier error
+    CHECK(results.errors[0].gpuId == -1); // it will put the global error before the GPU specific error
+    CHECK(results.errors[1].gpuId == gpuId);
+
+    unsigned int gpuId2 = 1;
+    DcgmError d2 { gpuId2 };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d2, 99, gpuId2, 95);
+    DcgmError dDup2 { gpuId2 };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup2, 99, gpuId2, 95);
+    p.AddErrorForGpu(gpuId2, d2);
+    p.AddErrorForGpu(gpuId2, dDup2);
+    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(results.numErrors == 3);        // it should add the duplicate error once for the new GPU
+    CHECK(results.errors[0].gpuId == -1); // it will put the global error before the GPU specific error
+    CHECK(results.errors[1].gpuId == gpuId);
+    CHECK(results.errors[2].gpuId == gpuId2);
 }

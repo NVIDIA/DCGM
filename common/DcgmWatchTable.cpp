@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,6 +128,29 @@ dcgmReturn_t DcgmWatchTable::RemoveWatches(DcgmWatcher watcher, dcgmPostWatchInf
     }
 
     return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+void DcgmWatchTable::GetMaxAgeUsecAllWatches(timelib64_t &minAge, timelib64_t &maxAge)
+{
+    minAge = DCGM_INT64_BLANK;
+    maxAge = 0;
+
+    for (auto &[watchKey, watchInfo] : m_entityWatchHashTable)
+    {
+        if (watchInfo.updateIntervalUsec != DCGM_INT64_BLANK)
+        {
+            maxAge = std::max(watchInfo.maxAgeUsec, maxAge);
+            minAge = std::min(watchInfo.maxAgeUsec, minAge);
+        }
+    }
+
+    if (DCGM_INT64_IS_BLANK(minAge))
+    {
+        minAge = 0;
+    }
+
+    DCGM_LOG_DEBUG << "GetMaxAgeUsecAllWatches returning min " << minAge << ", max " << maxAge;
 }
 
 /*****************************************************************************/
@@ -355,7 +378,7 @@ bool DcgmWatchTable::AddWatcher(dcgm_field_entity_group_t entityGroupId,
     else
     {
         watchInfo.updateIntervalUsec = std::min(watchInfo.updateIntervalUsec, updateIntervalUsec);
-        watchInfo.maxAgeUsec         = std::min(watchInfo.maxAgeUsec, maxAgeUsec);
+        watchInfo.maxAgeUsec         = std::max(watchInfo.maxAgeUsec, maxAgeUsec);
 
         AddWatcherInfoIfNeeded(watchInfo, watcherInfo);
     }

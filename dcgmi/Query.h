@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,6 +99,8 @@ private:
     void HelperDisplayThermals(dcgmDeviceThermals_t thermals, unsigned int bitvector);
     void HelperDisplayPowerLimits(dcgmDevicePowerLimits_t powerLimits, unsigned int bitvector);
     void HelperDisplayIdentifiers(dcgmDeviceIdentifiers_t &identifiers, unsigned int bitvector);
+
+    dcgmReturn_t HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle);
 };
 
 /*****************************************************************************

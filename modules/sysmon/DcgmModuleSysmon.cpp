@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,17 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
     }
 
     m_sysmon.Init();
+
+    if (getenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__) == nullptr)
+    {
+        if (m_sysmon.AreNvidiaCpusPresent() == false)
+        {
+            log_debug("Not starting sysmon because Nvidia CPUs aren't present. CPU Vendor is {}.",
+                      m_sysmon.GetCpuVendor());
+            throw std::runtime_error("Incompatible hardware vendor for sysmon.");
+        }
+    }
+
     PopulateTemperatureFileMap();
 }
 
