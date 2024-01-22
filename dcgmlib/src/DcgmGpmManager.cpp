@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,20 +30,41 @@
 void DcgmGpmManagerEntity::AddWatcher(unsigned short fieldId,
                                       DcgmWatcher watcher,
                                       timelib64_t updateIntervalUsec,
-                                      timelib64_t maxAgeUsec)
+                                      timelib64_t maxAgeUsec,
+                                      int maxKeepSamples)
 {
-    m_watchTable.AddWatcher(
-        m_entityPair.entityGroupId, m_entityPair.entityId, fieldId, watcher, updateIntervalUsec, maxAgeUsec, false);
+    using namespace DcgmNs::Timelib;
+    using namespace std::chrono;
+    using DcgmNs::Utils::GetMaxAge;
+
+    const double slackMultiplier = 2; // 200% slack
+    const milliseconds monitorFrequency
+        = duration_cast<milliseconds>(FromLegacyTimestamp<microseconds>(m_maxUpdateInterval));
+    const milliseconds maxAge = duration_cast<milliseconds>(FromLegacyTimestamp<microseconds>(maxAgeUsec));
+    const timelib64_t maxAgeCalculated
+        = ToLegacyTimestamp(GetMaxAge(monitorFrequency, maxAge, maxKeepSamples, slackMultiplier));
+    timelib64_t _discard;
+
+    m_watchTable.AddWatcher(m_entityPair.entityGroupId,
+                            m_entityPair.entityId,
+                            fieldId,
+                            watcher,
+                            updateIntervalUsec,
+                            maxAgeCalculated,
+                            false);
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
+    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
 }
 
 /****************************************************************************/
 void DcgmGpmManagerEntity::RemoveWatcher(unsigned short dcgmFieldId, DcgmWatcher watcher)
 {
+    timelib64_t _discard;
+
     m_watchTable.RemoveWatcher(m_entityPair.entityGroupId, m_entityPair.entityId, dcgmFieldId, watcher, nullptr);
 
-    /* Update our max watch interval after any watch table changes */
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
+    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
 }
 
 /****************************************************************************/
@@ -73,17 +94,9 @@ DcgmGpmSample DcgmGpmManagerEntity::reuseOrAllocateSample()
 void DcgmGpmManagerEntity::PruneOldSamples(timelib64_t now)
 {
     using namespace std::ranges;
-    using namespace DcgmNs::Timelib;
-    using DcgmNs::Utils::GetMaxAge;
-    using std::chrono::milliseconds;
 
-    const milliseconds monitorFrequency = FromLegacyTimestamp<milliseconds>(m_maxUpdateInterval);
-    const milliseconds maxAge           = milliseconds(0);
-    const int maxKeepSamples            = 2;
-    const double slackMultiplier        = 2; // 200% slack
-    timelib64_t maxAgeUsec = ToLegacyTimestamp(GetMaxAge(monitorFrequency, maxAge, maxKeepSamples, slackMultiplier));
 
-    timelib64_t cutOffMinimumExclusive = now - maxAgeUsec;
+    timelib64_t cutOffMinimumExclusive = now - m_maxSampleAge;
     auto upperBound                    = m_gpmSamples.upper_bound(cutOffMinimumExclusive);
 
     move(subrange(begin(m_gpmSamples), upperBound) | views::values, std::back_inserter(m_freedGpmSamples));
@@ -301,7 +314,8 @@ void DcgmGpmManager::RemoveConnectionWatches(dcgm_connection_id_t connectionId)
 dcgmReturn_t DcgmGpmManager::AddWatcher(dcgm_entity_key_t entityKey,
                                         DcgmWatcher watcher,
                                         timelib64_t updateIntervalUsec,
-                                        timelib64_t maxAgeUsec)
+                                        timelib64_t maxAgeUsec,
+                                        int maxKeepSamples)
 {
     dcgmGroupEntityPair_t entityPair;
 
@@ -310,7 +324,7 @@ dcgmReturn_t DcgmGpmManager::AddWatcher(dcgm_entity_key_t entityKey,
 
     auto entityIt = m_entities.try_emplace(entityPair, entityPair).first;
 
-    entityIt->second.AddWatcher(entityKey.fieldId, watcher, updateIntervalUsec, maxAgeUsec);
+    entityIt->second.AddWatcher(entityKey.fieldId, watcher, updateIntervalUsec, maxAgeUsec, maxKeepSamples);
     return DCGM_ST_OK;
 }
 

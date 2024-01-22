@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,72 @@ Query::~Query()
 }
 
 /********************************************************************************/
+dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
+{
+    std::vector<dcgm_field_eid_t> entityIds;
+    dcgmCpuHierarchy_t stCpuHierarchy {};
+    stCpuHierarchy.version = dcgmCpuHierarchy_version1;
+    DcgmiOutputColumns outColumns;
+    DcgmiOutput &out = outColumns;
+
+    DcgmiOutputFieldSelector cpuIdSelector   = DcgmiOutputFieldSelector().child(c_cpuId);
+    DcgmiOutputFieldSelector cpuInfoSelector = DcgmiOutputFieldSelector().child(c_info);
+
+    out.setOption(DCGMI_OUTPUT_OPTIONS_SEPARATE_SECTIONS, true);
+
+    out.addColumn(8, c_cpuId, cpuIdSelector);
+    out.addColumn(70, c_info, cpuInfoSelector);
+
+    /* Display the CPUs in the system */
+    dcgmReturn_t result = HelperGetEntityList(dcgmHandle, DCGM_FE_CPU, entityIds);
+    if (DCGM_ST_OK != result)
+    {
+        if (result == DCGM_ST_MODULE_NOT_LOADED)
+        {
+            log_debug("No Nvidia CPUs found on this system.");
+        }
+        else
+        {
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Cannot get CPU list from remote node. Error: {}: {}", result, errorString(result));
+            return result;
+        }
+    }
+    else
+    {
+        result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
+        if (result != DCGM_ST_OK)
+        {
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
+            return result;
+        }
+    }
+
+    std::cout << fmt::format("{} CPU{} found.", entityIds.size(), (entityIds.size() == 1 ? "" : "s")) << std::endl;
+    for (auto const &entityId : entityIds)
+    {
+        std::string idStr   = std::to_string(entityId);
+        out[idStr][c_cpuId] = idStr;
+
+        if (entityId >= stCpuHierarchy.numCpus)
+        {
+            out[idStr][c_info].setOrAppend("Error: Entity ID exceeded the number of known CPUs.");
+            log_error("Error: Entity ID {} exceeded the number of known CPUs.", entityId);
+            continue;
+        }
+
+        auto coreMap = HelperBuildCpuListFromRanges(
+            HelperGetCpuRangesFromBitmask(stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
+        out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace TH500");
+        out[idStr][c_info].setOrAppend(coreMap);
+    }
+    std::cout << out.str();
+
+    return DCGM_ST_OK;
+}
+
+/********************************************************************************/
 dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
 {
     dcgmReturn_t result;
@@ -174,59 +240,7 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
         std::cout << out.str();
     }
 
-    {
-        dcgmCpuHierarchy_t stCpuHierarchy {};
-        stCpuHierarchy.version = dcgmCpuHierarchy_version1;
-        DcgmiOutputColumns outColumns;
-        DcgmiOutput &out = outColumns;
-
-        DcgmiOutputFieldSelector cpuIdSelector   = DcgmiOutputFieldSelector().child(c_cpuId);
-        DcgmiOutputFieldSelector cpuInfoSelector = DcgmiOutputFieldSelector().child(c_info);
-
-        out.setOption(DCGMI_OUTPUT_OPTIONS_SEPARATE_SECTIONS, true);
-
-        out.addColumn(8, c_cpuId, cpuIdSelector);
-        out.addColumn(70, c_info, cpuInfoSelector);
-
-        /* Display the CPUs in the system */
-        result = HelperGetEntityList(dcgmHandle, DCGM_FE_CPU, entityIds);
-        if (DCGM_ST_OK != result)
-        {
-            SHOW_AND_LOG_ERROR << fmt::format(
-                "Cannot get CPU list from remote node. Error: {}: {}", result, errorString(result));
-            return result;
-        }
-
-        result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
-        if (result != DCGM_ST_OK)
-        {
-            SHOW_AND_LOG_ERROR << fmt::format(
-                "Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
-            return result;
-        }
-
-        std::cout << fmt::format("{} CPU{} found.", entityIds.size(), (entityIds.size() == 1 ? "" : "s")) << std::endl;
-        for (auto const &entityId : entityIds)
-        {
-            std::string idStr   = std::to_string(entityId);
-            out[idStr][c_cpuId] = idStr;
-
-            if (entityId >= stCpuHierarchy.numCpus)
-            {
-                out[idStr][c_info].setOrAppend("Error: Entity ID exceeded the number of known CPUs.");
-                log_error("Error: Entity ID {} exceeded the number of known CPUs.", entityId);
-                continue;
-            }
-
-            auto coreMap = HelperBuildCpuListFromRanges(HelperGetCpuRangesFromBitmask(
-                stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
-            out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace TH500");
-            out[idStr][c_info].setOrAppend(coreMap);
-        }
-        std::cout << out.str();
-    }
-
-    return DCGM_ST_OK;
+    return HelperDisplayDiscoveredCpus(dcgmHandle);
 }
 /********************************************************************************/
 dcgmReturn_t Query::DisplayDeviceInfo(dcgmHandle_t dcgmHandle,
@@ -873,8 +887,11 @@ dcgmReturn_t Query::HelperGetEntityList(dcgmHandle_t dcgmHandle,
     result = dcgmGetEntityGroupEntities(dcgmHandle, entityGroup, entities, &numItems, 0);
     if (DCGM_ST_OK != result)
     {
-        std::cout << "Error: Cannot get devices from remote node. Return: " << errorString(result) << std::endl;
-        log_error("Error discovering devices from remote node. Return: {}", result);
+        if (result != DCGM_ST_MODULE_NOT_LOADED)
+        {
+            std::cout << "Error: Cannot get devices from remote node. Return: " << errorString(result) << std::endl;
+            log_error("Error discovering devices from remote node. Return: {}", result);
+        }
         return result;
     }
 

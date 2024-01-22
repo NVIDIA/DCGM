@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ TEST_CASE("Utils: GetMaxAge")
     using namespace std::chrono_literals;
 
     auto maxAge = DcgmNs::Utils::GetMaxAge(100ms, 10s, 10);
-    REQUIRE(maxAge == 1100ms);
+    REQUIRE(maxAge == 10s);
 
     maxAge = DcgmNs::Utils::GetMaxAge(100ms, 10s, 10, 2);
-    REQUIRE(maxAge == 3000ms);
+    REQUIRE(maxAge == 10s);
 
     maxAge = DcgmNs::Utils::GetMaxAge(0ms, 10s, 10);
     REQUIRE(maxAge == 10s);

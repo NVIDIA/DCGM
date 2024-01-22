@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1085,7 +1085,7 @@ class RunEmbeddedHostEngine:
             logger.info("Skipping dcgmEngineShutdown. Host engine was not running")
         set_connect_mode(DCGM_CONNECT_MODE_UNKNOWN)
 
-def run_with_embedded_host_engine(opmode=dcgm_structs.DCGM_OPERATION_MODE_AUTO, startTcpServer=False):
+def run_with_embedded_host_engine(opmode=dcgm_structs.DCGM_OPERATION_MODE_AUTO, startTcpServer=False, heEnv=None):
     """
     Run this test with an embedded host engine. This will start the host engine before the test
     and stop the host engine after the test
@@ -1093,9 +1093,18 @@ def run_with_embedded_host_engine(opmode=dcgm_structs.DCGM_OPERATION_MODE_AUTO, 
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
+            if heEnv:
+                for key in heEnv:
+                    os.environ[key] = heEnv[key]
+
             with RunEmbeddedHostEngine(opmode=opmode, startTcpServer=startTcpServer) as handle:
                 kwds['handle'] = handle
                 fn(*args, **kwds)
+
+            if heEnv:
+                for key in heEnv:
+                    del os.environ[key]
+            
             return
         return wrapper
     return decorator

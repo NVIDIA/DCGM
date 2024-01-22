@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -981,6 +981,8 @@ void Diag::HelperJsonAddBasicTests(Json::Value &output, int &categoryIndex, dcgm
     // Make the categories array and add each entry
     for (unsigned int testIndex = 0; testIndex < diagResult.levelOneTestCount; testIndex++)
     {
+        Json::Value resultEntry;
+
         // Skip the Cuda Runtime library test when it is not run, which is always for now.
         if (testIndex == DCGM_SWTEST_CUDA_RUNTIME_LIBRARY
             && diagResult.levelOneResults[testIndex].status == DCGM_DIAG_RESULT_NOT_RUN)
@@ -990,23 +992,25 @@ void Diag::HelperJsonAddBasicTests(Json::Value &output, int &categoryIndex, dcgm
         }
 
         category[NVVS_TESTS][testIndex + adjustment][NVVS_TEST_NAME] = levelOneTests[testIndex];
-        category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][0][NVVS_STATUS]
-            = HelperDisplayDiagResult(diagResult.levelOneResults[testIndex].status);
+        resultEntry[NVVS_STATUS] = HelperDisplayDiagResult(diagResult.levelOneResults[testIndex].status);
 
         for (unsigned int i = 0; i < DCGM_MAX_ERRORS; i++)
         {
+            Json::Value warningEntry;
+
             if (diagResult.levelOneResults[testIndex].error[i].msg[0] != '\0')
             {
-                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_WARNINGS]
-                    = diagResult.levelOneResults[testIndex].error[i].msg;
-                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_ID]
-                    = diagResult.levelOneResults[testIndex].error[i].code;
-                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_CATEGORY]
-                    = diagResult.levelOneResults[testIndex].error[i].category;
-                category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][i][NVVS_ERROR_SEVERITY]
-                    = diagResult.levelOneResults[testIndex].error[i].severity;
+                resultEntry[NVVS_GPU_ID]          = diagResult.levelOneResults[testIndex].error[i].gpuId;
+                warningEntry[NVVS_WARNINGS]       = diagResult.levelOneResults[testIndex].error[i].msg;
+                warningEntry[NVVS_ERROR_ID]       = diagResult.levelOneResults[testIndex].error[i].code;
+                warningEntry[NVVS_ERROR_CATEGORY] = diagResult.levelOneResults[testIndex].error[i].category;
+                warningEntry[NVVS_ERROR_SEVERITY] = diagResult.levelOneResults[testIndex].error[i].severity;
+
+                resultEntry[NVVS_WARNINGS][i] = warningEntry;
             }
         }
+
+        category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][0] = resultEntry;
     }
 
     // Add the categories array to the root json node

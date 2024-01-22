@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include <catch2/catch.hpp>
 
 #include <cstring>
+#include <stdlib.h>
 
 #define DCGM_SYSMON_TEST
 #include <DcgmModuleSysmon.h>
@@ -42,7 +43,33 @@ dcgmCoreCallbacks_t g_coreCallbacks(dcgmCoreCallbacks_version, postRequestToCore
 
 TEST_CASE("Sysmon: initialize module")
 {
-    DcgmModuleSysmon sysmon(g_coreCallbacks);
+    // Verify that instructing the constructor to skip the hardware check allows us to initialize correctly.
+    bool differentHardware = false;
+
+    try
+    {
+        DcgmModuleSysmon sysmon(g_coreCallbacks);
+    }
+    catch (std::runtime_error &e)
+    {
+        differentHardware = true;
+    }
+
+    if (differentHardware)
+    {
+        if (!setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+        {
+            try
+            {
+                DcgmModuleSysmon sysmon(g_coreCallbacks);
+            }
+            catch (std::runtime_error &e)
+            {
+                // We should never reach this point
+                CHECK(false);
+            }
+        }
+    }
 }
 
 TEST_CASE("DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString")
@@ -98,6 +125,12 @@ TEST_CASE("DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString")
 
 TEST_CASE("DcgmModuleSysmon::ParseProcStatCpuLine")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     DcgmModuleSysmon sysmon(g_coreCallbacks);
     sysmon.m_cpus.AddFakeCpu(); // Make sure 0 is a valid CPU
 
@@ -139,6 +172,12 @@ TEST_CASE("DcgmModuleSysmon::ParseProcStatCpuLine")
 
 TEST_CASE("DcgmModuleSysmon::ParseThermalFileContentsAndStore")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     DcgmModuleSysmon dms(g_coreCallbacks);
 
     // Format for matches should be 'Thermal Zone Skt# TJMax'
@@ -154,6 +193,12 @@ TEST_CASE("DcgmModuleSysmon::ParseThermalFileContentsAndStore")
 
 TEST_CASE("DcgmModuleSysmon Watches")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     DcgmModuleSysmon sysmon(g_coreCallbacks);
     dcgm_sysmon_msg_watch_fields_t watchMsg;
     dcgm_sysmon_msg_unwatch_fields_t unwatchMsg;
@@ -194,6 +239,12 @@ TEST_CASE("DcgmModuleSysmon Watches")
 
 TEST_CASE("DcgmModuleSysmon::CalculateCoreUtilization")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     DcgmModuleSysmon sysmon(g_coreCallbacks);
 
     unsigned int numCores = 2;
@@ -314,6 +365,12 @@ int setupTzDirs(const std::string &baseDir)
 
 TEST_CASE("DcgmModuleSysmon::PopulateTemperatureFileMap")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     // Setup the directories
     std::string baseDir("tz");
 
@@ -351,6 +408,12 @@ TEST_CASE("DcgmModuleSysmon::PopulateTemperatureFileMap")
 
 TEST_CASE("DcgmModuleSysmon::ReadTemperature")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     // Setup the directories
     std::string baseDir("tz");
 
@@ -378,6 +441,12 @@ TEST_CASE("DcgmModuleSysmon::ReadTemperature")
 
 TEST_CASE("DcgmModuleSysmon::ReadCoreSpeed")
 {
+    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+    {
+        // We can't reliably run these tests if we can't skip the hardware checks
+        return;
+    }
+
     // Number of skinnyjoe cores
     const int NUM_FAKE_CPUS = 288;
     DcgmModuleSysmon sysmon(g_coreCallbacks);

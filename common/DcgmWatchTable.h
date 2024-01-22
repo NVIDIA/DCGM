@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,13 +266,24 @@ public:
 
     /*****************************************************************************/
     /**
+     * Gets the max age of a sample in useconds from all watches
+     *
+     * @param minAge[out] : Minimum age in the watch table. 0 = no entries in the watch table.
+     * @param maxAge[out] : Maximum age in the watch table. 0 = no entries in the watch table.
+     *
+     * @return void
+     */
+    void GetMaxAgeUsecAllWatches(timelib64_t &minAge, timelib64_t &maxAge);
+
+    /*****************************************************************************/
+    /**
      * Get the maximum update interval in usec across all watches contained in this
      * watch table
      *
      * @param minUpdateInterval[out] : Minimum update inteval in the watch table. 0 = no entries in the watch table.
      * @param maxUpdateInterval[out] : Maximum update inteval in the watch table. 0 = no entries in the watch table.
      *
-     * @return maximum watch age in usec. 0 if there are no watches.
+     * @return void
      */
     void GetMinAndMaxUpdateInterval(timelib64_t &minUpdateInterval, timelib64_t &maxUpdateInterval);
 
