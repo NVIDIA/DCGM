@@ -57,8 +57,8 @@ errorTuples = [(dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, DIAG_THROTTLE_WA
 ################################################################################
 class FailedTestInfo():
     ################################################################################
-    def __init__(self, testname, warning, gpuInfo=None):
-        self.m_warning = warning
+    def __init__(self, testname, warnings, gpuInfo=None):
+        self.m_warning = warnings
         self.m_testname = testname
         self.m_info = ''
         self.m_gpuField = gpuInfo

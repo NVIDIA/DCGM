@@ -30,13 +30,18 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
-    const char *parameterNames[] = { DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD, DIAGNOSTIC_STR_TEST_DURATION,
-                                     DIAGNOSTIC_STR_USE_DOUBLES,         DIAGNOSTIC_STR_TEMPERATURE_MAX,
-                                     DIAGNOSTIC_STR_IS_ALLOWED,          DIAGNOSTIC_STR_MATRIX_DIM,
-                                     DIAGNOSTIC_STR_PRECISION,           nullptr };
+    const char *parameterNames[] = { DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD,
+                                     DIAGNOSTIC_STR_TEST_DURATION,
+                                     DIAGNOSTIC_STR_USE_DOUBLES,
+                                     DIAGNOSTIC_STR_TEMPERATURE_MAX,
+                                     DIAGNOSTIC_STR_IS_ALLOWED,
+                                     DIAGNOSTIC_STR_MATRIX_DIM,
+                                     DIAGNOSTIC_STR_PRECISION,
+                                     DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT,
+                                     nullptr };
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamInt,  DcgmPluginParamInt, DcgmPluginParamBool, DcgmPluginParamFloat,
-            DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamNone, DcgmPluginParamString };
+        = { DcgmPluginParamInt, DcgmPluginParamInt,  DcgmPluginParamBool,   DcgmPluginParamFloat, DcgmPluginParamBool,
+            DcgmPluginParamInt, DcgmPluginParamNone, DcgmPluginParamString, DcgmPluginParamFloat };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

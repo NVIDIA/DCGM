@@ -22,7 +22,7 @@
 #define SYSMON_LOG_IFSTREAM_DEBUG(path, pathDescription)                                          \
     do                                                                                            \
     {                                                                                             \
-        char errbuf[DCGM_MAX_STR_LENGTH];                                                         \
+        char errbuf[DCGM_MAX_STR_LENGTH] = { 0 };                                                 \
         strerror_r(errno, errbuf, sizeof(errbuf));                                                \
         log_debug("Couldn't open {} file '{}' for reading: '{}'", pathDescription, path, errbuf); \
     } while (0)
@@ -30,7 +30,7 @@
 #define SYSMON_LOG_IFSTREAM_ERROR(path, pathDescription)                                          \
     do                                                                                            \
     {                                                                                             \
-        char errbuf[DCGM_MAX_STR_LENGTH];                                                         \
+        char errbuf[DCGM_MAX_STR_LENGTH] = { 0 };                                                 \
         strerror_r(errno, errbuf, sizeof(errbuf));                                                \
         log_error("Couldn't open {} file '{}' for reading: '{}'", pathDescription, path, errbuf); \
     } while (0)

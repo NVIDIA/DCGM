@@ -3255,7 +3255,7 @@ skus:
       is_allowed: true
       starting_matrix_dim: 1024.0
       target_power: 900.0
-      use_dgemm: false
+      use_dgemm: true
     targeted_stress:
       is_allowed: true
       use_dgemm: false
@@ -3396,6 +3396,42 @@ skus:
       minimum_bandwidth: 491250
     pulse_test:
       is_allowed: true
+  - name: H20A
+    id: 2329
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 500.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 17700
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~23600. Multiply by .75 to get 17700
+      target_stress: 17700
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 164.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows ~2010000. Multiply by .75 to get ~1507000
+      minimum_bandwidth: 1507000
+    pulse_test:
+      is_allowed: true
   - name: L2
     id: 27b6
     targeted_power:
@@ -3430,5 +3466,40 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows ~254000. Multiply by .75 to get ~190500
       minimum_bandwidth: 190500
+    pulse_test:
+      is_allowed: true
+  - name: H200
+    id: 2335
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 700.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 37500
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~50000. Multiply by .75 to get 37500
+      target_stress: 37500
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 3110. Multiply by .75 to get 2333
+      minimum_bandwidth: 2333
     pulse_test:
       is_allowed: true

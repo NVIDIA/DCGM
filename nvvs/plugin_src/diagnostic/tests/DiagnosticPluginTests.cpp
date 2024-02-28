@@ -75,3 +75,72 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
     CHECK(USE_SINGLE_PRECISION(precision) != 0);
     CHECK(USE_DOUBLE_PRECISION(precision) != 0);
 }
+
+TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
+{
+    SECTION("Only one GPU")
+    {
+        // Test with one GPU ...
+        dcgmDiagPluginGpuList_t gpuList = {};
+        gpuList.numGpus                 = 1;
+        gpuList.gpus[0].gpuId           = 0;
+        gpuList.gpus[0].status          = DcgmEntityStatusOk;
+        GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+
+        std::vector<double> gflops = { 600.0 };
+        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.05);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        CHECK(indicesBelowThreshold.size() == 0);
+    }
+
+    // Populate the gpuList to be passed
+    dcgmDiagPluginGpuList_t gpuList = {};
+    gpuList.numGpus                 = 4;
+
+    for (size_t i = 0; i < gpuList.numGpus; i++)
+    {
+        gpuList.gpus[i].gpuId  = i;
+        gpuList.gpus[i].status = DcgmEntityStatusOk;
+    }
+    GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+
+    SECTION("Value below threshold")
+    {
+        std::vector<double> gflops = { 600.0, 598.0, 600.0, 550.0 };
+        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.05);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        CHECK(indicesBelowThreshold.size() > 0);
+        CHECK(indicesBelowThreshold == std::vector<size_t> { 3 });
+    }
+
+    SECTION("All values within threshold")
+    {
+        std::vector<double> gflops = { 600.0, 598.0, 600.0, 550.0 };
+        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.1);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        CHECK(indicesBelowThreshold.size() == 0);
+    }
+
+    SECTION("Multiple values below threshold")
+    {
+        std::vector<double> gflops = { 600.0, 1.0, 300.0, 550.0 };
+        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.01);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        CHECK(indicesBelowThreshold.size() > 0);
+        CHECK(indicesBelowThreshold == std::vector<size_t> { 1, 2 });
+    }
+}
+
+TEST_CASE("Diagnostic: GpuBurnDevice parameters")
+{
+    // Test with one GPU ...
+    dcgmDiagPluginGpuList_t gpuList = {};
+    gpuList.numGpus                 = 1;
+    gpuList.gpus[0].gpuId           = 0;
+    gpuList.gpus[0].status          = DcgmEntityStatusOk;
+    GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+    GpuBurnDevice gbd;
+    DcgmRecorder dr;
+    GpuBurnWorker gbw(&gbd, gbp, DIAG_SINGLE_PRECISION, 15.0, 2048, dr, false, 1001);
+    CHECK(GpuBurnWorkerTester::GetNElemsPerIter(gbw) == (2048 * 2048));
+}

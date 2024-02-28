@@ -19,6 +19,7 @@
 #include "CudaCommon.h"
 #include "DcgmError.h"
 #include "DcgmRecorder.h"
+#include "DcgmThread/DcgmThread.h"
 #include "Plugin.h"
 #include "PluginCommon.h"
 #include "PluginDevice.h"
@@ -45,6 +46,8 @@ class GpuBurnDevice : public PluginDevice
 {
 public:
     CUcontext cuContext {};
+
+    GpuBurnDevice() = default;
 
     GpuBurnDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
         : PluginDevice(ndi, pciBusId, p)
@@ -133,6 +136,8 @@ public:
 };
 
 /*****************************************************************************/
+class GpuBurnPluginTester; // forward
+/*****************************************************************************/
 /* GpuBurn plugin */
 class GpuBurnPlugin : public Plugin
 {
@@ -172,7 +177,7 @@ private:
      *
      * Returns: true if the test passed for all gpus, false otherwise.
      */
-    bool CheckPassFail(const std::vector<int> &errorCount);
+    bool CheckPassFail(const std::vector<int> &errorCount, const std::vector<int> &nanCount);
 
     /*************************************************************************/
     /*
@@ -199,6 +204,35 @@ private:
 
     /*************************************************************************/
     /*
+     * Determines the mean and min threshold value per the specified % tolerance
+     *
+     * Returns:
+     *      A pair of double containing first: the mean and second: the min threshold
+     */
+    double GetGflopsMinThreshold(const std::vector<double> &gflops, double tolerancePcnt) const;
+
+    /*************************************************************************/
+    /*
+     * Determine which GPUs recorded operations below the minium threshold value
+     *
+     * Returns:
+     *      A vector of indices referring to elements in gflops that are below the threshold value
+     */
+    std::vector<size_t> GetGflopsBelowMinThreshold(const std::vector<double> &gflops, double minThresh) const;
+
+    /*************************************************************************/
+    /*
+     * Report errors for each GPU that falls below the minimum threshold value
+     *
+     * Returns:
+     *      None
+     */
+    void ReportGpusBelowMinThreshold(const std::vector<double> &gflops,
+                                     const std::vector<size_t> &indices,
+                                     double minThresh);
+
+    /*************************************************************************/
+    /*
      * Clean up any resources allocated by this object, including memory and
      * file handles.
      */
@@ -217,9 +251,223 @@ private:
     /* Cached parameters read from testParameters */
     double m_testDuration;             /* test length, in seconds */
     double m_sbeFailureThreshold;      /* Failure threshold for SBEs. Below this it's a warning */
+    double m_gflopsTolerancePcnt;      /* % of mean gflops below which an error is reported */
     int32_t m_precision;               /* bitmap for what precision we should use (half, single, double) */
     unsigned int m_matrixDim;          /* The dimension size of the matrix */
     dcgmDiagPluginGpuList_t m_gpuInfo; // The information about each GPU
+
+    friend GpuBurnPluginTester;
+};
+
+/*****************************************************************************/
+/* GpuBurnPluginTester - attorney class to facilitate testing */
+class GpuBurnPluginTester
+{
+public:
+    static double GetGflopsMinThreshold(const GpuBurnPlugin &gbp,
+                                        const std::vector<double> &gflops,
+                                        double tolerancePcnt)
+    {
+        return gbp.GetGflopsMinThreshold(gflops, tolerancePcnt);
+    }
+
+    static std::vector<size_t> GetGflopsBelowMinThreshold(const GpuBurnPlugin &gbp,
+                                                          const std::vector<double> &gflops,
+                                                          double minThresh)
+    {
+        return gbp.GetGflopsBelowMinThreshold(gflops, minThresh);
+    }
+};
+
+/*************************************************************************/
+class GpuBurnWorkerTester;
+/*************************************************************************/
+class GpuBurnWorker : public DcgmThread
+{
+public:
+    /*************************************************************************/
+    /*
+     * Constructor
+     */
+    GpuBurnWorker(GpuBurnDevice *gpuBurnDevice,
+                  GpuBurnPlugin &plugin,
+                  int32_t precision,
+                  double testDuration,
+                  unsigned int matrixDim,
+                  DcgmRecorder &dcgmRecorder,
+                  bool failEarly,
+                  unsigned long failCheckInterval);
+
+    /*************************************************************************/
+    /*
+     * Destructor
+     */
+    virtual ~GpuBurnWorker();
+
+    /*************************************************************************/
+    /*
+     * Get the time this thread stopped
+     */
+    timelib64_t GetStopTime() const
+    {
+        return m_stopTime;
+    }
+
+    /*************************************************************************/
+    /*
+     * Get the total number of errors detected by the test
+     */
+    long long GetTotalErrors() const
+    {
+        return m_totalErrors;
+    }
+
+    /*************************************************************************/
+    /*
+     * Get the total number of nan values detected by the test
+     */
+    long long GetTotalNaNs() const
+    {
+        return m_totalNaNs;
+    }
+
+    /*************************************************************************/
+    /*
+     * Get the total matrix multiplications performed
+     */
+    long long GetTotalOperations() const
+    {
+        return m_totalOperations;
+    }
+
+    /*************************************************************************/
+    /*
+     * Set our cuda context
+     */
+    int Bind();
+
+    /*************************************************************************/
+    /*
+     * Get available memory
+     */
+    size_t AvailMemory(int &st);
+
+    /*************************************************************************/
+    /*
+     * Allocate the buffers
+     */
+    void AllocBuffers()
+    {
+        // Initting A and B with random data
+        m_A_FP64 = std::make_unique<double[]>(m_matrixDim * m_matrixDim);
+        m_B_FP64 = std::make_unique<double[]>(m_matrixDim * m_matrixDim);
+        m_A_FP32 = std::make_unique<float[]>(m_matrixDim * m_matrixDim);
+        m_B_FP32 = std::make_unique<float[]>(m_matrixDim * m_matrixDim);
+        m_A_FP16 = std::make_unique<__half[]>(m_matrixDim * m_matrixDim);
+        m_B_FP16 = std::make_unique<__half[]>(m_matrixDim * m_matrixDim);
+
+        srand(10);
+        for (size_t i = 0; i < m_matrixDim * m_matrixDim; ++i)
+        {
+            m_A_FP64[i] = ((double)(rand() % 1000000) / 100000.0);
+            m_A_FP32[i] = (float)m_A_FP64[i];
+            m_A_FP16[i] = __float2half(m_A_FP32[i]);
+
+
+            m_B_FP64[i] = ((double)(rand() % 1000000) / 100000.0);
+            m_B_FP32[i] = (float)m_B_FP64[i];
+            m_B_FP16[i] = __float2half(m_B_FP32[i]);
+        }
+    }
+
+    /*************************************************************************/
+    /*
+     * Initialize the buffers
+     */
+    int InitBuffers();
+
+    /*************************************************************************/
+    /*
+     * Load the compare CUDA functions compiled separately from our ptx string
+     */
+    int InitCompareKernel();
+
+    /*************************************************************************/
+    /*
+     * Check for incorrect memory
+     */
+    int Compare(int precision);
+
+    /*************************************************************************/
+    /*
+     * Perform some matrix math
+     */
+    int Compute(int precision);
+
+    /*************************************************************************/
+    /*
+     * Worker thread main
+     */
+    void run();
+
+private:
+    GpuBurnDevice *m_device;
+    GpuBurnPlugin &m_plugin;
+    int32_t m_precision;
+    std::vector<int32_t> m_precisions;
+    double m_testDuration;
+    cublasHandle_t m_cublas;
+    long long int m_error;
+    long long int m_nan;
+    size_t m_iters;
+    size_t m_resultSize;
+    unsigned int m_matrixDim;
+    size_t m_nElemsPerIter;
+
+    static const int g_blockSize = 16;
+
+    CUmodule m_module;
+    CUfunction m_f16CompareFunc;
+    CUfunction m_f32CompareFunc;
+    CUfunction m_f64CompareFunc;
+    dim3 m_gridDim;
+    dim3 m_blockDim;
+    void *m_params[5]; /* Size needs to be the number of parameters to compareFP64() in compare.cu */
+
+    /* C can be (and is) reused for each datatype. it's also the remainder of DRAM on the GPU after
+       As and Bs have been allocated. A and B need to be provided per-datatype */
+    CUdeviceptr m_Cdata;
+    CUdeviceptr m_AdataFP64;
+    CUdeviceptr m_BdataFP64;
+    CUdeviceptr m_AdataFP32;
+    CUdeviceptr m_BdataFP32;
+    CUdeviceptr m_AdataFP16;
+    CUdeviceptr m_BdataFP16;
+    CUdeviceptr m_faultyElemData;
+    CUdeviceptr m_nanElemData;
+    std::unique_ptr<double[]> m_A_FP64;
+    std::unique_ptr<double[]> m_B_FP64;
+    std::unique_ptr<float[]> m_A_FP32;
+    std::unique_ptr<float[]> m_B_FP32;
+    std::unique_ptr<__half[]> m_A_FP16;
+    std::unique_ptr<__half[]> m_B_FP16;
+    timelib64_t m_stopTime;
+    long long m_totalOperations;
+    long long m_totalErrors;
+    long long m_totalNaNs;
+    DcgmRecorder &m_dcgmRecorder;
+    bool m_failEarly;
+    friend GpuBurnWorkerTester;
+};
+/*****************************************************************************/
+/* GpuBurnWorkerTester - attorney class to facilitate testing */
+class GpuBurnWorkerTester
+{
+public:
+    static size_t GetNElemsPerIter(const GpuBurnWorker &gbw)
+    {
+        return gbw.m_nElemsPerIter;
+    }
 };
 
 #endif // DIAGNOSTICPLUGIN_H

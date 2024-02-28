@@ -32,6 +32,8 @@ public:
     std::string warning;
     std::string m_pciBusId;
 
+    PluginDevice() = default;
+
     PluginDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
         : cudaDeviceIdx(0)
         , gpuId(ndi)

@@ -211,7 +211,7 @@ std::string TestFramework::GetPluginDirExtension() const
     unsigned int cudaMinorVersion = dcgmSystem.GetCudaMinorVersion();
     if (cudaMajorVersion == 0)
     {
-        throw std::runtime_error("Unable to detect Cuda version. Please verify that libcuda.so is on the system.");
+        throw std::runtime_error("Unable to detect Cuda version. Please verify that libcuda.so.1 is on the system.");
     }
 
     log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
