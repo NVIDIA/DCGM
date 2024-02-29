@@ -47,18 +47,19 @@ unsigned long long SysmonUtilizationSampleCore::GetActive() const
 DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
     : DcgmModuleWithCoreProxy(dcc)
     , m_procStat("/proc/stat")
+    , m_paused(true)
 {
     DCGM_LOG_DEBUG << "Constructing Sysmon Module";
 
     PopulateCpusIfNeeded();
+    m_sysmon.Init();
+
     int st = Start();
     if (st)
     {
         DCGM_LOG_ERROR << "Got error " << st << " when trying to start the task runner";
         throw std::runtime_error("Unable to start a DcgmTaskRunner");
     }
-
-    m_sysmon.Init();
 
     if (getenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__) == nullptr)
     {
@@ -69,6 +70,8 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
             throw std::runtime_error("Incompatible hardware vendor for sysmon.");
         }
     }
+
+    m_paused = false;
 
     PopulateTemperatureFileMap();
 }

@@ -261,7 +261,7 @@ unsigned int DcgmSystem::GetCudaMajorVersion()
             break;
         default:
         {
-            log_error("Unable to detect Cuda version: {}. Please verify that libcuda.so is present on the system.",
+            log_error("Unable to detect Cuda version: {}. Please verify that libcuda.so.1 is present on the system.",
                       errorString(ret));
             return 0;
         }

@@ -124,8 +124,9 @@ DCGM_FR_DBE_THRESHOLD_VIOLATION             = 106,
 DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION     = 107,
 DCGM_FR_CUDA_FM_NOT_INITIALIZED             = 108,
 DCGM_FR_SXID_ERROR                          = 109,
-DCGM_FR_ERROR_SENTINEL                      = 110 # MUST BE THE LAST ERROR CODE
-
+DCGM_FR_GFLOPS_THRESHOLD_VIOLATION          = 110,
+DCGM_FR_NAN_VALUE                           = 111,
+DCGM_FR_ERROR_SENTINEL                      = 112 # MUST BE THE LAST ERROR CODE
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
 DEBUG_COOLING_MSG = "Verify that the cooling on this machine is functional, including external, thermal "\
@@ -312,6 +313,8 @@ DCGM_FR_DBE_THRESHOLD_VIOLATION_MSG         = "Detected DBE threshold violation 
 DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_MSG = "Detected PCIe replay violation for GPU %u"
 DCGM_FR_SXID_ERROR_MSG                      = "Detected fatal NvSwitch SXID %u"
 DCGM_FR_CUDA_FM_NOT_INITIALIZED_MSG         = "FabricManager not initialized"
+DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_MSG      = "Detected %.2f %s for GPU %u which is below the threshold %.2f"
+DCGM_FR_NAN_VALUE_MSG                       = "Found %d NaN-value memory elements on GPU %u"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -434,6 +437,10 @@ DCGM_FR_DBE_THRESHOLD_VIOLATION_NEXT         = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_NEXT = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT         = "Ensure that the FabricManager is running without errors."
 DCGM_FR_SXID_ERROR_NEXT                      = ""
+DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT      = \
+    "Please verify your user-specified variance tolerance is set appropriately; " \
+    "if so, and if errors are persistent, please run a field diagnostic."
+DCGM_FR_NAN_VALUE_NEXT                       = TRIAGE_RUN_FIELD_DIAG_MSG
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

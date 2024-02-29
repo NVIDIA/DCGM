@@ -25,12 +25,60 @@
 #include <errno.h>
 #include <fmt/format.h>
 #include <iostream>
+#include <span>
 #include <stdexcept>
 #include <string.h>
 #include <unistd.h>
 
 #ifdef __x86_64__
 __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
+#endif
+
+#define DCGM_STRINGIFY_IMPL(x) #x
+#define DCGM_STRINGIFY(x)      DCGM_STRINGIFY_IMPL(x)
+
+#ifndef DCGM_NVML_SONAME
+#ifndef DCGM_NVML_SOVERSION
+#define DCGM_NVML_SOVERSION 1
+#endif
+#define DCGM_NVML_SONAME "libnvidia-ml.so." DCGM_STRINGIFY(DCGM_NVML_SOVERSION)
+#else
+#ifdef DCGM_NVML_SOVERSION
+#pragma message DCGM_NVML_SONAME set explicitly; DCGM_NVML_SOVERSION ignored !
+#endif
+#endif
+
+#ifndef DCGM_CUDA_SONAME
+#ifndef DCGM_CUDA_SOVERSION
+#define DCGM_CUDA_SOVERSION 1
+#endif
+#define DCGM_CUDA_SONAME "libcuda.so." DCGM_STRINGIFY(DCGM_CUDA_SOVERSION)
+#else
+#ifdef DCGM_CUDA_SOVERSION
+#pragma message DCGM_CUDA_SONAME set explicitly; DCGM_CUDA_SOVERSION ignored !
+#endif
+#endif
+
+#ifndef DCGM_CUDART_SONAME
+#ifndef DCGM_CUDART_SOVERSION
+#define DCGM_CUDART_SOVERSION 1
+#endif
+#define DCGM_CUDART_SONAME "libcudart.so." DCGM_STRINGIFY(DCGM_CUDART_SOVERSION)
+#else
+#ifdef DCGM_CUDART_SOVERSION
+#pragma message DCGM_CUDART_SONAME set explicitly; DCGM_CUDART_SOVERSION ignored !
+#endif
+#endif
+
+#ifndef DCGM_CUBLAS_SONAME
+#ifndef DCGM_CUBLAS_SOVERSION
+#define DCGM_CUBLAS_SOVERSION 1
+#endif
+#define DCGM_CUBLAS_SONAME "libcublas.so." DCGM_STRINGIFY(DCGM_CUBLAS_SOVERSION)
+#else
+#ifdef DCGM_CUBLAS_SOVERSION
+#pragma message DCGM_CUBLAS_SONAME set explicitly; DCGM_CUBLAS_SOVERSION ignored !
+#endif
 #endif
 
 Software::Software(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
@@ -67,7 +115,7 @@ Software::Software(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     m_dcgmSystem.Init(handle);
 }
 
-void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void Software::Go(unsigned int numParameters, dcgmDiagPluginTestParameter_t const *tpStruct)
 {
     if (UsingFakeGpus())
     {
@@ -120,7 +168,7 @@ void Software::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
         checkInforom();
 }
 
-bool Software::CountDevEntry(const std::string &entryName)
+bool Software::CountDevEntry(std::string const &entryName)
 {
     if (entryName.compare(0, 6, "nvidia") == 0)
     {
@@ -212,7 +260,7 @@ bool Software::checkPermissions(bool checkFileCreation, bool skipDeviceTest)
         if (euidaccess(".", W_OK))
         {
             char cwd[1024];
-            const char *working_dir = getcwd(cwd, sizeof(cwd));
+            char const *working_dir = getcwd(cwd, sizeof(cwd));
 
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             d.SetCode(DCGM_FR_FILE_CREATE_PERMISSIONS);
@@ -226,25 +274,71 @@ bool Software::checkPermissions(bool checkFileCreation, bool skipDeviceTest)
     return false;
 }
 
+// This function suggests time-of-check/time-of-use (TOCTOU) race conditions
 bool Software::checkLibraries(libraryCheck_t checkLib)
 {
-    // check whether the NVML, CUDA, and CUDA toolkit libraries can be found
-    // via default paths
-    bool fail = false;
-    std::vector<std::string> libs;
+    // Check whether the NVML, CUDA, or CUDA toolkit libraries can be found with sufficient permissions
+    using span_t   = std::span<char const *const>;
+    using result_t = nvvsPluginResult_t;
+
+    auto const check = [this](span_t const libraries, span_t const diagnostics, result_t const failureCode) {
+        bool failure = false;
+        std::string error;
+
+        for (char const *const library : libraries)
+        {
+            if (!findLib(library, error))
+            {
+                DcgmError d { DcgmError::GpuIdTag::Unknown };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_OPEN_LIB, d, library, error.c_str());
+                AddError(d);
+                SetResult(failureCode);
+                failure = true;
+            }
+        }
+
+        if (failure)
+        {
+            for (char const *const diagnostic : diagnostics)
+            {
+                AddInfo(diagnostic);
+            }
+        }
+
+        return failure;
+    };
 
     switch (checkLib)
     {
         case CHECK_NVML:
-            libs.push_back("libnvidia-ml.so.1");
-            break;
+        {
+            static constexpr char const *libraries[]   = { DCGM_NVML_SONAME };
+            static constexpr char const *diagnostics[] = {
+                "The NVML main library could not be found in the default search paths.",
+                "Please check to see if it is installed or that LD_LIBRARY_PATH contains the path to " DCGM_NVML_SONAME,
+                "Skipping remainder of tests."
+            };
+
+            return check(libraries, diagnostics, NVVS_RESULT_FAIL);
+        }
         case CHECK_CUDA:
-            libs.push_back("libcuda.so");
-            break;
+        {
+            static constexpr char const *libraries[]   = { DCGM_CUDA_SONAME };
+            static constexpr char const *diagnostics[] = { "The CUDA main library could not be found."
+                                                           "Skipping remainder of tests." };
+
+            return check(libraries, diagnostics, NVVS_RESULT_WARN);
+        }
         case CHECK_CUDATK:
-            libs.push_back("libcudart.so");
-            libs.push_back("libcublas.so");
-            break;
+        {
+            static constexpr char const *libraries[] = { DCGM_CUDART_SONAME, DCGM_CUBLAS_SONAME };
+            static constexpr char const *diagnostics[]
+                = { "The CUDA Toolkit libraries could not be found.",
+                    "Is LD_LIBRARY_PATH set to the 64-bit library path? (usually /usr/local/cuda/lib64)",
+                    "Some tests will not run." };
+
+            return check(libraries, diagnostics, NVVS_RESULT_WARN);
+        }
         default:
         {
             // should never get here
@@ -252,51 +346,9 @@ bool Software::checkLibraries(libraryCheck_t checkLib)
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BAD_PARAMETER, d, __func__);
             AddError(d);
             SetResult(NVVS_RESULT_FAIL);
+            return true;
         }
     }
-
-    for (std::vector<std::string>::iterator it = libs.begin(); it != libs.end(); it++)
-    {
-        std::string error;
-        if (!findLib(*it, error))
-        {
-            DcgmError d { DcgmError::GpuIdTag::Unknown };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_OPEN_LIB, d, it->c_str(), error.c_str());
-            AddError(d);
-            if (checkLib != CHECK_CUDATK)
-            {
-                SetResult(NVVS_RESULT_FAIL);
-            }
-            else
-            {
-                SetResult(NVVS_RESULT_WARN);
-            }
-
-            fail = true;
-        }
-    }
-
-    // The statements that follow are all classified as info statements because only messages directly tied
-    // to failures are errors.
-    if (checkLib == CHECK_CUDATK && fail == true)
-    {
-        AddInfo("The CUDA Toolkit libraries could not be found.");
-        AddInfo("Is LD_LIBRARY_PATH set to the 64-bit library path? (usually /usr/local/cuda/lib64)");
-        AddInfo("Some tests will not run.");
-    }
-    if (checkLib == CHECK_CUDA && fail == true)
-    {
-        AddInfo("The CUDA main library could not be found.");
-        AddInfo("Skipping remainder of tests.");
-    }
-    if (checkLib == CHECK_NVML && fail == true)
-    {
-        AddInfo("The NVML main library could not be found in the default search paths.");
-        AddInfo(
-            "Please check to see if it is installed or that LD_LIBRARY_PATH contains the path to libnvidia-ml.so.1.");
-        AddInfo("Skipping remainder of tests.");
-    }
-    return fail;
 }
 
 bool Software::checkDenylist()
@@ -304,10 +356,10 @@ bool Software::checkDenylist()
     // check whether the nouveau driver is installed and if so, fail this test
     bool status = false;
 
-    const std::string searchPaths[] = { "/sys/bus/pci/devices", "/sys/bus/pci_express/devices" };
-    const std::string driverDirs[]  = { "driver", "subsystem/drivers" };
+    std::string const searchPaths[] = { "/sys/bus/pci/devices", "/sys/bus/pci_express/devices" };
+    std::string const driverDirs[]  = { "driver", "subsystem/drivers" };
 
-    const std::vector<std::string> denyList = { "nouveau" };
+    std::vector<std::string> const denyList = { "nouveau" };
 
     for (int i = 0; i < sizeof(searchPaths) / sizeof(searchPaths[0]); i++)
     {
@@ -400,8 +452,14 @@ int Software::checkDriverPathDenylist(std::string driverPath, std::vector<std::s
 
 bool Software::findLib(std::string library, std::string &error)
 {
-    void *handle;
-    handle = dlopen(library.c_str(), RTLD_NOW);
+    // On Linux, the search procedure considers
+    // 1. (ELF binaries) the directories described by the binary RPATH (if the RUNPATH tag is absent)
+    // 2. the directories described by the LD_LIBRARY_PATH environment variable
+    // 3. (ELF binaries) the directories described by the binary RUNPATH (if the RUNPATH tag is present)
+    // 4. the /etc/ld.so.cache
+    // 5. the /lib directory
+    // 6. the /usr/lib directory
+    void *const handle = dlopen(library.c_str(), RTLD_NOW);
     if (!handle)
     {
         error = dlerror();

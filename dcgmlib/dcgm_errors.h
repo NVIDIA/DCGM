@@ -140,7 +140,9 @@ typedef enum dcgmError_enum
     DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION = 107, //!< 107 PCIE replay count violated
     DCGM_FR_CUDA_FM_NOT_INITIALIZED         = 108, //!< 108 The fabricmanager is not initialized
     DCGM_FR_SXID_ERROR                      = 109, //!< 109 NvSwitch fatal error detected
-    DCGM_FR_ERROR_SENTINEL                  = 110, //!< 110 MUST BE THE LAST ERROR CODE
+    DCGM_FR_GFLOPS_THRESHOLD_VIOLATION      = 110, //!< 110 GPU GFLOPs threshold violated
+    DCGM_FR_NAN_VALUE                       = 111, //!< 111 NaN value detected on this GPU
+    DCGM_FR_ERROR_SENTINEL                  = 112, //!< 112 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -442,6 +444,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_MSG "Detected %ld %s for GPU %u which is above the threshold %ld"
 #define DCGM_FR_CUDA_FM_NOT_INITIALIZED_MSG         ""
 #define DCGM_FR_SXID_ERROR_MSG                      "Detected fatal NvSwitch SXID %u"
+#define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_MSG      "Detected %.2f %s for GPU %u which is below the threshold %.2f"
+#define DCGM_FR_NAN_VALUE_MSG                       "Found %d NaN-value memory elements on GPU %u"
 #define DCGM_FR_ERROR_SENTINEL_MSG                  "" /* See message inplace */
 
 /*
@@ -604,6 +608,10 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION_NEXT TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT         "Ensure that the FabricManager is running without errors."
 #define DCGM_FR_SXID_ERROR_NEXT                      SYSTEM_TRIAGE_MSG
+#define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT                                   \
+    "Please verify your user-specified variance tolerance is set appropriately; " \
+    "if so, and if errors are persistent, please run a field diagnostic."
+#define DCGM_FR_NAN_VALUE_NEXT      TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_ERROR_SENTINEL_NEXT                  "" /* See message inplace */
 
 #ifdef __cplusplus

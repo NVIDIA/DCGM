@@ -130,7 +130,7 @@ private:
     DcgmWatchTable m_watchTable; /* Table of watchers */
     DcgmSystemMonitor m_sysmon;
     std::string m_coreSpeedBaseDir;
-    bool m_paused;
+    std::atomic_bool m_paused;
 
     bool m_enabledMonitoring[SYSMON_MONITORING_SWITCH_COUNT];
     std::vector<double> m_cpuUtilization;

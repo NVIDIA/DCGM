@@ -299,6 +299,8 @@
 #define DIAGNOSTIC_STR_IS_ALLOWED          "is_allowed"      /* Is this plugin allowed to run? */
 #define DIAGNOSTIC_STR_MATRIX_DIM          "matrix_dim"      /* The starting dimension of the matrix used for S/Dgemm */
 #define DIAGNOSTIC_STR_PRECISION           "precision"       /* The precision to use: half, single, or double */
+#define DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT \
+    "gflops_tolerance_pcnt" /* % of mean below which gflops are treated as errors */
 
 /****************************************************************************
  * CONTEXT CREATE PLUGIN

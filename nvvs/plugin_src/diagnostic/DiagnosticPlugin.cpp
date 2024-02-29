@@ -16,9 +16,9 @@
 #define __STDC_LIMIT_MACROS
 #include <EarlyFailChecker.h>
 #include <fmt/format.h>
+#include <numeric>
 #include <stdint.h>
 
-#include "DcgmThread/DcgmThread.h"
 #include "DiagnosticPlugin.h"
 #include "gpuburn_ptx_string.h"
 
@@ -77,6 +77,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
     , m_explicitTests(false)
     , m_testDuration(.0)
     , m_sbeFailureThreshold(.0)
+    , m_gflopsTolerancePcnt(0.0)
     , m_precision(DIAG_SINGLE_PRECISION)
     , m_matrixDim(2048)
     , m_gpuInfo()
@@ -95,6 +96,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
     m_testParameters->AddDouble(DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
     m_testParameters->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "False");
     m_testParameters->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 2048.0);
+    m_testParameters->AddDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT, 0.0);
     m_testParameters->AddString(PS_LOGFILE, "stats_diagnostic.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
 
@@ -331,6 +333,7 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     m_testDuration        = m_testParameters->GetDouble(DIAGNOSTIC_STR_TEST_DURATION); /* test length, in seconds */
     m_sbeFailureThreshold = m_testParameters->GetDouble(DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD);
     m_matrixDim           = static_cast<unsigned int>(m_testParameters->GetDouble(DIAGNOSTIC_STR_MATRIX_DIM));
+    m_gflopsTolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT);
 
     std::string useDoubles = m_testParameters->GetString(DIAGNOSTIC_STR_USE_DOUBLES);
     bool supportsDoubles   = false;
@@ -361,16 +364,27 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
 }
 
 /*************************************************************************/
-bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount)
+bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount, const std::vector<int> &nanCount)
 {
     bool allPassed = true;
     for (size_t i = 0; i < m_device.size(); i++)
     {
+        if (errorCount[i] || nanCount[i])
+        {
         if (errorCount[i])
         {
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, errorCount[i], m_device[i]->gpuId);
             AddErrorForGpu(m_device[i]->gpuId, d);
+            }
+
+            if (nanCount[i])
+            {
+                DcgmError d { m_device[i]->gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NAN_VALUE, d, nanCount[i], m_device[i]->gpuId);
+                AddErrorForGpu(m_device[i]->gpuId, d);
+            }
+
             SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_FAIL);
             allPassed = false;
         }
@@ -383,171 +397,6 @@ bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount)
     return allPassed;
 }
 
-/*************************************************************************/
-class GpuBurnWorker : public DcgmThread
-{
-public:
-    /*************************************************************************/
-    /*
-     * Constructor
-     */
-    GpuBurnWorker(GpuBurnDevice *gpuBurnDevice,
-                  GpuBurnPlugin &plugin,
-                  int32_t precision,
-                  double testDuration,
-                  unsigned int matrixDim,
-                  DcgmRecorder &dcgmRecorder,
-                  bool failEarly,
-                  unsigned long failCheckInterval);
-
-    /*************************************************************************/
-    /*
-     * Destructor
-     */
-    virtual ~GpuBurnWorker();
-
-    /*************************************************************************/
-    /*
-     * Get the time this thread stopped
-     */
-    timelib64_t GetStopTime() const
-    {
-        return m_stopTime;
-    }
-
-    /*************************************************************************/
-    /*
-     * Get the total number of errors detected by the test
-     */
-    long long GetTotalErrors() const
-    {
-        return m_totalErrors;
-    }
-
-    /*************************************************************************/
-    /*
-     * Get the total matrix multiplications performed
-     */
-    long long GetTotalOperations() const
-    {
-        return m_totalOperations;
-    }
-
-    /*************************************************************************/
-    /*
-     * Set our cuda context
-     */
-    int Bind();
-
-    /*************************************************************************/
-    /*
-     * Get available memory
-     */
-    size_t AvailMemory(int &st);
-
-    /*************************************************************************/
-    /*
-     * Allocate the buffers
-     */
-    void AllocBuffers()
-    {
-        // Initting A and B with random data
-        m_A_FP64 = std::make_unique<double[]>(m_matrixDim * m_matrixDim);
-        m_B_FP64 = std::make_unique<double[]>(m_matrixDim * m_matrixDim);
-        m_A_FP32 = std::make_unique<float[]>(m_matrixDim * m_matrixDim);
-        m_B_FP32 = std::make_unique<float[]>(m_matrixDim * m_matrixDim);
-        m_A_FP16 = std::make_unique<__half[]>(m_matrixDim * m_matrixDim);
-        m_B_FP16 = std::make_unique<__half[]>(m_matrixDim * m_matrixDim);
-
-        srand(10);
-        for (size_t i = 0; i < m_matrixDim * m_matrixDim; ++i)
-        {
-            m_A_FP64[i] = ((double)(rand() % 1000000) / 100000.0);
-            m_A_FP32[i] = (float)m_A_FP64[i];
-            m_A_FP16[i] = __float2half(m_A_FP32[i]);
-
-
-            m_B_FP64[i] = ((double)(rand() % 1000000) / 100000.0);
-            m_B_FP32[i] = (float)m_B_FP64[i];
-            m_B_FP16[i] = __float2half(m_B_FP32[i]);
-        }
-    }
-
-    /*************************************************************************/
-    /*
-     * Initialize the buffers
-     */
-    int InitBuffers();
-
-    /*************************************************************************/
-    /*
-     * Load the compare CUDA functions compiled separately from our ptx string
-     */
-    int InitCompareKernel();
-
-    /*************************************************************************/
-    /*
-     * Check for incorrect memory
-     */
-    int Compare(int precision);
-
-    /*************************************************************************/
-    /*
-     * Perform some matrix math
-     */
-    int Compute(int precision);
-
-    /*************************************************************************/
-    /*
-     * Worker thread main
-     */
-    void run();
-
-private:
-    GpuBurnDevice *m_device;
-    GpuBurnPlugin &m_plugin;
-    int32_t m_precision;
-    std::vector<int32_t> m_precisions;
-    double m_testDuration;
-    cublasHandle_t m_cublas;
-    long long int m_error;
-    size_t m_iters;
-    size_t m_resultSize;
-    unsigned int m_matrixDim;
-
-    static const int g_blockSize = 16;
-
-    CUmodule m_module;
-    CUfunction m_f16CompareFunc;
-    CUfunction m_f32CompareFunc;
-    CUfunction m_f64CompareFunc;
-    dim3 m_gridDim;
-    dim3 m_blockDim;
-    void *m_params[3]; /* Size needs to be the number of parameters to compareFP64() in compare.cu */
-
-    /* C can be (and is) reused for each datatype. it's also the remainder of DRAM on the GPU after
-       As and Bs have been allocated. A and B need to be provided per-datatype */
-    CUdeviceptr m_Cdata;
-    CUdeviceptr m_AdataFP64;
-    CUdeviceptr m_BdataFP64;
-    CUdeviceptr m_AdataFP32;
-    CUdeviceptr m_BdataFP32;
-    CUdeviceptr m_AdataFP16;
-    CUdeviceptr m_BdataFP16;
-    CUdeviceptr m_faultyElemData;
-    std::unique_ptr<double[]> m_A_FP64;
-    std::unique_ptr<double[]> m_B_FP64;
-    std::unique_ptr<float[]> m_A_FP32;
-    std::unique_ptr<float[]> m_B_FP32;
-    std::unique_ptr<__half[]> m_A_FP16;
-    std::unique_ptr<__half[]> m_B_FP16;
-    timelib64_t m_stopTime;
-    long long m_totalOperations;
-    long long m_totalErrors;
-    DcgmRecorder &m_dcgmRecorder;
-    bool m_failEarly;
-};
-
 /****************************************************************************/
 /*
  * GpuBurnPlugin::RunTest implementation.
@@ -556,6 +405,7 @@ private:
 bool GpuBurnPlugin::RunTest()
 {
     std::vector<int> errorCount;
+    std::vector<int> nanCount;
     std::vector<long long> operationsPerformed;
     GpuBurnWorker *workerThreads[DCGM_MAX_NUM_DEVICES] = { 0 };
     int st;
@@ -713,6 +563,7 @@ bool GpuBurnPlugin::RunTest()
     for (size_t i = 0; i < m_device.size(); i++)
     {
         errorCount.push_back(workerThreads[i]->GetTotalErrors());
+        nanCount.push_back(workerThreads[i]->GetTotalNaNs());
         operationsPerformed.push_back(workerThreads[i]->GetTotalOperations());
 
         delete (workerThreads[i]);
@@ -725,29 +576,82 @@ bool GpuBurnPlugin::RunTest()
         Cleanup();
         return false; // Caller will check for main_should_stop and set the test skipped
     }
-
+    std::vector<double> gflops(operationsPerformed.size());
     for (size_t i = 0; i < operationsPerformed.size(); i++)
     {
         // Calculate the approximate gigaflops and record it as info for this test
-        double gigaflops = operationsPerformed[i] * OPS_PER_MUL / (1024 * 1024 * 1024) / m_testDuration;
+        gflops[i] = operationsPerformed[i] * OPS_PER_MUL / (1024 * 1024 * 1024) / m_testDuration;
         char buf[1024];
         snprintf(buf,
                  sizeof(buf),
                  "GPU %u calculated at approximately %.2f gigaflops during this test",
                  m_device[i]->gpuId,
-                 gigaflops);
+                 gflops[i]);
         AddInfoVerboseForGpu(m_device[i]->gpuId, buf);
+    }
+
+    if (gflops.size() > 1 && m_gflopsTolerancePcnt > 0.0)
+    {
+        double gflopsMinThreshold = GetGflopsMinThreshold(gflops, m_gflopsTolerancePcnt);
+        auto indices              = GetGflopsBelowMinThreshold(gflops, gflopsMinThreshold);
+        ReportGpusBelowMinThreshold(gflops, indices, gflopsMinThreshold);
     }
 
     /* Set pass/failed status.
      * Do NOT return false after this point as the test has run without issues. (Test failures do not count as issues).
      */
-    CheckPassFail(errorCount);
+    CheckPassFail(errorCount, nanCount);
 
     Cleanup();
     return true;
 }
 
+/****************************************************************************/
+/*
+ * GpuBurnPlugin::GetGflopsMeanAndMinThreshold
+ */
+/****************************************************************************/
+double GpuBurnPlugin::GetGflopsMinThreshold(const std::vector<double> &gflops, double tolerancePcnt) const
+{
+    double mean = std::accumulate(gflops.begin(), gflops.end(), 0.0) / gflops.size();
+    return (1.0 - tolerancePcnt) * mean;
+}
+
+/****************************************************************************/
+/*
+ * GpuBurnPlugin::GetGflopsBelowMinThershold
+ */
+/****************************************************************************/
+std::vector<size_t> GpuBurnPlugin::GetGflopsBelowMinThreshold(const std::vector<double> &gflops, double minThresh) const
+{
+    std::vector<size_t> result;
+    for (size_t i = 0; i < gflops.size(); i++)
+    {
+        if (gflops[i] < minThresh)
+            result.push_back(i);
+    }
+    return result;
+}
+
+/****************************************************************************/
+/*
+ * GpuBurnPlugin::ReportGpusBelowMinThreshold
+ */
+/****************************************************************************/
+void GpuBurnPlugin::ReportGpusBelowMinThreshold(const std::vector<double> &gflops,
+                                                const std::vector<size_t> &indices,
+                                                double minThresh)
+{
+    for (size_t i : indices)
+    {
+        DcgmError d { m_device[i]->gpuId };
+        //  "Detected %.2f %s for GPU %u which is below the threshold %.2f"
+        DCGM_ERROR_FORMAT_MESSAGE(
+            DCGM_FR_GFLOPS_THRESHOLD_VIOLATION, d, gflops[i], "GFLOPs", m_device[i]->gpuId, minThresh);
+        log_error(d.GetMessage());
+        AddErrorForGpu(m_device[i]->gpuId, d);
+    }
+}
 
 /****************************************************************************/
 /*
@@ -769,9 +673,11 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_testDuration(testDuration)
     , m_cublas(0)
     , m_error(0)
+    , m_nan(0)
     , m_iters(0)
     , m_resultSize(0)
     , m_matrixDim(matrixDim)
+    , m_nElemsPerIter(m_matrixDim * m_matrixDim)
     , m_module()
     , m_f16CompareFunc()
     , m_f32CompareFunc()
@@ -784,6 +690,7 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_AdataFP16(0)
     , m_BdataFP16(0)
     , m_faultyElemData(0)
+    , m_nanElemData(0)
     , m_A_FP64(nullptr)
     , m_B_FP64(nullptr)
     , m_A_FP32(nullptr)
@@ -793,6 +700,7 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_stopTime(0)
     , m_totalOperations(0)
     , m_totalErrors(0)
+    , m_totalNaNs(0)
     , m_dcgmRecorder(dr)
     , m_failEarly(failEarly)
 {
@@ -893,6 +801,8 @@ GpuBurnWorker::~GpuBurnWorker()
     LOCAL_FREE_DEVICE_PTR(m_BdataFP32);
     LOCAL_FREE_DEVICE_PTR(m_BdataFP16);
     LOCAL_FREE_DEVICE_PTR(m_Cdata);
+    LOCAL_FREE_DEVICE_PTR(m_faultyElemData);
+    LOCAL_FREE_DEVICE_PTR(m_nanElemData);
 
     if (m_cublas)
     {
@@ -989,6 +899,7 @@ int GpuBurnWorker::InitBuffers()
     CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_BdataFP16, resultSizeFP16));
 
     CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_nanElemData, sizeof(int)));
 
     std::stringstream ss;
     ss << "Allocated space for " << m_iters << " output matricies from " << useBytes << " bytes available.";
@@ -1023,14 +934,21 @@ int GpuBurnWorker::InitCompareKernel()
 
     m_params[0] = &m_Cdata;
     m_params[1] = &m_faultyElemData;
-    m_params[2] = &m_iters;
+    m_params[2] = &m_nanElemData;
+    m_params[3] = &m_iters;
+    m_params[4] = &m_nElemsPerIter;
 
-    m_gridDim.x = m_matrixDim / g_blockSize;
-    m_gridDim.y = m_matrixDim / g_blockSize;
+    // Since we are using grid-stride loops, the grid size doesn't have to depend on data size
+    // We make sure two things:
+    // - Enough blocks to ensure GPU occupancy
+    // - # of total threads less than data size, so that each thread works on multiple data elements
+    m_gridDim.x = 64;
+    m_gridDim.y = 64;
     m_gridDim.z = 1;
 
-    m_blockDim.x = g_blockSize;
-    m_blockDim.y = g_blockSize;
+    // First dimension as multiples of 32 to align with warp size (=32)
+    m_blockDim.x = 32;
+    m_blockDim.y = 8;
     m_blockDim.z = 1;
     return 0;
 }
@@ -1039,8 +957,10 @@ int GpuBurnWorker::InitCompareKernel()
 int GpuBurnWorker::Compare(int precisionIndex)
 {
     int faultyElems = 0;
+    int nanElems    = 0;
     CUfunction compare;
     CHECK_CUDA_ERROR("cuMemsetD32", cuMemsetD32(m_faultyElemData, 0, 1));
+    CHECK_CUDA_ERROR("cuMemsetD32", cuMemsetD32(m_nanElemData, 0, 1));
     if (precisionIndex == DIAG_HALF_PRECISION)
     {
         compare = m_f16CompareFunc;
@@ -1067,14 +987,19 @@ int GpuBurnWorker::Compare(int precisionIndex)
                                     m_params,
                                     0));
     CHECK_CUDA_ERROR("cuMemcpyDtoH", cuMemcpyDtoH(&faultyElems, m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemcpyDtoH", cuMemcpyDtoH(&nanElems, m_nanElemData, sizeof(int)));
     if (faultyElems)
     {
         m_error += (long long int)faultyElems;
     }
+    if (nanElems)
+    {
+        m_nan += (long long int)nanElems;
+    }
 
     if (m_failEarly)
     {
-        if (m_error > 0)
+        if (m_error > 0 || m_nan > 0)
         {
             return 1;
         }
@@ -1200,6 +1125,7 @@ void GpuBurnWorker::run()
         double iterStart = timelib_dsecSince1970();
         // Clear previous error counts
         m_error = 0;
+        m_nan   = 0;
 
         // Perform the calculations and check the results
         for (auto &precision : m_precisions)
@@ -1231,6 +1157,7 @@ void GpuBurnWorker::run()
 
             // Save the error and work totals
             m_totalErrors += m_error;
+            m_totalNaNs += m_nan;
             m_totalOperations += m_iters;
             iterEnd = timelib_dsecSince1970();
 

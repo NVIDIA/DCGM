@@ -20,6 +20,14 @@
 #
 # sm_30 is used here for Kepler or newer
 
-/usr/local/cuda/bin/nvcc -arch=sm_30 -ptx -keep compare.cu
-bin2c compare.ptx --padd 0 --name gpuburn_ptx_string > gpuburn_ptx_string.h
+#/usr/local/cuda/bin/nvcc -arch=sm_50 -ptx -keep compare.cu
+CUDA_IMAGE=nvcr.io/nvidia/cuda:10.2-devel-ubuntu18.04
+
+docker run \
+    --rm \
+    -v $(pwd):/work \
+    -w /work \
+    ${CUDA_IMAGE} \
+    /bin/bash -c "/usr/local/cuda/bin/nvcc -ptx -m64 -arch=sm_30 -o compare.ptx compare.cu || die 'Failed to compile compare.cu'; \
+                  /usr/local/cuda/bin/bin2c compare.ptx --padd 0 --name gpuburn_ptx_string > gpuburn_ptx_string.h; chmod a+w gpuburn_ptx_string.h"
 python find_ptx_symbols.py compare.ptx gpuburn_ptx_string.h
