@@ -18,7 +18,7 @@
 #include "DcgmLogging.h"
 #include "DcgmUtilities.h"
 #include "DcgmWatchTable.h"
-
+inline int format_as(DcgmWatcherType_t type) {  return static_cast<int>(type);}
 /*****************************************************************************/
 DcgmWatchTable::DcgmWatchTable()
     : m_entityWatchHashTable()

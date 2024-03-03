@@ -25,7 +25,7 @@
 #include "DcgmSettings.h"
 #include <fmt/format.h>
 #include <stdexcept>
-
+inline int format_as(dcgmEntityStatusType_enum type) {  return static_cast<int>(type);}
 /*****************************************************************************
  * Implementation for Group Manager Class
  *****************************************************************************/

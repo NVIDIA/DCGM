@@ -167,4 +167,6 @@ private:
     dcgmReturn_t WatchFields(dcgm_connection_id_t connectionId);
 };
 
+inline int format_as(DcgmViolationPolicyAlert_enum type) {  return static_cast<int>(type);}
+
 #endif // DCGMPOLICYMANAGER_H

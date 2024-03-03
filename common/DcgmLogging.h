@@ -31,7 +31,7 @@
 #include <mutex>
 #include <string>
 #include <syslog.h>
-
+#include "format.hpp" // now define formatting for classes in this module
 #define DCGM_LOGGING_SEVERITY_OPTIONS "NONE, FATAL, ERROR, WARN, INFO, DEBUG, VERB"
 
 #define DCGM_LOGGING_SEVERITY_STRING_VERBOSE "VERB"

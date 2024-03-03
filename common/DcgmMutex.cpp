@@ -21,6 +21,8 @@
 #include <chrono>
 #include <ratio>
 
+inline int format_as(dcgmMutexSt type) {  return static_cast<int>(type);}
+
 /*****************************************************************************/
 DcgmMutex::DcgmMutex(int timeoutMs)
     // Cast to long long to avoid overflowing before widening to a long long

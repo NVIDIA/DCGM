@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#include <cublas_proxy.hpp>
+//#include <cublas_proxy.hpp>
+#include "../cublas_proxy/cublas_proxy.hpp"
 #include <cuda.h>
 
 #if (CUDA_VERSION_USED >= 11)
@@ -23,8 +24,12 @@
 #endif
 
 #include <DcgmLogging.h>
+
 #include <fmt/format.h>
 #include <timelib.h>
+inline int format_as(cublasStatus_t type) {
+  return static_cast<int>(type);
+  }
 
 using namespace Dcgm;
 

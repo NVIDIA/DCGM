@@ -17,15 +17,14 @@
 #include <optional>
 #include <string>
 #include <tuple>
-
 #include <DcgmLogging.h>
 #include <DcgmSettings.h>
-
 #include "FieldIds.h"
 #include "NvSwitchData.h"
 #include "UpdateFunctions.h"
-
 #include "DcgmNvSwitchManager.h"
+
+inline int format_as(dcgmNvLinkLinkState_t type) {  return static_cast<int>(type);}
 
 namespace DcgmNs
 {

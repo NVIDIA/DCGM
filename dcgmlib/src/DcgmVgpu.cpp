@@ -21,7 +21,7 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include <DcgmStringHelpers.h>
-
+inline int format_as(nvmlReturn_enum type) {  return static_cast<int>(type);}
 /*****************************************************************************/
 static std::string_view ConvertNvmlGridLicenseStateToString(unsigned int licenseState)
 {

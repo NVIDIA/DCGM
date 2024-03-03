@@ -19,6 +19,10 @@
 
 #include <dlfcn.h>
 
+inline int format_as(dcgmDiagAuxDataType type) {
+  return static_cast<int>(type);
+}
+
 
 /*****************************************************************************/
 PluginLib::PluginLib()

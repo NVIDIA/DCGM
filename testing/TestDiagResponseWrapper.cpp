@@ -22,6 +22,11 @@
 #include "NvvsJsonStrings.h"
 #include "TestDiagResponseWrapper.h"
 
+
+inline int format_as(dcgmDiagResult_enum type) {
+  return static_cast<int>(type);
+}
+
 TestDiagResponseWrapper::TestDiagResponseWrapper() = default;
 
 TestDiagResponseWrapper::~TestDiagResponseWrapper() = default;

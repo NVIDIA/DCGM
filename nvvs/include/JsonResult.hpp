@@ -28,6 +28,10 @@
 #include <string>
 #include <vector>
 
+inline int format_as(nvvsReturn_t type) {
+  return static_cast<int>(type);
+}
+
 /*
  * This file contains the JSON serialization and deserialization logic and structures for the NVVS JSON result format.
  * Here is an example of the JSON format:
@@ -68,6 +72,7 @@
  */
 namespace DcgmNs::Nvvs::Json
 {
+
 
 struct Info
 {

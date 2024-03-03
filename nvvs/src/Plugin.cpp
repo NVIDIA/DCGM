@@ -16,6 +16,11 @@
 #include "Plugin.h"
 #include "PluginStrings.h"
 
+
+inline int format_as(nvvsPluginResult_enum type) {
+  return static_cast<int>(type);
+}
+
 const double DUMMY_TEMPERATURE_VALUE = 30.0;
 
 /*************************************************************************/

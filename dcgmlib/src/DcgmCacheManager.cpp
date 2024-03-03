@@ -27,10 +27,8 @@
 #include <TimeLib.hpp>
 #include <dcgm_agent.h>
 #include <dcgm_nvswitch_structs.h>
-
 #include <fmt/chrono.h>
 #include <fmt/format.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -43,6 +41,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+inline int format_as(nvmlReturn_enum type) {  return static_cast<int>(type);}
+inline int format_as(dcgmNvLinkLinkState_t type) {  return static_cast<int>(type);}
+inline int format_as(DcgmWatcherType_t type) {  return static_cast<int>(type);}
+inline int format_as(dcgmEntityStatusType_enum type) {  return static_cast<int>(type);}
 
 #define DRIVER_VERSION_510 510
 
