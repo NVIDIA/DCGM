@@ -467,7 +467,7 @@ bool GpuBurnPlugin::RunTest()
                         workerThreads[j]->Kill();
                         DcgmError d { m_device[j]->gpuId };
                         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
-                        AddError(d);
+                        AddErrorForGpu(m_device[j]->gpuId, d);
                     }
                     delete (workerThreads[j]);
                     workerThreads[j] = nullptr;
@@ -503,7 +503,7 @@ bool GpuBurnPlugin::RunTest()
                 {
                     DcgmError d { m_device[i]->gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
-                    AddError(d);
+                    AddErrorForGpu(m_device[i]->gpuId, d);
                 }
                 if (st)
                 {
@@ -549,7 +549,7 @@ bool GpuBurnPlugin::RunTest()
                 workerThreads[i]->Kill();
                 DcgmError err { m_device[i]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, err, ex.what());
-                AddError(err);
+                AddErrorForGpu(m_device[i]->gpuId, err);
             }
             delete (workerThreads[i]);
             workerThreads[i] = NULL;

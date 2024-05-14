@@ -15,9 +15,12 @@
  */
 #include <cuda.h>
 
+CUresult cuInitResult         = CUDA_SUCCESS;
+CUresult cuStreamCreateResult = CUDA_SUCCESS;
+
 CUresult cuInit(unsigned int flags)
 {
-    return CUDA_SUCCESS;
+    return cuInitResult;
 }
 
 CUresult cuMemGetInfo_v2(size_t *free, size_t *total)
@@ -106,6 +109,74 @@ CUresult cuGetErrorString(CUresult error, const char **strPtr)
 }
 
 CUresult cuDeviceGetByPCIBusId(CUdevice *device, const char *pciBusId)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuCtxSynchronize()
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuModuleGetGlobal(CUdeviceptr *dptr, size_t *bytes, CUmodule hmod, const char *name)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuModuleUnload(CUmodule hMod)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuDeviceGetAttribute(int *pi, CUdevice_attribute attrib, CUdevice dev)
+{
+    return CUDA_SUCCESS;
+}
+
+
+CUresult cuEventCreate(CUevent *phEvent, unsigned int flags)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuEventRecord(CUevent hEvent, CUstream hStream)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuEventElapsedTime(float *pMilliseconds, CUevent hStart, CUevent hEnd)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuEventDestroy(CUevent hEvent)
+{
+    return CUDA_SUCCESS;
+}
+
+
+CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost, size_t byteCount, CUstream hStream)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuMemcpyDtoHAsync(void *dstHost, CUdeviceptr srcDevice, size_t byteCount, CUstream hStream)
+{
+    return CUDA_SUCCESS;
+}
+
+
+CUresult cuStreamSynchronize(CUstream hStream)
+{
+    return CUDA_SUCCESS;
+}
+
+CUresult cuStreamCreate(CUstream *phStream, unsigned int flags)
+{
+    return cuStreamCreateResult;
+}
+
+CUresult cuStreamDestroy(CUstream hStream)
 {
     return CUDA_SUCCESS;
 }

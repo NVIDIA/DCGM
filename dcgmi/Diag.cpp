@@ -349,8 +349,10 @@ void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t r
 /*******************************************************************************/
 dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 {
+    std::unique_ptr<dcgmDiagResponse_t> diagResultUPtr = std::make_unique<dcgmDiagResponse_t>();
+
+    dcgmDiagResponse_t &diagResult = *(diagResultUPtr.get());
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmDiagResponse_t diagResult;
     std::vector<unsigned int> gpuVec;
     std::vector<std::string> gpuStrList;
 
@@ -460,12 +462,12 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 /*******************************************************************************/
 dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_t &diagResult)
 {
-    RemoteDiagExecutor rde(handle, m_drd);
+    std::unique_ptr<RemoteDiagExecutor> rde = std::make_unique<RemoteDiagExecutor>(handle, m_drd);
     dcgmReturn_t result   = DCGM_ST_OK;
     diag_stopDiagOnSignal = true;
 
     // Start the diagnostic
-    rde.Start();
+    rde->Start();
 
     while (1)
     {
@@ -473,14 +475,14 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_t &
         {
             AbortDiag ad(m_hostname);
             ad.Execute();
-            rde.Stop();
+            rde->Stop();
             result = DCGM_ST_NVVS_KILLED;
             break;
         }
-        else if (rde.HasExited())
+        else if (rde->HasExited())
         {
-            result     = rde.GetResult();
-            diagResult = rde.GetResponse();
+            result     = rde->GetResult();
+            diagResult = rde->GetResponse();
             break;
         }
 

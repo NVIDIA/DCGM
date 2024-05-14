@@ -70,8 +70,6 @@ target_sources(testdcgmunittests
         TestDcgmValue.cpp
         TestDcgmValue.h
         TestPolicyManager.h
-        TestStatCollection.cpp
-        TestStatCollection.h
         TestTopology.cpp
         TestTopology.h
         TestVersioning.cpp

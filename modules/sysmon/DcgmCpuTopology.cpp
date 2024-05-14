@@ -150,7 +150,6 @@ std::string DcgmCpuTopology::RunLscpuAndGetOutput(std::string &output)
     else
     {
         errmsg += fmt::format("A child process ({}) is being traced or otherwise can't exit", childPid);
-        ;
     }
 
     return errmsg;

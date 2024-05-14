@@ -208,4 +208,13 @@ private:
                                    fmt::memory_buffer &stderrStream,
                                    DcgmNs::Utils::FileHandle stdoutFd,
                                    DcgmNs::Utils::FileHandle stderrFd) const;
+
+    /**
+     * Pause or resume the HostEngine.
+     *
+     * @param pause - if true, pause, else resume
+     * @return Result from m_coreProxy.SendModuleCommand()
+     * @see DcgmCoreProxy::SendModuleCommand
+     */
+    dcgmReturn_t PauseResumeHostEngine(bool pause);
 };

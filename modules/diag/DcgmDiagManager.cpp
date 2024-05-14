@@ -22,6 +22,7 @@
 #include "Defer.hpp"
 #include "NvvsJsonStrings.h"
 #include "dcgm_config_structs.h"
+#include "dcgm_core_structs.h"
 #include "dcgm_structs.h"
 #include "serialize/DcgmJsonSerialize.hpp"
 
@@ -102,40 +103,73 @@ DcgmDiagManager::~DcgmDiagManager()
 
 dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
 {
-    static const unsigned int MAX_SIGTERM_ATTEMPTS = 3;
+    static const std::chrono::seconds SIGTERM_RETRY_DELAY = std::chrono::seconds(4);
+    static const unsigned int MAX_SIGTERM_ATTEMPTS        = 4;
 
+    pid_t childPid          = m_nvvsPID;
     unsigned int kill_count = 0;
     bool sigkilled          = false;
 
-    while (kill(m_nvvsPID, 0) == 0 && kill_count <= maxRetries)
+    assert(m_mutex.Poll() == DCGM_MUTEX_ST_LOCKEDBYME);
+
+    while (kill_count <= maxRetries && kill(childPid, 0) == 0)
     {
         // As long as the process exists, keep killing it
         if (kill_count < MAX_SIGTERM_ATTEMPTS)
         {
-            kill(m_nvvsPID, SIGTERM);
+            kill(childPid, SIGTERM);
         }
         else
         {
             if (sigkilled == false)
             {
-                DCGM_LOG_ERROR << "Unable to kill nvvs with 3 SIGTERM attempts, escalating to SIGKILL. pid: "
-                               << m_nvvsPID;
+                DCGM_LOG_ERROR << "Unable to kill nvvs pid with 3 SIGTERM attempts, escalating to SIGKILL. pid: "
+                               << childPid;
             }
 
-            kill(m_nvvsPID, SIGKILL);
+            kill(childPid, SIGKILL);
             sigkilled = true;
         }
+
+        // sleep on subsequent retry attempts
+        if (kill_count > 0)
+        {
+            dcgm_mutex_unlock(&m_mutex);
+            // Yield, then wait for the process to exit.
+            std::this_thread::yield();
+            // The lock was just released.
+            // coverity[sleep: FALSE]
+            std::this_thread::sleep_for(SIGTERM_RETRY_DELAY);
+            dcgm_mutex_lock(&m_mutex);
+        }
         kill_count++;
-        std::this_thread::yield();
     }
 
     if (kill_count > maxRetries)
     {
-        DCGM_LOG_ERROR << "Giving up attempting to kill NVVS process " << m_nvvsPID << " after " << maxRetries
+        // Child process died and may not resume hostengine (EUD only?)
+        // Resume request may block, temporary release of lock.
+        dcgm_mutex_unlock(&m_mutex);
+        dcgmReturn_t dcgmReturn = PauseResumeHostEngine(false);
+        dcgm_mutex_lock(&m_mutex);
+
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            log_error("Unable to resume engine, error: {}", dcgmReturn, errorString(dcgmReturn));
+            // m_mutex is locked
+            // coverity[missing_unlock: FALSE]
+            return dcgmReturn;
+        }
+
+        DCGM_LOG_ERROR << "Giving up attempting to kill NVVS process " << childPid << " after " << maxRetries
                        << " retries.";
+        // m_mutex is (still) locked
+        // coverity[missing_unlock: FALSE]
         return DCGM_ST_CHILD_NOT_KILLED;
     }
 
+    // m_mutex is (still) locked
+    // coverity[missing_unlock: FALSE]
     return DCGM_ST_OK;
 }
 
@@ -158,7 +192,7 @@ std::string DcgmDiagManager::GetNvvsBinPath()
         result = access(nvvsBinPath.c_str(), F_OK);
         if (result == 0)
         {
-            cmd = nvvsBinPath;
+            cmd = std::move(nvvsBinPath);
             DCGM_LOG_DEBUG << "The new NVVS binary path is: " << cmd;
             return cmd;
         }
@@ -1564,4 +1598,20 @@ dcgmReturn_t DcgmDiagManager::ReadProcessOutput(fmt::memory_buffer &stdoutStream
         }
     }
     return DCGM_ST_OK;
+}
+/*****************************************************************************/
+dcgmReturn_t DcgmDiagManager::PauseResumeHostEngine(bool pause = false)
+{
+    dcgm_core_msg_pause_resume_v1 msg {};
+
+    memset(&msg, 0, sizeof(msg));
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_PAUSE_RESUME;
+    msg.header.version    = dcgm_core_msg_pause_resume_version1;
+    msg.pause             = pause;
+
+    dcgmReturn_t ret = m_coreProxy.SendModuleCommand(&msg);
+    log_debug("PauseResumeHostEngine({}) returns {} ({})", pause, ret, errorString(ret));
+    return ret;
 }

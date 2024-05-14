@@ -218,7 +218,9 @@ public:
      */
     bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
 
+#ifndef TARGETED_STRESS_TESTS
 private:
+#endif
     /*************************************************************************/
     /*
      * Initialize the parts of cuda and cublas needed for this plugin to run

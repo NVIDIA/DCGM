@@ -58,8 +58,8 @@ def diag_result_assert_fail(response, gpuIndex, testIndex, msg, errorCode):
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_PASS, msg
     if response.version == dcgm_structs.dcgmDiagResponse_version9:
         codeMsg = "Failing test expected error code %d, but found %d" % \
-                    (errorCode, response.perGpuResponses[gpuIndex].results[testIndex].error.code)
-        assert response.perGpuResponses[gpuIndex].results[testIndex].error.code == errorCode, codeMsg
+                    (errorCode, response.perGpuResponses[gpuIndex].results[testIndex].error[0].code)
+        assert response.perGpuResponses[gpuIndex].results[testIndex].error[0].code == errorCode, codeMsg
 
 def diag_result_assert_pass(response, gpuIndex, testIndex, msg):
     # Instead of checking that it passed, just make sure it didn't fail because we want to ignore skipped
@@ -67,7 +67,7 @@ def diag_result_assert_pass(response, gpuIndex, testIndex, msg):
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_FAIL, msg
     if response.version == dcgm_structs.dcgmDiagResponse_version9:
         codeMsg = "Passing test somehow has a non-zero error code!"
-        assert response.perGpuResponses[gpuIndex].results[testIndex].error.code == 0, codeMsg
+        assert response.perGpuResponses[gpuIndex].results[testIndex].error[0].code == 0, codeMsg
 
 def helper_check_diag_empty_group(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -1032,3 +1032,77 @@ def test_dcgm_diag_paused_embedded(handle, gpuIds):
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_diag_paused_standalone(handle, gpuIds):
     helper_test_dcgm_diag_paused(handle, gpuIds)
+
+
+def helper_hbm_temeprature_check(handle, gpuIds, flag):
+    # ------------------------
+    indices_to_check = {
+                    "Memory": dcgm_structs.DCGM_MEMORY_INDEX,
+                    "Diagnostic": dcgm_structs.DCGM_DIAGNOSTIC_INDEX
+                    }
+
+    # create new diag object
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr="4")
+    dd.UseFakeGpus()
+    
+    # ------------------------
+    # set the temperature
+    if flag == "fail":
+        # set fake hbm temperature greater than max
+        fake_curr_temperature = 1000
+    
+    else: 
+        # set fake hbm temperature less than max
+        fake_curr_temperature = 10
+
+    # ------------------------
+    # inject the temperature
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP, fake_curr_temperature, injection_offset, repeatCount=3, repeatOffset=5)
+
+    # ------------------------
+    # Verify that the inserted values are visible in DCGM before starting the diag        
+    assert dcgm_internal_helpers.verify_field_value(gpuIds[0], dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP, fake_curr_temperature, numMatches=1), \
+        "Expected inserted values to be visible in DCGM"
+
+    # ------------------------
+    # run the diag
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    logger.info("Started diag")
+
+    # ------------------------
+    # Verify that the inserted values are visible in DCGM after running the diag
+    assert dcgm_internal_helpers.verify_field_value(gpuIds[0], dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP, fake_curr_temperature, numMatches=1), \
+        "Expected inserted values to be visible in DCGM"
+
+    # ------------------------
+    # check if the memory diagnostic fails/passes
+    assert response.gpuCount == len(gpuIds), "Expected %d gpus, but found %d reported" % (len(gpuIds), response.gpuCount)
+    
+    # ------------------------
+    logger.info("Checking HBM Temperature")
+    for key in indices_to_check:
+        if response.perGpuResponses[gpuIds[0]].results[indices_to_check[key]].result == dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
+            logger.info("Diag test: {} did not run".format(key))
+        elif response.perGpuResponses[gpuIds[0]].results[indices_to_check[key]].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP:
+            logger.info("Diag test: {} did not run and was skipped".format(key))
+        else:
+            if flag=="fail": 
+                diag_result_assert_fail(response, gpuIds[0], indices_to_check[key], "Expected a failure in test: {} due to 1000 degree inserted temp.".format(key), dcgm_errors.DCGM_FR_TEMP_VIOLATION)
+            else:
+                diag_result_assert_pass(response, gpuIds[0], indices_to_check[key], "Expected a pass in test {}".format(key))
+
+
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_diag_hbm_temperature_fail(handle, gpuIds):
+    logger.info("Starting test")
+    helper_hbm_temeprature_check(handle, gpuIds, "fail")
+
+
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_diag_hbm_temperature_pass(handle, gpuIds):
+    logger.info("Starting test")
+    helper_hbm_temeprature_check(handle, gpuIds, "pass")

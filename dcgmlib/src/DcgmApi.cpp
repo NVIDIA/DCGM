@@ -2905,9 +2905,9 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                                  dcgmPolicyAction_t action,
                                  dcgmDiagResponse_t *response)
 {
-    dcgm_diag_msg_run_v7 msg7;
-    dcgm_diag_msg_run_v6 msg6;
-    dcgm_diag_msg_run_v5 msg5;
+    std::unique_ptr<dcgm_diag_msg_run_v7> msg7 = std::make_unique<dcgm_diag_msg_run_v7>();
+    std::unique_ptr<dcgm_diag_msg_run_v6> msg6 = std::make_unique<dcgm_diag_msg_run_v6>();
+    std::unique_ptr<dcgm_diag_msg_run_v5> msg5 = std::make_unique<dcgm_diag_msg_run_v5>();
     dcgmReturn_t dcgmReturn;
 
     if (!drd || !response)
@@ -2934,33 +2934,33 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     switch (response->version)
     {
         case dcgmDiagResponse_version9:
-            memset(&msg7, 0, sizeof(msg7));
-            msg7.header.length        = sizeof(msg7);
-            msg7.header.version       = dcgm_diag_msg_run_version7;
-            msg7.diagResponse.version = dcgmDiagResponse_version9;
-            msg7.action               = action;
-            runDiag                   = &(msg7.runDiag);
-            header                    = &(msg7.header);
+            memset(msg7.get(), 0, sizeof(*msg7));
+            msg7->header.length        = sizeof(*msg7);
+            msg7->header.version       = dcgm_diag_msg_run_version7;
+            msg7->diagResponse.version = dcgmDiagResponse_version9;
+            msg7->action               = action;
+            runDiag                    = &(msg7->runDiag);
+            header                     = &(msg7->header);
             break;
 
         case dcgmDiagResponse_version8:
-            memset(&msg6, 0, sizeof(msg6));
-            msg6.header.length        = sizeof(msg6);
-            msg6.header.version       = dcgm_diag_msg_run_version6;
-            msg6.diagResponse.version = dcgmDiagResponse_version8;
-            msg6.action               = action;
-            runDiag                   = &(msg6.runDiag);
-            header                    = &(msg6.header);
+            memset(msg6.get(), 0, sizeof(*msg6));
+            msg6->header.length        = sizeof(*msg6);
+            msg6->header.version       = dcgm_diag_msg_run_version6;
+            msg6->diagResponse.version = dcgmDiagResponse_version8;
+            msg6->action               = action;
+            runDiag                    = &(msg6->runDiag);
+            header                     = &(msg6->header);
             break;
 
         case dcgmDiagResponse_version7:
-            memset(&msg5, 0, sizeof(msg5));
-            msg5.header.length        = sizeof(msg5);
-            msg5.header.version       = dcgm_diag_msg_run_version5;
-            msg5.diagResponse.version = dcgmDiagResponse_version7;
-            msg5.action               = action;
-            runDiag                   = &(msg5.runDiag);
-            header                    = &(msg5.header);
+            memset(msg5.get(), 0, sizeof(*msg5));
+            msg5->header.length        = sizeof(*msg5);
+            msg5->header.version       = dcgm_diag_msg_run_version5;
+            msg5->diagResponse.version = dcgmDiagResponse_version7;
+            msg5->action               = action;
+            runDiag                    = &(msg5->runDiag);
+            header                     = &(msg5->header);
             break;
 
         default:
@@ -2988,20 +2988,20 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     // The diagnostic requires a lengthy timeout
     static const int EIGHT_HOURS_IN_MS = 28800000;
     // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(msg7), nullptr, EIGHT_HOURS_IN_MS);
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(*msg7), nullptr, EIGHT_HOURS_IN_MS);
 
     switch (response->version)
     {
         case dcgmDiagResponse_version9:
-            memcpy(response, &msg7.diagResponse, sizeof(msg7.diagResponse));
+            memcpy(response, &msg7->diagResponse, sizeof(msg7->diagResponse));
             break;
 
         case dcgmDiagResponse_version8:
-            memcpy(response, &msg6.diagResponse, sizeof(msg6.diagResponse));
+            memcpy(response, &msg6->diagResponse, sizeof(msg6->diagResponse));
             break;
 
         case dcgmDiagResponse_version7:
-            memcpy(response, &msg5.diagResponse, sizeof(msg5.diagResponse));
+            memcpy(response, &msg5->diagResponse, sizeof(msg5->diagResponse));
             break;
 
         default:

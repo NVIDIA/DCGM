@@ -216,7 +216,7 @@ int ConstantPerf::CudaInit()
                 DcgmError d { device->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaStreamCreate");
                 d.AddDetail(ss.str());
-                AddError(d);
+                AddErrorForGpu(device->gpuId, d);
                 return -1;
             }
 

@@ -16,6 +16,8 @@
 #include "Plugin.h"
 #include "PluginStrings.h"
 
+#include <DcgmStringHelpers.h>
+
 const double DUMMY_TEMPERATURE_VALUE = 30.0;
 
 /*************************************************************************/
@@ -99,6 +101,14 @@ void Plugin::AddError(const DcgmError &error)
     }
     DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
     m_errors.push_back(error);
+}
+
+/*************************************************************************/
+void Plugin::AddOptionalError(const DcgmError &error)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
+    m_optionalErrors.push_back(error);
 }
 
 /*************************************************************************/
@@ -211,6 +221,17 @@ void Plugin::SetResultForGpu(unsigned int gpuId, nvvsPluginResult_t res)
 }
 
 /*************************************************************************/
+void Plugin::AddErrorToResults(dcgmDiagResults_t &results, const DcgmError &error, int gpuId)
+{
+    results.errors[results.numErrors].code     = error.GetCode();
+    results.errors[results.numErrors].category = error.GetCategory();
+    results.errors[results.numErrors].severity = error.GetSeverity();
+    results.errors[results.numErrors].gpuId    = gpuId;
+    SafeCopyTo(results.errors[results.numErrors].msg, error.GetMessage().c_str());
+    results.numErrors++;
+}
+
+/*************************************************************************/
 dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
 {
     if (results == nullptr)
@@ -232,15 +253,7 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
 
     for (auto &&error : m_errors)
     {
-        results->errors[results->numErrors].code     = error.GetCode();
-        results->errors[results->numErrors].category = error.GetCategory();
-        results->errors[results->numErrors].severity = error.GetSeverity();
-        results->errors[results->numErrors].gpuId    = -1;
-        snprintf(results->errors[results->numErrors].msg,
-                 sizeof(results->errors[results->numErrors].msg),
-                 "%s",
-                 error.GetMessage().c_str());
-        results->numErrors++;
+        AddErrorToResults(*results, error, -1);
         if (results->numErrors == DCGM_DIAG_MAX_ERRORS)
         {
             errorsFull = true;
@@ -263,15 +276,21 @@ dcgmReturn_t Plugin::GetResults(dcgmDiagResults_t *results)
                 break;
             }
 
-            results->errors[results->numErrors].code     = error.GetCode();
-            results->errors[results->numErrors].category = error.GetCategory();
-            results->errors[results->numErrors].severity = error.GetSeverity();
-            results->errors[results->numErrors].gpuId    = gpuId;
-            snprintf(results->errors[results->numErrors].msg,
-                     sizeof(results->errors[results->numErrors].msg),
-                     "%s",
-                     error.GetMessage().c_str());
-            results->numErrors++;
+            AddErrorToResults(*results, error, gpuId);
+        }
+    }
+
+    if (results->numErrors == 0)
+    {
+        for (auto &&error : m_optionalErrors)
+        {
+            AddErrorToResults(*results, error, -1);
+
+            if (results->numErrors == DCGM_DIAG_MAX_ERRORS)
+            {
+                errorsFull = true;
+                break;
+            }
         }
     }
 

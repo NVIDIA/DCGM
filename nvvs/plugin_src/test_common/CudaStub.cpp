@@ -23,6 +23,7 @@
  */
 
 int cudaAttributeValue;
+cudaError_t cudaStreamCreateResult = cudaSuccess;
 
 cudaError_t cudaGetDeviceCount(int *cudaDeviceCount)
 {
@@ -158,10 +159,25 @@ cudaError_t cudaEventDestroy(cudaEvent_t event)
 
 cudaError_t cudaStreamCreate(cudaStream_t *stream)
 {
-    return cudaSuccess;
+    return cudaStreamCreateResult;
 }
 
 cudaError_t cudaStreamDestroy(cudaStream_t stream)
+{
+    return cudaSuccess;
+}
+
+cudaError_t cudaStreamSynchronize(cudaStream_t stream)
+{
+    return cudaSuccess;
+}
+
+cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp *prop, int device)
+{
+    return cudaSuccess;
+}
+
+cudaError_t cudaEventQuery(cudaEvent_t event)
 {
     return cudaSuccess;
 }

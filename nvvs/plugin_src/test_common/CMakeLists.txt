@@ -19,6 +19,10 @@ if (BUILD_TESTING)
     target_link_libraries(testing_cuda_stubs PUBLIC nvvs_interface)
     target_link_libraries(testing_cuda_stubs PRIVATE nvvs_plugins_common_interface)
 
+    add_library(testing_cuda_stubs_interface INTERFACE)
+    target_include_directories(testing_cuda_stubs_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(testing_cuda_stubs_interface INTERFACE ${CUDA12_INCLUDE_DIR})
+
     add_library(testing_dcgm_cublas_stubs STATIC)
     target_sources(testing_dcgm_cublas_stubs PRIVATE CublasStub.cpp)
     target_include_directories(testing_dcgm_cublas_stubs PRIVATE ${DCGM_ROOT_DIR}/cublas_proxy)

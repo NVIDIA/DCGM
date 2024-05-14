@@ -479,6 +479,7 @@ dcgmReturn_t DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString(dcgm_sys
     cpu.ownedCores.version = dcgmCpuHierarchyOwnedCores_version1;
     auto cpuRanges         = DcgmNs::Split(rangeStr, ',');
 
+    std::memset(cpu.ownedCores.bitmask, 0, sizeof(cpu.ownedCores.bitmask));
     for (auto range : cpuRanges)
     {
         auto firstLastCpu = DcgmNs::Split(range, '-');

@@ -7708,6 +7708,16 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
+            constexpr unsigned int MAX_TEMPUINT { 200 };
+            if (tempUint > MAX_TEMPUINT)
+            {
+                log_warning(
+                    "Value out of range on GPU {}. GPU Temperature returned from NVML: {}; expected range: [0, {}].",
+                    gpuId,
+                    tempUint,
+                    MAX_TEMPUINT);
+                return DCGM_ST_OK;
+            }
 
             AppendEntityInt64(threadCtx, (long long)tempUint, 0, now, expireTime);
             break;

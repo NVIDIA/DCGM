@@ -371,7 +371,7 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
         std::string error = AppendCudaDriverError("Unable to initialize CUDA library", cuRes);
         d.AddDetail(fmt::format("{} {}. {}", error, GetAdditionalCuInitDetail(cuRes), RUN_CUDA_KERNEL_REC));
-        memGlobals->memory->AddError(d);
+        memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
         return 1;
     }
     memGlobals->cudaInitialized = 1;
