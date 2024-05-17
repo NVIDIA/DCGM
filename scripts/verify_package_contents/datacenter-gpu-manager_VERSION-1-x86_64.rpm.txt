@@ -137,9 +137,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda11/libDiagnostic.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libDiagnostic.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libDiagnostic.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda11/libEud.so
-/usr/share/nvidia-validation-suite/plugins/cuda11/libEud.so.${VERSION}
-/usr/share/nvidia-validation-suite/plugins/cuda11/libEud.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda11/libMemory.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libMemory.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libMemory.so.3
@@ -164,11 +161,9 @@
 /usr/share/nvidia-validation-suite/plugins/cuda11/libTargetedStress.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libTargetedStress.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libTargetedStress.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda11/libcurand.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libpluginCommon.so
 /usr/share/nvidia-validation-suite/plugins/cuda11/libpluginCommon.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda11/libpluginCommon.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda11/ubergemm
 /usr/share/nvidia-validation-suite/plugins/cuda12
 /usr/share/nvidia-validation-suite/plugins/cuda12/BwChecker_12
 /usr/share/nvidia-validation-suite/plugins/cuda12/DcgmProfTesterKernels.ptx
@@ -178,9 +173,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda12/libDiagnostic.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libDiagnostic.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libDiagnostic.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda12/libEud.so
-/usr/share/nvidia-validation-suite/plugins/cuda12/libEud.so.${VERSION}
-/usr/share/nvidia-validation-suite/plugins/cuda12/libEud.so.3
 /usr/share/nvidia-validation-suite/plugins/cuda12/libMemory.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libMemory.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libMemory.so.3
@@ -205,9 +197,6 @@
 /usr/share/nvidia-validation-suite/plugins/cuda12/libTargetedStress.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libTargetedStress.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libTargetedStress.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda12/libcupti.so
-/usr/share/nvidia-validation-suite/plugins/cuda12/libcurand.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libpluginCommon.so
 /usr/share/nvidia-validation-suite/plugins/cuda12/libpluginCommon.so.${VERSION}
 /usr/share/nvidia-validation-suite/plugins/cuda12/libpluginCommon.so.3
-/usr/share/nvidia-validation-suite/plugins/cuda12/ubergemm
