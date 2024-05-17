@@ -67,15 +67,13 @@ endmacro()
 
 LIST(APPEND SUPPORTED_CUDA_VERSIONS 12)
 LIST(APPEND SUPPORTED_CUDA_VERSIONS 11)
-IF (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    LIST(APPEND SUPPORTED_CUDA_VERSIONS 10)
-ENDIF()
 
 LIST(SORT SUPPORTED_CUDA_VERSIONS)
 
 LIST(APPEND NVVS_PLUGINS "")
 LIST(APPEND BW_CHECKERS "")
 
+add_subdirectory(test_common)
 add_subdirectory(common)
 add_subdirectory(cuda_common)
 add_subdirectory(pcie)
@@ -87,7 +85,6 @@ add_subdirectory(memory)
 #add_subdirectory(smstress)
 add_subdirectory(software)
 add_subdirectory(memtest)
-add_subdirectory(test_common)
 
 foreach(plugin ${NVVS_PLUGINS})
     install(TARGETS ${plugin}

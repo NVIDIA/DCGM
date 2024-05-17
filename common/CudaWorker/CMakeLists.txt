@@ -42,9 +42,6 @@ endmacro()
 
 set(LOCAL_DCGM_CUDA_WORKER "")
 
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    define_dcgm_cuda_worker(10)
-endif()
 define_dcgm_cuda_worker(11)
 define_dcgm_cuda_worker(12)
 

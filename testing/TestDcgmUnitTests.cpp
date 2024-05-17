@@ -25,7 +25,6 @@
 #include "TestHealthMonitor.h"
 #include "TestKeyedVector.h"
 #include "TestPolicyManager.h"
-#include "TestStatCollection.h"
 #include "TestTopology.h"
 #include "TestVersioning.h"
 #include "dcgm_test_apis.h"
@@ -83,11 +82,6 @@ public:
         m_modules[moduleTag] = module;
 
         module = (TestDcgmModule *)(new TestFieldGroups());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestStatCollection());
         module->SetDcgmHandle(m_dcgmHandle);
         moduleTag            = module->GetTag();
         m_modules[moduleTag] = module;

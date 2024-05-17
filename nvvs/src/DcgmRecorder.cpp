@@ -50,6 +50,7 @@ unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
                                         DCGM_FI_DEV_MEM_CLOCK,
                                         DCGM_FI_DEV_POWER_VIOLATION,
                                         DCGM_FI_DEV_CLOCK_THROTTLE_REASONS,
+                                        DCGM_FI_DEV_MEMORY_TEMP,
                                         0 };
 
 DcgmRecorder::DcgmRecorder()
@@ -964,6 +965,7 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
     return st;
 }
 
+
 int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
 {
     // mask for the failures we're evaluating
@@ -1176,6 +1178,17 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
     {
         long long maxTemp = DetermineMaxTemp(gpuInfo, tp);
         int ret           = CheckErrorFields(fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, errors, startTime);
+        int retHBMErrorFields = CheckHBMErrorFields(gpuInfo, errors, startTime);
+
+        // ret - violation, retHBMErrorFields - violation --> ret = violation
+        // ret - success, retHBMErrorFields - violation --> ret = violation
+        // ret - violation, retHBMErrorFields - success --> ret = violation (does not enter the if case as ret is
+        // already a violation) ret - success, retHBMErrorFields - success --> ret = success (does not enter the if case
+        // as both are success)
+        if (retHBMErrorFields == DR_VIOLATION || (ret == DR_SUCCESS && ret != retHBMErrorFields))
+        {
+            ret = retHBMErrorFields;
+        }
 
         if (ret == DR_COMM_ERROR)
         {
@@ -1212,4 +1225,107 @@ std::string DcgmRecorder::ErrorAsString(dcgmReturn_t ret)
 unsigned int DcgmRecorder::GetCudaMajorVersion()
 {
     return m_dcgmSystem.GetCudaMajorVersion();
+}
+
+int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginGpuInfo_t gpuInfo,
+                                      std::vector<DcgmError> &errors,
+                                      timelib64_t startTime)
+{
+    // HBM temperature check
+    // local vars
+    long long maxHBMTemp;
+    int skipCheck                = 0;
+    dcgmFieldValue_v2 maxTempVal = {};
+    int ret                      = DR_SUCCESS;
+
+    // get the max temperature
+    dcgmReturn_t returnValue
+        = GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_MEM_MAX_OP_TEMP, maxTempVal, DCGM_FV_FLAG_LIVE_DATA);
+
+    if (returnValue != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
+    {
+        // logging the error
+        DCGM_LOG_WARNING << "Cannot read the max HBM operating temperature " << gpuInfo.gpuId << ": ";
+
+        if (gpuInfo.status == DcgmEntityStatusFake)
+        {
+            // fake gpu - hardcoding value
+            maxHBMTemp = 100;
+        }
+        else
+        {
+            // read empty, skipping the check
+            skipCheck = 1;
+        }
+    }
+    else
+    {
+        // setting maxHBMTemp to max value read
+        maxHBMTemp = maxTempVal.value.i64;
+    }
+
+    if (skipCheck == 0)
+    {
+        // checking if current HBM temperature is greater than max
+        ret = VerifyHBMTemperature(gpuInfo.gpuId, errors, maxHBMTemp, startTime);
+    }
+
+    return ret;
+}
+
+
+int DcgmRecorder::VerifyHBMTemperature(unsigned int gpuId,
+                                       std::vector<DcgmError> &errorList,
+                                       long long maxTemp,
+                                       timelib64_t startTime)
+
+{
+    // local vars
+    long long currHighTemp;
+
+    // defaulting to success
+    int st = DR_SUCCESS;
+
+    // field struct for current HBM temperature
+    dcgmFieldSummaryRequest_t fsr;
+    memset(&fsr, 0, sizeof(fsr));
+    fsr.fieldId         = DCGM_FI_DEV_MEMORY_TEMP;
+    fsr.entityGroupId   = DCGM_FE_GPU;
+    fsr.entityId        = gpuId;
+    fsr.summaryTypeMask = DCGM_SUMMARY_MAX | DCGM_SUMMARY_AVG;
+    fsr.startTime       = startTime;
+    fsr.endTime         = 0;
+
+    // populate field
+    dcgmReturn_t ret = GetFieldSummary(fsr);
+
+    // check if field is not populated
+    if (ret != DCGM_ST_OK)
+    {
+        DcgmError d { gpuId };
+        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "HBM temperature", gpuId);
+        errorList.push_back(d);
+        currHighTemp = 0;
+        return DR_COMM_ERROR;
+    }
+
+    // get the curr high temp
+    currHighTemp = fsr.response.values[0].i64;
+
+    // check if nan or blank
+    if (DCGM_INT64_IS_BLANK(fsr.response.values[0].i64))
+    {
+        currHighTemp = 0;
+    }
+
+    // check if curr high temp is lesser or greater than max HBM temp
+    if (currHighTemp > maxTemp)
+    {
+        DcgmError d { gpuId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, currHighTemp, gpuId, maxTemp);
+        errorList.push_back(d);
+        st = DR_VIOLATION;
+    }
+
+    return st;
 }

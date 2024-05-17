@@ -1622,7 +1622,7 @@ int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     unsigned int err = 0;
     unsigned long p1, p2;
     float elapsedtime;
-    int size = tot_num_blocks * BLOCKSIZE;
+    unsigned long long size = tot_num_blocks * BLOCKSIZE;
 
     cudaStream_t stream;
     cudaEvent_t start, stop;

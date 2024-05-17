@@ -594,18 +594,18 @@ modtest_read(char* _ptr, char* end_ptr, unsigned int offset, unsigned int p1, un
 }
 
 extern "C" __global__ void
-test10_write(char* ptr, int memsize, unsigned long p1)
+test10_write(char* ptr, unsigned long long memsize, unsigned long p1)
 {
-    int i;
-    int avenumber = memsize/(gridDim.x*gridDim.y);
+    unsigned int i;
+    unsigned long avenumber = memsize/(gridDim.x*gridDim.y);
     unsigned long* mybuf = (unsigned long*)(ptr + blockIdx.x* avenumber);
-    int n = avenumber/(blockDim.x*sizeof(unsigned long));
+    unsigned int n = avenumber/(blockDim.x*sizeof(unsigned long));
 
     for(i=0;i < n;i++){
-        int index = i*blockDim.x + threadIdx.x;
+        unsigned int index = i*blockDim.x + threadIdx.x;
         mybuf[index]= p1;
     }
-    int index = n*blockDim.x + threadIdx.x;
+    unsigned int index = n*blockDim.x + threadIdx.x;
     if (index*sizeof(unsigned long) < avenumber){
         mybuf[index] = p1;
     }
@@ -614,24 +614,24 @@ test10_write(char* ptr, int memsize, unsigned long p1)
 }
 
 extern "C" __global__ void
-test10_readwrite(char* ptr, int memsize, unsigned long p1, unsigned long p2,  unsigned int* err,
+test10_readwrite(char* ptr, unsigned long long memsize, unsigned long p1, unsigned long p2,  unsigned int* err,
 					unsigned long* err_addr, unsigned long* err_expect, unsigned long* err_current, unsigned long* err_second_read)
 {
-    int i;
-    int avenumber = memsize/(gridDim.x*gridDim.y);
+    unsigned int i;
+    unsigned long avenumber = memsize/(gridDim.x*gridDim.y);
     unsigned long* mybuf = (unsigned long*)(ptr + blockIdx.x* avenumber);
-    int n = avenumber/(blockDim.x*sizeof(unsigned long));
+    unsigned int n = avenumber/(blockDim.x*sizeof(unsigned long));
     unsigned long localp;
 
     for(i=0;i < n;i++){
-        int index = i*blockDim.x + threadIdx.x;
+        unsigned int index = i*blockDim.x + threadIdx.x;
         localp = mybuf[index];
         if (localp != p1){
 	    RECORD_ERR(err, &mybuf[index], p1, localp);
 	}
 	mybuf[index] = p2;
     }
-    int index = n*blockDim.x + threadIdx.x;
+    unsigned int index = n*blockDim.x + threadIdx.x;
     if (index*sizeof(unsigned long) < avenumber){
 	localp = mybuf[index];
 	if (localp!= p1){

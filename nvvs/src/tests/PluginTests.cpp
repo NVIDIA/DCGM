@@ -18,6 +18,7 @@
 #include <stdlib.h>
 
 #include <DcgmError.h>
+#define DCGM_PLUGIN_TEST
 #include <Plugin.h>
 #include <dcgm_structs.h>
 
@@ -97,4 +98,40 @@ TEST_CASE("Plugin Duplicate Errors")
     CHECK(results.errors[0].gpuId == -1); // it will put the global error before the GPU specific error
     CHECK(results.errors[1].gpuId == gpuId);
     CHECK(results.errors[2].gpuId == gpuId2);
+}
+
+TEST_CASE("Optional Errors")
+{
+    UnitTestPlugin p;
+    UnitTestPlugin p2;
+    unsigned int gpuId = 1;
+    DcgmError gpuError { gpuId };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_VOLATILE_DBE_DETECTED, gpuError, 1, gpuId);
+    DcgmError globalError1 { DcgmError::GpuIdTag::Unknown };
+    DCGM_ERROR_FORMAT_MESSAGE(
+        DCGM_FR_INTERNAL, globalError1, "We are out of steak: 'Lyle is coming to fix the steak problem'");
+    DcgmError globalError2 { DcgmError::GpuIdTag::Unknown };
+    DCGM_ERROR_FORMAT_MESSAGE(
+        DCGM_FR_HOSTENGINE_CONN, globalError2, "At Rex Kwon Do, we use the buddy system. No more flyin solo!");
+
+    p.AddErrorForGpu(gpuId, gpuError);
+    p.AddOptionalError(globalError1);
+    p.AddOptionalError(globalError2);
+
+    dcgmDiagResults_t results1 {};
+    dcgmDiagResults_t results2 {};
+
+    p.GetResults(&results1);
+    CHECK(results1.numErrors == 1);
+    CHECK(static_cast<unsigned int>(results1.errors[0].gpuId) == gpuId);
+    CHECK(results1.errors[0].code == DCGM_FR_VOLATILE_DBE_DETECTED);
+
+    p2.AddOptionalError(globalError1);
+    p2.AddOptionalError(globalError2);
+    p2.GetResults(&results2);
+    CHECK(results2.numErrors == 2);
+    CHECK(results2.errors[0].gpuId == -1);
+    CHECK(results2.errors[0].code == DCGM_FR_INTERNAL);
+    CHECK(results2.errors[1].gpuId == -1);
+    CHECK(results2.errors[1].code == DCGM_FR_HOSTENGINE_CONN);
 }

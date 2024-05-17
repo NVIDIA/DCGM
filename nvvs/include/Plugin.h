@@ -213,7 +213,16 @@ public:
      *
      * Thread-safe.
      */
-    void AddError(const DcgmError &error);
+    void AddError(DcgmError const &error);
+
+    /*************************************************************************/
+    /*
+     * Adds an error that should be stored, but shouldn't be reported if other errors were found.
+     *
+     * These errors tend to be very generic; generally, they are accompanied by a more specific
+     * error and can be ignored. However, if no other error is found they should be reported.
+     */
+    void AddOptionalError(const DcgmError &error);
 
     /*************************************************************************/
     /*
@@ -303,8 +312,11 @@ public:
     std::string GetDisplayName();
 
     /***************************PRIVATE**********************************/
+#ifndef DCGM_PLUGIN_TEST
 private:
+#endif
     /* Methods */
+
     /*************************************************************************/
     /*
      * Clears all warnings, info messages, and results.
@@ -312,8 +324,16 @@ private:
      */
     void ResetResultsAndMessages();
 
+    /*************************************************************************/
+    /*
+     * Records the specified error in the dcgmDiagResults_t struct with the specified gpuId
+     */
+    void AddErrorToResults(dcgmDiagResults_t &results, const DcgmError &error, int gpuId);
+
     std::vector<nvvsPluginResult_t> m_nonGpuResults; /* Results for non-GPU specific tests */
     std::vector<DcgmError> m_errors;                 /* List of errors from the plugin */
+    std::vector<DcgmError>
+        m_optionalErrors; /* List of errors from the plugin that shouldn't be reported if others are present */
     std::vector<std::string> m_warnings;             /* List of general warnings from the plugin */
     std::vector<std::string> m_verboseInfo;          /* List of general verbose output from the plugin */
 

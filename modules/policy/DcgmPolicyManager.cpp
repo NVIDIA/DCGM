@@ -824,7 +824,8 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
     std::set<dcgm_request_id_t> seenRequestIds;
     int i;
 
-    dcgmMutexReturn_t mutexSt = dcgm_mutex_lock_me(m_mutex);
+    {
+        DcgmLockGuard dlg(m_mutex);
 
     for (i = 0; i < m_numGpus; i++)
     {
@@ -845,9 +846,7 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
             watcherIt = m_gpus[i].watchers.erase(watcherIt);
         }
     }
-
-    if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-        dcgm_mutex_unlock(m_mutex);
+    }
 
     /* notify each seenRequestIds for connectionId that it's gone */
     std::set<dcgm_request_id_t>::iterator requestIt;
@@ -861,7 +860,7 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
 /*****************************************************************************/
 void DcgmPolicyManager::OnClientDisconnect(dcgm_connection_id_t connectionId)
 {
-    dcgm_mutex_lock(m_mutex);
+    DcgmLockGuard dlg(m_mutex);
 
     /* The OnClientDisconnect to the cache manager handled the cache manager watches.
        Only worry about local structures */
@@ -872,10 +871,7 @@ void DcgmPolicyManager::OnClientDisconnect(dcgm_connection_id_t connectionId)
         log_debug("Removed m_haveWatchedFields for connectionId {}", connectionId);
         m_haveWatchedFields.erase(it);
     }
-
     RemoveWatchersForConnection(connectionId);
-
-    dcgm_mutex_unlock(m_mutex);
 }
 
 /*****************************************************************************/
