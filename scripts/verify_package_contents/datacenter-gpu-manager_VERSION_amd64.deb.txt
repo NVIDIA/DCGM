@@ -161,9 +161,6 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libPcie.so.3
-./usr/share/nvidia-validation-suite/plugins/cuda11/libPulseTest.so
-./usr/share/nvidia-validation-suite/plugins/cuda11/libPulseTest.so.${VERSION}
-./usr/share/nvidia-validation-suite/plugins/cuda11/libPulseTest.so.3
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda11/libSoftware.so.3
@@ -197,9 +194,6 @@
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libPcie.so.3
-./usr/share/nvidia-validation-suite/plugins/cuda12/libPulseTest.so
-./usr/share/nvidia-validation-suite/plugins/cuda12/libPulseTest.so.${VERSION}
-./usr/share/nvidia-validation-suite/plugins/cuda12/libPulseTest.so.3
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so.${VERSION}
 ./usr/share/nvidia-validation-suite/plugins/cuda12/libSoftware.so.3
