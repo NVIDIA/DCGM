@@ -49,12 +49,20 @@ std::vector<std::string> dcgmTokenizeString(const std::string &src, const std::s
  * Unlike strncpy(), This version actually NULL-terminates destionation
  * if source is >= (destinationSize+1) in length.
  *
+ * Unlike strncpy(), This version will now inform you if you attempt to 
+ * copy a source that is larger than the destination buffer.
+ * 
+ * Unlike strncpy(), If the source is shorter than the destination size
+ * this implementation will immediately stop once the null terminating 
+ * string is encountered. Unlike its strncpy counterpart which will append
+ * null bytes until n bytes (destinationSize) are written.
+ * 
  * destination    OUT: Destination buffer
  * source          IN: Source NULL-terminated c string.
  * destinationSize IN: Actual buffer size of destination[].
  *                     Pass sizeof(destination) here for fixed size char arrays.
  */
-void dcgmStrncpy(char *destination, const char *source, size_t destinationSize);
+bool dcgmStrncpy(char *destination, const char *source, size_t destinationSize);
 
 /*****************************************************************************/
 /*
