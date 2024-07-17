@@ -31,6 +31,7 @@
  * 'errorListAllGpus'.
  */
 void CheckAndSetResult(Plugin *p,
+                       std::string const &testName,
                        const std::vector<unsigned int> &gpuList,
                        size_t i,
                        bool passed,

@@ -196,6 +196,7 @@ def vtDcgmFieldGroupGetAll(dcgm_handle, versionTest):
     return c_allGroupInfo
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_dcgm_field_group_get_all_validate(handle):
 
     """
@@ -301,6 +302,7 @@ def vtDcgmPolicyGet(dcgm_handle, group_id, count, status_handle, versionTest):
     return c_policy_values[0:count]
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_dcgm_policy_get_validate(handle):
     
     """
@@ -355,7 +357,7 @@ def test_dcgm_health_check_validate(handle):
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
@@ -371,7 +373,7 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     return response
 
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct
@@ -386,7 +388,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     return response
 
 def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
     response.version = versionTest
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
@@ -420,8 +422,8 @@ def test_dcgm_run_diagnostic_validate(handle, gpuIds):
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
 
-    drd = dcgm_structs.c_dcgmRunDiag_t()
-    drd.version = dcgm_structs.dcgmRunDiag_version
+    drd = dcgm_structs.c_dcgmRunDiag_v7()
+    drd.version = dcgm_structs.dcgmRunDiag_version7
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = groupId
     drd.gpuList = gpuIdStr
@@ -704,6 +706,7 @@ def vtDcgmVgpuConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle,
 
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_dcgm_vgpu_config_get_validate(handle):
 
     """

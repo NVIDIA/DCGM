@@ -51,3 +51,45 @@ class _MaybeMock:
         return self
 
 maybemock = _MaybeMock()
+
+DCGM_NVML_NOT_EXIST_MSG = "dcgm_nvml not presented."
+DCGM_NVML_VER_MSG = "dcgm_nvml exists, but missing some definitions. Please update it to the latest version https://pypi.org/project/nvidia-ml-py/#description"
+
+try:
+    import dcgm_nvml
+    DCGM_NVML_PRESENTED = True
+except ImportError:
+    logger.warning(MOCK_MSG)
+    DCGM_NVML_PRESENTED = False
+
+import nvml_injection_structs
+if not nvml_injection_structs.nvml_injection_usable:
+    logger.warning(DCGM_NVML_VER_MSG)
+    DCGM_NVML_PRESENTED = False
+
+def skip_test_if_no_dcgm_nvml():
+    '''
+    Returns a decorator for functions. The decorator skips
+    the test in the provided function if dcgm_nvml is not presented
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if DCGM_NVML_PRESENTED:
+                fn(*args, **kwds)
+            else:
+                skip_test(DCGM_NVML_NOT_EXIST_MSG)
+        return wrapper
+    return decorator
+
+# Do not use this class directly
+class _MaybeDcgmNVML:
+    def __call__(self, *args, **kwds):
+        return skip_test_if_no_dcgm_nvml()
+
+    def __getattr__(self, attr):
+        if (DCGM_NVML_PRESENTED):
+            return getattr(dcgm_nvml, attr)
+        return self
+
+maybe_dcgm_nvml = _MaybeDcgmNVML()

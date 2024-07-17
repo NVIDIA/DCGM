@@ -73,7 +73,7 @@ static std::unique_ptr<DcgmCacheManager> createCacheManager(int pollInLockStep)
         return nullptr;
     }
 
-    st = cacheManager->Init(pollInLockStep, 86400.0);
+    st = cacheManager->Init(pollInLockStep, 86400.0, true);
     if (st)
     {
         fprintf(stderr, "cacheManager->Init returned %d\n", st);
@@ -2426,7 +2426,7 @@ int TestCacheManager::TestAttachDetachNoWatches(void)
 
     // Must detach first so that nvmlInit_v2() is called
     dcm.DetachGpus();
-    dcgmReturn_t ret = dcm.Init(1, 86400.0);
+    dcgmReturn_t ret = dcm.Init(1, 86400.0, true);
     if (ret != DCGM_ST_OK)
     {
         fprintf(stderr, "TestAttachDetachNoWatches(): Error attaching to GPUs: %s.", errorString(ret));
@@ -2508,7 +2508,7 @@ int TestCacheManager::TestAttachDetachWithWatches(void)
 
     // Must detach first so we don't think nvml has been initialized
     dcm.DetachGpus();
-    ret = dcm.Init(1, 86400.0);
+    ret = dcm.Init(1, 86400.0, true);
     if (ret != DCGM_ST_OK)
     {
         fprintf(stderr, "TestAttachDetachWithWatches(): Error attaching to GPUs: %s.", errorString(ret));

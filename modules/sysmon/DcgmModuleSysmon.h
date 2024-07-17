@@ -131,6 +131,7 @@ private:
     DcgmSystemMonitor m_sysmon;
     std::string m_coreSpeedBaseDir;
     std::atomic_bool m_paused;
+    DcgmNs::Timelib::TimePoint m_maxSampleAge;
 
     bool m_enabledMonitoring[SYSMON_MONITORING_SWITCH_COUNT];
     std::vector<double> m_cpuUtilization;
@@ -174,7 +175,7 @@ private:
     dcgmReturn_t PopulateCpusIfNeeded();
     // Probably going to be replaced by a mechanism that relies on the watch table
     dcgmReturn_t EnableMonitoring(unsigned int monitoringSwitch);
-    void PruneSamples(DcgmNs::Timelib::TimePoint now, std::chrono::milliseconds maxUpdateInterval);
+    void PruneSamples(DcgmNs::Timelib::TimePoint now);
     dcgmReturn_t ParseProcStatCpuLine(const std::string &line, SysmonUtilizationSample &sample);
 
     /*

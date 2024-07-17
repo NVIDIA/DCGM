@@ -218,14 +218,20 @@ def main():
                 logger.warning("The test environment does not seem to be healthy, test framework cannot continue.")
                 sys.exit(1)
 
-        if not option_parser.options.no_process_check:
-            if not nvidia_smi_utils.are_gpus_free():
-                sys.exit(1)
-        else:
-            logger.warning("Not checking for other processes using the GPU(s), test failures may occur.")
+        try:
+            if not option_parser.options.no_process_check:
+                if not nvidia_smi_utils.are_gpus_free():
+                    sys.exit(1)
+            else:
+                logger.warning("Not checking for other processes using the GPU(s), test failures may occur.")
+        except FileNotFoundError as e:
+            logger.warning("Skipping checking GPUs for other processes: nvidia-smi is not found.")
 
         if option_parser.options.test_info:
             print_test_info()
+            return
+        if option_parser.options.capture_nvml_environment_to is not None:
+            test_utils.try_capture_nvml_env(option_parser.options.capture_nvml_environment_to)
             return
 
         testdir = os.path.dirname(os.path.realpath(__file__))

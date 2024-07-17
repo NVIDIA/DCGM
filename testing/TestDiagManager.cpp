@@ -229,7 +229,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     dcgmReturn_t result;
     std::string command;
     std::vector<std::string> cmdArgs;
-    dcgmRunDiag_t drd = {};
+    dcgmRunDiag_v7 drd = {};
     DcgmDiagManager am(g_coreCallbacks);
 
     std::string nvvsBinPath;
@@ -314,7 +314,7 @@ int TestDiagManager::TestCreateNvvsCommand()
 int TestDiagManager::TestPopulateRunDiag()
 {
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmRunDiag_t drd   = {};
+    dcgmRunDiag_v7 drd  = {};
 
     drd.version = dcgmRunDiag_version7;
 
@@ -399,7 +399,7 @@ int TestDiagManager::TestPopulateRunDiag()
     std::string debugFileName("kaladin");
     std::string statsPath("/home/aimian/");
     std::string throttleMask("HW_SLOWDOWN");
-    drd         = dcgmRunDiag_t(); // Need to reset the struct
+    drd         = dcgmRunDiag_v7(); // Need to reset the struct
     drd.version = dcgmRunDiag_version7;
     dcgm_diag_common_populate_run_diag(
         drd,
@@ -540,7 +540,7 @@ int TestDiagManager::TestPopulateRunDiag()
 int TestDiagManager::TestErrorsFromLevelOne()
 {
     DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0);
+    dcm.Init(1, 3600.0, true);
 
     std::string errorReported(
         "Persistence mode for GPU 1 is currently disabled. NVVS requires persistence mode to be enabled. Enable persistence mode by running (as root): nvidia-smi -i 1 -pm 1");
@@ -613,10 +613,10 @@ int TestDiagManager::TestErrorsFromLevelOne()
     dcc.Init(&dcm, &dgm);
     g_coreCallbacks.poster = &dcc;
     DcgmDiagManager am(g_coreCallbacks);
-    dcgmDiagResponse_t response;
-    response.version = dcgmDiagResponse_version;
+    dcgmDiagResponse_v10 response;
+    response.version = dcgmDiagResponse_version10;
     DcgmDiagResponseWrapper drw;
-    drw.SetVersion9(&response);
+    drw.SetVersion10(&response);
 
     auto nvvsResults
         = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { rawJsonOutput });
@@ -687,7 +687,7 @@ int TestDiagManager::TestErrorsFromLevelOne()
 int TestDiagManager::TestInvalidVersion()
 {
     DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0);
+    dcm.Init(1, 3600.0, true);
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
@@ -733,7 +733,7 @@ int TestDiagManager::TestFillResponseStructure()
 {
     dcgmReturn_t result = DCGM_ST_OK;
     DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0);
+    dcm.Init(1, 3600.0, true);
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
@@ -752,10 +752,10 @@ int TestDiagManager::TestFillResponseStructure()
             "Persistence Mode", "Environment",  "Page Retirement/Row Remap", "Graphics Processes", "Inforom" };
 
     /* Version 1.7 (v5), 2.0 (v6) / Per GPU JSON */
-    dcgmDiagResponse_t perGpuResponse;
-    perGpuResponse.version = dcgmDiagResponse_version;
+    dcgmDiagResponse_v10 perGpuResponse;
+    perGpuResponse.version = dcgmDiagResponse_version10;
     DcgmDiagResponseWrapper perGpuDrw;
-    perGpuDrw.SetVersion9(&perGpuResponse);
+    perGpuDrw.SetVersion10(&perGpuResponse);
 
     fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
 

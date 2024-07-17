@@ -16,6 +16,8 @@
 set(CTEST_USE_LAUNCHERS 1)
 
 find_package(Catch2 REQUIRED)
+find_package(Yaml REQUIRED)
+find_package(fmt REQUIRED)
 
 include(CTest)
 include(Catch)
@@ -26,12 +28,12 @@ if (BUILD_TESTING)
         PRIVATE
             NvmliCoreTestsMain.cpp
             InjectedNvmlTests.cpp
-            ../AttributeQueryInfo.cpp
-            ../FieldHelpers.cpp
             ../CompoundValue.cpp
             ../InjectedNvml.cpp
             ../InjectionArgument.cpp
             ../InjectionKeys.cpp
+            ../NvmlFuncReturn.cpp
+            ../NvmlReturnDeserializer.cpp
             ../nvml_generated_stubs.cpp
             ../nvml_stubs.cpp
             ../PassThruNvml.cpp
@@ -40,15 +42,18 @@ if (BUILD_TESTING)
     target_include_directories(nvmlicoretests
         PRIVATE
             ..
+            ${YAML_INCLUDE_DIR}
     )
 
     target_link_libraries(nvmlicoretests
         PRIVATE
+            ${YAML_STATIC_LIBS}
             nvmli_interface
             sdk_nvml_interface
             rt
             dl
             sdk_nvml_essentials_objects
+            fmt::fmt
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

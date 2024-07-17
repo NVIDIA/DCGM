@@ -22,7 +22,7 @@
 #include <mutex>
 
 static void *g_nvmlLib                                     = 0;
-static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 0;
+static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 1;
 #ifdef INJECTION_LIBRARY_AVAILABLE
 static bool g_injectionLibraryLoaded = false;
 #endif
@@ -66,15 +66,15 @@ static bool g_injectionLibraryLoaded = false;
         if (!g_nvmlLib)                                                                                  \
             return NVML_ERROR_UNINITIALIZED;                                                             \
                                                                                                          \
-        if (!isLookupDone)                                                                               \
+        if (isLookupDone != g_nvmlStaticLibResetHooksCount)                                              \
         {                                                                                                \
             static std::mutex initLock;                                                                  \
             std::lock_guard<std::mutex> guard(initLock);                                                 \
-            if (!isLookupDone)                                                                           \
+            if (isLookupDone != g_nvmlStaticLibResetHooksCount)                                          \
             {                                                                                            \
                 libFunctionName##DefaultFunc                                                             \
                     = (libFunctionName##_loader_t)nvmlLoaderGetProcAddress(g_nvmlLib, #libFunctionName); \
-                isLookupDone = 1;                                                                        \
+                isLookupDone = g_nvmlStaticLibResetHooksCount;                                           \
             }                                                                                            \
         }                                                                                                \
                                                                                                          \
@@ -317,6 +317,7 @@ void nvmlClearLibraryHandleIfNeeded(void)
     {
         dlclose(g_nvmlLib);
         g_nvmlLib = 0;
+        resetAllNvmlHooks();
     }
 }
 #endif 

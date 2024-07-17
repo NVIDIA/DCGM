@@ -30,6 +30,9 @@ import pprint
 import dcgm_internal_helpers
 import dcgm_field_injection_helpers
 import dcgm_errors
+import nvml_injection
+import nvml_injection_structs
+from _test_helpers import skip_test_if_no_dcgm_nvml, maybe_dcgm_nvml
 
 def skip_test_if_unhealthy(groupObj):
     # Skip the test if the GPU is already failing health checks
@@ -144,6 +147,52 @@ def test_dcgm_health_check_pcie_embedded(handle, gpuIds):
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
     helper_dcgm_health_check_pcie(handle, gpuIds)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_health_check_pcie_embedded_using_nvml_injection(handle, gpuIds):
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test1")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds() #Limit gpuIds to GPUs in our group
+    gpuId = gpuIds[0]
+
+    injectedRetsArray = nvml_injection.c_injectNvmlRet_t * 4
+    injectedRets = injectedRetsArray()
+    injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
+    injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+    injectedRets[0].values[0].value.ui = 0
+    injectedRets[0].valueCount = 1
+    injectedRets[1].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
+    injectedRets[1].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+    injectedRets[1].values[0].value.ui = 10
+    injectedRets[1].valueCount = 1
+
+    ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "PcieReplayCounter", None, 0, injectedRets, 2)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_PCIE
+    groupObj.health.Set(newSystems)
+
+    skip_test_if_unhealthy(groupObj)
+
+    response = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    # we expect that there will be no data here
+    assert (response.incidentCount == 0)
+
+    # Wait for cache refresh
+    for _ in range(10):
+        responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+        if responseV4.incidentCount == 1:
+            break
+        time.sleep(10)
+    assert (responseV4.incidentCount == 1)
+    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
 
 def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
     """

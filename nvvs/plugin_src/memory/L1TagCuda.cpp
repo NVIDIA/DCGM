@@ -42,7 +42,7 @@ void L1TagCuda::Cleanup(void)
         cuRes = cuMemFree(m_l1Data);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMORY_PLUGIN_NAME, "cuMemFree", cuRes, m_gpuIndex);
         }
     }
 
@@ -51,7 +51,7 @@ void L1TagCuda::Cleanup(void)
         cuRes = cuMemFree(m_devMiscompareCount);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMORY_PLUGIN_NAME, "cuMemFree", cuRes, m_gpuIndex);
         }
     }
 
@@ -60,14 +60,14 @@ void L1TagCuda::Cleanup(void)
         cuRes = cuMemFree(m_devErrorLog);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMORY_PLUGIN_NAME, "cuMemFree", cuRes, m_gpuIndex);
         }
     }
 
     cuRes = cuModuleUnload(m_cuMod);
     if (CUDA_SUCCESS != cuRes)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuModuleUnload", cuRes, m_gpuIndex);
+        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMORY_PLUGIN_NAME, "cuModuleUnload", cuRes, m_gpuIndex);
     }
 }
 
@@ -77,7 +77,7 @@ int L1TagCuda::AllocDeviceMem(int size, CUdeviceptr *ptr)
     {
         DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, size, m_gpuIndex);
-        m_plugin->AddErrorForGpu(m_gpuIndex, d);
+        m_plugin->AddErrorForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d);
         log_error(d.GetMessage());
         return 1;
     }
@@ -106,7 +106,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, d, "dcgmEntitiesGetLatestValues");
         d.AddDcgmError(ret);
         DCGM_LOG_ERROR << "Error reading CUDA compute capability for GPU " << m_gpuIndex << ": " << errorString(ret);
-        m_plugin->AddError(d);
+        m_plugin->AddError(MEMORY_PLUGIN_NAME, d);
         return NVVS_RESULT_FAIL;
     }
 
@@ -123,7 +123,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
         {
             DcgmError d { m_gpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
-            m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
+            m_plugin->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d.GetMessage());
             return NVVS_RESULT_SKIP;
         }
 
@@ -145,7 +145,7 @@ nvvsPluginResult_t L1TagCuda::LogCudaFail(const char *msg, const char *cudaFuncS
     std::string error = AppendCudaDriverError(msg, cuRes);
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, cudaFuncS);
     d.AddDetail(error);
-    m_plugin->AddErrorForGpu(m_gpuIndex, d);
+    m_plugin->AddErrorForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d);
     return NVVS_RESULT_FAIL;
 }
 
@@ -185,7 +185,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     {
         DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
-        m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
+        m_plugin->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d.GetMessage());
         return NVVS_RESULT_SKIP;
     }
 
@@ -217,7 +217,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     {
         DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_UNSUPPORTED, d);
-        m_plugin->AddInfoVerboseForGpu(m_gpuIndex, d.GetMessage());
+        m_plugin->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d.GetMessage());
         return NVVS_RESULT_SKIP;
     }
 
@@ -427,7 +427,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
 
             DcgmError d { m_gpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_L1TAG_MISCOMPARE, d);
-            m_plugin->AddErrorForGpu(m_gpuIndex, d);
+            m_plugin->AddErrorForGpu(MEMORY_PLUGIN_NAME, m_gpuIndex, d);
 
             if (hostMiscompareCount > m_errorLogLen)
             {

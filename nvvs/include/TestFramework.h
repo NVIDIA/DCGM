@@ -68,13 +68,15 @@ public:
      *
      * Transforms ' ' and '_' depending on the value of "reverse"
      */
-    std::string GetCompareName(Test::testClasses_enum classNum, const std::string &pluginName, bool reverse = false);
+    std::string GetCompareName(Test::testClasses_enum classNum, const std::string &testName, bool reverse = false);
 
     /********************************************************************/
     /*
      * Returns a map of test names and their valid parameters
      */
     std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> GetSubtestParameters();
+
+    std::string GetPluginNameFromTestName(std::string const &testName) const;
 
 protected:
     std::vector<Test *> m_testList;
@@ -91,6 +93,8 @@ protected:
     std::vector<std::unique_ptr<PluginLib>> m_plugins;
     std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfo;
     std::vector<std::string> m_skipLibraryList;
+    // As one plugin can provide more than one test, this map holds the test name to the name of its belonging.
+    std::unordered_map<std::string, std::string> m_testNameToPluginName;
 
     // methods
     std::string GetTestDisplayName(dcgmPerGpuTestIndices_t index);
@@ -108,8 +112,13 @@ protected:
                         Test *test,
                         int logFileType);
 
+    void LoadPluginWithDir(std::string const &pluginDir);
+
     /********************************************************************/
-    std::string GetPluginDir();
+    std::optional<std::string> GetPluginUsingDriverDir();
+
+    /********************************************************************/
+    std::string GetPluginCudalessDir();
 
     /********************************************************************/
     void PopulateGpuInfoForPlugins(std::vector<Gpu *> &gpuList, std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo);
@@ -124,8 +133,9 @@ protected:
     /********************************************************************/
     /*
      * Checks the driver version and returns /cuda{version} to load the correct plugins
+     * return std::nullopt if failed.
      */
-    std::string GetPluginDirExtension() const;
+    std::optional<std::string> GetPluginCudaDirExtension() const;
 
     /********************************************************************/
     /*

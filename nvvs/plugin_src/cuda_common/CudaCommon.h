@@ -45,6 +45,7 @@ const char *cublasGetErrorString(cublasStatus_t status);
  * Thread-safe method.
  */
 std::string AddAPIError(Plugin *p,
+                        std::string const &testName,
                         const char *callName,
                         const char *errorText,
                         unsigned int gpuId,
@@ -59,6 +60,7 @@ std::string AddAPIError(Plugin *p,
  * Thread-safe method.
  */
 std::string AddCudaError(Plugin *p,
+                         std::string const &testName,
                          const char *callName,
                          cudaError_t cuSt,
                          unsigned int gpuId,
@@ -67,6 +69,7 @@ std::string AddCudaError(Plugin *p,
 
 /* Overloaded version for cuda driver errors (i.e. CUResult) */
 std::string AddCudaError(Plugin *p,
+                         std::string const &testName,
                          const char *callName,
                          CUresult cuSt,
                          unsigned int gpuId,
@@ -78,17 +81,17 @@ std::string AddCudaError(Plugin *p,
  * file name corresponding to the location where the macro is called. If the error message was logged inside the
  * AddCudaError method, the line number and file name would have been obscured.
  */
-#define LOG_CUDA_ERROR_FOR_PLUGIN(plugin, callName, cuSt, gpuId, ...)                                   \
+#define LOG_CUDA_ERROR_FOR_PLUGIN(plugin, testName, callName, cuSt, gpuId, ...)                                   \
     {                                                                                                   \
-        std::string pluginCommonCudaError = AddCudaError(plugin, callName, cuSt, gpuId, ##__VA_ARGS__); \
+        std::string pluginCommonCudaError = AddCudaError(plugin, testName, callName, cuSt, gpuId, ##__VA_ARGS__); \
         log_error(pluginCommonCudaError);                                                               \
     }                                                                                                   \
     (void)0
 
 // Only for use by the Plugin subclasses
-#define LOG_CUDA_ERROR(callName, cuSt, gpuId, ...)                                                    \
+#define LOG_CUDA_ERROR(testName, callName, cuSt, gpuId, ...)                                                    \
     {                                                                                                 \
-        std::string pluginCommonCudaError = AddCudaError(this, callName, cuSt, gpuId, ##__VA_ARGS__); \
+        std::string pluginCommonCudaError = AddCudaError(this, testName, callName, cuSt, gpuId, ##__VA_ARGS__); \
         log_error(pluginCommonCudaError);                                                             \
     }                                                                                                 \
     (void)0
@@ -101,6 +104,7 @@ std::string AddCudaError(Plugin *p,
  * Thread-safe method.
  */
 std::string AddCublasError(Plugin *p,
+                           std::string const &testName,
                            const char *callName,
                            cublasStatus_t cubSt,
                            unsigned int gpuId,
@@ -121,17 +125,17 @@ const char *GetAdditionalCuInitDetail(CUresult cuSt);
  * file name corresponding to the location where the macro is called. If the error message was logged inside the
  * AddCublasError method, the line number and file name would have been obscured.
  */
-#define LOG_CUBLAS_ERROR_FOR_PLUGIN(plugin, callName, cubSt, gpuId, ...)                                     \
+#define LOG_CUBLAS_ERROR_FOR_PLUGIN(plugin, testName, callName, cubSt, gpuId, ...)                                     \
     {                                                                                                        \
-        std::string pluginCommonCublasError = AddCublasError(plugin, callName, cubSt, gpuId, ##__VA_ARGS__); \
+        std::string pluginCommonCublasError = AddCublasError(plugin, testName, callName, cubSt, gpuId, ##__VA_ARGS__); \
         log_error(pluginCommonCublasError);                                                                  \
     }                                                                                                        \
     (void)0
 
 // Only for use by the Plugin subclasses
-#define LOG_CUBLAS_ERROR(callName, cubSt, gpuId, ...)                                                      \
+#define LOG_CUBLAS_ERROR(testName, callName, cubSt, gpuId, ...)                                                      \
     {                                                                                                      \
-        std::string pluginCommonCublasError = AddCublasError(this, callName, cubSt, gpuId, ##__VA_ARGS__); \
+        std::string pluginCommonCublasError = AddCublasError(this, testName, callName, cubSt, gpuId, ##__VA_ARGS__); \
         log_error(pluginCommonCublasError);                                                                \
     }                                                                                                      \
     (void)0

@@ -53,6 +53,7 @@ private:
     static int TestGetBasicTestResultIndex();
     static int TestRecordSystemError();
     static int TestAddErrorDetail();
+    static int TestAddAuxData();
 };
 
 #endif /* TEST_DIAG_RESPONSE_WRAPPER_H */

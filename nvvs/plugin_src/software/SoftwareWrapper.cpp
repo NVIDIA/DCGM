@@ -15,6 +15,8 @@
  */
 #include "Software.h"
 
+#include "DcgmStringHelpers.h"
+
 #include <PluginCommon.h>
 #include <PluginInterface.h>
 #include <PluginLib.h>
@@ -40,19 +42,22 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 
     unsigned int paramCount = 0;
 
+    info->numValidTests = 1;
+
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->validParameters[paramCount].parameterName,
-                 sizeof(info->validParameters[paramCount].parameterName),
+        snprintf(info->tests[0].validParameters[paramCount].parameterName,
+                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
                  "%s",
                  parameterNames[paramCount]);
-        info->validParameters[paramCount].parameterType = paramTypes[paramCount];
+        info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
 
-    info->numValidParameters = paramCount;
+    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(SW_PLUGIN_NAME)>(info->tests[0].testeName, SW_PLUGIN_NAME);
+    info->tests[0].numValidParameters = paramCount;
 
     snprintf(info->pluginName, sizeof(info->pluginName), "%s", SW_PLUGIN_NAME);
-    snprintf(info->testGroup, sizeof(info->testGroup), "Software");
+    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "Software");
     snprintf(info->description, sizeof(info->description), "Software deployment checks plugin.");
 
     return DCGM_ST_OK;
@@ -72,25 +77,26 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     return DCGM_ST_OK;
 }
 
-void RunTest(unsigned int timeout,
+void RunTest(const char *testName,
+             unsigned int timeout,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
              void *userData)
 {
     auto sw = (Software *)userData;
-    sw->Go(numParameters, testParameters);
+    sw->Go(testName, numParameters, testParameters);
 }
 
 
-void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
+void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
     // There's no stat data for the Software plugin
 }
 
-void RetrieveResults(dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
 {
     auto sw = (Software *)userData;
-    sw->GetResults(results);
+    sw->GetResults(testName, results);
 }
 
 } // END extern "C"

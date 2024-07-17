@@ -640,6 +640,7 @@ def test_dcgmi_port(handle):
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_initialized_client()
+@test_utils.run_only_with_nvml()
 def test_dcgmi_field_groups(handle):
     """
     Test DCGMI field groups - test the dcgmi commands under "fieldgroup"

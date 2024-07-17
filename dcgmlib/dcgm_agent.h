@@ -1602,7 +1602,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
  *                               details on creating the group. Alternatively, pass in the group id as
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param validate           IN: The validation to perform after the action.
- * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_t for details.
+ * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1617,7 +1617,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
                                                 dcgmGpuGrp_t groupId,
                                                 dcgmPolicyValidation_t validate,
-                                                dcgmDiagResponse_t *response);
+                                                dcgmDiagResponse_v10 *response);
 
 /**
  * Inform the action manager to perform a manual validation of a group of GPUs on the system
@@ -1627,7 +1627,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                               that should be performed. Look at \ref dcgmGroupCreate for details on creating the
  *                               group. Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS to perform
  *                               operation on all the GPUs.
- * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_t for details.
+ * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1640,7 +1640,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
                                                    dcgmRunDiag_v7 *drd,
-                                                   dcgmDiagResponse_t *response);
+                                                   dcgmDiagResponse_v10 *response);
 
 /**
  * Run a diagnostic on a group of GPUs
@@ -1651,7 +1651,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param diagLevel          IN: Diagnostic level to run
  * @param diagResponse   IN/OUT: Result of running the DCGM diagnostic.<br>
- *                               .version should be set to \ref dcgmDiagResponse_version before this call.
+ *                               .version should be set to \ref dcgmDiagResponse_version10 before this call.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1667,7 +1667,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                                dcgmGpuGrp_t groupId,
                                                dcgmDiagnosticLevel_t diagLevel,
-                                               dcgmDiagResponse_t *diagResponse);
+                                               dcgmDiagResponse_v10 *diagResponse);
 
 /** @} */ // Closing for DCGMAPI_PO_MI
 

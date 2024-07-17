@@ -31,6 +31,7 @@ set(SRCS
     DcgmTopology.cpp
     DcgmGpmManager.cpp
     DcgmVgpu.cpp
+    DcgmKmsgReader.cpp
     dcgm.c
     dcgm_errors.c
     dcgm_fields.cpp

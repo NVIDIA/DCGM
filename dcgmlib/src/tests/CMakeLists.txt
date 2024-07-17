@@ -32,6 +32,7 @@ if (BUILD_TESTING)
             GpuInstanceTests.cpp
             dcgm_error_tests.cpp
             GpmTests.cpp
+            DcgmKmsgReaderTests.cpp
     )
 
     target_link_libraries(dcgmlibtests PRIVATE

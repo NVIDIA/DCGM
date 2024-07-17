@@ -47,7 +47,7 @@ unsigned int NvvsDevice::GetGpuId()
 }
 
 /*****************************************************************************/
-int NvvsDevice::SaveState(nvvs_device_state_t *savedState)
+int NvvsDevice::SaveState(std::string const &testName, nvvs_device_state_t *savedState)
 {
     unsigned int flags               = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
     dcgmFieldValue_v2 computeModeVal = {};
@@ -68,7 +68,7 @@ int NvvsDevice::SaveState(nvvs_device_state_t *savedState)
     {
         DcgmError d { m_gpuId };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmEntitiesGetLatestValues");
-        RecordWarning(d, 0);
+        RecordWarning(testName, d, 0);
     }
     else if (computeModeVal.status != DCGM_ST_OK)
     {
@@ -85,14 +85,14 @@ int NvvsDevice::SaveState(nvvs_device_state_t *savedState)
 }
 
 /*****************************************************************************/
-int NvvsDevice::RestoreState(void)
+int NvvsDevice::RestoreState(std::string const &testName)
 {
     nvvs_device_state_t afterState;
     int NstatesRestored = 0; /* How many device states did we restore? */
 
     /* Record the current state of the device for comparison */
     afterState.populated = 0;
-    SaveState(&afterState);
+    SaveState(testName, &afterState);
 
     /* Do the easy check to see if anything has changed */
     if (!memcmp(&m_savedState, &afterState, sizeof(m_savedState)))
@@ -128,7 +128,7 @@ int NvvsDevice::RestoreState(void)
         {
             DcgmError d { m_gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmConfigSet");
-            RecordWarning(d, 0);
+            RecordWarning(testName, d, 0);
         }
         else
         {
@@ -146,21 +146,21 @@ int NvvsDevice::RestoreState(void)
 }
 
 /*****************************************************************************/
-int NvvsDevice::Init(unsigned int gpuId)
+int NvvsDevice::Init(std::string const &testName, unsigned int gpuId)
 {
     m_gpuId = gpuId;
 
     /* Save initial state */
     m_savedState.populated = 0;
-    return SaveState(&m_savedState);
+    return SaveState(testName, &m_savedState);
 }
 
 /*****************************************************************************/
-void NvvsDevice::RecordInfo(const char *logText)
+void NvvsDevice::RecordInfo(std::string const &testName, char const *logText)
 {
     if (m_plugin)
     {
-        m_plugin->AddInfo(logText);
+        m_plugin->AddInfo(testName, logText);
     }
     else
     {
@@ -169,14 +169,14 @@ void NvvsDevice::RecordInfo(const char *logText)
 }
 
 /*****************************************************************************/
-void NvvsDevice::RecordWarning(const DcgmError &d, int failPlugin)
+void NvvsDevice::RecordWarning(std::string const &testName, DcgmError const &d, int failPlugin)
 {
     if (m_plugin)
     {
-        m_plugin->AddErrorForGpu(m_gpuId, d);
+        m_plugin->AddErrorForGpu(testName, m_gpuId, d);
         if (failPlugin)
         {
-            m_plugin->SetResultForGpu(m_gpuId, NVVS_RESULT_FAIL);
+            m_plugin->SetResultForGpu(testName, m_gpuId, NVVS_RESULT_FAIL);
         }
     }
     else
@@ -215,7 +215,7 @@ NvvsDeviceList::~NvvsDeviceList(void)
 }
 
 /*****************************************************************************/
-int NvvsDeviceList::Init(std::vector<unsigned int> gpuIds)
+int NvvsDeviceList::Init(std::string const &testName, std::vector<unsigned int> gpuIds)
 {
     NvvsDevice *nvvsDevice;
     char buf[256];
@@ -231,13 +231,13 @@ int NvvsDeviceList::Init(std::vector<unsigned int> gpuIds)
         unsigned int gpuId = gpuIds[i];
 
         nvvsDevice = new NvvsDevice(m_plugin);
-        int st     = nvvsDevice->Init(gpuId);
+        int st     = nvvsDevice->Init(testName, gpuId);
         if (st)
         {
             DcgmError d { gpuId };
             snprintf(buf, sizeof(buf), "Got error %d while initializing NvvsDevice index %u", st, gpuId);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, buf);
-            RecordWarning(d, 1);
+            RecordWarning(testName, d, 1);
             delete (nvvsDevice);
             nvvsDevice = 0;
         }
@@ -249,23 +249,23 @@ int NvvsDeviceList::Init(std::vector<unsigned int> gpuIds)
 }
 
 /*****************************************************************************/
-void NvvsDeviceList::RecordInfo(const char *logText)
+void NvvsDeviceList::RecordInfo(std::string const &testName, char const *logText)
 {
     if (m_plugin)
-        m_plugin->AddInfo(logText);
+        m_plugin->AddInfo(testName, logText);
     else
         log_info(logText);
 }
 
 /*****************************************************************************/
-void NvvsDeviceList::RecordWarning(const DcgmError &d, int failPlugin)
+void NvvsDeviceList::RecordWarning(std::string const &testName, DcgmError const &d, int failPlugin)
 {
     if (m_plugin)
     {
-        m_plugin->AddError(d);
+        m_plugin->AddError(testName, d);
         if (failPlugin)
         {
-            m_plugin->SetResult(NVVS_RESULT_FAIL);
+            m_plugin->SetResult(testName, NVVS_RESULT_FAIL);
         }
     }
     else
@@ -279,7 +279,7 @@ void NvvsDeviceList::RecordWarning(const DcgmError &d, int failPlugin)
 }
 
 /*****************************************************************************/
-int NvvsDeviceList::RestoreState(int failOnRestore)
+int NvvsDeviceList::RestoreState(std::string const &testName, int failOnRestore)
 {
     int i, st;
     NvvsDevice *nvvsDevice;
@@ -288,7 +288,7 @@ int NvvsDeviceList::RestoreState(int failOnRestore)
     for (i = 0; i < (int)m_devices.size(); i++)
     {
         nvvsDevice = m_devices[i];
-        st         = nvvsDevice->RestoreState();
+        st         = nvvsDevice->RestoreState(testName);
         if (!st)
             continue; /* Nothing changed. Great */
         else if (failOnRestore)
@@ -312,7 +312,7 @@ int NvvsDeviceList::RestoreState(int failOnRestore)
 
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_HAD_TO_RESTORE_STATE, d, ss.str().c_str());
 
-        RecordWarning(d, 1);
+        RecordWarning(testName, d, 1);
         return 1;
     }
 

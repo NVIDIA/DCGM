@@ -18,6 +18,9 @@ set(CMAKE_CXX_VISIBILITY_PRESET default)
 set(CMAKE_C_VISIBILITY_PRESET default)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
 
+find_package(Yaml REQUIRED)
+find_package(fmt REQUIRED)
+
 add_compile_definitions(NVML_NO_UNVERSIONED_FUNC_DEFS)
 
 add_library(nvmli_public OBJECT)
@@ -42,16 +45,20 @@ set_target_properties(nvml_injection PROPERTIES LINKER_LANGUAGE CXX)
 target_sources(
     nvml_injection
     PRIVATE
-        AttributeQueryInfo.cpp
         CompoundValue.cpp
-        FieldHelpers.cpp
         InjectedNvml.cpp
+        NvmlFuncReturn.cpp
+        NvmlReturnDeserializer.cpp
         PassThruNvml.cpp
 )
 
 target_link_libraries(nvml_injection PUBLIC nvmli_interface)
 target_link_libraries(nvml_injection PRIVATE nvmli_public sdk_nvml_interface)
+target_link_libraries(nvml_injection PRIVATE ${YAML_STATIC_LIBS})
+target_link_libraries(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/nvml-injection.linux_defs)
+target_link_libraries(nvml_injection PRIVATE fmt::fmt)
 target_include_directories(nvml_injection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(nvml_injection PRIVATE ${YAML_INCLUDE_DIR})
 
 set(NVMLI_VERSION 1.0)
 set(NVMLI_MAJOR_VERSION 1)

@@ -22,7 +22,7 @@ class DcgmDiag:
     }
 
     def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, 
-                 version=dcgm_structs.dcgmRunDiag_version):
+                 version=dcgm_structs.dcgmRunDiag_version7):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
             raise ValueError("'%s' is not a valid version for dcgmRunDiag." % version)

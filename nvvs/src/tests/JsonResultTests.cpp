@@ -138,6 +138,7 @@ DcgmNs::Nvvs::Json::Test GenerateRandomTest()
     Test test {
         .name    = "test name",
         .results = { GenerateRandomResult(), GenerateRandomResult(), GenerateRandomResult() },
+        .auxData = std::nullopt,
     };
 
     return test;

@@ -15,6 +15,8 @@
  */
 #include "memtest_wrapper.h"
 
+#include "DcgmStringHelpers.h"
+
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
@@ -46,19 +48,23 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 
     unsigned int paramCount = 0;
 
+    info->numValidTests = 1;
+
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->validParameters[paramCount].parameterName,
-                 sizeof(info->validParameters[paramCount].parameterName),
+        snprintf(info->tests[0].validParameters[paramCount].parameterName,
+                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
                  "%s",
                  parameterNames[paramCount]);
-        info->validParameters[paramCount].parameterType = paramTypes[paramCount];
+        info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
 
-    info->numValidParameters = paramCount;
+    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(MEMTEST_PLUGIN_NAME)>(info->tests[0].testeName,
+                                                                              MEMTEST_PLUGIN_NAME);
+    info->tests[0].numValidParameters = paramCount;
 
     snprintf(info->pluginName, sizeof(info->pluginName), "%s", MEMTEST_PLUGIN_NAME);
-    memset(info->testGroup, 0, sizeof(info->testGroup));
+    memset(info->tests[0].testGroup, 0, sizeof(info->tests[0].testGroup));
     snprintf(info->description, sizeof(info->description), "This plugin will test the memory health of a given GPU.");
 
     return DCGM_ST_OK;
@@ -78,17 +84,18 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     return DCGM_ST_OK;
 }
 
-void RunTest(unsigned int timeout,
+void RunTest(const char *testName,
+             unsigned int timeout,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
              void *userData)
 {
     auto memtestp = (MemtestPlugin *)userData;
-    memtestp->Go(numParameters, testParameters);
+    memtestp->Go(testName, numParameters, testParameters);
 }
 
 
-void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
+void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
     if (customStats != nullptr)
     {
@@ -97,10 +104,10 @@ void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
     }
 }
 
-void RetrieveResults(dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
 {
     auto memtestp = (MemtestPlugin *)userData;
-    memtestp->GetResults(results);
+    memtestp->GetResults(testName, results);
 }
 
 } // END extern "C"

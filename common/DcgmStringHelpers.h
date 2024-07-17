@@ -80,6 +80,8 @@ void SafeCopyTo(char (&dst)[N], char const *src)
     *result.out = '\0';
 }
 
+std::string dcgmStrToLower(std::string s);
+
 namespace DcgmNs
 {
 /*****************************************************************************/

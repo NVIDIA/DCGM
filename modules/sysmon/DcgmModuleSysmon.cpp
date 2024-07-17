@@ -277,21 +277,36 @@ dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
             else
             {
                 EnableMonitoring(SYSMON_MONITORING_SWITCH_UTILIZATION);
-                log_debug("Adding watcher eg {} eid {} field {} updateInterval {} maxAge {}",
+                log_debug("Adding watcher eg {} eid {} field {} updateInterval {} maxAge {} maxKeepSamples {}",
                           entity.entityGroupId,
                           entity.entityId,
                           msg->fieldIds[fieldIndex],
                           msg->updateIntervalUsec,
-                          msg->maxKeepAge);
+                          msg->maxKeepAge,
+                          msg->maxKeepSamples);
             }
+
+            using namespace DcgmNs::Timelib;
+            using DcgmNs::Utils::GetMaxAge;
+            using std::chrono::milliseconds, std::chrono::microseconds, std::chrono::duration;
+            const double slackMultiplier = 2; // 200% slack
+            const timelib64_t maxKeepAge = ToLegacyTimestamp(
+                GetMaxAge(duration_cast<milliseconds>(FromLegacyTimestamp<microseconds>(msg->updateIntervalUsec)),
+                          duration_cast<milliseconds>(duration<double>(msg->maxKeepAge)),
+                          msg->maxKeepSamples,
+                          slackMultiplier));
 
             m_watchTable.AddWatcher(entity.entityGroupId,
                                     entity.entityId,
                                     msg->fieldIds[fieldIndex],
                                     msg->watcher,
                                     msg->updateIntervalUsec,
-                                    msg->maxKeepAge,
+                                    maxKeepAge,
                                     true);
+
+            timelib64_t minSampleAgeUsec, maxSampleAgeUsec;
+            m_watchTable.GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
+            m_maxSampleAge = TimePoint(FromLegacyTimestamp<microseconds>(maxSampleAgeUsec));
         }
     }
 
@@ -317,8 +332,13 @@ dcgmReturn_t DcgmModuleSysmon::ProcessUnwatchFields(UnwatchFieldsMessage msg)
 {
     // Not needed for sysmon watches
     dcgmPostWatchInfo_t *postWatchInfo = nullptr;
+    timelib64_t minSampleAgeUsec, maxSampleAgeUsec;
+    using namespace DcgmNs::Timelib;
+    using std::chrono::microseconds;
 
     m_watchTable.RemoveWatches(msg->watcher, postWatchInfo);
+    m_watchTable.GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
+    m_maxSampleAge = TimePoint(FromLegacyTimestamp<microseconds>(maxSampleAgeUsec));
     return DCGM_ST_OK;
 }
 
@@ -743,25 +763,23 @@ dcgmReturn_t DcgmModuleSysmon::UpdateField(DcgmNs::Timelib::TimePoint now, const
 }
 
 /*****************************************************************************/
-void DcgmModuleSysmon::PruneSamples(DcgmNs::Timelib::TimePoint now, std::chrono::milliseconds maxUpdateInterval)
+void DcgmModuleSysmon::PruneSamples(DcgmNs::Timelib::TimePoint now)
 {
     log_debug("Pruning samples");
 
     using namespace std::ranges;
     using namespace DcgmNs::Timelib;
-    using DcgmNs::Utils::GetMaxAge;
-    using std::chrono::milliseconds;
 
-    const milliseconds maxAgeIn  = milliseconds(0);
-    const int maxKeepSamples     = 2;
-    const double slackMultiplier = 2; // 200% slack
-    milliseconds maxAge          = GetMaxAge(maxUpdateInterval, maxAge, maxKeepSamples, slackMultiplier);
+    TimePoint cutOffMinimumExclusive = TimePoint(now - m_maxSampleAge);
 
-    TimePoint cutOffMinimumExclusive = now - maxAge;
-    auto upperBound                  = m_utilizationSamples.upper_bound(cutOffMinimumExclusive);
+    auto upperBound = m_utilizationSamples.upper_bound(cutOffMinimumExclusive);
+
+    if (upperBound == m_utilizationSamples.end())
+    {
+        log_debug("Pruning all samples (upper_bound > now)");
+    }
 
     m_utilizationSamples.erase(m_utilizationSamples.begin(), upperBound);
-
     log_debug("Pruned old samples. utilizationSamples.size = {}", m_utilizationSamples.size());
 }
 
@@ -814,7 +832,7 @@ void DcgmModuleSysmon::UpdateFields(timelib64_t &nextUpdateTimeUsec)
     }
 
     RecordMetrics(ToLegacyTimestamp(now), toUpdate);
-    PruneSamples(now, FromLegacyTimestamp<milliseconds>(maxUpdateIntervalUsec));
+    PruneSamples(now);
 }
 
 /*****************************************************************************/

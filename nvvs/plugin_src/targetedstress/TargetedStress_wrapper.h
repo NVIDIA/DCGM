@@ -31,6 +31,7 @@
 #include <DcgmRecorder.h>
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
+#include <PluginStrings.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 
@@ -104,7 +105,7 @@ public:
     double usecInGemm;   /* How long (microseconds) have we spent running gemm */
 
     CPerfDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(ndi, pciBusId, p)
+        : PluginDevice(TS_PLUGIN_NAME, ndi, pciBusId, p)
         , Nstreams(0)
         , allocatedCublasHandle(0)
         , cublasHandle(0)
@@ -188,7 +189,9 @@ public:
     ~ConstantPerf();
 
     /*************************************************************************/
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters);
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters);
 
     /*************************************************************************/
     /*

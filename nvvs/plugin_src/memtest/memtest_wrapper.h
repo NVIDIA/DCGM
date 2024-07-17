@@ -43,7 +43,9 @@ public:
     {
         throw std::runtime_error("Not implemented in this test.");
     }
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters) override;
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters) override;
 
     dcgmHandle_t GetHandle() const;
 

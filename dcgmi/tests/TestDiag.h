@@ -47,7 +47,7 @@ private:
      *
      **/
     int TestPopulateGpuList();
-    int TestHelperGetPluginName();
+    int TestHelperGetTestName();
     int TestHelperJsonAddResult();
     int TestHelperJsonAddBasicTests();
     int TestHelperJsonBuildOutput();

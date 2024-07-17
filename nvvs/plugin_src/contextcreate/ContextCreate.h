@@ -25,6 +25,7 @@
 #include "timelib.h"
 #include <CudaCommon.h>
 #include <NvvsStructs.h>
+#include <PluginStrings.h>
 
 #define CTX_CREATED 0x0
 #define CTX_SKIP    0x1
@@ -37,7 +38,7 @@ public:
     CUcontext cuContext {};
 
     ContextCreateDevice(unsigned int ndi, const char *pciBusId, Plugin *p, DcgmHandle &handle)
-        : PluginDevice(ndi, pciBusId, p)
+        : PluginDevice(CTXCREATE_PLUGIN_NAME, ndi, pciBusId, p)
         , cuContext(0)
     {
         char buf[256] = { 0 };

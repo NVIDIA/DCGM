@@ -211,6 +211,8 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(PULSE_TEST_PLUGIN_NAME);
         case DCGM_EUD_TEST_INDEX:
             return std::string(EUD_PLUGIN_NAME);
+        case DCGM_CPU_EUD_TEST_INDEX:
+            return std::string(EUD_CPU_EUD_TEST_NAME);
         default:
             return std::string("Unknown");
     }
@@ -268,6 +270,10 @@ dcgmPerGpuTestIndices_t GetTestIndex(const std::string name)
     else if (testName == EUD_PLUGIN_NAME)
     {
         return DCGM_EUD_TEST_INDEX;
+    }
+    else if (testName == EUD_CPU_EUD_TEST_NAME)
+    {
+        return DCGM_CPU_EUD_TEST_INDEX;
     }
 
     return DCGM_UNKNOWN_INDEX;

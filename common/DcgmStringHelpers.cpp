@@ -63,6 +63,12 @@ void dcgmStrncpy(char *destination, const char *source, size_t destinationSize)
     destination[destinationSize - 1] = '\0';
 }
 
+std::string dcgmStrToLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
+    return s;
+}
+
 namespace DcgmNs
 {
 std::vector<std::string_view> Split(std::string_view value, char const separator)

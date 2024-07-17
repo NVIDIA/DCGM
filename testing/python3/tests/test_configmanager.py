@@ -59,6 +59,7 @@ def helper_investigate_status(statusHandle):
 '''
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_dcgm_config_embedded_get_devices(handle):
     """
     Verifies that DCGM Engine returns list of devices
@@ -70,6 +71,7 @@ def test_dcgm_config_embedded_get_devices(handle):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
+@test_utils.run_only_with_nvml()
 def test_dcgm_config_standalone_get_devices(handle):
     """
     Verifies that DCGM Engine returns list of devices

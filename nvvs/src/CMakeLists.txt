@@ -60,6 +60,7 @@ target_sources(nvvs_without_main_objects
         TestParameters.cpp
         Allowlist.cpp
         PluginLib.cpp
+        PluginTest.cpp
         PluginCoreFunctionality.cpp
         CustomStatHolder.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/FallbackDiagConfig.cpp

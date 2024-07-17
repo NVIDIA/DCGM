@@ -153,3 +153,8 @@ void CompoundValue::Clear()
     m_valueCount = 0;
     m_values.clear();
 }
+
+const std::vector<InjectionArgument> &CompoundValue::RawValues()
+{
+    return m_values;
+}

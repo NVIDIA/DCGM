@@ -283,6 +283,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "The DCGM diagnostic was killed by a signal";
         case DCGM_ST_ALREADY_INITIALIZED:
             return "The object has already been initialized";
+        case DCGM_ST_NVML_NOT_LOADED:
+            return "Cannot perform the requested operation because NVML doesn't exist on this system.";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

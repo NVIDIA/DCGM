@@ -47,13 +47,13 @@ TEST_CASE("PluginLib: General")
     TestParameters tp;
     tp.AddDouble(PS_LOGFILE_TYPE, 0.0);
     setenv("result", "pass", 1);
-    pl.RunTest(10, &tp);
+    pl.RunTest("test", 10, &tp);
 
-    nvvsPluginResult_t result = pl.GetResult();
+    nvvsPluginResult_t result = pl.GetResult("test");
     CHECK(result == NVVS_RESULT_PASS);
 
     setenv("result", "fail", 1);
-    pl.RunTest(10, &tp);
-    result = pl.GetResult();
+    pl.RunTest("test", 10, &tp);
+    result = pl.GetResult("test");
     CHECK(result == NVVS_RESULT_FAIL);
 }

@@ -543,9 +543,9 @@ def helperDiagCheckReturn(ret, response):
 
 @ensure_byte_strings()
 def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version7):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
     runDiagInfo.version = runDiagVersion
-    response.version = dcgm_structs.dcgmDiagResponse_version9
+    response.version = dcgm_structs.dcgmDiagResponse_version10
     fn = dcgmFP("dcgmActionValidate_v2")
     ret = fn(dcgm_handle, byref(runDiagInfo), byref(response))
 
@@ -553,9 +553,9 @@ def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.
 
 @ensure_byte_strings()
 def dcgmActionValidate(dcgm_handle, group_id, validate):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
-    response.version = dcgm_structs.dcgmDiagResponse_version9
-    
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
+    response.version = dcgm_structs.dcgmDiagResponse_version10
+
     # Put the group_id and validate into a dcgmRunDiag struct
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
     runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
@@ -569,8 +569,8 @@ def dcgmActionValidate(dcgm_handle, group_id, validate):
 
 @ensure_byte_strings()
 def dcgmRunDiagnostic(dcgm_handle, group_id, diagLevel):
-    response = dcgm_structs.c_dcgmDiagResponse_v9()
-    response.version = dcgm_structs.dcgmDiagResponse_version9
+    response = dcgm_structs.c_dcgmDiagResponse_v10()
+    response.version = dcgm_structs.dcgmDiagResponse_version10
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
 

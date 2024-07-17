@@ -23,26 +23,31 @@ class WrapperTestFramework : protected TestFramework
 {
 public:
     WrapperTestFramework(bool jsonOutput, std::unique_ptr<GpuSet> &gpuSet);
-    std::string WrapperGetPluginDir();
+    std::string WrapperGetPluginUsingDriverDir();
     std::string WrapperGetPluginBaseDir();
-    std::string WrapperGetPluginDirExtension() const;
+    std::string WrapperGetPluginCudaDirExtension() const;
+    std::string WrapperGetPluginCudalessDir();
 };
 
 WrapperTestFramework::WrapperTestFramework(bool jsonOutput, std::unique_ptr<GpuSet> &gpuSet)
     : TestFramework(jsonOutput, gpuSet.get())
 {}
 
-std::string WrapperTestFramework::WrapperGetPluginDir()
+std::string WrapperTestFramework::WrapperGetPluginUsingDriverDir()
 {
-    return GetPluginDir();
+    return GetPluginUsingDriverDir().value_or("");
 }
 std::string WrapperTestFramework::WrapperGetPluginBaseDir()
 {
     return GetPluginBaseDir();
 }
-std::string WrapperTestFramework::WrapperGetPluginDirExtension() const
+std::string WrapperTestFramework::WrapperGetPluginCudaDirExtension() const
 {
-    return GetPluginDirExtension();
+    return GetPluginCudaDirExtension().value_or("");
+}
+std::string WrapperTestFramework::WrapperGetPluginCudalessDir()
+{
+    return GetPluginCudalessDir();
 }
 
 /*
@@ -86,4 +91,13 @@ SCENARIO("GetPluginBaseDir returns plugin directory relative to current process'
         CHECK(std::string { "" } == std::string { strerror(errno) });
     }
     CHECK(tf.WrapperGetPluginBaseDir() == pluginDir);
+}
+
+SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
+{
+    const std::string myLocation   = getThisExecsLocation();
+    const std::string pluginDir    = myLocation + "/plugins/cudaless/";
+    std::unique_ptr<GpuSet> gpuSet = std::make_unique<GpuSet>();
+    WrapperTestFramework tf(true, gpuSet);
+    CHECK(tf.WrapperGetPluginCudalessDir() == pluginDir);
 }

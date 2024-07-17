@@ -165,6 +165,13 @@ dcgmReturn_t DcgmHostEngineHandler::HelperSelectGpusByTopology(uint32_t numGpus,
                                                                uint64_t &outputGpus)
 {
     std::vector<unsigned int> gpuIds;
+
+    if (!m_nvmlLoaded)
+    {
+        log_debug("Cannot select GPUs by topology: NVML is not loaded");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     dcgmReturn_t ret = TranslateBitmapToGpuVector(inputGpus, gpuIds);
 
     if (ret == DCGM_ST_OK)
@@ -415,6 +422,12 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
     dcgmAffinity_t *affinity_p;
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned int> dcgmGpuIds;
+
+    if (!m_nvmlLoaded)
+    {
+        log_debug("Cannot get topology: NVML is not loaded");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
 
     if (gpuAffinity.numGpus > DCGM_MAX_NUM_DEVICES)
     {
@@ -1180,6 +1193,12 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn_t dcgmReturn;
     DcgmWatcher watcher(DcgmWatcherTypeHostEngine, DCGM_CONNECTION_ID_NONE);
 
+    if (m_nvmlLoaded == false)
+    {
+        log_debug("Not watching host engine fields because NVML is not loaded.");
+        return DCGM_ST_OK;
+    }
+
     fieldIds.clear();
     fieldIds.push_back(DCGM_FI_DEV_ECC_CURRENT); /* Can really only change once per driver reload. NVML caches this so
                                                     it's virtually a no-op */
@@ -1402,6 +1421,11 @@ static void nvHostEngineMigCallback(unsigned int gpuId, void *userData)
 
 void DcgmHostEngineHandler::ShutdownNvml()
 {
+    if (!m_nvmlLoaded)
+    {
+        return;
+    }
+
     if (m_usingInjectionNvml)
     {
 #ifdef INJECTION_LIBRARY_AVAILABLE
@@ -1434,6 +1458,10 @@ void DcgmHostEngineHandler::LoadNvml()
         {
             throw std::runtime_error("Error: Failed to initialize injected NVML");
         }
+        else
+        {
+            m_nvmlLoaded = true;
+        }
     }
 #endif
 
@@ -1441,7 +1469,12 @@ void DcgmHostEngineHandler::LoadNvml()
     {
         if (NVML_SUCCESS != nvmlInit_v2())
         {
-            throw std::runtime_error("Error: Failed to initialize NVML");
+            log_error("Cannot load NVML; DCGM will proceed without managing GPUs.");
+            m_nvmlLoaded = false;
+        }
+        else
+        {
+            m_nvmlLoaded = true;
         }
     }
 }
@@ -1454,6 +1487,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     , m_dcgmIpc(DCGM_HE_NUM_WORKERS)
     , m_hostengineHealth(0)
     , m_usingInjectionNvml(false)
+    , m_nvmlLoaded(false)
 {
     int ret;
     dcgmReturn_t dcgmRet;
@@ -1511,12 +1545,15 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
 
     LoadNvml();
 
+    if (m_nvmlLoaded)
+    {
     char driverVersion[80];
     nvmlSystemGetDriverVersion(driverVersion, 80);
     if (strcmp(driverVersion, DCGM_MIN_DRIVER_VERSION) < 0)
     {
         throw std::runtime_error("Driver " + std::string(driverVersion) + " is unsupported. Must be at least "
                                  + std::string(DCGM_MIN_DRIVER_VERSION) + ".");
+    }
     }
 
     ret = DcgmFieldsInit();
@@ -1528,6 +1565,8 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
 
     unsigned int nvmlDeviceCount = 0;
+    if (m_nvmlLoaded)
+    {
     nvmlReturn_t nvmlSt          = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
     if (nvmlSt != NVML_SUCCESS)
     {
@@ -1543,6 +1582,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
            << " GPUs were found in the system.";
         throw std::runtime_error(ss.str());
     }
+    }
 
     mpCacheManager = new DcgmCacheManager();
     mModuleCoreObj.Initialize(mpCacheManager);
@@ -1551,7 +1591,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
 
     if (params.opMode == DCGM_OPERATION_MODE_AUTO)
     {
-        ret = mpCacheManager->Init(0, 86400.0);
+        ret = mpCacheManager->Init(0, 86400.0, m_nvmlLoaded);
         if (ret != 0)
         {
             std::stringstream ss;
@@ -1561,7 +1601,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
     else
     {
-        ret = mpCacheManager->Init(1, 14400.0);
+        ret = mpCacheManager->Init(1, 14400.0, m_nvmlLoaded);
         if (ret != 0)
         {
             std::stringstream ss;
@@ -2176,6 +2216,12 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     dcgmcm_sample_t samples[Msamples];
     dcgmStatSummaryInt32_t blankSummary32 = { DCGM_INT32_BLANK, DCGM_INT32_BLANK, DCGM_INT32_BLANK };
     dcgmStatSummaryInt64_t blankSummary64 = { DCGM_INT64_BLANK, DCGM_INT64_BLANK, DCGM_INT64_BLANK };
+
+    if (!m_nvmlLoaded)
+    {
+        log_debug("Cannot get process stats: NVML is not loaded");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
 
     /* Sanity check the incoming parameters */
     if (pidInfo->pid == 0)

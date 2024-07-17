@@ -13,25 +13,17 @@
 # limitations under the License.
 declare_nvvs_plugin(common .)
 
-set(LOCAL_NVVS_PLUGINS "")
+add_library(pluginCommon SHARED)
+nvvs_plugin_srcs(pluginCommon)
+set_target_properties(pluginCommon PROPERTIES LIBRARY_OUTPUT_NAME "pluginCommon")
+update_lib_ver(pluginCommon)
+install(TARGETS pluginCommon
+    LIBRARY DESTINATION ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cudaless
+    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    COMPONENT DCGM)
+set_target_properties(pluginCommon PROPERTIES INSTALL_TO_DIR ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cudaless)
 
-macro(common_plugin CUDA_VER)
-    add_library(pluginCommon_${CUDA_VER} SHARED)
-    nvvs_plugin_srcs(pluginCommon_${CUDA_VER})
-    target_include_directories(pluginCommon_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_INCLUDE_DIR})
-    target_link_libraries(pluginCommon_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
-    target_link_libraries(pluginCommon_${CUDA_VER} PUBLIC ${CUDA${CUDA_VER}_LIBS})
-    set_target_properties(pluginCommon_${CUDA_VER} PROPERTIES LIBRARY_OUTPUT_NAME "pluginCommon")
-    update_lib_ver(pluginCommon_${CUDA_VER})
-    set_target_properties(pluginCommon_${CUDA_VER} PROPERTIES INSTALL_TO_DIR ${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda${CUDA_VER})
-    set(LOCAL_NVVS_PLUGINS "${LOCAL_NVVS_PLUGINS};pluginCommon_${CUDA_VER}" PARENT_SCOPE)
-endmacro()
-
-foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
-    add_subdirectory(Cuda${CUDA_VER})
-endforeach()
-
-set(NVVS_PLUGINS "${NVVS_PLUGINS};${LOCAL_NVVS_PLUGINS}" PARENT_SCOPE)
+set(NVVS_PLUGINS "${NVVS_PLUGINS};pluginCommon" PARENT_SCOPE)
 
 add_library(nvvs_plugins_common_objects OBJECT)
 target_sources(nvvs_plugins_common_objects PRIVATE PluginCommon.cpp)

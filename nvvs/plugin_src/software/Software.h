@@ -35,7 +35,9 @@ public:
         delete tp;
     }
 
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters);
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters);
     void setArgs(std::string args)
     {
         myArgs = args;

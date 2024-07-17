@@ -260,6 +260,7 @@ def test_sdk_field_value_sample_standalone(handle, gpuIds):
     
 @test_utils.run_with_standalone_host_engine(timeout=SAMPLE_SCRIPT_TIMEOUT)
 @test_utils.run_only_as_root()
+@test_utils.run_only_with_nvml()
 def test_sdk_example_script_smoke_standalone_auto():
     """
     Smoke test ensuring that the example script for using dcgm does not fail
@@ -271,6 +272,7 @@ def test_sdk_example_script_smoke_standalone_auto():
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
 
 @test_utils.run_only_as_root()
+@test_utils.run_only_with_nvml()
 def test_sdk_example_script_smoke_embedded_auto():
     """
     Smoke test ensuring that the example script for using dcgm does not fail
@@ -282,6 +284,7 @@ def test_sdk_example_script_smoke_embedded_auto():
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
 
 @test_utils.run_only_as_root()
+@test_utils.run_only_with_nvml()
 def test_sdk_example_script_smoke_embedded_manual():
     """
     Smoke test ensuring that the example script for using dcgm does not fail 

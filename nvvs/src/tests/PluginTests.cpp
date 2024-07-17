@@ -24,7 +24,9 @@
 
 class UnitTestPlugin : public Plugin
 {
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters) override
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters) override
     {}
 };
 
@@ -32,33 +34,34 @@ TEST_CASE("Plugin Results Reporting")
 {
     UnitTestPlugin p;
     dcgmDiagResults_t results {};
+    std::string testName = "unit_test_plugin";
 
     DcgmError d { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, 0, 1);
-    p.AddError(d);
+    p.AddError(testName, d);
     memset(&results, 0, sizeof(results));
 
-    CHECK(p.GetResults(nullptr) == DCGM_ST_BADPARAM);
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(p.GetResults(testName, nullptr) == DCGM_ST_BADPARAM);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 1);
     CHECK(results.errors[0].gpuId == -1);
 
     DcgmError d1 { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d1, 10000, 0, 95);
     const unsigned int GPU_ID = 0;
-    p.AddErrorForGpu(GPU_ID, d1);
+    p.AddErrorForGpu(testName, GPU_ID, d1);
     memset(&results, 0, sizeof(results));
 
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 2); // it will still have the first error
     CHECK(results.errors[1].gpuId == GPU_ID);
 
     DcgmError d2 { 0 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d2, 10000, 0, 95);
-    p.AddErrorForGpu(0, d2);
+    p.AddErrorForGpu(testName, 0, d2);
     memset(&results, 0, sizeof(results));
 
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 3); // it'll still have the first two errors
     CHECK(results.errors[2].gpuId == GPU_ID);
 }
@@ -66,22 +69,23 @@ TEST_CASE("Plugin Results Reporting")
 TEST_CASE("Plugin Duplicate Errors")
 {
     UnitTestPlugin p;
-    unsigned int gpuId = 0;
+    unsigned int gpuId   = 0;
+    std::string testName = "unit_test_plugin";
     DcgmError d { gpuId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, 99, gpuId, 95);
     DcgmError dDup { gpuId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup, 99, gpuId, 95);
-    p.AddErrorForGpu(gpuId, d);
-    p.AddErrorForGpu(gpuId, dDup);
+    p.AddErrorForGpu(testName, gpuId, d);
+    p.AddErrorForGpu(testName, gpuId, dDup);
 
     dcgmDiagResults_t results {};
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 1); // it shouldn't have added the second error
     CHECK(results.errors[0].gpuId == gpuId);
 
-    p.AddError(d);
-    p.AddError(dDup);
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    p.AddError(testName, d);
+    p.AddError(testName, dDup);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 2);        // it should only have processed the first AddError, plus the earlier error
     CHECK(results.errors[0].gpuId == -1); // it will put the global error before the GPU specific error
     CHECK(results.errors[1].gpuId == gpuId);
@@ -91,9 +95,9 @@ TEST_CASE("Plugin Duplicate Errors")
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d2, 99, gpuId2, 95);
     DcgmError dDup2 { gpuId2 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup2, 99, gpuId2, 95);
-    p.AddErrorForGpu(gpuId2, d2);
-    p.AddErrorForGpu(gpuId2, dDup2);
-    CHECK(p.GetResults(&results) == DCGM_ST_OK);
+    p.AddErrorForGpu(testName, gpuId2, d2);
+    p.AddErrorForGpu(testName, gpuId2, dDup2);
+    CHECK(p.GetResults(testName, &results) == DCGM_ST_OK);
     CHECK(results.numErrors == 3);        // it should add the duplicate error once for the new GPU
     CHECK(results.errors[0].gpuId == -1); // it will put the global error before the GPU specific error
     CHECK(results.errors[1].gpuId == gpuId);
@@ -113,22 +117,23 @@ TEST_CASE("Optional Errors")
     DcgmError globalError2 { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(
         DCGM_FR_HOSTENGINE_CONN, globalError2, "At Rex Kwon Do, we use the buddy system. No more flyin solo!");
+    std::string const testName = "capoo";
 
-    p.AddErrorForGpu(gpuId, gpuError);
-    p.AddOptionalError(globalError1);
-    p.AddOptionalError(globalError2);
+    p.AddErrorForGpu(testName, gpuId, gpuError);
+    p.AddOptionalError(testName, globalError1);
+    p.AddOptionalError(testName, globalError2);
 
     dcgmDiagResults_t results1 {};
     dcgmDiagResults_t results2 {};
 
-    p.GetResults(&results1);
+    p.GetResults(testName, &results1);
     CHECK(results1.numErrors == 1);
     CHECK(static_cast<unsigned int>(results1.errors[0].gpuId) == gpuId);
     CHECK(results1.errors[0].code == DCGM_FR_VOLATILE_DBE_DETECTED);
 
-    p2.AddOptionalError(globalError1);
-    p2.AddOptionalError(globalError2);
-    p2.GetResults(&results2);
+    p2.AddOptionalError(testName, globalError1);
+    p2.AddOptionalError(testName, globalError2);
+    p2.GetResults(testName, &results2);
     CHECK(results2.numErrors == 2);
     CHECK(results2.errors[0].gpuId == -1);
     CHECK(results2.errors[0].code == DCGM_FR_INTERNAL);

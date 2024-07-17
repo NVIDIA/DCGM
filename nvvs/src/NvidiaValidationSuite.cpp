@@ -370,7 +370,6 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     stopTimer();
     */
 
-    CheckDriverVersion();
 
     if (configFile.size() > 0)
         parser->setConfigFile(configFile);
@@ -399,19 +398,31 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     parser->legacyGlobalStructHelper();
 
     std::vector<std::unique_ptr<GpuSet>> &gpuSets = parser->getGpuSetVec();
+    const bool hasSupportedGpus                   = !gpuSets.empty() && gpuSets[0]->properties.present;
 
-    EnumerateAllVisibleGpus();
+    if (hasSupportedGpus)
+    {
+        CheckDriverVersion();
+        EnumerateAllVisibleGpus();
+    }
 
     if (listGpus)
     {
-        std::cout << "Supported GPUs available:" << std::endl;
-
-        for (std::vector<Gpu *>::iterator it = m_gpuVect.begin(); it != m_gpuVect.end(); ++it)
+        if (hasSupportedGpus)
         {
-            std::cout << "\t"
-                      << "[" << (*it)->getDevicePciBusId() << "] -- " << (*it)->getDeviceName() << std::endl;
+            std::cout << "Supported GPUs available:" << std::endl;
+
+            for (std::vector<Gpu *>::iterator it = m_gpuVect.begin(); it != m_gpuVect.end(); ++it)
+            {
+                std::cout << "\t"
+                          << "[" << (*it)->getDevicePciBusId() << "] -- " << (*it)->getDeviceName() << std::endl;
+            }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
+        else
+        {
+            std::cout << "No GPUs available" << std::endl;
+        }
         return "";
     }
 
@@ -423,7 +434,10 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         }
     }
 
-    InitializeAndCheckGpuObjs(gpuSets);
+    if (hasSupportedGpus)
+    {
+        InitializeAndCheckGpuObjs(gpuSets);
+    }
 
     std::string errorString = BuildCommonGpusList(gpuIndices, m_gpuVect);
     if (errorString.empty() == false)
@@ -450,8 +464,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
         for (std::vector<Test *>::iterator it = testVect.begin(); it != testVect.end(); ++it)
         {
-            if (it + 1 != testVect.end()) // last object is a "skip" object that does not need to be displayed
-                std::cout << "\t" << (*it)->GetTestName() << " -- " << (*it)->getTestDesc() << std::endl;
+            std::cout << "\t" << (*it)->GetTestName() << " -- " << (*it)->getTestDesc() << std::endl;
         }
         std::cout << std::endl;
         return "";
@@ -755,7 +768,7 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                 /*
                  * When diag module runs EUD with enabled service-account, the EUD is the only test in the command line.
                  */
-                if (first_pass == true && compareTestName != "eud")
+                if (first_pass == true && compareTestName != "eud" && compareTestName != "cpu_eud")
                 {
                     fillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, gpuSet.get());
                     first_pass = false;
@@ -769,7 +782,9 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
 
                     // Add each test from the list
                     for (size_t i = 0; i < groups[requestedTestName].size(); i++)
-                        gpuSets[i]->AddTestObject(CUSTOM_TEST_OBJS, groups[requestedTestName][i]);
+                    {
+                        gpuSet->AddTestObject(CUSTOM_TEST_OBJS, groups[requestedTestName][i]);
+                    }
                 }
                 else // now check individual tests
                 {
@@ -789,16 +804,18 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             TestParameters *tp = new TestParameters();
                             tpVect.push_back(tp); // purely for accounting when we go to cleanup
 
-
-                            m_allowlist->getDefaultsByDeviceId(
-                                compareRequestedName, gpuSet->gpuObjs[0]->getDeviceId(), tp);
+                            if (!gpuSet->gpuObjs.empty())
+                            {
+                                m_allowlist->getDefaultsByDeviceId(
+                                    compareRequestedName, gpuSet->gpuObjs[0]->getDeviceId(), tp);
+                            }
 
                             if (nvvsCommon.parms.size() > 0)
                             {
                                 overrideParameters(tp, compareRequestedName);
                             }
 
-                            tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetTestName());
+                            tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
                             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
 
                             (*testIt)->pushArgVectorElement(Test::NVVS_CLASS_CUSTOM, tp);
@@ -923,7 +940,12 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                     overrideParameters(tp, *it);
             }
 
-            tp->AddString(PS_PLUGIN_NAME, (*it));
+            std::string pluginName = *it;
+            if (testClass != Test::NVVS_CLASS_SOFTWARE)
+            {
+                pluginName = m_tf->GetPluginNameFromTestName(*it);
+            }
+            tp->AddString(PS_PLUGIN_NAME, pluginName);
             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
             tp->AddDouble(PS_SUITE_LEVEL, (double)suite);
 

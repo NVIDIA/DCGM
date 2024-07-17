@@ -79,6 +79,10 @@
 #define DCGM_CORE_SR_NVML_INJECT_FIELD_VALUE          56 /* Inject a value into injection NVML */
 #define DCGM_CORE_SR_NVML_INJECT_DEVICE               57 /* Inject a value for an NVML device */
 #define DCGM_CORE_SR_PAUSE_RESUME                     58 /* Pause/Resume all metrics collection */
+#define DCGM_CORE_SR_NVML_INJECT_DEVICE_FOR_FOLLOWING_CALLS 59 /* Inject a series of values for an NVML device */
+#define DCGM_CORE_SR_NVML_INJECTED_DEVICE_RESET             60 /* Reset injected values for an NVML device */
+#define DCGM_CORE_SR_GET_NVML_INJECT_FUNC_CALL_COUNT        61 /* Get counts of nvml injected function calls */
+#define DCGM_CORE_SR_RESET_NVML_FUNC_CALL_COUNT             62 /* Reset counts of nvml injected function calls */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -648,6 +652,55 @@ typedef struct
 #define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version1
 
 typedef dcgm_core_msg_nvml_inject_device_v1 dcgm_core_msg_nvml_inject_device_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;              /* Command header */
+    dcgmMsgNvmlInjectDeviceForFollowingCalls_v1 info; /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_inject_device_for_following_calls_v1;
+
+#define dcgm_core_msg_nvml_inject_device_for_following_calls_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_for_following_calls_v1, 1)
+#define dcgm_core_msg_nvml_inject_device_for_following_calls_version \
+    dcgm_core_msg_nvml_inject_device_for_following_calls_version1
+
+typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v1 dcgm_core_msg_nvml_inject_device_for_following_calls_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;    /* Command header */
+    dcgmMsgNvmlInjectedDeviceReset_v1 info; /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_injected_device_reset_v1;
+
+#define dcgm_core_msg_nvml_injected_device_reset_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_injected_device_reset_v1, 1)
+#define dcgm_core_msg_nvml_injected_device_reset_version dcgm_core_msg_nvml_injected_device_reset_version1
+
+typedef dcgm_core_msg_nvml_injected_device_reset_v1 dcgm_core_msg_nvml_injected_device_reset_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;       /* Command header */
+    dcgmMsgGetNvmlInjectFuncCallCount_v1 info; /* IN/OUT user request to process */
+} dcgm_core_msg_get_nvml_inject_func_call_count_v1;
+
+#define dcgm_core_msg_get_nvml_inject_func_call_count_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_get_nvml_inject_func_call_count_v1, 1)
+#define dcgm_core_msg_get_nvml_inject_func_call_count_version dcgm_core_msg_get_nvml_inject_func_call_count_version1
+
+typedef dcgm_core_msg_get_nvml_inject_func_call_count_v1 dcgm_core_msg_get_nvml_inject_func_call_count_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_reset_nvml_inject_func_call_count_v1;
+
+#define dcgm_core_msg_reset_nvml_inject_func_call_count_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_reset_nvml_inject_func_call_count_v1, 1)
+#define dcgm_core_msg_reset_nvml_inject_func_call_count_version dcgm_core_msg_reset_nvml_inject_func_call_count_version1
+
+typedef dcgm_core_msg_reset_nvml_inject_func_call_count_v1 dcgm_core_msg_reset_nvml_inject_func_call_count_t;
+
 #endif
 
 DCGM_CASSERT(dcgm_core_msg_client_disconnect_version1 == (long)0x100001c, 1);
@@ -695,3 +748,9 @@ DCGM_CASSERT(dcgm_core_msg_fieldgroup_get_all_version == (long)0x1008428, 1);
 DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version == (long)0x1011f24, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version1 == (long)0x1000578, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version == (long)0x1000578, 1);
+
+#ifdef INJECTION_LIBRARY_AVAILABLE
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version1 == (long)0x1009ba0, 1);
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_for_following_calls_version1 == (long)0x10305a0, 1);
+DCGM_CASSERT(dcgm_core_msg_nvml_injected_device_reset_version1 == (long)0x1000020, 1);
+#endif

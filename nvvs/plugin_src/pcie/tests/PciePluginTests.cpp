@@ -84,28 +84,28 @@ TEST_CASE("Pcie: pcie_check_nvlink_status_expected")
     dcgmDiagResults_t results  = {};
     bg1.m_gpuNvlinksExpectedUp = 1;
     pcie_check_nvlink_status(&bg1, gpuInfo);
-    bg1.GetResults(&results);
+    bg1.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 0);
 
     memset(&results, 0, sizeof(results));
     BusGrind bg2               = BusGrind(handle, &gpuInfo);
     bg2.m_gpuNvlinksExpectedUp = 2;
     pcie_check_nvlink_status(&bg2, gpuInfo);
-    bg2.GetResults(&results);
+    bg2.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 1);
 
     memset(&results, 0, sizeof(results));
     BusGrind bg3                    = BusGrind(handle, &gpuInfo);
     bg3.m_nvSwitchNvlinksExpectedUp = 1;
     pcie_check_nvlink_status(&bg3, gpuInfo);
-    bg3.GetResults(&results);
+    bg3.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 0);
 
     memset(&results, 0, sizeof(results));
     BusGrind bg4                    = BusGrind(handle, &gpuInfo);
     bg4.m_nvSwitchNvlinksExpectedUp = 2;
     pcie_check_nvlink_status(&bg4, gpuInfo);
-    bg4.GetResults(&results);
+    bg4.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 1);
 }
 
@@ -177,7 +177,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     bg.m_testParameters = tp;
     unsigned int ret    = ProcessChildrenOutputs(childrenInfo, bg, groupName);
     CHECK(ret == 1); // we should have one failed test
-    bg.GetResults(&results);
+    bg.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 1);
     CHECK(results.errors[0].gpuId == 4);
 
@@ -193,7 +193,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg2, groupName);
     CHECK(ret == 1); // we should have one failed test due to low bandwidth
-    bg2.GetResults(&results);
+    bg2.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 1);
     CHECK(results.errors[0].gpuId == 7);
 
@@ -208,7 +208,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg3, groupName);
     CHECK(ret == 0); // we shouldn't have any failures
-    bg3.GetResults(&results);
+    bg3.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 0);
 
     BusGrind bg4(handle, &gpuInfo);
@@ -222,7 +222,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg4, groupName);
     CHECK(ret == 1);
-    bg4.GetResults(&results);
+    bg4.GetResults(PCIE_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 1);        // we get one failure for bad json
     CHECK(results.errors[0].gpuId == -1); // this error isn't tied to a GPU id
 }

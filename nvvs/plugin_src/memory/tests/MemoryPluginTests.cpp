@@ -41,7 +41,7 @@ TEST_CASE("mem_init")
     REQUIRE(mem_init(&memGlobals, gpuList.gpus[1]) == 1);
 
     dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = mem.GetResults(&results);
+    dcgmReturn_t ret          = mem.GetResults(MEMORY_PLUGIN_NAME, &results);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(results.numErrors == 1);
     CHECK(results.errors[0].gpuId == 1);

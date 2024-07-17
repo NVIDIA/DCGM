@@ -33,10 +33,12 @@
 #include "dcgm_policy_structs.h"
 #include "dcgm_profiling_structs.h"
 #include "dcgm_sysmon_structs.h"
+#include "nvml_injection.h"
 #include <DcgmStringHelpers.h>
 
 #include <fmt/core.h>
 
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -2900,16 +2902,44 @@ dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgm
     return dcgmReturn;
 }
 
-dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
-                                 dcgmRunDiag_t *drd,
-                                 dcgmPolicyAction_t action,
-                                 dcgmDiagResponse_t *response)
-{
-    std::unique_ptr<dcgm_diag_msg_run_v7> msg7 = std::make_unique<dcgm_diag_msg_run_v7>();
-    std::unique_ptr<dcgm_diag_msg_run_v6> msg6 = std::make_unique<dcgm_diag_msg_run_v6>();
-    std::unique_ptr<dcgm_diag_msg_run_v5> msg5 = std::make_unique<dcgm_diag_msg_run_v5>();
-    dcgmReturn_t dcgmReturn;
+#define EIGHT_HOURS_IN_MS 28800000
 
+template <typename MsgType>
+static inline std::pair<dcgmRunDiag_v7 *, dcgm_module_command_header_t *> helperInitDiagMsgRun(
+    MsgType *msg,
+    unsigned int const msgVersion,
+    dcgmPolicyAction_t action)
+{
+    memset(msg, 0, sizeof(*msg));
+    msg->header.length  = sizeof(*msg);
+    msg->header.version = msgVersion;
+    msg->action         = action;
+
+    switch (msg->header.version)
+    {
+        case dcgm_diag_msg_run_version5:
+            msg->diagResponse.version = dcgmDiagResponse_version7;
+            break;
+        case dcgm_diag_msg_run_version6:
+            msg->diagResponse.version = dcgmDiagResponse_version8;
+            break;
+        case dcgm_diag_msg_run_version7:
+            msg->diagResponse.version = dcgmDiagResponse_version9;
+            break;
+        case dcgm_diag_msg_run_version8:
+        default:
+            msg->diagResponse.version = dcgmDiagResponse_version10;
+            break;
+    }
+
+    return std::make_pair(&(msg->runDiag), &(msg->header));
+}
+
+dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
+                                 dcgmRunDiag_v7 *drd,
+                                 dcgmPolicyAction_t action,
+                                 dcgmDiagResponse_v10 *response)
+{
     if (!drd || !response)
     {
         log_error("drd {} or response {} was NULL.", (void *)drd, (void *)response);
@@ -2924,43 +2954,35 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             // unknown drd version
             log_error("dcgmRunDiag version mismatch {:X} != {:X} and isn't in accepted list",
                       drd->version,
-                      dcgmRunDiag_version);
+                      dcgmRunDiag_version7);
             return DCGM_ST_VER_MISMATCH;
     }
 
+    std::unique_ptr<dcgm_diag_msg_run_v8> msg8 = std::make_unique<dcgm_diag_msg_run_v8>();
+    std::unique_ptr<dcgm_diag_msg_run_v7> msg7 = std::make_unique<dcgm_diag_msg_run_v7>();
+    std::unique_ptr<dcgm_diag_msg_run_v6> msg6 = std::make_unique<dcgm_diag_msg_run_v6>();
+    std::unique_ptr<dcgm_diag_msg_run_v5> msg5 = std::make_unique<dcgm_diag_msg_run_v5>();
+
+    dcgmReturn_t dcgmReturn;
     dcgm_module_command_header_t *header;
-    dcgmRunDiag_t *runDiag;
+    dcgmRunDiag_v7 *runDiag;
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version10:
+            std::tie(runDiag, header) = helperInitDiagMsgRun(msg8.get(), dcgm_diag_msg_run_version8, action);
+            break;
+
         case dcgmDiagResponse_version9:
-            memset(msg7.get(), 0, sizeof(*msg7));
-            msg7->header.length        = sizeof(*msg7);
-            msg7->header.version       = dcgm_diag_msg_run_version7;
-            msg7->diagResponse.version = dcgmDiagResponse_version9;
-            msg7->action               = action;
-            runDiag                    = &(msg7->runDiag);
-            header                     = &(msg7->header);
+            std::tie(runDiag, header) = helperInitDiagMsgRun(msg7.get(), dcgm_diag_msg_run_version7, action);
             break;
 
         case dcgmDiagResponse_version8:
-            memset(msg6.get(), 0, sizeof(*msg6));
-            msg6->header.length        = sizeof(*msg6);
-            msg6->header.version       = dcgm_diag_msg_run_version6;
-            msg6->diagResponse.version = dcgmDiagResponse_version8;
-            msg6->action               = action;
-            runDiag                    = &(msg6->runDiag);
-            header                     = &(msg6->header);
+            std::tie(runDiag, header) = helperInitDiagMsgRun(msg6.get(), dcgm_diag_msg_run_version6, action);
             break;
 
         case dcgmDiagResponse_version7:
-            memset(msg5.get(), 0, sizeof(*msg5));
-            msg5->header.length        = sizeof(*msg5);
-            msg5->header.version       = dcgm_diag_msg_run_version5;
-            msg5->diagResponse.version = dcgmDiagResponse_version7;
-            msg5->action               = action;
-            runDiag                    = &(msg5->runDiag);
-            header                     = &(msg5->header);
+            std::tie(runDiag, header) = helperInitDiagMsgRun(msg5.get(), dcgm_diag_msg_run_version5, action);
             break;
 
         default:
@@ -2975,23 +2997,29 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     switch (drd->version)
     {
         case dcgmRunDiag_version7:
-            memcpy(runDiag, drd, sizeof(dcgmRunDiag_v7));
+            memcpy(runDiag, drd, sizeof(*runDiag));
             break;
         default:
             // unknown dcgmRunDiag version
             log_error("dcgmRunDiag_version mismatch {:X} != {:X} and isn't in accepted list",
                       drd->version,
-                      dcgmRunDiag_version);
+                      dcgmRunDiag_version7);
             return DCGM_ST_VER_MISMATCH;
     }
 
-    // The diagnostic requires a lengthy timeout
-    static const int EIGHT_HOURS_IN_MS = 28800000;
-    // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(*msg7), nullptr, EIGHT_HOURS_IN_MS);
+    // Compatibility requirement
+    static_assert(sizeof(msg7->diagResponse) < sizeof(msg8->diagResponse));
+    static_assert(sizeof(msg6->diagResponse) < sizeof(msg7->diagResponse));
+    static_assert(sizeof(msg5->diagResponse) < sizeof(msg6->diagResponse));
 
+    // coverity[overrun-buffer-arg]
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, header, sizeof(*msg8), nullptr, EIGHT_HOURS_IN_MS);
     switch (response->version)
     {
+        case dcgmDiagResponse_version10:
+            memcpy(response, &msg8->diagResponse, sizeof(msg8->diagResponse));
+            break;
+
         case dcgmDiagResponse_version9:
             memcpy(response, &msg7->diagResponse, sizeof(msg7->diagResponse));
             break;
@@ -3953,8 +3981,8 @@ static dcgmReturn_t tsapiEngineHealthCheck(dcgmHandle_t pDcgmHandle,
 }
 
 static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
-                                                 dcgmRunDiag_t *drd,
-                                                 dcgmDiagResponse_t *response)
+                                                 dcgmRunDiag_v7 *drd,
+                                                 dcgmDiagResponse_v10 *response)
 {
     return helperActionManager(pDcgmHandle, drd, DCGM_POLICY_ACTION_NONE, response);
 }
@@ -3962,22 +3990,24 @@ static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
 static dcgmReturn_t tsapiEngineActionValidate(dcgmHandle_t pDcgmHandle,
                                               dcgmGpuGrp_t groupId,
                                               dcgmPolicyValidation_t validate,
-                                              dcgmDiagResponse_t *response)
+                                              dcgmDiagResponse_v10 *response)
 {
-    dcgmRunDiag_t drd = {};
-    drd.version       = dcgmRunDiag_version7;
-    drd.validate      = validate;
-    drd.groupId       = groupId;
-    return helperActionManager(pDcgmHandle, &drd, DCGM_POLICY_ACTION_NONE, response);
+    dcgmRunDiag_v7 drd7 = {};
+
+    drd7.version  = dcgmRunDiag_version7;
+    drd7.validate = validate;
+    drd7.groupId  = groupId;
+
+    return helperActionManager(pDcgmHandle, &drd7, DCGM_POLICY_ACTION_NONE, response);
 }
 
 static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                              dcgmGpuGrp_t groupId,
                                              dcgmDiagnosticLevel_t diagLevel,
-                                             dcgmDiagResponse_t *diagResponse)
+                                             dcgmDiagResponse_v10 *diagResponse)
 {
     dcgmPolicyValidation_t validation = DCGM_POLICY_VALID_NONE;
-    dcgmRunDiag_t drd                 = {};
+    dcgmRunDiag_v7 drd                = {};
 
     if (!diagResponse)
         return DCGM_ST_BADPARAM;
@@ -4013,7 +4043,7 @@ static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
             return DCGM_ST_BADPARAM;
     }
 
-    drd.version  = dcgmRunDiag_version;
+    drd.version  = dcgmRunDiag_version7;
     drd.groupId  = groupId;
     drd.validate = validation;
 
@@ -4865,22 +4895,39 @@ dcgmReturn_t tsapiInjectNvmlDevice(dcgmHandle_t dcgmHandle,
                                    const char *key,
                                    const injectNvmlVal_t *extraKeys,
                                    unsigned int extraKeyCount,
-                                   const injectNvmlVal_t *value)
+                                   const injectNvmlRet_t *injectNvmlRet)
 {
-    if (key == nullptr || value == nullptr)
+    if (key == nullptr)
     {
-        DCGM_LOG_ERROR << "Both key and value are required to process injecting an NVML device.";
+        DCGM_LOG_ERROR << "Key is required to process injecting an NVML device.";
+        return DCGM_ST_BADPARAM;
+    }
+    if (injectNvmlRet == nullptr)
+    {
+        DCGM_LOG_ERROR << "Injected NVML return is required to process injecting an NVML device.";
+        return DCGM_ST_BADPARAM;
+    }
+    if (injectNvmlRet->nvmlRet == NVML_SUCCESS && injectNvmlRet->valueCount == 0)
+    {
+        DCGM_LOG_ERROR << "Value is required to process injecting an NVML device when nvmlRet is NVML_SUCCESS.";
         return DCGM_ST_BADPARAM;
     }
 
-    if (extraKeyCount > DCGM_MAX_EXTRA_KEYS)
+    if (extraKeyCount > NVML_INJECTION_MAX_EXTRA_KEYS)
     {
-        DCGM_LOG_ERROR << "Cannot process " << extraKeyCount << " extra keys. The maximum is " << DCGM_MAX_EXTRA_KEYS;
+        DCGM_LOG_ERROR << "Cannot process " << extraKeyCount << " extra keys. The maximum is "
+                       << NVML_INJECTION_MAX_EXTRA_KEYS;
         return DCGM_ST_BADPARAM;
     }
     else if (extraKeys != nullptr && extraKeyCount == 0)
     {
         DCGM_LOG_ERROR << "Extra keys cannot be processed specifying how many there are. (0 specified.)";
+        return DCGM_ST_BADPARAM;
+    }
+    else if (injectNvmlRet->valueCount > NVML_INJECTION_MAX_VALUES)
+    {
+        DCGM_LOG_ERROR << "Cannot process " << injectNvmlRet->valueCount << " values. The maximum is "
+                       << NVML_INJECTION_MAX_VALUES;
         return DCGM_ST_BADPARAM;
     }
 
@@ -4898,7 +4945,7 @@ dcgmReturn_t tsapiInjectNvmlDevice(dcgmHandle_t dcgmHandle,
     }
     msg.info.extraKeyCount = extraKeyCount;
     msg.info.gpuId         = gpuId;
-    memcpy(&msg.info.value, value, sizeof(msg.info.value));
+    memcpy(&msg.info.injectNvmlRet, injectNvmlRet, sizeof(*injectNvmlRet));
 
     // coverity[overrun-buffer-arg]
     dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
@@ -4909,6 +4956,152 @@ dcgmReturn_t tsapiInjectNvmlDevice(dcgmHandle_t dcgmHandle,
         return ret;
     }
 
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiInjectNvmlDeviceForFollowingCalls(dcgmHandle_t dcgmHandle,
+                                                    unsigned int gpuId,
+                                                    const char *key,
+                                                    const injectNvmlVal_t *extraKeys,
+                                                    unsigned int extraKeyCount,
+                                                    const injectNvmlRet_t *injectNvmlRets,
+                                                    unsigned int retCount)
+{
+    if (key == nullptr)
+    {
+        DCGM_LOG_ERROR << "Key is required to process injecting an NVML device.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (extraKeyCount > NVML_INJECTION_MAX_EXTRA_KEYS)
+    {
+        DCGM_LOG_ERROR << "Cannot process " << extraKeyCount << " extra keys. The maximum is "
+                       << NVML_INJECTION_MAX_EXTRA_KEYS;
+        return DCGM_ST_BADPARAM;
+    }
+    else if (extraKeys != nullptr && extraKeyCount == 0)
+    {
+        DCGM_LOG_ERROR << "Extra keys cannot be processed specifying how many there are. (0 specified.)";
+        return DCGM_ST_BADPARAM;
+    }
+    else if (retCount > NVML_INJECTION_MAX_RETURNS)
+    {
+        DCGM_LOG_ERROR << "Cannot process " << retCount << " returns. The maximum is " << NVML_INJECTION_MAX_RETURNS;
+        return DCGM_ST_BADPARAM;
+    }
+    else if (retCount > 0 && injectNvmlRets == nullptr)
+    {
+        DCGM_LOG_ERROR << "injectNvmlRets is expected";
+        return DCGM_ST_BADPARAM;
+    }
+
+    for (unsigned i = 0; i < retCount; ++i)
+    {
+        if (injectNvmlRets[i].valueCount > NVML_INJECTION_MAX_VALUES)
+        {
+            DCGM_LOG_ERROR << "The value count in injectNvmlRets[" << i << "] is too large. The maximum is "
+                           << NVML_INJECTION_MAX_VALUES;
+            return DCGM_ST_BADPARAM;
+        }
+        if (injectNvmlRets[i].nvmlRet == NVML_SUCCESS && injectNvmlRets[i].valueCount == 0)
+        {
+            DCGM_LOG_ERROR << "Value is required to process injecting an NVML device when nvmlRet is NVML_SUCCESS.";
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    dcgm_core_msg_nvml_inject_device_for_following_calls_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVML_INJECT_DEVICE_FOR_FOLLOWING_CALLS;
+    msg.header.version    = dcgm_core_msg_nvml_inject_device_for_following_calls_version;
+
+    snprintf(msg.info.key, sizeof(msg.info.key), "%s", key);
+    if (extraKeys != nullptr && extraKeyCount > 0)
+    {
+        memcpy(&msg.info.extraKeys, extraKeys, sizeof(injectNvmlVal_t) * extraKeyCount);
+    }
+    msg.info.extraKeyCount = extraKeyCount;
+    msg.info.gpuId         = gpuId;
+    msg.info.retCount      = retCount;
+    memcpy(msg.info.injectNvmlRets, injectNvmlRets, sizeof(injectNvmlRet_t) * retCount);
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiGetNvmlInjectFuncCallCount(dcgmHandle_t dcgmHandle, injectNvmlFuncCallCounts_t *nvmlFuncCallCounts)
+{
+    if (nvmlFuncCallCounts == nullptr)
+    {
+        DCGM_LOG_ERROR << "nvmlFuncCallCounts nullptr; bad param";
+        return DCGM_ST_BADPARAM;
+    }
+    dcgm_core_msg_get_nvml_inject_func_call_count_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_GET_NVML_INJECT_FUNC_CALL_COUNT;
+    msg.header.version    = dcgm_core_msg_get_nvml_inject_func_call_count_version;
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+    *nvmlFuncCallCounts = msg.info.funcCallCounts;
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiResetNvmlInjectFuncCallCount(dcgmHandle_t dcgmHandle)
+{
+    dcgm_core_msg_reset_nvml_inject_func_call_count_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_RESET_NVML_FUNC_CALL_COUNT;
+    msg.header.version    = dcgm_core_msg_reset_nvml_inject_func_call_count_version;
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t tsapiInjectedNvmlDeviceReset(dcgmHandle_t dcgmHandle, unsigned int gpuId)
+{
+    dcgm_core_msg_nvml_inject_device_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVML_INJECTED_DEVICE_RESET;
+    msg.header.version    = dcgm_core_msg_nvml_injected_device_reset_version;
+    msg.info.gpuId        = gpuId;
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
     return (dcgmReturn_t)msg.info.cmdRet;
 }
 #endif

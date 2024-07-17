@@ -367,6 +367,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_NVVS_KILLED           = -53, //!< The NVVS process was killed by a signal
     DCGM_ST_PAUSED                = -54, //!< The hostengine and all modules are paused
     DCGM_ST_ALREADY_INITIALIZED   = -55, //!< The object is already initialized
+    DCGM_ST_NVML_NOT_LOADED       = -56, //!< Cannot perform operation because NVML isn't loaded
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -2441,7 +2442,7 @@ typedef enum dcgmPerGpuTestIndices_enum
     // Remaining tests are included for convenience but have different execution rules
     // See DCGM_PER_GPU_TEST_COUNT
     DCGM_UNUSED2_TEST_INDEX   = 10,
-    DCGM_UNUSED3_TEST_INDEX   = 11,
+    DCGM_CPU_EUD_TEST_INDEX   = 11, //!< CPU EUD test index
     DCGM_UNUSED4_TEST_INDEX   = 12,
     DCGM_UNUSED5_TEST_INDEX   = 13,
     DCGM_SOFTWARE_INDEX       = 14, //!< Software test index
@@ -2488,6 +2489,26 @@ typedef struct
 } dcgmDiagResponsePerGpu_v3;
 
 
+#define DCGM_DIAG_AUX_DATA_LEN 2048
+
+/**
+ * Per test aux data structure v1
+ *
+ * Since DCGM 3.3.7
+ */
+typedef struct
+{
+    unsigned int version; //!< version number (dcgmDiagTestAuxData_version1)
+    char data[DCGM_DIAG_AUX_DATA_LEN];
+} dcgmDiagTestAuxData_v1;
+
+/**
+ * Version 1 for \ref dcgmDiagTestAuxData_v1
+ */
+#define dcgmDiagTestAuxData_version1 MAKE_DCGM_VERSION(dcgmDiagTestAuxData_v1, 1)
+
+#define dcgmDiagTestAuxData_version dcgmDiagTestAuxData_version1
+
 #define DCGM_SWTEST_COUNT     10
 #define LEVEL_ONE_MAX_RESULTS 16
 
@@ -2507,6 +2528,27 @@ typedef enum dcgmSoftwareTest_enum
 
 #define DCGM_DEVICE_ID_LEN 5
 #define DCGM_VERSION_LEN   12
+
+/**
+ * Global diagnostics result structure v10
+ *
+ * Since DCGM 3.3.7
+ */
+typedef struct
+{
+    unsigned int version;           //!< version number (dcgmDiagResponse_v10)
+    unsigned int gpuCount;          //!< number of valid per GPU results
+    unsigned int levelOneTestCount; //!< number of valid levelOne results
+
+    dcgmDiagTestResult_v3 levelOneResults[LEVEL_ONE_MAX_RESULTS];      //!< Basic, system-wide test results.
+    dcgmDiagResponsePerGpu_v5 perGpuResponses[DCGM_MAX_NUM_DEVICES];   //!< per GPU test results
+    dcgmDiagErrorDetail_v2 systemError;                                //!< System-wide error reported from NVVS
+    char devIds[DCGM_MAX_NUM_DEVICES][DCGM_DEVICE_ID_LEN];             //!< The SKU device id for each GPU
+    char devSerials[DCGM_MAX_NUM_DEVICES][DCGM_MAX_STR_LENGTH];        //!< Serial for the device
+    char dcgmVersion[DCGM_VERSION_LEN];                                //!< A string representing DCGM's version
+    char driverVersion[DCGM_MAX_STR_LENGTH];                           //!< A string representing the driver version
+    dcgmDiagTestAuxData_v1 auxDataPerTest[DCGM_PER_GPU_TEST_COUNT_V8]; //!< Aux data that each test returned.
+} dcgmDiagResponse_v10;
 
 /**
  * Global diagnostics result structure v9
@@ -2567,9 +2609,9 @@ typedef struct
 } dcgmDiagResponse_v7;
 
 /**
- * Typedef for \ref dcgmDiagResponse_v9
+ * Version 10 for \ref dcgmDiagResponse_v10
  */
-typedef dcgmDiagResponse_v9 dcgmDiagResponse_t;
+#define dcgmDiagResponse_version10 MAKE_DCGM_VERSION(dcgmDiagResponse_v10, 10)
 
 /**
  * Version 9 for \ref dcgmDiagResponse_v9
@@ -2585,11 +2627,6 @@ typedef dcgmDiagResponse_v9 dcgmDiagResponse_t;
  * Version 7 for \ref dcgmDiagResponse_v7
  */
 #define dcgmDiagResponse_version7 MAKE_DCGM_VERSION(dcgmDiagResponse_v7, 7)
-
-/**
- * Latest version for \ref dcgmDiagResponse_t
- */
-#define dcgmDiagResponse_version dcgmDiagResponse_version9
 
 /**
  * Represents level relationships within a system between two GPUs

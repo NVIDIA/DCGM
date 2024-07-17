@@ -15,10 +15,16 @@
  */
 #include "InjectedNvml.h"
 #include "InjectionKeys.h"
+#include "NvmlFuncReturn.h"
 #include "PassThruNvml.h"
 #include "nvml.h"
 #include "nvml_generated_declarations.h"
 #include "nvml_injection.h"
+
+#include <fmt/core.h>
+#include <fmt/format.h>
+
+#include <unordered_map>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +32,8 @@ extern "C" {
 extern bool GLOBAL_PASS_THROUGH_MODE;
 
 typedef nvmlReturn_t (*nvmlInit_f)();
+
+#define NVML_YAML_FILE "NVML_YAML_FILE"
 
 nvmlReturn_t injectionNvmlInit()
 {
@@ -45,38 +53,126 @@ nvmlReturn_t injectionNvmlInit()
     else
     {
         InjectedNvml::Init();
+
+        auto *injectedNvml = InjectedNvml::GetInstance();
+
+        char *yamlFilePath = getenv(NVML_YAML_FILE);
+        if (yamlFilePath == nullptr)
+        {
+            // if we don't provide any injection, dcgm will exit directly.
+            injectedNvml->SetupDefaultEnv();
+            return NVML_SUCCESS;
+        }
+        return injectedNvml->LoadFromFile(yamlFilePath) ? NVML_SUCCESS : NVML_ERROR_UNKNOWN;
     }
 
     return NVML_SUCCESS;
 }
 
-nvmlReturn_t nvmlDeviceSimpleInject(nvmlDevice_t nvmlDevice, const char *key, const injectNvmlVal_t *valueParm)
+nvmlReturn_t nvmlInit_v2()
 {
-    if (key == nullptr || valueParm == nullptr)
+    if (auto ret = injectionNvmlInit(); ret != NVML_SUCCESS)
     {
-        return NVML_ERROR_INVALID_ARGUMENT;
+        return ret;
     }
-
-    auto InjectedNvml = InjectedNvml::GetInstance();
-    InjectionArgument value(*valueParm);
-    InjectedNvml->SimpleDeviceSet(nvmlDevice, key, value);
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    injectedNvml->AddFuncCallCount("nvmlInit_v2");
     return NVML_SUCCESS;
 }
 
-nvmlReturn_t nvmlDeviceInjectExtraKey(nvmlDevice_t nvmlDevice,
-                                      const char *key,
-                                      const injectNvmlVal_t *extraKeyParm,
-                                      const injectNvmlVal_t *valueParm)
+nvmlReturn_t nvmlShutdown()
 {
-    auto InjectedNvml = InjectedNvml::GetInstance();
-    if (key == nullptr || extraKeyParm == nullptr || valueParm == nullptr)
+    return injectionNvmlShutdown();
+}
+
+nvmlReturn_t nvmlDeviceInject(nvmlDevice_t nvmlDevice,
+                              const char *key,
+                              const injectNvmlVal_t *extraKeys,
+                              unsigned int extraKeyCount,
+                              const injectNvmlRet_t *injectNvmlRet)
+{
+    if (key == nullptr || (extraKeyCount >= 1 && extraKeys == nullptr) || extraKeyCount > NVML_INJECTION_MAX_EXTRA_KEYS
+        || injectNvmlRet == nullptr)
     {
         return NVML_ERROR_INVALID_ARGUMENT;
     }
+    if (injectNvmlRet->nvmlRet == NVML_SUCCESS
+        && (injectNvmlRet->valueCount < 1 || injectNvmlRet->valueCount > NVML_INJECTION_MAX_VALUES))
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    auto *injectedNvml = InjectedNvml::GetInstance();
 
-    InjectionArgument extraKey(*extraKeyParm);
-    InjectionArgument value(*valueParm);
-    InjectedNvml->DeviceSetWithExtraKey(nvmlDevice, key, extraKey, value);
+    std::vector<InjectionArgument> extraKeyArg;
+    for (unsigned int i = 0; i < extraKeyCount; ++i)
+    {
+        extraKeyArg.emplace_back(extraKeys[i]);
+    }
+
+    if (injectNvmlRet->nvmlRet != NVML_SUCCESS)
+    {
+        injectedNvml->DeviceInject(nvmlDevice, key, extraKeyArg, NvmlFuncReturn(injectNvmlRet->nvmlRet));
+        return NVML_SUCCESS;
+    }
+
+    std::vector<InjectionArgument> valuesArg;
+    for (unsigned int i = 0; i < injectNvmlRet->valueCount; ++i)
+    {
+        valuesArg.emplace_back(injectNvmlRet->values[i]);
+    }
+    injectedNvml->DeviceInject(nvmlDevice, key, extraKeyArg, NvmlFuncReturn(injectNvmlRet->nvmlRet, valuesArg));
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceInjectForFollowingCalls(nvmlDevice_t nvmlDevice,
+                                               const char *key,
+                                               const injectNvmlVal_t *extraKeys,
+                                               unsigned int extraKeyCount,
+                                               const injectNvmlRet_t *injectNvmlRet,
+                                               unsigned int retCount)
+{
+    if (key == nullptr || (extraKeyCount >= 1 && extraKeys == nullptr) || extraKeyCount > NVML_INJECTION_MAX_EXTRA_KEYS
+        || injectNvmlRet == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    if (retCount > NVML_INJECTION_MAX_RETURNS)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    for (unsigned i = 0; i < retCount; ++i)
+    {
+        if (injectNvmlRet[i].nvmlRet == NVML_SUCCESS
+            && (injectNvmlRet[i].valueCount < 1 || injectNvmlRet[i].valueCount > NVML_INJECTION_MAX_VALUES))
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+    }
+    auto *injectedNvml = InjectedNvml::GetInstance();
+
+    std::vector<InjectionArgument> extraKeyArg;
+    for (unsigned int i = 0; i < extraKeyCount; ++i)
+    {
+        extraKeyArg.emplace_back(extraKeys[i]);
+    }
+
+    std::list<NvmlFuncReturn> rets;
+    for (unsigned i = 0; i < retCount; ++i)
+    {
+        std::vector<InjectionArgument> valuesArg;
+        if (injectNvmlRet[i].nvmlRet != NVML_SUCCESS)
+        {
+            rets.emplace_back(injectNvmlRet[i].nvmlRet);
+            continue;
+        }
+
+        for (unsigned j = 0; j < injectNvmlRet[i].valueCount; ++j)
+        {
+            valuesArg.emplace_back(injectNvmlRet[i].values[j]);
+        }
+        rets.emplace_back(injectNvmlRet[i].nvmlRet, valuesArg);
+    }
+    injectedNvml->DeviceInjectForFollowingCalls(nvmlDevice, key, extraKeyArg, rets);
     return NVML_SUCCESS;
 }
 
@@ -94,6 +190,48 @@ nvmlReturn_t nvmlCreateDevice(unsigned int index)
     }
 }
 
+nvmlReturn_t nvmlGetFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts)
+{
+    if (!funcCallCounts)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    auto mapRet
+        = injectedNvml->GetFuncCallCounts(); // copy-by-value here because GetFuncCallCounts returns a thread-safe copy
+    funcCallCounts->numFuncs = mapRet.size();
+    if (funcCallCounts->numFuncs == 0)
+    {
+        return NVML_SUCCESS;
+    }
+    if (funcCallCounts->numFuncs > NVML_MAX_FUNCS)
+    {
+        return NVML_ERROR_INSUFFICIENT_SIZE;
+    }
+
+    for (unsigned index = 0; auto const &it : mapRet)
+    {
+        strncpy(funcCallCounts->funcCallInfo[index].funcName,
+                it.first.c_str(),
+                sizeof(funcCallCounts->funcCallInfo[index].funcName));
+        funcCallCounts->funcCallInfo[index].funcCallCount = it.second;
+        index++;
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlResetFuncCallCount()
+{
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    if (injectedNvml)
+    {
+        injectedNvml->ResetFuncCallCounts();
+    }
+
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlDeviceInjectFieldValue(nvmlDevice_t nvmlDevice, const nvmlFieldValue_t *value)
 {
     if (value == nullptr || nvmlDevice == (nvmlDevice_t)0)
@@ -101,8 +239,8 @@ nvmlReturn_t nvmlDeviceInjectFieldValue(nvmlDevice_t nvmlDevice, const nvmlField
         return NVML_ERROR_INVALID_ARGUMENT;
     }
 
-    auto InjectedNvml = InjectedNvml::GetInstance();
-    return InjectedNvml->SetFieldValue(nvmlDevice, *value);
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    return injectedNvml->InjectFieldValue(nvmlDevice, *value);
 }
 
 nvmlReturn_t injectionNvmlShutdown()
@@ -111,8 +249,29 @@ nvmlReturn_t injectionNvmlShutdown()
     if (InjectedNvml != nullptr)
     {
         delete InjectedNvml;
+        InjectedNvml::Reset();
     }
     return NVML_SUCCESS;
+}
+
+char const *nvmlErrorString(nvmlReturn_t errorCode)
+{
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    if (!injectedNvml)
+    {
+        return "NVML Error";
+    }
+    injectedNvml->AddFuncCallCount("nvmlErrorString");
+
+    static std::unordered_map<nvmlReturn_t, std::string> errorStringMap;
+    static std::mutex m;
+    std::lock_guard<std::mutex> lg(m);
+    if (!errorStringMap.contains(errorCode))
+    {
+        auto const &errorString = fmt::format("NVML Injection Stub, Code: {}", errorCode);
+        errorStringMap.emplace(errorCode, errorString);
+    }
+    return errorStringMap[errorCode].c_str();
 }
 
 /*nvmlReturn_t nvmlDeviceInjectFieldValue(

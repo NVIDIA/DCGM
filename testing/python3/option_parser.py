@@ -191,8 +191,13 @@ def parse_options():
             default=False,
             help="Skips the check that the test framework is being run as root."
             )
+    parser.add_option(
+            "--capture-nvml-environment-to",
+            dest="capture_nvml_environment_to",
+            default=None,
+            help="Capture the current NVML state can be used for reporducuig testing environment later."
+            )
 
-    
     (options, args) = parser.parse_args()
 
     if options.debug:
@@ -236,6 +241,7 @@ class OptionParserStub():
         self.coverage = ''
         self.dvssc_testing = False
         self.no_root_check = False
+        self.capture_nvml_environment_to = None
 
 
 def initialize_as_stub():

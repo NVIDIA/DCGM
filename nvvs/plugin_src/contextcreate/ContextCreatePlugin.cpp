@@ -40,17 +40,19 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuL
     if (gpuInfo != nullptr)
     {
         m_gpuInfo = *gpuInfo;
-        InitializeForGpuList(*gpuInfo);
+        InitializeForGpuList(CTXCREATE_PLUGIN_NAME, *gpuInfo);
     }
     else
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(d);
+        AddError(CTXCREATE_PLUGIN_NAME, d);
     }
 }
 
-void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void ContextCreatePlugin::Go(std::string const &testName,
+                             unsigned int numParameters,
+                             const dcgmDiagPluginTestParameter_t *tpStruct)
 {
     // UNUSED function. Delete when the Plugin Interface's extra methods are eliminated.
     TestParameters testParameters(*m_infoStruct.defaultTestParameters);
@@ -60,8 +62,8 @@ void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTes
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, CTXCREATE_PLUGIN_NAME);
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 
@@ -72,30 +74,30 @@ void ContextCreatePlugin::Go(unsigned int numParameters, const dcgmDiagPluginTes
         int st = cc.Run(m_gpuInfo);
         if (!st)
         {
-            SetResult(NVVS_RESULT_PASS);
+            SetResult(testName, NVVS_RESULT_PASS);
         }
         else if (main_should_stop)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(d);
-            SetResult(NVVS_RESULT_SKIP);
+            AddError(testName, d);
+            SetResult(testName, NVVS_RESULT_SKIP);
         }
         else if (st == CONTEXT_CREATE_SKIP)
         {
-            SetResult(NVVS_RESULT_SKIP);
+            SetResult(testName, NVVS_RESULT_SKIP);
         }
         else
         {
-            SetResult(NVVS_RESULT_FAIL);
+            SetResult(testName, NVVS_RESULT_FAIL);
         }
     }
     else
     {
-        SetResult(NVVS_RESULT_FAIL);
+        SetResult(testName, NVVS_RESULT_FAIL);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EMPTY_GPU_LIST, d);
-        AddError(d);
+        AddError(testName, d);
     }
 }
 

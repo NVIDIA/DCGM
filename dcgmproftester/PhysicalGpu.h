@@ -157,6 +157,9 @@ public:
 
     bool IsValidated(void) const; // Did all workers pass validation?
 
+    // Get all visible non-MIG GPUs
+    dcgmReturn_t HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs);
+
 private:
     // Tick handler type.
     using TickHandlerType = std::function<dcgmReturn_t(size_t index,

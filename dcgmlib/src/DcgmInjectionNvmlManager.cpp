@@ -29,25 +29,40 @@ DcgmInjectionNvmlManager::DcgmInjectionNvmlManager()
 #ifdef INJECTION_LIBRARY_AVAILABLE
 dcgmReturn_t DcgmInjectionNvmlManager::InjectGpu(nvmlDevice_t nvmlDevice,
                                                  const char *key,
-                                                 const injectNvmlVal_t &value,
                                                  const injectNvmlVal_t *extraKeys,
-                                                 unsigned int extraKeyCount)
+                                                 unsigned int extraKeyCount,
+                                                 const injectNvmlRet_t &injectNvmlRet)
 {
-    if (extraKeys == nullptr)
-    {
-        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlDeviceSimpleInject(nvmlDevice, key, &value));
-    }
-    else if (extraKeyCount == 1)
-    {
-        nvmlReturn_t nvmlRet = nvmlDeviceInjectExtraKey(nvmlDevice, key, &extraKeys[0], &value);
-        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlRet);
-    }
-    else
-    {
-        // TODO: Add support for more cases as needed
-    }
-    return DCGM_ST_NOT_SUPPORTED;
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(
+        nvmlDeviceInject(nvmlDevice, key, extraKeys, extraKeyCount, &injectNvmlRet));
 }
+
+dcgmReturn_t DcgmInjectionNvmlManager::InjectGpuForFollowingCalls(nvmlDevice_t nvmlDevice,
+                                                                  const char *key,
+                                                                  const injectNvmlVal_t *extraKeys,
+                                                                  unsigned int extraKeyCount,
+                                                                  const injectNvmlRet_t *injectNvmlRets,
+                                                                  unsigned int retCount)
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(
+        nvmlDeviceInjectForFollowingCalls(nvmlDevice, key, extraKeys, extraKeyCount, injectNvmlRets, retCount));
+}
+
+dcgmReturn_t DcgmInjectionNvmlManager::InjectedGpuReset(nvmlDevice_t nvmlDevice)
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlDeviceReset(nvmlDevice));
+}
+
+dcgmReturn_t DcgmInjectionNvmlManager::GetFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts)
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlGetFuncCallCount(funcCallCounts));
+}
+
+dcgmReturn_t DcgmInjectionNvmlManager::ResetFuncCallCount()
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlResetFuncCallCount());
+}
+
 #endif
 
 dcgmReturn_t DcgmInjectionNvmlManager::CreateDevice(unsigned int index)
