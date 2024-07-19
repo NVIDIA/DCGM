@@ -731,6 +731,7 @@ def test_dcgmproftester_sm_occupancy(handle, gpuIds):
 @test_utils.exclude_non_compute_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
+@test_utils.skip_denylisted_gpus(["NVIDIA T400", "NVIDIA T400 4GB"]) # TEMPORARY CHANGE : If DCGM-3744 has been satisfactorily resolved, remove this line
 def test_dcgmproftester_tensor_active(handle, gpuIds):
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)
 

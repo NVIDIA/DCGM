@@ -107,9 +107,36 @@ def dcgmCreateNvmlInjectionGpu(dcgmHandle, index):
     return ret
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmInjectNvmlDevice(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, value):
+def dcgmInjectNvmlDevice(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, injectNvmlRet):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmInjectNvmlDevice")
-    ret = fn(dcgmHandle, c_uint(gpuId), key, byref(extraKeys), c_uint(extraKeyCount), byref(value))
+    if extraKeys is None:
+        ret = fn(dcgmHandle, c_uint(gpuId), key, None, c_uint(extraKeyCount), byref(injectNvmlRet))
+    else:
+        ret = fn(dcgmHandle, c_uint(gpuId), key, byref(extraKeys), c_uint(extraKeyCount), byref(injectNvmlRet))
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmInjectNvmlDeviceForFollowingCalls(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, injectNvmlRets, retCount):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmInjectNvmlDeviceForFollowingCalls")
+    if extraKeys is None:
+        ret = fn(dcgmHandle, c_uint(gpuId), key, None, c_uint(extraKeyCount), byref(injectNvmlRets), retCount)
+    else:
+        ret = fn(dcgmHandle, c_uint(gpuId), key, byref(extraKeys), c_uint(extraKeyCount), byref(injectNvmlRets), retCount)
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmGetNvmlInjectFuncCallCount(dcgmHandle, funcCallInfo):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetNvmlInjectFuncCallCount")
+    ret = fn(dcgmHandle, byref(funcCallInfo))
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmResetNvmlInjectFuncCallCount(dcgmHandle):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmResetNvmlInjectFuncCallCount")
+    ret = fn(dcgmHandle)
     _dcgmIntCheckReturn(ret)
     return ret
 

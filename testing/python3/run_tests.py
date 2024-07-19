@@ -30,6 +30,7 @@ import nvidia_smi_utils
 from sys import version as python_version
 
 from tests.nvswitch_tests import test_nvswitch_utils
+        
 
 def log_environment_info():
     if utils.is_linux():
@@ -95,7 +96,6 @@ def run_tests():
 
     '''
     with test_utils.SubTest("Main"):
-
         log_environment_info()
 
         test_utils.RestoreDefaultEnvironment.restore_env()
@@ -111,21 +111,25 @@ def run_tests():
             raise
 
         dcgmGpuCount = 0
-        if option_parser.options.use_running_hostengine:
-            with test_utils.RunStandaloneHostEngine() as handle:
-                dcgmGpuCount = test_utils.log_gpu_information(handle)
-        else:
-            with test_utils.RunEmbeddedHostEngine() as handle:
-                dcgmGpuCount = test_utils.log_gpu_information(handle)
+        try:
+            if option_parser.options.use_running_hostengine:
+                with test_utils.RunStandaloneHostEngine() as handle:
+                    dcgmGpuCount = test_utils.log_gpu_information(handle)
+            else:
+                with test_utils.RunEmbeddedHostEngine() as handle:
+                    dcgmGpuCount = test_utils.log_gpu_information(handle)
+        except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+            test_utils.nvmlNotLoaded = True
 
-        # Persistence mode is required
-        if dcgmGpuCount > 0:
-            (_, error) = nvidia_smi_utils.enable_persistence_mode()
-            if error:
-                logger.error(error)
-                return
+        if test_utils.nvmlNotLoaded == False:
+            # Persistence mode is required
+            if dcgmGpuCount > 0:
+                (_, error) = nvidia_smi_utils.enable_persistence_mode()
+                if error:
+                    logger.error(error)
+                    return
 
-        test_utils.save_gpu_count(dcgmGpuCount)
+            test_utils.save_gpu_count(dcgmGpuCount)
         
         with test_utils.SubTest("restore state", quiet=True):
             test_utils.RestoreDefaultEnvironment.restore() # restore the nvml settings
@@ -139,7 +143,11 @@ def run_tests():
 
                 with test_utils.SubTest("module %s" % module[0].__name__):
                     for function in module[1]:
-                        test_utils.run_subtest(function)
+                        try:
+                            test_utils.run_subtest(function)
+                        except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                            logger.info("Test %s cannot run since NVML isn't present on this machine" % str(function))
+                            pass
                         with test_utils.SubTest("%s - restore state" % (function.__name__), quiet=True):
                             test_utils.RestoreDefaultEnvironment.restore()
         finally:

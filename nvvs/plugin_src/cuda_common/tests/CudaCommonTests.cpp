@@ -23,7 +23,9 @@
 class TestPlugin : public Plugin
 {
 public:
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters)
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters)
     {}
 
     ~TestPlugin()
@@ -41,7 +43,7 @@ void initializePluginWithGpus(Plugin &p, unsigned int count)
         gpuInfo.gpus[i].status = DcgmEntityStatusOk;
     }
 
-    p.InitializeForGpuList(gpuInfo);
+    p.InitializeForGpuList("CUDA_COMMON_TEST", gpuInfo);
 }
 
 TEST_CASE("Logging GPU Specific Errors")
@@ -49,12 +51,12 @@ TEST_CASE("Logging GPU Specific Errors")
     TestPlugin p;
     initializePluginWithGpus(p, 3);
 
-    AddCudaError(&p, "cudaMalloc", cudaErrorMemoryAllocation, 0);
-    AddCudaError(&p, "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
-    AddCudaError(&p, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
+    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 0);
+    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
+    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
 
     dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = p.GetResults(&results);
+    dcgmReturn_t ret          = p.GetResults("CUDA_COMMON_TEST", &results);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(results.numErrors == 3);
     for (unsigned int i = 0; i < results.numErrors; i++)
@@ -62,11 +64,11 @@ TEST_CASE("Logging GPU Specific Errors")
         CHECK(results.perGpuResults[i].gpuId == i);
     }
 
-    LOG_CUDA_ERROR_FOR_PLUGIN(&p, "cudaFake", cudaErrorMemoryAllocation, 1);
+    LOG_CUDA_ERROR_FOR_PLUGIN(&p, "CUDA_COMMON_TEST", "cudaFake", cudaErrorMemoryAllocation, 1);
     cublasStatus_t cubSt = (cublasStatus_t)1;
-    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, "cublasFake", cubSt, 0);
+    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, "CUDA_COMMON_TEST", "cublasFake", cubSt, 0);
     memset(&results, 0, sizeof(results));
-    ret = p.GetResults(&results);
+    ret = p.GetResults("CUDA_COMMON_TEST", &results);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(results.numErrors == 5);
     for (unsigned int i = 0; i < results.numErrors; i++)
@@ -82,11 +84,11 @@ TEST_CASE("AddAPIError Details")
     initializePluginWithGpus(p, 2);
 
     // Should append the GPU index since it's a GPU specific failure
-    std::string errText = AddAPIError(&p, "bridgeFour", "rock not found", 0, 0, true);
+    std::string errText = AddAPIError(&p, "test_name", "bridgeFour", "rock not found", 0, 0, true);
     std::string gpuSpecficErrorPiece("failed for GPU 0");
     CHECK(errText.find(gpuSpecficErrorPiece) != std::string::npos);
 
     // Shouldn't append the GPU index since it isn't a GPU specific failure
-    errText = AddAPIError(&p, "bridgeFour", "rock not found", 0, 0, false);
+    errText = AddAPIError(&p, "test_name", "bridgeFour", "rock not found", 0, 0, false);
     CHECK(errText.find(gpuSpecficErrorPiece) == std::string::npos);
 }

@@ -46,7 +46,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
     snprintf(params[1].parameterName, sizeof(params[1].parameterName), "%s", DIAGNOSTIC_STR_IS_ALLOWED);
     snprintf(params[1].parameterValue, sizeof(params[1].parameterValue), "false");
     params[1].type = DcgmPluginParamBool;
-    gbp.Go(2, params); // Set the parameters
+    gbp.Go("test", 2, params); // Set the parameters
 
     // Make sure we get only half precision
     precision = gbp.SetPrecisionFromString(false);
@@ -61,7 +61,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
 
     // Make sure we get the default value if it's an empty string
     memset(params[0].parameterValue, 0, sizeof(params[0].parameterValue));
-    gbp.Go(2, params); // Set the parameters
+    gbp.Go("test", 2, params); // Set the parameters
     precision = gbp.SetPrecisionFromString(true);
     CHECK(USE_HALF_PRECISION(precision) != 0);
     CHECK(USE_SINGLE_PRECISION(precision) != 0);
@@ -69,7 +69,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
 
     // Make sure an invalid string also results in the default settings
     snprintf(params[0].parameterValue, sizeof(params[0].parameterValue), "bobby");
-    gbp.Go(2, params); // Set the parameters
+    gbp.Go("test", 2, params); // Set the parameters
     precision = gbp.SetPrecisionFromString(true);
     CHECK(USE_HALF_PRECISION(precision) != 0);
     CHECK(USE_SINGLE_PRECISION(precision) != 0);

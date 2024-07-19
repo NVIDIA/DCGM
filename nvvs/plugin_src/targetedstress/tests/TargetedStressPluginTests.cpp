@@ -20,6 +20,7 @@
 #define TARGETED_STRESS_TESTS
 #include <DcgmSystem.h>
 #include <PluginInterface.h>
+#include <PluginStrings.h>
 #include <TargetedStress_wrapper.h>
 
 #include <CudaStubControl.h>
@@ -43,7 +44,7 @@ TEST_CASE("TargetedStress::CudaInit()")
 
     CHECK(cp.CudaInit() == -1);
     dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = cp.GetResults(&results);
+    dcgmReturn_t ret          = cp.GetResults(TS_PLUGIN_NAME, &results);
     CHECK(ret == DCGM_ST_OK);
 
     /*

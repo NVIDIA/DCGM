@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "dcgm_structs.h"
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
 
@@ -132,7 +133,7 @@ bool ConstantPerf::Init(dcgmDiagPluginGpuList_t *gpuInfo)
         }
         catch (DcgmError &d)
         {
-            AddErrorForGpu(gpuInfo->gpus[gpuListIndex].gpuId, d);
+            AddErrorForGpu(TS_PLUGIN_NAME, gpuInfo->gpus[gpuListIndex].gpuId, d);
             delete cpDevice;
             return false;
         }
@@ -156,7 +157,7 @@ int ConstantPerf::CudaInit()
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR("cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -199,7 +200,7 @@ int ConstantPerf::CudaInit()
         cuSt = cudaGetDeviceProperties(&device->cudaDevProp, device->cudaDeviceIdx);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaGetDeviceProperties", cuSt, device->gpuId);
+            LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaGetDeviceProperties", cuSt, device->gpuId);
             return -1;
         }
 
@@ -216,14 +217,14 @@ int ConstantPerf::CudaInit()
                 DcgmError d { device->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaStreamCreate");
                 d.AddDetail(ss.str());
-                AddErrorForGpu(device->gpuId, d);
+                AddErrorForGpu(TS_PLUGIN_NAME, device->gpuId, d);
                 return -1;
             }
 
             cuSt = cudaEventCreate(&cpStream->afterWorkBlock);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaEventCreate", cuSt, device->gpuId);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
                 return -1;
             }
 
@@ -232,25 +233,25 @@ int ConstantPerf::CudaInit()
                 cuSt = cudaEventCreate(&cpStream->beforeCopyH2D[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR("cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->beforeGemm[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR("cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->beforeCopyD2H[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR("cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->afterCopyD2H[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR("cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
             }
@@ -262,21 +263,21 @@ int ConstantPerf::CudaInit()
             cuSt = cudaHostAlloc(&cpStream->hostA, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaHostAlloc(&cpStream->hostB, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaHostAlloc(&cpStream->hostC, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
@@ -315,7 +316,7 @@ int ConstantPerf::CudaInit()
         cubSt = CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR("cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(TS_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         device->allocatedCublasHandle = 1;
@@ -327,21 +328,21 @@ int ConstantPerf::CudaInit()
             cuSt = cudaMalloc((void **)&cpStream->deviceA, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaMalloc((void **)&cpStream->deviceB, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaMalloc((void **)&cpStream->deviceC, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
         }
@@ -351,15 +352,17 @@ int ConstantPerf::CudaInit()
 }
 
 /*****************************************************************************/
-void ConstantPerf::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters)
+void ConstantPerf::Go(std::string const &testName,
+                      unsigned int numParameters,
+                      const dcgmDiagPluginTestParameter_t *testParameters)
 {
-    InitializeForGpuList(m_gpuInfo);
+    InitializeForGpuList(testName, m_gpuInfo);
 
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -371,8 +374,8 @@ void ConstantPerf::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TS_PLUGIN_NAME);
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 
@@ -388,13 +391,13 @@ void ConstantPerf::Go(unsigned int numParameters, const dcgmDiagPluginTestParame
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-        AddError(d);
-        SetResult(NVVS_RESULT_SKIP);
+        AddError(testName, d);
+        SetResult(testName, NVVS_RESULT_SKIP);
     }
     else if (!result)
     {
         // There was an error running the test - set result for all gpus to failed
-        SetResult(NVVS_RESULT_FAIL);
+        SetResult(testName, NVVS_RESULT_FAIL);
     }
 }
 
@@ -463,7 +466,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
     ss.setf(std::ios::fixed, std::ios::floatfield);
     ss.precision(0);
     ss << "GPU " << device->gpuId << " relative stress level\t" << avg;
-    AddInfoVerboseForGpu(device->gpuId, ss.str());
+    AddInfoVerboseForGpu(TS_PLUGIN_NAME, device->gpuId, ss.str());
     return true;
 }
 
@@ -500,7 +503,7 @@ bool ConstantPerf::CheckPassFail(timelib64_t startTime, timelib64_t earliestStop
     {
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(this, TS_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -669,8 +672,8 @@ bool ConstantPerf::RunTest()
         log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        AddError(d);
-        SetResult(NVVS_RESULT_FAIL);
+        AddError(TS_PLUGIN_NAME, d);
+        SetResult(TS_PLUGIN_NAME, NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -777,11 +780,11 @@ int ConstantPerfWorker::RecordTiming(cperf_stream_p cpStream)
 
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventElapsedTime", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventElapsedTime", cuSt, m_device->gpuId);
         std::stringstream ss;
         ss << "Results for GPU " << m_device->gpuId << " will be inaccurate because there was an "
            << "error getting elapsed time.";
-        m_plugin.AddInfoVerboseForGpu(m_device->gpuId, ss.str());
+        m_plugin.AddInfoVerboseForGpu(TS_PLUGIN_NAME, m_device->gpuId, ss.str());
         return -1;
     }
 
@@ -817,7 +820,7 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
     cuSt = cudaEventRecord(cpStream->beforeCopyH2D[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -826,28 +829,28 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
         cpStream->deviceA, cpStream->hostA, arrayByteSize, cudaMemcpyHostToDevice, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
     cuSt = cudaMemcpyAsync(
         cpStream->deviceB, cpStream->hostB, arrayByteSize, cudaMemcpyHostToDevice, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
 
     cuSt = cudaEventRecord(cpStream->beforeGemm[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
     cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, cpStream->cudaStream);
     if (cubSt != CUBLAS_STATUS_SUCCESS)
     {
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasSetStream", cubSt, m_device->gpuId);
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasSetStream", cubSt, m_device->gpuId);
         return -1;
     }
 
@@ -869,7 +872,7 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
                                          TS_TEST_DIMENSION);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasDgemm", cubSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasDgemm", cubSt, m_device->gpuId);
             return -1;
         }
     }
@@ -891,7 +894,7 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
                                          TS_TEST_DIMENSION);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasSgemm", cubSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasSgemm", cubSt, m_device->gpuId);
             return -1;
         }
     }
@@ -899,7 +902,7 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
     cuSt = cudaEventRecord(cpStream->beforeCopyD2H[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -908,14 +911,14 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
         cpStream->hostC, cpStream->deviceC, arrayByteSize, cudaMemcpyDeviceToHost, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
 
     cuSt = cudaEventRecord(cpStream->afterCopyD2H[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -974,7 +977,7 @@ void ConstantPerfWorker::run(void)
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";
-    m_plugin.AddInfo(ss.str());
+    m_plugin.AddInfo(TS_PLUGIN_NAME, ss.str());
 
     startTime            = timelib_dsecSince1970();
     lastPrintTime        = startTime;
@@ -1032,7 +1035,7 @@ void ConstantPerfWorker::run(void)
                 cuSt = cudaEventRecord(cpStream->afterWorkBlock, m_device->streams[i].cudaStream);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaEventRecord", cuSt, m_device->gpuId);
+                    LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
                     /* An error here causes problems for the rest of the test due to time calculations. */
                     break;
                 }
@@ -1062,7 +1065,7 @@ void ConstantPerfWorker::run(void)
             m_plugin.SetGpuStat(m_device->gpuId, "nops_so_far", (long long)Nops);
             ss.str("");
             ss << "DeviceIdx " << m_device->gpuId << ", ops " << Nops << ", gflops " << gflops;
-            m_plugin.AddInfo(ss.str());
+            m_plugin.AddInfo(TS_PLUGIN_NAME, ss.str());
             lastPrintTime = now;
         }
 

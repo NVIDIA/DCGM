@@ -13,16 +13,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <nvml.h>
 
 #include "nvml_injection_structs.h"
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define PASS_THROUGH_MODE "NVML_PASS_THROUGH_MODE"
+#define PASS_THROUGH_MODE             "NVML_PASS_THROUGH_MODE"
+#define NVML_INJECTION_MAX_EXTRA_KEYS 4
+#define NVML_INJECTION_MAX_VALUES     4
+#define NVML_INJECTION_MAX_RETURNS    8
+#define NVML_MAX_FUNCS                1024
+#define NVML_MAX_FUNC_NAME_LENGTH     1024
+/*
+ * @param nvmlRet       (I) - nvmlRet
+ * @param values        (I) - the values we are setting
+ * @param valueCount    (I) - number of values that are valid
+ */
+typedef struct
+{
+    nvmlReturn_t nvmlRet;
+    injectNvmlVal_t values[NVML_INJECTION_MAX_VALUES + 1];
+    unsigned int valueCount;
+} injectNvmlRet_t;
+
+typedef struct
+{
+    char funcName[NVML_MAX_FUNC_NAME_LENGTH];
+    uint32_t funcCallCount;
+} injectNvmlFuncCallInfo_t;
+
+typedef struct
+{
+    injectNvmlFuncCallInfo_t funcCallInfo[NVML_MAX_FUNCS];
+    unsigned numFuncs;
+} injectNvmlFuncCallCounts_t;
 
 /*
  * Must be called before using the library to initialize it correctly
@@ -39,33 +70,67 @@ nvmlReturn_t injectionNvmlInit();
 nvmlReturn_t injectionNvmlShutdown();
 
 /*
- * Sets a value associated with the specified key for the nvmlDevice
- *
- * @param nvmlDevice (I) - the NVML device whose value we're setting
- * @param key        (I) - the key associated with the value
- * @param value      (I) - the value we are setting
- * @return NVML_SUCCESS or NVML_* to indicate an error
- */
-nvmlReturn_t nvmlDeviceSimpleInject(nvmlDevice_t nvmlDevice, const char *key, const injectNvmlVal_t *value);
-
-/*
  *
  */
 nvmlReturn_t nvmlCreateDevice(unsigned int index);
 
 /*
- * Sets a value associated with two keys for the nvmlDevice
+ * Sets values and nvmlReturn_t associated with keys for the nvmlDevice
  *
- * @param nvmlDevice (I) - the NVML device whose value we're setting
- * @param key        (I) - the first key associated with the value
- * @param extraKey   (I) - the second key associated with the value (doesn't have to be a string)
- * @param value      (I) - the value we are setting
+ * @param nvmlDevice    (I) - the NVML device whose value we're setting
+ * @param key           (I) - the first key associated with the value
+ * @param extraKeys     (I) - the further keys associated with the values (doesn't have to be a string)
+ * @param extraKeyCount (I) - number of extraKeys that are valid
+ * @param injectNvmlRet (I) - return associated with the keys
  * @return NVML_SUCCESS or NVML_* to indicate an error
  */
-nvmlReturn_t nvmlDeviceInjectExtraKey(nvmlDevice_t nvmlDevice,
-                                      const char *key,
-                                      const injectNvmlVal_t *extraKey,
-                                      const injectNvmlVal_t *value);
+nvmlReturn_t nvmlDeviceInject(nvmlDevice_t nvmlDevice,
+                              const char *key,
+                              const injectNvmlVal_t *extraKeys,
+                              unsigned int extraKeyCount,
+                              const injectNvmlRet_t *injectNvmlRet);
+
+/*
+ * Sets values and nvmlReturn_t associated with keys for the nvmlDevice
+ *
+ * @param nvmlDevice    (I) - the NVML device whose value we're setting
+ * @param key           (I) - the first key associated with the value
+ * @param extraKeys     (I) - the further keys associated with the values (doesn't have to be a string)
+ * @param extraKeyCount (I) - number of extraKeys that are valid
+ * @param injectNvmlRet (I) - return associated with the keys
+ * @param retCount      (I) - number of injectNvmlRet which is valid
+ * @return NVML_SUCCESS or NVML_* to indicate an error
+ */
+nvmlReturn_t nvmlDeviceInjectForFollowingCalls(nvmlDevice_t nvmlDevice,
+                                               const char *key,
+                                               const injectNvmlVal_t *extraKeys,
+                                               unsigned int extraKeyCount,
+                                               const injectNvmlRet_t *injectNvmlRet,
+                                               unsigned int retCount);
+
+/*
+ * Gets the nvml function call count since the last nvmlResetFuncCallCount
+ *
+ * @param funcCallInfo    - array of functions called after a reset
+ * @param numFuncs        - array count
+ * @return NVML_SUCCESS or NVML_* to indicate an error
+ */
+nvmlReturn_t nvmlGetFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts);
+
+/*
+ * Resets the nvml functions' call count
+ *
+ * @return NVML_SUCCESS or NVML_* to indicate an error
+ */
+nvmlReturn_t nvmlResetFuncCallCount();
+
+/*
+ * Reset nvml device to loaded state
+ *
+ * @param nvmlDevice    (I) - the target NVML device
+ * @return NVML_SUCCESS or NVML_* to indicate an error
+ */
+nvmlReturn_t nvmlDeviceReset(nvmlDevice_t nvmlDevice);
 
 /*
  * Stores the field value for the NVML device

@@ -19,6 +19,7 @@
 #include "Brokenp2p.h"
 
 #include "Pcie.h"
+#include "PluginStrings.h"
 
 #define ERR_BUF_SIZE 2048
 
@@ -181,10 +182,10 @@ nvvsPluginResult_t Brokenp2p::RunTest()
                                << " failed: '" << errBuf << "'.";
                 DcgmError d1Err { m_gpus[d1]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_MEMORY_DEVICE, d1Err, m_gpus[d1]->gpuId, errStr.c_str());
-                m_bg->AddErrorForGpu(m_gpus[d1]->gpuId, d1Err);
+                m_bg->AddErrorForGpu(PCIE_PLUGIN_NAME, m_gpus[d1]->gpuId, d1Err);
                 DcgmError d2Err { m_gpus[d2]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_WRITER_DEVICE, d2Err, m_gpus[d2]->gpuId, errStr.c_str());
-                m_bg->AddErrorForGpu(m_gpus[d2]->gpuId, d2Err);
+                m_bg->AddErrorForGpu(PCIE_PLUGIN_NAME, m_gpus[d2]->gpuId, d2Err);
                 ret = NVVS_RESULT_FAIL;
             }
             else

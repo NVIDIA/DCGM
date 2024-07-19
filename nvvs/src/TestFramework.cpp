@@ -205,13 +205,14 @@ std::string TestFramework::GetPluginBaseDir()
     return pluginsPath;
 }
 
-std::string TestFramework::GetPluginDirExtension() const
+std::optional<std::string> TestFramework::GetPluginCudaDirExtension() const
 {
     unsigned int cudaMajorVersion = dcgmSystem.GetCudaMajorVersion();
     unsigned int cudaMinorVersion = dcgmSystem.GetCudaMinorVersion();
     if (cudaMajorVersion == 0)
     {
-        throw std::runtime_error("Unable to detect Cuda version. Please verify that libcuda.so.1 is on the system.");
+        log_error("Unable to detect Cuda version.");
+        return std::nullopt;
     }
 
     log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
@@ -234,12 +235,7 @@ std::string TestFramework::GetPluginDirExtension() const
     }
 
     // NOT-REACHED
-    return "";
-}
-
-std::string TestFramework::GetPluginDir()
-{
-    return GetPluginBaseDir() + GetPluginDirExtension();
+    return std::nullopt;
 }
 
 void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName)
@@ -284,6 +280,7 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
                 if (ret == DCGM_ST_OK)
                 {
                     m_plugins.push_back(std::move(pl));
+                    log_debug("Successfully loaded dlib {}", libraryName);
                 }
                 else
                 {
@@ -352,13 +349,22 @@ bool TestFramework::PluginPermissionsMatch(const std::string &pluginDir, const s
     return match;
 }
 
-/*****************************************************************************/
-void TestFramework::loadPlugins()
+std::optional<std::string> TestFramework::GetPluginUsingDriverDir()
+{
+    auto baseDir                                      = GetPluginBaseDir();
+    std::optional<std::string> pluginCudaDirExtension = GetPluginCudaDirExtension();
+    if (!pluginCudaDirExtension)
+    {
+        return std::nullopt;
+    }
+    return baseDir + *pluginCudaDirExtension;
+}
+
+void TestFramework::LoadPluginWithDir(std::string const &pluginDir)
 {
     // plugin discovery
     char oldPath[2048]    = { 0 };
-    std::string pluginDir = GetPluginDir();
-    struct dirent *dirent = 0;
+    struct dirent *dirent = nullptr;
     DIR *dir;
     std::string dotSo(".so");
     std::map<std::string, maker_t *, std::less<std::string>>::iterator fitr;
@@ -378,9 +384,6 @@ void TestFramework::loadPlugins()
         log_error(errbuf.str());
         throw std::runtime_error(errbuf.str());
     }
-
-    // Load the pluginCommon library first so that those libraries can find the appropriate symbols
-    LoadLibrary("./libpluginCommon.so", "libpluginCommon.so");
 
     if ((dir = opendir(".")) == 0)
     {
@@ -404,21 +407,57 @@ void TestFramework::loadPlugins()
 
         // Do not load any plugins with different permissions / owner than the diagnostic binary
         if (!PluginPermissionsMatch(pluginDir, buf))
+        {
             continue;
+        }
 
         LoadLibrary(buf, dirent->d_name);
     }
 
     closedir(dir);
-
     chdir(oldPath);
+}
+
+std::string TestFramework::GetPluginCudalessDir()
+{
+    return GetPluginBaseDir() + "/cudaless/";
+}
+
+/*****************************************************************************/
+void TestFramework::loadPlugins()
+{
+    std::string cudalessPluginDir                   = GetPluginCudalessDir();
+    std::string pluginCommonPath                    = cudalessPluginDir + "/libpluginCommon.so";
+    std::optional<std::string> usingDriverPluginDir = GetPluginUsingDriverDir();
+
+    // Load the pluginCommon library first so that those libraries can find the appropriate symbols
+    LoadLibrary(pluginCommonPath.c_str(), "libpluginCommon.so");
+    LoadPluginWithDir(cudalessPluginDir);
+
+    if (usingDriverPluginDir)
+    {
+        LoadPluginWithDir(*usingDriverPluginDir);
+    }
+    else
+    {
+        log_error(
+            "failed to get path of plugin using driver, it may lack of driver. Skip loading plugins that need driver.");
+    }
 
     for (size_t i = 0; i < m_plugins.size(); i++)
     {
-        auto temp = new Test(
-            GetTestIndex(m_plugins[i]->GetName()), m_plugins[i]->GetDescription(), m_plugins[i]->GetTestGroup());
-        m_testList.insert(m_testList.end(), temp);
-        insertIntoTestGroup(m_plugins[i]->GetTestGroup(), temp);
+        auto pluginTests = m_plugins[i]->GetPluginTests();
+        for (const auto &[testName, pluginTest] : pluginTests)
+        {
+            log_debug("test [{}] in plugin [{}] oberseved", testName, m_plugins[i]->GetName());
+            auto *temp = new Test(GetTestIndex(testName),
+                                  pluginTest.GetDescription(),
+                                  pluginTest.GetTestGroup(),
+                                  m_plugins[i]->GetName());
+            m_testList.insert(m_testList.end(), temp);
+            insertIntoTestGroup(pluginTest.GetTestGroup(), temp);
+            m_testNameToPluginName[testName] = m_plugins[i]->GetName();
+        }
     }
 }
 
@@ -557,7 +596,7 @@ void TestFramework::PopulateGpuInfoForPlugins(std::vector<Gpu *> &gpuList,
     }
 }
 
-std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const std::string &pluginName, bool reverse)
+std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const std::string &testName, bool reverse)
 {
     std::string compareName;
     if (classNum == Test::NVVS_CLASS_SOFTWARE)
@@ -566,7 +605,7 @@ std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const
     }
     else if (!reverse)
     {
-        compareName = pluginName;
+        compareName = testName;
         std::transform(compareName.begin(), compareName.end(), compareName.begin(), [](unsigned char c) {
             if (c == ' ')
             {
@@ -577,7 +616,7 @@ std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const
     }
     else
     {
-        compareName = pluginName;
+        compareName = testName;
         std::transform(compareName.begin(), compareName.end(), compareName.begin(), [](unsigned char c) {
             if (c == '_')
             {
@@ -665,10 +704,11 @@ void TestFramework::goList(Test::testClasses_enum classNum,
         unsigned int vecSize = test->getArgVectorSize(classNum);
         for (unsigned int i = 0; i < vecSize; i++)
         {
-            TestParameters *tp = test->popArgVectorElement(classNum);
-            std::string name   = tp->GetString(PS_PLUGIN_NAME);
+            TestParameters *tp     = test->popArgVectorElement(classNum);
+            std::string pluginName = tp->GetString(PS_PLUGIN_NAME);
+            std::string testName   = test->GetTestName();
 
-            int pluginIndex = GetPluginIndex(classNum, name);
+            int pluginIndex = GetPluginIndex(classNum, pluginName);
 
             if (test->GetTestIndex() == DCGM_PULSE_TEST_INDEX)
             {
@@ -680,36 +720,44 @@ void TestFramework::goList(Test::testClasses_enum classNum,
             if (pluginIndex == -1)
             {
                 // Error! Didn't find the named plugin. Report fake results for it
-                DCGM_LOG_ERROR << "Couldn't find the plugin '" << name << "'";
+                DCGM_LOG_ERROR << "Couldn't find the plugin '" << pluginName << "'";
                 std::vector<dcgmDiagSimpleResult_t> perGpuResults;
                 std::vector<dcgmDiagErrorDetail_v2> errors;
                 std::vector<dcgmDiagErrorDetail_v2> info;
                 dcgmDiagErrorDetail_v2 error = {};
                 error.code                   = -1;
                 error.gpuId                  = -1;
-                snprintf(error.msg, sizeof(error.msg), "Unable to find plugin '%s'", name.c_str());
+                snprintf(error.msg, sizeof(error.msg), "Unable to find plugin '%s'", pluginName.c_str());
                 errors.push_back(error);
 
                 m_output->Result(NVVS_RESULT_FAIL, perGpuResults, errors, info);
                 continue;
             }
 
-            m_output->prep(name);
+            // software hardcoded its plugin name to specific test name (e.g. Denylist)
+            if (classNum == Test::NVVS_CLASS_SOFTWARE)
+            {
+                m_output->prep(pluginName);
+            }
+            else
+            {
+                m_output->prep(testName);
+            }
             if (!skipRest && !main_should_stop)
             {
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
                 {
                     if (!nvvsCommon.requirePersistenceMode)
                         tp->AddString(SW_STR_REQUIRE_PERSISTENCE, "False");
-                    if (name == "Denylist")
+                    if (pluginName == "Denylist")
                         tp->AddString(SW_STR_DO_TEST, "denylist");
-                    else if (name == "NVML Library")
+                    else if (pluginName == "NVML Library")
                         tp->AddString(SW_STR_DO_TEST, "libraries_nvml");
-                    else if (name == "CUDA Main Library")
+                    else if (pluginName == "CUDA Main Library")
                         tp->AddString(SW_STR_DO_TEST, "libraries_cuda");
-                    else if (name == "CUDA Toolkit Libraries")
+                    else if (pluginName == "CUDA Toolkit Libraries")
                         tp->AddString(SW_STR_DO_TEST, "libraries_cudatk");
-                    else if (name == "Permissions and OS-related Blocks")
+                    else if (pluginName == "Permissions and OS-related Blocks")
                     {
                         tp->AddString(SW_STR_DO_TEST, "permissions");
                         if (checkFileCreation)
@@ -721,27 +769,27 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                             tp->AddString(SW_STR_CHECK_FILE_CREATION, "False");
                         }
                     }
-                    else if (name == "Persistence Mode")
+                    else if (pluginName == "Persistence Mode")
                         tp->AddString(SW_STR_DO_TEST, "persistence_mode");
-                    else if (name == "Environmental Variables")
+                    else if (pluginName == "Environmental Variables")
                         tp->AddString(SW_STR_DO_TEST, "env_variables");
-                    else if (name == "Page Retirement/Row Remap")
+                    else if (pluginName == "Page Retirement/Row Remap")
                         tp->AddString(SW_STR_DO_TEST, "page_retirement");
-                    else if (name == "Graphics Processes")
+                    else if (pluginName == "Graphics Processes")
                         tp->AddString(SW_STR_DO_TEST, "graphics_processes");
-                    else if (name == "Inforom")
+                    else if (pluginName == "Inforom")
                         tp->AddString(SW_STR_DO_TEST, "inforom");
                 }
 
                 DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
 
-                m_plugins[pluginIndex]->RunTest(600, tp);
+                m_plugins[pluginIndex]->RunTest(test->GetTestName(), 600, tp);
 
-                m_output->Result(m_plugins[pluginIndex]->GetResult(),
-                                 m_plugins[pluginIndex]->GetResults(),
-                                 m_plugins[pluginIndex]->GetErrors(),
-                                 m_plugins[pluginIndex]->GetInfo(),
-                                 m_plugins[pluginIndex]->GetAuxData());
+                m_output->Result(m_plugins[pluginIndex]->GetResult(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetResults(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetErrors(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetInfo(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetAuxData(test->GetTestName()));
 
                 if (classNum == Test::NVVS_CLASS_SOFTWARE)
                 {
@@ -754,17 +802,18 @@ void TestFramework::goList(Test::testClasses_enum classNum,
                 /* If the test hasn't been run (test->go() was not called), test->GetResults() returns
                  * empty results, which is treated as the test being skipped.
                  */
-                m_output->Result(m_plugins[pluginIndex]->GetResult(),
-                                 m_plugins[pluginIndex]->GetResults(),
-                                 m_plugins[pluginIndex]->GetErrors(),
-                                 m_plugins[pluginIndex]->GetInfo(),
-                                 m_plugins[pluginIndex]->GetAuxData());
+                m_output->Result(m_plugins[pluginIndex]->GetResult(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetResults(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetErrors(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetInfo(test->GetTestName()),
+                                 m_plugins[pluginIndex]->GetAuxData(test->GetTestName()));
             }
 
-            DCGM_LOG_DEBUG << "Test " << name << " had over result " << m_plugins[pluginIndex]->GetResult()
-                           << ". Configless is " << nvvsCommon.configless;
+            DCGM_LOG_DEBUG << "Test " << testName << " had over result "
+                           << m_plugins[pluginIndex]->GetResult(test->GetTestName()) << ". Configless is "
+                           << nvvsCommon.configless;
 
-            if (m_plugins[pluginIndex]->GetResult() == NVVS_RESULT_FAIL
+            if (m_plugins[pluginIndex]->GetResult(test->GetTestName()) == NVVS_RESULT_FAIL
                 && ((!nvvsCommon.configless) || nvvsCommon.failEarly))
 
             {
@@ -786,17 +835,31 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
 
     for (unsigned int i = 0; i < m_plugins.size(); i++)
     {
-        std::string Name = GetCompareName(Test::NVVS_CLASS_CUSTOM, m_plugins[i]->GetName(), true);
-        auto &p          = parms[Name];
-        p                = m_plugins[i]->GetParameterInfo();
-        //
-        // Add parameters common for all subtests
-        //
-        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_SUITE_LEVEL, DcgmPluginParamInt });
-        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE, DcgmPluginParamString });
-        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
-        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
+        for (const auto &[testName, pluginTest] : m_plugins[i]->GetPluginTests())
+        {
+            std::string Name = GetCompareName(Test::NVVS_CLASS_CUSTOM, pluginTest.GetName(), true);
+            auto &p          = parms[Name];
+            p                = m_plugins[i]->GetParameterInfo(testName);
+            //
+            // Add parameters common for all subtests
+            //
+            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_SUITE_LEVEL, DcgmPluginParamInt });
+            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE, DcgmPluginParamString });
+            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
+            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
+        }
     }
 
     return parms;
+}
+
+std::string TestFramework::GetPluginNameFromTestName(std::string const &testName) const
+{
+    auto it = m_testNameToPluginName.find(testName);
+    if (it == m_testNameToPluginName.end())
+    {
+        log_error("Cannot find plugin name from test name [{}]", testName);
+        return "";
+    }
+    return it->second;
 }

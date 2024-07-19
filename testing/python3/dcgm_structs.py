@@ -123,6 +123,8 @@ DCGM_ST_NVVS_ISOLATE_ERROR          = -51  # The diagnostic returned an error th
 DCGM_ST_NVVS_BINARY_NOT_FOUND       = -52  # The NVVS binary was not found in the specified location
 DCGM_ST_NVVS_KILLED                 = -53  # The NVVS process was killed by a signal
 DCGM_ST_PAUSED                      = -54  # The hostengine and all modules are paused
+DCGM_ST_ALREADY_INITIALIZED         = -55  # The object is already initialized
+DCGM_ST_NVML_NOT_LOADED             = -56  # NVML couldn't be loaded on this system
 
 DCGM_GROUP_DEFAULT = 0  # All the GPUs on the node are added to the group
 DCGM_GROUP_EMPTY   = 1  # Creates an empty group
@@ -180,7 +182,7 @@ DCGM_MEMTEST_INDEX          = 7
 DCGM_PULSE_TEST_INDEX       = 8
 DCGM_EUD_TEST_INDEX         = 9
 DCGM_UNUSED2_TEST_INDEX     = 10
-DCGM_UNUSED3_TEST_INDEX     = 11
+DCGM_CPU_EUD_TEST_INDEX     = 11
 DCGM_UNUSED4_TEST_INDEX     = 12
 DCGM_UNUSED5_TEST_INDEX     = 13
 DCGM_PER_GPU_TEST_COUNT_V7  = 9
@@ -269,6 +271,11 @@ class DCGMError(Exception):
         DCGM_ST_INSUFFICIENT_RESOURCES:      "Not enough resources available",
         DCGM_ST_PLUGIN_EXCEPTION:            "Exception thrown from a diagnostic plugin",
         DCGM_ST_NVVS_ISOLATE_ERROR:          "The diagnostic returned an error that indicates the need for isolation",
+        DCGM_ST_NVVS_BINARY_NOT_FOUND:       "The NVVS binary was not found in the specified location",
+        DCGM_ST_NVVS_KILLED:                 "The NVVS process was killed by a signal",
+        DCGM_ST_PAUSED:                      "The hostengine and all modules are paused",
+        DCGM_ST_ALREADY_INITIALIZED:         "The object is already initialized",
+        DCGM_ST_NVML_NOT_LOADED:             "NVML couldn't be loaded on this system",
     }
 
     def __new__(typ, value):
@@ -1734,10 +1741,39 @@ class c_dcgmDiagResponsePerGpu_v5(_PrintableStructure):
         ('results', c_dcgmDiagTestResult_v3 * DCGM_PER_GPU_TEST_COUNT_V8)
     ]
 
+DCGM_DIAG_AUX_DATA_LEN = 2048
+
+class c_dcgmDiagTestAuxData_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('data', c_char * DCGM_DIAG_AUX_DATA_LEN)
+    ]
+
+dcgmDiagTestAuxData_version1 = make_dcgm_version(c_dcgmDiagTestAuxData_v1, 1)
+
+dcgmDiagTestAuxData_version = dcgmDiagTestAuxData_version1
+
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
 DCGM_DEVICE_ID_LEN = 5
 DCGM_VERSION_LEN = 12
+
+class c_dcgmDiagResponse_v10(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('gpuCount', c_uint),
+        ('levelOneTestCount', c_uint),
+        ('levelOneResults', c_dcgmDiagTestResult_v3 * LEVEL_ONE_MAX_RESULTS),
+        ('perGpuResponses', c_dcgmDiagResponsePerGpu_v5 * DCGM_MAX_NUM_DEVICES),
+        ('systemError',     c_dcgmDiagErrorDetail_v2),
+        ('devIds', c_char * DCGM_MAX_NUM_DEVICES * DCGM_DEVICE_ID_LEN),
+        ('devSerials', c_char * DCGM_MAX_NUM_DEVICES * DCGM_MAX_STR_LENGTH),
+        ('dcgmVersion', c_char * DCGM_VERSION_LEN),
+        ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
+        ('auxDataPerTest', c_dcgmDiagTestAuxData_v1 * DCGM_PER_GPU_TEST_COUNT_V8),
+    ]
+
+dcgmDiagResponse_version10 = make_dcgm_version(c_dcgmDiagResponse_v10, 10)
 
 class c_dcgmDiagResponse_v9(_PrintableStructure):
     _fields_ = [
@@ -1902,7 +1938,6 @@ c_dcgmRunDiag_t = c_dcgmRunDiag_v7
 
 # Latest version for dcgmRunDiag_t
 dcgmRunDiag_version = dcgmRunDiag_version7
-
 
 #Flags for dcgmGetEntityGroupEntities's flags parameter
 DCGM_GEGE_FLAG_ONLY_SUPPORTED = 0x00000001 #Only return entities that are supported by DCGM.

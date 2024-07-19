@@ -32,12 +32,16 @@ const std::vector<DcgmError> Test::m_emptyErrors;
 const nvvsPluginGpuErrors_t Test::m_emptyPerGpuErrors;
 
 /*****************************************************************************/
-Test::Test(dcgmPerGpuTestIndices_t index, const std::string &description, const std::string &testGroup)
+Test::Test(dcgmPerGpuTestIndices_t index,
+           const std::string &description,
+           const std::string &testGroup,
+           const std::string &pluginName)
     : m_index(index)
     , m_argMap()
     , m_skipTest(false)
     , m_description(description)
     , m_testGroup(testGroup)
+    , m_pluginName(pluginName)
 {}
 
 /*****************************************************************************/

@@ -912,6 +912,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     assert numErrors == 0, "Got %d errors" % numErrors
 
 @test_utils.run_only_with_gpus_present()
+@test_utils.run_only_with_nvml()
 def test_dcgm_verify_manual_mode_behavior():
     """  
     Test to verify that field values cannot be
@@ -959,6 +960,7 @@ def test_dcgm_verify_manual_mode_behavior():
 
 
 @test_utils.run_only_with_gpus_present()
+@test_utils.run_only_with_nvml()
 def test_dcgm_verify_auto_mode_behavior():
     """  
     Test to verify that field values can be retrieved

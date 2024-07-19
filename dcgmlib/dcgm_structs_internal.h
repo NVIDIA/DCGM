@@ -815,16 +815,39 @@ typedef struct
 } dcgmMsgNvmlCreateInjectionGpu_v1;
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
-#define DCGM_MAX_EXTRA_KEYS 4
+
 typedef struct
 {
     unsigned int gpuId;                             //!< IN: the DCGM gpu id of the device being injected
     char key[DCGM_MAX_STR_LENGTH];                  //!< IN: The key for the NVML injected value
-    injectNvmlVal_t extraKeys[DCGM_MAX_EXTRA_KEYS]; //!< IN: extra keys, optional
+    injectNvmlVal_t extraKeys[NVML_INJECTION_MAX_EXTRA_KEYS + 1]; //!< IN: extra keys, optional
     unsigned int extraKeyCount;                     //!< IN: the number of extra keys
-    injectNvmlVal_t value;                          //!< IN: the NVML value being injected
+    injectNvmlRet_t injectNvmlRet;                                //!< IN: the return to the associate keys
     unsigned int cmdRet;                            //!< OUT: Error code generated
 } dcgmMsgNvmlInjectDevice_v1;
+
+typedef struct
+{
+    unsigned int gpuId;                                           //!< IN: the DCGM gpu id of the device being injected
+    char key[DCGM_MAX_STR_LENGTH];                                //!< IN: The key for the NVML injected value
+    injectNvmlVal_t extraKeys[NVML_INJECTION_MAX_EXTRA_KEYS + 1]; //!< IN: extra keys, optional
+    unsigned int extraKeyCount;                                   //!< IN: the number of extra keys
+    injectNvmlRet_t injectNvmlRets[NVML_INJECTION_MAX_RETURNS + 1]; //!< IN: the returns to the associate keys
+    unsigned int retCount;                                          //!< IN: count of valid injectNvmlRets
+    unsigned int cmdRet;                                            //!< OUT: Error code generated
+} dcgmMsgNvmlInjectDeviceForFollowingCalls_v1;
+
+typedef struct
+{
+    unsigned int gpuId;  //!< IN: the DCGM gpu id of the device being injected
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmMsgNvmlInjectedDeviceReset_v1;
+
+typedef struct
+{
+    injectNvmlFuncCallCounts_t funcCallCounts; //!< OUT: the NVML function call count info
+    unsigned int cmdRet;                       //!< OUT: Error code generated
+} dcgmMsgGetNvmlInjectFuncCallCount_v1;
 #endif
 
 /**
@@ -870,7 +893,9 @@ DCGM_CASSERT(dcgmPolicyCallbackResponse_version == (long)16777240, 1);
 DCGM_CASSERT(dcgmDiagResponse_version7 == (long)0x07099290, 1);
 DCGM_CASSERT(dcgmDiagResponse_version8 == (long)0x80d9690, 8);
 DCGM_CASSERT(dcgmDiagResponse_version9 == (long)0x914f4dc, 9);
-DCGM_CASSERT(dcgmDiagResponse_version == (long)0x914f4dc, 9);
+DCGM_CASSERT(dcgmDiagResponse_version10 == (long)0xa155abc, 10);
+DCGM_CASSERT(dcgmDiagTestAuxData_version1 == (long)0x1000804, 10);
+DCGM_CASSERT(dcgmDiagTestAuxData_version == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmRunDiag_version7 == (long)0x70054D0, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version6 == (long)16787744, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version7 == (long)117451168, 1);

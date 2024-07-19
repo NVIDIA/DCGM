@@ -29,6 +29,7 @@ std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
 }
 
 std::string AddAPIError(Plugin *p,
+                        std::string const &testName,
                         const char *callName,
                         const char *errorText,
                         unsigned int gpuId,
@@ -39,6 +40,7 @@ std::string AddAPIError(Plugin *p,
 }
 
 std::string AddCudaError(Plugin *p,
+                         std::string const &testName,
                          const char *callName,
                          cudaError_t cuSt,
                          unsigned int gpuId,
@@ -49,6 +51,7 @@ std::string AddCudaError(Plugin *p,
 }
 
 std::string AddCudaError(Plugin *p,
+                         std::string const &testName,
                          const char *callName,
                          CUresult cuSt,
                          unsigned int gpuId,
@@ -59,6 +62,7 @@ std::string AddCudaError(Plugin *p,
 }
 
 std::string AddCublasError(Plugin *p,
+                           std::string const &testName,
                            const char *callName,
                            cublasStatus_t cubSt,
                            unsigned int gpuId,

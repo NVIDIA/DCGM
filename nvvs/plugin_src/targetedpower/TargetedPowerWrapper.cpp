@@ -15,6 +15,8 @@
  */
 #include "TargetedPower_wrapper.h"
 
+#include "DcgmStringHelpers.h"
+
 #include <PluginLib.h>
 #include <PluginStrings.h>
 
@@ -63,19 +65,22 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
 
     unsigned int paramCount = 0;
 
+    info->numValidTests = 1;
+
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->validParameters[paramCount].parameterName,
-                 sizeof(info->validParameters[paramCount].parameterName),
+        snprintf(info->tests[0].validParameters[paramCount].parameterName,
+                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
                  "%s",
                  parameterNames[paramCount]);
-        info->validParameters[paramCount].parameterType = paramTypes[paramCount];
+        info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
 
-    info->numValidParameters = paramCount;
+    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(TP_PLUGIN_NAME)>(info->tests[0].testeName, TP_PLUGIN_NAME);
+    info->tests[0].numValidParameters = paramCount;
 
     snprintf(info->pluginName, sizeof(info->pluginName), "%s", TP_PLUGIN_NAME);
-    snprintf(info->testGroup, sizeof(info->testGroup), "Power");
+    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "Power");
     snprintf(info->description,
              sizeof(info->description),
              "This plugin will keep the list of GPUs at a constant power level.");
@@ -104,17 +109,18 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     return DCGM_ST_OK;
 }
 
-void RunTest(unsigned int timeout,
+void RunTest(const char *testName,
+             unsigned int timeout,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
              void *userData)
 {
     auto cp = (ConstantPower *)userData;
-    cp->Go(numParameters, testParameters);
+    cp->Go(testName, numParameters, testParameters);
 }
 
 
-void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
+void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
     if (customStats != nullptr)
     {
@@ -123,10 +129,10 @@ void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
     }
 }
 
-void RetrieveResults(dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
 {
     auto cp = (ConstantPower *)userData;
-    cp->GetResults(results);
+    cp->GetResults(testName, results);
 }
 
 } // END extern "C"

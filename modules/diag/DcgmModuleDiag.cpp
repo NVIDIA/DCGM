@@ -37,6 +37,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
+    dcgmRunDiag_v7 &drd7 = msg->runDiag;
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version5);
     if (DCGM_ST_OK != dcgmReturn)
@@ -49,27 +50,27 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(msg->runDiag.fakeGpuList);
-    dcgmTerminateCharBuffer(msg->runDiag.gpuList);
-    dcgmTerminateCharBuffer(msg->runDiag.debugLogFile);
-    dcgmTerminateCharBuffer(msg->runDiag.statsPath);
-    dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
-    dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
-    dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
-    dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
+    dcgmTerminateCharBuffer(drd7.fakeGpuList);
+    dcgmTerminateCharBuffer(drd7.gpuList);
+    dcgmTerminateCharBuffer(drd7.debugLogFile);
+    dcgmTerminateCharBuffer(drd7.statsPath);
+    dcgmTerminateCharBuffer(drd7.configFileContents);
+    dcgmTerminateCharBuffer(drd7.throttleMask);
+    dcgmTerminateCharBuffer(drd7.pluginPath);
+    dcgmTerminateCharBuffer(drd7._unusedBuf);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testNames); i++)
     {
-        dcgmTerminateCharBuffer(msg->runDiag.testNames[i]);
+        dcgmTerminateCharBuffer(drd7.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testParms); i++)
     {
-        dcgmTerminateCharBuffer(msg->runDiag.testParms[i]);
+        dcgmTerminateCharBuffer(drd7.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd7, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         DCGM_LOG_ERROR << "RunDiagAndAction returned " << dcgmReturn;
@@ -82,6 +83,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
+    dcgmRunDiag_v7 &drd7 = msg->runDiag;
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version7);
     if (DCGM_ST_OK != dcgmReturn)
@@ -94,27 +96,27 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(msg->runDiag.fakeGpuList);
-    dcgmTerminateCharBuffer(msg->runDiag.gpuList);
-    dcgmTerminateCharBuffer(msg->runDiag.debugLogFile);
-    dcgmTerminateCharBuffer(msg->runDiag.statsPath);
-    dcgmTerminateCharBuffer(msg->runDiag.configFileContents);
-    dcgmTerminateCharBuffer(msg->runDiag.throttleMask);
-    dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
-    dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
+    dcgmTerminateCharBuffer(drd7.fakeGpuList);
+    dcgmTerminateCharBuffer(drd7.gpuList);
+    dcgmTerminateCharBuffer(drd7.debugLogFile);
+    dcgmTerminateCharBuffer(drd7.statsPath);
+    dcgmTerminateCharBuffer(drd7.configFileContents);
+    dcgmTerminateCharBuffer(drd7.throttleMask);
+    dcgmTerminateCharBuffer(drd7.pluginPath);
+    dcgmTerminateCharBuffer(drd7._unusedBuf);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testNames); i++)
     {
-        dcgmTerminateCharBuffer(msg->runDiag.testNames[i]);
+        dcgmTerminateCharBuffer(drd7.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testParms); i++)
     {
-        dcgmTerminateCharBuffer(msg->runDiag.testParms[i]);
+        dcgmTerminateCharBuffer(drd7.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&msg->runDiag, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd7, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         log_error("RunDiagAndAction returned {}", dcgmReturn);
@@ -127,6 +129,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
+    dcgmRunDiag_v7 &drd7 = msg->runDiag;
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version6);
     if (DCGM_ST_OK != dcgmReturn)
@@ -137,6 +140,49 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
     {
         drw.SetVersion8(&msg->diagResponse);
     }
+
+    /* Sanitize the inputs */
+    dcgmTerminateCharBuffer(drd7.fakeGpuList);
+    dcgmTerminateCharBuffer(drd7.gpuList);
+    dcgmTerminateCharBuffer(drd7.debugLogFile);
+    dcgmTerminateCharBuffer(drd7.statsPath);
+    dcgmTerminateCharBuffer(drd7.configFileContents);
+    dcgmTerminateCharBuffer(drd7.throttleMask);
+    dcgmTerminateCharBuffer(drd7.pluginPath);
+    dcgmTerminateCharBuffer(drd7._unusedBuf);
+
+    size_t i;
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testNames); i++)
+    {
+        dcgmTerminateCharBuffer(drd7.testNames[i]);
+    }
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd7.testParms); i++)
+    {
+        dcgmTerminateCharBuffer(drd7.testParms[i]);
+    }
+
+    /* Run the diag */
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd7, msg->action, drw, msg->header.connectionId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("RunDiagAndAction returned {}", dcgmReturn);
+    }
+
+    return dcgmReturn;
+}
+
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v8(dcgm_diag_msg_run_v8 *msg)
+{
+    dcgmReturn_t dcgmReturn;
+    DcgmDiagResponseWrapper drw;
+
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version8);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    drw.SetVersion10(&msg->diagResponse);
 
     /* Sanitize the inputs */
     dcgmTerminateCharBuffer(msg->runDiag.fakeGpuList);
@@ -167,7 +213,6 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 
     return dcgmReturn;
 }
-
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleDiag::ProcessStop(dcgm_diag_msg_stop_t *msg)
@@ -231,7 +276,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
                 }
                 else
                 {
-                    if (moduleCommand->version == dcgm_diag_msg_run_version7)
+                    if (moduleCommand->version == dcgm_diag_msg_run_version8)
+                    {
+                        retSt = ProcessRun_v8((dcgm_diag_msg_run_v8 *)(moduleCommand));
+                    }
+                    else if (moduleCommand->version == dcgm_diag_msg_run_version7)
                     {
                         retSt = ProcessRun_v7((dcgm_diag_msg_run_v7 *)moduleCommand);
                     }

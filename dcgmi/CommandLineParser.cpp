@@ -1552,8 +1552,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         runValue = startDiag.getValue();
     }
 
-    dcgmRunDiag_t drd = {};
-    drd.version       = dcgmRunDiag_version;
+    dcgmRunDiag_v7 drd = {};
+    drd.version        = dcgmRunDiag_version7;
     std::string error;
 
     // We set it to BLANK by default so the processes underneath can use the ENV

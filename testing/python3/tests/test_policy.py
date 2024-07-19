@@ -85,6 +85,7 @@ def test_dcgm_policy_negative_unregister_standalone(handle):
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
+@test_utils.run_only_with_nvml()
 def test_dcgm_policy_set_get_violation_policy_standalone(handle, gpuIds):
     """
     Verifies that set and get violation policy work

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "DcgmStringHelpers.h"
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <dcgm_structs.h>
@@ -30,8 +31,11 @@ unsigned int GetPluginInterfaceVersion(void)
 dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
 {
     snprintf(info->pluginName, sizeof(info->pluginName), "software");
-    info->numValidParameters = 0;
-    snprintf(info->testGroup, sizeof(info->testGroup), "test");
+    info->numValidTests               = 1;
+    info->tests[0].numValidParameters = 0;
+    const char *testName              = "test";
+    SafeCopyTo(info->tests[0].testeName, testName);
+    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "test");
     snprintf(info->description, sizeof(info->description), "test only");
     return DCGM_ST_OK;
 }
@@ -53,16 +57,17 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
     return DCGM_ST_OK;
 }
 
-void RunTest(unsigned int timeout,
+void RunTest(const char *testName,
+             unsigned int timeout,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
              void *userData)
 {}
 
-void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData)
+void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {}
 
-void RetrieveResults(dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
 {
     char *result = getenv("result");
 

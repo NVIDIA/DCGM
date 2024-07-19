@@ -34,9 +34,10 @@ extern "C" {
 
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* 2.4.0 -> 3.1.7 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* Current version - 3.1.8 -> 3.2.3 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* Current version - 3.2.5 and later */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* 3.1.8 -> 3.2.3 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* 3.2.5 -> 3.3.5 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5 5 /* Current version - 3.3.5 and later */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5
 
 /* IMPORTANT:
  *
@@ -60,6 +61,7 @@ typedef struct
 
 #define DCGM_MAX_PLUGIN_DESC_LEN       128
 #define DCGM_MAX_PLUGIN_NAME_LEN       20
+#define DCGM_MAX_PLUGIN_TEST_NUM       6
 #define DCGM_MAX_PARAMETERS_PER_PLUGIN 64
 #define DCGM_MAX_PARAMETER_NAME_LEN    50
 #define DCGM_DIAG_MAX_VALUE_LEN        50
@@ -83,11 +85,19 @@ typedef struct
 
 typedef struct
 {
-    char pluginName[DCGM_MAX_PLUGIN_NAME_LEN];                                     //!< the plugin name
+    char testeName[DCGM_MAX_PLUGIN_NAME_LEN];                                      //!< the test name
+    char description[DCGM_MAX_PLUGIN_DESC_LEN];                                    //!< A short description of the test
     unsigned int numValidParameters;                                               //!< the number of valid parameters
     dcgmDiagPluginParameterInfo_t validParameters[DCGM_MAX_PARAMETERS_PER_PLUGIN]; //!< an array of valid parameters
     char testGroup[DCGM_MAX_PLUGIN_NAME_LEN];                                      //!< the name of the test group
-    char description[DCGM_MAX_PLUGIN_DESC_LEN]; //!< A short description of the plugin
+} dcgmDiagPluginTest_t;
+
+typedef struct
+{
+    char pluginName[DCGM_MAX_PLUGIN_NAME_LEN];            //!< the plugin name
+    char description[DCGM_MAX_PLUGIN_DESC_LEN];           //!< A short description of the plugin
+    dcgmDiagPluginTest_t tests[DCGM_MAX_PLUGIN_TEST_NUM]; //!< Tests supported by this plugin
+    unsigned int numValidTests;                           //!< The number of valid tests
 } dcgmDiagPluginInfo_t;
 
 typedef struct
@@ -246,6 +256,21 @@ typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    void **userData,
                                                    DcgmLoggingSeverity_t loggingSeverity,
                                                    hostEngineAppenderCallbackFp_t loggingCallback);
+
+/**
+ * @brief Shuts down the plugin.
+ *
+ * This function would be called when the plugin class is destructing.
+ * It is responsible for releasing any resources that the plugin has allocated,
+ * and ensuring that the plugin is properly cleaned up before exit.
+ *
+ * @param userData[in]        - the user data set in InitializePlugin()
+ *
+ * @return DCGM_ST_OK         - if successed.
+ *         DCGM_ST_*          - if an error occured.
+ **/
+DCGM_PUBLIC_API dcgmReturn_t ShutdownPlugin(void *userData);
+
 typedef dcgmReturn_t (*dcgmDiagShutdownPlugin_f)(void *userData);
 
 /*
@@ -256,11 +281,13 @@ typedef dcgmReturn_t (*dcgmDiagShutdownPlugin_f)(void *userData);
  * @param testParameters[in]  - an array of parameters to control different functions for the
  * @param userData[in]        - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RunTest(unsigned int timeout,
+DCGM_PUBLIC_API void RunTest(const char *testName,
+                             unsigned int timeout,
                              unsigned int numParameters,
                              const dcgmDiagPluginTestParameter_t *testParameters,
                              void *userData);
-typedef void (*dcgmDiagRunTest_f)(unsigned int timeout,
+typedef void (*dcgmDiagRunTest_f)(const char *testName,
+                                  unsigned int timeout,
                                   unsigned int numParameters,
                                   const dcgmDiagPluginTestParameter_t *testParameters,
                                   void *userData);
@@ -271,8 +298,8 @@ typedef void (*dcgmDiagRunTest_f)(unsigned int timeout,
  * @param customStats[out]  - the plugin should write any custom stats to be added to the stats file here
  * @param userData[in]      - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RetrieveCustomStats(dcgmDiagCustomStats_t *customStats, void *userData);
-typedef void (*dcgmDiagRetrieveCustomStats_f)(dcgmDiagCustomStats_t *customStats, void *userData);
+DCGM_PUBLIC_API void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData);
+typedef void (*dcgmDiagRetrieveCustomStats_f)(const char *testName, dcgmDiagCustomStats_t *customStats, void *userData);
 
 /**
  * Pass results from the plugin to the diagnostic.
@@ -281,8 +308,8 @@ typedef void (*dcgmDiagRetrieveCustomStats_f)(dcgmDiagCustomStats_t *customStats
  * @param results[out] - detailed results for the plugin
  * @param userData[in] - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RetrieveResults(dcgmDiagResults_t *results, void *userData);
-typedef void (*dcgmDiagRetrieveResults_f)(dcgmDiagResults_t *results, void *userData);
+DCGM_PUBLIC_API void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData);
+typedef void (*dcgmDiagRetrieveResults_f)(const char *testName, dcgmDiagResults_t *results, void *userData);
 
 #ifdef __cplusplus
 } // END extern "C"

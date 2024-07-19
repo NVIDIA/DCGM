@@ -106,7 +106,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuIn
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Cannot initialize the plugin without GPU information.");
-        AddError(d);
+        AddError(DIAGNOSTIC_PLUGIN_NAME, d);
         return;
     }
     m_gpuInfo = *gpuInfo;
@@ -141,7 +141,7 @@ void GpuBurnPlugin::UpdateForHGemmSupport(int deviceId)
     if (cudaSt != cudaSuccess)
     {
         DCGM_LOG_ERROR << "Unable to check compute capability for the device. Assuming that cublasHgemm is supported";
-        LOG_CUDA_ERROR("cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+        LOG_CUDA_ERROR(DIAGNOSTIC_PLUGIN_NAME, "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
@@ -149,7 +149,7 @@ void GpuBurnPlugin::UpdateForHGemmSupport(int deviceId)
     if (cudaSt != cudaSuccess)
     {
         DCGM_LOG_ERROR << "Unable to get compute capability for the device. Assuming that cublasHgemm is supported";
-        LOG_CUDA_ERROR("cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+        LOG_CUDA_ERROR(DIAGNOSTIC_PLUGIN_NAME, "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
@@ -177,7 +177,7 @@ void GpuBurnPlugin::UpdateForDGemmSupport(int deviceId)
     {
         DCGM_LOG_ERROR
             << "Unable to check single to double perf ratio for the device. Assuming that cublasDgemm is not supported";
-        LOG_CUDA_ERROR("cudaDeviceGetAttribute", cudaSt, 0, 0, false);
+        LOG_CUDA_ERROR(DIAGNOSTIC_PLUGIN_NAME, "cudaDeviceGetAttribute", cudaSt, 0, 0, false);
         return;
     }
 
@@ -213,7 +213,7 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
         cudaSt = cudaDeviceGetByPCIBusId(&deviceIdx, m_gpuInfo.gpus[i].attributes.identifiers.pciBusId);
         if (cudaSuccess != cudaSt)
         {
-            LOG_CUDA_ERROR("cudaDeviceGetByPCIBusId", cudaSt, i, 0, false);
+            LOG_CUDA_ERROR(DIAGNOSTIC_PLUGIN_NAME, "cudaDeviceGetByPCIBusId", cudaSt, i, 0, false);
             continue;
         }
 
@@ -237,12 +237,12 @@ bool GpuBurnPlugin::Init(dcgmDiagPluginGpuList_t &gpuInfo)
         {
             if (gbDevice != NULL)
             {
-                AddErrorForGpu(gpuId, d);
+                AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, gpuId, d);
                 delete gbDevice;
             }
             else
             {
-                AddErrorForGpu(gpuId, d);
+                AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, gpuId, d);
                 log_error(d.GetMessage());
             }
             return false;
@@ -304,19 +304,21 @@ int32_t GpuBurnPlugin::SetPrecisionFromString(bool supportsDoubles)
 }
 
 /*****************************************************************************/
-void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void GpuBurnPlugin::Go(std::string const &testName,
+                       unsigned int numParameters,
+                       const dcgmDiagPluginTestParameter_t *tpStruct)
 {
     bool result;
 
     m_testParameters->SetFromStruct(numParameters, tpStruct);
 
-    InitializeForGpuList(m_gpuInfo);
+    InitializeForGpuList(testName, m_gpuInfo);
 
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -324,8 +326,8 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, DIAGNOSTIC_PLUGIN_NAME);
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 
@@ -353,13 +355,13 @@ void GpuBurnPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-        AddError(d);
-        SetResult(NVVS_RESULT_SKIP);
+        AddError(testName, d);
+        SetResult(testName, NVVS_RESULT_SKIP);
     }
     else if (!result)
     {
         // There was an error running the test - set result for all gpus to failed
-        SetResult(NVVS_RESULT_FAIL);
+        SetResult(testName, NVVS_RESULT_FAIL);
     }
 }
 
@@ -371,26 +373,26 @@ bool GpuBurnPlugin::CheckPassFail(const std::vector<int> &errorCount, const std:
     {
         if (errorCount[i] || nanCount[i])
         {
-        if (errorCount[i])
-        {
-            DcgmError d { m_device[i]->gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, errorCount[i], m_device[i]->gpuId);
-            AddErrorForGpu(m_device[i]->gpuId, d);
+            if (errorCount[i])
+            {
+                DcgmError d { m_device[i]->gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, errorCount[i], m_device[i]->gpuId);
+                AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, d);
             }
 
             if (nanCount[i])
             {
                 DcgmError d { m_device[i]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NAN_VALUE, d, nanCount[i], m_device[i]->gpuId);
-                AddErrorForGpu(m_device[i]->gpuId, d);
+                AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, d);
             }
 
-            SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_FAIL);
+            SetResultForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, NVVS_RESULT_FAIL);
             allPassed = false;
         }
         else
         {
-            SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_PASS);
+            SetResultForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, NVVS_RESULT_PASS);
         }
     }
 
@@ -422,7 +424,7 @@ bool GpuBurnPlugin::RunTest()
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "Failed to initialize the plugin.");
-        AddError(d);
+        AddError(DIAGNOSTIC_PLUGIN_NAME, d);
         return false;
     }
 
@@ -467,7 +469,7 @@ bool GpuBurnPlugin::RunTest()
                         workerThreads[j]->Kill();
                         DcgmError d { m_device[j]->gpuId };
                         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
-                        AddErrorForGpu(m_device[j]->gpuId, d);
+                        AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[j]->gpuId, d);
                     }
                     delete (workerThreads[j]);
                     workerThreads[j] = nullptr;
@@ -503,7 +505,7 @@ bool GpuBurnPlugin::RunTest()
                 {
                     DcgmError d { m_device[i]->gpuId };
                     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, ex.what());
-                    AddErrorForGpu(m_device[i]->gpuId, d);
+                    AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, d);
                 }
                 if (st)
                 {
@@ -525,8 +527,8 @@ bool GpuBurnPlugin::RunTest()
         log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        AddError(d);
-        SetResult(NVVS_RESULT_FAIL);
+        AddError(DIAGNOSTIC_PLUGIN_NAME, d);
+        SetResult(DIAGNOSTIC_PLUGIN_NAME, NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -549,7 +551,7 @@ bool GpuBurnPlugin::RunTest()
                 workerThreads[i]->Kill();
                 DcgmError err { m_device[i]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, err, ex.what());
-                AddErrorForGpu(m_device[i]->gpuId, err);
+                AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, err);
             }
             delete (workerThreads[i]);
             workerThreads[i] = NULL;
@@ -587,7 +589,7 @@ bool GpuBurnPlugin::RunTest()
                  "GPU %u calculated at approximately %.2f gigaflops during this test",
                  m_device[i]->gpuId,
                  gflops[i]);
-        AddInfoVerboseForGpu(m_device[i]->gpuId, buf);
+        AddInfoVerboseForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, buf);
     }
 
     if (gflops.size() > 1 && m_gflopsTolerancePcnt > 0.0)
@@ -649,7 +651,7 @@ void GpuBurnPlugin::ReportGpusBelowMinThreshold(const std::vector<double> &gflop
         DCGM_ERROR_FORMAT_MESSAGE(
             DCGM_FR_GFLOPS_THRESHOLD_VIOLATION, d, gflops[i], "GFLOPs", m_device[i]->gpuId, minThresh);
         log_error(d.GetMessage());
-        AddErrorForGpu(m_device[i]->gpuId, d);
+        AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device[i]->gpuId, d);
     }
 }
 
@@ -725,30 +727,30 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
  * For use by GpuBurnWorker only.
  */
 /****************************************************************************/
-#define CHECK_CUDA_ERROR(callName, cuSt)                                       \
-    if (cuSt != CUDA_SUCCESS)                                                  \
-    {                                                                          \
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, callName, cuSt, m_device->gpuId); \
-        return -1;                                                             \
-    }                                                                          \
-    else                                                                       \
+#define CHECK_CUDA_ERROR(callName, cuSt)                                                               \
+    if (cuSt != CUDA_SUCCESS)                                                                          \
+    {                                                                                                  \
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, callName, cuSt, m_device->gpuId); \
+        return -1;                                                                                     \
+    }                                                                                                  \
+    else                                                                                               \
         (void)0
 
-#define CHECK_CUBLAS_ERROR_AND_RETURN(callName, cubSt)                            \
-    if (cubSt != CUBLAS_STATUS_SUCCESS)                                           \
-    {                                                                             \
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, callName, cubSt, m_device->gpuId); \
-        return -1;                                                                \
-    }                                                                             \
-    else                                                                          \
+#define CHECK_CUBLAS_ERROR_AND_RETURN(callName, cubSt)                                                    \
+    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                   \
+    {                                                                                                     \
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, callName, cubSt, m_device->gpuId); \
+        return -1;                                                                                        \
+    }                                                                                                     \
+    else                                                                                                  \
         (void)0
 
-#define CHECK_CUBLAS_ERROR(callName, cubSt)                                       \
-    if (cubSt != CUBLAS_STATUS_SUCCESS)                                           \
-    {                                                                             \
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, callName, cubSt, m_device->gpuId); \
-    }                                                                             \
-    else                                                                          \
+#define CHECK_CUBLAS_ERROR(callName, cubSt)                                                               \
+    if (cubSt != CUBLAS_STATUS_SUCCESS)                                                                   \
+    {                                                                                                     \
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, callName, cubSt, m_device->gpuId); \
+    }                                                                                                     \
+    else                                                                                                  \
         (void)0
 
 /****************************************************************************/
@@ -780,18 +782,18 @@ GpuBurnWorker::~GpuBurnWorker()
         DCGM_LOG_ERROR << "bind returned " << st;
     }
 
-#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                  \
-    {                                                                                     \
-        CUresult cuSt;                                                                    \
-        if (devicePtr)                                                                    \
-        {                                                                                 \
-            cuSt = cuMemFree(devicePtr);                                                  \
-            if (cuSt != CUDA_SUCCESS)                                                     \
-            {                                                                             \
-                LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cuMemFree", cuSt, m_device->gpuId); \
-            }                                                                             \
-            devicePtr = 0;                                                                \
-        }                                                                                 \
+#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                                          \
+    {                                                                                                             \
+        CUresult cuSt;                                                                                            \
+        if (devicePtr)                                                                                            \
+        {                                                                                                         \
+            cuSt = cuMemFree(devicePtr);                                                                          \
+            if (cuSt != CUDA_SUCCESS)                                                                             \
+            {                                                                                                     \
+                LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, "cuMemFree", cuSt, m_device->gpuId); \
+            }                                                                                                     \
+            devicePtr = 0;                                                                                        \
+        }                                                                                                         \
     }
 
     LOCAL_FREE_DEVICE_PTR(m_AdataFP64);
@@ -824,7 +826,7 @@ int GpuBurnWorker::Bind()
         DcgmError d { m_device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_UNBOUND, d, m_device->cudaDeviceIdx);
         log_error(d.GetMessage());
-        m_plugin.AddErrorForGpu(m_device->gpuId, d);
+        m_plugin.AddErrorForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device->gpuId, d);
         return -1;
     }
     else
@@ -849,7 +851,7 @@ size_t GpuBurnWorker::AvailMemory(int &st)
     CUresult cuSt   = cuMemGetInfo(&freeMem, &totalMem);
     if (cuSt != CUDA_SUCCESS)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cuMemGetInfo", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, "cuMemGetInfo", cuSt, m_device->gpuId);
         st = -1;
         return 0;
     }
@@ -903,7 +905,7 @@ int GpuBurnWorker::InitBuffers()
 
     std::stringstream ss;
     ss << "Allocated space for " << m_iters << " output matricies from " << useBytes << " bytes available.";
-    m_plugin.AddInfoVerboseForGpu(m_device->gpuId, ss.str());
+    m_plugin.AddInfoVerboseForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device->gpuId, ss.str());
 
     // Populating matrices A and B
     CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_AdataFP64, m_A_FP64.get(), resultSizeFP64));
@@ -1106,7 +1108,7 @@ void GpuBurnWorker::run()
     cublasStatus_t cubSt = CublasProxy::CublasCreate(&m_cublas);
     if (cubSt != CUBLAS_STATUS_SUCCESS)
     {
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasCreate", cubSt, 0, 0, false);
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, DIAGNOSTIC_PLUGIN_NAME, "cublasCreate", cubSt, 0, 0, false);
         m_stopTime = timelib_usecSince1970();
         return;
     }
@@ -1114,7 +1116,7 @@ void GpuBurnWorker::run()
     std::stringstream ss;
     ss << "Running with precisions: FP64 " << USE_DOUBLE_PRECISION(m_precision) << ", FP32 "
        << USE_SINGLE_PRECISION(m_precision) << ", FP16 " << USE_HALF_PRECISION(m_precision);
-    m_plugin.AddInfoVerboseForGpu(m_device->gpuId, ss.str());
+    m_plugin.AddInfoVerboseForGpu(DIAGNOSTIC_PLUGIN_NAME, m_device->gpuId, ss.str());
 
     startTime = timelib_dsecSince1970();
     std::vector<DcgmError> errorList;

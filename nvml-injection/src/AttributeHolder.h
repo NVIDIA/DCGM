@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <list>
 #include <map>
 #include <string>
 
@@ -23,101 +24,305 @@
 
 #include "CompoundValue.h"
 #include "InjectionArgument.h"
+#include "NvmlFuncReturn.h"
+#include "NvmlLogging.h"
 #include "TimestampedData.h"
 #include "nvml_injection_types.h"
+
+namespace
+{
+
+template <typename T, typename K>
+void EraseIfEmpty(T &container, const K &key)
+{
+    if (!container.contains(key))
+    {
+        return;
+    }
+    if (container[key].size() == 0)
+    {
+        container.erase(key);
+    }
+}
+
+} //namespace
 
 template <class T>
 class AttributeHolder
 {
 public:
-    AttributeHolder()
-        : m_identifier()
-        , m_attributes()
-        , m_twoKeyAttributes()
-        , m_pageRetirementInfo()
-    {}
+    AttributeHolder() = default;
 
     AttributeHolder(T &identifier)
         : m_identifier(identifier)
-        , m_attributes()
-        , m_twoKeyAttributes()
-        , m_pageRetirementInfo()
     {}
 
-    InjectionArgument GetAttribute(const std::string &key)
+    NvmlFuncReturn GetAttribute(const std::string &key)
     {
-        return m_attributes[key].AsInjectionArgument();
-    }
-
-    InjectionArgument GetAttribute(const std::string &key, const InjectionArgument &key2)
-    {
-        return m_twoKeyAttributes[key][key2].AsInjectionArgument();
-    }
-
-    CompoundValue GetCompoundAttribute(const std::string &key)
-    {
+        if (m_injectedAttributes.contains(key))
+        {
+            auto &[cleanAfterUsed, injectedVals] = m_injectedAttributes[key];
+            if (!injectedVals.empty())
+            {
+                auto ret = injectedVals.front();
+                if (cleanAfterUsed)
+                {
+                    injectedVals.pop_front();
+                    if (injectedVals.empty())
+                    {
+                        m_injectedAttributes.erase(key);
+                    }
+                }
+                return ret;
+            }
+        }
+        if (!m_attributes[key].HasValue())
+        {
+            NVML_LOG_ERR("key [%s] is not injected, the result is meaningless", key.c_str());
+        }
         return m_attributes[key];
     }
 
-    CompoundValue GetCompoundAttribute(const std::string &key, const InjectionArgument &key2)
+    NvmlFuncReturn GetAttribute(const std::string &key, const InjectionArgument &key2)
     {
+        if (m_injectedTwoKeyAttributes.contains(key) && m_injectedTwoKeyAttributes[key].contains(key2))
+        {
+            auto &[cleanAfterUsed, injectedVals] = m_injectedTwoKeyAttributes[key][key2];
+            if (!injectedVals.empty())
+            {
+                auto ret = injectedVals.front();
+                if (cleanAfterUsed)
+                {
+                    injectedVals.pop_front();
+                    if (injectedVals.empty())
+                    {
+                        m_injectedTwoKeyAttributes[key].erase(key2);
+                        EraseIfEmpty(m_injectedTwoKeyAttributes, key);
+                    }
+                }
+                return ret;
+            }
+        }
+        if (!m_twoKeyAttributes[key][key2].HasValue())
+        {
+            // dcgm tests nvmlDeviceGetGpuInstanceProfileInfo till it returns NVML_ERROR_INVALID_ARGUMENT
+            // dcgm tries to call nvmlDeviceGetMigDeviceHandleByIndex for getting relate devices
+            // to avoid showing misleading information, we skip it.
+            if (key != "GpuInstanceProfileInfo" && key != "MigDeviceHandleByIndex")
+            {
+                NVML_LOG_ERR("key [%s] is not injected, the result is meaningless", key.c_str());
+            }
+        }
         return m_twoKeyAttributes[key][key2];
     }
 
-    InjectionArgument GetAttribute(const std::string &key, const InjectionArgument &key2, const InjectionArgument &key3)
+    NvmlFuncReturn GetAttribute(const std::string &key, const InjectionArgument &key2, const InjectionArgument &key3)
     {
-        return m_threeKeyAttributes[key][key2][key3].AsInjectionArgument();
-    }
-
-    CompoundValue GetCompoundAttribute(const std::string &key,
-                                       const InjectionArgument &key2,
-                                       const InjectionArgument &key3)
-    {
+        if (m_injectedThreeKeyAttributes.contains(key) && m_injectedThreeKeyAttributes[key].contains(key2)
+            && m_injectedThreeKeyAttributes[key][key2].contains(key3))
+        {
+            auto &[cleanAfterUsed, injectedVals] = m_injectedThreeKeyAttributes[key][key2][key3];
+            if (!injectedVals.empty())
+            {
+                auto ret = injectedVals.front();
+                if (cleanAfterUsed)
+                {
+                    injectedVals.pop_front();
+                    if (injectedVals.empty())
+                    {
+                        m_injectedThreeKeyAttributes[key][key2].erase(key3);
+                        EraseIfEmpty(m_injectedThreeKeyAttributes[key], key2);
+                        EraseIfEmpty(m_injectedThreeKeyAttributes, key);
+                    }
+                }
+                return ret;
+            }
+        }
+        if (!m_threeKeyAttributes[key][key2][key3].HasValue())
+        {
+            // dcgm tests nvmlGpuInstanceGetComputeInstanceProfileInfo till it returns NVML_ERROR_INVALID_ARGUMENT
+            // to avoid showing misleading information, we skip it.
+            if (key != "ComputeInstanceProfileInfo")
+            {
+                NVML_LOG_ERR("key [%s] is not injected, the result is meaningless", key.c_str());
+            }
+        }
         return m_threeKeyAttributes[key][key2][key3];
     }
 
-    void SetAttribute(const std::string &key, const InjectionArgument &val)
+    NvmlFuncReturn GetAttribute(const std::string &key,
+                                const InjectionArgument &key2,
+                                const InjectionArgument &key3,
+                                const InjectionArgument &key4)
     {
-        CompoundValue cv(val);
-        m_attributes[key] = cv;
+        if (m_injectedFourKeyAttributes.contains(key) && m_injectedFourKeyAttributes[key].contains(key2)
+            && m_injectedFourKeyAttributes[key][key2].contains(key3)
+            && m_injectedFourKeyAttributes[key][key2][key3].contains(key4))
+        {
+            auto &[cleanAfterUsed, injectedVals] = m_injectedFourKeyAttributes[key][key2][key3][key4];
+            if (!injectedVals.empty())
+            {
+                auto ret = injectedVals.front();
+                if (cleanAfterUsed)
+                {
+                    injectedVals.pop_front();
+                    if (injectedVals.empty())
+                    {
+                        m_injectedFourKeyAttributes[key][key2][key3].erase(key4);
+                        EraseIfEmpty(m_injectedFourKeyAttributes[key][key2], key3);
+                        EraseIfEmpty(m_injectedFourKeyAttributes[key], key2);
+                        EraseIfEmpty(m_injectedFourKeyAttributes, key);
+                    }
+                }
+                return ret;
+            }
+        }
+        if (!m_fourKeyAttributes[key][key2][key3][key4].HasValue())
+        {
+            // dcgm tests nvmlGpuInstanceGetComputeInstanceProfileInfo till it returns NVML_ERROR_INVALID_ARGUMENT
+            // to avoid showing misleading information, we skip it.
+            if (key != "ComputeInstanceProfileInfo")
+            {
+                NVML_LOG_ERR("key [%s] is not injected, the result is meaningless", key.c_str());
+            }
+        }
+        return m_fourKeyAttributes[key][key2][key3][key4];
     }
 
-    void SetAttribute(const std::string &key, const InjectionArgument &key2, const InjectionArgument &val)
+    void SetAttribute(const std::string &key, const NvmlFuncReturn &val)
     {
-        CompoundValue cv(val);
-        m_twoKeyAttributes[key][key2] = cv;
+        m_attributes[key].Clear();
+        m_attributes[key] = val;
+    }
+
+    void SetAttribute(const std::string &key, const InjectionArgument &key2, const NvmlFuncReturn &val)
+    {
+        m_twoKeyAttributes[key][key2].Clear();
+        m_twoKeyAttributes[key][key2] = val;
     }
 
     void SetAttribute(const std::string &key,
                       const InjectionArgument &key2,
                       const InjectionArgument &key3,
-                      const InjectionArgument &val)
+                      const NvmlFuncReturn &val)
     {
-        CompoundValue cv(val);
-        m_threeKeyAttributes[key][key2][key3] = cv;
-    }
-
-    void SetAttribute(const std::string &key, const CompoundValue &cval)
-    {
-        m_attributes[key] = cval;
-    }
-
-    void SetAttribute(const std::string &key, const InjectionArgument &key2, const CompoundValue &cval)
-    {
-        m_twoKeyAttributes[key][key2] = cval;
+        m_threeKeyAttributes[key][key2][key3].Clear();
+        m_threeKeyAttributes[key][key2][key3] = val;
     }
 
     void SetAttribute(const std::string &key,
                       const InjectionArgument &key2,
                       const InjectionArgument &key3,
-                      const CompoundValue &cval)
+                      const InjectionArgument &key4,
+                      const NvmlFuncReturn &val)
     {
-        m_threeKeyAttributes[key][key2][key3] = cval;
+        m_fourKeyAttributes[key][key2][key3][key4].Clear();
+        m_fourKeyAttributes[key][key2][key3][key4] = val;
+    }
+
+    void InjectAttribute(const std::string &key,
+                         const bool cleanAfterUsed,
+                         const std::list<NvmlFuncReturn> &injectedVals)
+    {
+        for (auto &oldRet : std::get<1>(m_injectedAttributes[key]))
+        {
+            oldRet.Clear();
+        }
+        m_injectedAttributes[key] = { cleanAfterUsed, injectedVals };
+    }
+
+    void InjectAttribute(const std::string &key,
+                         const InjectionArgument &key2,
+                         const bool cleanAfterUsed,
+                         const std::list<NvmlFuncReturn> &injectedVals)
+    {
+        for (auto &oldRet : std::get<1>(m_injectedTwoKeyAttributes[key][key2]))
+        {
+            oldRet.Clear();
+        }
+        m_injectedTwoKeyAttributes[key][key2] = { cleanAfterUsed, injectedVals };
+    }
+
+    void InjectAttribute(const std::string &key,
+                         const InjectionArgument &key2,
+                         const InjectionArgument &key3,
+                         const bool cleanAfterUsed,
+                         const std::list<NvmlFuncReturn> &injectedVals)
+    {
+        for (auto &oldRet : std::get<1>(m_injectedThreeKeyAttributes[key][key2][key3]))
+        {
+            oldRet.Clear();
+        }
+        m_injectedThreeKeyAttributes[key][key2][key3] = { cleanAfterUsed, injectedVals };
+    }
+
+    void InjectAttribute(const std::string &key,
+                         const InjectionArgument &key2,
+                         const InjectionArgument &key3,
+                         const InjectionArgument &key4,
+                         const bool cleanAfterUsed,
+                         const std::list<NvmlFuncReturn> &injectedVals)
+    {
+        for (auto &oldRet : std::get<1>(m_injectedFourKeyAttributes[key][key2][key3][key4]))
+        {
+            oldRet.Clear();
+        }
+        m_injectedFourKeyAttributes[key][key2][key3][key4] = { cleanAfterUsed, injectedVals };
+    }
+
+    void ResetInjectedAttribute()
+    {
+        auto clean = [](NvmlFuncReturn &ret) {
+            ret.Clear();
+        };
+        for (auto &[_, injectedAttr] : m_injectedAttributes)
+        {
+            auto &[cleanAfterUsed, injectedList] = injectedAttr;
+            std::for_each(injectedList.begin(), injectedList.end(), clean);
+        }
+        m_injectedAttributes.clear();
+        for (auto &[k1, v1] : m_injectedTwoKeyAttributes)
+        {
+            for (auto &[k2, injectedAttr] : v1)
+            {
+                auto &[cleanAfterUsed, injectedList] = injectedAttr;
+                std::for_each(injectedList.begin(), injectedList.end(), clean);
+            }
+        }
+        m_injectedTwoKeyAttributes.clear();
+        for (auto &[k1, v1] : m_injectedThreeKeyAttributes)
+        {
+            for (auto &[k2, v2] : v1)
+            {
+                for (auto &[k3, injectedAttr] : v2)
+                {
+                    auto &[cleanAfterUsed, injectedList] = injectedAttr;
+                    std::for_each(injectedList.begin(), injectedList.end(), clean);
+                }
+            }
+        }
+        m_injectedThreeKeyAttributes.clear();
+        for (auto &[k1, v1] : m_injectedFourKeyAttributes)
+        {
+            for (auto &[k2, v2] : v1)
+            {
+                for (auto &[k3, v3] : v2)
+                {
+                    for (auto &[k4, injectedAttr] : v3)
+                    {
+                        auto &[cleanAfterUsed, injectedList] = injectedAttr;
+                        std::for_each(injectedList.begin(), injectedList.end(), clean);
+                    }
+                }
+            }
+        }
+        m_injectedFourKeyAttributes.clear();
+        m_injectedFieldValues.clear();
     }
 
     nvmlReturn_t ClearAttribute(const std::string &key)
     {
-        if (m_attributes[key].IsSingleton())
+        if (m_attributes[key].GetCompoundValue().IsSingleton())
         {
             m_attributes[key].Clear();
             return NVML_SUCCESS;
@@ -130,7 +335,7 @@ public:
 
     nvmlReturn_t ClearAttribute(const std::string &key, const InjectionArgument &key2)
     {
-        if (m_twoKeyAttributes[key][key2].IsSingleton())
+        if (m_twoKeyAttributes[key][key2].GetCompoundValue().IsSingleton())
         {
             m_twoKeyAttributes[key][key2].Clear();
             return NVML_SUCCESS;
@@ -143,7 +348,7 @@ public:
 
     nvmlReturn_t ClearAttribute(const std::string &key, const InjectionArgument &key2, const InjectionArgument &key3)
     {
-        if (m_threeKeyAttributes[key][key2][key3].IsSingleton())
+        if (m_threeKeyAttributes[key][key2][key3].GetCompoundValue().IsSingleton())
         {
             m_threeKeyAttributes[key][key2][key3].Clear();
             return NVML_SUCCESS;
@@ -156,7 +361,7 @@ public:
 
     nvmlReturn_t ClearCompoundAttribute(const std::string &key)
     {
-        if (!m_attributes[key].IsSingleton())
+        if (!m_attributes[key].GetCompoundValue().IsSingleton())
         {
             m_attributes[key].Clear();
             return NVML_SUCCESS;
@@ -169,7 +374,7 @@ public:
 
     nvmlReturn_t ClearCompoundAttribute(const std::string &key, const InjectionArgument &key2)
     {
-        if (!m_twoKeyAttributes[key][key2].IsSingleton())
+        if (!m_twoKeyAttributes[key][key2].GetCompoundValue().IsSingleton())
         {
             m_twoKeyAttributes[key][key2].Clear();
             return NVML_SUCCESS;
@@ -184,7 +389,7 @@ public:
                                         const InjectionArgument &key2,
                                         const InjectionArgument &key3)
     {
-        if (!m_threeKeyAttributes[key][key2][key3].IsSingleton())
+        if (!m_threeKeyAttributes[key][key2][key3].GetCompoundValue().IsSingleton())
         {
             m_threeKeyAttributes[key][key2][key3].Clear();
             return NVML_SUCCESS;
@@ -207,164 +412,53 @@ public:
 
     void Clear()
     {
+        ResetInjectedAttribute();
+        for (auto &[_, value] : m_attributes)
+        {
+            value.Clear();
+        }
         m_attributes.clear();
+        for (auto &[k1, v1] : m_twoKeyAttributes)
+        {
+            for (auto &[k2, v2] : v1)
+            {
+                v2.Clear();
+            }
+        }
         m_twoKeyAttributes.clear();
+        for (auto &[k1, v1] : m_threeKeyAttributes)
+        {
+            for (auto &[k2, v2] : v1)
+            {
+                for (auto &[k3, v3] : v2)
+                {
+                    v3.Clear();
+                }
+            }
+        }
         m_threeKeyAttributes.clear();
-        m_pageRetirementInfo.clear();
-    }
-
-    nvmlReturn_t GetRetiredPages(nvmlPageRetirementCause_t cause,
-                                 unsigned int *pageCount,
-                                 unsigned long long *addresses,
-                                 unsigned long long *timestamps) const
-    {
-        if (pageCount == nullptr)
+        for (auto &[k1, v1] : m_fourKeyAttributes)
         {
-            return NVML_ERROR_INVALID_ARGUMENT;
-        }
-
-        if (*pageCount == 0)
-        {
-            unsigned int count = 0;
-            for (const auto &pri : m_pageRetirementInfo)
+            for (auto &[k2, v2] : v1)
             {
-                if (cause == pri.cause || cause == NVML_PAGE_RETIREMENT_CAUSE_COUNT)
+                for (auto &[k3, v3] : v2)
                 {
-                    count++;
-                }
-            }
-
-            *pageCount = count;
-        }
-        else
-        {
-            if (addresses == nullptr)
-            {
-                return NVML_ERROR_INVALID_ARGUMENT;
-            }
-
-            unsigned int count = 0;
-            for (const auto &pri : m_pageRetirementInfo)
-            {
-                if (cause == pri.cause || cause == NVML_PAGE_RETIREMENT_CAUSE_COUNT)
-                {
-                    if (count >= *pageCount)
+                    for (auto &[k4, v4] : v3)
                     {
-                        return NVML_ERROR_INSUFFICIENT_SIZE;
-                        break;
+                        v4.Clear();
                     }
-
-                    addresses[count] = pri.address;
-
-                    if (timestamps != nullptr)
-                    {
-                        timestamps[count] = pri.timestamp;
-                    }
-                    count++;
                 }
             }
         }
-
-        return NVML_SUCCESS;
-    }
-
-    void CopyDataAfter(unsigned long long timestamp,
-                       std::vector<TimestampedData> &output,
-                       const std::vector<TimestampedData> &src) const
-    {
-        for (const auto &data : src)
-        {
-            if (data.AfterTimestamp(timestamp))
-            {
-                output.push_back(data);
-            }
-        }
-    }
-
-    std::vector<TimestampedData> GetDataAfter(unsigned long long timestamp, const std::string &key) const
-    {
-        std::vector<TimestampedData> output;
-        const std::vector<TimestampedData> &src = m_tsData.at(key);
-        CopyDataAfter(timestamp, output, src);
-
-        return output;
-    }
-
-    std::vector<TimestampedData> GetDataAfter(unsigned long long timestamp,
-                                              const std::string &key,
-                                              const InjectionArgument &key2) const
-    {
-        std::vector<TimestampedData> output;
-        const std::vector<TimestampedData> &src = m_tsDataExtraKey.at(key).at(key2);
-        CopyDataAfter(timestamp, output, src);
-
-        return output;
-    }
-
-    void InsertInto(std::vector<TimestampedData> &dataTs, const TimestampedData &data)
-    {
-        if (dataTs.empty())
-        {
-            dataTs.push_back(data);
-        }
-        else if (data.AfterTimestamp(dataTs[dataTs.size() - 1].GetTimestamp()))
-        {
-            dataTs.push_back(data);
-        }
-        else
-        {
-            bool inserted = false;
-            for (auto it = dataTs.begin(); it != dataTs.end(); it++)
-            {
-                if (!data.AfterTimestamp(it->GetTimestamp()))
-                {
-                    inserted = true;
-                    dataTs.insert(it, data);
-                    break;
-                }
-            }
-
-            if (!inserted)
-            {
-                // We should never reach here
-                dataTs.push_back(data);
-            }
-        }
-    }
-
-    nvmlReturn_t AddTimestampedData(const TimestampedData &data, const std::string &key)
-    {
-        std::vector<TimestampedData> &dataTs = m_tsData[key];
-        InsertInto(dataTs, data);
-
-        return NVML_SUCCESS;
-    }
-
-    nvmlReturn_t AddTimestampedData(const TimestampedData &data, const std::string &key, const InjectionArgument &key2)
-    {
-        std::vector<TimestampedData> &dataTs = m_tsDataExtraKey[key][key2];
-        InsertInto(dataTs, data);
-
-        return NVML_SUCCESS;
-    }
-
-    unsigned long long GetEccErrorCount(nvmlMemoryErrorType_t memErrType,
-                                        nvmlEccCounterType_t eccCounter,
-                                        nvmlMemoryLocation_t memLoc)
-    {
-        return m_eccData[memErrType][eccCounter][memLoc];
-    }
-
-    void SetEccErrorCount(nvmlMemoryErrorType_t memErrType,
-                          nvmlEccCounterType_t eccCounter,
-                          nvmlMemoryLocation_t memLoc,
-                          unsigned long long count)
-    {
-        m_eccData[memErrType][eccCounter][memLoc] = count;
+        m_fourKeyAttributes.clear();
     }
 
     nvmlFieldValue_t GetFieldValue(unsigned int nvmlFieldId)
     {
+        if (m_injectedFieldValues.count(nvmlFieldId) == 1)
+        {
+            return m_injectedFieldValues[nvmlFieldId];
+        }
         if (m_fieldValues.count(nvmlFieldId) == 1)
         {
             return m_fieldValues[nvmlFieldId];
@@ -427,17 +521,95 @@ public:
         m_fieldValues[value.fieldId] = value;
     }
 
+    void InjectFieldValue(const nvmlFieldValue_t &value)
+    {
+        m_injectedFieldValues[value.fieldId] = value;
+    }
+
+    void AddProcessUtilizationRecord(const unsigned long long timestamp, const nvmlProcessUtilizationSample_t &sample)
+    {
+        m_processUtilization.emplace(timestamp, sample);
+    }
+
+    std::vector<nvmlProcessUtilizationSample_t> GetProcessUtilizationRecord(const unsigned long long timestamp)
+    {
+        std::vector<nvmlProcessUtilizationSample_t> ret;
+
+        for (auto it = m_processUtilization.upper_bound(timestamp); it != m_processUtilization.end(); ++it)
+        {
+            ret.emplace_back(it->second);
+        }
+
+        return ret;
+    }
+
+    void AddVgpuProcessUtilizationRecord(const unsigned long long timestamp,
+                                         const nvmlVgpuProcessUtilizationSample_t &sample)
+    {
+        m_vgpuProcessUtilization.emplace(timestamp, sample);
+    }
+
+    std::vector<nvmlVgpuProcessUtilizationSample_t> GetVgpuProcessUtilizationRecord(const unsigned long long timestamp)
+    {
+        std::vector<nvmlVgpuProcessUtilizationSample_t> ret;
+
+        for (auto it = m_vgpuProcessUtilization.upper_bound(timestamp); it != m_vgpuProcessUtilization.end(); ++it)
+        {
+            ret.emplace_back(it->second);
+        }
+
+        return ret;
+    }
+
+    void AddVgpuInstanceUtilizationRecord(const unsigned long long timestamp,
+                                          const std::tuple<nvmlValueType_t, nvmlVgpuInstanceUtilizationSample_t> &data)
+    {
+        m_vgpuInstanceUtilization.emplace(timestamp, data);
+    }
+
+    std::vector<std::tuple<nvmlValueType_t, nvmlVgpuInstanceUtilizationSample_t>> GetVgpuInstanceUtilizationRecord(
+        const unsigned long long timestamp)
+    {
+        std::vector<std::tuple<nvmlValueType_t, nvmlVgpuInstanceUtilizationSample_t>> ret;
+
+        for (auto it = m_vgpuInstanceUtilization.upper_bound(timestamp); it != m_vgpuInstanceUtilization.end(); ++it)
+        {
+            ret.emplace_back(it->second);
+        }
+
+        return ret;
+    }
+
 private:
     T m_identifier;
-    std::map<std::string, CompoundValue> m_attributes;
-    std::map<std::string, std::map<InjectionArgument, CompoundValue>> m_twoKeyAttributes;
-    std::map<std::string, std::map<InjectionArgument, std::map<InjectionArgument, CompoundValue>>> m_threeKeyAttributes;
-    std::map<std::string, std::vector<TimestampedData>> m_tsData;
-    std::map<std::string, std::map<InjectionArgument, std::vector<TimestampedData>>> m_tsDataExtraKey;
-    std::vector<nvmliPageRetirementInfo_t> m_pageRetirementInfo;
+    std::map<std::string, NvmlFuncReturn> m_attributes;
+    std::map<std::string, std::map<InjectionArgument, NvmlFuncReturn>> m_twoKeyAttributes;
+    std::map<std::string, std::map<InjectionArgument, std::map<InjectionArgument, NvmlFuncReturn>>>
+        m_threeKeyAttributes;
+    std::map<std::string,
+             std::map<InjectionArgument, std::map<InjectionArgument, std::map<InjectionArgument, NvmlFuncReturn>>>>
+        m_fourKeyAttributes;
 
-    std::map<nvmlMemoryErrorType_t, std::map<nvmlEccCounterType_t, std::map<nvmlMemoryLocation_t, unsigned long long>>>
-        m_eccData;
+    std::map<std::string, std::tuple<bool, std::list<NvmlFuncReturn>>> m_injectedAttributes;
+    std::map<std::string, std::map<InjectionArgument, std::tuple<bool, std::list<NvmlFuncReturn>>>>
+        m_injectedTwoKeyAttributes;
+    std::map<std::string,
+             std::map<InjectionArgument, std::map<InjectionArgument, std::tuple<bool, std::list<NvmlFuncReturn>>>>>
+        m_injectedThreeKeyAttributes;
+    std::map<
+        std::string,
+        std::map<InjectionArgument,
+                 std::map<InjectionArgument, std::map<InjectionArgument, std::tuple<bool, std::list<NvmlFuncReturn>>>>>>
+        m_injectedFourKeyAttributes;
 
     std::map<unsigned int, nvmlFieldValue_t> m_fieldValues;
+    std::map<unsigned int, nvmlFieldValue_t> m_injectedFieldValues;
+
+    // timestamp -> nvmlProcessUtilizationSample_t
+    std::multimap<unsigned long long, nvmlProcessUtilizationSample_t> m_processUtilization;
+    // timestamp -> nvmlVgpuProcessUtilizationSample_t
+    std::multimap<unsigned long long, nvmlVgpuProcessUtilizationSample_t> m_vgpuProcessUtilization;
+    // timestamp -> [nvmlValueType_t, nvmlVgpuInstanceUtilizationSample_t]
+    std::multimap<unsigned long long, std::tuple<nvmlValueType_t, nvmlVgpuInstanceUtilizationSample_t>>
+        m_vgpuInstanceUtilization;
 };

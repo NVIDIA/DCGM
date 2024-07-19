@@ -49,44 +49,44 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
  * Note: Currently this macro sets the result of the plugin to failed for all GPUs. This is to maintain existing
  * behavior (a cuda failure always resulted in the test being stopped and all GPUs being marked as failing the test).
  */
-#define BG_cudaCheckError(callName, args, mask, gpuIndex, isGpuSpecific)  \
-    do                                                                    \
-    {                                                                     \
-        cudaError_t e = callName args;                                    \
-        if (e != cudaSuccess)                                             \
-        {                                                                 \
-            if (isGpuSpecific)                                            \
-            {                                                             \
-                unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;            \
-                LOG_CUDA_ERROR_FOR_PLUGIN(bg, #callName, e, gpuId);       \
-            }                                                             \
-            else                                                          \
-            {                                                             \
-                LOG_CUDA_ERROR_FOR_PLUGIN(bg, #callName, e, 0, 0, false); \
-            }                                                             \
-            bg->SetResult(NVVS_RESULT_FAIL);                              \
-            return -1;                                                    \
-        }                                                                 \
+#define BG_cudaCheckError(callName, args, mask, gpuIndex, isGpuSpecific)                    \
+    do                                                                                      \
+    {                                                                                       \
+        cudaError_t e = callName args;                                                      \
+        if (e != cudaSuccess)                                                               \
+        {                                                                                   \
+            if (isGpuSpecific)                                                              \
+            {                                                                               \
+                unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                              \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg, PCIE_PLUGIN_NAME, #callName, e, gpuId);       \
+            }                                                                               \
+            else                                                                            \
+            {                                                                               \
+                LOG_CUDA_ERROR_FOR_PLUGIN(bg, PCIE_PLUGIN_NAME, #callName, e, 0, 0, false); \
+            }                                                                               \
+            bg->SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);                              \
+            return -1;                                                                      \
+        }                                                                                   \
     } while (0)
 
-#define BG_cudaCheckErrorRef(callName, args, mask, gpuIndex, isGpuSpecific) \
-    do                                                                      \
-    {                                                                       \
-        cudaError_t e = callName args;                                      \
-        if (e != cudaSuccess)                                               \
-        {                                                                   \
-            if (isGpuSpecific)                                              \
-            {                                                               \
-                unsigned int gpuId = bg.gpu[gpuIndex]->gpuId;               \
-                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, #callName, e, gpuId);        \
-            }                                                               \
-            else                                                            \
-            {                                                               \
-                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, #callName, e, 0, 0, false);  \
-            }                                                               \
-            bg.SetResult(NVVS_RESULT_FAIL);                                 \
-            return -1;                                                      \
-        }                                                                   \
+#define BG_cudaCheckErrorRef(callName, args, mask, gpuIndex, isGpuSpecific)                  \
+    do                                                                                       \
+    {                                                                                        \
+        cudaError_t e = callName args;                                                       \
+        if (e != cudaSuccess)                                                                \
+        {                                                                                    \
+            if (isGpuSpecific)                                                               \
+            {                                                                                \
+                unsigned int gpuId = bg.gpu[gpuIndex]->gpuId;                                \
+                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, PCIE_PLUGIN_NAME, #callName, e, gpuId);       \
+            }                                                                                \
+            else                                                                             \
+            {                                                                                \
+                LOG_CUDA_ERROR_FOR_PLUGIN(&bg, PCIE_PLUGIN_NAME, #callName, e, 0, 0, false); \
+            }                                                                                \
+            bg.SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);                                \
+            return -1;                                                                       \
+        }                                                                                    \
     } while (0)
 
 
@@ -98,16 +98,16 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
 
 // Macro for checking cuda errors following a cuda launch or api call from an OMP pragma
 // we need separate code for this since you are not allowed to exit from OMP
-#define cudaCheckErrorOmp(callName, args, mask, gpuIndex)       \
-    do                                                          \
-    {                                                           \
-        cudaError_t e = callName args;                          \
-        if (e != cudaSuccess)                                   \
-        {                                                       \
-            unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;      \
-            LOG_CUDA_ERROR_FOR_PLUGIN(bg, #callName, e, gpuId); \
-            bg->SetResultForGpu(gpuId, NVVS_RESULT_FAIL);       \
-        }                                                       \
+#define cudaCheckErrorOmp(callName, args, mask, gpuIndex)                         \
+    do                                                                            \
+    {                                                                             \
+        cudaError_t e = callName args;                                            \
+        if (e != cudaSuccess)                                                     \
+        {                                                                         \
+            unsigned int gpuId = bg->gpu[gpuIndex]->gpuId;                        \
+            LOG_CUDA_ERROR_FOR_PLUGIN(bg, PCIE_PLUGIN_NAME, #callName, e, gpuId); \
+            bg->SetResultForGpu(PCIE_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);       \
+        }                                                                         \
     } while (0)
 
 /*****************************************************************************/
@@ -174,7 +174,7 @@ void disableP2P(BusGrind *bg)
                 std::stringstream ss;
                 ss << "cudaDeviceDisablePeerAccess returned error " << cudaGetErrorString(cudaReturn) << " for device "
                    << bg->gpu[j]->gpuId << std::endl;
-                bg->AddInfoVerboseForGpu(bg->gpu[j]->gpuId, ss.str());
+                bg->AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, bg->gpu[j]->gpuId, ss.str());
             }
         }
     }
@@ -199,7 +199,7 @@ void addLatencyInfo(BusGrind *bg, unsigned int gpu, std::string key, double late
            << "\t\t";
     ss << latency << " us";
 
-    bg->AddInfoVerboseForGpu(gpu, ss.str());
+    bg->AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, gpu, ss.str());
 }
 
 
@@ -222,7 +222,7 @@ void addBandwidthInfo(BusGrind &bg, unsigned int gpu, const std::string &key, do
            << "\t\t";
     ss << bandwidth << " GB/s";
 
-    bg.AddInfoVerboseForGpu(gpu, ss.str());
+    bg.AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, gpu, ss.str());
 }
 
 /*****************************************************************************/
@@ -259,7 +259,7 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
             buf << "Skipping PCI-E link check for GPU " << gpu->gpuId << " in pstate " << pstateValue.value.i64;
             std::string bufStr(buf.str());
             DCGM_LOG_WARNING << bufStr;
-            bg.AddInfoVerboseForGpu(gpu->gpuId, bufStr);
+            bg.AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, bufStr);
             continue;
         }
 
@@ -293,7 +293,7 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
             buf << "Skipping PCI-E link check for GPU " << gpu->gpuId << " in pstate " << pstateValue.value.i64;
             std::string bufStr(buf.str());
             DCGM_LOG_WARNING << bufStr;
-            bg.AddInfoVerboseForGpu(gpu->gpuId, bufStr);
+            bg.AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, bufStr);
             continue;
         }
 
@@ -309,8 +309,8 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_GENERATION, d, gpu->gpuId, linkgenValue.value.i64, minPcieLinkGen, PCIE_STR_MIN_PCI_GEN);
             log_error(d.GetMessage());
-            bg.AddErrorForGpu(gpu->gpuId, d);
-            bg.SetResultForGpu(gpu->gpuId, NVVS_RESULT_FAIL);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, d);
+            bg.SetResultForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, NVVS_RESULT_FAIL);
             Nfailed++;
         }
 
@@ -321,8 +321,8 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_WIDTH, d, gpu->gpuId, widthValue.value.i64, minPcieLinkWidth, PCIE_STR_MIN_PCI_WIDTH);
             log_error(d.GetMessage());
-            bg.AddErrorForGpu(gpu->gpuId, d);
-            bg.SetResultForGpu(gpu->gpuId, NVVS_RESULT_FAIL);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, d);
+            bg.SetResultForGpu(PCIE_PLUGIN_NAME, gpu->gpuId, NVVS_RESULT_FAIL);
             Nfailed++;
         }
     }
@@ -523,9 +523,9 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
                 DcgmError d { bg.gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bg.gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
-                bg.AddErrorForGpu(bg.gpu[j]->gpuId, d);
+                bg.AddErrorForGpu(PCIE_PLUGIN_NAME, bg.gpu[j]->gpuId, d);
                 log_error(d.GetMessage());
-                bg.SetResultForGpu(bg.gpu[j]->gpuId, NVVS_RESULT_FAIL);
+                bg.SetResultForGpu(PCIE_PLUGIN_NAME, bg.gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 failedTests++;
             }
         }
@@ -581,7 +581,7 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
             std::string err = fmt::format(
                 "Error while waiting for child process ({}) to exit: '{}'", childInfo.pid, strerror(errno));
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            bg.AddError(d);
+            bg.AddError(PCIE_PLUGIN_NAME, d);
             errorCondition = true;
             continue;
         }
@@ -597,7 +597,7 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
                 std::string err
                     = fmt::format("A child process ({}) exited with non-zero status {}", childInfo.pid, childStatus);
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-                bg.AddError(d);
+                bg.AddError(PCIE_PLUGIN_NAME, d);
                 errorCondition = true;
             }
         }
@@ -608,7 +608,7 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             std::string err = fmt::format("A child process ({}) terminated with signal {}", childInfo.pid, childStatus);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            bg.AddError(d);
+            bg.AddError(PCIE_PLUGIN_NAME, d);
             errorCondition = true;
         }
         else
@@ -618,7 +618,7 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
                 = fmt::format("A child process ({}) is being traced or otherwise can't exit", childInfo.pid);
             ;
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            bg.AddError(d);
+            bg.AddError(PCIE_PLUGIN_NAME, d);
             errorCondition = true;
         }
     }
@@ -653,7 +653,7 @@ unsigned int ProcessChildOutput(Json::Value &root, BusGrind &bg, double minimumB
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         std::string errmsg = fmt::format("Error reported from child process ({}): '{}'", pid, errBuf.str());
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
-        bg.AddError(d);
+        bg.AddError(PCIE_PLUGIN_NAME, d);
         failedTests++;
 
         // Global errors mean we weren't able to run the test successfully; no need to process further.
@@ -672,9 +672,9 @@ unsigned int ProcessChildOutput(Json::Value &root, BusGrind &bg, double minimumB
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, gpuJv[BWC_JSON_ERROR].asString().c_str());
-            bg.AddErrorForGpu(gpuId, d);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpuId, d);
             log_error(d.GetMessage());
-            bg.SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            bg.SetResultForGpu(PCIE_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             failedTests++;
 
             continue;
@@ -684,9 +684,9 @@ unsigned int ProcessChildOutput(Json::Value &root, BusGrind &bg, double minimumB
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_LOW_BANDWIDTH, d, gpuId, "d2h", maxTxBwGb, minimumBandwidth);
-            bg.AddErrorForGpu(gpuId, d);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpuId, d);
             log_error(d.GetMessage());
-            bg.SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            bg.SetResultForGpu(PCIE_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             failedTests++;
         }
 
@@ -694,9 +694,9 @@ unsigned int ProcessChildOutput(Json::Value &root, BusGrind &bg, double minimumB
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_LOW_BANDWIDTH, d, gpuId, "h2d", maxRxBwGb, minimumBandwidth);
-            bg.AddErrorForGpu(gpuId, d);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpuId, d);
             log_error(d.GetMessage());
-            bg.SetResultForGpu(gpuId, NVVS_RESULT_FAIL);
+            bg.SetResultForGpu(PCIE_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             failedTests++;
         }
 
@@ -732,7 +732,7 @@ unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
                 std::string errmsg
                     = fmt::format("Output of child process ({}) couldn't be read: '{}'", childInfo.pid, errbuf);
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
-                bg.AddError(d);
+                bg.AddError(PCIE_PLUGIN_NAME, d);
             }
             else
             {
@@ -741,7 +741,7 @@ unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
                                                  childInfo.pid,
                                                  reader.getFormattedErrorMessages());
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
-                bg.AddError(d);
+                bg.AddError(PCIE_PLUGIN_NAME, d);
             }
 
             failedTests++;
@@ -903,7 +903,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             std::string err = fmt::format("Couldn't find the correct arguments to launch bandwidth measurement test");
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            bg.AddError(d);
+            bg.AddError(PCIE_PLUGIN_NAME, d);
             failedTests++;
             return failedTests;
         }
@@ -917,7 +917,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             std::string err = fmt::format("Couldn't fork to launch bandwidth measurement test: '{}'", strerror(errno));
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            bg.AddError(d);
+            bg.AddError(PCIE_PLUGIN_NAME, d);
             failedTests++;
             return failedTests;
         }
@@ -1146,9 +1146,9 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
                 DcgmError d { bg->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(
                     DCGM_FR_LOW_BANDWIDTH, d, bg->gpu[j]->gpuId, labels[i], bandwidth, minimumBandwidth);
-                bg->AddErrorForGpu(bg->gpu[j]->gpuId, d);
+                bg->AddErrorForGpu(PCIE_PLUGIN_NAME, bg->gpu[j]->gpuId, d);
                 log_error(d.GetMessage());
-                bg->SetResultForGpu(bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
+                bg->SetResultForGpu(PCIE_PLUGIN_NAME, bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 failedTests++;
             }
         }
@@ -1312,8 +1312,8 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
                 DcgmError d { bg->gpu[j]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_HIGH_LATENCY, d, labels[i], bg->gpu[j]->gpuId, latency, maxLatency);
                 log_error(d.GetMessage());
-                bg->AddErrorForGpu(bg->gpu[j]->gpuId, d);
-                bg->SetResultForGpu(bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
+                bg->AddErrorForGpu(PCIE_PLUGIN_NAME, bg->gpu[j]->gpuId, d);
+                bg->SetResultForGpu(PCIE_PLUGIN_NAME, bg->gpu[j]->gpuId, NVVS_RESULT_FAIL);
                 Nfailures++;
             }
         }
@@ -1548,7 +1548,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CONCURRENT_GPUS, d);
-            bg->AddInfo(d.GetMessage());
+            bg->AddInfo(PCIE_PLUGIN_NAME, d.GetMessage());
             bg->m_printedConcurrentGpuErrorMessage = true;
         }
 
@@ -1762,7 +1762,7 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CONCURRENT_GPUS, d);
-            bg->AddInfo(d.GetMessage());
+            bg->AddInfo(PCIE_PLUGIN_NAME, d.GetMessage());
             bg->m_printedConcurrentGpuErrorMessage = true;
         }
         return 0;
@@ -2025,19 +2025,21 @@ int main_init(BusGrind &bg, const dcgmDiagPluginGpuList_t &gpuInfo)
         PluginDevice *pd = 0;
         try
         {
-            pd = new PluginDevice(
-                gpuInfo.gpus[gpuListIndex].gpuId, gpuInfo.gpus[gpuListIndex].attributes.identifiers.pciBusId, &bg);
+            pd = new PluginDevice(PCIE_PLUGIN_NAME,
+                                  gpuInfo.gpus[gpuListIndex].gpuId,
+                                  gpuInfo.gpus[gpuListIndex].attributes.identifiers.pciBusId,
+                                  &bg);
         }
         catch (DcgmError &d)
         {
-            bg.AddErrorForGpu(gpuInfo.gpus[gpuListIndex].gpuId, d);
+            bg.AddErrorForGpu(PCIE_PLUGIN_NAME, gpuInfo.gpus[gpuListIndex].gpuId, d);
             delete pd;
             return (-1);
         }
 
         if (pd->warning.size() > 0)
         {
-            bg.AddInfoVerboseForGpu(gpuInfo.gpus[gpuListIndex].gpuId, pd->warning);
+            bg.AddInfoVerboseForGpu(PCIE_PLUGIN_NAME, gpuInfo.gpus[gpuListIndex].gpuId, pd->warning);
         }
 
         /* At this point, we consider this GPU part of our set */
@@ -2160,8 +2162,8 @@ int bg_should_stop(BusGrind *bg)
 
     DcgmError d { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-    bg->AddError(d);
-    bg->SetResult(NVVS_RESULT_SKIP);
+    bg->AddError(PCIE_PLUGIN_NAME, d);
+    bg->SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_SKIP);
     return 1;
 }
 
@@ -2253,18 +2255,18 @@ bool bg_check_global_pass_fail(BusGrind *bg, timelib64_t startTime, timelib64_t 
         /* Some tests set the GPU result to fail when error conditions occur. Only consider the test passed
          * if the existing result is not set to FAIL
          */
-        if (passed && bg->GetGpuResults().find(bgGpu->gpuId)->second != NVVS_RESULT_FAIL)
+        if (passed && bg->GetGpuResults(PCIE_PLUGIN_NAME).find(bgGpu->gpuId)->second != NVVS_RESULT_FAIL)
         {
-            bg->SetResultForGpu(bgGpu->gpuId, NVVS_RESULT_PASS);
+            bg->SetResultForGpu(PCIE_PLUGIN_NAME, bgGpu->gpuId, NVVS_RESULT_PASS);
         }
         else
         {
             allPassed = false;
-            bg->SetResultForGpu(bgGpu->gpuId, NVVS_RESULT_FAIL);
+            bg->SetResultForGpu(PCIE_PLUGIN_NAME, bgGpu->gpuId, NVVS_RESULT_FAIL);
             // Log warnings for this gpu
             for (size_t j = 0; j < errorList.size(); j++)
             {
-                bg->AddErrorForGpu(bgGpu->gpuId, errorList[j]);
+                bg->AddErrorForGpu(PCIE_PLUGIN_NAME, bgGpu->gpuId, errorList[j]);
             }
         }
     }
@@ -2298,7 +2300,7 @@ void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuIn
     {
         std::stringstream buf;
         buf << "Cannot check NvLink status: " << errorString(ret);
-        bg->AddInfoVerbose(buf.str());
+        bg->AddInfoVerbose(PCIE_PLUGIN_NAME, buf.str());
         DCGM_LOG_ERROR << buf.str();
         return;
     }
@@ -2331,7 +2333,7 @@ void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuIn
         {
             DcgmError d { linkStatus.gpus[i].entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_EXPECTED_NVLINKS_UP, d, upNvLinks, bg->m_gpuNvlinksExpectedUp);
-            bg->AddErrorForGpu(linkStatus.gpus[i].entityId, d);
+            bg->AddErrorForGpu(PCIE_PLUGIN_NAME, linkStatus.gpus[i].entityId, d);
             downLinks = true;
         }
     }
@@ -2356,7 +2358,7 @@ void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuIn
                                       linkStatus.nvSwitches[i].entityId,
                                       upNvLinks,
                                       bg->m_nvSwitchNvlinksExpectedUp);
-            bg->AddError(d);
+            bg->AddError(PCIE_PLUGIN_NAME, d);
             downLinks = true;
         }
     }
@@ -2391,7 +2393,7 @@ int main_entry_wrapped(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo)
         std::stringstream ss;
         ss << "Skipping p2p tests because we have " << gpuInfo.numGpus << " GPUs, which is above the limit of "
            << MAX_PCIE_CONCURRENT_GPUS << ".";
-        bg->AddInfoVerbose(ss.str());
+        bg->AddInfoVerbose(PCIE_PLUGIN_NAME, ss.str());
         DCGM_LOG_INFO << ss.str();
     }
 
@@ -2580,8 +2582,8 @@ int main_entry(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo)
         const char *err_str = e.what();
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err_str);
         log_error("Caught runtime_error {}", err_str);
-        bg->AddError(d);
-        bg->SetResult(NVVS_RESULT_FAIL);
+        bg->AddError(PCIE_PLUGIN_NAME, d);
+        bg->SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);
         // Let the TestFramework report the exception information.
         throw;
     }

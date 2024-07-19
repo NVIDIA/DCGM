@@ -95,7 +95,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
         buf << "Invalid minimum allocation percentage of GPU memory '" << minAllocationPcnt * 100.0
             << "'. Defaulting to 75%";
         DCGM_LOG_WARNING << buf.str();
-        memGlobals->memory->AddInfoVerboseForGpu(memGlobals->dcgmGpuIndex, buf.str());
+        memGlobals->memory->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, buf.str());
         minAllocationPcnt = DEFAULT_MIN_ALLOCATION;
     }
 
@@ -135,7 +135,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
-            memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
+            memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
             log_error(d.GetMessage());
             goto error_no_cleanup;
         }
@@ -151,7 +151,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals, CUdevice
         ss.setf(std::ios::fixed, std::ios::floatfield);
         ss.precision(1);
         ss << "Allocated " << size << " bytes (" << (float)(size * 100.0f / totalMem) << "%)";
-        memGlobals->memory->AddInfoVerboseForGpu(memGlobals->dcgmGpuIndex, ss.str());
+        memGlobals->memory->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, ss.str());
     }
 
     // Everything after this point needs to clean up
@@ -241,8 +241,8 @@ error_no_cleanup:
     {
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_DBE, d, memGlobals->dcgmGpuIndex);
-        memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
-        memGlobals->memory->AddInfo("A DBE occurred, CUDA error containment reported issue.");
+        memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
+        memGlobals->memory->AddInfo(MEMORY_PLUGIN_NAME, "A DBE occurred, CUDA error containment reported issue.");
         return NVVS_RESULT_FAIL;
     }
 
@@ -253,7 +253,7 @@ error_no_cleanup:
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_MISMATCH, d, memGlobals->dcgmGpuIndex);
-            memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
+            memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
             ret = NVVS_RESULT_FAIL;
         }
 
@@ -343,14 +343,15 @@ void mem_cleanup(mem_globals_p memGlobals)
         cuRes = cuCtxDestroy(memGlobals->cuCtx);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory, "cuCtxDestroy", cuRes, memGlobals->dcgmGpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memGlobals->memory, MEMORY_PLUGIN_NAME, "cuCtxDestroy", cuRes, memGlobals->dcgmGpuIndex);
         }
     }
     memGlobals->cuCtxCreated = 0;
 
     if (memGlobals->nvvsDevice)
     {
-        memGlobals->nvvsDevice->RestoreState();
+        memGlobals->nvvsDevice->RestoreState(MEMORY_PLUGIN_NAME);
         delete (memGlobals->nvvsDevice);
         memGlobals->nvvsDevice = 0;
     }
@@ -371,13 +372,13 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
         std::string error = AppendCudaDriverError("Unable to initialize CUDA library", cuRes);
         d.AddDetail(fmt::format("{} {}. {}", error, GetAdditionalCuInitDetail(cuRes), RUN_CUDA_KERNEL_REC));
-        memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
+        memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
         return 1;
     }
     memGlobals->cudaInitialized = 1;
 
     memGlobals->nvvsDevice = new NvvsDevice(memGlobals->memory);
-    st                     = memGlobals->nvvsDevice->Init(memGlobals->dcgmGpuIndex);
+    st                     = memGlobals->nvvsDevice->Init(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex);
     if (st)
     {
         return 1;
@@ -399,7 +400,7 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
             /* Found CUDA_VISIBLE_DEVICES */
             d.AddDetail("If you specify CUDA_VISIBLE_DEVICES in your environment, it must include all Cuda "
                         "device indices that DCGM GPU Diagnostic will be run on.");
-            memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
+            memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
         }
         return 1;
     }
@@ -411,7 +412,7 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate");
         d.AddDetail(error);
-        memGlobals->memory->AddErrorForGpu(memGlobals->dcgmGpuIndex, d);
+        memGlobals->memory->AddErrorForGpu(MEMORY_PLUGIN_NAME, memGlobals->dcgmGpuIndex, d);
         return 1;
     }
     memGlobals->cuCtxCreated = 1;
@@ -437,7 +438,7 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
     st = mem_init(memGlobals, gpuInfo);
     if (st)
     {
-        memGlobals->memory->SetResult(NVVS_RESULT_FAIL);
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_FAIL);
         mem_cleanup(memGlobals);
         return 1;
     }
@@ -454,8 +455,8 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, d, "dcgmEntitiesGetLatestValues");
         d.AddDcgmError(ret);
         log_error(d.GetMessage());
-        memGlobals->memory->AddError(d);
-        memGlobals->memory->SetResult(NVVS_RESULT_FAIL);
+        memGlobals->memory->AddError(MEMORY_PLUGIN_NAME, d);
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_FAIL);
         mem_cleanup(memGlobals);
         return 1;
     }
@@ -463,8 +464,8 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
     {
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_UNSUPPORTED, d);
-        memGlobals->memory->AddInfoVerboseForGpu(gpuId, d.GetMessage());
-        memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
+        memGlobals->memory->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, gpuId, d.GetMessage());
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
         mem_cleanup(memGlobals);
         return 1;
     }
@@ -474,8 +475,8 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         std::stringstream ss;
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_DISABLED, d, "Memory", gpuId);
-        memGlobals->memory->AddInfoVerboseForGpu(gpuId, d.GetMessage());
-        memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
+        memGlobals->memory->AddInfoVerboseForGpu(MEMORY_PLUGIN_NAME, gpuId, d.GetMessage());
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
         mem_cleanup(memGlobals);
         return 1;
     }
@@ -496,11 +497,11 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         {
             if (result == NVVS_RESULT_SKIP)
             {
-                memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
+                memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
             }
             else
             {
-                memGlobals->memory->SetResult(NVVS_RESULT_FAIL);
+                memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_FAIL);
             }
 
             mem_cleanup(memGlobals);
@@ -512,19 +513,19 @@ int main_entry(const dcgmDiagPluginGpuInfo_t &gpuInfo, Memory *memory, TestParam
         log_error("Caught runtime_error {}", e.what());
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        memGlobals->memory->AddError(d);
-        memGlobals->memory->SetResult(NVVS_RESULT_FAIL);
+        memGlobals->memory->AddError(MEMORY_PLUGIN_NAME, d);
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_FAIL);
         mem_cleanup(memGlobals);
         throw;
     }
 
     if (main_should_stop)
     {
-        memGlobals->memory->SetResult(NVVS_RESULT_SKIP);
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
     }
     else
     {
-        memGlobals->memory->SetResult(NVVS_RESULT_PASS);
+        memGlobals->memory->SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_PASS);
     }
 
     mem_cleanup(memGlobals);

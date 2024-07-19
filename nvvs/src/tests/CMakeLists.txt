@@ -65,6 +65,7 @@ if (BUILD_TESTING)
     add_library(testplugin SHARED)
 
     target_link_libraries(testplugin PUBLIC nvvs_interface)
+    target_link_libraries(testplugin PRIVATE fmt::fmt)
 
     target_sources(
         testplugin

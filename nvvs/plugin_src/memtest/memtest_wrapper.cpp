@@ -51,12 +51,12 @@ MemtestPlugin::MemtestPlugin(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t 
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(d);
+        AddError(MEMTEST_PLUGIN_NAME, d);
     }
     else
     {
         m_gpuInfo = *gpuInfo;
-        InitializeForGpuList(*gpuInfo);
+        InitializeForGpuList(MEMTEST_PLUGIN_NAME, *gpuInfo);
     }
 }
 
@@ -73,15 +73,17 @@ void MemtestPlugin::Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &
     {
         DcgmError d { gpu.gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memtest");
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(MEMTEST_PLUGIN_NAME, d.GetMessage());
+        SetResult(MEMTEST_PLUGIN_NAME, NVVS_RESULT_SKIP);
         return;
     }
     //    main_entry(gpu, this, testParameters);
 }
 
 /*****************************************************************************/
-void MemtestPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void MemtestPlugin::Go(std::string const &testName,
+                       unsigned int numParameters,
+                       const dcgmDiagPluginTestParameter_t *tpStruct)
 {
     int st;
 
@@ -89,7 +91,7 @@ void MemtestPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(3); // Sync with test_dcgm_diag.py->injection_offset for error injection
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -105,8 +107,8 @@ void MemtestPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memtest");
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 
@@ -119,21 +121,21 @@ void MemtestPlugin::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(d);
-            SetResult(NVVS_RESULT_SKIP);
+            AddError(testName, d);
+            SetResult(testName, NVVS_RESULT_SKIP);
         }
         else if (st)
         {
             // Fatal error in plugin or test could not be initialized
-            SetResult(NVVS_RESULT_FAIL);
+            SetResult(testName, NVVS_RESULT_FAIL);
         }
     }
     else
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EMPTY_GPU_LIST, d);
-        AddError(d);
-        SetResult(NVVS_RESULT_FAIL);
+        AddError(testName, d);
+        SetResult(testName, NVVS_RESULT_FAIL);
     }
 
     delete memtest;

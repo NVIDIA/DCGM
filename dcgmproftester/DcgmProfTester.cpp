@@ -583,6 +583,14 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 
         (*entities)[DCGM_FE_GPU] = gpuInstance.m_gpuId;
 
+        /**
+         * We always save a prospective value for CUDA_VISIBLE_DEVICES in the
+         * dcgmproftester main thread. The dcgmproftester worker thread will set
+         * it in the MIG case to ensure we work on the right MIG slice. In the
+         * non-MIG case, we can actually get the physical GPU Device ID, and
+         * CUDA_VISIBLE_DEVICES lists all non-MIG GPUs (so NvLink tests work).
+         */
+
         if (gpuInstance.m_isMig)
         {
             if ((testFieldId != DCGM_FI_PROF_PCIE_TX_BYTES) && (testFieldId != DCGM_FI_PROF_PCIE_RX_BYTES))
@@ -593,20 +601,7 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 
             entity.entityGroupId = DCGM_FE_GPU_CI;
             entity.entityId      = gpuInstance.m_ci;
-        }
-        else
-        {
-            entity.entityGroupId = DCGM_FE_GPU;
-            entity.entityId      = gpuInstance.m_gpuId;
-        }
 
-        /**
-         * We always save a prospective value for CUDA_VISIBLE_DEVICES in the
-         * dcgmproftester main thread. The dcgmproftester worker thread will set
-         * it in the MIG case to ensure we work on the right MIG slice. In the
-         * non-MIG case, we can actually get the physical GPU Device ID.
-         */
-        {
             dcgmFieldValue_v2 value {};
 
             dcgmReturn_t dcgmReturn
@@ -624,6 +619,22 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
             }
 
             cudaVisibleDevices = value.value.str;
+        }
+        else
+        {
+            entity.entityGroupId = DCGM_FE_GPU;
+            entity.entityId      = gpuInstance.m_gpuId;
+
+            dcgmReturn_t dcgmReturn = m_gpus[gpuInstance.m_gpuId]->HelperGetCudaVisibleGPUs(cudaVisibleDevices);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                AbortOtherChildren(gpuInstance.m_gpuId);
+
+                DCGM_LOG_ERROR << "Could not get non-MIG CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn
+                               << ")";
+
+                return DCGM_ST_GENERIC_ERROR;
+            }
         }
 
         worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);

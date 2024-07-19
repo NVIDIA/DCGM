@@ -48,12 +48,12 @@ Memory::Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(d);
+        AddError(MEMORY_PLUGIN_NAME, d);
     }
     else
     {
         m_gpuInfo = *gpuInfo;
-        InitializeForGpuList(*gpuInfo);
+        InitializeForGpuList(MEMORY_PLUGIN_NAME, *gpuInfo);
     }
 }
 
@@ -70,21 +70,21 @@ void Memory::Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &gpu)
     {
         DcgmError d { gpu.gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(MEMORY_PLUGIN_NAME, d.GetMessage());
+        SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
         return;
     }
     //    main_entry(gpu, this, testParameters);
 }
 
 /*****************************************************************************/
-void Memory::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void Memory::Go(std::string const &testName, unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
 {
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -95,8 +95,8 @@ void Memory::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t 
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 

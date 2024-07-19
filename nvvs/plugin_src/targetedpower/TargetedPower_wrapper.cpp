@@ -175,21 +175,21 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmGetDeviceAttributes");
-                AddErrorForGpu(gpuId, d);
+                AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
                 log_error("Can't get the enforced power limit: {}", d.GetMessage());
                 return false;
             }
         }
         catch (const DcgmError &d)
         {
-            AddErrorForGpu(gpuId, d);
+            AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
             return false;
         }
         catch (const std::runtime_error &re)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
-            AddErrorForGpu(gpuId, d);
+            AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
 
             return false;
         }
@@ -214,7 +214,7 @@ int ConstantPower::CudaInit()
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR("cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -238,7 +238,7 @@ int ConstantPower::CudaInit()
         log_error("Error allocating {} bytes x 3 on the host (malloc)", (int)arrayByteSize);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC_HOST, d, arrayByteSize);
-        AddError(d);
+        AddError(TP_PLUGIN_NAME, d);
         return -1;
     }
 
@@ -285,7 +285,7 @@ int ConstantPower::CudaInit()
         cuSt = cudaGetDeviceProperties(&device->cudaDevProp, device->cudaDeviceIdx);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaGetDeviceProperties", cuSt, device->gpuId);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaGetDeviceProperties", cuSt, device->gpuId);
             return -1;
         }
 
@@ -300,7 +300,7 @@ int ConstantPower::CudaInit()
                 std::stringstream ss;
                 ss << "'" << cudaGetErrorString(cuSt) << "' for GPU " << device->gpuId;
                 d.AddDetail(ss.str());
-                AddErrorForGpu(device->gpuId, d);
+                AddErrorForGpu(TP_PLUGIN_NAME, device->gpuId, d);
                 return -1;
             }
             device->NcudaStreams++;
@@ -310,7 +310,7 @@ int ConstantPower::CudaInit()
         cubSt = CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR("cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(TP_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         device->allocatedCublasHandle = 1;
@@ -318,13 +318,13 @@ int ConstantPower::CudaInit()
         cuSt = cudaMalloc((void **)&device->deviceA, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceB, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
@@ -334,7 +334,7 @@ int ConstantPower::CudaInit()
             cuSt = cudaMalloc((void **)&device->deviceC[i], arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
             device->NdeviceC++;
@@ -344,21 +344,21 @@ int ConstantPower::CudaInit()
         cuSt = cudaMemcpy(device->deviceA, m_hostA, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
         cuSt = cudaMemcpy(device->deviceB, m_hostB, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
         cuSt = cudaMemcpy(device->deviceC[0], m_hostC, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         /* Copy the rest of the C arrays from the first C array */
@@ -367,7 +367,7 @@ int ConstantPower::CudaInit()
             cuSt = cudaMemcpy(device->deviceC[i], device->deviceC[0], arrayByteSize, cudaMemcpyDeviceToDevice);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR("cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
         }
@@ -377,15 +377,17 @@ int ConstantPower::CudaInit()
 }
 
 /*************************************************************************/
-void ConstantPower::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters)
+void ConstantPower::Go(std::string const &testName,
+                       unsigned int numParameters,
+                       const dcgmDiagPluginTestParameter_t *testParameters)
 {
-    InitializeForGpuList(m_gpuInfo);
+    InitializeForGpuList(testName, m_gpuInfo);
 
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -397,8 +399,8 @@ void ConstantPower::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TP_PLUGIN_NAME);
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 
@@ -413,13 +415,13 @@ void ConstantPower::Go(unsigned int numParameters, const dcgmDiagPluginTestParam
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-        AddError(d);
-        SetResult(NVVS_RESULT_SKIP);
+        AddError(testName, d);
+        SetResult(testName, NVVS_RESULT_SKIP);
     }
     else if (!result)
     {
         // There was an error running the test - set result for all gpus to failed
-        SetResult(NVVS_RESULT_FAIL);
+        SetResult(testName, NVVS_RESULT_FAIL);
     }
 }
 
@@ -467,7 +469,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
             buf << "Max power of " << maxVal << " did not reach desired power minimum " << TP_STR_TARGET_POWER_MIN_RATIO
                 << " of " << minRatioTarget << " for GPU " << device->gpuId
                 << " because the enforced power limit has been set to " << device->maxPowerTarget;
-            AddInfoVerboseForGpu(device->gpuId, buf.str());
+            AddInfoVerboseForGpu(TP_PLUGIN_NAME, device->gpuId, buf.str());
         }
         else
         {
@@ -489,7 +491,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
     // Add a message about the max / average power usage
     std::string infoStr = fmt::format(
         "GPU {} max power: {:.1f} W average power usage: {:.1f} W", device->gpuId, maxVal, fsr.response.values[1].fp64);
-    AddInfoVerboseForGpu(device->gpuId, infoStr);
+    AddInfoVerboseForGpu(TP_PLUGIN_NAME, device->gpuId, infoStr);
 
     return true;
 }
@@ -528,7 +530,7 @@ bool ConstantPower::CheckPassFail(timelib64_t startTime, timelib64_t earliestSto
                  "Test duration of %.1f will not produce useful results as "
                  "this test takes at least 30 seconds to get to target power.",
                  m_testDuration);
-        AddInfo(buf);
+        AddInfo(TP_PLUGIN_NAME, buf);
     }
 
     for (size_t i = 0; i < m_device.size(); i++)
@@ -540,7 +542,7 @@ bool ConstantPower::CheckPassFail(timelib64_t startTime, timelib64_t earliestSto
 
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(this, TP_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -564,8 +566,8 @@ bool ConstantPower::EnforcedPowerLimitTooLow()
             // Enforced power limit is too low. Skip the test.
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ENFORCED_POWER_LIMIT, d, m_device[i]->gpuId, m_device[i]->maxPowerTarget);
-            AddErrorForGpu(m_device[i]->gpuId, d);
-            SetResultForGpu(m_device[i]->gpuId, NVVS_RESULT_SKIP);
+            AddErrorForGpu(TP_PLUGIN_NAME, m_device[i]->gpuId, d);
+            SetResultForGpu(TP_PLUGIN_NAME, m_device[i]->gpuId, NVVS_RESULT_SKIP);
             m_device[i]->m_lowPowerLimit = true;
         }
         else
@@ -746,8 +748,8 @@ bool ConstantPower::RunTest()
         log_error("Caught runtime_error {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        AddError(d);
-        SetResult(NVVS_RESULT_FAIL);
+        AddError(TP_PLUGIN_NAME, d);
+        SetResult(TP_PLUGIN_NAME, NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -984,7 +986,8 @@ void ConstantPowerWorker::run()
                     cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, m_device->cudaStream[i]);
                     if (cubSt != CUBLAS_STATUS_SUCCESS)
                     {
-                        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasSetStream", cubSt, m_device->gpuId);
+                        LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                            &m_plugin, TP_PLUGIN_NAME, "cublasSetStream", cubSt, m_device->gpuId);
                         m_stopTime = timelib_usecSince1970();
                         return;
                     }
@@ -1008,7 +1011,8 @@ void ConstantPowerWorker::run()
                                                          matrixDim);
                         if (cubSt != CUBLAS_STATUS_SUCCESS)
                         {
-                            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasDgemm", cubSt, m_device->gpuId);
+                            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                                &m_plugin, TP_PLUGIN_NAME, "cublasDgemm", cubSt, m_device->gpuId);
                             m_stopTime = timelib_usecSince1970();
                             return;
                         }
@@ -1031,7 +1035,8 @@ void ConstantPowerWorker::run()
                                                          matrixDim);
                         if (cubSt != CUBLAS_STATUS_SUCCESS)
                         {
-                            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasSgemm", cubSt, m_device->gpuId);
+                            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                                &m_plugin, TP_PLUGIN_NAME, "cublasSgemm", cubSt, m_device->gpuId);
                             m_stopTime = timelib_usecSince1970();
                             return;
                         }

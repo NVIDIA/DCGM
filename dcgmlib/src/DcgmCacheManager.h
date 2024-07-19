@@ -20,6 +20,7 @@
 #include "DcgmGpmManager.hpp"
 #include "DcgmGpuInstance.h"
 #include "DcgmInjectionNvmlManager.h"
+#include "DcgmKmsgReader.h"
 #include "DcgmMigManager.h"
 #include "DcgmMutex.h"
 #include "DcgmSettings.h"
@@ -438,7 +439,7 @@ public:
      * Returns 0 on Success
      *        <0 on error
      */
-    dcgmReturn_t Init(int pollInLockStep, double maxSampleAge);
+    dcgmReturn_t Init(int pollInLockStep, double maxSampleAge, bool nvmlLoaded);
 
     /*************************************************************************/
     /*
@@ -1562,9 +1563,22 @@ public:
 #ifdef INJECTION_LIBRARY_AVAILABLE
     dcgmReturn_t InjectNvmlGpu(dcgm_field_eid_t gpuId,
                                const char *key,
-                               const injectNvmlVal_t &value,
                                const injectNvmlVal_t *extraKeys,
-                               unsigned int extraKeyCount);
+                               unsigned int extraKeyCount,
+                               const injectNvmlRet_t &injectNvmlRet);
+
+    dcgmReturn_t InjectNvmlGpuForFollowingCalls(dcgm_field_eid_t gpuId,
+                                                const char *key,
+                                                const injectNvmlVal_t *extraKeys,
+                                                unsigned int extraKeyCount,
+                                                const injectNvmlRet_t *injectNvmlRets,
+                                                unsigned int retCount);
+
+    dcgmReturn_t InjectedNvmlGpuReset(dcgm_field_eid_t gpuId);
+
+    dcgmReturn_t GetNvmlInjectFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts);
+
+    dcgmReturn_t ResetNvmlInjectFuncCallCount();
 #endif
 
     dcgmReturn_t CreateNvmlInjectionDevice(unsigned int index);
@@ -1628,7 +1642,9 @@ private:
     /* Runtime stats of the cache manager */
     dcgmcm_runtime_stats_t m_runStats;
 
-    DcgmCacheManagerEventThread *m_eventThread; /* Thread for reading NVML events */
+    DcgmCacheManagerEventThread *m_eventThread { nullptr }; /* Thread for reading NVML events */
+
+    DcgmKmsgReaderThread *m_kmsgThread { nullptr }; /* Thread for reading additional NVML events in /dev/kmsg */
 
     bool m_haveAnyLiveSubscribers; /* Has any watch registered to receive live updates? */
 
@@ -1653,6 +1669,10 @@ private:
 
     dcgmcm_update_thread_t
         *m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
+
+    bool m_nvmlLoaded; /* true if NVML was successfully loaded */
+
+    std::unordered_map<std::string, unsigned int> pciBusGpuIdMap;
 
     /*************************************************************************/
     /*
@@ -2254,4 +2274,13 @@ private:
                            nvmlDevice_t migDevice,
                            unsigned int nvmlGpuInstanceId,
                            unsigned int nvmlComputeInstanceId);
+
+    /*************************************************************************/
+    /*
+     * Stops the given thread with a timeout of 10s. If the thread cannot be stopped
+     * in that time, it is killed.
+     *
+     * @param threadPtr - the DcgmThread that needs to be stopped
+     */
+    void StopThread(DcgmThread *threadPtr);
 };

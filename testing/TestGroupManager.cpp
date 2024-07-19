@@ -139,7 +139,7 @@ static std::unique_ptr<DcgmCacheManager> GetCacheManagerInstance(void)
         return nullptr;
     }
 
-    dcgmReturn_t dcgmReturn = cacheManager->Init(1, 3600.0);
+    dcgmReturn_t dcgmReturn = cacheManager->Init(1, 3600.0, true);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "DcgmCacheManager::Init() failed with %s\n", errorString(dcgmReturn));

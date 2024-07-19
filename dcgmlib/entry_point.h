@@ -644,7 +644,7 @@ DCGM_ENTRY_POINT(dcgmHealthCheck,
 
 DCGM_ENTRY_POINT(dcgmActionValidate_v2,
                  tsapiEngineActionValidate_v2,
-                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_t *drd, dcgmDiagResponse_t *response),
+                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v7 *drd, dcgmDiagResponse_v10 *response),
                  "({}, {}, {})",
                  pDcgmHandle,
                  drd,
@@ -653,17 +653,19 @@ DCGM_ENTRY_POINT(dcgmActionValidate_v2,
 DCGM_ENTRY_POINT(
     dcgmActionValidate,
     tsapiEngineActionValidate,
-    (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmPolicyValidation_t validate, dcgmDiagResponse_t *response),
+    (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmPolicyValidation_t validate, dcgmDiagResponse_v10 *response),
     "({} {}, {}, {})",
     pDcgmHandle,
     groupId,
     validate,
     response)
 
-DCGM_ENTRY_POINT(
-    dcgmRunDiagnostic,
+DCGM_ENTRY_POINT(dcgmRunDiagnostic,
     tsapiEngineRunDiagnostic,
-    (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmDiagnosticLevel_t diagLevel, dcgmDiagResponse_t *diagResponse),
+                 (dcgmHandle_t pDcgmHandle,
+                  dcgmGpuGrp_t groupId,
+                  dcgmDiagnosticLevel_t diagLevel,
+                  dcgmDiagResponse_v10 *diagResponse),
     "({} {}, {}, {})",
     pDcgmHandle,
     groupId,
@@ -950,14 +952,53 @@ DCGM_ENTRY_POINT(dcgmInjectNvmlDevice,
                   const char *key,
                   const injectNvmlVal_t *extraKeys,
                   unsigned int extraKeyCount,
-                  const injectNvmlVal_t *value),
+                  const injectNvmlRet_t *injectNvmlRet),
                  "({}, {}, {}, {}, {}, {})",
                  dcgmHandle,
                  gpuId,
                  key,
                  extraKeys,
                  extraKeyCount,
-                 value)
+                 injectNvmlRet)
+
+DCGM_ENTRY_POINT(dcgmInjectNvmlDeviceForFollowingCalls,
+                 tsapiInjectNvmlDeviceForFollowingCalls,
+                 (dcgmHandle_t dcgmHandle,
+                  unsigned int gpuId,
+                  const char *key,
+                  const injectNvmlVal_t *extraKeys,
+                  unsigned int extraKeyCount,
+                  const injectNvmlRet_t *injectNvmlRets,
+                  unsigned int retCount),
+                 "({}, {}, {}, {}, {}, {}, {})",
+                 dcgmHandle,
+                 gpuId,
+                 key,
+                 extraKeys,
+                 extraKeyCount,
+                 injectNvmlRets,
+                 retCount)
+
+DCGM_ENTRY_POINT(dcgmInjectedNvmlDeviceReset,
+                 tsapiInjectedNvmlDeviceReset,
+                 (dcgmHandle_t dcgmHandle, unsigned int gpuId),
+                 "({}, {})",
+                 dcgmHandle,
+                 gpuId)
+
+DCGM_ENTRY_POINT(dcgmGetNvmlInjectFuncCallCount,
+                 tsapiGetNvmlInjectFuncCallCount,
+                 (dcgmHandle_t dcgmHandle, injectNvmlFuncCallCounts_t *nvmlFuncCallCounts),
+                 "({}, {})",
+                 dcgmHandle,
+                 nvmlFuncCallCounts)
+
+DCGM_ENTRY_POINT(dcgmResetNvmlInjectFuncCallCount,
+                 tsapiResetNvmlInjectFuncCallCount,
+                 (dcgmHandle_t dcgmHandle),
+                 "({})",
+                 dcgmHandle)
+
 #endif
 
 DCGM_ENTRY_POINT(dcgmPauseTelemetryForDiag, tsapiPause, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)

@@ -45,6 +45,10 @@ SB_FN            = 'single_bit'
 PCI_FN           = "pci"
 PCI_DEVICE_ID_FN = "pci_device_id"
 
+MIG_MODE_FN      = "mig_mode"
+CURRENT_MIG_FN   = "current_mig"
+PENDING_MIG_FN   = "pending_mig"
+
 # list of relevant throttle reasons
 relevant_throttling = ["clocks_throttle_reason_hw_slowdown",
                        "clocks_throttle_reason_hw_thermal_slowdown",
@@ -185,7 +189,11 @@ class NvidiaSmiJob(threading.Thread):
                 for grandchild in child:
                     if grandchild.tag == PCI_DEVICE_ID_FN:
                          gpudata[dcgm_fields.DCGM_FI_DEV_PCI_COMBINED_ID] = grandchild.text
-
+            elif child.tag == MIG_MODE_FN:
+                for grandchild in child:
+                    # Takes the last MIG grandchild. There should only be one
+                    if grandchild.tag == CURRENT_MIG_FN:
+                        gpudata[dcgm_fields.DCGM_FI_DEV_MIG_MODE] = grandchild.text
         if gpu_id not in self.m_data:
             self.m_data[gpu_id] = {}
 

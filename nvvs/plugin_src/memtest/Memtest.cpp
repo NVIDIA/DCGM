@@ -201,7 +201,7 @@ void Memtest::Cleanup()
         {
             try
             {
-                gpu.nvvsDevice->RestoreState();
+                gpu.nvvsDevice->RestoreState(MEMTEST_PLUGIN_NAME);
             }
             catch (std::exception const &e)
             {
@@ -219,7 +219,7 @@ void Memtest::Cleanup()
         {
             if (auto cuSt = cuModuleUnload(gpu.cuModule); cuSt != CUDA_SUCCESS)
             {
-                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuModuleUnload", cuSt, gpu.gpuId);
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuModuleUnload", cuSt, gpu.gpuId);
             }
             gpu.cuModule = nullptr;
         }
@@ -228,14 +228,14 @@ void Memtest::Cleanup()
             /* Unload our context and reset the default context so that the next plugin gets a clean state */
             if (auto cuSt = cuCtxDestroy(gpu.cuContext); cuSt != CUDA_SUCCESS)
             {
-                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxDestroy", cuSt, gpu.gpuId);
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuCtxDestroy", cuSt, gpu.gpuId);
             }
             gpu.cuContext = nullptr;
         }
 
         if (auto cuSt = cuDevicePrimaryCtxReset(gpu.cuDevice); cuSt != CUDA_SUCCESS)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDevicePrimaryCtxReset", cuSt, gpu.gpuId);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuDevicePrimaryCtxReset", cuSt, gpu.gpuId);
         }
     }
 
@@ -439,7 +439,7 @@ int Memtest::CudaInit()
         {
             if (auto cuSt = cuCtxCreate(&gpu.cuContext, 0, gpu.cuDevice); cuSt != CUDA_SUCCESS)
             {
-                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuCtxCreate", cuSt, gpu.gpuId);
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuCtxCreate", cuSt, gpu.gpuId);
                 return -1;
             }
 
@@ -460,7 +460,7 @@ dcgmReturn_t Memtest::Init(const dcgmDiagPluginGpuList_t &gpuList)
     /* Need to call cuInit before we call cuDeviceGetByPCIBusId */
     if (auto const cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuInit", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuInit", cuSt, 0, 0, false);
         return DCGM_ST_INIT_ERROR;
     }
 
@@ -471,7 +471,7 @@ dcgmReturn_t Memtest::Init(const dcgmDiagPluginGpuList_t &gpuList)
         memtestDevice.gpuId      = gpu.gpuId;
         memtestDevice.nvvsDevice = std::make_unique<NvvsDevice>(m_plugin);
 
-        if (auto st = memtestDevice.nvvsDevice->Init(memtestDevice.gpuId); st != 0)
+        if (auto st = memtestDevice.nvvsDevice->Init(MEMTEST_PLUGIN_NAME, memtestDevice.gpuId); st != 0)
         {
             log_error("Failed to initialize NvvsDevice for GPU {}", gpu.gpuId);
             return DCGM_ST_INIT_ERROR;
@@ -480,7 +480,8 @@ dcgmReturn_t Memtest::Init(const dcgmDiagPluginGpuList_t &gpuList)
         if (auto cuSt = cuDeviceGetByPCIBusId(&memtestDevice.cuDevice, gpu.attributes.identifiers.pciBusId);
             cuSt != CUDA_SUCCESS)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, "cuDeviceGetByPCIBusId", cuSt, memtestDevice.gpuId, 0, true);
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                m_plugin, MEMTEST_PLUGIN_NAME, "cuDeviceGetByPCIBusId", cuSt, memtestDevice.gpuId, 0, true);
             return DCGM_ST_INIT_ERROR;
         }
 
@@ -536,7 +537,7 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t &gpuList)
         log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        m_plugin->AddError(d);
+        m_plugin->AddError(MEMTEST_PLUGIN_NAME, d);
 
         for (auto &workerThread : workerThreads)
         {
@@ -581,7 +582,7 @@ bool Memtest::CheckPassFailSingleGpu(memtest_device_p device, std::vector<DcgmEr
     {
         snprintf(
             buf, sizeof(buf), "Device %d recorded %d errors during memtest", device->gpuId, gpu_errors[device->gpuId]);
-        m_plugin->AddInfo(std::string(buf));
+        m_plugin->AddInfo(MEMTEST_PLUGIN_NAME, std::string(buf));
 
         DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_MISMATCH, d, device->gpuId);
@@ -604,16 +605,16 @@ bool Memtest::CheckPassFail()
         bool passed = CheckPassFailSingleGpu(&gpu, errorList);
         if (passed)
         {
-            m_plugin->SetResultForGpu(gpu.gpuId, NVVS_RESULT_PASS);
+            m_plugin->SetResultForGpu(MEMTEST_PLUGIN_NAME, gpu.gpuId, NVVS_RESULT_PASS);
         }
         else
         {
             allPassed = false;
-            m_plugin->SetResultForGpu(gpu.gpuId, NVVS_RESULT_FAIL);
+            m_plugin->SetResultForGpu(MEMTEST_PLUGIN_NAME, gpu.gpuId, NVVS_RESULT_FAIL);
             // Log warnings for this gpu
             for (size_t j = 0; j < errorList.size(); j++)
             {
-                m_plugin->AddErrorForGpu(gpu.gpuId, errorList[j]);
+                m_plugin->AddErrorForGpu(MEMTEST_PLUGIN_NAME, gpu.gpuId, errorList[j]);
             }
         }
     }

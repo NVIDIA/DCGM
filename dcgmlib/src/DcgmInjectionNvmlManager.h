@@ -33,9 +33,22 @@ public:
 #ifdef INJECTION_LIBRARY_AVAILABLE
     dcgmReturn_t InjectGpu(nvmlDevice_t nvmlDevice,
                            const char *key,
-                           const injectNvmlVal_t &value,
                            const injectNvmlVal_t *extraKeys,
-                           unsigned int extraKeyCount);
+                           unsigned int extraKeyCount,
+                           const injectNvmlRet_t &injectNvmlRet);
+
+    dcgmReturn_t InjectGpuForFollowingCalls(nvmlDevice_t nvmlDevice,
+                                            const char *key,
+                                            const injectNvmlVal_t *extraKeys,
+                                            unsigned int extraKeyCount,
+                                            const injectNvmlRet_t *injectNvmlRets,
+                                            unsigned int retCount);
+
+    dcgmReturn_t InjectedGpuReset(nvmlDevice_t nvmlDevice);
+
+    dcgmReturn_t GetFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts);
+
+    dcgmReturn_t ResetFuncCallCount();
 #endif
 
     dcgmReturn_t CreateDevice(unsigned int index);

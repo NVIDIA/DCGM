@@ -22,7 +22,7 @@
 SCENARIO("Diag::GetFailureResult")
 {
     Diag d(1, "localhost");
-    dcgmDiagResponse_t result {};
+    dcgmDiagResponse_v10 result {};
 
     // Initialized to all zeros should pass
     CHECK(d.GetFailureResult(result) == DCGM_ST_OK);

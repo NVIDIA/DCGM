@@ -39,11 +39,11 @@ TEST_CASE("Memory Go With Multiple Gpus")
     snprintf(params[0].parameterName, sizeof(params[0].parameterName), "%s", MEMORY_STR_IS_ALLOWED);
     snprintf(params[0].parameterValue, sizeof(params[0].parameterValue), "True");
     params[0].type = DcgmPluginParamBool;
-    mem.Go(1, params);
+    mem.Go(MEMORY_PLUGIN_NAME, 1, params);
 
     // We should be considering these as fake GPUs because there's no PCI device id, so nothing ran
     dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = mem.GetResults(&results);
+    dcgmReturn_t ret          = mem.GetResults(MEMORY_PLUGIN_NAME, &results);
     CHECK(results.numErrors == 0);
 
     // Add fake PCI device IDs to make things run.
@@ -52,10 +52,10 @@ TEST_CASE("Memory Go With Multiple Gpus")
         gpuList.gpus[i].attributes.identifiers.pciDeviceId = 1;
     }
     Memory m2((dcgmHandle_t)0, &gpuList);
-    m2.Go(1, params);
+    m2.Go(MEMORY_PLUGIN_NAME, 1, params);
 
     memset(&results, 0, sizeof(results));
-    ret = m2.GetResults(&results);
+    ret = m2.GetResults(MEMORY_PLUGIN_NAME, &results);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(results.numErrors == 4);
     for (unsigned int i = 0; i < results.numErrors; i++)

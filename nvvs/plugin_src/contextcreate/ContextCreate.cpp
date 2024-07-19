@@ -42,7 +42,7 @@ bool ContextCreate::GpusAreNonExclusive()
     if (ret != DCGM_ST_OK)
     {
         std::string err = m_dcgmHandle.RetToString(ret);
-        m_plugin->AddInfo(err);
+        m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err);
         log_debug(err);
         return false;
     }
@@ -53,7 +53,7 @@ bool ContextCreate::GpusAreNonExclusive()
         {
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in prohibited mode, so we must skip this test.";
-            m_plugin->AddInfo(err.str());
+            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
             log_debug(err.str());
             return false;
         }
@@ -61,7 +61,7 @@ bool ContextCreate::GpusAreNonExclusive()
         {
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in exclusive mode, so we must skip this test.";
-            m_plugin->AddInfo(err.str());
+            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
             log_debug(err.str());
             return false;
         }
@@ -90,7 +90,7 @@ std::string ContextCreate::Init(const dcgmDiagPluginGpuList_t &gpuList)
                 delete ccd;
             }
 
-            m_plugin->AddError(d);
+            m_plugin->AddError(CTXCREATE_PLUGIN_NAME, d);
             return d.GetMessage();
         }
         catch (std::runtime_error &re)
@@ -150,7 +150,7 @@ int ContextCreate::CanCreateContext()
         else if (cuSt == CUDA_ERROR_UNKNOWN)
         {
             err << "GPU " << m_device[i]->gpuId << " is in prohibted mode; skipping test.";
-            m_plugin->AddInfo(err.str());
+            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
             log_debug(err.str());
             created |= CTX_SKIP;
         }
@@ -160,7 +160,7 @@ int ContextCreate::CanCreateContext()
             cuGetErrorString(cuSt, &errStr);
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, m_device[i]->gpuId, errStr);
-            m_plugin->AddErrorForGpu(m_device[i]->gpuId, d);
+            m_plugin->AddErrorForGpu(CTXCREATE_PLUGIN_NAME, m_device[i]->gpuId, d);
             log_debug(error);
             created |= CTX_FAIL;
         }

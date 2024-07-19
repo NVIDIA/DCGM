@@ -111,6 +111,8 @@ def test_reading_specific_data(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_only_on_non_mig_gpus()
+@test_utils.run_with_non_mig_cuda_visible_devices()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_with_cuda_app()
 def test_reading_pid_fields(handle, gpuIds, cudaApp):

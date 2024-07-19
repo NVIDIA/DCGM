@@ -37,7 +37,10 @@ class Test
 {
     /***************************PUBLIC***********************************/
 public:
-    Test(dcgmPerGpuTestIndices_t index, const std::string &description, const std::string &testGroup);
+    Test(dcgmPerGpuTestIndices_t index,
+         const std::string &description,
+         const std::string &testGroup,
+         const std::string &pluginName);
     Test(Plugin *);
     ~Test();
 
@@ -58,6 +61,11 @@ public:
     std::string GetTestName()
     {
         return GetTestDisplayName(m_index);
+    }
+
+    std::string GetPluginName()
+    {
+        return m_pluginName;
     }
 
     std::string getTestDesc()
@@ -113,6 +121,7 @@ private:
     bool m_skipTest = false;
     std::string m_description;
     std::string m_testGroup;
+    std::string m_pluginName; // which plugin this test belongs to
     static const nvvsPluginGpuResults_t m_emptyGpuResults;
     static const nvvsPluginGpuMessages_t m_emptyGpuMessages;
     static const std::vector<std::string> m_emptyMessages;

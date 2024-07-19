@@ -47,7 +47,7 @@ public:
      * Returns 0 on success.
      *         Nonzero on failure
      **/
-    int Init(unsigned int gpuId);
+    int Init(std::string const &testName, unsigned int gpuId);
 
     /*************************************************************************/
     /*
@@ -58,7 +58,7 @@ public:
      *        !0 on error
      *
      */
-    int SaveState(nvvs_device_state_t *savedState);
+    int SaveState(std::string const &testName, nvvs_device_state_t *savedState);
 
 
     /*************************************************************************/
@@ -84,7 +84,7 @@ public:
      *         >0 if state was restored
      *
      */
-    int RestoreState();
+    int RestoreState(std::string const &testName);
 
     /*************************************************************************/
     /*
@@ -110,8 +110,8 @@ public:
      *             to be caught at a higher level. 0=just log it
      */
 
-    void RecordWarning(const DcgmError &d, int failPlugin);
-    void RecordInfo(const char *logText);
+    void RecordWarning(std::string const &testName, DcgmError const &d, int failPlugin);
+    void RecordInfo(std::string const &testName, char const *logText);
 
     /*************************************************************************/
 
@@ -150,7 +150,7 @@ public:
      * Returns: 0 on success
      *         <0 on error
      */
-    int Init(std::vector<unsigned int> gpuIds);
+    int Init(std::string const &testName, std::vector<unsigned int> gpuIds);
 
     /*************************************************************************/
     /*
@@ -162,8 +162,8 @@ public:
      *             to be caught at a higher level. 0=just log it
      */
 
-    void RecordWarning(const DcgmError &d, int failPlugin);
-    void RecordInfo(const char *logText);
+    void RecordWarning(std::string const &testName, DcgmError const &d, int failPlugin);
+    void RecordInfo(std::string const &testName, char const *logText);
 
     /*************************************************************************/
     /*
@@ -177,7 +177,7 @@ public:
      *         >0 if state was restored
      *
      */
-    int RestoreState(int failOnRestore);
+    int RestoreState(std::string const &testName, int failOnRestore);
 
     /*************************************************************************/
     /*

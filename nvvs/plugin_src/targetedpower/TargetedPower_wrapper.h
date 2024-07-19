@@ -29,6 +29,7 @@
 #include <CudaCommon.h>
 
 #include <NvvsStructs.h>
+#include <PluginStrings.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 
@@ -76,7 +77,7 @@ public:
     bool m_lowPowerLimit;
 
     CPDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(ndi, pciBusId, p)
+        : PluginDevice(TP_PLUGIN_NAME, ndi, pciBusId, p)
         , maxPowerTarget(0)
         , NcudaStreams(0)
         , allocatedCublasHandle(0)
@@ -144,7 +145,9 @@ public:
     ~ConstantPower();
 
     /*************************************************************************/
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters);
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters);
 
     /*************************************************************************/
     /*

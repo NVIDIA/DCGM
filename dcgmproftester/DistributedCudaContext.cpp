@@ -64,18 +64,15 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    if (GetPhysicalGpu()->IsMIG())
-    {
         /**
          * With MIG, we have to use CUDA_VISIBLE_DEVICES to identify the MIG
          * partition "device", along with a device ID of 0. We can not run
-         * NvLink tests with MIG and we check to ensure we do not try.
+     * NvLink tests with MIG and we check to ensure we do not try. Without MIG,
+     * we set CUDA_VISIBLE_DEVICES to all non-MIG GPUs so NvLink tests work, and
+     * we set the device ID properly.
          */
 
-        int st;
-
         st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
-
         if (st != 0)
         {
             m_error << "std::setenv returned" << st << '\n';
@@ -84,9 +81,6 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         }
 
         m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
-
-        m_device = 0;
-    }
 
     cuSt = cuInit(0);
     if (cuSt)
@@ -118,6 +112,10 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         }
 
         m_message << "Bus ID " << busId << " mapped to cuda device ID " << m_device << "\n";
+    }
+    else
+    {
+        m_device = 0;
     }
 
     /* Get Device Attributes */

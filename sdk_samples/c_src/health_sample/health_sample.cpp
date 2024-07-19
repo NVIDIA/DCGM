@@ -23,7 +23,7 @@
 // See function description at bottom of file.
 int displayFieldValue(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userData);
 
-bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_t &response)
+bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v10 &response)
 {
     return (strstr(response.systemError.msg, "MIG configuration is incompatible with the diagnostic")
             || strstr(response.systemError.msg,
@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     dcgmHealthSystems_t healthSystems;
     dcgmHealthResponse_v4 results;
     char myTestString[] = "Outputting watches for DCGM_FC_DEV_INFO";
-    dcgmDiagResponse_t diagnosticResults;
+    dcgmDiagResponse_v10 diagnosticResults;
 
     // In our case we do not know whether to run in standalone or embedded so we will get the user
     // to set the mode. This will also allow us to see the differences and similarities between
@@ -333,7 +333,7 @@ int main(int argc, char **argv)
     // diagnostic would be preferred, but this is just an example.
     std::cout << "Running diagnostic.\n";
     // Update version
-    diagnosticResults.version = dcgmDiagResponse_version;
+    diagnosticResults.version = dcgmDiagResponse_version10;
     result                    = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_SHORT, &diagnosticResults);
 
     // Check result to see if DCGM operation was successful.

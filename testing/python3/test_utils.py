@@ -50,6 +50,7 @@ import xml.etree.ElementTree as ET
 import subprocess
 from subprocess import Popen, check_call, CalledProcessError, PIPE
 
+nvmlNotLoaded = False
 test_directory = 'tests'
 noLogging = True
 noLoggingBackup = noLogging
@@ -393,6 +394,21 @@ def run_only_with_minimum_cuda_version(major_ver, minor_ver):
             elif major == major_ver and minor < minor_ver:
                 test_utils.skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
                         % (major_ver, minor_ver))
+        return wrapper
+    return decorator
+
+def run_only_with_nvml():
+    """
+    Run this test only if NVML is active on this system
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            global nvmlNotLoaded
+            if nvmlNotLoaded:
+                skip_test("This test is skipped because NVML is not active on this system.")
+            
+            fn(*args, **kwds)
         return wrapper
     return decorator
 
@@ -819,8 +835,8 @@ class SubTest(object):
 
         if self.result == SubTest.FAILED and option_parser.options.break_at_failure:
             try:
-                import debugging
-                debugging.break_after_exception()
+                import pdb
+                breakpoint()
             except ImportError:
                 logger.warning("Unable to find Python Debugging Module - \"-b\" option is unavailable")
 
@@ -1183,6 +1199,72 @@ def run_with_injection_nvml():
         return wrapper
     return decorator
 
+def run_with_additional_fatal_kmsg_xid(xid):
+    """
+    Add XID to the list of fatal XIDs tracked by the hostengine.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            TEST_KMSG_XID_ENV = '__DCGM_XID_KMSG__'
+            os.environ[TEST_KMSG_XID_ENV] = xid
+            TEST_DCGM_FATAL_XIDS = '__DCGM_FATAL_XIDS__'
+            os.environ[TEST_DCGM_FATAL_XIDS] = xid
+            try:
+                fn(*args, **kwds)
+            finally:
+                del os.environ[TEST_KMSG_XID_ENV]
+                del os.environ[TEST_DCGM_FATAL_XIDS]
+            return
+        return wrapper
+    return decorator
+
+NVML_YAML_FILE = 'NVML_YAML_FILE'
+def run_with_current_system_injection_nvml():
+    """
+    Have DCGM load injection NVML based on the current system's GPUs
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            # This environment variable tells DCGM to load injection NVML
+            os.environ[INJECTION_MODE_VAR] = 'True' 
+            skuFileName = "current_system.yaml"
+            skuFilePath = os.path.join(logger.default_log_dir, skuFileName)
+            try_capture_nvml_env(skuFilePath)
+            os.environ[NVML_YAML_FILE] = skuFilePath
+            try:
+                fn(*args, **kwds)
+            finally:
+                del os.environ[NVML_YAML_FILE]
+                del os.environ[INJECTION_MODE_VAR]
+            return
+        return wrapper
+    return decorator
+
+def run_with_injection_nvml_using_specific_sku(skuFileName: str):
+    """
+    Have DCGM load injection NVML instead of normal NVML
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            skuFilePath = os.path.abspath(os.path.join("SKUs", skuFileName))
+            if not os.path.exists(skuFilePath):
+                skip_test(f"Skip test due to miss SKU file {skuFilePath}")
+            # This environment variable tells DCGM to load injection NVML
+            os.environ[INJECTION_MODE_VAR] = 'True'
+            # This environment variable indicates the target SKU file
+            os.environ[NVML_YAML_FILE] = skuFilePath
+            try:
+                fn(*args, **kwds)
+            finally:
+                del os.environ[NVML_YAML_FILE]
+                del os.environ[INJECTION_MODE_VAR]
+            return
+        return wrapper
+    return decorator
+
 def run_with_diag_small_fb_mode():
     """
     Have DCGM diag run with smaller FB allocations to speed up tests that don't rely on DCGM Diag running at full scale
@@ -1289,12 +1371,38 @@ def run_only_with_live_gpus():
         def wrapper(*args, **kwds):
                 
             if 'handle' in kwds:
-                gpuIds = get_live_gpu_ids(kwds['handle'])
+                try:
+                    gpuIds = get_live_gpu_ids(kwds['handle'])
+                except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                    skip_test("This test cannot run since NVML is not loaded")
             else:
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(gpuIds) < 1:
                 logger.warning("Skipping test that requires live GPUs. None were found")
+            else:
+                kwds['gpuIds'] = gpuIds
+                fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
+def run_with_nvml_injected_gpus():
+    """
+    Only run this test if NVML injected gpus are present on the system
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                if os.getenv(INJECTION_MODE_VAR, default='False') != 'True':
+                    raise Exception("Not connected to remote or embedded host engine that run with NVML injection. Use appropriate decorator")
+                gpuIds = get_live_gpu_ids(kwds['handle'])
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if len(gpuIds) < 1:
+                logger.warning("Skipping test that requires injected GPUs. None were found")
             else:
                 kwds['gpuIds'] = gpuIds
                 fn(*args, **kwds)
@@ -1344,8 +1452,13 @@ def run_with_injection_gpus(gpuCount=1):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
+            global nvmlNotLoaded
+
             if 'handle' not in kwds:
                 raise Exception("Not connected to remote or embedded host engine. Use approriate decorator")
+
+            if nvmlNotLoaded:
+                skip_test("This test is skipped because NVML is not active on this system.")
 
             numGpus = len(dcgm_agent.dcgmGetAllDevices(kwds['handle']))
             if numGpus + gpuCount >= dcgm_structs.DCGM_MAX_NUM_DEVICES:
@@ -1599,8 +1712,12 @@ def run_with_injection_nvswitches(switchCount=1):
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
+            global nvmlNotLoaded
             if 'handle' not in kwds:
                 raise Exception("Not connected to remote or embedded host engine. Use approriate decorator")
+
+            if nvmlNotLoaded:
+                skip_test("This test is skipped because NVML is not active on this system.")
 
             numActiveSwitches = len(dcgm_agent.dcgmGetEntityGroupEntities(kwds['handle'], dcgm_fields.DCGM_FE_SWITCH, 0))
             if numActiveSwitches + switchCount >= dcgm_structs.DCGM_MAX_NUM_SWITCHES:
@@ -1704,6 +1821,15 @@ def restore_logging_state():
     noLogging = noLoggingBackup
     logger.setup_environment()
 
+def try_capture_nvml_env(capture_nvml_environment_to):
+    try:
+        import nvml_api_recorder
+        with nvml_api_recorder.NVMLApiRecorder() as recorder:
+            recorder.record(capture_nvml_environment_to)
+            print(f"NVML environment captured to [{capture_nvml_environment_to}]")
+    except:
+        print("Failed to capture NVML env")
+
 def run_subtest(subtestFn, *args, **kwargs):
     #List that contains failings test to re-run with logging enabled
     global noLogging
@@ -1731,6 +1857,9 @@ def run_subtest(subtestFn, *args, **kwargs):
         #Running failing tests with logging enabled
         set_logging_state(True)
         reRunning = True
+
+        logger.warning("Try to capture NVML env for failing test \"%s\"" % subtest.name)
+        try_capture_nvml_env(os.path.join(logger.default_log_dir, f"{subtest.name}.yaml"))
 
         logger.warning("Re-running failing test \"%s\" with logging enabled" % subtest.name)
         with SubTest("%s" % (subtestFn.__name__)) as subtest:
@@ -1964,6 +2093,10 @@ def run_only_with_all_supported_gpus():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
+            global nvmlNotLoaded
+            if nvmlNotLoaded:
+                skip_test("This test is skipped because NVML is not active on this system.")
+                
             (all_gpus_supported, gpu_ids) = are_all_gpus_dcgm_supported(kwds.get('handle', None))
             if not all_gpus_supported:
                 skip_test("Unsupported GPU(s) detected, skipping test")
@@ -2211,16 +2344,44 @@ def is_throttling_masked_by_nvvs(handle, gpuId, throttle_type):
 
     return False
 
+def mig_mode_helper():
+    mig_enabled_gpus = []
+    mig_disabled_gpus = []
+    non_mig_gpus = []
+
+    nvidiaSmi = nvidia_smi_utils.NvidiaSmiJob()
+    nvidiaSmi.QueryNvidiaSmiXml()
+
+    for gpuId in nvidiaSmi.m_data:
+        if dcgm_fields.DCGM_FI_DEV_MIG_MODE in nvidiaSmi.m_data[gpuId]:
+            mig_tags = nvidiaSmi.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_MIG_MODE]
+
+            for mig_tag in mig_tags:
+                if mig_tag == "N/A":
+                    non_mig_gpus.append(gpuId)
+                elif mig_tag == "Enabled":
+                    mig_enabled_gpus.append(gpuId)
+                elif mig_tag == "Disabled":
+                    mig_disabled_gpus.append(gpuId)
+
+    return mig_enabled_gpus, mig_disabled_gpus, non_mig_gpus
+
+# Retained for backward compatability.
+#
+# This utility method determines if MIG is enabled on ANY GPU. This may not
+# be useful as we may want to check if MIG is enabled on a SPECIFIC GPU. It
+# really is only useful to determine if MIG is supported and enabled on at least
+# one GPU.
+#
+# test_instances uses decorators based in this to run tests that create
+# and delete MIG GIs and CIs, but they further interogate the MIG hierarchy
+# to find an appriopriate GPU to do this on.
+#
+# However, 
 def is_mig_mode_enabled():
-    cmd = 'nvidia-smi mig -lgi'
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE, universal_newlines=True)
-    out, err = p.communicate()
-    # Return false if we detect MIG=off or that we are running on an older
-    # driver that does not support MIG
-    if out.find("No MIG-enabled devices found.") != -1 or out.find("Invalid combination of input arguments.") != -1:
-        return False
-    else:
-        return True
+    mig_enabled_gpus, _, _ = mig_mode_helper()
+
+    return len(mig_enabled_gpus) > 0
 
 def run_only_if_mig_is_disabled():
     '''
@@ -2247,6 +2408,97 @@ def run_only_if_mig_is_enabled():
                 skip_test("this test does nothing if MIG mode is not enabled")
             else:
                 result = fn(*args, **kwds)
+        return wrapper
+    return decorator
+
+def run_only_on_mig_gpus():
+    '''
+    Decorator to filter GPU list to those that are MIG-enabled
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            mig_enabled_gpus, _, _ = mig_mode_helper()
+
+            mig_gpus=[]
+            
+            for gpu in kwds['gpuIds']:
+                if gpu in mig_enabled_gpus:
+                    mig_gpus.append(gpu)
+                    
+            kwds['gpuIds'] = mig_gpus
+
+            if len(kwds['gpuIds']) == 0:
+                skip_test("no mig-enabled gpus found in GPU list")
+            else:
+                result = fn(*args, **kwds)
+        return wrapper
+    return decorator
+
+def run_only_on_non_mig_gpus():
+    '''
+    Decorator to filter GPU list to those that are MIG-enabled
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            _, non_mig_enabled_gpus, _ = mig_mode_helper()
+
+            non_mig_gpus = []
+            
+            for gpu in kwds['gpuIds']:
+                if gpu in non_mig_enabled_gpus:
+                    non_mig_gpus.append(gpu)
+                    
+            kwds['gpuIds'] = non_mig_gpus
+
+            if len(kwds['gpuIds']) == 0:
+                skip_test("no non-mig-enabled gpus found in GPU list")
+            else:
+                result = fn(*args, **kwds)
+        return wrapper
+    return decorator
+
+def run_with_non_mig_cuda_visible_devices():
+    '''
+    Decorator to temporarily set CUDA_VISIBLE_DEVICES environment variable
+    for wrapped method based on GPU Ids.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                skip_test("Can't get GPU uuids without a valid handle to DCGM, skipping test.")
+            if 'gpuIds' not in kwds:
+                skip_test("Can't get GPU uuids without without a GPU list, skipping test.")
+                
+            handle = kwds['handle']
+            gpuIds = kwds['gpuIds']
+            
+            handleObj = pydcgm.DcgmHandle(handle=handle)
+            systemObj = handleObj.GetSystem()
+            cuda_visible_devices = ""
+
+            for gpuId in gpuIds:
+                gpuAttrib = systemObj.discovery.GetGpuAttributes(gpuId)
+                assert len(gpuAttrib.identifiers.uuid) > 0 and not dcgmvalue.DCGM_STR_IS_BLANK(gpuAttrib.identifiers.uuid), \
+                    "gpuAttrib.identifiers.uuid: '%s'" % gpuAttrib.identifiers.uuid
+
+                cuda_visible_devices += "," + gpuAttrib.identifiers.uuid
+                
+            old_cuda_visible_devices = os.getenv('CUDA_VISIBLE_DEVICES')
+            os.environ['CUDA_VISIBLE_DEVICES'] = cuda_visible_devices[1:]
+            logger.info("set CUDA_VISIBLE_DEVICES to %s" % cuda_visible_devices[1:])
+
+            try:
+                result = fn(*args, **kwds)
+            finally:
+                if old_cuda_visible_devices == None:
+                    del os.environ['CUDA_VISIBLE_DEVICES']
+                    logger.info("deleted CUDA_VISIBLE_DEVICES")
+                else:
+                    os.environ['CUDA_VISIBLE_DEVICES'] = old_cuda_visible_devices
+                    logger.info("restored CUDA_VISIBLE_DEVICES")
         return wrapper
     return decorator
 

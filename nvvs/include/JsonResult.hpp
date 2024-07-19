@@ -490,6 +490,7 @@ struct Test
 {
     std::string name;
     std::vector<Result> results;
+    std::optional<std::string> auxData;
     friend auto operator<=>(Test const &, Test const &) = default;
 };
 
@@ -513,6 +514,9 @@ auto inline ParseJson(::Json::Value const &json, DcgmNs::JsonSerialize::To<Test>
     }
     test.name = json[NVVS_TEST_NAME].asString();
 
+    // cpu_eud uses aux data field to show results now.
+    if (test.name != "cpu_eud")
+    {
     if (!json.isMember(NVVS_RESULTS) || !json[NVVS_RESULTS].isArray())
     {
         log_error("Failed to parse JSON: {} is missing or not an array", NVVS_RESULTS);
@@ -535,6 +539,25 @@ auto inline ParseJson(::Json::Value const &json, DcgmNs::JsonSerialize::To<Test>
         }
         test.results.push_back(*parsedResult);
     }
+    }
+
+    if (json.isMember(NVVS_AUX_DATA))
+    {
+        if (json[NVVS_AUX_DATA].isString())
+        {
+            test.auxData = json[NVVS_AUX_DATA].asString();
+        }
+        else if (json[NVVS_AUX_DATA].isObject())
+        {
+            ::Json::StreamWriterBuilder builder;
+            test.auxData = ::Json::writeString(builder, json[NVVS_AUX_DATA]);
+        }
+        else
+        {
+            log_error("Failed to parse JSON: {} has unknown data type", NVVS_AUX_DATA);
+            log_debug("JSON: {}", json[NVVS_AUX_DATA].toStyledString());
+        }
+    }
 
     return test;
 }
@@ -547,6 +570,10 @@ inline auto ToJson(Test const &value) -> ::Json::Value
     for (auto const &result : value.results)
     {
         json[NVVS_RESULTS].append(Serialize(result));
+    }
+    if (value.auxData)
+    {
+        json[NVVS_AUX_DATA] = *value.auxData;
     }
     return json;
 }

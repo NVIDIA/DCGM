@@ -15,15 +15,49 @@
  */
 
 
-NVML_INJECTION_ENTRY_POINT(nvmlDeviceSimpleInject,
-                           nvmlDeviceSimpleInject,
-                           (nvmlDevice_t nvmlDevice, const char *key, const injectNvmlVal_t *value),
-                           "(%p, %p, %p)",
+#include "nvml_injection.h"
+
+NVML_INJECTION_ENTRY_POINT(nvmlDeviceInject,
+                           nvmlDeviceInject,
+                           (nvmlDevice_t nvmlDevice,
+                            const char *key,
+                            const injectNvmlVal_t *extraKeys,
+                            unsigned int extraKeyCount,
+                            const injectNvmlRet_t *injectNvmlRet),
+                           "(%p, %p, %p, %u, %p)",
                            nvmlDevice,
                            key,
-                           value)
+                           extraKeys,
+                           extraKeyCount,
+                           injectNvmlRet)
+
+NVML_INJECTION_ENTRY_POINT(nvmlDeviceInjectForFollowingCalls,
+                           nvmlDeviceInjectForFollowingCalls,
+                           (nvmlDevice_t nvmlDevice,
+                            const char *key,
+                            const injectNvmlVal_t *extraKeys,
+                            unsigned int extraKeyCount,
+                            const injectNvmlRet_t *injectNvmlRet,
+                            unsigned int retCount),
+                           "(%p, %p, %p, %u, %p, %u)",
+                           nvmlDevice,
+                           key,
+                           extraKeys,
+                           extraKeyCount,
+                           injectNvmlRet,
+                           retCount)
+
+NVML_INJECTION_ENTRY_POINT(nvmlDeviceReset, nvmlDeviceReset, (nvmlDevice_t nvmlDevice), "(%p)", nvmlDevice)
 
 NVML_INJECTION_ENTRY_POINT(nvmlCreateDevice, nvmlCreateDevice, (unsigned int index), "(%u)", index)
+
+NVML_INJECTION_ENTRY_POINT(nvmlGetFuncCallCount,
+                           nvmlGetFuncCallCount,
+                           (injectNvmlFuncCallCounts_t * funcCallCounts),
+                           "(%p)",
+                           funcCallCounts)
+
+NVML_INJECTION_ENTRY_POINT(nvmlResetFuncCallCount, nvmlResetFuncCallCount, (void), "()")
 
 NVML_INJECTION_ENTRY_POINT(
     nvmlDeviceInjectExtraKey,

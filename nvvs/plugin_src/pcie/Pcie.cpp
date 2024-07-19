@@ -30,6 +30,7 @@
 #include <TimeLib.hpp>
 
 #include "PcieMain.h"
+#include "PluginStrings.h"
 #include <cstdlib>
 #include <cstring>
 
@@ -171,23 +172,25 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified.");
-        AddError(d);
+        AddError(PCIE_PLUGIN_NAME, d);
     }
     else
     {
-        InitializeForGpuList(*gpuInfo);
+        InitializeForGpuList(PCIE_PLUGIN_NAME, *gpuInfo);
         m_gpuInfo = *gpuInfo;
     }
 }
 
 /*****************************************************************************/
-void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
+void BusGrind::Go(std::string const &testName,
+                  unsigned int numParameters,
+                  const dcgmDiagPluginTestParameter_t *tpStruct)
 {
     if (UsingFakeGpus())
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
-        SetResult(NVVS_RESULT_PASS);
+        SetResult(testName, NVVS_RESULT_PASS);
         return;
     }
 
@@ -199,7 +202,7 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     {
         // The error has been logged by main_init()
         log_error("Failed while initializing the PCIe plugin.");
-        SetResult(NVVS_RESULT_FAIL);
+        SetResult(testName, NVVS_RESULT_FAIL);
         return;
     }
 
@@ -210,14 +213,14 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(d);
-            SetResult(NVVS_RESULT_SKIP);
+            AddError(testName, d);
+            SetResult(testName, NVVS_RESULT_SKIP);
             return;
         }
         else if (st)
         {
             // Fatal error in plugin or test could not be initialized
-            SetResult(NVVS_RESULT_FAIL);
+            SetResult(testName, NVVS_RESULT_FAIL);
             return;
         }
     }
@@ -237,13 +240,13 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(d);
-            SetResult(NVVS_RESULT_SKIP);
+            AddError(testName, d);
+            SetResult(testName, NVVS_RESULT_SKIP);
         }
         else if (!result)
         {
             // There was an error running the test - set result for all gpus to failed
-            SetResult(NVVS_RESULT_FAIL);
+            SetResult(testName, NVVS_RESULT_FAIL);
         }
 
         return;
@@ -253,8 +256,8 @@ void BusGrind::Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
-        AddInfo(d.GetMessage());
-        SetResult(NVVS_RESULT_SKIP);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 }
@@ -323,7 +326,7 @@ bool BusGrind::Init(dcgmDiagPluginGpuList_t *gpuInfo)
 
     m_gpuInfo = *gpuInfo;
     m_device.reserve(gpuInfo->numGpus);
-    InitializeForGpuList(*gpuInfo);
+    InitializeForGpuList(PCIE_PLUGIN_NAME, *gpuInfo);
 
     if (UsingFakeGpus())
     {
@@ -340,7 +343,7 @@ bool BusGrind::Init(dcgmDiagPluginGpuList_t *gpuInfo)
         }
         catch (DcgmError &d)
         {
-            AddErrorForGpu(gpuInfo->gpus[gpuListIndex].gpuId, d);
+            AddErrorForGpu(PCIE_PLUGIN_NAME, gpuInfo->gpus[gpuListIndex].gpuId, d);
             delete smDevice;
             return false;
         }
@@ -422,7 +425,7 @@ int BusGrind::CudaInit(void)
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR("cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -458,19 +461,19 @@ int BusGrind::CudaInit(void)
         cuSt = cudaHostAlloc(&device->hostA, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaHostAlloc(&device->hostB, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaHostAlloc(&device->hostC, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
@@ -506,7 +509,7 @@ int BusGrind::CudaInit(void)
         cubSt = Dcgm::CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR("cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(PCIE_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         log_debug("cublasCreate cudaDeviceIdx {}, handle {}", device->cudaDeviceIdx, (void *)device->cublasHandle);
@@ -516,19 +519,19 @@ int BusGrind::CudaInit(void)
         cuSt = cudaMalloc((void **)&device->deviceA, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceB, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceC, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR("cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
     }
@@ -702,7 +705,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
-            AddErrorForGpu(device->gpuId, d);
+            AddErrorForGpu(PCIE_PLUGIN_NAME, device->gpuId, d);
 
             return false;
         }
@@ -711,7 +714,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
-            AddErrorForGpu(device->gpuId, d);
+            AddErrorForGpu(PCIE_PLUGIN_NAME, device->gpuId, d);
 
             return false;
         }
@@ -731,7 +734,7 @@ bool BusGrind::CheckPassFail(timelib64_t startTime, timelib64_t earliestStopTime
     {
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(this, PCIE_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -916,8 +919,8 @@ bool BusGrind::RunTest_sm()
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         log_error("Caught exception {}", e.what());
-        AddError(d);
-        SetResult(NVVS_RESULT_FAIL);
+        AddError(PCIE_PLUGIN_NAME, d);
+        SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -1019,7 +1022,7 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
                                             m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasDgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cublasDgemm", cublasSt, m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
@@ -1042,7 +1045,7 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
                                             m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, "cublasSgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cublasSgemm", cublasSt, m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
@@ -1092,7 +1095,7 @@ void SmPerfWorker::run(void)
     cuSt = cudaMemcpyAsync(m_device->deviceA, m_device->hostA, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaMemcpy", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cudaMemcpy", cuSt, m_device->gpuId, arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
@@ -1100,7 +1103,7 @@ void SmPerfWorker::run(void)
     cuSt = cudaMemcpyAsync(m_device->deviceB, m_device->hostB, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
@@ -1130,7 +1133,7 @@ void SmPerfWorker::run(void)
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";
-    m_plugin.AddInfo(ss.str());
+    m_plugin.AddInfo(PCIE_PLUGIN_NAME, ss.str());
     startTime            = timelib_dsecSince1970();
     lastPrintTime        = startTime;
     lastFailureCheckTime = startTime;
@@ -1175,7 +1178,7 @@ void SmPerfWorker::run(void)
 
             ss.str("");
             ss << "GPU " << m_device->gpuId << ", ops " << Nops << ", gflops " << gflops;
-            m_plugin.AddInfo(ss.str());
+            m_plugin.AddInfo(PCIE_PLUGIN_NAME, ss.str());
             lastPrintTime = now;
         }
 

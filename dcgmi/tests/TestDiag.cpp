@@ -35,14 +35,14 @@ int TestDiag::Run()
     int st;
     int Nfailed = 0;
 
-    st = TestHelperGetPluginName();
+    st = TestHelperGetTestName();
     if (st)
     {
         Nfailed++;
-        fprintf(stderr, "TestDiag::TestHelperGetPluginName FAILED with %d.\n", st);
+        fprintf(stderr, "TestDiag::TestHelperGetTestName FAILED with %d.\n", st);
     }
     else
-        fprintf(stdout, "TestDiag::TestHelperGetPluginName PASSED.\n");
+        fprintf(stdout, "TestDiag::TestHelperGetTestName PASSED.\n");
 
     st = TestHelperJsonAddResult();
     if (st)
@@ -106,7 +106,7 @@ int TestDiag::Run()
 int TestDiag::TestPopulateGpuList()
 {
     std::vector<unsigned int> gpuVec;
-    dcgmDiagResponse_t diagResult;
+    dcgmDiagResponse_v10 diagResult;
 
     int ret = 0;
     Diag d;
@@ -128,9 +128,9 @@ int TestDiag::TestPopulateGpuList()
         ret = -1;
     }
 
-    if (diagResult.version != dcgmDiagResponse_version)
+    if (diagResult.version != dcgmDiagResponse_version10)
     {
-        fprintf(stderr, "Version should be %u but was %u.\n", dcgmDiagResponse_version, diagResult.version);
+        fprintf(stderr, "Version should be %u but was %u.\n", dcgmDiagResponse_version10, diagResult.version);
         ret = -1;
     }
 
@@ -167,7 +167,7 @@ int TestDiag::TestGetFailureResult()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_t diagResult = {};
+    dcgmDiagResponse_v10 diagResult = {};
     diagResult.levelOneTestCount  = DCGM_SWTEST_COUNT;
 
     dcgmReturn_t drt = d.GetFailureResult(diagResult);
@@ -222,13 +222,13 @@ std::string TestDiag::GetTag()
     return std::string("diag");
 }
 
-int TestDiag::TestHelperGetPluginName()
+int TestDiag::TestHelperGetTestName()
 {
     int ret = 0;
 
     Diag d;
 
-    std::string name = d.HelperGetPluginName(DCGM_MEMORY_INDEX);
+    std::string name = d.HelperGetTestName(DCGM_MEMORY_INDEX);
     if (name != "GPU Memory")
     {
         fprintf(stderr,
@@ -238,7 +238,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_DIAGNOSTIC_INDEX);
+    name = d.HelperGetTestName(DCGM_DIAGNOSTIC_INDEX);
     if (name != DIAGNOSTIC_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -249,7 +249,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_PCI_INDEX);
+    name = d.HelperGetTestName(DCGM_PCI_INDEX);
     if (name != PCIE_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -260,7 +260,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_SM_STRESS_INDEX);
+    name = d.HelperGetTestName(DCGM_SM_STRESS_INDEX);
     if (name != SMSTRESS_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -271,7 +271,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_TARGETED_STRESS_INDEX);
+    name = d.HelperGetTestName(DCGM_TARGETED_STRESS_INDEX);
     if (name != TS_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -282,7 +282,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_TARGETED_POWER_INDEX);
+    name = d.HelperGetTestName(DCGM_TARGETED_POWER_INDEX);
     if (name != TP_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -293,7 +293,7 @@ int TestDiag::TestHelperGetPluginName()
         ret = -1;
     }
 
-    name = d.HelperGetPluginName(DCGM_MEMORY_BANDWIDTH_INDEX);
+    name = d.HelperGetTestName(DCGM_MEMORY_BANDWIDTH_INDEX);
     if (name != MEMBW_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -401,7 +401,7 @@ int TestDiag::TestHelperJsonAddBasicTests()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_t r = {};
+    dcgmDiagResponse_v10 r = {};
     Json::Value output;
     int categoryIndex = 0;
 
@@ -492,7 +492,7 @@ int TestDiag::TestHelperJsonBuildOutput()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_t r = {};
+    dcgmDiagResponse_v10 r = {};
     Json::Value output;
     std::vector<unsigned int> gpuIndices;
     const char *warnings[] = { "Voidspren are dangerous.",

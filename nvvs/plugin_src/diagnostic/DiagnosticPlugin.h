@@ -50,7 +50,7 @@ public:
     GpuBurnDevice() = default;
 
     GpuBurnDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(ndi, pciBusId, p)
+        : PluginDevice(DIAGNOSTIC_PLUGIN_NAME, ndi, pciBusId, p)
     {
         char buf[256]           = { 0 };
         const char *errorString = NULL;
@@ -150,7 +150,9 @@ public:
      * Run Diagnostic test
      *
      */
-    void Go(unsigned int numParameters, const dcgmDiagPluginTestParameter_t *testParameters);
+    void Go(std::string const &testName,
+            unsigned int numParameters,
+            const dcgmDiagPluginTestParameter_t *testParameters);
 
     /*************************************************************************/
     /*

@@ -81,6 +81,7 @@ public:
     static unsigned int GetBasicTestResultIndex(std::string_view const &testname);
 
     /*****************************************************************************/
+    dcgmReturn_t SetVersion10(dcgmDiagResponse_v10 *response);
     dcgmReturn_t SetVersion9(dcgmDiagResponse_v9 *response);
     dcgmReturn_t SetVersion8(dcgmDiagResponse_v8 *response);
     dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
@@ -101,12 +102,16 @@ public:
                                dcgmDiagResult_t result);
 
     /*****************************************************************************/
+    void AddAuxData(unsigned int testIndex, const std::string &auxData);
+
+    /*****************************************************************************/
     bool IsValidGpuIndex(unsigned int gpuIndex);
 
 private:
     union
     {
-        dcgmDiagResponse_v9 *v9ptr; // A pointer to the version8 struct
+        dcgmDiagResponse_v10 *v10ptr; // A pointer to the version10 struct
+        dcgmDiagResponse_v9 *v9ptr;   // A pointer to the version9 struct
         dcgmDiagResponse_v8 *v8ptr; // A pointer to the version8 struct
         dcgmDiagResponse_v7 *v7ptr; // A pointer to the version7 struct
     } m_response;

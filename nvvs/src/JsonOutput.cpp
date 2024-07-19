@@ -308,6 +308,18 @@ void JsonOutput::Result(nvvsPluginResult_t overallResult,
 
             m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_RESULTS][m_gpuIndices[i]] = resultField;
         }
+        if (pluginSpecificData)
+        {
+            try
+            {
+                auto auxData = std::any_cast<Json::Value>(*pluginSpecificData);
+                m_root[NVVS_HEADERS][headerIndex][NVVS_TESTS][m_testIndex][NVVS_AUX_DATA] = auxData;
+            }
+            catch (std::bad_any_cast const &e)
+            {
+                log_debug("Failed to cast plugin specific data to json: {}", e.what());
+            }
+        }
         m_testIndex++;
     }
     // Software tests are independent of GPUs and have the same results for all GPUs

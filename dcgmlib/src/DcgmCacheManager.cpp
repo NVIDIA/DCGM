@@ -931,6 +931,7 @@ DcgmCacheManager::DcgmCacheManager()
     }
 
     m_eventThread = new DcgmCacheManagerEventThread(this);
+    m_kmsgThread  = new DcgmKmsgReaderThread();
 
     const char *gpmEnvStr = getenv("__DCGM_FORCE_PROF_METRICS_THROUGH_GPM");
     if (gpmEnvStr && gpmEnvStr[0] == '1')
@@ -979,7 +980,7 @@ void DcgmCacheManager::UninitializeNvmlEventSet()
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::InitializeNvmlEventSet()
 {
-    if (!m_nvmlEventSetInitialized)
+    if (!m_nvmlEventSetInitialized && m_nvmlLoaded)
     {
         nvmlReturn_t nvmlReturn = nvmlEventSetCreate(&m_nvmlEventSet);
         if (nvmlReturn != NVML_SUCCESS)
@@ -1240,6 +1241,15 @@ void DcgmCacheManager::MergeNewlyDetectedGpuList(dcgmcm_gpu_info_p detectedGpus,
             m_numGpus++;
         }
     }
+
+    // Clear and repopulate pci bus info-gpu id map
+    pciBusGpuIdMap.clear();
+    for (unsigned int i = 0; i < m_numGpus; i++)
+    {
+        std::string pciBdf = dcgmStrToLower(m_gpus[i].pciInfo.busIdLegacy);
+        pciBusGpuIdMap.emplace(pciBdf, m_gpus[i].gpuId);
+        log_debug("Added GPU {} with GPU ID {} to the pciBusGpuIdMap", pciBdf, m_gpus[i].gpuId);
+    }
 }
 
 /*****************************************************************************/
@@ -1272,6 +1282,13 @@ dcgmReturn_t DcgmCacheManager::AttachGpus()
     dcgmcm_gpu_info_t detectedGpus[DCGM_MAX_NUM_DEVICES]; /* All of the GPUs we know about, indexed by gpuId */
     memset(&detectedGpus, 0, sizeof(detectedGpus));
     dcgmReturn_t ret;
+
+    if (m_nvmlLoaded == false)
+    {
+        log_debug("Not attaching to GPUs because NVML is not loaded.");
+        // NO-OP
+        return DCGM_ST_OK;
+    }
 
     dcgm_mutex_lock(m_mutex);
     m_numInstances        = 0;
@@ -1856,9 +1873,10 @@ dcgmReturn_t DcgmCacheManager::SetEntityNvLinkLinkState(dcgm_field_entity_group_
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::Init(int pollInLockStep, double /*maxSampleAge*/)
+dcgmReturn_t DcgmCacheManager::Init(int pollInLockStep, double /*maxSampleAge*/, bool nvmlLoaded)
 {
     m_pollInLockStep = pollInLockStep;
+    m_nvmlLoaded     = nvmlLoaded;
 
     dcgmReturn_t ret = AttachGpus();
     if (ret != DCGM_ST_OK)
@@ -1870,37 +1888,49 @@ dcgmReturn_t DcgmCacheManager::Init(int pollInLockStep, double /*maxSampleAge*/)
     /* Start the event watch before we start the event reading thread */
     ManageDeviceEvents(DCGM_GPU_ID_BAD, 0);
 
-    if (!m_eventThread)
+    /* Don't bother starting the event and kmsg threads if NVML isn't loaded */
+    if (m_nvmlLoaded)
     {
-        log_error("m_eventThread was NULL. We're unlikely to collect any events.");
-        return DCGM_ST_GENERIC_ERROR;
-    }
-    int st = m_eventThread->Start();
-    if (st)
-    {
-        log_error("m_eventThread->Start() returned {}", st);
-        return DCGM_ST_GENERIC_ERROR;
+        if (!m_eventThread)
+        {
+            log_error("m_eventThread was NULL. We're unlikely to collect any events.");
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        int st = m_eventThread->Start();
+        if (st)
+        {
+            log_error("m_eventThread->Start() returned {}", st);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        if (!m_kmsgThread)
+        {
+            log_error("m_kmsgThread was NULL. We're unlikely to collect any events.");
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        st = m_kmsgThread->Start();
+        if (st)
+        {
+            log_error("m_kmsgThread->Start() returned {}", st);
+            return DCGM_ST_GENERIC_ERROR;
+        }
     }
 
     return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::Shutdown()
+void DcgmCacheManager::StopThread(DcgmThread *dcgmThread)
 {
-    dcgmReturn_t retSt = DCGM_ST_OK;
-    nvmlVgpuInstance_t vgpuInstanceCount;
-
-    if (m_eventThread)
+    if (dcgmThread)
     {
-        log_info("Stopping event thread.");
         try
         {
-            int st = m_eventThread->StopAndWait(10000);
+            int st = dcgmThread->StopAndWait(10000);
             if (st)
             {
-                log_warning("Killing event thread that is still running.");
-                m_eventThread->Kill();
+                log_warning("Killing thread that is still running.");
+                dcgmThread->Kill();
             }
             else
             {
@@ -1909,19 +1939,36 @@ dcgmReturn_t DcgmCacheManager::Shutdown()
         }
         catch (std::exception const &ex)
         {
-            DCGM_LOG_ERROR << "Exception in m_eventThread->StopAndWait(): " << ex.what();
-            m_eventThread->Kill();
+            DCGM_LOG_ERROR << "Exception in thread StopAndWait(): " << ex.what();
+            dcgmThread->Kill();
         }
         catch (...)
         {
-            DCGM_LOG_ERROR << "Unknown exception in m_eventThread->StopAndWait()";
-            m_eventThread->Kill();
+            DCGM_LOG_ERROR << "Unknown exception in thread StopAndWait()";
+            dcgmThread->Kill();
         }
-        delete m_eventThread;
-        m_eventThread = 0;
+
+        delete dcgmThread;
     }
     else
-        log_warning("m_eventThread was NULL");
+    {
+        log_warning("dcgmThread was NULL");
+    }
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::Shutdown()
+{
+    dcgmReturn_t retSt = DCGM_ST_OK;
+    nvmlVgpuInstance_t vgpuInstanceCount;
+
+    log_info("Stopping event thread.");
+    StopThread(m_eventThread);
+    m_eventThread = nullptr;
+
+    log_info("Stopping kmsg thread.");
+    StopThread(m_kmsgThread);
+    m_kmsgThread = nullptr;
 
     /* Wake up the cache manager thread if it's sleeping. No need to wait */
     TaskRunner::Stop();
@@ -2480,43 +2527,47 @@ dcgmReturn_t DcgmCacheManager::ManageDeviceEvents(unsigned int addWatchOnGpuId, 
     if (ret != DCGM_ST_OK)
         return ret;
 
-    for (gpuId = 0; gpuId < m_numGpus; gpuId++)
+    if (m_nvmlLoaded)
     {
-        if (m_gpus[gpuId].status == DcgmEntityStatusDetached || m_gpus[gpuId].status == DcgmEntityStatusFake)
-            continue;
-
-        // TODO: add a check here to investigate gpuInstanceId and computeInstanceId.
-        /* Did this GPU change? */
-        if (desiredEvents[gpuId] == m_currentEventMask[gpuId])
-            continue;
-
-        nvmlReturn = nvmlDeviceGetHandleByIndex_v2(GpuIdToNvmlIndex(gpuId), &nvmlDevice);
-        if (nvmlReturn != NVML_SUCCESS)
+        for (gpuId = 0; gpuId < m_numGpus; gpuId++)
         {
-            log_error("ManageDeviceEvents: nvmlDeviceGetHandleByIndex_v2 returned {} for gpuId {}",
-                      (int)nvmlReturn,
-                      (int)gpuId);
-            return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
-        }
+            if (m_gpus[gpuId].status == DcgmEntityStatusDetached || m_gpus[gpuId].status == DcgmEntityStatusFake)
+                continue;
 
-        nvmlReturn = nvmlDeviceRegisterEvents(nvmlDevice, desiredEvents[gpuId], m_nvmlEventSet);
-        if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED)
-        {
-            log_warning("ManageDeviceEvents: Desired events are not supported for gpuId: {}. Events mask: {}",
-                        (int)gpuId,
-                        desiredEvents[gpuId]);
-            continue;
-        }
-        else if (nvmlReturn != NVML_SUCCESS)
-        {
-            log_error(
-                "ManageDeviceEvents: nvmlDeviceRegisterEvents returned {} for gpuId {}", (int)nvmlReturn, (int)gpuId);
-            return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
-        }
+            // TODO: add a check here to investigate gpuInstanceId and computeInstanceId.
+            /* Did this GPU change? */
+            if (desiredEvents[gpuId] == m_currentEventMask[gpuId])
+                continue;
 
-        log_debug("Set nvmlIndex {} event mask to x{}", gpuId, desiredEvents[gpuId]);
+            nvmlReturn = nvmlDeviceGetHandleByIndex_v2(GpuIdToNvmlIndex(gpuId), &nvmlDevice);
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                log_error("ManageDeviceEvents: nvmlDeviceGetHandleByIndex_v2 returned {} for gpuId {}",
+                          (int)nvmlReturn,
+                          (int)gpuId);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
 
-        m_currentEventMask[gpuId] = desiredEvents[gpuId];
+            nvmlReturn = nvmlDeviceRegisterEvents(nvmlDevice, desiredEvents[gpuId], m_nvmlEventSet);
+            if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED)
+            {
+                log_warning("ManageDeviceEvents: Desired events are not supported for gpuId: {}. Events mask: {}",
+                            (int)gpuId,
+                            desiredEvents[gpuId]);
+                continue;
+            }
+            else if (nvmlReturn != NVML_SUCCESS)
+            {
+                log_error("ManageDeviceEvents: nvmlDeviceRegisterEvents returned {} for gpuId {}",
+                          (int)nvmlReturn,
+                          (int)gpuId);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            log_debug("Set nvmlIndex {} event mask to x{}", gpuId, desiredEvents[gpuId]);
+
+            m_currentEventMask[gpuId] = desiredEvents[gpuId];
+        }
     }
 
     return DCGM_ST_OK;
@@ -2532,6 +2583,11 @@ bool DcgmCacheManager::DriverVersionIsAtLeast(std::string const &compareVersion)
 /*****************************************************************************/
 void DcgmCacheManager::ReadAndCacheDriverVersions(void)
 {
+    if (m_nvmlLoaded == false)
+    {
+        return;
+    }
+
     char driverVersion[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE] = { 0 };
 
     nvmlReturn_t nvmlReturn = nvmlSystemGetDriverVersion(driverVersion, sizeof(driverVersion));
@@ -2596,6 +2652,11 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::NvmlPreWatch(unsigned int gpuId, unsigned short dcgmFieldId)
 {
+    if (m_nvmlLoaded == false)
+    {
+        return DCGM_ST_OK;
+    }
+
     nvmlReturn_t nvmlReturn;
     nvmlDevice_t nvmlDevice     = 0;
     dcgm_field_meta_p fieldMeta = 0;
@@ -2684,6 +2745,11 @@ dcgmReturn_t DcgmCacheManager::NvmlPreWatch(unsigned int gpuId, unsigned short d
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::NvmlPostWatch(unsigned int gpuId, unsigned short dcgmFieldId)
 {
+    if (m_nvmlLoaded == false)
+    {
+        return DCGM_ST_OK;
+    }
+
     switch (dcgmFieldId)
     {
         case DCGM_FI_DEV_XID_ERRORS:
@@ -2712,6 +2778,24 @@ dcgmReturn_t DcgmCacheManager::AddFieldWatch(dcgm_field_entity_group_t entityGro
                                              bool &wereFirstWatcher)
 {
     dcgm_field_meta_p fieldMeta = 0;
+
+    if (!m_nvmlLoaded)
+    {
+        switch (entityGroupId)
+        {
+            case DCGM_FE_GPU:    // Fall through
+            case DCGM_FE_VGPU:   // Fall through
+            case DCGM_FE_GPU_I:  // Fall through
+            case DCGM_FE_GPU_CI: // Fall through
+            case DCGM_FE_LINK:   // Fall through
+                log_debug("Cannot watch requested field ID {} because NVML is not loaded.", dcgmFieldId);
+                return DCGM_ST_NVML_NOT_LOADED;
+                break;
+            default:
+                // NO-OP
+                break;
+        }
+    }
 
     fieldMeta = DcgmFieldGetById(dcgmFieldId);
     if (!fieldMeta)
@@ -2837,12 +2921,17 @@ dcgmReturn_t DcgmCacheManager::RemoveWatcher(dcgmcm_watch_info_p watchInfo, dcgm
             {
                 watchInfo->isWatched = 0;
 
-                if (watchInfo->watchKey.entityGroupId == DCGM_FE_GPU)
+                if (m_nvmlLoaded == true)
                 {
-                    NvmlPostWatch(GpuIdToNvmlIndex(watchInfo->watchKey.entityId), watchInfo->watchKey.fieldId);
+                    if (watchInfo->watchKey.entityGroupId == DCGM_FE_GPU)
+                    {
+                        NvmlPostWatch(GpuIdToNvmlIndex(watchInfo->watchKey.entityId), watchInfo->watchKey.fieldId);
+                    }
+                    else if (watchInfo->watchKey.entityGroupId == DCGM_FE_NONE)
+                    {
+                        NvmlPostWatch(-1, watchInfo->watchKey.fieldId);
+                    }
                 }
-                else if (watchInfo->watchKey.entityGroupId == DCGM_FE_NONE)
-                    NvmlPostWatch(-1, watchInfo->watchKey.fieldId);
             }
 
             return DCGM_ST_OK;
@@ -3076,6 +3165,12 @@ bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
 {
     if (!DCGM_FIELD_ID_IS_PROF_FIELD(entityKey.fieldId))
     {
+        return false;
+    }
+
+    if (!m_nvmlLoaded)
+    {
+        log_debug("GPM cannot be used: NVML is not loaded");
         return false;
     }
 
@@ -4554,6 +4649,12 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
     if (!fieldMeta)
         return DCGM_ST_UNKNOWN_FIELD;
 
+    if (m_nvmlLoaded == false)
+    {
+        log_error("Cannot set NVML values: NVML isn't loaded.");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     memset(&updateCtx, 0, sizeof(updateCtx));
     ClearThreadCtx(&updateCtx);
     updateCtx.entityKey.entityGroupId = DCGM_FE_GPU;
@@ -5627,6 +5728,12 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
     dcgm_field_meta_p *fieldMeta   = threadCtx->fieldValueFields[gpuId];
     dcgmcm_watch_info_p *watchInfo = threadCtx->fieldValueWatchInfo[gpuId];
 
+    if (m_nvmlLoaded == false)
+    {
+        log_error("Cannot update NVML values: NVML isn't loaded.");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     if (gpuId >= m_numGpus)
         return DCGM_ST_GENERIC_ERROR;
 
@@ -6649,17 +6756,42 @@ void DcgmCacheManager::RecordXidForGpuInstance(unsigned int gpuId,
 }
 
 /*****************************************************************************/
+std::unordered_set<uint32_t> ReadEnvForFatalXids()
+{
+    char *xidGetEnv                               = getenv("__DCGM_FATAL_XIDS__");
+    std::unordered_set<uint32_t> defaultFatalXids = { 79, 119 };
+    if (!xidGetEnv)
+    {
+        log_debug("__DCGM_FATAL_XIDS__ unset. Not loading");
+        return defaultFatalXids;
+    }
+    auto additionalFatalXids = dcgmTokenizeString(xidGetEnv, ",");
+    for (auto const &xid : additionalFatalXids)
+    {
+        defaultFatalXids.insert(std::stoul(xid.c_str()));
+    }
+    return defaultFatalXids;
+}
+
+/*****************************************************************************/
 void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
 {
     nvmlReturn_t nvmlReturn;
     nvmlEventData_t eventData = {};
     unsigned int nvmlGpuIndex;
+    bool doNotEnterDriver = false;
     timelib64_t now;
     unsigned int gpuId;
     int numErrors          = 0;
     unsigned int timeoutMs = 0; // Do not block in the NVML event call
     dcgmcm_update_thread_t threadCtx;
     static const unsigned int MIG_RECONFIG_DELAY_TIMEOUT = 10000000; // 10 seconds in microseconds
+
+    if (m_nvmlLoaded == false)
+    {
+        // Do not log a message here - NVML not being loaded should be logged already, and this is called in a loop
+        return;
+    }
 
     InitAndClearThreadCtx(&threadCtx);
 
@@ -6668,6 +6800,8 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
         log_error("event set not initialized");
         TaskRunner::Stop(); /* Skip the next loop */
     }
+
+    auto fatalXids = ReadEnvForFatalXids();
 
     while (!eventThread->ShouldStop())
     {
@@ -6683,122 +6817,145 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
             threadCtx.fvBuffer = new DcgmFvBuffer();
         }
 
-        MarkEnteredDriver();
-
-        if (!m_nvmlEventSetInitialized)
+        std::vector<std::unique_ptr<KmsgXidData>> kmsgXids = m_kmsgThread->GetParsedKmsgXids();
+        if (!kmsgXids.empty())
         {
-            MarkReturnedFromDriver();
-            Sleep(1000000);
-            continue;
-        }
-
-        /* Try to read an event */
-        nvmlReturn = nvmlEventSetWait_v2(m_nvmlEventSet, &eventData, timeoutMs);
-        if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED || nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)
-        {
-            DCGM_LOG_DEBUG << "nvmlEventSetWait_v2 returned " << nvmlReturn << ". Calling nvmlEventSetWait";
-            nvmlReturn = nvmlEventSetWait(m_nvmlEventSet, &eventData, timeoutMs);
-        }
-        if (nvmlReturn == NVML_ERROR_TIMEOUT)
-        {
-            // This happens often and is expected to. Only log if set to verbose to reduce noise
-            DCGM_LOG_VERBOSE << "nvmlEventSetWait timeout.";
-            MarkReturnedFromDriver();
-            Sleep(1000000);
-            continue; /* We expect to get this 99.9% of the time. Keep on reading */
-        }
-        else if (nvmlReturn != NVML_SUCCESS)
-        {
-            log_warning("Got st {} from nvmlEventSetWait", (int)nvmlReturn);
-            numErrors++;
-            if (numErrors >= 1000)
+            for (auto const &kmsgXid : kmsgXids)
             {
-                /* If we get an excessive number of errors, quit instead of spinning in a hot loop
-                   this will cripple event reading, but it will prevent DCGM from using 100% CPU */
-                log_fatal("Quitting EventThreadMain() after {} errors.", numErrors);
-            }
-            MarkReturnedFromDriver();
-            Sleep(1000000);
-            continue;
-        }
-
-        now = timelib_usecSince1970();
-
-        nvmlReturn = nvmlDeviceGetIndex(eventData.device, &nvmlGpuIndex);
-        if (nvmlReturn != NVML_SUCCESS)
-        {
-            log_warning("Unable to convert device handle to index");
-            MarkReturnedFromDriver();
-            Sleep(1000000);
-            continue;
-        }
-
-        gpuId = NvmlIndexToGpuId(nvmlGpuIndex);
-
-        log_debug("Got nvmlEvent {} for gpuId {}", eventData.eventType, gpuId);
-
-        switch (eventData.eventType)
-        {
-            case nvmlEventTypeXidCriticalError:
-                if (!m_driverIsR450OrNewer || m_gpus[gpuId].migEnabled == false)
+                if (!pciBusGpuIdMap.contains(dcgmStrToLower(kmsgXid->pciBdf)))
                 {
-                    RecordXidForGpu(gpuId, threadCtx, eventData.eventData, nvmlReturn, now);
-                }
-                else if (eventData.gpuInstanceId == DCGM_BLANK_ENTITY_ID
-                         && eventData.computeInstanceId == DCGM_BLANK_ENTITY_ID)
-                {
-                    RecordXidForGpu(gpuId, threadCtx, eventData.eventData, nvmlReturn, now);
-                }
-                else if (eventData.computeInstanceId != DCGM_BLANK_ENTITY_ID)
-                {
-                    RecordXidForComputeInstance(gpuId, threadCtx, eventData, nvmlReturn, now);
+                    log_error("PCI slot information parsed from /dev/kmsg is invalid: {}", kmsgXid->pciBdf);
                 }
                 else
                 {
-                    RecordXidForGpuInstance(gpuId, threadCtx, eventData, nvmlReturn, now);
+                    auto gpuId = pciBusGpuIdMap[kmsgXid->pciBdf];
+                    RecordXidForGpu(gpuId, threadCtx, kmsgXid->xid, NVML_SUCCESS, kmsgXid->timestamp);
+                    if (fatalXids.contains(kmsgXid->xid))
+                    {
+                        doNotEnterDriver = true;
+                        log_debug("Skipping NVML driver calls");
+                    }
                 }
-                break;
+            }
+        }
+        if (!doNotEnterDriver)
+        {
+            MarkEnteredDriver();
 
-            case nvmlEventMigConfigChange:
+            if (!m_nvmlEventSetInitialized)
             {
-                updatedMigGpuId = gpuId;
-
-                dcgmMutexReturn_t mutexSt = dcgm_mutex_lock_me(m_mutex);
-                // If the user has requested that we delay processing this event within a reasonable timeout,
-                // then do so.
-                dcgmReturn_t ret = DCGM_ST_OK;
-                if (now - m_delayedMigReconfigProcessingTimestamp >= MIG_RECONFIG_DELAY_TIMEOUT)
-                {
-                    ClearGpuMigInfo(m_gpus[gpuId]);
-                    ret = InitializeGpuInstances(m_gpus[gpuId]);
-                }
-                if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-                    dcgm_mutex_unlock(m_mutex);
-
-                if (ret != DCGM_ST_OK)
-                {
-                    DCGM_LOG_ERROR << "Could not re-initialize MIG information for GPU " << gpuId << ": "
-                                   << errorString(ret);
-                }
-
-                break;
+                MarkReturnedFromDriver();
+                Sleep(1000000);
+                continue;
             }
 
-            default:
-                log_warning("Unhandled event type {:X}", eventData.eventType);
-                break;
+            /* Try to read an event */
+            nvmlReturn = nvmlEventSetWait_v2(m_nvmlEventSet, &eventData, timeoutMs);
+            if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED || nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)
+            {
+                DCGM_LOG_DEBUG << "nvmlEventSetWait_v2 returned " << nvmlReturn << ". Calling nvmlEventSetWait";
+                nvmlReturn = nvmlEventSetWait(m_nvmlEventSet, &eventData, timeoutMs);
+            }
+            if (nvmlReturn == NVML_ERROR_TIMEOUT)
+            {
+                // This happens often and is expected to. Only log if set to verbose to reduce noise
+                DCGM_LOG_VERBOSE << "nvmlEventSetWait timeout.";
+                MarkReturnedFromDriver();
+                Sleep(1000000);
+                continue; /* We expect to get this 99.9% of the time. Keep on reading */
+            }
+            else if (nvmlReturn != NVML_SUCCESS)
+            {
+                log_warning("Got st {} from nvmlEventSetWait", (int)nvmlReturn);
+                numErrors++;
+                if (numErrors >= 1000)
+                {
+                    /* If we get an excessive number of errors, quit instead of spinning in a hot loop
+                    this will cripple event reading, but it will prevent DCGM from using 100% CPU */
+                    log_fatal("Quitting EventThreadMain() after {} errors.", numErrors);
+                }
+                MarkReturnedFromDriver();
+                Sleep(1000000);
+                continue;
+            }
+
+            now = timelib_usecSince1970();
+
+            nvmlReturn = nvmlDeviceGetIndex(eventData.device, &nvmlGpuIndex);
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                log_warning("Unable to convert device handle to index");
+                MarkReturnedFromDriver();
+                Sleep(1000000);
+                continue;
+            }
+
+            gpuId = NvmlIndexToGpuId(nvmlGpuIndex);
+
+            log_debug("Got nvmlEvent {} for gpuId {}", eventData.eventType, gpuId);
+
+            switch (eventData.eventType)
+            {
+                case nvmlEventTypeXidCriticalError:
+                    if (!m_driverIsR450OrNewer || m_gpus[gpuId].migEnabled == false)
+                    {
+                        RecordXidForGpu(gpuId, threadCtx, eventData.eventData, nvmlReturn, now);
+                    }
+                    else if (eventData.gpuInstanceId == DCGM_BLANK_ENTITY_ID
+                             && eventData.computeInstanceId == DCGM_BLANK_ENTITY_ID)
+                    {
+                        RecordXidForGpu(gpuId, threadCtx, eventData.eventData, nvmlReturn, now);
+                    }
+                    else if (eventData.computeInstanceId != DCGM_BLANK_ENTITY_ID)
+                    {
+                        RecordXidForComputeInstance(gpuId, threadCtx, eventData, nvmlReturn, now);
+                    }
+                    else
+                    {
+                        RecordXidForGpuInstance(gpuId, threadCtx, eventData, nvmlReturn, now);
+                    }
+                    break;
+
+                case nvmlEventMigConfigChange:
+                {
+                    updatedMigGpuId = gpuId;
+
+                    dcgmMutexReturn_t mutexSt = dcgm_mutex_lock_me(m_mutex);
+                    // If the user has requested that we delay processing this event within a reasonable timeout,
+                    // then do so.
+                    dcgmReturn_t ret = DCGM_ST_OK;
+                    if (now - m_delayedMigReconfigProcessingTimestamp >= MIG_RECONFIG_DELAY_TIMEOUT)
+                    {
+                        ClearGpuMigInfo(m_gpus[gpuId]);
+                        ret = InitializeGpuInstances(m_gpus[gpuId]);
+                    }
+                    if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
+                        dcgm_mutex_unlock(m_mutex);
+
+                    if (ret != DCGM_ST_OK)
+                    {
+                        DCGM_LOG_ERROR << "Could not re-initialize MIG information for GPU " << gpuId << ": "
+                                       << errorString(ret);
+                    }
+
+                    break;
+                }
+
+                default:
+                    log_warning("Unhandled event type {:X}", eventData.eventType);
+                    break;
+            }
+
+            if (threadCtx.fvBuffer)
+                UpdateFvSubscribers(&threadCtx);
+
+            MarkReturnedFromDriver();
+
+            if (updatedMigGpuId != DCGM_MAX_NUM_DEVICES)
+            {
+                NotifyMigUpdateSubscribers(updatedMigGpuId);
+            }
         }
-
-        if (threadCtx.fvBuffer)
-            UpdateFvSubscribers(&threadCtx);
-
-        MarkReturnedFromDriver();
-
-        if (updatedMigGpuId != DCGM_MAX_NUM_DEVICES)
-        {
-            NotifyMigUpdateSubscribers(updatedMigGpuId);
-        }
-
         Sleep(1000000);
     }
 }
@@ -6827,7 +6984,9 @@ dcgmReturn_t DcgmCacheManager::CacheTopologyNvLink(dcgmcm_update_thread_t *threa
     dcgmReturn_t ret           = PopulateTopologyNvLink(GetTopologyHelper(true), &topology_p, topologySize);
 
     if (ret == DCGM_ST_NOT_SUPPORTED && threadCtx->watchInfo)
+    {
         threadCtx->watchInfo->lastStatus = NVML_ERROR_NOT_SUPPORTED;
+    }
 
     AppendEntityBlob(threadCtx, topology_p, topologySize, now, expireTime);
 
@@ -6980,6 +7139,33 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
     unsigned int entityId      = threadCtx->entityKey.entityId;
     unsigned int entityGroupId = threadCtx->entityKey.entityGroupId;
     unsigned int gpuId         = m_numGpus; // Initialize to an invalid value for check below
+
+    if (!m_nvmlLoaded && fieldMeta->fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID)
+    {
+        log_error("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+
+        switch (fieldMeta->fieldType)
+        {
+            case DCGM_FT_DOUBLE:
+                AppendEntityDouble(threadCtx, DCGM_FP64_NOT_SUPPORTED, 0, now, expireTime);
+                break;
+            case DCGM_FT_INT64:
+                AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, expireTime);
+                break;
+            case DCGM_FT_STRING:
+                AppendEntityString(threadCtx, errorString(DCGM_ST_NVML_NOT_LOADED), now, expireTime);
+                break;
+            case DCGM_FT_TIMESTAMP:
+                AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, expireTime);
+                break;
+
+            case DCGM_FT_BINARY: // Not sure?
+            default:
+                break;
+        }
+
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
 
     dcgmReturn_t ret = GetGpuId(entityGroupId, entityId, gpuId);
     if (ret != DCGM_ST_OK)
@@ -10725,6 +10911,12 @@ void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
     unsigned int total, free, used, reserved;
     double usedPercent;
 
+    // Code above should prevent ever calling this method, but just in case
+    if (!m_nvmlLoaded)
+    {
+        return;
+    }
+
     nvmlReturn_t nvmlReturn;
 
     timelib64_t now = timelib_usecSince1970();
@@ -10878,6 +11070,12 @@ void DcgmCacheManager::ReadAndCacheNvLinkBandwidthTotal(dcgmcm_update_thread_t *
         return;
     }
 
+    // Code above should prevent ever calling this method, but just in case
+    if (!m_nvmlLoaded)
+    {
+        return;
+    }
+
     /* We need to add together RX and TX. Request them both in one API call */
     nvmlFieldValue_t fv[2] = {};
     fv[0].fieldId          = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX;
@@ -10980,6 +11178,12 @@ void DcgmCacheManager::ReadAndCacheNvLinkData(dcgmcm_update_thread_t *threadCtx,
             watchInfo->lastStatus = NVML_ERROR_NOT_SUPPORTED;
         }
         DCGM_LOG_DEBUG << "NvLink bandwidth counters are only supported for r445 or newer drivers";
+        return;
+    }
+
+    // Code above should prevent ever calling this method, but just in case
+    if (!m_nvmlLoaded)
+    {
         return;
     }
 
@@ -11178,6 +11382,13 @@ dcgmReturn_t DcgmCacheManager::AppendDeviceAccountingStats(dcgmcm_update_thread_
 {
     dcgmDevicePidAccountingStats_t accountingStats;
 
+    // Again, we shouldn't enter here without NVML loaded due to other checks
+    if (!m_nvmlLoaded)
+    {
+        log_error("Cannot get accounting stats without NVML loaded.");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     memset(&accountingStats, 0, sizeof(accountingStats));
     accountingStats.version = dcgmDevicePidAccountingStats_version;
 
@@ -11227,6 +11438,13 @@ dcgmReturn_t DcgmCacheManager::AppendDeviceSupportedClocks(dcgmcm_update_thread_
                                                            timelib64_t timestamp,
                                                            timelib64_t oldestKeepTimestamp)
 {
+    // Again, we shouldn't enter here without NVML loaded due to other checks
+    if (!m_nvmlLoaded)
+    {
+        log_error("Cannot get supported clocks without NVML loaded.");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     unsigned int memClocksCount = 32; /* Up to one per P-state */
     std::vector<unsigned int> memClocks(memClocksCount, 0);
     const unsigned int maxSmClocksCount = 512;
@@ -11286,6 +11504,12 @@ dcgmReturn_t DcgmCacheManager::AppendDeviceSupportedClocks(dcgmcm_update_thread_
 dcgmReturn_t DcgmCacheManager::GetGpuIds(int activeOnly, std::vector<unsigned int> &gpuIds)
 {
     gpuIds.clear();
+
+    if (!m_nvmlLoaded)
+    {
+        log_debug("Cannot get GPU ids: NVML is not loaded");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
 
     dcgm_mutex_lock(m_mutex);
 
@@ -12304,6 +12528,12 @@ dcgmReturn_t DcgmCacheManager::PopulateMigHierarchy(dcgmMigHierarchy_v2 &migHier
 {
     memset(&migHierarchy, 0, sizeof(migHierarchy));
 
+    if (!m_nvmlLoaded)
+    {
+        log_debug("Cannot get MIG hierarchy: NVML is not loaded");
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
     for (unsigned int i = 0; i < m_numGpus; i++)
     {
         if (!m_gpus[i].migEnabled)
@@ -12481,12 +12711,40 @@ nvmlDevice_t DcgmCacheManager::GetNvmlDeviceFromEntityId(dcgm_field_eid_t entity
 #ifdef INJECTION_LIBRARY_AVAILABLE
 dcgmReturn_t DcgmCacheManager::InjectNvmlGpu(dcgm_field_eid_t gpuId,
                                              const char *key,
-                                             const injectNvmlVal_t &value,
                                              const injectNvmlVal_t *extraKeys,
-                                             unsigned int extraKeyCount)
+                                             unsigned int extraKeyCount,
+                                             const injectNvmlRet_t &injectNvmlRet)
 {
     nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
-    return m_nvmlInjectionManager.InjectGpu(nvmlDevice, key, value, extraKeys, extraKeyCount);
+    return m_nvmlInjectionManager.InjectGpu(nvmlDevice, key, extraKeys, extraKeyCount, injectNvmlRet);
+}
+
+dcgmReturn_t DcgmCacheManager::InjectNvmlGpuForFollowingCalls(dcgm_field_eid_t gpuId,
+                                                              const char *key,
+                                                              const injectNvmlVal_t *extraKeys,
+                                                              unsigned int extraKeyCount,
+                                                              const injectNvmlRet_t *injectNvmlRets,
+                                                              unsigned int retCount)
+{
+    nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
+    return m_nvmlInjectionManager.InjectGpuForFollowingCalls(
+        nvmlDevice, key, extraKeys, extraKeyCount, injectNvmlRets, retCount);
+}
+
+dcgmReturn_t DcgmCacheManager::InjectedNvmlGpuReset(dcgm_field_eid_t gpuId)
+{
+    nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
+    return m_nvmlInjectionManager.InjectedGpuReset(nvmlDevice);
+}
+
+dcgmReturn_t DcgmCacheManager::GetNvmlInjectFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts)
+{
+    return m_nvmlInjectionManager.GetFuncCallCount(funcCallCounts);
+}
+
+dcgmReturn_t DcgmCacheManager::ResetNvmlInjectFuncCallCount()
+{
+    return m_nvmlInjectionManager.ResetFuncCallCount();
 }
 #endif
 

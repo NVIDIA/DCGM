@@ -46,6 +46,8 @@ public:
 
     void Clear();
 
+    const std::vector<InjectionArgument> &RawValues();
+
 private:
     unsigned int m_valueCount;               //!< The number of acceptable values (checked before assigning)
     std::vector<InjectionArgument> m_values; //!< Where we store the values

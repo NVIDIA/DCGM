@@ -84,6 +84,10 @@ public:
     dcgmReturn_t ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &msg);
 #ifdef INJECTION_LIBRARY_AVAILABLE
     dcgmReturn_t ProcessNvmlInjectDevice(dcgm_core_msg_nvml_inject_device_t &msg);
+    dcgmReturn_t ProcessNvmlInjectDeviceForFollowingCalls(dcgm_core_msg_nvml_inject_device_for_following_calls_t &msg);
+    dcgmReturn_t ProcessNvmlInjectedDeviceReset(dcgm_core_msg_nvml_injected_device_reset_t &msg);
+    dcgmReturn_t ProcessGetNvmlInjectFuncCallCount(dcgm_core_msg_get_nvml_inject_func_call_count_t &msg);
+    dcgmReturn_t ProcessResetNvmlInjectFuncCallCount(dcgm_core_msg_reset_nvml_inject_func_call_count_t &msg);
 #endif
     dcgmReturn_t ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg);
 
