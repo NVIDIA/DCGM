@@ -229,8 +229,8 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
     unsigned int portNumber = 0;
     char *p                 = NULL;
 
-    if (!addressIsUnixSocket)
-        p = strchr(&identifierTemp[0], ':');
+    if (!addressIsUnixSocket && identifierTemp[identifierTemp.size()-2] != ']')
+        p = strrchr(&identifierTemp[0], ':');
 
     if (p == NULL)
     {

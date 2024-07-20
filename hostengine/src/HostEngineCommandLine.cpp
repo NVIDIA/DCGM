@@ -146,6 +146,10 @@ std::string ParseBindIp(std::string const &value)
     {
         return ""s;
     }
+    /* If the value is an IPv6 address, then we need to remove [] from it */
+    if (value.size() > 1 && value[0] == '[' && value[value.size() - 1] == ']') {
+        return value.substr(1, value.size() - 2);
+    }
     return value;
 }
 

@@ -275,7 +275,9 @@ static int SetNonBlocking(int fd)
 /*****************************************************************************/
 dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
 {
-    struct sockaddr_in listenAddr;
+    struct sockaddr_in listenAddr4;
+    struct sockaddr_in6 listenAddr6;
+    struct sockaddr_storage listenAddr;
     int reuseAddrOn;
 
     ASSERT_IS_IPC_THREAD;
@@ -286,8 +288,40 @@ dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
         return DCGM_ST_OK;
     }
 
+    memset(&listenAddr4, 0, sizeof(listenAddr4));
+    listenAddr4.sin_family = AF_INET;
+    listenAddr4.sin_port   = htons(m_tcpParameters.value().port);
+
+    memset(&listenAddr6, 0, sizeof(listenAddr6));
+    listenAddr6.sin6_family = AF_INET6;
+    listenAddr6.sin6_port   = htons(m_tcpParameters.value().port);
+
+    if (m_tcpParameters.value().bindIPAddress.size() > 0)
+    {
+        if (inet_aton(m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr4.sin_addr) == 1)
+        {
+            memcpy(&listenAddr, &listenAddr4, sizeof(listenAddr4));
+        }
+        else if (inet_pton(AF_INET6, m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr6.sin6_addr) == 1)
+        {
+            memcpy(&listenAddr, &listenAddr6, sizeof(listenAddr6));
+        }
+        else
+        {
+            DCGM_LOG_ERROR << "Unable to convert \"" << m_tcpParameters.value().bindIPAddress
+                           << "\" to a network address.";
+            return DCGM_ST_GENERIC_ERROR;
+        }
+    }
+    else
+    {
+        /* Bind to all interfaces (IPv4 and IPv6) */
+        listenAddr6.sin6_addr = in6addr_any;
+        memcpy(&listenAddr, &listenAddr6, sizeof(listenAddr6));
+    }
+
     /* Create our listening socket. */
-    m_tcpListenSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+    m_tcpListenSocketFd = socket(listenAddr.ss_family, SOCK_STREAM, 0);
     if (m_tcpListenSocketFd < 0)
     {
         DCGM_LOG_ERROR << "ERROR: socket creation failed";
@@ -303,24 +337,6 @@ dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    memset(&listenAddr, 0, sizeof(listenAddr));
-    listenAddr.sin_family      = AF_INET;
-    listenAddr.sin_addr.s_addr = INADDR_ANY;
-
-    if (m_tcpParameters.value().bindIPAddress.size() > 0)
-    {
-        /* Convert mSocketPath to a number in network byte order */
-        if (!inet_aton(m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr.sin_addr))
-        {
-            DCGM_LOG_ERROR << "Unable to convert \"" << m_tcpParameters.value().bindIPAddress
-                           << "\" to a network address.";
-            close(m_tcpListenSocketFd);
-            m_tcpListenSocketFd = -1;
-            return DCGM_ST_GENERIC_ERROR;
-        }
-    }
-
-    listenAddr.sin_port = htons(m_tcpParameters.value().port);
     if (bind(m_tcpListenSocketFd, (struct sockaddr *)&listenAddr, sizeof(listenAddr)) < 0)
     {
         DCGM_LOG_ERROR << "bind failed. port " << m_tcpParameters.value().port << ", address "
@@ -579,8 +595,21 @@ void DcgmIpc::ConnectTcpAsyncImpl(DcgmIpcConnectTcp &tcpConnect)
     bufferevent_setcb(bev, DcgmIpc::StaticReadCB, NULL, DcgmIpc::StaticEventCB, this);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
+    /* Allow IPv6 IPs to override family */
+    char buf[16];
+    sa_family_t family = AF_INET;
+    std::string str = tcpConnect.m_hostname;
+    if (str.size() > 1 && str[0] == '[' && str[str.size() - 1] == ']')
+    {
+        tcpConnect.m_hostname = str.substr(1, str.size() - 2);
+    }
+    if (inet_pton(AF_INET6, tcpConnect.m_hostname.c_str(), buf) > 0)
+    {
+        family = AF_INET6;
+    }
+
     int ret = bufferevent_socket_connect_hostname(
-        bev, m_dnsBase, AF_INET, tcpConnect.m_hostname.c_str(), tcpConnect.m_port);
+        bev, m_dnsBase, family, tcpConnect.m_hostname.c_str(), tcpConnect.m_port);
     if (0 != ret)
     {
         RemoveConnectionByBev(bev);
