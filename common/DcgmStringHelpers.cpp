@@ -57,10 +57,15 @@ std::vector<std::string> dcgmTokenizeString(const std::string &src, const std::s
 }
 
 /*****************************************************************************/
-void dcgmStrncpy(char *destination, const char *source, size_t destinationSize)
+bool dcgmStrncpy(char *destination, const char *source, size_t destinationSize)
 {
-    strncpy(destination, source, destinationSize);
-    destination[destinationSize - 1] = '\0';
+    if (nullptr == static_cast<char*>(memccpy(destination, source, '\0', destinationSize)))
+    {
+        destination[destinationSize - 1] = '\0';
+        return false;
+    }
+
+    return true;
 }
 
 std::string dcgmStrToLower(std::string s)
