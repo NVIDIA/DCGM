@@ -25,6 +25,7 @@
 #include <DcgmStringHelpers.h>
 #include <algorithm>
 #include <cstdarg>
+#include <functional>
 #include <iostream>
 #include <string>
 

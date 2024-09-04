@@ -19,6 +19,7 @@
 #include <dlfcn.h>
 
 #include <atomic>
+#include <cstdlib>
 #include <mutex>
 
 static void *g_nvmlLib                                     = 0;
