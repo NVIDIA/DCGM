@@ -285,6 +285,9 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "The object has already been initialized";
         case DCGM_ST_NVML_NOT_LOADED:
             return "Cannot perform the requested operation because NVML doesn't exist on this system.";
+        case DCGM_ST_NVML_DRIVER_TIMEOUT:
+            return "Cannot perform the requested operation because an NVML driver timeout error was detected. "
+                   "Verify NVML is responsive before restarting the hostengine.";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

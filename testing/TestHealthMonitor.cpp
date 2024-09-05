@@ -426,10 +426,28 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
+    /* Inject PCIe generation and width/lanes. */
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_COUNTER;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
+    fv.value.i64 = 4;
+    fv.fieldId   = DCGM_FI_DEV_PCIE_LINK_GEN;
+    fv.ts        = ToLegacyTimestamp(now);
+    result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    fv.value.i64 = 16;
+    fv.fieldId   = DCGM_FI_DEV_PCIE_LINK_WIDTH;
+    result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_COUNTER;
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(now - 50s);
 

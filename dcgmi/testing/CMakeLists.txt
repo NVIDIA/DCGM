@@ -34,6 +34,7 @@ if (BUILD_TESTING)
         WildcardTests.cpp
         QueryTests.cpp
         DcgmiCommonTests.cpp
+        CommandLineParserTests.cpp
     )
 
     # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation

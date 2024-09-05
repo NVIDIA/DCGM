@@ -534,6 +534,9 @@ void DcgmDiagResponseWrapper::AddAuxData(unsigned int testIndex, const std::stri
     }
 
     m_response.v10ptr->auxDataPerTest[testIndex].version = dcgmDiagTestAuxData_version;
+    memset(m_response.v10ptr->auxDataPerTest[testIndex].data,
+           0,
+           sizeof(m_response.v10ptr->auxDataPerTest[testIndex].data));
     std::memcpy(m_response.v10ptr->auxDataPerTest[testIndex].data, auxData.data(), auxData.size());
 }
 

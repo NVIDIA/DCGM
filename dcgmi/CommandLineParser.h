@@ -31,7 +31,9 @@ public:
     // only accepts a subsytem name
     static dcgmReturn_t ProcessCommandLine(int argc, char const *const *argv);
 
+#ifndef DCGMI_TESTS
 private:
+#endif
     struct StaticConstructor
     {
         StaticConstructor();
@@ -62,6 +64,13 @@ private:
 
     // Helper to validate the throttle mask parameter
     static void ValidateThrottleMask(const std::string &throttleMask);
+
+    static std::string ConcatenateParameters(std::vector<std::string> const &parameters);
+
+    static void ValidateParameters(const std::string &parameters);
+
+    // Totals the requested test durations and throws an error if they exceed the requested timeout
+    static void CheckTestDurationAndTimeout(const std::string &parameters, unsigned int timeoutSeconds);
 };
 
 #endif // DCGMI_CLI_PARSER_H

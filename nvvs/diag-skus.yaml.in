@@ -3503,3 +3503,39 @@ skus:
       minimum_bandwidth: 2333
     pulse_test:
       is_allowed: true
+  # P1010 SKU 230 H200 NVL
+  - name: H200
+    id: 233b
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 600.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 32218
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~42958. Multiply by .75 to get 32218
+      target_stress: 32218
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 2950000. Multiply by .75 to get 2212500
+      minimum_bandwidth: 2212500
+    pulse_test:
+      is_allowed: true

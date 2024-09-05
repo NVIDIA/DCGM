@@ -1311,6 +1311,114 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
     }
 }
 
+void CommandLineParser::ValidateParameters(const std::string &parameters)
+{
+    std::vector<std::string> tokens;
+    dcgmTokenizeString(parameters, ";", tokens);
+
+    for (auto const &t : tokens)
+    {
+        if (t.size() >= DCGM_MAX_TEST_PARMS_LEN_V2)
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("parameter [{}] is too long", t));
+        }
+    }
+}
+
+std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> const &parameters)
+{
+    unsigned int retBuffSize = 0;
+    std::unordered_map<std::string, std::function<void(std::string &, std::string const &)>> const
+        multiDefinitionsHandlers {
+            { "passthrough_args",
+              [](std::string &parameter, std::string const &newParameter) {
+                  // eud plugin uses space as passthrough_args's delimiter
+                  parameter += " " + newParameter;
+              } },
+        };
+    // Utilize map with sorting to ensure consistent output and enable reliable testing.
+    std::map<std::string, std::string> parsedParameter;
+
+    for (auto const &parameter : parameters)
+    {
+        // valid form: cpu_eud.passthrough_args=arg1;eud.passthrough_args=arg2
+        std::vector<std::string> tokens;
+        dcgmTokenizeString(parameter, ";", tokens);
+
+        for (auto const &t : tokens)
+        {
+            auto idx = t.find('=');
+            if (idx == std::string::npos)
+            {
+                throw TCLAP::CmdLineParseException(fmt::format("incorrect parameter format: ", t));
+            }
+            std::string key = t.substr(0, idx);
+            auto dotIdx     = key.find('.');
+            if (dotIdx == std::string::npos)
+            {
+                throw TCLAP::CmdLineParseException(fmt::format("incorrect parameter format: ", t));
+            }
+
+            std::string value = t.substr(idx + 1);
+            if (!parsedParameter.contains(key))
+            {
+                parsedParameter[key] = value;
+                // extra 1 for '='
+                retBuffSize += key.size() + 1 + value.size();
+                continue;
+            }
+
+            std::string argName = key.substr(dotIdx + 1);
+            auto handler        = multiDefinitionsHandlers.find(argName);
+            if (handler == multiDefinitionsHandlers.end())
+            {
+                throw TCLAP::CmdLineParseException(fmt::format("multiple definitions of {} parameter", key));
+            }
+            retBuffSize -= parsedParameter[key].size();
+            handler->second(parsedParameter[key], value);
+            retBuffSize += parsedParameter[key].size();
+        }
+    }
+
+    std::string ret;
+    ret.reserve(retBuffSize);
+    for (auto const &[key, value] : parsedParameter)
+    {
+        if (ret.empty())
+        {
+            ret = fmt::format("{}={}", key, value);
+        }
+        else
+        {
+            ret += fmt::format(";{}={}", key, value);
+        }
+    }
+
+    return ret;
+}
+
+void CommandLineParser::CheckTestDurationAndTimeout(const std::string &parameters, unsigned int timeoutSeconds)
+{
+    unsigned int totalTestDuration = 0;
+    std::vector<std::string> tokens;
+    dcgmTokenizeString(parameters, ";", tokens);
+    static const std::string testDuration = "test_duration=";
+    for (const auto &t : tokens)
+    {
+        size_t pos = t.find(testDuration);
+        if (pos != std::string::npos)
+        {
+            totalTestDuration += std::stoul(t.substr(pos + testDuration.size()));
+        }
+    }
+
+    if (totalTestDuration >= timeoutSeconds)
+    {
+        throw TCLAP::CmdLineParseException(fmt::format(
+            "The total test duration {} is too high for the timeout {}", totalTestDuration, timeoutSeconds));
+    }
+}
+
 dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv)
 {
     // Check for stop diag request
@@ -1349,12 +1457,11 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                            cmd);
     TCLAP::ValueArg<int> groupId("g", "group", "The group ID to query.", false, DCGM_GROUP_ALL_GPUS, "groupId", cmd);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
-    TCLAP::ValueArg<std::string> parms("p",
+    TCLAP::MultiArg<std::string> parms("p",
                                        "parameters",
                                        "Test parameters to set for this run.",
                                        false,
-                                       "",
-                                       "test_name.variable_name=variable_value",
+                                       "test_name.variable_name=variable_value;test_name.variable_name2=variable_value",
                                        cmd);
     TCLAP::ValueArg<std::string> config(
         "c", "configfile", "Path to the configuration file.", false, "", "/full/path/to/config/file", cmd);
@@ -1373,6 +1480,15 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         false,
         "",
         "gpuList",
+        cmd);
+    TCLAP::ValueArg<std::string> expectedNumEntities(
+        "n",
+        "expectedNumEntities",
+        "Expected number of active GPUs to run diagnostic. The diag will fail if the number of active GPUs does not match this value.\
+            Format: gpu:N, where N is the number of expected GPUs (not GPU id). Cannot be used with -f/--gpuList.",
+        false,
+        "",
+        "expectedNumEntities",
         cmd);
     TCLAP::SwitchArg verbose("v", "verbose", "Show information and warnings for each test.", cmd, false);
     TCLAP::SwitchArg statsOnFail(
@@ -1455,6 +1571,15 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                              "iterations",
                                              cmd);
 
+    TCLAP::ValueArg<unsigned int> timeout(
+        "t",
+        "timeout",
+        "Specify a timeout in seconds for the execution of the diagnostic. (Default is unlimited).",
+        false,
+        0,
+        "timeout",
+        cmd);
+
     // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
     helpOutput.addFooter("Verbose diagnostic output is currently limited on client, for full diagnostic and validation "
@@ -1467,6 +1592,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &config);
     helpOutput.addToGroup("1", &fakeGpuList);
     helpOutput.addToGroup("1", &gpuList);
+    helpOutput.addToGroup("1", &expectedNumEntities);
     helpOutput.addToGroup("1", &verbose);
     helpOutput.addToGroup("1", &statsOnFail);
     helpOutput.addToGroup("1", &debugLogFile);
@@ -1477,6 +1603,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &failEarly);
     helpOutput.addToGroup("1", &failCheckInterval);
     helpOutput.addToGroup("1", &iterations);
+    helpOutput.addToGroup("1", &timeout);
 
     cmd.parse(argc, argv);
 
@@ -1506,6 +1633,18 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     if (gpuList.isSet() && groupId.isSet())
     {
         throw TCLAP::CmdLineParseException("Specifying a group id and a gpu list are mutually exclusive");
+    }
+
+    if (expectedNumEntities.isSet())
+    {
+        if (fakeGpuList.isSet())
+        {
+            throw TCLAP::CmdLineParseException("Specifying expectedNumEntities with a fake gpu list is not supported");
+        }
+        else if (gpuList.isSet())
+        {
+            throw TCLAP::CmdLineParseException("Specifying expectedNumEntities with a gpu list is not supported");
+        }
     }
 
     if (debugLogFile.getValue().size() > DCGM_PATH_LEN - 1)
@@ -1546,14 +1685,28 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("Interval value must be between 1 and 300", "check-interval");
     }
 
+    std::string concatenatedParams;
+    if (parms.isSet())
+    {
+        std::vector<std::string> paramList = parms.getValue();
+        concatenatedParams                 = ConcatenateParameters(paramList);
+    }
+
+    if (!concatenatedParams.empty() && timeout.getValue() > 0)
+    {
+        // This will throw an exception if the test durations exceed the timeout`
+        CheckTestDurationAndTimeout(concatenatedParams, timeout.getValue());
+    }
+
     std::string runValue;
     if (startDiag.isSet())
     {
         runValue = startDiag.getValue();
     }
+    ValidateParameters(concatenatedParams);
 
-    dcgmRunDiag_v7 drd = {};
-    drd.version        = dcgmRunDiag_version7;
+    dcgmRunDiag_v8 drd = {};
+    drd.version        = dcgmRunDiag_version8;
     std::string error;
 
     // We set it to BLANK by default so the processes underneath can use the ENV
@@ -1568,7 +1721,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
 
     result = dcgm_diag_common_populate_run_diag(drd,
                                                 runValue,
-                                                parms.getValue(),
+                                                concatenatedParams,
                                                 "",
                                                 fakeGpuList.getValue(),
                                                 gpuList.getValue(),
@@ -1581,6 +1734,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 groupId.getValue(),
                                                 failEarly.getValue(),
                                                 failCheckInterval.getValue(),
+                                                timeout.getValue(),
+                                                expectedNumEntities.getValue(),
                                                 error);
 
     if (result == DCGM_ST_BADPARAM)
@@ -1591,7 +1746,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     bool hostAddressWasOverridden = hostAddress.isSet();
 
     return StartDiag { hostAddress.getValue(), hostAddressWasOverridden,
-                       parms.getValue(),       config.getValue(),
+                       concatenatedParams,     config.getValue(),
                        json.getValue(),        drd,
                        iterations.getValue(),  argv[0] }
         .Execute();

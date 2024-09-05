@@ -542,7 +542,7 @@ def helperDiagCheckReturn(ret, response):
     return response
 
 @ensure_byte_strings()
-def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version7):
+def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version8):
     response = dcgm_structs.c_dcgmDiagResponse_v10()
     runDiagInfo.version = runDiagVersion
     response.version = dcgm_structs.dcgmDiagResponse_version10
@@ -557,8 +557,8 @@ def dcgmActionValidate(dcgm_handle, group_id, validate):
     response.version = dcgm_structs.dcgmDiagResponse_version10
 
     # Put the group_id and validate into a dcgmRunDiag struct
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
     runDiagInfo.validate = validate
     runDiagInfo.groupId = group_id
 

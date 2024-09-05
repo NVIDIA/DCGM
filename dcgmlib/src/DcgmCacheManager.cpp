@@ -899,6 +899,7 @@ DcgmCacheManager::DcgmCacheManager()
     , m_forceProfMetricsThroughGpm(false)
     , m_nvmlInjectionManager()
     , m_updateThreadCtx(nullptr)
+    , m_skipDriverCalls(false)
 {
     int kvSt = 0;
 
@@ -5437,7 +5438,19 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateAllFields(dcgmcm_update_thread_t *t
             BufferOrCacheLatestGpuValue(threadCtx, fieldMeta);
         }
         else if (watchInfo->practicalEntityGroupId == DCGM_FE_VGPU)
-            BufferOrCacheLatestVgpuValue(*this, threadCtx, watchInfo->practicalEntityId, fieldMeta);
+        {
+            if (m_skipDriverCalls)
+            {
+                InsertNvmlErrorValue(threadCtx, fieldMeta->fieldType, NVML_ERROR_UNKNOWN, watchInfo->maxAgeUsec);
+                log_error(
+                    "Cannot retrieve value for fieldId {} due to detected driver timeout error; inserting blank value instead.",
+                    fieldMeta->fieldId);
+            }
+            else
+            {
+                BufferOrCacheLatestVgpuValue(*this, threadCtx, watchInfo->practicalEntityId, fieldMeta);
+            }
+        }
         else
             log_debug("Unhandled entityGroupId {}", watchInfo->practicalEntityGroupId);
         /* Resync clock after a value fetch since a driver call may take a while */
@@ -5748,6 +5761,29 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
     for (i = 0; i < numFields; i++)
     {
         values[i].fieldId = fieldMeta[i]->nvmlFieldId;
+    }
+
+    if (m_skipDriverCalls)
+    {
+        threadCtx->entityKey.entityGroupId = DCGM_FE_GPU;
+        threadCtx->entityKey.entityId      = gpuId;
+
+        // Insert blank values in all requested fields
+        for (i = 0; i < numFields; i++)
+        {
+            fv                           = &values[i];
+            threadCtx->entityKey.fieldId = fieldMeta[i]->fieldId;
+            threadCtx->watchInfo         = watchInfo[i];
+
+            InsertNvmlErrorValue(threadCtx,
+                                 fieldMeta[i]->fieldType,
+                                 NVML_ERROR_UNKNOWN,
+                                 watchInfo[i] != nullptr ? watchInfo[i]->maxAgeUsec : 0);
+            log_error(
+                "Cannot retrieve value for fieldId {} due to detected driver timeout error, inserting blank value instead.",
+                fieldMeta[i]->fieldId);
+        }
+        return DCGM_ST_NVML_DRIVER_TIMEOUT;
     }
 
     // Do not attempt to poll NVML for values of detached GPUs
@@ -6759,7 +6795,7 @@ void DcgmCacheManager::RecordXidForGpuInstance(unsigned int gpuId,
 std::unordered_set<uint32_t> ReadEnvForFatalXids()
 {
     char *xidGetEnv                               = getenv("__DCGM_FATAL_XIDS__");
-    std::unordered_set<uint32_t> defaultFatalXids = { 79, 119 };
+    std::unordered_set<uint32_t> defaultFatalXids = { 119, 120 };
     if (!xidGetEnv)
     {
         log_debug("__DCGM_FATAL_XIDS__ unset. Not loading");
@@ -6779,7 +6815,6 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
     nvmlReturn_t nvmlReturn;
     nvmlEventData_t eventData = {};
     unsigned int nvmlGpuIndex;
-    bool doNotEnterDriver = false;
     timelib64_t now;
     unsigned int gpuId;
     int numErrors          = 0;
@@ -6832,13 +6867,19 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
                     RecordXidForGpu(gpuId, threadCtx, kmsgXid->xid, NVML_SUCCESS, kmsgXid->timestamp);
                     if (fatalXids.contains(kmsgXid->xid))
                     {
-                        doNotEnterDriver = true;
-                        log_debug("Skipping NVML driver calls");
+                        m_skipDriverCalls = true;
+                        log_fatal(
+                            "XID {} detected in /dev/kmsg. Hostengine restart required. Ensure nvidia-smi is responsive before attempting to restart the hostengine.",
+                            kmsgXid->xid);
+                    }
+                    else
+                    {
+                        log_error("XID {} detected on GPU {}({}) in /dev/kmsg.", kmsgXid->xid, gpuId, kmsgXid->pciBdf);
                     }
                 }
             }
         }
-        if (!doNotEnterDriver)
+        if (!m_skipDriverCalls)
         {
             MarkEnteredDriver();
 
@@ -7165,6 +7206,18 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         }
 
         return DCGM_ST_NVML_NOT_LOADED;
+    }
+
+    if (m_skipDriverCalls)
+    {
+        InsertNvmlErrorValue(threadCtx,
+                             fieldMeta->fieldType,
+                             NVML_ERROR_UNKNOWN,
+                             threadCtx->watchInfo != nullptr ? threadCtx->watchInfo->maxAgeUsec : 0);
+        log_error(
+            "Cannot retrieve value for fieldId {} due to detected driver timeout error; inserting blank value instead.",
+            fieldMeta->fieldId);
+        return DCGM_ST_NVML_DRIVER_TIMEOUT;
     }
 
     dcgmReturn_t ret = GetGpuId(entityGroupId, entityId, gpuId);
@@ -11518,7 +11571,9 @@ dcgmReturn_t DcgmCacheManager::GetGpuIds(int activeOnly, std::vector<unsigned in
         if (!activeOnly || m_gpus[i].status == DcgmEntityStatusOk || m_gpus[i].status == DcgmEntityStatusFake)
         {
             gpuIds.push_back(m_gpus[i].gpuId);
+            continue;
         }
+        log_debug("Skipping gpu {} due to inactive status", m_gpus[i].gpuId);
     }
 
     dcgm_mutex_unlock(m_mutex);

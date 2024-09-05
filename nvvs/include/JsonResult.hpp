@@ -550,6 +550,8 @@ auto inline ParseJson(::Json::Value const &json, DcgmNs::JsonSerialize::To<Test>
         else if (json[NVVS_AUX_DATA].isObject())
         {
             ::Json::StreamWriterBuilder builder;
+            builder["indentation"]  = "";
+            builder["commentStyle"] = "None";
             test.auxData = ::Json::writeString(builder, json[NVVS_AUX_DATA]);
         }
         else

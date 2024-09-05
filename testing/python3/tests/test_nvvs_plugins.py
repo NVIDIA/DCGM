@@ -107,7 +107,7 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, testIndex, extra
 
     if extraTestInfo:
         extraTestResult = response.perGpuResponses[gpuId].results[extraTestInfo[1]].result
-        assert extraTestResult == dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN, \
+        assert extraTestResult == dcgm_structs.DCGM_DIAG_RESULT_SKIP, \
             "Expected the extra test to be skipped since the first test failed.\nGot results: %s" % \
             (extraTestResult)
 
@@ -310,3 +310,33 @@ def test_nvvs_plugins_required_symbols():
                     numErrors += 1
     
     assert numErrors == 0, "Some plugins were missing symbols. See errors above."
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_initialized_client()
+@test_utils.run_with_injection_gpus(2)
+def test_nvvs_plugin_skip_memtest_if_page_retirement_row_remap_present(handle, gpuIds):
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="memtest", paramsStr="memtest.test_duration=10")
+    dd.UseFakeGpus()
+
+    # Inject Row remap failure and check for memtest to be skipped.
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE, 1, 10, True, repeatCount=10)
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert response.levelOneResults[dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL,\
+        f"Actual result: [{response.levelOneResults[dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT].result}]"
+    assert response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP,\
+        f"Actual result is {response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result}"
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE, 0, 10, True, repeatCount=10) # reset the value
+
+    # Inject pending page retired failure and check for memtest to be skipped.
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 1, 10, True, repeatCount=10)
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert response.levelOneResults[dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL,\
+        f"Actual result: [{response.levelOneResults[dcgm_structs.DCGM_SWTEST_PAGE_RETIREMENT].result}]"
+    assert response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP,\
+        f"Actual result is {response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result}"
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 0, 10, True, repeatCount=10) # reset the value
+
+    # After Row remap and pending page retired are reset i.e. not present, memtest's shouldn't be skipped.
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result != dcgm_structs.DCGM_DIAG_RESULT_SKIP,\
+        f"Actual result is {response.perGpuResponses[gpuIds[0]].results[dcgm_structs.DCGM_MEMTEST_INDEX].result}"

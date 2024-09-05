@@ -33,6 +33,8 @@ import dcgm_errors
 import nvml_injection
 import nvml_injection_structs
 from _test_helpers import skip_test_if_no_dcgm_nvml, maybe_dcgm_nvml
+import random
+import math
 
 def skip_test_if_unhealthy(groupObj):
     # Skip the test if the GPU is already failing health checks
@@ -102,7 +104,7 @@ def test_dcgm_health_invalid_group_embedded(handle):
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
         groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
 
-def helper_dcgm_health_check_pcie(handle, gpuIds):
+def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg):
     """
     Verifies that a check error occurs when an error is injected
     Checks for call errors are done in the bindings except dcgmClientHealthCheck
@@ -119,6 +121,14 @@ def helper_dcgm_health_check_pcie(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
+    # inject PCIe Gen and width/lanes
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN,
+            pcieGen, 0)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH,
+            pcieLanes, 0)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
             0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
@@ -128,25 +138,102 @@ def helper_dcgm_health_check_pcie(handle, gpuIds):
 
     # inject an error into PCI
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-            10, 100) # set the injected data into the future
+            pcieReplayCounter, 100) # set the injected data into the future
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+    if expectingPcieIncident:
+        assert (responseV4.incidentCount == 1), errmsg
+        assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
+        assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+        assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+    else:
+        assert (responseV4.incidentCount == 0), errmsg
+
+def helper_reset_pcie_replay_counter(handle, gpuIds):
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+                                                              0, 100)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_embedded(handle, gpuIds):
-    helper_dcgm_health_check_pcie(handle, gpuIds)
+    # PCIe replay rate thresholds for each generation per lane.
+    pcieGenReplayRatesPerLane = [
+        2.5 / 1000 * 60,  # Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min per lane.
+        5.0 / 1000 * 60,  # Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per lane.
+        8.0 / 1000 * 60,  # Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per lane.
+        16.0 / 1000 * 60, # Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min per lane.
+        32.0 / 1000 * 60, # Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min per lane.
+        64.0 / 1000 * 60  # Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min per lane.
+    ]
+
+    # Run it multiple times to cover more combinations of pcieGen and pcieLanes.
+    for i in range(3):
+        pcieGen = 1
+        # For each Gen, randomly select number of lanes and PCIe replay counter to inject to dcgm.
+        # If replay counter rate > expected rate, then make sure PCIe incident is present, no incident otherwise.
+        for pcieGenReplayRatePerLane in pcieGenReplayRatesPerLane:
+            pcieLanes = random.randint(1, 16)
+            expectedPcieReplayCounterLimit = math.ceil(pcieGenReplayRatePerLane * pcieLanes)
+            # Multiply by 2 to have uniform probability for pcieReplayCounter to give success or failure scenario.
+            pcieReplayCounter = random.randint(1, 2 * expectedPcieReplayCounterLimit)
+            expectingPcieIncident = True if pcieReplayCounter > expectedPcieReplayCounterLimit else False
+            errmsg = ("pcieGen={} pcieGenReplayRatePerLane={} pcieLanes={} expectedPcieReplayCounterLimit={} "
+                      "pcieReplayCounter={} expectingPcieIncident={}").format(
+                pcieGen,
+                pcieGenReplayRatePerLane,
+                pcieLanes,
+                expectedPcieReplayCounterLimit,
+                pcieReplayCounter,
+                expectingPcieIncident
+            )
+            helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg)
+            # Reset after testing each failure test case i.e. if expecting PCIe incident.
+            if expectingPcieIncident:
+                helper_reset_pcie_replay_counter(handle, gpuIds)
+            pcieGen += 1
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
-    helper_dcgm_health_check_pcie(handle, gpuIds)
+    # PCIe replay rate thresholds for each generation per lane.
+    pcieGenReplayRatesPerLane = [
+        2.5 / 1000 * 60,  # Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min per lane.
+        5.0 / 1000 * 60,  # Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per lane.
+        8.0 / 1000 * 60,  # Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per lane.
+        16.0 / 1000 * 60, # Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min per lane.
+        32.0 / 1000 * 60, # Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min per lane.
+        64.0 / 1000 * 60  # Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min per lane.
+    ]
+
+    # Run it multiple times to cover more combinations of pcieGen and pcieLanes.
+    for i in range(3):
+        pcieGen = 1
+        # For each Gen, randomly select number of lanes and PCIe replay counter to inject to dcgm.
+        # If replay counter rate > expected rate, then make sure PCIe incident is present, no incident otherwise.
+        for pcieGenReplayRatePerLane in pcieGenReplayRatesPerLane:
+            pcieLanes = random.randint(1, 16)
+            expectedPcieReplayCounterLimit = math.ceil(pcieGenReplayRatePerLane * pcieLanes)
+            # Multiply by 2 to have uniform probability for pcieReplayCounter to give success or failure scenario.
+            pcieReplayCounter = random.randint(1, 2 * expectedPcieReplayCounterLimit)
+            expectingPcieIncident = True if pcieReplayCounter > expectedPcieReplayCounterLimit else False
+            errmsg = ("pcieGen={} pcieGenReplayRatePerLane={} pcieLanes={} expectedPcieReplayCounterLimit={} "
+                      "pcieReplayCounter={} expectingPcieIncident={}").format(
+                pcieGen,
+                pcieGenReplayRatePerLane,
+                pcieLanes,
+                expectedPcieReplayCounterLimit,
+                pcieReplayCounter,
+                expectingPcieIncident
+            )
+            helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg)
+            # Reset after testing each failure test case i.e. if expecting PCIe incident.
+            if expectingPcieIncident:
+                helper_reset_pcie_replay_counter(handle, gpuIds)
+            pcieGen += 1
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -164,18 +251,26 @@ def test_dcgm_health_check_pcie_embedded_using_nvml_injection(handle, gpuIds):
     injectedRets = injectedRetsArray()
     injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[0].values[0].value.ui = 0
+    injectedRets[0].values[0].value.ui = 40
     injectedRets[0].valueCount = 1
     injectedRets[1].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[1].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[1].values[0].value.ui = 10
+    injectedRets[1].values[0].value.ui = 50
     injectedRets[1].valueCount = 1
+    injectedRets[2].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
+    injectedRets[2].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+    injectedRets[2].values[0].value.ui = 60
+    injectedRets[2].valueCount = 1
+    injectedRets[3].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
+    injectedRets[3].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+    injectedRets[3].values[0].value.ui = 70
+    injectedRets[3].valueCount = 1
 
-    ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "PcieReplayCounter", None, 0, injectedRets, 2)
+    ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "PcieReplayCounter", None, 0, injectedRets, 4)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_PCIE
-    groupObj.health.Set(newSystems)
+    groupObj.health.Set(newSystems, 250000, 3600.0) # 4 values * 250ms = 1 second to get a hit
 
     skip_test_if_unhealthy(groupObj)
 
@@ -184,11 +279,11 @@ def test_dcgm_health_check_pcie_embedded_using_nvml_injection(handle, gpuIds):
     assert (response.incidentCount == 0)
 
     # Wait for cache refresh
-    for _ in range(10):
+    for _ in range(10000):
         responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
         if responseV4.incidentCount == 1:
             break
-        time.sleep(10)
+        time.sleep(0.001)
     assert (responseV4.incidentCount == 1)
     assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
     assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
@@ -1117,6 +1212,14 @@ def helper_health_check_multiple_failures(handle, gpuIds):
     groupObj.health.Set(newSystems)
 
     skip_test_if_unhealthy(groupObj)
+
+    # inject a PCI Gen and width/lanes
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN,
+            4, 0)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH,
+            16, 0)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
 
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
             0, -50)

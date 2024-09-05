@@ -553,6 +553,9 @@ def test_dcgmi_diag(handle, gpuIds):
             ["diag", "--run", "1", "-i", allGpusCsv, "--plugin-path", "./apps/nvvs/plugins"], # verifies --plugin-path no longer works (removed)
             ["diag", "--run", "1", "--iterations", "0"], # We cannot run 0 iterations
             ["diag", "--run", "1", "--iterations", "\-1"], # We cannot run negative iterations
+            ["diag", "--run", "diagnostic", "--parameters", "diagnostic.test_duration=10", "timeout", "10"], # test_duration equals the timeout
+            ["diag", "--run", "diagnostic,targeted_power", "--parameters", "diagnostic.test_duration=10,targeted_power.test_duration=10", "timeout", "15"], # combined test_duration exceeds the timeout
+            ["diag", "--run", "3", "--parameters", f"pcie.h2d_d2h_singgle_pinned.iterations={'6'*(dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2 - len('pcie.h2d_d2h_singgle_pinned.iterations=') - 1)}"], # Test case parameter length limit exceeded
     ])
 
 @test_utils.run_with_persistence_mode_on()
@@ -1075,3 +1078,56 @@ def test_dcgmi_settings_logging_severity():
     app.validate()
 
     assert passed, "Unable to find 'VERB' in log file"
+
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgmi_diag_expected_num_entities(handle, gpuIds):
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    allGpusInSystem = dcgmSystem.discovery.GetAllGpuIds()
+
+    def create_dcgmi_group_with_entities(entityIds):
+        dcgmSystem = dcgmHandle.GetSystem()
+        groupObj = dcgmSystem.GetGroupWithGpuIds("testgroup", entityIds)
+        return str(groupObj.GetId().value)
+
+    def run_diag_with_args(args, outputString = ""):
+        _, stdoutLines, stderrLines = _run_dcgmi_command(args)
+        # expected allOutput: error: expectednumentities can only be used with dcgm_group_all_gpus,
+        # an error occurred trying to parse the command line.
+        # expected allOutput: error: unable to complete diagnostic..
+        # bad parameter passed to function.
+        allOutput = (' '.join(stdoutLines + stderrLines)).lower()
+        hasOutputString = outputString in allOutput
+        assert hasOutputString, f"Output of diag command '{args}': {allOutput}"
+
+    newAllGpusGroupId = create_dcgmi_group_with_entities(allGpusInSystem)
+    expectedNumEntitiesStr = f"gpu:{str(len(newAllGpusGroupId))}"
+    invalidArgsTestList = [
+        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", "gpu:9"], # Test --expectedNumEntities option with invalid group id
+        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", "gpu:3"], # Test --expectedNumEntities option with invalid group id
+        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", expectedNumEntitiesStr], # Test --expectedNumEntities option with invalid group id
+        ["diag", "--run", "1", "-f", "0,1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with fake gpus
+        ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in gpuIds), "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with gpu list
+    ]
+
+    for args in invalidArgsTestList:
+        run_diag_with_args(args, "error occurred trying to parse the command line")
+
+    badParamArgsTestList = [
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:{0"], # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:"], # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:0,cpu:1"], # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:-1"], # Test --expectedNumEntities option with invalid num gpus
+    ]
+
+    for args in badParamArgsTestList:
+        run_diag_with_args(args, "bad parameter passed to function")
+
+    validArgsTestList = [
+        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
+        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:0"], # verifies --expectedNumEntities with value 0 is ignored and does not error
+    ]
+    for args in validArgsTestList:
+        run_diag_with_args(args, "successfully ran diagnostic")

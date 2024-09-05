@@ -135,6 +135,9 @@ const char *NvmlErrorToStringValue(nvmlReturn_t nvmlReturn)
         case NVML_ERROR_NOT_FOUND:
             return DCGM_STR_NOT_FOUND;
 
+        case NVML_ERROR_UNKNOWN:
+            return DCGM_STR_BLANK;
+
         default:
             return DCGM_STR_BLANK;
     }
@@ -159,6 +162,9 @@ long long NvmlErrorToInt64Value(nvmlReturn_t nvmlReturn)
 
         case NVML_ERROR_NOT_FOUND:
             return DCGM_INT64_NOT_FOUND;
+
+        case NVML_ERROR_UNKNOWN:
+            return DCGM_INT64_BLANK;
 
         default:
             return DCGM_INT64_BLANK;
@@ -185,6 +191,9 @@ int NvmlErrorToInt32Value(nvmlReturn_t nvmlReturn)
         case NVML_ERROR_NOT_FOUND:
             return DCGM_INT32_NOT_FOUND;
 
+        case NVML_ERROR_UNKNOWN:
+            return DCGM_INT32_BLANK;
+
         default:
             return DCGM_INT32_BLANK;
     }
@@ -209,6 +218,9 @@ double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn)
 
         case NVML_ERROR_NOT_FOUND:
             return DCGM_FP64_NOT_FOUND;
+
+        case NVML_ERROR_UNKNOWN:
+            return DCGM_FP64_BLANK;
 
         default:
             return DCGM_FP64_BLANK;

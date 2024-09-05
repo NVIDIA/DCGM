@@ -28,6 +28,8 @@ if (BUILD_TESTING)
             dcgmi_objects
             dcgm
             dcgm_common
+            dcgm_logging
+            dcgmmodulediag_common
             Catch2::Catch2
             ${JSONCPP_STATIC_LIBS}
             fmt::fmt
@@ -38,6 +40,7 @@ if (BUILD_TESTING)
         PRIVATE
             DcgmiUnitTestsMain.cpp
             TopoTests.cpp
+            CommandLineParserTests.cpp
     )
 
     if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")

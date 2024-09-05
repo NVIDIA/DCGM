@@ -57,6 +57,7 @@ private:
     void CreateDummyScript();
     void CreateDummyFailScript();
     void RemoveDummyScript();
+    int TestParseExpectedNumEntitiesForGpus();
 };
 
 #endif /* TESTDIAGMANAGER_H */

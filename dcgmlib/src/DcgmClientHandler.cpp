@@ -426,6 +426,12 @@ dcgmReturn_t DcgmClientHandler::ExchangeModuleCommandAsync(dcgmHandle_t dcgmHand
         return retSt;
     }
 
+    if (timeoutMs == 0)
+    {
+        requestFut.wait();
+    }
+    else
+    {
     auto futStatus = requestFut.wait_for(std::chrono::milliseconds(timeoutMs));
     if (futStatus != std::future_status::ready)
     {
@@ -434,6 +440,7 @@ dcgmReturn_t DcgmClientHandler::ExchangeModuleCommandAsync(dcgmHandle_t dcgmHand
         RemoveBlockingRequest(connectionId, requestId, std::nullopt);
         RemovePersistentRequest(connectionId, requestId);
         return DCGM_ST_TIMEOUT;
+    }
     }
 
     auto response = requestFut.get();
