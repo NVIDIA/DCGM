@@ -125,6 +125,7 @@ DCGM_ST_NVVS_KILLED                 = -53  # The NVVS process was killed by a si
 DCGM_ST_PAUSED                      = -54  # The hostengine and all modules are paused
 DCGM_ST_ALREADY_INITIALIZED         = -55  # The object is already initialized
 DCGM_ST_NVML_NOT_LOADED             = -56  # NVML couldn't be loaded on this system
+DCGM_ST_NVML_DRIVER_TIMEOUT         = -57, # NVML driver timeout error was detected
 
 DCGM_GROUP_DEFAULT = 0  # All the GPUs on the node are added to the group
 DCGM_GROUP_EMPTY   = 1  # Creates an empty group
@@ -276,6 +277,7 @@ class DCGMError(Exception):
         DCGM_ST_PAUSED:                      "The hostengine and all modules are paused",
         DCGM_ST_ALREADY_INITIALIZED:         "The object is already initialized",
         DCGM_ST_NVML_NOT_LOADED:             "NVML couldn't be loaded on this system",
+        DCGM_ST_NVML_DRIVER_TIMEOUT:         "NVML driver timeout error was detected",
     }
 
     def __new__(typ, value):
@@ -1894,8 +1896,10 @@ DCGM_MAX_TEST_NAMES = 20
 DCGM_MAX_TEST_NAMES_LEN = 50
 DCGM_MAX_TEST_PARMS = 100
 DCGM_MAX_TEST_PARMS_LEN = 100
+DCGM_MAX_TEST_PARMS_LEN_V2 = 1050
 DCGM_GPU_LIST_LEN = 50
 DCGM_FILE_LEN = 30
+DCGM_EXPECTED_ENTITIES_LEN = 50
 DCGM_PATH_LEN = 128
 DCGM_THROTTLE_MASK_LEN = 50
 
@@ -1908,15 +1912,15 @@ DCGM_RUN_FLAGS_TRAIN       = 0x0004
 DCGM_RUN_FLAGS_FORCE_TRAIN = 0x0008
 DCGM_RUN_FLAGS_FAIL_EARLY  = 0x0010 # Enable fail early checks for the Targeted Stress, Targeted Power, SM Stress, and Diagnostic tests
 
-class c_dcgmRunDiag_v7(_PrintableStructure):
+class c_dcgmRunDiag_v8(_PrintableStructure):
     _fields_ = [
         ('version', c_uint), # version of this message
         ('flags', c_uint), # flags specifying binary options for running it. Currently verbose and stats on fail
         ('debugLevel', c_uint), # 0-5 for the debug level the GPU diagnostic will use for logging
         ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with gpuList.
         ('validate', c_uint), # 0-3 for which tests to run. Optional.
-        ('testNames', c_char * DCGM_MAX_TEST_NAMES * DCGM_MAX_TEST_NAMES_LEN), # Specifed list of test names. Optional.
-        ('testParms', c_char * DCGM_MAX_TEST_PARMS * DCGM_MAX_TEST_PARMS_LEN), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES), # Specifed list of test names. Optional.
+        ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
         ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
         ('gpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of gpus. Cannot be specified with the groupId.
         ('debugLogFile', c_char * DCGM_PATH_LEN), # Alternate name for the debug log file that should be used
@@ -1924,9 +1928,35 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
         ('throttleMask', c_char * DCGM_THROTTLE_MASK_LEN), # Throttle reasons to ignore as either integer mask or csv list of reasons
         ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
-        ('_unusedInt1', c_uint), # Unused
-        ('_unusedInt2', c_uint), # Unused
-        ('_unusedInt3', c_uint), # Unused
+        ('currentIterations', c_uint), # The current iteration that will be executed
+        ('totalIterations', c_uint), # The total iterations that will be executed
+        ('timeoutSeconds', c_uint), # The timeout in seconds
+        ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
+        ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN) # The expected number of entities the diag will run on.
+    ]
+
+dcgmRunDiag_version8 = make_dcgm_version(c_dcgmRunDiag_v8, 8)
+
+class c_dcgmRunDiag_v7(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint), # version of this message
+        ('flags', c_uint), # flags specifying binary options for running it. Currently verbose and stats on fail
+        ('debugLevel', c_uint), # 0-5 for the debug level the GPU diagnostic will use for logging
+        ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with gpuList.
+        ('validate', c_uint), # 0-3 for which tests to run. Optional.
+        ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES), # Specifed list of test names. Optional.
+        ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
+        ('gpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of gpus. Cannot be specified with the groupId.
+        ('debugLogFile', c_char * DCGM_PATH_LEN), # Alternate name for the debug log file that should be used
+        ('statsPath', c_char * DCGM_PATH_LEN), # Path that the plugin's statistics files should be written to
+        ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
+        ('throttleMask', c_char * DCGM_THROTTLE_MASK_LEN), # Throttle reasons to ignore as either integer mask or csv list of reasons
+        ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
+        ('currentIterations', c_uint), # The current iteration that will be executed
+        ('totalIterations', c_uint), # The total iterations that will be executed
+        ('timeoutSeconds', c_uint), # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
         ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
     ]
@@ -1934,10 +1964,10 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
 dcgmRunDiag_version7 = make_dcgm_version(c_dcgmRunDiag_v7, 7)
 
 # Latest c_dcgmRunDiag class
-c_dcgmRunDiag_t = c_dcgmRunDiag_v7
+c_dcgmRunDiag_t = c_dcgmRunDiag_v8
 
 # Latest version for dcgmRunDiag_t
-dcgmRunDiag_version = dcgmRunDiag_version7
+dcgmRunDiag_version = dcgmRunDiag_version8
 
 #Flags for dcgmGetEntityGroupEntities's flags parameter
 DCGM_GEGE_FLAG_ONLY_SUPPORTED = 0x00000001 #Only return entities that are supported by DCGM.

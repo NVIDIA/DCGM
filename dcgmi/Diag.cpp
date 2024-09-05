@@ -288,7 +288,7 @@ void AddCpuEudResultIfAny(Json::Value &category, int &pluginCount, dcgmDiagTestA
  * RemoteDiagExecutor
  *****************************************************************************
  *****************************************************************************/
-RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v7 &drd)
+RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v8 &drd)
     : m_handle(handle)
     , m_result(DCGM_ST_OK)
 {
@@ -332,7 +332,7 @@ Diag::~Diag()
 {}
 
 /*******************************************************************************/
-void Diag::setDcgmRunDiag(dcgmRunDiag_v7 *drd)
+void Diag::setDcgmRunDiag(dcgmRunDiag_v8 *drd)
 {
     memcpy(&this->m_drd, drd, sizeof(this->m_drd));
 }
@@ -1539,14 +1539,14 @@ StartDiag::StartDiag(const std::string &hostname,
                      const std::string &parms,
                      const std::string &configPath,
                      bool jsonOutput,
-                     dcgmRunDiag_v7 &drd,
+                     dcgmRunDiag_v8 &drd,
                      unsigned int iterations,
                      const std::string &pathToDcgmExecutable)
     : m_diagObj(iterations, hostname)
 
 {
     std::string configFileContents;
-    drd.version = dcgmRunDiag_version7;
+    drd.version = dcgmRunDiag_version8;
     m_hostName  = hostname;
 
     /* If the host address was overridden, complain if we can't connect.

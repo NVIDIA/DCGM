@@ -246,7 +246,7 @@ dcgmReturn_t DcgmDiagManager::EnforceGPUConfiguration(unsigned int gpuId, dcgm_c
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v7 *drd) const
+dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v8 *drd) const
 {
     std::string testParms;
     std::string testNames;
@@ -302,7 +302,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v7 *drd, std::vector<std::string> &cmdArgs) const
+dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v8 *drd, std::vector<std::string> &cmdArgs) const
 {
     static const unsigned int MAX_RETRIES = 3;
 
@@ -400,7 +400,7 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v7 *drd, std::vector<std
 
 /*****************************************************************************/
 void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                                  dcgmRunDiag_v7 *drd,
+                                                  dcgmRunDiag_v8 *drd,
                                                   const std::string &gpuIds) const
 {
     if (drd->flags & DCGM_RUN_FLAGS_STATSONFAIL)
@@ -483,7 +483,7 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
 
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                                dcgmRunDiag_v7 *drd,
+                                                dcgmRunDiag_v8 *drd,
                                                 std::string const &gpuIds) const
 {
     dcgmReturn_t ret;
@@ -521,7 +521,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  std::string *stderrStr,
-                                                 dcgmRunDiag_v7 *drd,
+                                                 dcgmRunDiag_v8 *drd,
                                                  std::string const &gpuIds,
                                                  ExecuteWithServiceAccount useServiceAccount) const
 {
@@ -872,7 +872,7 @@ static std::string_view SanitizeNvvsJson(std::string_view stdoutStr)
  */
 auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
                          DcgmDiagResponseWrapper const &response,
-                         dcgmRunDiag_v7 *drd,
+                         dcgmRunDiag_v8 *drd,
                          std::string const &gpuIds,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
                          = DcgmDiagManager::ExecuteWithServiceAccount::Yes) -> ExecuteAndParseNvvsResult
@@ -966,11 +966,12 @@ std::vector<std::uint32_t> ParseAndFilterGpuList(std::string_view input)
  * @return DCGM_ST_OK if the EUD was executed successfully, an error code otherwise
  */
 dcgmReturn_t ExecuteEudAsRoot(DcgmDiagManager const &diagManager,
-                              dcgmRunDiag_v7 const *drd,
+                              dcgmRunDiag_v8 const *drd,
                               DcgmDiagResponseWrapper const &response,
                               char const *serviceAccount,
                               std::string const &indexList,
-                              std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> &nvvsResults)
+                              std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> &nvvsResults,
+                              std::vector<std::string> const &eudTestNames)
 {
     if (auto serviceAccountCredentials = GetUserCredentials(serviceAccount);
         !serviceAccountCredentials.has_value() || (*serviceAccountCredentials).gid == 0
@@ -984,7 +985,10 @@ dcgmReturn_t ExecuteEudAsRoot(DcgmDiagManager const &diagManager,
     auto eudDrd     = *drd;
     eudDrd.validate = DCGM_POLICY_VALID_NONE;
     memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
-    SafeCopyTo(eudDrd.testNames[0], (char const *)"eud");
+    for (unsigned int i = 0; i < eudTestNames.size() && i < DCGM_MAX_TEST_NAMES; ++i)
+    {
+        SafeCopyTo(eudDrd.testNames[i], eudTestNames[i].c_str());
+    }
 
     auto eudResults = ExecuteAndParseNvvs(
         diagManager, response, &eudDrd, indexList, DcgmDiagManager::ExecuteWithServiceAccount::No);
@@ -1022,7 +1026,7 @@ dcgmReturn_t ExecuteEudAsRoot(DcgmDiagManager const &diagManager,
     return DCGM_ST_OK;
 }
 
-bool AllTestsCanRunWithoutGpu(dcgmRunDiag_v7 const *drd)
+bool AllTestsCanRunWithoutGpu(dcgmRunDiag_v8 const *drd)
 {
     int numTests = 0;
 
@@ -1038,9 +1042,70 @@ bool AllTestsCanRunWithoutGpu(dcgmRunDiag_v7 const *drd)
     return numTests > 0;
 }
 
+bool AllDigits(std::string const &str)
+{
+    if (str.empty())
+    {
+        return false;
+    }
+
+    for (auto const c : str)
+    {
+        if (!isdigit(c))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
-dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v7 *drd, DcgmDiagResponseWrapper &response)
+std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntities, unsigned int &gpuCount)
+{
+    gpuCount = 0;
+    if (expectedNumEntities.empty())
+    {
+        return "";
+    }
+
+    std::string gpuCountStr;
+    size_t colonPos = expectedNumEntities.find_first_of(":");
+    if (colonPos != std::string::npos)
+    {
+        std::string loweredStr = expectedNumEntities.substr(0, colonPos);
+        std::transform(
+            loweredStr.begin(), loweredStr.end(), loweredStr.begin(), [](unsigned char c) { return std::tolower(c); });
+
+        if (!loweredStr.starts_with("gpu"))
+        {
+            std::string err = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed.",
+                                          expectedNumEntities);
+            return err;
+        }
+        gpuCountStr = expectedNumEntities.substr(colonPos + 1);
+    }
+    if (!AllDigits(gpuCountStr))
+    {
+        std::string err
+            = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed.", expectedNumEntities);
+        return err;
+    }
+    try
+    {
+        gpuCount = stol(gpuCountStr);
+    }
+    catch (const std::exception &e)
+    {
+        std::string err = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed. Error: {}",
+                                      expectedNumEntities,
+                                      e.what());
+        return err;
+    }
+    return "";
+}
+
+dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapper &response)
 {
     dcgmReturn_t ret   = DCGM_ST_OK;
     bool areAllSameSku = true;
@@ -1084,16 +1149,32 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v7 *drd, DcgmDiagResponseWrapp
         log_debug("No GPU detected.");
         if (!AllTestsCanRunWithoutGpu(drd))
         {
-        return DCGM_ST_GROUP_IS_EMPTY;
-    }
+            return DCGM_ST_GROUP_IS_EMPTY;
+        }
     }
     else
     {
-    if (!areAllSameSku)
-    {
-        DCGM_LOG_DEBUG << "GPUs are incompatible for Validation";
-        return DCGM_ST_GROUP_INCOMPATIBLE;
+        if (!areAllSameSku)
+        {
+            DCGM_LOG_DEBUG << "GPUs are incompatible for Validation";
+            return DCGM_ST_GROUP_INCOMPATIBLE;
+        }
     }
+
+    unsigned int expectedNumGpus = 0;
+    auto err                     = ParseExpectedNumEntitiesForGpus(drd->expectedNumEntities, expectedNumGpus);
+    if (!err.empty())
+    {
+        log_error(err);
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (expectedNumGpus > 0 && expectedNumGpus != gpuIds.size())
+    {
+        log_error("expectedNumGpus [{}] does not match the number of GPUs [{}] listed/discovered in the system.",
+                  expectedNumGpus,
+                  gpuIds.size());
+        return DCGM_ST_BADPARAM;
     }
 
     std::string indexList = fmt::format("{}", fmt::join(gpuIds, ","));
@@ -1123,6 +1204,7 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v7 *drd, DcgmDiagResponseWrapp
      * It should be forbidden to have validation level other than none if the test names are specified.
      */
     std::unordered_set<std::string_view> testNames;
+    std::vector<std::string> eudTestNames;
     if (drd->validate == DCGM_POLICY_VALID_NONE)
     {
         for (auto const &testName : drd->testNames)
@@ -1134,13 +1216,22 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v7 *drd, DcgmDiagResponseWrapp
         }
     }
 
-    if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG
-        || testNames.contains("eud") || testNames.contains("production_testing"))
+    if (testNames.contains("eud") || drd->validate == DCGM_POLICY_VALID_SV_LONG
+        || drd->validate == DCGM_POLICY_VALID_SV_XLONG || testNames.contains("production_testing"))
+    {
+        eudTestNames.push_back("eud");
+    }
+    if (testNames.contains("cpu_eud"))
+    {
+        eudTestNames.push_back("cpu_eud");
+    }
+
+    if (!eudTestNames.empty())
     {
         if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
         {
-            if (auto eudRet
-                = ExecuteEudAsRoot(*this, drd, response, (*serviceAccount).c_str(), indexList, nvvsResults.results);
+            if (auto eudRet = ExecuteEudAsRoot(
+                    *this, drd, response, (*serviceAccount).c_str(), indexList, nvvsResults.results, eudTestNames);
                 eudRet != DCGM_ST_OK)
             {
                 return eudRet;
@@ -1432,7 +1523,7 @@ dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::Diagnost
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v7 *drd,
+dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v8 *drd,
                                                dcgmPolicyAction_t action,
                                                DcgmDiagResponseWrapper &response,
                                                dcgm_connection_id_t connectionId)

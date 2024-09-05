@@ -43,7 +43,7 @@ public:
     dcgmReturn_t RunStartDiag(dcgmHandle_t mNvcmHandle);
     dcgmReturn_t RunViewDiag();
 
-    void setDcgmRunDiag(dcgmRunDiag_v7 *drd);
+    void setDcgmRunDiag(dcgmRunDiag_v8 *drd);
     void setJsonOutput(bool jsonOutput);
     std::string Sanitize(const std::string &toOutput);
     void DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, const std::string &info);
@@ -118,7 +118,7 @@ private:
 
     bool isWhitespace(char c);
 
-    dcgmRunDiag_v7 m_drd;
+    dcgmRunDiag_v8 m_drd;
     bool m_jsonOutput;
     unsigned int m_iterations;
     std::string m_hostname;
@@ -134,7 +134,7 @@ class RemoteDiagExecutor : public DcgmThread
 {
 public:
     /*****************************************************************************/
-    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v7 &drd);
+    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v8 &drd);
 
     /*****************************************************************************/
     void run(void);
@@ -147,7 +147,7 @@ public:
 
 private:
     dcgmHandle_t m_handle;
-    dcgmRunDiag_v7 m_drd;
+    dcgmRunDiag_v8 m_drd;
     dcgmDiagResponse_v10 m_diagResult;
     dcgmReturn_t m_result;
 };
@@ -163,7 +163,7 @@ public:
               const std::string &parms,
               const std::string &configPath,
               bool jsonOutput,
-              dcgmRunDiag_v7 &drd,
+              dcgmRunDiag_v8 &drd,
               unsigned int iterations,
               const std::string &pathToDcgmExecutable);
 

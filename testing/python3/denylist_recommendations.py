@@ -124,8 +124,8 @@ def setTestDurations(runDiagInfo, timePercentage):
     addParamString(runDiagInfo, 3, powerParam)
 
 def initialize_run_diag_info(settings):
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
     runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
     testNamesStr = settings['testNames']
     if testNamesStr == '1':

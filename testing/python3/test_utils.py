@@ -397,6 +397,19 @@ def run_only_with_minimum_cuda_version(major_ver, minor_ver):
         return wrapper
     return decorator
 
+def run_only_when_path_exists(path):
+    """
+    Run this test only if path exists
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if not os.path.exists(path):
+                skip_test(f"This test is skipped because [{path}] does not exist.")
+            fn(*args, **kwds)
+        return wrapper
+    return decorator
+
 def run_only_with_nvml():
     """
     Run this test only if NVML is active on this system
@@ -1228,10 +1241,11 @@ def run_with_current_system_injection_nvml():
         @wraps(fn)
         def wrapper(*args, **kwds):
             # This environment variable tells DCGM to load injection NVML
-            os.environ[INJECTION_MODE_VAR] = 'True' 
+            os.environ[INJECTION_MODE_VAR] = 'True'
             skuFileName = "current_system.yaml"
             skuFilePath = os.path.join(logger.default_log_dir, skuFileName)
-            try_capture_nvml_env(skuFilePath)
+            if not try_capture_nvml_env(skuFilePath):
+                skip_test(f"Skip test since we failed to capture nvml env.")
             os.environ[NVML_YAML_FILE] = skuFilePath
             try:
                 fn(*args, **kwds)
@@ -1826,9 +1840,11 @@ def try_capture_nvml_env(capture_nvml_environment_to):
         import nvml_api_recorder
         with nvml_api_recorder.NVMLApiRecorder() as recorder:
             recorder.record(capture_nvml_environment_to)
-            print(f"NVML environment captured to [{capture_nvml_environment_to}]")
-    except:
-        print("Failed to capture NVML env")
+            logger.info(f"NVML environment captured to [{capture_nvml_environment_to}]")
+        return True
+    except Exception as e:
+        logger.error(f"failed to capture NVML environment, err: [{e}]")
+        return False
 
 def run_subtest(subtestFn, *args, **kwargs):
     #List that contains failings test to re-run with logging enabled
@@ -2529,7 +2545,7 @@ def diag_execute_wrapper(dd, handle):
         else:
             raise e
 
-def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version7):
+def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version8):
     try:
         response = dcgm_agent.dcgmActionValidate_v2(handle, runDiagInfo, runDiagVersion)
         return response

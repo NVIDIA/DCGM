@@ -432,7 +432,7 @@ typedef enum dcgmEntityStatusType_enum
 /**
  * Typedef for \ref dcgmRunDiag_t
  */
-typedef dcgmRunDiag_v7 dcgmRunDiag_t;
+typedef dcgmRunDiag_v8 dcgmRunDiag_t;
 
 /**
  * Latest version for \ref dcgmRunDiag_t
@@ -897,6 +897,7 @@ DCGM_CASSERT(dcgmDiagResponse_version10 == (long)0xa155abc, 10);
 DCGM_CASSERT(dcgmDiagTestAuxData_version1 == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmDiagTestAuxData_version == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmRunDiag_version7 == (long)0x70054D0, 1);
+DCGM_CASSERT(dcgmRunDiag_version8 == (long)0x801C818, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version6 == (long)16787744, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version7 == (long)117451168, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version == (long)117451168, 1);

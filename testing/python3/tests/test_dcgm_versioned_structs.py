@@ -361,8 +361,8 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
     logger.debug("Structure version: %d" % runDiagInfo.version)
 
     runDiagInfo.version = versionTest
@@ -377,7 +377,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
     runDiagInfo.version = versionTest
     runDiagInfo.validate = validate
     runDiagInfo.groupId = group_id
@@ -422,8 +422,8 @@ def test_dcgm_run_diagnostic_validate(handle, gpuIds):
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
 
-    drd = dcgm_structs.c_dcgmRunDiag_v7()
-    drd.version = dcgm_structs.dcgmRunDiag_version7
+    drd = dcgm_structs.c_dcgmRunDiag_v8()
+    drd.version = dcgm_structs.dcgmRunDiag_version8
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = groupId
     drd.gpuList = gpuIdStr

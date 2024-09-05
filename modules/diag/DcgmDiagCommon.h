@@ -24,7 +24,7 @@ Common helper functions and classes relating to DCGM GPU Diagnostics
 #include <string>
 
 /*****************************************************************************/
-dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v7 &drd,
+dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
                                                 const std::string &testNames,
                                                 const std::string &parms,
                                                 const std::string &configFileContents,
@@ -39,9 +39,11 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v7 &drd,
                                                 unsigned int groupId,
                                                 bool failEarly,
                                                 unsigned int failCheckInterval,
+                                                unsigned int timeout,
+                                                std::string const &expectedNumEntities,
                                                 std::string &error);
 
 /*****************************************************************************/
-void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v7 &drd);
+void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v8 &drd);
 
 /*****************************************************************************/

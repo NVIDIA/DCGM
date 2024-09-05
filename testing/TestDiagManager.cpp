@@ -121,6 +121,15 @@ int TestDiagManager::Run()
     else
         printf("TestDiagManager::TestErrorsFromLevelOne PASSED\n");
 
+    st = TestParseExpectedNumEntitiesForGpus();
+    if (st < 0)
+    {
+        Nfailed++;
+        fprintf(stderr, "TestDiagManager::TestParseExpectedNumEntitiesForGpus FAILED with %d\n", st);
+    }
+    else
+        printf("TestDiagManager::TestParseExpectedNumEntitiesForGpus PASSED\n");
+
     if (Nfailed > 0)
     {
         fprintf(stderr, "%d tests FAILED\n", Nfailed);
@@ -229,7 +238,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     dcgmReturn_t result;
     std::string command;
     std::vector<std::string> cmdArgs;
-    dcgmRunDiag_v7 drd = {};
+    dcgmRunDiag_v8 drd = {};
     DcgmDiagManager am(g_coreCallbacks);
 
     std::string nvvsBinPath;
@@ -311,17 +320,91 @@ int TestDiagManager::TestCreateNvvsCommand()
     return result;
 }
 
+int TestDiagManager::TestParseExpectedNumEntitiesForGpus()
+{
+    dcgmReturn_t result    = DCGM_ST_OK;
+    unsigned int numErrors = 0;
+    std::string expectedNumEntities;
+
+    auto verifyCountAndError
+        = [&numErrors](std::string const &expectedNumEntities, unsigned int const &expectedGpuCount, bool error) {
+              unsigned int gpuCount;
+              auto err = ParseExpectedNumEntitiesForGpus(expectedNumEntities, gpuCount);
+              if (gpuCount != expectedGpuCount)
+              {
+                  fprintf(stderr, "Expected gpuCount %u, got %u.\n", expectedGpuCount, gpuCount);
+                  numErrors++;
+              }
+              else if (error && err.empty())
+              {
+                  fprintf(stderr,
+                          "Expected an error, but got no error for expectedNumEntities string '%s'\n",
+                          expectedNumEntities.c_str());
+                  numErrors++;
+              }
+              else if (!error && !err.empty())
+              {
+                  fprintf(stderr,
+                          "Expected no error, but got an error for expectedNumEntities string '%s': '%s'\n",
+                          expectedNumEntities.c_str(),
+                          err.c_str());
+                  numErrors++;
+              }
+          };
+
+    expectedNumEntities = "";
+    verifyCountAndError(expectedNumEntities, 0, false);
+
+    expectedNumEntities = "gpu:0";
+    verifyCountAndError(expectedNumEntities, 0, false);
+
+    expectedNumEntities = "Gpu:2";
+    verifyCountAndError(expectedNumEntities, 2, false);
+
+    expectedNumEntities = "GPU:4";
+    verifyCountAndError(expectedNumEntities, 4, false);
+
+    expectedNumEntities = "g:2";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "gpu:";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "cpu:0";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "gpu:2,cpu:3";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "gibberish2";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "gpu0";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    expectedNumEntities = "gpu";
+    verifyCountAndError(expectedNumEntities, 0, true);
+
+    if (numErrors > 0)
+    {
+        return -1;
+    }
+
+    return result;
+}
+
 int TestDiagManager::TestPopulateRunDiag()
 {
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmRunDiag_v7 drd  = {};
+    dcgmRunDiag_v8 drd  = {};
 
-    drd.version = dcgmRunDiag_version7;
+    drd.version = dcgmRunDiag_version8;
 
     std::string error;
 
     // Basic test, nothing should get populated
-    dcgm_diag_common_populate_run_diag(drd, "1", "", "", "", "", false, false, "", "", 0, "", 1, true, 3, error);
+    dcgm_diag_common_populate_run_diag(
+        drd, "1", "", "", "", "", false, false, "", "", 0, "", 1, true, 3, 60, "", error);
     if (strlen(drd.testNames[0]) != 0)
     {
         fprintf(stderr, "Expected testNames to be empty but found '%s'\n", drd.testNames[0]);
@@ -399,8 +482,8 @@ int TestDiagManager::TestPopulateRunDiag()
     std::string debugFileName("kaladin");
     std::string statsPath("/home/aimian/");
     std::string throttleMask("HW_SLOWDOWN");
-    drd         = dcgmRunDiag_v7(); // Need to reset the struct
-    drd.version = dcgmRunDiag_version7;
+    drd         = dcgmRunDiag_v8(); // Need to reset the struct
+    drd.version = dcgmRunDiag_version8;
     dcgm_diag_common_populate_run_diag(
         drd,
         "pcie,targeted power",
@@ -414,9 +497,11 @@ int TestDiagManager::TestPopulateRunDiag()
         statsPath,
         3,
         throttleMask,
-        0,
+        DCGM_GROUP_ALL_GPUS,
         false,
         3,
+        60,
+        "gpu:8",
         error);
     for (int i = 0; i < 2; i++)
     {
@@ -493,9 +578,18 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (drd.groupId != (dcgmGpuGrp_t)0)
+    if (drd.groupId != DCGM_GROUP_ALL_GPUS)
     {
-        fprintf(stderr, "Expected groupid to be 0, but found %llu.\n", (unsigned long long)drd.groupId);
+        fprintf(stderr,
+                "Expected groupid to be %llu, but found %llu.\n",
+                (unsigned long long)DCGM_GROUP_ALL_GPUS,
+                (unsigned long long)drd.groupId);
+        return -1;
+    }
+
+    if (std::string_view(drd.expectedNumEntities) != "gpu:8")
+    {
+        fprintf(stderr, "Expected expectedNumEntities to be 'gpu:8', but found %s.\n", drd.expectedNumEntities);
         return -1;
     }
 
@@ -527,10 +621,38 @@ int TestDiagManager::TestPopulateRunDiag()
                                        0,
                                        false,
                                        0,
+                                       60,
+                                       "",
                                        error);
     if (strcmp(drd.configFileContents, "configfile"))
     {
         fprintf(stderr, "Config file should be 'configfile', but found %s.\n", drd.configFileContents);
+        return -1;
+    }
+
+    drd              = dcgmRunDiag_v8(); // Need to reset the struct
+    dcgmReturn_t ret = dcgm_diag_common_populate_run_diag(
+        drd,
+        "pcie,targeted power",
+        "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
+        "",
+        "",
+        "0,1,2",
+        true,
+        true,
+        debugFileName,
+        statsPath,
+        3,
+        throttleMask,
+        0,
+        false,
+        3,
+        60,
+        "gpu:8",
+        error);
+    if (ret != DCGM_ST_BADPARAM)
+    {
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", ret, error.c_str());
         return -1;
     }
 

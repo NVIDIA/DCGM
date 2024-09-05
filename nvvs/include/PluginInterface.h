@@ -109,7 +109,7 @@ typedef struct
 typedef struct
 {
     char parameterName[DCGM_MAX_PARAMETER_NAME_LEN];
-    char parameterValue[DCGM_DIAG_MAX_VALUE_LEN];
+    char parameterValue[DCGM_MAX_TEST_PARMS_LEN_V2];
     dcgmPluginValue_t type;
 } dcgmDiagPluginTestParameter_t;
 

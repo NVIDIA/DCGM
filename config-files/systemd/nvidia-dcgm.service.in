@@ -16,6 +16,8 @@
 [Unit]
 Description=NVIDIA DCGM service
 Conflicts=dcgm.service
+After=nvidia-gpu-reset.target
+Wants=nvidia-gpu-reset.target
 
 [Service]
 User=root

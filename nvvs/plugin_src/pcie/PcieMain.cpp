@@ -17,6 +17,7 @@
 #include "PcieMain.h"
 #include "Brokenp2p.h"
 #include "CudaCommon.h"
+#include "PluginStrings.h"
 #include "cuda.h"
 #include "cuda_runtime.h"
 
@@ -890,6 +891,26 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
     std::vector<std::thread> readerThreads;
     DcgmNs::Utils::FileHandle outputFds[DCGM_MAX_NUM_DEVICES];
     unsigned int fdsIndex = 0;
+
+    // Reset cuda context before forking out child processes
+    for (size_t i = 0; i < bg.gpu.size(); i++)
+    {
+        int cudaStatus = cudaSetDevice(bg.gpu[i]->cudaDeviceIdx);
+        if (cudaStatus != cudaSuccess)
+        {
+            log_error("CUDA call cudaSetDevice failed on device {}", bg.gpu[i]->cudaDeviceIdx);
+            bg.SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);
+            return -1;
+        }
+
+        cudaStatus = cudaDeviceReset();
+        if (cudaStatus != cudaSuccess)
+        {
+            log_error("CUDA call cudaDeviceReset failed on device {}", bg.gpu[i]->cudaDeviceIdx);
+            bg.SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);
+            return -1;
+        }
+    }
 
     for (auto &memoryNodeMapEntry : memoryNodeToGpuList)
     {

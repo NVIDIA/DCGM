@@ -56,10 +56,10 @@ public:
                                           dcgm_connection_id_t connectionId);
 
     /* perform the specified validation */
-    dcgmReturn_t RunDiag(dcgmRunDiag_v7 *drd, DcgmDiagResponseWrapper &response);
+    dcgmReturn_t RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapper &response);
 
     /* possibly run the DCGM diagnostic and perform an action */
-    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v7 *drd,
+    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v8 *drd,
                                   dcgmPolicyAction_t action,
                                   DcgmDiagResponseWrapper &response,
                                   dcgm_connection_id_t connectionId);
@@ -93,7 +93,7 @@ public:
      */
     dcgmReturn_t PerformNVVSExecute(std::string *stdoutStr,
                                     std::string *stderrStr,
-                                    dcgmRunDiag_v7 *drd,
+                                    dcgmRunDiag_v8 *drd,
                                     std::string const &gpuIds                   = "",
                                     ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
 
@@ -115,7 +115,7 @@ public:
      *
      */
     dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                   dcgmRunDiag_v7 *drd,
+                                   dcgmRunDiag_v8 *drd,
                                    std::string const &gpuIds = "") const;
 
     /**
@@ -181,10 +181,10 @@ private:
     /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
      */
-    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v7 *drd) const;
+    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v8 *drd) const;
 
     void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                     dcgmRunDiag_v7 *drd,
+                                     dcgmRunDiag_v8 *drd,
                                      const std::string &gpuIds) const;
 
     /*
@@ -201,7 +201,7 @@ private:
     /*
      * Write the config file (if needed) and add that to the command arguments
      */
-    dcgmReturn_t AddConfigFile(dcgmRunDiag_v7 *drd, std::vector<std::string> &cmdArgs) const;
+    dcgmReturn_t AddConfigFile(dcgmRunDiag_v8 *drd, std::vector<std::string> &cmdArgs) const;
     static void AppendDummyArgs(std::vector<std::string> &args);
     dcgmReturn_t CanRunNewNvvsInstance() const;
     dcgmReturn_t ReadProcessOutput(fmt::memory_buffer &stdoutStream,
@@ -218,3 +218,11 @@ private:
      */
     dcgmReturn_t PauseResumeHostEngine(bool pause);
 };
+
+/*
+ * Parse the expectedNumEntities string in the format 'gpu:N' for the GPU count, N.
+ * @param expectedNumEntities[in] - the string to be parsed
+ * @param gpuCount[out] - the parsed GPu count
+ * @return the error string, empty if no error
+ */
+std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntities, unsigned int &gpuCount);

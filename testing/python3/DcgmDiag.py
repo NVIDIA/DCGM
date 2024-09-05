@@ -18,17 +18,21 @@ class DcgmDiag:
 
     # Maps version codes to simple version values for range comparisons
     _versionMap = {
-        dcgm_structs.dcgmRunDiag_version: 5
+        dcgm_structs.dcgmRunDiag_version: 5,
+        dcgm_structs.dcgmRunDiag_version8: 5,
+        dcgm_structs.dcgmRunDiag_version7: 5,
     }
 
     def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True, 
-                 version=dcgm_structs.dcgmRunDiag_version7):
+                 version=dcgm_structs.dcgmRunDiag_version8, timeout=0):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
             raise ValueError("'%s' is not a valid version for dcgmRunDiag." % version)
         self.version = version
 
-        if self.version == dcgm_structs.dcgmRunDiag_version7:
+        if self.version == dcgm_structs.dcgmRunDiag_version8:
+            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+        elif self.version == dcgm_structs.dcgmRunDiag_version7:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
         else:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
@@ -80,6 +84,8 @@ class DcgmDiag:
                     first = False
                 else:
                     self.runDiagInfo.gpuList = "%s,%s" % (self.runDiagInfo.gpuList, str(gpu))
+
+        self.runDiagInfo.timeoutSeconds = timeout
     
     def SetVerbose(self, val):
         if val == True:
@@ -94,9 +100,14 @@ class DcgmDiag:
         return self.runDiagInfo
 
     def AddParameter(self, parameterStr):
-        if len(parameterStr) >= dcgm_structs.DCGM_MAX_TEST_PARMS_LEN:
+        maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN
+        if self.version == dcgm_structs.dcgmRunDiag_version8:
+            maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2
+        elif self.version == dcgm_structs.dcgmRunDiag_version7:
+            maxTestParamsLen = dcgm_structs.DCGM_MAX_TEST_PARMS_LEN
+        if len(parameterStr) >= maxTestParamsLen:
             err = 'DcgmDiag cannot add parameter \'%s\' because it exceeds max length %d.' % \
-                  (parameterStr, dcgm_structs.DCGM_MAX_TEST_PARMS_LEN)
+                  (parameterStr, maxTestParamsLen)
             raise ValueError(err)
 
         index = 0

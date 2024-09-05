@@ -122,13 +122,13 @@ def helper_dcgm_action_run_diag_gpu_list(handle, gpuIds):
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
 
-    drd = dcgm_structs.c_dcgmRunDiag_v7()
-    drd.version = dcgm_structs.dcgmRunDiag_version7
+    drd = dcgm_structs.c_dcgmRunDiag_v8()
+    drd.version = dcgm_structs.dcgmRunDiag_version8
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = 0 #Initializing to 0 in case the constructor above doesn't
     drd.gpuList = gpuIdStr
     #this will throw an exception on error
-    response = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version7)
+    response = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version8)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -154,10 +154,10 @@ def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
         if i > 0:
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
-    drd = dcgm_structs.c_dcgmRunDiag_v7()
-    drd.version = dcgm_structs.dcgmRunDiag_version7
+    drd = dcgm_structs.c_dcgmRunDiag_v8()
+    drd.version = dcgm_structs.dcgmRunDiag_version8
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_XLONG + 1 #use an invalid value
     drd.groupId = 0 #Initializing to 0 in case the constructor above doesn't
     drd.gpuList = gpuIdStr
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
-        response = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version7)
+        response = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version8)

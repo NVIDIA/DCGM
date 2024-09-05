@@ -647,6 +647,9 @@ dcgmReturn_t DcgmHealthWatch::SetPcie(dcgm_field_entity_group_t entityGroupId,
         return ret;
 
     ADD_WATCH(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
+    ADD_WATCH(DCGM_FI_DEV_PCIE_LINK_GEN);
+    ADD_WATCH(DCGM_FI_DEV_PCIE_LINK_WIDTH);
+
     return ret;
 }
 
@@ -997,6 +1000,75 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::GetExpectedPcieReplayRate(dcgm_field_entity_group_t entityGroupId,
+                                                        dcgm_field_eid_t entityId,
+                                                        int &expectedPcieReplayRate)
+{
+    std::vector<unsigned short> fieldIds { DCGM_FI_DEV_PCIE_LINK_GEN, DCGM_FI_DEV_PCIE_LINK_WIDTH };
+    std::unordered_map<unsigned short, dcgmcm_sample_t> samples {};
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    /* Get PCIe generation and lanes/width. */
+    for (auto fieldId : fieldIds)
+    {
+        ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, fieldId, &samples[fieldId], 0);
+        if (DCGM_ST_NO_DATA == ret)
+        {
+            log_debug("No PCIe data for field {} of gpuId {}.", fieldId, entityId);
+            return DCGM_ST_NO_DATA;
+        }
+        else if (DCGM_ST_NOT_WATCHED == ret)
+        {
+            log_warning("PCIe field {} not watched for gpuId {}", fieldId, entityId);
+            return DCGM_ST_NOT_WATCHED;
+        }
+        else if (DCGM_ST_OK != ret)
+        {
+            log_error("Unable to retrieve PCIe field {} from cache for gpuId {}, returned {}", fieldId, entityId, ret);
+            return ret;
+        }
+        if (DCGM_INT64_IS_BLANK(samples[fieldId].val.i64))
+        {
+            log_debug("Blank PCIe data for field {} of gpuId {}.", fieldId, entityId);
+            return DCGM_ST_NO_DATA;
+        }
+    }
+
+    unsigned long long pcieGen   = samples[DCGM_FI_DEV_PCIE_LINK_GEN].val.i64;
+    unsigned long long pcieLanes = samples[DCGM_FI_DEV_PCIE_LINK_WIDTH].val.i64;
+    /*
+     * PCIe replay rate thresholds for each generation per lane.
+     * Note that ((10^-12) * 10^9) is simpliefied as 10^-3 i.e. ( divide by 1000) in following table.
+     */
+    static double pcieGenReplayRatePerLane[] = {
+        2.5 / 1000 * 60,  /* Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min per lane. */
+        5.0 / 1000 * 60,  /* Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per lane. */
+        8.0 / 1000 * 60,  /* Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per lane. */
+        16.0 / 1000 * 60, /* Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min per lane. */
+        32.0 / 1000 * 60, /* Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min per lane. */
+        64.0 / 1000 * 60  /* Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min per lane. */
+    };
+    unsigned int pcieGenMax = (sizeof(pcieGenReplayRatePerLane) / sizeof(pcieGenReplayRatePerLane[0]));
+
+    if (pcieGen > pcieGenMax)
+    {
+        /* Cap the version at the max we know about. */
+        log_warning("PCIe generation {} is more than max we know {}, capping it to max.", pcieGen, pcieGenMax);
+        pcieGen = pcieGenMax;
+    }
+
+    /* Expected replay rate = Replay rate per lane * Num of pcie Lanes. Note that value is ceiled. */
+    expectedPcieReplayRate = std::ceil(pcieGenReplayRatePerLane[pcieGen - 1] * pcieLanes);
+    log_debug("expected PCIe replay rate is {} for gen {}, replay rate per lane {} and lanes {}",
+              expectedPcieReplayRate,
+              pcieGen,
+              pcieGenReplayRatePerLane[pcieGen - 1],
+              pcieLanes);
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupId,
                                           dcgm_field_eid_t entityId,
                                           long long startTime,
@@ -1072,11 +1144,21 @@ dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupI
     int pciReplayRate = (startValue.val.i64 >= endValue.val.i64) ? (startValue.val.i64 - endValue.val.i64)
                                                                  : (endValue.val.i64 - startValue.val.i64);
 
+    /* Get expected replay rate which depends on the PCIe generation and number of lanes. */
+    int expectedPcieReplayRate = 0;
+    ret                        = GetExpectedPcieReplayRate(entityGroupId, entityId, expectedPcieReplayRate);
+    if (DCGM_ST_OK != ret)
+    {
+        log_debug("GetExpectedPcieReplayRate returned, ret {}.", ret);
+        if (DCGM_ST_NO_DATA == ret || DCGM_ST_NOT_WATCHED == ret)
+            return DCGM_ST_OK;
+        return ret;
+    }
 
-    if (pciReplayRate > DCGM_LIMIT_MAX_PCIREPLAY_RATE)
+    if (pciReplayRate > expectedPcieReplayRate)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCI_REPLAY_RATE, d, DCGM_LIMIT_MAX_PCIREPLAY_RATE, entityId, pciReplayRate);
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCI_REPLAY_RATE, d, expectedPcieReplayRate, entityId, pciReplayRate);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, d, response);
     }
 

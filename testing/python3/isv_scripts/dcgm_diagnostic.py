@@ -50,8 +50,8 @@ if __name__ == "__main__":
     with RunDCGM('127.0.0.1', dcgm_structs.DCGM_OPERATION_MODE_MANUAL) as handle:
        
         # The validate information should be packed in the dcgmRunDiag object 
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
     
         ## Create a default group. (Default group is comprised of all the GPUs on the node)
         ## Let's call the group as "all_gpus_group". The method returns an opaque handle (groupId) to

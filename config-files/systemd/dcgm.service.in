@@ -16,6 +16,8 @@
 [Unit]
 Description=DEPRECATED. Please use nvidia-dcgm.service
 Conflicts=nvidia-dcgm.service
+After=nvidia-gpu-reset.target
+Wants=nvidia-gpu-reset.target
 
 [Service]
 User=root

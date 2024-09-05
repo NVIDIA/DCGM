@@ -37,7 +37,23 @@ bool is_valid_gpu_list(const std::string &gpuList)
     return true;
 }
 
-dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v7 &drd,
+bool is_valid_expected_num_entities(dcgmRunDiag_v8 const &drd,
+                                    std::string const &expectedNumEntities,
+                                    std::string &error)
+{
+    if (!expectedNumEntities.empty())
+    {
+        // expectedNumEntities is only supported with the default DCGM_GROUP_ALL_GPUS groupId
+        if (drd.groupId != DCGM_GROUP_ALL_GPUS)
+        {
+            error = fmt::format("Error: expectedNumEntities can only be used with DCGM_GROUP_ALL_GPUS.");
+            return false;
+        }
+    }
+    return true;
+}
+
+dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
                                                 const std::string &testNames,
                                                 const std::string &parms,
                                                 const std::string &configFileContents,
@@ -52,6 +68,8 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v7 &drd,
                                                 unsigned int groupId,
                                                 bool failEarly,
                                                 unsigned int failCheckInterval,
+                                                unsigned int timeout,
+                                                std::string const &expectedNumEntities,
                                                 std::string &error)
 {
     std::stringstream errbuf;
@@ -158,10 +176,26 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v7 &drd,
         drd.failCheckInterval = failCheckInterval;
     }
 
+    drd.timeoutSeconds = timeout;
+
+    if (expectedNumEntities.size() > DCGM_EXPECTED_ENTITIES_LEN)
+    {
+        error = fmt::format("Error: expectedNumEntities size [{}] larger than the maximum allowable size [{}].",
+                            expectedNumEntities.size(),
+                            DCGM_EXPECTED_ENTITIES_LEN);
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (!is_valid_expected_num_entities(drd, expectedNumEntities, error))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    SafeCopyTo(drd.expectedNumEntities, expectedNumEntities.data());
+
     return DCGM_ST_OK;
 }
 
-void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v7 &drd)
+void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v8 &drd)
 {
     snprintf(drd.configFileContents, sizeof(drd.configFileContents), "%s", configFileContents.c_str());
 }

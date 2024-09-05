@@ -482,8 +482,8 @@ class DcgmGroupAction:
     Returns a dcgm_structs.c_dcgmDiagResponse_v10 instance
     '''
     def Validate(self, validate):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
         runDiagInfo.validate = validate
         runDiagInfo.groupId = self._groupId
 
@@ -507,8 +507,8 @@ class DcgmGroupAction:
     Returns a dcgm_structs.c_dcgmDiagResponse_v5 instance
     '''
     def RunSpecificTest(self, testName):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
         for i in range(len(testName)):
             runDiagInfo.testNames[0][i] = testName[i]
         runDiagInfo.groupId = self._groupId

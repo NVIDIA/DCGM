@@ -644,7 +644,7 @@ DCGM_ENTRY_POINT(dcgmHealthCheck,
 
 DCGM_ENTRY_POINT(dcgmActionValidate_v2,
                  tsapiEngineActionValidate_v2,
-                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v7 *drd, dcgmDiagResponse_v10 *response),
+                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v8 *drd, dcgmDiagResponse_v10 *response),
                  "({}, {}, {})",
                  pDcgmHandle,
                  drd,

@@ -123,7 +123,13 @@ void Software::Go(std::string const &testName,
     {
         log_error("Plugin is using fake gpus");
         SetResult(testName, NVVS_RESULT_PASS);
-        checkPageRetirement();
+        TestParameters testParameters(*(m_infoStruct.defaultTestParameters));
+        testParameters.SetFromStruct(numParameters, tpStruct);
+        if (testParameters.GetString(SW_STR_DO_TEST) == "page_retirement")
+        {
+            checkPageRetirement();
+            checkRowRemapping();
+        }
         return;
     }
 
@@ -489,7 +495,7 @@ int Software::checkForGraphicsProcesses()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "graphics_pids", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }
@@ -509,7 +515,7 @@ int Software::checkForGraphicsProcesses()
             // If there's any information here, it means a process is running
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GRAPHICS_PROCESSES, d);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_WARN);
         }
     }
@@ -577,7 +583,7 @@ int Software::checkPageRetirement()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_pending", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }
@@ -597,16 +603,21 @@ int Software::checkPageRetirement()
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS, d, gpuId);
-                AddError(SW_PLUGIN_NAME, d);
+                AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
                 SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             }
             else
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_PAGE_RETIREMENTS, d, gpuId);
-                AddError(SW_PLUGIN_NAME, d);
+                AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
                 SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             }
+            /*
+             * Halt nvvs for failures related to 'pending page retirements' or 'RETIRED_DBE/SBE'. Please be aware that
+             * we will not stop for internal DCGM failures, such as issues with retrieving the current field value.
+             */
+            main_should_stop.store(1);
             continue;
         }
 
@@ -619,7 +630,7 @@ int Software::checkPageRetirement()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_dbe", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }
@@ -640,7 +651,7 @@ int Software::checkPageRetirement()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "retired_pages_sbe", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }
@@ -659,8 +670,9 @@ int Software::checkPageRetirement()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_RETIRED_PAGES_LIMIT, d, DCGM_LIMIT_MAX_RETIRED_PAGES, gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
+            main_should_stop.store(1);
             continue;
         }
     }
@@ -698,7 +710,7 @@ int Software::checkRowRemapping()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "row_remap_failure", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResultForGpu(SW_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             continue;
         }
@@ -712,9 +724,14 @@ int Software::checkRowRemapping()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d, gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResultForGpu(SW_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
 
+            /*
+             * Halt nvvs for failures related to 'row remap/pending' or 'uncorrectable remapped row'. Please be aware
+             * that we will not stop for internal DCGM failures, such as issues with retrieving the current field value.
+             */
+            main_should_stop.store(1);
             continue;
         }
 
@@ -726,7 +743,7 @@ int Software::checkRowRemapping()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "row_remap_pending", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResultForGpu(SW_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             continue;
         }
@@ -744,16 +761,17 @@ int Software::checkRowRemapping()
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCORRECTABLE_ROW_REMAP, d, gpuId);
-                AddError(SW_PLUGIN_NAME, d);
+                AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
                 SetResultForGpu(SW_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             }
             else
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PENDING_ROW_REMAP, d, gpuId);
-                AddError(SW_PLUGIN_NAME, d);
+                AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
                 SetResultForGpu(SW_PLUGIN_NAME, gpuId, NVVS_RESULT_FAIL);
             }
+            main_should_stop.store(1);
         }
     }
 
@@ -777,7 +795,7 @@ int Software::checkInforom()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "inforom_config_valid", gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }
@@ -809,7 +827,7 @@ int Software::checkInforom()
             // Inforom is not valid
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CORRUPT_INFOROM, d, gpuId);
-            AddError(SW_PLUGIN_NAME, d);
+            AddErrorForGpu(SW_PLUGIN_NAME, gpuId, d);
             SetResult(SW_PLUGIN_NAME, NVVS_RESULT_FAIL);
             continue;
         }

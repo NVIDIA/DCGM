@@ -256,6 +256,11 @@ private:
                                           DcgmHealthResponse &response);
 
     bool FitsGpuHardwareCheck(dcgm_field_entity_group_t entityGroupId);
+
+    /* Helpers called by MonitorPcie() */
+    dcgmReturn_t GetExpectedPcieReplayRate(dcgm_field_entity_group_t entityGroupId,
+                                           dcgm_field_eid_t entityId,
+                                           int &expectedPcieReplayRate);
 };
 
 #endif //_DCGM_HEALTH_WATCH_H

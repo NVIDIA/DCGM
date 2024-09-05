@@ -1674,6 +1674,12 @@ private:
 
     std::unordered_map<std::string, unsigned int> pciBusGpuIdMap;
 
+    /*
+     * Set by DcgmCacheManagerEventThread when NVML driver timeout XID is detected, and NVML calls need
+     * to be skipped.
+     */
+    std::atomic<bool> m_skipDriverCalls;
+
     /*************************************************************************/
     /*
      * Build vector of gpu info for topology functions.

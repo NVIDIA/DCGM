@@ -1603,6 +1603,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param validate           IN: The validation to perform after the action.
  * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
+ *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
+ *                                     except for the version field.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1628,6 +1630,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                               group. Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS to perform
  *                               operation on all the GPUs.
  * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
+ *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
+ *                                     except for the version field.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1639,7 +1643,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                                            currently not allowed.
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
-                                                   dcgmRunDiag_v7 *drd,
+                                                   dcgmRunDiag_v8 *drd,
                                                    dcgmDiagResponse_v10 *response);
 
 /**
@@ -1652,6 +1656,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
  * @param diagLevel          IN: Diagnostic level to run
  * @param diagResponse   IN/OUT: Result of running the DCGM diagnostic.<br>
  *                               .version should be set to \ref dcgmDiagResponse_version10 before this call.
+ *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
+ *                                     except for the version field.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful

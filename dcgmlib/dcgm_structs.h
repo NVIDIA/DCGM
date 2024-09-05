@@ -368,6 +368,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_PAUSED                = -54, //!< The hostengine and all modules are paused
     DCGM_ST_ALREADY_INITIALIZED   = -55, //!< The object is already initialized
     DCGM_ST_NVML_NOT_LOADED       = -56, //!< Cannot perform operation because NVML isn't loaded
+    DCGM_ST_NVML_DRIVER_TIMEOUT   = -57, //!< Cannot perform operation because an NVML driver timeout error was detected
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -2807,7 +2808,9 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
 #define DCGM_MAX_TEST_NAMES_LEN  50
 #define DCGM_MAX_TEST_PARMS      100
 #define DCGM_MAX_TEST_PARMS_LEN  100
+#define DCGM_MAX_TEST_PARMS_LEN_V2 1050
 #define DCGM_GPU_LIST_LEN        50
+#define DCGM_EXPECTED_ENTITIES_LEN 50
 #define DCGM_FILE_LEN            30
 #define DCGM_PATH_LEN            128
 #define DCGM_THROTTLE_MASK_LEN   50
@@ -2850,6 +2853,43 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
  */
 
 /*
+ * Run diagnostic structure v8
+ */
+typedef struct
+{
+    unsigned int version;            //!< version of this message
+    unsigned int flags;              //!< flags specifying binary options for running it. See DCGM_RUN_FLAGS_*
+    unsigned int debugLevel;         //!< 0-5 for the debug level the GPU diagnostic will use for logging.
+    dcgmGpuGrp_t groupId;            //!< group of GPUs to verify. Cannot be specified together with gpuList.
+    dcgmPolicyValidation_t validate; //!< 0-3 for which tests to run. Optional.
+    char testNames[DCGM_MAX_TEST_NAMES][DCGM_MAX_TEST_NAMES_LEN]; //!< Specified list of test names. Optional.
+    char testParms[DCGM_MAX_TEST_PARMS]
+                  [DCGM_MAX_TEST_PARMS_LEN_V2]; //!< Parameters to set for specified tests
+                                                //!< in the format:
+                                                //!< testName.parameterName=parameterValue. Optional.
+    char fakeGpuList[DCGM_GPU_LIST_LEN];        //!< Comma-separated list of GPUs. Cannot be specified with the groupId.
+    char gpuList[DCGM_GPU_LIST_LEN];            //!< Comma-separated list of GPUs. Cannot be specified with the groupId.
+    char debugLogFile[DCGM_PATH_LEN];           //!< Alternate name for the debug log file that should be used
+    char statsPath[DCGM_PATH_LEN];              //!< Path that the plugin's statistics files should be written to
+    char configFileContents[DCGM_MAX_CONFIG_FILE_LEN]; //!< Contents of nvvs config file (likely yaml)
+    char throttleMask[DCGM_THROTTLE_MASK_LEN]; //!< Throttle reasons to ignore as either integer mask or csv list of
+                                               //!< reasons
+    char pluginPath[DCGM_PATH_LEN]; //!< Custom path to the diagnostic plugins - No longer supported as of 2.2.9
+
+    unsigned int currentIteration;  //!< The current iteration that will be executed
+    unsigned int totalIterations;   //!< The total iterations that will be executed
+    unsigned int timeoutSeconds;    //!< The timeout for the diagnostic in seconds
+    char _unusedBuf[DCGM_PATH_LEN]; //!< No longer used
+    unsigned int failCheckInterval; //!< How often the fail early checks should occur when enabled.
+    char expectedNumEntities[DCGM_EXPECTED_ENTITIES_LEN]; //!< The expected number of entities the diag will run on.
+} dcgmRunDiag_v8;
+
+/**
+ * Version 8 for \ref dcgmRunDiag_t
+ */
+#define dcgmRunDiag_version8 MAKE_DCGM_VERSION(dcgmRunDiag_v8, 8)
+
+/*
  * Run diagnostic structure v7
  */
 typedef struct
@@ -2874,7 +2914,7 @@ typedef struct
 
     unsigned int currentIteration;  //!< The current iteration that will be executed
     unsigned int totalIterations;   //!< The total iterations that will be executed
-    unsigned int _unusedInt1;       //!< No longer used
+    unsigned int timeoutSeconds;    //!< The timeout for the diagnostic in seconds
     char _unusedBuf[DCGM_PATH_LEN]; //!< No longer used
     unsigned int failCheckInterval; //!< How often the fail early checks should occur when enabled.
 } dcgmRunDiag_v7;
