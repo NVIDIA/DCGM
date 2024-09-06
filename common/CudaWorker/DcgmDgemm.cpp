@@ -15,6 +15,7 @@
  */
 #include "DcgmDgemm.hpp"
 
+#include <cstdint>
 #include <exception>
 #include <stdexcept>
 

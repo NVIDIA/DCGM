@@ -24,6 +24,7 @@
 #define DIAG_H_
 
 #include <optional>
+#include <functional>
 
 #include "Command.h"
 #include "CommandOutputController.h"

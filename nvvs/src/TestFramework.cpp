@@ -25,6 +25,7 @@
 #include <TestFramework.h>
 
 #include <atomic>
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>

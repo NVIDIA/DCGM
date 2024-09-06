@@ -15,6 +15,7 @@
  */
 #include "DcgmStringHelpers.h"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
