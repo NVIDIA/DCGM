@@ -2086,6 +2086,16 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_CPU_POWER_LIMIT 1131
 
 /**
+ * SoC power utilization
+ */
+#define DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT 1132
+
+/**
+ * Module power utilization
+ */
+#define DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT 1133
+
+/**
  * CPU vendor name
  */
 #define DCGM_FI_DEV_CPU_VENDOR 1140

@@ -97,6 +97,20 @@ public:
         }
         else if (cuContext == NULL)
         {
+            // Reset the device before context creation
+            cuSt = cuDevicePrimaryCtxReset(cudaDeviceIdx);
+            if (cuSt != CUDA_SUCCESS)
+            {
+                DcgmError d { gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDevicePrimaryCtxReset");
+                cuGetErrorString(cuSt, &errorString);
+                if (errorString != NULL)
+                {
+                    snprintf(buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cuSt), gpuId);
+                    d.AddDetail(buf);
+                }
+                throw d;
+            }
             // cuCtxGetCurrent doesn't return an error if there's no context, so check and attempt to create one
             cuSt = cuCtxCreate(&cuContext, 0, cudaDeviceIdx);
 

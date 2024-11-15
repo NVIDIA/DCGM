@@ -191,6 +191,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
 
     if (NULL == pGroupId)
     {
+        DCGM_LOG_ERROR << "DcgmGroupManager::AddNewGroup NULL group ID";
         return DCGM_ST_BADPARAM;
     }
 
@@ -679,6 +680,10 @@ dcgmReturn_t DcgmGroupInfo::AddEntityToGroup(dcgm_field_entity_group_t entityGro
     }
 
     mEntityList.push_back(insertEntity);
+    log_info("AddEntityToGroup groupId {}, eg {}, eid {} added to the group",
+             mGroupId,
+             insertEntity.entityGroupId,
+             insertEntity.entityId);
     return DCGM_ST_OK;
 }
 

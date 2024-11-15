@@ -160,12 +160,12 @@ TEST_CASE("DcgmSystemMonitor::PopulateSocketPowerMap")
     DcgmSystemMonitor sysmon;
     sysmon.PopulateSocketPowerMap(baseDir);
 
-    CHECK(sysmon.m_socketToPowerUsagePath.size() == 2);
+    CHECK(sysmon.m_cpuSocketToPowerUsagePath.size() == 2);
     CHECK(sysmon.m_socketToPowerCapPath.size() == 2);
     CHECK(sysmon.m_socketToPowerCapPath[0] == "hwmon/hwmon0/device/power1_cap");
-    CHECK(sysmon.m_socketToPowerUsagePath[0] == "hwmon/hwmon1/device/power1_average");
+    CHECK(sysmon.m_cpuSocketToPowerUsagePath[0] == "hwmon/hwmon1/device/power1_average");
     CHECK(sysmon.m_socketToPowerCapPath[1] == "hwmon/hwmon2/device/power1_cap");
-    CHECK(sysmon.m_socketToPowerUsagePath[1] == "hwmon/hwmon3/device/power1_average");
+    CHECK(sysmon.m_cpuSocketToPowerUsagePath[1] == "hwmon/hwmon3/device/power1_average");
 }
 
 

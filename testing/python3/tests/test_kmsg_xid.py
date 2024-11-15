@@ -35,6 +35,7 @@ def _generate_xid_43_with_cuda_assert(handle, busId, appTimeout, gpuId):
     app.start(appTimeout*2)
     return app
 
+@test_utils.skip_test_on_vm()
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
 @test_utils.run_with_additional_fatal_kmsg_xid('43')

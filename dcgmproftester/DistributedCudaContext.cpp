@@ -64,23 +64,23 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         return DCGM_ST_GENERIC_ERROR;
     }
 
-        /**
-         * With MIG, we have to use CUDA_VISIBLE_DEVICES to identify the MIG
-         * partition "device", along with a device ID of 0. We can not run
+    /**
+     * With MIG, we have to use CUDA_VISIBLE_DEVICES to identify the MIG
+     * partition "device", along with a device ID of 0. We can not run
      * NvLink tests with MIG and we check to ensure we do not try. Without MIG,
      * we set CUDA_VISIBLE_DEVICES to all non-MIG GPUs so NvLink tests work, and
      * we set the device ID properly.
-         */
+     */
 
-        st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
-        if (st != 0)
-        {
-            m_error << "std::setenv returned" << st << '\n';
+    st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
+    if (st != 0)
+    {
+        m_error << "std::setenv returned" << st << '\n';
 
-            return DCGM_ST_GENERIC_ERROR;
-        }
+        return DCGM_ST_GENERIC_ERROR;
+    }
 
-        m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
+    m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
 
     cuSt = cuInit(0);
     if (cuSt)
@@ -290,6 +290,7 @@ void DistributedCudaContext::Reset(bool keepDcgmGroups)
     // m_pid         = 0; -- preserve this to kill child if necessary.
     m_part      = 0;
     m_parts     = 0;
+    m_activity  = 0;
     m_tick      = false;
     m_firstTick = false;
     m_wait      = false;
@@ -537,6 +538,18 @@ unsigned int DistributedCudaContext::GetTries(void) const
     return m_tries;
 }
 
+// Set this worker's test depth.
+void DistributedCudaContext::SetActivity(unsigned int activity)
+{
+    m_activity = activity;
+}
+
+// Return this worker's test depth.
+unsigned int DistributedCudaContext::GetActivity(void) const
+{
+    return m_activity;
+}
+
 // Set this worker's validation status.
 void DistributedCudaContext::SetValidated(bool validated)
 {
@@ -603,6 +616,7 @@ void DistributedCudaContext::MoveFrom(DistributedCudaContext &&other)
     m_pid            = other.m_pid;
     m_part           = other.m_part;
     m_parts          = other.m_parts;
+    m_activity       = other.m_activity;
     m_tick           = other.m_tick;
     m_testFieldId    = other.m_testFieldId;
     m_duration       = other.m_duration;
@@ -787,6 +801,34 @@ dcgmReturn_t DistributedCudaContext::DestroyDcgmGroups(void)
 }
 
 /*****************************************************************************/
+/**
+   ReportIntervalSleep sleeps for m_reportInterval seconds, to microsecond
+   resolution. It is basically a wrapper around usleep(useconds_t t) which
+   accepts a useconds_t argument capable of holding integral values in the
+   range of [0,1000000] and MAYBE more.
+
+   To be portable, we don't call usleep with values greater than 1000000.0
+   (which would be implicitly truncated to an integral type), but call this
+   instead.
+ */
+/*****************************************************************************/
+void DistributedCudaContext::ReportIntervalSleep(void) const
+{
+    unsigned long sleepSeconds  = static_cast<unsigned long>(m_reportInterval);
+    unsigned long usleepSeconds = static_cast<useconds_t>((m_reportInterval - sleepSeconds) * 1000000.0);
+
+    if (sleepSeconds > 0)
+    {
+        sleep(sleepSeconds);
+    }
+
+    if (usleepSeconds > 0)
+    {
+        usleep(usleepSeconds);
+    }
+}
+
+/*****************************************************************************/
 static int dptGetLatestDcgmValueCB(dcgm_field_entity_group_t entityGroupId,
                                    dcgm_field_eid_t entityId,
                                    dcgmFieldValue_v1 *values,
@@ -872,7 +914,8 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
 {
     /* Generate SM activity */
 
-    int retSt               = 0;
+    int retSt { 0 };
+
     auto duration           = m_duration;
     double startTime        = timelib_dsecSince1970();
     double now              = timelib_dsecSince1970();
@@ -890,14 +933,15 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        usleep(m_reportInterval * 1000000);
+        ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
 
         if (now > tick)
         {
             tick = now + m_reportInterval;
-            Respond("T %0.3f %0.3f %0.3f %u\n",
+            Respond("T %u %0.3f %0.3f %0.3f %u\n",
+                    activity,
                     howFarIn,
                     howFarIn,
                     now - startTime,
@@ -912,11 +956,9 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
         {
             break;
         }
-
-        retSt = 0;
     }
 
-    Respond(retSt == 0 ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     m_cudaWorker.SetWorkerToIdle();
 
@@ -928,7 +970,9 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
 {
     /* Generate SM occupancy */
 
-    auto duration           = m_duration / 3.0;
+    int retSt { 0 };
+
+    auto duration           = m_duration;
     double now              = timelib_dsecSince1970();
     double startTime        = timelib_dsecSince1970();
     double tick             = startTime + m_reportInterval;
@@ -936,10 +980,11 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
 
     m_cudaWorker.SetWorkerToIdle();
 
+    double curOccupancy  = 0.0;
     double prevOccupancy = 0.0;
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    Respond("S\nD 0 3\n");
+    Respond("S\nD 0 1\n");
 
     double sleepKernelInterval  = std::max(0.005, m_reportInterval / 100.0);
     unsigned int innerLoopCount = m_reportInterval / sleepKernelInterval;
@@ -955,16 +1000,19 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
         double howFarIn = 1.0 * activity / activities;
 
         m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY, howFarIn);
+        curOccupancy = ((double)(unsigned int)(howFarIn * m_attributes.m_maxThreadsPerMultiProcessor))
+                       / m_attributes.m_maxThreadsPerMultiProcessor;
 
-        usleep(m_reportInterval * 1000000);
+        ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
         if (now > tick)
         {
-            Respond("T %0.3f %0.3f %.3f %.3f %u %u\n",
+            Respond("T %u %0.3f %0.3f %.3f %.3f %u %u\n",
+                    activity,
                     howFarIn,
                     prevOccupancy,
-                    howFarIn,
+                    curOccupancy,
                     now - startTime,
                     (unsigned int)(howFarIn * m_attributes.m_maxThreadsPerMultiProcessor),
                     m_attributes.m_maxThreadsPerMultiProcessor);
@@ -976,16 +1024,9 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
 
         bool earlyQuit { false };
 
-        auto retSt = ReadLnCheck(activity, earlyQuit);
+        retSt = ReadLnCheck(activity, earlyQuit);
 
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
+        if ((retSt < 0) || earlyQuit)
         {
             break;
         }
@@ -993,106 +1034,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
 
     m_cudaWorker.SetWorkerToIdle();
 
-    usleep(2000000 * m_reportInterval);
-
-    Respond("D 1 3\n");
-
-    now           = timelib_dsecSince1970();
-    startTime     = now;
-    tick          = startTime + m_reportInterval;
-    prevOccupancy = 0.0;
-
-    for (unsigned int activity = 0; activity < activities; activity++)
-    {
-        double howFarIn = 1.0 * activity / activities;
-
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY, howFarIn);
-
-        usleep(m_reportInterval * 1000000);
-
-        now = timelib_dsecSince1970();
-        if (now > tick)
-        {
-            Respond("T %0.3f %0.3f %.3f %.3f %u %u\n",
-                    howFarIn,
-                    prevOccupancy,
-                    howFarIn,
-                    now - startTime,
-                    (unsigned int)(howFarIn * m_attributes.m_multiProcessorCount),
-                    m_attributes.m_multiProcessorCount);
-
-            tick = now + m_reportInterval;
-        }
-
-        prevOccupancy = howFarIn;
-
-        bool earlyQuit { false };
-
-        auto retSt = ReadLnCheck(activity, earlyQuit);
-
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
-        {
-            break;
-        }
-    }
-
-    m_cudaWorker.SetWorkerToIdle();
-
-    usleep(2000000 * m_reportInterval);
-
-    Respond("D 2 3\n");
-
-    now           = timelib_dsecSince1970();
-    startTime     = now;
-    tick          = startTime + m_reportInterval;
-    prevOccupancy = 0.0;
-
-    for (unsigned int activity = 0; activity < activities; activity++)
-    {
-        double howFarIn            = 1.0 * activity / activities;
-        double expectedSmOccupancy = howFarIn;
-
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY, howFarIn);
-
-        usleep(m_reportInterval * 1000000);
-
-        now = timelib_dsecSince1970();
-        if (now > tick)
-        {
-            Respond("T %0.3f %0.3f %0.3f %0.3f\n", howFarIn, prevOccupancy, expectedSmOccupancy, now - startTime);
-
-            tick = now + m_reportInterval;
-        }
-
-        prevOccupancy = expectedSmOccupancy;
-
-        bool earlyQuit { false };
-
-        auto retSt = ReadLnCheck(activity, earlyQuit);
-
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
-        {
-            break;
-        }
-    }
-
-    m_cudaWorker.SetWorkerToIdle();
-
-    Respond("D 3 3\nP\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return 0;
 }
@@ -1102,33 +1044,39 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
 {
     /* Generate SM activity */
 
-    auto duration           = m_duration / 2.0;
+    int retSt { 0 };
+
+    auto duration           = m_duration;
     double now              = timelib_dsecSince1970();
     double startTime        = timelib_dsecSince1970();
     double tick             = startTime + m_reportInterval;
+    double curSmActivity    = 0.0;
     double prevSmActivity   = 0.0;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
     m_cudaWorker.SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    Respond("S\nD 0 2\n");
+    Respond("S\nD 0 1\n");
 
     for (unsigned int activity = 0; activity < activities; activity++)
     {
         double howFarIn = 1.0 * activity / activities;
 
         m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_ACTIVE, howFarIn);
+        curSmActivity = ((double)(unsigned int)(howFarIn * m_attributes.m_multiProcessorCount))
+                        / m_attributes.m_multiProcessorCount;
 
-        usleep(m_reportInterval * 1000000);
+        ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
         if (now > tick)
         {
-            Respond("T %0.3f %0.3f %2.3f %2.3f %u %u\n",
+            Respond("T %u %0.3f %0.3f %2.3f %2.3f %u %u\n",
+                    activity,
                     howFarIn,
                     prevSmActivity,
-                    howFarIn,
+                    curSmActivity,
                     now - startTime,
                     (unsigned int)(howFarIn * m_attributes.m_multiProcessorCount),
                     m_attributes.m_multiProcessorCount);
@@ -1136,20 +1084,13 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
             tick = now + m_reportInterval;
         }
 
-        prevSmActivity = howFarIn;
+        prevSmActivity = curSmActivity;
 
         bool earlyQuit { false };
 
-        auto retSt = ReadLnCheck(activity, earlyQuit);
+        retSt = ReadLnCheck(activity, earlyQuit);
 
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
+        if ((retSt < 0) || earlyQuit)
         {
             break;
         }
@@ -1157,53 +1098,7 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
 
     m_cudaWorker.SetWorkerToIdle();
 
-    usleep(2000000);
-
-    Respond("D 1 2\n");
-
-    now            = timelib_dsecSince1970();
-    startTime      = now;
-    tick           = startTime + m_reportInterval;
-    prevSmActivity = 0.0;
-
-    for (unsigned int activity = 0; activity < activities; activity++)
-    {
-        double howFarIn = 1.0 * activity / activities;
-
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_ACTIVE, howFarIn);
-
-        usleep(m_reportInterval * 1000000);
-
-        now = timelib_dsecSince1970();
-        if (now > tick)
-        {
-            Respond("T %0.3f %0.3f %0.3f %0.3f\n", howFarIn, prevSmActivity, howFarIn, now - startTime);
-
-            tick = now + m_reportInterval;
-        }
-
-        prevSmActivity = howFarIn;
-
-        bool earlyQuit { false };
-
-        auto retSt = ReadLnCheck(activity, earlyQuit);
-
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
-        {
-            break;
-        }
-    }
-
-    m_cudaWorker.SetWorkerToIdle();
-
-    Respond("D 2 2\nP\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return 0;
 }
@@ -1212,6 +1107,8 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
 int DistributedCudaContext::RunSubtestGrActivity(void)
 {
     /* Generate graphics and SM activity */
+
+    int retSt { 0 };
 
     auto duration           = m_duration;
     double now              = timelib_dsecSince1970();
@@ -1236,13 +1133,13 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
         double howFarIn = 1.0 * activity / activities;
 
         m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_GR_ENGINE_ACTIVE, howFarIn);
-        usleep(1000000 * m_reportInterval);
+        ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
 
         if (now > tick)
         {
-            Respond("T %0.3f %0.3f %0.3f %0.3f\n", howFarIn, prevHowFarIn, howFarIn, now - startTime);
+            Respond("T %u %0.3f %0.3f %0.3f %0.3f\n", activity, howFarIn, prevHowFarIn, howFarIn, now - startTime);
             tick = now + m_reportInterval;
         }
 
@@ -1250,16 +1147,9 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
 
         bool earlyQuit { false };
 
-        auto retSt = ReadLnCheck(activity, earlyQuit);
+        retSt = ReadLnCheck(activity, earlyQuit);
 
-        if (retSt < 0)
-        {
-            Respond("F\n");
-
-            return retSt;
-        }
-
-        if (earlyQuit)
+        if ((retSt < 0) || earlyQuit)
         {
             break;
         }
@@ -1267,7 +1157,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
 
     m_cudaWorker.SetWorkerToIdle();
 
-    Respond("D 1 1\nP\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return 0;
 }
@@ -1275,7 +1165,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
 /*****************************************************************************/
 int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 {
-    int retSt = 0;
+    int retSt { 0 };
 
     /* Setting target to 1.0 since it's ignored anyway. We can update
        FieldWorkerPciRxTxBytes in the future if we need specific targets */
@@ -1283,10 +1173,7 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 
     /* Set timers after we've allocated memory since that takes a while */
 
-    auto duration    = m_duration;
-    double now       = timelib_dsecSince1970();
-    double startTime = now;
-    // double endTime   = now + duration;
+    auto duration           = m_duration;
     unsigned int activities = (duration + m_reportInterval / 2.0) / m_reportInterval;
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -1296,8 +1183,9 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 
     for (unsigned int activity = 0; activity <= activities; activity++)
     {
-        usleep(1000000 * m_reportInterval);
-        double howFarIn      = std::max(1.0, (now - startTime) / m_duration);
+        ReportIntervalSleep();
+
+        double howFarIn      = 1.0 * activity / activities;
         double prevPerSecond = perSecond;
         perSecond            = m_cudaWorker.GetCurrentAchievedLoad();
         perSecond /= 1000000.0; /* Bytes -> MiB */
@@ -1312,7 +1200,8 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
             perSecond *= 1.123; /* We've seen a 12.3% overhead in testing, verified secondarily by looking at
                                    nvidia-smi dmon -s */
         }
-        Respond("T %0.3f %0.3f %0.3f\n", howFarIn, prevPerSecond, perSecond);
+
+        Respond("T %u %0.3f %0.3f %0.3f\n", activity, howFarIn, prevPerSecond, perSecond);
 
         bool earlyQuit { false };
 
@@ -1322,14 +1211,13 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
         {
             break;
         }
-
-        now = timelib_dsecSince1970();
     }
 
     m_cudaWorker.SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
-    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
+
     return retSt;
 }
 
@@ -1338,8 +1226,6 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 {
     int retSt { 0 };
-
-    double startTime, now; //, endTime;
 
     m_cudaWorker.SetWorkerToIdle();
 
@@ -1354,9 +1240,6 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    now       = timelib_dsecSince1970();
-    startTime = now;
-    // endTime   = now + m_duration;
     unsigned int activities = (m_duration + m_reportInterval / 2.0) / m_reportInterval;
 
     /* Load target is irrelevant because we target SOL anyway */
@@ -1369,13 +1252,14 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
 
     for (unsigned int activity = 0; activity <= activities; activity++)
     {
-        usleep(1000000 * m_reportInterval);
-        double howFarIn = std::max(1.0, (now - startTime) / m_duration);
+        ReportIntervalSleep();
+
+        double howFarIn = 1.0 * activity / activities;
         prevPerSecond   = perSecond;
         perSecond       = m_cudaWorker.GetCurrentAchievedLoad();
         perSecond /= 1000000.0; /* Bytes -> MiB */
 
-        Respond("T %0.3f %0.3f %0.3f\n", howFarIn, prevPerSecond, perSecond);
+        Respond("T %u %0.3f %0.3f %0.3f\n", activity, howFarIn, prevPerSecond, perSecond);
 
         bool earlyQuit { false };
 
@@ -1385,13 +1269,11 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
         {
             break;
         }
-
-        now = timelib_dsecSince1970();
     }
 
     m_cudaWorker.SetWorkerToIdle();
 
-    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return retSt;
 }
@@ -1419,7 +1301,7 @@ bool DistributedCudaContext::EccAffectsDramBandwidth(void)
 /*****************************************************************************/
 int DistributedCudaContext::RunSubtestDramUtil(void)
 {
-    int retSt = 0;
+    int retSt { 0 };
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
@@ -1428,9 +1310,6 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
 
     Respond("S\nD 0 1\n");
 
-    double now       = timelib_dsecSince1970();
-    double startTime = now;
-    // double endTime           = startTime + m_duration;
     double prevDramAct       = 0.0;
     bool eccAffectsBandwidth = EccAffectsDramBandwidth() && (m_attributes.m_eccSupport > 0);
     unsigned int activities  = (m_duration + m_reportInterval / 2.0) / m_reportInterval;
@@ -1439,15 +1318,17 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
 
     for (unsigned int activity = 0; activity <= activities; activity++)
     {
-        usleep(1000000 * m_reportInterval);
-        double howFarIn      = std::max(1.0, (now - startTime) / m_duration);
+        ReportIntervalSleep();
+
+        double howFarIn      = 1.0 * activity / activities;
         double prevPerSecond = perSecond;
         perSecond            = m_cudaWorker.GetCurrentAchievedLoad();
         prevDramAct          = utilRate;
         utilRate             = perSecond / m_attributes.m_maxMemBandwidth;
         perSecond /= 1000000000.0;
 
-        Respond("T %0.3f %0.3f %0.3f %0.3f %0.3f %1u\n",
+        Respond("T %u %0.3f %0.3f %0.3f %0.3f %0.3f %1u\n",
+                activity,
                 howFarIn,
                 prevDramAct,
                 utilRate,
@@ -1463,14 +1344,12 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
         {
             break;
         }
-
-        now = timelib_dsecSince1970();
     }
 
     m_cudaWorker.SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
-    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return retSt;
 }
@@ -1478,7 +1357,8 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
 /*****************************************************************************/
 int DistributedCudaContext::RunSubtestGemmUtil(void)
 {
-    int retSt = 0;
+    int retSt { 0 };
+
     double now, startTime; // endTime;
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -1498,11 +1378,12 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
 
     for (unsigned int activity = 0; activity <= activities; activity++)
     {
-        usleep(1000000 * m_reportInterval);
+        ReportIntervalSleep();
+
         double howFarIn = std::max(1.0, (now - startTime) / m_duration);
         double gflops   = m_cudaWorker.GetCurrentAchievedLoad() / 1000000000.0;
 
-        Respond("T %0.3f %0.3f %0.3f\n", howFarIn, gflops, gflops);
+        Respond("T %u %0.3f %0.3f %0.3f\n", activity, howFarIn, gflops, gflops);
 
         bool earlyQuit { false };
 
@@ -1519,7 +1400,7 @@ int DistributedCudaContext::RunSubtestGemmUtil(void)
     m_cudaWorker.SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
-    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
 
     return retSt;
 }
@@ -1529,14 +1410,14 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
 {
     /* Generate per-datatype activity */
 
+    int retSt { 0 };
+
     auto duration             = m_duration;
     double now                = timelib_dsecSince1970();
     double startTime          = timelib_dsecSince1970();
     double tick               = startTime + m_reportInterval;
     double prevTargetActivity = 0.0;
     unsigned int activities   = (duration + m_reportInterval) / m_reportInterval;
-    int retSt                 = 0;
-
     m_cudaWorker.SetWorkerToIdle();
 
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -1549,12 +1430,13 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
 
         m_cudaWorker.SetWorkloadAndTarget(m_testFieldId, targetActivity);
 
-        usleep(m_reportInterval * 1000000);
+        ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
         if (now > tick)
         {
-            Respond("T %0.3f %0.3f %2.3f %2.3f %u %u\n",
+            Respond("T %u %0.3f %0.3f %2.3f %2.3f %u %u\n",
+                    activity,
                     howFarIn,
                     prevTargetActivity,
                     targetActivity,
@@ -1571,7 +1453,7 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
 
         retSt = ReadLnCheck(activity, earlyQuit);
 
-        if (retSt < 0 || earlyQuit)
+        if ((retSt < 0) || earlyQuit)
         {
             break;
         }
@@ -1580,7 +1462,8 @@ int DistributedCudaContext::RunSubtestDataTypeActive(void)
     m_cudaWorker.SetWorkerToIdle();
 
     // coverity[dead_error_condition] - Leaving in case retSt is nonzero in the future
-    Respond((retSt == 0) ? "D 1 1\nP\n" : "F\n");
+    Respond((retSt < 0) ? "F\n" : "D 1 1\nP\n");
+
     return 0;
 }
 
@@ -1691,7 +1574,8 @@ int DistributedCudaContext::Run(void)
 {
     extern std::atomic_bool g_signalCaught;
 
-    int retSt = 0;
+    int retSt     = 0;
+    int exitValue = 0;
     int toChildPipe[2];  // parent writes to this, child reads from this
     int toParentPipe[2]; // parent reads from this, child writes to this
 
@@ -1795,8 +1679,8 @@ int DistributedCudaContext::Run(void)
                  * is a bad one. Of course, parent could have died, closing
                  * the write end of the pipe, and that causes us to die.
                  */
-
-                exit((int)DCGM_ST_GENERIC_ERROR);
+                exitValue = (int)DCGM_ST_GENERIC_ERROR;
+                break;
             }
             else if (retSt == 0)
             {
@@ -1867,12 +1751,18 @@ int DistributedCudaContext::Run(void)
     catch (...)
     {
         // catastrophic error
-        exit((int)DCGM_ST_GENERIC_ERROR);
+        exitValue = (int)DCGM_ST_GENERIC_ERROR;
     }
 
-    Reset();
+    /* Note : No longer calling Reset() here before shutdown because that call hangs */
 
-    exit(0);
+    /* Make sure our worker thread is inactive before exiting to avoid queuing cuda work
+       at the same time the cuda atexit() handlers are running */
+    m_cudaWorker.Shutdown();
+
+    /* In the future, we shouldn't exit here, but that will require a more substantial
+       refactor of DistributedCudaContext and our forked worker */
+    exit(exitValue);
 }
 
 } // namespace DcgmNs::ProfTester

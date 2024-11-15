@@ -3539,3 +3539,76 @@ skus:
       minimum_bandwidth: 2212500
     pulse_test:
       is_allowed: true
+  - name: H100 144GB HBM3
+    id: 2348
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024.0
+      target_power: 900.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      # Copied from sm stress target
+      target_stress: 37581
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~50108. Multiply by .75 to get 37581
+      target_stress: 37581
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 measures ~3120000. Multiply by .75 to get ~2340000.00
+      minimum_bandwidth: 2340000
+    pulse_test:
+      is_allowed: true
+  - name: H20 HBM3e
+    id: 232c
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 500.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 20562
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~27416. Multiply by .75 to get 20562
+      target_stress: 20562
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 164.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 measures ~2180000. Multiply by .75 to get ~1635000
+      minimum_bandwidth: 1635000
+    pulse_test:
+      is_allowed: true

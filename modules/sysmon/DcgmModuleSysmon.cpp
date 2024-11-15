@@ -1233,7 +1233,35 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
                 double usage          = 0.0;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
 
-                dcgmReturn_t ret = m_sysmon.GetCurrentPowerUsage(socketId, usage);
+                dcgmReturn_t ret = m_sysmon.GetCurrentCPUPowerUsage(socketId, usage);
+                buf.AddDoubleValue(fieldToUpdate.entityGroupId,
+                                   fieldToUpdate.entityId,
+                                   fieldToUpdate.fieldMeta->fieldId,
+                                   usage,
+                                   now,
+                                   ret);
+                break;
+            }
+            case DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT:
+            {
+                double usage          = 0.0;
+                unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
+
+                dcgmReturn_t ret = m_sysmon.GetCurrentSysIOPowerUsage(socketId, usage);
+                buf.AddDoubleValue(fieldToUpdate.entityGroupId,
+                                   fieldToUpdate.entityId,
+                                   fieldToUpdate.fieldMeta->fieldId,
+                                   usage,
+                                   now,
+                                   ret);
+                break;
+            }
+            case DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT:
+            {
+                double usage          = 0.0;
+                unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
+
+                dcgmReturn_t ret = m_sysmon.GetCurrentModulePowerUsage(socketId, usage);
                 buf.AddDoubleValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,

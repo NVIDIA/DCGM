@@ -436,6 +436,12 @@ int Memtest::CudaInit()
     /* Do per-device initialization */
     for (auto &gpu : m_device)
     {
+        // Reset the device before context creation
+        if (auto cuSt = cuDevicePrimaryCtxReset(gpu.cuDevice); cuSt != CUDA_SUCCESS)
+        {
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, MEMTEST_PLUGIN_NAME, "cuDevicePrimaryCtxReset", cuSt, gpu.gpuId);
+            return -1;
+        }
         {
             if (auto cuSt = cuCtxCreate(&gpu.cuContext, 0, gpu.cuDevice); cuSt != CUDA_SUCCESS)
             {

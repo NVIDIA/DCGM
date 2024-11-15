@@ -41,10 +41,18 @@ typedef enum dcgmPowerFileType_enum
     DCGM_POWER_CAP_FILE   = 2,
 } dcgmPowerFile_t;
 
+typedef enum dcgmPowerFileSource_enum
+{
+    DCGM_CPU_POWER_SOCKET_FILE    = 1,
+    DCGM_MODULE_POWER_SOCKET_FILE = 2,
+    DCGM_SYSIO_POWER_SOCKET_FILE  = 3,
+} dcgmPowerSrc_t;
+
 typedef struct
 {
     unsigned int socketId;
     dcgmPowerFile_t fileType;
+    dcgmPowerSrc_t fileSrc;
 } dcgmPowerFileInfo_t;
 
 class DcgmSystemMonitor
@@ -55,9 +63,21 @@ public:
 
     /*************************************************************************/
     /*
-     * Returns the current power usage in watts
+     * Returns the current CPU power usage in watts
      */
-    dcgmReturn_t GetCurrentPowerUsage(unsigned int socketId, double &usage);
+    dcgmReturn_t GetCurrentCPUPowerUsage(unsigned int socketId, double &usage);
+
+    /*************************************************************************/
+    /*
+     * Returns the current SysIO power usage in watts
+     */
+    dcgmReturn_t GetCurrentSysIOPowerUsage(unsigned int socketId, double &usage);
+
+    /*************************************************************************/
+    /*
+     * Returns the current module power usage in watts
+     */
+    dcgmReturn_t GetCurrentModulePowerUsage(unsigned int socketId, double &usage);
 
     /*************************************************************************/
     /*
@@ -94,7 +114,9 @@ public:
 #ifndef DCGM_SYSMON_TEST // Allow sysmon tests to peek in
 private:
 #endif
-    std::unordered_map<unsigned int, std::string> m_socketToPowerUsagePath;
+    std::unordered_map<unsigned int, std::string> m_cpuSocketToPowerUsagePath;
+    std::unordered_map<unsigned int, std::string> m_moduleSocketToPowerUsagePath;
+    std::unordered_map<unsigned int, std::string> m_sysioSocketToPowerUsagePath;
     std::unordered_map<unsigned int, std::string> m_socketToPowerCapPath;
     std::string m_cpuVendor;
     std::string m_cpuModel;

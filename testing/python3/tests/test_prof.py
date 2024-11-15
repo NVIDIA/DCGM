@@ -30,6 +30,8 @@ import apps
 
 g_profNotSupportedErrorStr = "Continuous mode profiling is not supported for this GPU group. Either libnvperf_dcgm_host.so isn't in your LD_LIBRARY_PATH or it is not the NDA version that supports DC profiling"
 g_moduleNotLoadedErrorStr = "Continuous mode profiling is not supported for this system because the profiling module could not be loaded. This is likely due to libnvperf_dcgm_host.so not being in LD_LIBRARY_PATH"
+g_profGroupIsEmpty = "No GPUs suitable for testing."
+g_noMigSlicesErrorStr = "GPU(s) is(are) in MIG mode, but no MIG CI partitions are defined."
 
 DLG_MAX_METRIC_GROUPS = 5 #This is taken from modules/profiling/DcgmLopConfig.h. These values need to be in sync for multipass tests to pass
 
@@ -556,10 +558,30 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs = None):
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
-    # Just test the first GPU of our SKU. Other tests will cover multiple SKUs
-    useGpuIds = [gpuIds[0], ]
+    # Find the first testable GPU of our SKU. Other tests will cover multiple
+    # GPUs.
+    
+    slices = 0;
 
-    args = ["-d", "5.0", "-r", "0.25", "-t", fieldIdsStr]
+    for gpuId in gpuIds:
+        slices = test_utils.get_gpu_slices(handle, gpuId)
+
+        if slices == 0:
+            continue
+
+    if slices == 0:
+        test_utils.skip_test(g_noMigSlicesErrorStr)
+
+    useGpuIds = [ gpuId ]
+        
+    duration = 5.0 * slices
+    rate = .25 * slices
+
+    args = ["-d", str(duration), "-r", str(rate), "-t", fieldIdsStr]
+
+    # MIG requires slightly looser tolerances than 10%
+    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+        args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
         args.extend(extraArgs)
@@ -568,7 +590,7 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs = None):
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
-def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, extraArgs = None):
+def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast = False, extraArgs = None):
     '''
     Test that dcgmproftester passes for validation run.
     '''
@@ -582,10 +604,33 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, extraArgs = None):
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
-    # Just test the first GPU of our SKU. Other tests will cover multiple SKUs
-    useGpuIds = [gpuIds[0], ]
+    # Find the first testable GPU of our SKU. Other tests will cover multiple
+    # GPUs.
+    
+    slices = 0;
 
-    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate", "-d", "5.0", "-r", "0.25", "--sync-count", "5", "-w", "5", "-t", fieldIdsStr]
+    for gpuId in gpuIds:
+        slices = test_utils.get_gpu_slices(handle, gpuId)
+
+        if slices == 0:
+            continue
+
+    if slices == 0:
+        test_utils.skip_test(g_noMigSlicesErrorStr)
+
+    if fast:
+        duration = 1.0 * slices
+    else:
+        duration = 5.0 * slices
+
+    rate = 0.25 * slices
+    useGpuIds = [ gpuId ]
+
+    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate", "-d", str(duration), "-r", str(rate), "--sync-count", "5", "-w", "5", "-t", fieldIdsStr]
+
+    # MIG requires slightly looser tolerances than 10%
+    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+        args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
         args.extend(extraArgs)
@@ -594,13 +639,13 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, extraArgs = None):
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
-def helper_test_dpt_field_id(handle, gpuIds, fieldId, extraArgs = None):
+def helper_test_dpt_field_id(handle, gpuIds, fieldId, fast = False, extraArgs = None):
     '''
     Test that dcgmproftester passes.
     '''
     helper_test_dpt_field_ids(handle, gpuIds, str(fieldId), extraArgs)
 
-def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, extraArgs = None):
+def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, fast = False, extraArgs = None):
     '''
     Test that dcgmproftester passes in fast mode.
     '''
@@ -614,10 +659,34 @@ def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, extraArgs = None):
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
-    # Just test the first GPU of our SKU. Other tests will cover multiple SKUs
-    useGpuIds = [gpuIds[0], ]
+    # Find the first testable GPU of our SKU. Other tests will cover multiple
+    # GPUs.
+    
+    slices = 0;
 
-    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate,fast", "-d", "15.0", "-r", "1.0", "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+    for gpuId in gpuIds:
+        slices = test_utils.get_gpu_slices(handle, gpuId)
+
+        if slices == 0:
+            continue
+
+    if slices == 0:
+        test_utils.skip_test(g_noMigSlicesErrorStr)
+
+    if fast:
+        duration = 1.0 * slices
+        rate = 0.25 * slices
+    else:
+        duration = 15.0 * slices
+        rate = 1.0 * slices
+
+    useGpuIds = [ gpuId ]
+
+    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate,fast", "-d", str(duration), "-r", str(rate), "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+
+    # MIG requires slightly looser tolerances than 10%
+    if ((fieldId == dcgm_fields.DCGM_FI_PROF_SM_ACTIVE) or (fieldId == dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY)) and (slices > 1):
+        args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
         args.extend(extraArgs)
@@ -733,7 +802,7 @@ def test_dcgmproftester_sm_occupancy(handle, gpuIds):
 @test_utils.run_only_as_root()
 @test_utils.skip_denylisted_gpus(["NVIDIA T400", "NVIDIA T400 4GB"]) # TEMPORARY CHANGE : If DCGM-3744 has been satisfactorily resolved, remove this line
 def test_dcgmproftester_tensor_active(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -743,7 +812,7 @@ def test_dcgmproftester_tensor_active(handle, gpuIds):
 @test_utils.run_only_if_gpus_available()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp64_active(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP64_ACTIVE)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP64_ACTIVE, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -752,7 +821,7 @@ def test_dcgmproftester_fp64_active(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp32_active(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -761,7 +830,7 @@ def test_dcgmproftester_fp32_active(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp32_active_cublas(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, ["--cublas"])
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, True, ["--cublas"])
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -770,7 +839,7 @@ def test_dcgmproftester_fp32_active_cublas(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp16_active(handle, gpuIds):
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP16_ACTIVE)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP16_ACTIVE, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -779,7 +848,7 @@ def test_dcgmproftester_fp16_active(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_pcie_rx(handle, gpuIds):
-    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, ["--percent-tolerance", "20.0"])
+    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, True, ["--percent-tolerance", "20.0"])
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -788,7 +857,7 @@ def test_dcgmproftester_pcie_rx(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_pcie_tx(handle, gpuIds):
-    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES)
+    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES, True)
 
 def dont_test_slower_gpus(handle, gpuIds):
     # These GPU ids don't need to be tested
@@ -807,7 +876,7 @@ def dont_test_slower_gpus(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmproftester_nvlink_rx(handle, gpuIds):
     dont_test_slower_gpus(handle, gpuIds)
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -818,7 +887,7 @@ def test_dcgmproftester_nvlink_rx(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmproftester_nvlink_tx(handle, gpuIds):
     dont_test_slower_gpus(handle, gpuIds)
-    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES)
+    helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES, True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -833,7 +902,7 @@ def test_dcgmproftester_nvlink_and_other(handle, gpuIds):
     https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3903747
     '''
     dont_test_slower_gpus(handle, gpuIds)
-    helper_test_dpt_field_ids(handle, gpuIds, str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE) + "," + str(dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES))
+    helper_test_dpt_field_ids(handle, gpuIds, str(dcgm_fields.DCGM_FI_PROF_PIPE_FP16_ACTIVE) + "," + str(dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES), True)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -860,11 +929,36 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
 
     cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
 
-    #Graphics activity works for every GPU that supports DCP. It also works reliably even under heavy concurrecy
-    fieldIds = "1001" 
+    #FP16 works for every GPU that supports DCP. It also works reliably even under heavy concurrecy
+    fieldIds = "1008"
 
-    args = ["--mode", "validate", "-d", "15.0", "-r", "1.0", "--sync-count", "5", "-w", "10", "-t", fieldIds]
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=gpuIds, args=args)
+    args = ["--mode", "validate", "--sync-count", "5", "-w", "10", "-t", fieldIds]
+
+    foundGpu = False;
+    
+    for gpuId in gpuIds:
+        slices = test_utils.get_gpu_slices(handle, gpuId)
+
+        if slices == 0:
+            continue
+
+        duration = 1.0 * slices
+        rate = .25 * slices
+
+        foundGpu = True;
+
+        args.extend(["-d", str(duration), "-r", str(rate)])
+
+        # MIG requires slightly looser tolerances than 10%
+        if ((fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+            args.extend(["--percent-tolerance", "15"])
+
+        args.extend(["-i", str(gpuId)])
+
+    if not foundGpu:
+        test_utils.skip_test(g_noMigSlicesErrorStr)
+
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
     app.validate() #Validate here so that errors are printed when they occur instead of at the end of the test
