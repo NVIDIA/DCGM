@@ -243,7 +243,10 @@ dcgmReturn_t DcgmiTest::HelperInitFieldValue(dcgmInjectFieldValue_t &injectField
             injectFieldValue.value.i64 = atol(injectValue.c_str());
             break;
         case DCGM_FT_STRING:
-            dcgmStrncpy(injectFieldValue.value.str, injectValue.c_str(), sizeof(injectFieldValue.value.str));
+            if (false == dcgmStrncpy(injectFieldValue.value.str, injectValue.c_str(), sizeof(injectFieldValue.value.str)))
+            {
+                log_debug("String overflow error for the requested injectValue.");
+            }
             break;
         case DCGM_FT_DOUBLE:
             injectFieldValue.value.dbl = atof(injectValue.c_str());
