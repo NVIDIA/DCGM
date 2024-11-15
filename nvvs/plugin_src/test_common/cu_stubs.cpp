@@ -53,6 +53,11 @@ CUresult cuMemsetD32(CUdeviceptr dstDevice, unsigned int val, size_t size)
     return CUDA_SUCCESS;
 }
 
+CUresult cuDevicePrimaryCtxReset(CUdevice /* dev */)
+{
+    return CUDA_SUCCESS;
+}
+
 CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags, CUdevice dev)
 {
     return CUDA_SUCCESS;

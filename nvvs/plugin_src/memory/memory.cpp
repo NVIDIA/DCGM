@@ -405,6 +405,18 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginGpuInfo_t &gpuInfo)
         return 1;
     }
 
+    // // Reset the device before context creation
+    cuRes = cuDevicePrimaryCtxReset(memGlobals->cuDevice);
+    if (CUDA_SUCCESS != cuRes)
+    {
+        std::string error = AppendCudaDriverError("Unable to reset primary CUDA context", cuRes);
+        DcgmError d { memGlobals->dcgmGpuIndex };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDevicePrimaryCtxReset");
+        d.AddDetail(error);
+        memGlobals->memory->AddError(MEMORY_PLUGIN_NAME, d);
+        return 1;
+    }
+
     cuRes = cuCtxCreate(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
     if (CUDA_SUCCESS != cuRes)
     {

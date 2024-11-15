@@ -3807,6 +3807,28 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_CPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
 
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "module_power_utilization",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "MODPU",
+                                             "",
+                                             DCGM_FE_CPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "sysio_power_utilization",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "SIOPU",
+                                             "",
+                                             DCGM_FE_CPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_CPU_VENDOR,
                                              DCGM_FT_STRING,
                                              0,

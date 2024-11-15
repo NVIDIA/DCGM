@@ -468,6 +468,20 @@ public:
     unsigned int GetTries(void) const;
 
     /**
+     * \brief Set this worker's test depth,
+     *
+     * The main process sets test depth of the current test.
+     */
+    void SetActivity(unsigned int activity);
+
+    /**
+     * \brief Get worker's test depth.
+     *
+     * Returns the last test depth.
+     */
+    unsigned int GetActivity(void) const;
+
+    /**
      * \brief Set this worker's validated status.
      *
      * The main process sets validated status of the last test.
@@ -593,6 +607,16 @@ private:
      * @return A dcgmReturn_t is returned indicating success or failure.
      */
     dcgmReturn_t LoadModule(void);
+
+    /**
+     * \brief ReportIntervalSleep sleeps for the report interval.
+     *
+     *
+     * It's a wrapper around usleep, which only accepts a useconds_t, which
+     * may be limited to no more than 1000000 microseconds. So, it's a
+     * protability convenience function.
+     */
+    void ReportIntervalSleep(void) const;
 
     /**
      * \brief ReadLnCheck checks for synchronous operation commands.
@@ -739,6 +763,7 @@ private:
     unsigned int m_tries { 0 }; //<! synchronous tries available
     unsigned int m_part { 0 };  //<! worker process part complete
     unsigned int m_parts { 0 }; //<! worker process total parts
+    double m_activity { 0 };    //<! how far into test
     bool m_tick { false };      //<! whether tick seen in current part;
     bool m_firstTick { false }; //<! whether this is first tick of part;
     bool m_wait { false };      //<! wait to process a tick

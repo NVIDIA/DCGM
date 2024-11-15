@@ -36,9 +36,13 @@
 #include <tclap/ValuesConstraint.h>
 
 #include <chrono>
+#include <climits>
 #include <csignal>
 #include <cstdint>
+#include <ctime> //RSH
 #include <fmt/format.h>
+#include <iomanip>  //RSH
+#include <iostream> //RSH
 #include <iterator>
 #include <map>
 #include <memory>
@@ -1194,6 +1198,23 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
             m_finishedWorkers++;
             worker->SetFinished();
 
+            if (IsSynchronous())
+            {
+                /*
+                 * Even if the last measurement failed validation, we had one
+                 * at the same activity level pass (otherwise we would not have
+                 * sent the '"A'dvance message to finish), so we let it go.
+                 */
+
+                if (!m_valid)
+                {
+                    info_reporter << "Ignored a validation failure after last activity level success."
+                                  << info_reporter.new_line;
+
+                    m_valid = true;
+                }
+            }
+
             break;
 
         case 'S': // S\n -- start
@@ -1297,9 +1318,10 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
                 if (tries > 0) // We can try again
                 {
                     worker->SetTries(tries - 1);
-
-                    // Demote error to none, decrement try count, and retry.
-                    dcgmReturn = DCGM_ST_OK;
+                }
+                else
+                {
+                    dcgmReturn = DCGM_ST_GENERIC_ERROR;
                 }
             }
 
@@ -1321,10 +1343,14 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
                  * but exit on the first success.
                  */
 
-                m_valid         = false;
-                m_exitRequested = !m_parameters.m_fast;
+                m_valid = false;
 
-                if ((dcgmReturn == DCGM_ST_PENDING) && !m_exitRequested && IsSynchronous())
+                if (dcgmReturn != DCGM_ST_PENDING)
+                {
+                    m_exitRequested = !m_parameters.m_fast;
+                }
+
+                if ((dcgmReturn != DCGM_ST_PENDING) && !m_exitRequested && IsSynchronous())
                 {
                     /**
                      * We failed, but we can't exit in case we pass, so we
@@ -1468,8 +1494,8 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 
                 if (m_parameters.m_report)
                 {
-                    info_reporter << "Worker " << m_gpuId << ":" << workerIdx << "[" << m_parameters.m_fieldId
-                                  << "]: " << label << ": ";
+                    info_reporter << fmt::format(
+                        "Worker {:d}:{:d}[{:d}]: {}: ", m_gpuId, workerIdx, m_parameters.m_fieldId, label);
 
                     /**
                      * Apparently we can't send big streambufs to the logger,
@@ -1624,6 +1650,84 @@ bool PhysicalGpu::IsValidated(void) const
      */
 
     return m_valid && !AnyWorkerRequestFailed();
+}
+
+bool PhysicalGpu::Advance(DistributedCudaContext &ignoreWorker, unsigned int activity)
+{
+    if (!ignoreWorker.GetValidated())
+    {
+        return false;
+    }
+
+    unsigned int minActivity { UINT_MAX - 1 };
+    unsigned int minPart { UINT_MAX - 1 };
+
+    unsigned int ignoreWorkerPart;
+    unsigned int ignoreWorkerParts;
+
+    unsigned int workerIdx { 0 };
+    unsigned int ignoreWorkerIdx { 0 };
+
+    ignoreWorker.GetParts(ignoreWorkerPart, ignoreWorkerParts);
+
+    unsigned int part, parts;
+
+    for (auto &worker : m_dcgmCudaContexts)
+    {
+        if (&*worker == &ignoreWorker)
+        {
+            break;
+        }
+
+        ignoreWorkerIdx++;
+    }
+
+    auto ignoreWorkerActivity = ignoreWorker.GetActivity();
+
+    if (ignoreWorkerActivity > activity)
+    {
+        activity = ignoreWorkerActivity;
+    }
+
+    for (auto &worker : m_dcgmCudaContexts)
+    {
+        if (&*worker != &ignoreWorker)
+        {
+            worker->GetParts(part, parts);
+
+            if (part <= minPart)
+            {
+                if (part < minPart)
+                {
+                    minPart     = part;
+                    minActivity = UINT_MAX - 1;
+                }
+
+                auto workerActivity = worker->GetActivity();
+
+                if (workerActivity < minActivity)
+                {
+                    minActivity = workerActivity;
+                }
+            }
+        }
+
+        workerIdx++;
+    }
+
+    if ((ignoreWorkerPart > minPart) || (activity > minActivity))
+    {
+        // We are too far ahead.
+
+        // Don't penalize worker
+        ignoreWorker.SetTries(ignoreWorker.GetTries() + 1);
+
+        return false; // Don't advance.
+    }
+
+    ignoreWorker.SetActivity(activity + 1);
+
+    return true;
 }
 
 /*****************************************************************************/
@@ -1810,11 +1914,13 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
             }
         }
 
+        unsigned int activity;
         double howFarIn;
         double howFarInCur;
         double timeOffset;
         unsigned int threadsPerSm;
 
+        worker.Input() >> activity;
         worker.Input() >> howFarIn;
         worker.Input() >> howFarInCur;
         worker.Input() >> timeOffset;
@@ -1826,7 +1932,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
             if (m_parameters.m_report)
             {
                 info_reporter << fmt::format(
-                    "Worker {:d}: {:d}[{:d}]: SmOccupancy generated 1.0, dcgm", m_gpuId, index, m_parameters.m_fieldId);
+                    "Worker {:d}:{:d}[{:d}]: SmOccupancy generated 1.0, dcgm", m_gpuId, index, m_parameters.m_fieldId);
 
                 ValuesDump(values, ValueType::Double, 1.0);
 
@@ -1842,7 +1948,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancyTargetMax(void)
             AppendSubtestRecord(1.0, value);
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -1866,6 +1972,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                                                            bool valid,
                                                            std::map<Entity, dcgmFieldValue_v1> &values,
                                                            DistributedCudaContext &worker) mutable -> dcgmReturn_t {
+        unsigned int activity { 0 };
         unsigned int part;
         unsigned int parts;
         bool firstPartTick = worker.IsFirstTick();
@@ -1894,7 +2001,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
                         info_reporter << fmt::format(
                             "GPU {:d}: Testing SmOccupancy scaling by num threads for {:#.3} seconds.",
                             m_gpuId,
-                            m_parameters.m_duration / 3.0)
+                            m_parameters.m_duration)
                                       << info_reporter.new_line;
                         info_reporter << "-------------------------------------------------------------"
                                       << info_reporter.new_line;
@@ -1909,6 +2016,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
             unsigned int threadsPerSm;
             unsigned int maxThreadsPerMultiProcessor;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> prevOccupancy;
             worker.Input() >> curOccupancy;
@@ -1921,7 +2029,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
             {
                 if (m_parameters.m_report)
                 {
-                    info_reporter << fmt::format("Worker {:d}: {:d}[{:d}]: SmOccupancy generated {:#.3}/{:#.3}, dcgm ",
+                    info_reporter << fmt::format("Worker {:d}:{:d}[{:d}]: SmOccupancy generated {:#.3}/{:#.3}, dcgm ",
                                                  m_gpuId,
                                                  index,
                                                  m_parameters.m_fieldId,
@@ -1939,187 +2047,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmOccupancy(void)
 
                 double value;
 
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
-
-                AppendSubtestRecord(prevOccupancy, value);
-            }
-        }
-        else if (part == 1)
-        {
-            if (firstPartTick)
-            {
-                if (nextPart == 1)
-                {
-                    nextPart  = 2;
-                    firstTick = false;
-                }
-
-                if (!firstTick) // First per-test part per-GPU code here.
-                {
-                    firstTick = true;
-
-                    EndSubtest();
-
-                    if (m_parameters.m_report)
-                    {
-                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
-                    }
-
-                    BeginSubtest("SM Occupancy - SM Count", "sm_occupancy_sm_count", true);
-                }
-
-                if (m_tester->GetNextPart() == 1)
-                {
-                    m_tester->SetNextPart(2);
-                    m_tester->SetFirstTick(false);
-                }
-
-                if (!m_tester->IsFirstTick()) // First per test part code here.
-                {
-                    m_tester->SetFirstTick();
-
-                    if (m_parameters.m_report)
-                    {
-                        info_reporter << fmt::format(
-                            "GPU {:d}: Testing SmOccupancy scaling by SM count for {:#.3} seconds.",
-                            m_gpuId,
-                            m_parameters.m_duration / 3.0)
-                                      << info_reporter.new_line;
-
-
-                        info_reporter << "----------------------------------------------------------"
-                                      << info_reporter.new_line;
-                    }
-                }
-            }
-
-            double howFarIn;
-            double prevOccupancy;
-            double curOccupancy;
-            double timeOffset;
-            unsigned int numSms;
-            unsigned int multiProcessorCount;
-
-            worker.Input() >> howFarIn;
-            worker.Input() >> prevOccupancy;
-            worker.Input() >> curOccupancy;
-            worker.Input() >> timeOffset;
-            worker.Input() >> numSms;
-            worker.Input() >> multiProcessorCount;
-            worker.Input().ignore(MaxStreamLength, '\n');
-
-            if (valid)
-            {
-                if (m_parameters.m_report)
-                {
-                    info_reporter << fmt::format("Worker {:d}:{:d}[{:d}]: SmOccupancy generated {:#.3}/{:#.3}, dcgm ",
-                                                 m_gpuId,
-                                                 index,
-                                                 m_parameters.m_fieldId,
-                                                 prevOccupancy,
-                                                 curOccupancy);
-                    ValuesDump(values, ValueType::Double, 1.0);
-
-                    info_reporter << fmt::format(
-                        " at {:#.3} seconds. numSms {:d} / {:d}.", timeOffset, numSms, multiProcessorCount)
-                                  << info_reporter.new_line;
-                }
-
-                double value;
-
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
-
-                AppendSubtestRecord(prevOccupancy, value);
-            }
-        }
-        else if (part == 2)
-        {
-            if (firstPartTick)
-            {
-                if (nextPart == 2)
-                {
-                    nextPart  = 3;
-                    firstTick = false;
-                }
-
-                if (!firstTick) // First per-test part per-GPU code here.
-                {
-                    firstTick = true;
-
-                    EndSubtest();
-
-                    if (m_parameters.m_report)
-                    {
-                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
-                    }
-
-                    BeginSubtest("SM Occupancy - CPU Sleeps", "sm_occupancy_cpu_sleeps", true);
-                }
-
-                if (m_tester->GetNextPart() == 2)
-                {
-                    m_tester->SetNextPart(3);
-                    m_tester->SetFirstTick(false);
-                }
-
-                if (!m_tester->IsFirstTick()) // First per test part code here.
-                {
-                    m_tester->SetFirstTick();
-
-                    if (m_parameters.m_report)
-                    {
-                        info_reporter << fmt::format(
-                            "GPU {:d}: Testing SmOccupancy scaling by CPU sleeps for {:#.3} seconds.",
-                            m_gpuId,
-                            m_parameters.m_duration / 3.0)
-                                      << info_reporter.new_line;
-                        info_reporter << "----------------------------------------------------------"
-                                      << info_reporter.new_line;
-                    }
-                }
-            }
-
-            double howFarIn;
-            double prevOccupancy;
-            double curOccupancy;
-            double timeOffset;
-
-            worker.Input() >> howFarIn;
-            worker.Input() >> prevOccupancy;
-            worker.Input() >> curOccupancy;
-            worker.Input() >> timeOffset;
-            worker.Input().ignore(MaxStreamLength, '\n');
-
-            if (valid)
-            {
-                if (m_parameters.m_report)
-                {
-                    info_reporter << fmt::format("Worker {:d}:{:d}[{:d}]: SmOccupancy generated {:#.3}/{:#.3}, dcgm ",
-                                                 m_gpuId,
-                                                 index,
-                                                 m_parameters.m_fieldId,
-                                                 prevOccupancy,
-                                                 curOccupancy);
-
-                    ValuesDump(values, ValueType::Double, 1.0);
-
-                    info_reporter << fmt::format(" at  {:#.3} seconds.", timeOffset) << info_reporter.new_line;
-                }
-
-                double value;
-
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
-                                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
+                worker.SetValidated(
+                    ValueGet(values, worker.Entities(), DCGM_FE_GPU /*_CI*/, ValueType::Double, 1.0, value)
+                    && Validate(prevOccupancy, curOccupancy, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevOccupancy, value);
             }
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2143,6 +2079,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                                                            DistributedCudaContext &worker) mutable -> dcgmReturn_t {
         unsigned int part;
         unsigned int parts;
+        unsigned int activity { 0 };
         bool firstPartTick = worker.IsFirstTick();
 
         worker.GetParts(part, parts);
@@ -2169,7 +2106,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                         info_reporter << fmt::format(
                             "GPU {:d}: Testing SmActivity scaling by SM count  for {:#.3} seconds.",
                             m_gpuId,
-                            m_parameters.m_duration / 2.0)
+                            m_parameters.m_duration)
                                       << info_reporter.new_line;
 
                         info_reporter << "---------------------------------------------------------"
@@ -2185,6 +2122,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
             unsigned int numSms;
             unsigned int multiProcessorCount;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> prevSmActivity;
             worker.Input() >> curSmActivity;
@@ -2213,7 +2151,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
 
                 double value;
 
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU, ValueType::Double, 1.0, value)
                                     && Validate(prevSmActivity, curSmActivity, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevSmActivity, value);
@@ -2237,8 +2175,11 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
 
                     if (m_parameters.m_report)
                     {
-                        info_reporter << "Worker " << m_gpuId << ":" << index << "[" << m_parameters.m_fieldId
-                                      << "]: Slept to let previous test fall off." << info_reporter.new_line;
+                        info_reporter << fmt::format("Worker {:d}:{:d}[{:d}]: Slept to let previous test fall off.",
+                                                     m_gpuId,
+                                                     index,
+                                                     m_parameters.m_fieldId)
+                                      << info_reporter.new_line;
                     }
 
                     BeginSubtest("SM Activity - CPU Sleeps", "sm_activity_cpu_sleeps", true);
@@ -2257,7 +2198,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
                     if (m_parameters.m_report)
                     {
                         info_reporter << fmt::format(
-                            "GPU {:d}: Testing SmActivity scaling by CPU sleps for {:#.3} seconds",
+                            "GPU {:d}: Testing SmActivity scaling by CPU sleeps for {:#.3} seconds",
                             m_gpuId,
                             m_parameters.m_duration / 2.0)
                                       << info_reporter.new_line;
@@ -2270,6 +2211,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
             double curSmActivity;
             double timeOffset;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> prevSmActivity;
             worker.Input() >> curSmActivity;
@@ -2294,14 +2236,14 @@ dcgmReturn_t PhysicalGpu::RunSubtestSmActivity(void)
 
                 double value;
 
-                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU_CI, ValueType::Double, 1.0, value)
+                worker.SetValidated(ValueGet(values, worker.Entities(), DCGM_FE_GPU, ValueType::Double, 1.0, value)
                                     && Validate(prevSmActivity, curSmActivity, value, howFarIn, worker.GetValidated()));
 
                 AppendSubtestRecord(prevSmActivity, value);
             }
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2325,6 +2267,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
                                              DistributedCudaContext &worker) mutable -> dcgmReturn_t {
         unsigned int part;
         unsigned int parts;
+        unsigned int activity { 0 };
         bool firstPartTick = worker.IsFirstTick();
 
         worker.GetParts(part, parts);
@@ -2349,6 +2292,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
         double curHowFarIn;
         double timeOffset;
 
+        worker.Input() >> activity;
         worker.Input() >> howFarIn;
         worker.Input() >> prevHowFarIn;
         worker.Input() >> curHowFarIn;
@@ -2359,7 +2303,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
         {
             if (m_parameters.m_report)
             {
-                info_reporter << fmt::format("Worker {:d}: {:d} [{:d}]: GrActivity: generated {:#.3}/{:#.3}, dcgm ",
+                info_reporter << fmt::format("Worker {:d}:{:d} [{:d}]: GrActivity: generated {:#.3}/{:#.3}, dcgm ",
                                              m_gpuId,
                                              index,
                                              m_parameters.m_fieldId,
@@ -2368,7 +2312,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
 
                 ValuesDump(values, ValueType::Double, 1.0); //<< value.value.dbl
 
-                info_reporter << fmt::format(" at {:#.3} seconds.", timeOffset) << info_reporter.new_line;
+                info_reporter << fmt::format(" at {:#.3} seconds. {:d}", timeOffset, activity)
+                              << info_reporter.new_line;
             }
 
             double value;
@@ -2379,7 +2324,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGrActivity(void)
             AppendSubtestRecord(howFarIn, value);
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2405,6 +2350,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
             DistributedCudaContext &worker) mutable -> dcgmReturn_t {
             unsigned int part;
             unsigned int parts;
+            unsigned int activity { 0 };
             bool firstPartTick = worker.IsFirstTick();
 
             worker.GetParts(part, parts);
@@ -2439,6 +2385,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
             double prevPerSecond;
             double curPerSecond;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> prevPerSecond;
             worker.Input() >> curPerSecond;
@@ -2446,8 +2393,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
             /*
              * We need to compare across the whole GPU, so we update whole-GPU
-             * activity, subtracting the previous activity, and adding the current
-             * activity generated.
+             * activity, subtracting the previous activity, and adding the
+             * currentactivity generated.
              */
 
             curGpuPerSecond += curPerSecond - prevPerSecond;
@@ -2565,7 +2512,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
             prevGpuPerSecond = curGpuPerSecond;
 
-            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+            return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
         });
 
     rtSt = CommandAll(false,
@@ -2579,7 +2526,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 }
 
 /*****************************************************************************/
-dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs)
+dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs, dcgmGroupEntityPair_t &entity)
 {
     int i;
 
@@ -2587,42 +2534,59 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs)
         .version = dcgmDeviceTopology_version1, .cpuAffinityMask = {}, .numGpus = 0, .gpuPaths = {}
     };
 
-    dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
-
-    if (dcgmReturn == DCGM_ST_NOT_SUPPORTED) // No other GPUs for NvLink tests
+    if (entity.entityGroupId == DCGM_FE_GPU) // A physical GPU
     {
-        deviceTopo.numGpus = 0;
+        dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
+
+        if ((dcgmReturn != DCGM_ST_OK) && (dcgmReturn != DCGM_ST_NOT_SUPPORTED))
+        {
+            DCGM_LOG_ERROR << "dcgmGetDeviceTopology failed with " << dcgmReturn << " for gpuId " << m_gpuId << ".";
+
+            return dcgmReturn;
+        }
     }
-    else if (dcgmReturn != DCGM_ST_OK)
+    else if (entity.entityGroupId != DCGM_FE_GPU_CI) // Not a MIG slice either
     {
-        DCGM_LOG_ERROR << "dcgmGetDeviceTopology failed with " << dcgmReturn << " for gpuId " << m_gpuId << ".";
+        DCGM_LOG_ERROR << "HelperGetCudaVisibleGPUs called with non-GPU or non-FI Entity Group Id for gpuId " << m_gpuId
+                       << ".";
 
-        return DCGM_ST_NOT_SUPPORTED;
+        return DCGM_ST_BADPARAM;
     }
 
-    // Iterate through NvLink-connected GPUS.
+    // Iterate through NvLink-connected GPUs.
 
     cudaVisibleGPUs = "";
 
+    std::string separator = "";
+
+    /**
+     * The first iteration through the loop gets the device ID for the device
+     * or MIG slice itself. Subsequent iterations get the device ID for
+     * reachable NvLink devices in the non-MIG case.
+     */
+
     for (i = -1; i < (int)deviceTopo.numGpus; i++)
     {
-        dcgmGroupEntityPair_t entity { DCGM_FE_GPU, i < 0 ? m_gpuId : deviceTopo.gpuPaths[i].gpuId };
+        dcgmGroupEntityPair_t tmpEntity { entity.entityGroupId,
+                                          i < 0 ? entity.entityId : deviceTopo.gpuPaths[i].gpuId };
+
         unsigned short fieldId { DCGM_FI_DEV_CUDA_VISIBLE_DEVICES_STR };
 
         dcgmFieldValue_v2 value {};
 
-        dcgmReturn = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+        dcgmReturn_t dcgmReturn
+            = dcgmEntitiesGetLatestValues(m_dcgmHandle, &tmpEntity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
 
         if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
         {
-            DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
-                           << "] to prospective CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << "), "
-                           << value.status;
+            DCGM_LOG_ERROR << "Could not map Entity ID [" << tmpEntity.entityGroupId << "," << tmpEntity.entityId
+                           << "] to prospective CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn
+                           << "), status: " << value.status;
 
             return DCGM_ST_GENERIC_ERROR;
         }
 
-        if (!strncmp(value.value.str, "MIG", 3))
+        if ((tmpEntity.entityGroupId != DCGM_FE_GPU_CI) && (strncmp(value.value.str, "MIG", 3) == 0))
         {
             DCGM_LOG_INFO << "Entity ID [" << entity.entityGroupId << "," << entity.entityId << "] maps to MIG GPU "
                           << value.value.str << "; ignored for CUDA_VISIBLE_DEVICES";
@@ -2630,12 +2594,8 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs)
             continue;
         }
 
-        if (!cudaVisibleGPUs.empty())
-        {
-            cudaVisibleGPUs += ",";
-        }
-
-        cudaVisibleGPUs += value.value.str;
+        cudaVisibleGPUs += separator + value.value.str;
+        separator = ",";
     }
 
     return DCGM_ST_OK;
@@ -2740,6 +2700,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                        DistributedCudaContext &worker) mutable -> dcgmReturn_t {
         unsigned int part;
         unsigned int parts;
+        unsigned int activity { 0 };
         bool firstPartTick = worker.IsFirstTick();
 
         worker.GetParts(part, parts);
@@ -2804,6 +2765,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
         double prevPerSecond;
         double curPerSecond;
 
+        worker.Input() >> activity;
         worker.Input() >> howFarIn;
         worker.Input() >> prevPerSecond;
         worker.Input() >> curPerSecond;
@@ -2843,7 +2805,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                                 && Validate(prevPerSecond, curPerSecond, value, howFarIn, worker.GetValidated()));
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -2913,6 +2875,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
                                                          DistributedCudaContext &worker) mutable -> dcgmReturn_t {
         unsigned int part;
         unsigned int parts;
+        unsigned int activity { 0 };
         bool firstPartTick = worker.IsFirstTick();
 
         worker.GetParts(part, parts);
@@ -2939,6 +2902,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
         unsigned int eccAffectsBandwidth;
         double maxCiBandwidth;
 
+        worker.Input() >> activity;
         worker.Input() >> howFarIn;
         worker.Input() >> prevDramAct;
         worker.Input() >> curDramAct;
@@ -2956,8 +2920,8 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
 
         if (valid)
         {
-            double prevGpuDramAct = curDramAct;
-            double curGpuDramAct  = prevDramAct;
+            double prevGpuDramAct = prevDramAct;
+            double curGpuDramAct  = curDramAct;
 
             dcgm_field_eid_t gi { 0 };
             dcgm_field_eid_t ci { 0 };
@@ -3020,7 +2984,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDramUtil(void)
             AppendSubtestRecord(prevDramAct, value);
         }
 
-        return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+        return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
     });
 
     rtSt = CommandAll(false,
@@ -3114,6 +3078,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
                                                               DistributedCudaContext &worker) mutable -> dcgmReturn_t {
             unsigned int part;
             unsigned int parts;
+            unsigned int activity { 0 };
             bool firstPartTick = worker.IsFirstTick();
 
             worker.GetParts(part, parts);
@@ -3137,6 +3102,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
             double target;
             double target2;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> target;
             worker.Input() >> target2;
@@ -3187,7 +3153,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
                 AppendSubtestRecord(0.0, value);
             }
 
-            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+            return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
         });
 
     rtSt = CommandAll(false,
@@ -3243,6 +3209,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
                                                               DistributedCudaContext &worker) mutable -> dcgmReturn_t {
             unsigned int part;
             unsigned int parts;
+            unsigned int activity { 0 };
             bool firstPartTick = worker.IsFirstTick();
 
             worker.GetParts(part, parts);
@@ -3266,6 +3233,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
             double gflops;
             double gflops2;
 
+            worker.Input() >> activity;
             worker.Input() >> howFarIn;
             worker.Input() >> gflops;
             worker.Input() >> gflops2;
@@ -3294,7 +3262,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
                 AppendSubtestRecord(0.0, value);
             }
 
-            return worker.GetValidated() ? DCGM_ST_OK : DCGM_ST_PENDING;
+            return Advance(worker, activity) ? DCGM_ST_OK : DCGM_ST_PENDING;
         });
 
     rtSt = CommandAll(false,

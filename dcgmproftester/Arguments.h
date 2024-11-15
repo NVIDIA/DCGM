@@ -463,10 +463,9 @@ public:
                          std::string("report"),
                          std::string("report gathering rate"),
                          std::string("Rate of report gathering in seconds"),
-                         std::string("Reporting interval should not be more than 5 seconds"),
-
-                         [](decltype(m_reportInterval) &arg, const decltype(m_reportInterval)::ArgType &value) {
-                             return value <= 5.0;
+                         std::string("Reporting interval should not be more than 10 seconds"),
+                         [](decltype(m_reportInterval) & /* arg */, const decltype(m_reportInterval)::ArgType &value) {
+                             return value <= 10.0;
                          })
         ,
 

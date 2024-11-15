@@ -216,6 +216,38 @@ def cuda_visible_devices_required(handle, gpuId):
 
     return False
 
+def get_gpu_slices(handle, gpuId):
+    # We need to count MIG CI slices, and consider a whole GPU as one.
+    # A GPU in MIG mode, but with no MIG CI slices can't do anything, so
+    # we return 0 in that case.
+    try:
+        hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
+    except dcgm_structs.DCGMError_NotSupported:
+        # No MIG so must be non-MIG -- a whole GPU
+        return 1
+
+    mig_enabled_gpus, _, _ = mig_mode_helper()
+
+    if gpuId not in mig_enabled_gpus:
+        # Our GPU is not in the set of MIG-enabled ones,
+        return 1;
+
+    # We have a MIG GPU -- count the CI slices.
+    slices = 0;
+    matchGpuId = -1
+
+    for i in range(0, hierarchy.count):
+        entity = hierarchy.entityList[i]
+        if entity.parent.entityGroupId == dcgm_fields.DCGM_FE_GPU:
+            matchGpuId = entity.parent.entityId
+
+        if matchGpuId != gpuId:
+            continue
+
+        if entity.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_CI:
+            slices += 1
+
+    return slices
 
 def get_cuda_visible_devices_env(handle, gpuId):
     env = {}
@@ -1975,6 +2007,19 @@ def run_only_if_gpus_available():
         return wrapper
     return decorator
 
+def skip_test_on_vm():
+    '''
+    Decorator to skip tests on VM.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if utils.is_bare_metal_system():
+                result = fn(*args, **kwds)
+            else:
+                skip_test("this test does not run on a VM")
+        return wrapper
+    return decorator
 
 def for_all_same_sku_gpus():
     '''

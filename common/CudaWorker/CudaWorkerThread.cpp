@@ -78,8 +78,17 @@ CudaWorkerThread::CudaWorkerThread()
 }
 
 /*****************************************************************************/
-CudaWorkerThread::~CudaWorkerThread()
+void CudaWorkerThread::Shutdown(void)
 {
+    if (!m_isInitialized)
+    {
+        DCGM_LOG_DEBUG << "Skipping Shutdown() for uninitialized worker.";
+        return;
+    }
+
+    /* Taskrunner tracks its own stopping status and related Semaphore separately */
+    TaskRunner::Stop();
+
     /* Wait for our task runner to exit */
     try
     {
@@ -97,6 +106,12 @@ CudaWorkerThread::~CudaWorkerThread()
     {
         DCGM_LOG_ERROR << "Unknown exception caught in CudaWorkerThread::~CudaWorkerThread()";
     }
+}
+
+/*****************************************************************************/
+CudaWorkerThread::~CudaWorkerThread()
+{
+    Shutdown();
 }
 
 /*****************************************************************************/

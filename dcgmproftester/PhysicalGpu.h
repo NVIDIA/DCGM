@@ -157,8 +157,10 @@ public:
 
     bool IsValidated(void) const; // Did all workers pass validation?
 
-    // Get all visible non-MIG GPUs
-    dcgmReturn_t HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs);
+    // Get all visible non-MIG GPUs for this entity
+    dcgmReturn_t HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs, dcgmGroupEntityPair_t &entity);
+
+    bool Advance(DistributedCudaContext &ignoreWorker, unsigned int activity); // Advance
 
 private:
     // Tick handler type.

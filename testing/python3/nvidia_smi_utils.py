@@ -416,6 +416,11 @@ def are_gpus_free():
         return True
 
     nvsmiData = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
+    xml_start = nvsmiData.find("<?xml version=")
+    if xml_start > 0:
+        logger.warning("Prefix found before XML: %s" % nvsmiData[:xml_start])
+        nvsmiData = nvsmiData[xml_start:]
+
     try:
         tree = ET.fromstring(nvsmiData)
     except ET.ParseError:

@@ -1589,6 +1589,8 @@ unsigned int DcgmCacheManager::AddFakeGpu(unsigned int pciDeviceId, unsigned int
     m_numGpus++;
     dcgm_mutex_unlock(m_mutex);
 
+    log_info("DcgmCacheManager::AddFakeGpu {}", gpuId);
+
     /* Inject ECC mode as enabled so policy management works */
     memset(&sample, 0, sizeof(sample));
     sample.timestamp = timelib_usecSince1970();
@@ -1764,6 +1766,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeInstance(dcgm_field_eid_t parentId)
     }
 
     entityId                    = parentId * DCGM_MAX_INSTANCES_PER_GPU + m_gpus[parentId].instances.size();
+    log_info("DcgmCacheManager::AddFakeInstance {} {}", parentId, entityId);
     unsigned int nvmlInstanceId = m_gpus[parentId].instances.size();
     nvmlGpuInstance_t instance  = {};
     nvmlGpuInstanceProfileInfo_t profileInfo = {};
@@ -1821,6 +1824,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeComputeInstance(dcgm_field_eid_t paren
                 ci.profileName           = "1fc.1g.4gb"; // Make a fake compute instance profile name
                 gpuInstance.AddComputeInstance(ci);
                 entityId = ci.dcgmComputeInstanceId.id;
+                log_info("DcgmCacheManager::AddFakeComputeInstance {} {}", gpuIndex, entityId);
                 m_migManager.RecordGpuComputeInstance(gpuIndex, gpuInstance.GetInstanceId(), ci.dcgmComputeInstanceId);
                 m_numComputeInstances++;
                 m_gpus[gpuIndex].ciCount++;

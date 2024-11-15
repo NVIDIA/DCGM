@@ -578,7 +578,6 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 
         auto entities = std::make_shared<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>>();
 
-        unsigned short fieldId { DCGM_FI_DEV_CUDA_VISIBLE_DEVICES_STR };
         dcgmGroupEntityPair_t entity;
 
         (*entities)[DCGM_FE_GPU] = gpuInstance.m_gpuId;
@@ -601,41 +600,22 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 
             entity.entityGroupId = DCGM_FE_GPU_CI;
             entity.entityId      = gpuInstance.m_ci;
-
-            dcgmFieldValue_v2 value {};
-
-            dcgmReturn_t dcgmReturn
-                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
-
-            if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
-            {
-                AbortOtherChildren(gpuInstance.m_gpuId);
-
-                DCGM_LOG_ERROR << "Could not map Entity ID [" << entity.entityGroupId << "," << entity.entityId
-                               << "] to prospective CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn
-                               << "), " << value.status;
-
-                return DCGM_ST_GENERIC_ERROR;
-            }
-
-            cudaVisibleDevices = value.value.str;
         }
         else
         {
             entity.entityGroupId = DCGM_FE_GPU;
             entity.entityId      = gpuInstance.m_gpuId;
+        }
 
-            dcgmReturn_t dcgmReturn = m_gpus[gpuInstance.m_gpuId]->HelperGetCudaVisibleGPUs(cudaVisibleDevices);
+        dcgmReturn_t dcgmReturn = m_gpus[gpuInstance.m_gpuId]->HelperGetCudaVisibleGPUs(cudaVisibleDevices, entity);
             if (dcgmReturn != DCGM_ST_OK)
             {
                 AbortOtherChildren(gpuInstance.m_gpuId);
 
-                DCGM_LOG_ERROR << "Could not get non-MIG CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn
-                               << ")";
+            DCGM_LOG_ERROR << "Could not get CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << ")";
 
                 return DCGM_ST_GENERIC_ERROR;
             }
-        }
 
         worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);
 

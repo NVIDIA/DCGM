@@ -551,6 +551,8 @@ DCGM_FI_DEV_CPU_TEMP_CRITICAL      = 1112 # CPU critical temparature
 DCGM_FI_DEV_CPU_CLOCK_CURRENT      = 1120 # CPU instantaneous clock speed
 DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT = 1130 # CPU power utilization
 DCGM_FI_DEV_CPU_POWER_LIMIT        = 1131 # CPU power limit
+DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT  = 1132 # SysIO power limit
+DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT = 1133 # Module power limit
 DCGM_FI_DEV_CPU_VENDOR             = 1140 # CPU vendor name
 DCGM_FI_DEV_CPU_MODEL              = 1141 # CPU model name
 
@@ -613,6 +615,7 @@ class c_dcgm_field_output_format_t(_PrintableStructure):
         ('width' , c_short)
     ]
 
+dcgm_field_output_format_t = POINTER(c_dcgm_field_output_format_t)
 TAG_LENGTH = 48
 
 # Structure to represent device information

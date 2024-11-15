@@ -51,6 +51,15 @@ public:
 
     /*************************************************************************/
     /**
+     * Soft destructor
+     *
+     * Stop the worker thread
+     *
+     */
+    void Shutdown(void);
+
+    /*************************************************************************/
+    /**
      * Set the workload fieldId and load target for this worker thread
      */
     void SetWorkloadAndTarget(unsigned int fieldId,
