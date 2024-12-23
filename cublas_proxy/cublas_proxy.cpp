@@ -26,6 +26,21 @@
 
 namespace Dcgm::CublasProxy
 {
+cublasStatus_t CublasDgemv(cublasHandle_t handle,
+                           cublasOperation_t trans,
+                           int m,
+                           int n,
+                           const double *alpha, /* host or device pointer */
+                           const double *A,
+                           int lda,
+                           const double *x,
+                           int incx,
+                           const double *beta, /* host or device pointer */
+                           double *y,
+                           int incy)
+{
+    MAKE_API_CALL(cublasDgemv, handle, trans, m, n, alpha, A, lda, x, incx, beta, y, incy);
+}
 cublasStatus_t CublasGetVersion(cublasHandle_t handle, int *version)
 {
     MAKE_API_CALL(cublasGetVersion, handle, version);
@@ -120,76 +135,14 @@ cublasStatus_t CublasLtDestroy(cublasLtHandle_t lightHandle)
     MAKE_API_CALL(cublasLtDestroy, lightHandle);
 }
 
-
-cublasStatus_t CublasLtMatmulDescCreate(cublasLtMatmulDesc_t *matmulDesc,
-                                        cublasComputeType_t computeType,
-                                        cudaDataType_t scaleType)
+cublasStatus_t CublasLtGetProperty(libraryPropertyType type, int *value)
 {
-    MAKE_API_CALL(cublasLtMatmulDescCreate, matmulDesc, computeType, scaleType);
+    MAKE_API_CALL(cublasLtGetProperty, type, value);
 }
 
-cublasStatus_t CublasLtMatrixLayoutCreate(cublasLtMatrixLayout_t *matLayout,
-                                          cudaDataType type,
-                                          uint64_t rows,
-                                          uint64_t cols,
-                                          int64_t ld)
+size_t CublasLtGetVersion(void)
 {
-    MAKE_API_CALL(cublasLtMatrixLayoutCreate, matLayout, type, rows, cols, ld);
-}
-
-cublasStatus_t CublasLtMatrixLayoutSetAttribute(cublasLtMatrixLayout_t matLayout,
-                                                cublasLtMatrixLayoutAttribute_t attr,
-                                                const void *buf,
-                                                size_t sizeInBytes)
-{
-    MAKE_API_CALL(cublasLtMatrixLayoutSetAttribute, matLayout, attr, buf, sizeInBytes);
-}
-
-
-cublasStatus_t CublasLtMatmulDescSetAttribute(cublasLtMatmulDesc_t matmulDesc,
-                                              cublasLtMatmulDescAttributes_t attr,
-                                              const void *buf,
-                                              size_t sizeInBytes)
-{
-    MAKE_API_CALL(cublasLtMatmulDescSetAttribute, matmulDesc, attr, buf, sizeInBytes);
-}
-
-
-cublasStatus_t CublasLtMatmulPreferenceCreate(cublasLtMatmulPreference_t *pref)
-{
-    MAKE_API_CALL(cublasLtMatmulPreferenceCreate, pref);
-}
-
-cublasStatus_t CublasLtMatmulPreferenceSetAttribute(cublasLtMatmulPreference_t pref,
-                                                    cublasLtMatmulPreferenceAttributes_t attr,
-                                                    const void *buf,
-                                                    size_t sizeInBytes)
-{
-    MAKE_API_CALL(cublasLtMatmulPreferenceSetAttribute, pref, attr, buf, sizeInBytes);
-}
-
-cublasStatus_t CublasLtMatmulAlgoGetHeuristic(cublasLtHandle_t lightHandle,
-                                              cublasLtMatmulDesc_t operationDesc,
-                                              cublasLtMatrixLayout_t Adesc,
-                                              cublasLtMatrixLayout_t Bdesc,
-                                              cublasLtMatrixLayout_t Cdesc,
-                                              cublasLtMatrixLayout_t Ddesc,
-                                              cublasLtMatmulPreference_t preference,
-                                              int requestedAlgoCount,
-                                              cublasLtMatmulHeuristicResult_t heuristicResultsArray[],
-                                              int *returnAlgoCount)
-{
-    MAKE_API_CALL(cublasLtMatmulAlgoGetHeuristic,
-                  lightHandle,
-                  operationDesc,
-                  Adesc,
-                  Bdesc,
-                  Cdesc,
-                  Ddesc,
-                  preference,
-                  requestedAlgoCount,
-                  heuristicResultsArray,
-                  returnAlgoCount);
+    return ::cublasLtGetVersion();
 }
 
 cublasStatus_t CublasLtMatmul(cublasLtHandle_t lightHandle,
@@ -228,14 +181,67 @@ cublasStatus_t CublasLtMatmul(cublasLtHandle_t lightHandle,
                   stream);
 }
 
-cublasStatus_t CublasLtMatmulPreferenceDestroy(cublasLtMatmulPreference_t pref)
+cublasStatus_t CublasLtMatmulAlgoConfigGetAttribute(const cublasLtMatmulAlgo_t *algo,
+                                                    cublasLtMatmulAlgoConfigAttributes_t attr,
+                                                    void *buf,
+                                                    size_t sizeInBytes,
+                                                    size_t *sizeWritten)
 {
-    MAKE_API_CALL(cublasLtMatmulPreferenceDestroy, pref);
+    MAKE_API_CALL(cublasLtMatmulAlgoConfigGetAttribute, algo, attr, buf, sizeInBytes, sizeWritten);
 }
 
-cublasStatus_t CublasLtMatrixLayoutDestroy(cublasLtMatrixLayout_t matLayout)
+cublasStatus_t CublasLtMatmulAlgoConfigSetAttribute(cublasLtMatmulAlgo_t *algo,
+                                                    cublasLtMatmulAlgoConfigAttributes_t attr,
+                                                    const void *buf,
+                                                    size_t sizeInBytes)
 {
-    MAKE_API_CALL(cublasLtMatrixLayoutDestroy, matLayout);
+    MAKE_API_CALL(cublasLtMatmulAlgoConfigSetAttribute, algo, attr, buf, sizeInBytes);
+}
+
+
+cublasStatus_t CublasLtMatmulAlgoGetHeuristic(cublasLtHandle_t lightHandle,
+                                              cublasLtMatmulDesc_t operationDesc,
+                                              cublasLtMatrixLayout_t Adesc,
+                                              cublasLtMatrixLayout_t Bdesc,
+                                              cublasLtMatrixLayout_t Cdesc,
+                                              cublasLtMatrixLayout_t Ddesc,
+                                              cublasLtMatmulPreference_t preference,
+                                              int requestedAlgoCount,
+                                              cublasLtMatmulHeuristicResult_t heuristicResultsArray[],
+                                              int *returnAlgoCount)
+{
+    MAKE_API_CALL(cublasLtMatmulAlgoGetHeuristic,
+                  lightHandle,
+                  operationDesc,
+                  Adesc,
+                  Bdesc,
+                  Cdesc,
+                  Ddesc,
+                  preference,
+                  requestedAlgoCount,
+                  heuristicResultsArray,
+                  returnAlgoCount);
+}
+
+cublasStatus_t CublasLtMatmulAlgoInit(cublasLtHandle_t lightHandle,
+                                      cublasComputeType_t computeType,
+                                      cudaDataType_t scaleType,
+                                      cudaDataType_t Atype,
+                                      cudaDataType_t Btype,
+                                      cudaDataType_t Ctype,
+                                      cudaDataType_t Dtype,
+                                      int algoId,
+                                      cublasLtMatmulAlgo_t *algo)
+{
+    MAKE_API_CALL(
+        cublasLtMatmulAlgoInit, lightHandle, computeType, scaleType, Atype, Btype, Ctype, Dtype, algoId, algo);
+}
+
+cublasStatus_t CublasLtMatmulDescCreate(cublasLtMatmulDesc_t *matmulDesc,
+                                        cublasComputeType_t computeType,
+                                        cudaDataType_t scaleType)
+{
+    MAKE_API_CALL(cublasLtMatmulDescCreate, matmulDesc, computeType, scaleType);
 }
 
 cublasStatus_t CublasLtMatmulDescDestroy(cublasLtMatmulDesc_t matmulDesc)
@@ -243,10 +249,72 @@ cublasStatus_t CublasLtMatmulDescDestroy(cublasLtMatmulDesc_t matmulDesc)
     MAKE_API_CALL(cublasLtMatmulDescDestroy, matmulDesc);
 }
 
-size_t CublasLtGetVersion(void)
+cublasStatus_t CublasLtMatmulDescGetAttribute(cublasLtMatmulDesc_t matmulDesc,
+                                              cublasLtMatmulDescAttributes_t attr,
+                                              void *buf,
+                                              size_t sizeInBytes,
+                                              size_t *sizeWritten)
 {
-    return ::cublasLtGetVersion();
+    MAKE_API_CALL(cublasLtMatmulDescGetAttribute, matmulDesc, attr, buf, sizeInBytes, sizeWritten);
 }
+
+cublasStatus_t CublasLtMatmulDescSetAttribute(cublasLtMatmulDesc_t matmulDesc,
+                                              cublasLtMatmulDescAttributes_t attr,
+                                              const void *buf,
+                                              size_t sizeInBytes)
+{
+    MAKE_API_CALL(cublasLtMatmulDescSetAttribute, matmulDesc, attr, buf, sizeInBytes);
+}
+
+cublasStatus_t CublasLtMatmulPreferenceCreate(cublasLtMatmulPreference_t *pref)
+{
+    MAKE_API_CALL(cublasLtMatmulPreferenceCreate, pref);
+}
+
+cublasStatus_t CublasLtMatmulPreferenceDestroy(cublasLtMatmulPreference_t pref)
+{
+    MAKE_API_CALL(cublasLtMatmulPreferenceDestroy, pref);
+}
+
+cublasStatus_t CublasLtMatmulPreferenceSetAttribute(cublasLtMatmulPreference_t pref,
+                                                    cublasLtMatmulPreferenceAttributes_t attr,
+                                                    const void *buf,
+                                                    size_t sizeInBytes)
+{
+    MAKE_API_CALL(cublasLtMatmulPreferenceSetAttribute, pref, attr, buf, sizeInBytes);
+}
+
+cublasStatus_t CublasLtMatrixLayoutCreate(cublasLtMatrixLayout_t *matLayout,
+                                          cudaDataType type,
+                                          uint64_t rows,
+                                          uint64_t cols,
+                                          int64_t ld)
+{
+    MAKE_API_CALL(cublasLtMatrixLayoutCreate, matLayout, type, rows, cols, ld);
+}
+
+cublasStatus_t CublasLtMatrixLayoutDestroy(cublasLtMatrixLayout_t matLayout)
+{
+    MAKE_API_CALL(cublasLtMatrixLayoutDestroy, matLayout);
+}
+
+cublasStatus_t CublasLtMatrixLayoutGetAttribute(cublasLtMatrixLayout_t matLayout,
+                                                cublasLtMatrixLayoutAttribute_t attr,
+                                                void *buf,
+                                                size_t sizeInBytes,
+                                                size_t *sizeWritten)
+{
+    MAKE_API_CALL(cublasLtMatrixLayoutGetAttribute, matLayout, attr, buf, sizeInBytes, sizeWritten);
+}
+
+cublasStatus_t CublasLtMatrixLayoutSetAttribute(cublasLtMatrixLayout_t matLayout,
+                                                cublasLtMatrixLayoutAttribute_t attr,
+                                                const void *buf,
+                                                size_t sizeInBytes)
+{
+    MAKE_API_CALL(cublasLtMatrixLayoutSetAttribute, matLayout, attr, buf, sizeInBytes);
+}
+
 
 #endif // CUDA_VERSION_USED > 10
 

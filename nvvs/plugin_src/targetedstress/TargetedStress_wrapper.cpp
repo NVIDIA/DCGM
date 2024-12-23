@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "dcgm_structs.h"
+#include "PluginInterface.h"
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
 
@@ -29,8 +29,8 @@
 #include "PluginStrings.h"
 #include "cuda_runtime_api.h"
 
-ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
-    : m_testParameters(NULL)
+ConstantPerf::ConstantPerf(dcgmHandle_t handle)
+    : m_testParameters(nullptr)
     , m_dcgmCommErrorOccurred(false)
     , m_dcgmRecorderInitialized(true)
     , m_dcgmRecorder(handle)
@@ -43,12 +43,12 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo
 {
     m_infoStruct.testIndex        = DCGM_TARGETED_STRESS_INDEX;
     m_infoStruct.shortDescription = "This plugin will keep the list of GPUs at a constant stress level.";
-    m_infoStruct.testGroups       = "Perf";
+    m_infoStruct.testCategories   = TS_PLUGIN_CATEGORY;
     m_infoStruct.selfParallel     = true;
     m_infoStruct.logFileTag       = TS_PLUGIN_NAME;
 
     /* Populate default test parameters */
-    m_testParameters = new TestParameters();
+    m_testParameters = std::make_unique<TestParameters>();
     m_testParameters->AddString(PS_RUN_IF_GOM_ENABLED, "False");
     m_testParameters->AddString(TS_STR_USE_DGEMM, "True");
     m_testParameters->AddString(TS_STR_IS_ALLOWED, "False");
@@ -75,7 +75,6 @@ ConstantPerf::~ConstantPerf()
 /*****************************************************************************/
 void ConstantPerf::Cleanup()
 {
-    size_t i;
     CPerfDevice *device = NULL;
 
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
@@ -84,7 +83,7 @@ void ConstantPerf::Cleanup()
         cudaSetDevice(device->cudaDeviceIdx);
 
         /* Wait for all streams to finish */
-        for (i = 0; i < device->Nstreams; i++)
+        for (int i = 0; i < device->Nstreams; ++i)
         {
             cudaStreamSynchronize(device->streams[i].cudaStream);
         }
@@ -105,35 +104,40 @@ void ConstantPerf::Cleanup()
 }
 
 /*****************************************************************************/
-bool ConstantPerf::Init(dcgmDiagPluginGpuList_t *gpuInfo)
+bool ConstantPerf::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
     CPerfDevice *cpDevice = 0;
 
-    if (gpuInfo == nullptr)
+    if (entityInfo == nullptr)
     {
         DCGM_LOG_ERROR << "Cannot inititalize without GPU information";
         return false;
     }
 
-    m_gpuInfo = *gpuInfo;
-
-    for (unsigned int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
+    for (unsigned int gpuListIndex = 0; gpuListIndex < entityInfo->numEntities; gpuListIndex++)
     {
-        if (gpuInfo->gpus[gpuListIndex].status == DcgmEntityStatusFake
-            || gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciDeviceId == 0)
+        if (entityInfo->entities[gpuListIndex].entity.entityGroupId != DCGM_FE_GPU)
         {
-            log_debug("Skipping cuda init for fake gpu {}", gpuInfo->gpus[gpuListIndex].gpuId);
+            continue;
+        }
+        if (entityInfo->entities[gpuListIndex].auxField.gpu.status == DcgmEntityStatusFake
+            || entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciDeviceId == 0)
+        {
+            log_debug("Skipping cuda init for fake gpu {}", entityInfo->entities[gpuListIndex].entity.entityId);
             continue;
         }
 
         try
         {
-            cpDevice = new CPerfDevice(
-                gpuInfo->gpus[gpuListIndex].gpuId, gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciBusId, this);
+            cpDevice = new CPerfDevice(GetTargetedStressTestName(),
+                                       entityInfo->entities[gpuListIndex].entity.entityId,
+                                       entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciBusId,
+                                       this);
         }
         catch (DcgmError &d)
         {
-            AddErrorForGpu(TS_PLUGIN_NAME, gpuInfo->gpus[gpuListIndex].gpuId, d);
+            d.SetGpuId(entityInfo->entities[gpuListIndex].entity.entityId);
+            AddError(GetTargetedStressTestName(), d);
             delete cpDevice;
             return false;
         }
@@ -148,7 +152,7 @@ int ConstantPerf::CudaInit()
 {
     using namespace Dcgm;
     cudaError_t cuSt;
-    int i, j, count, valueSize;
+    int count, valueSize;
     size_t arrayByteSize, arrayNelem;
     cublasStatus_t cubSt;
     CPerfDevice *device         = 0;
@@ -157,7 +161,7 @@ int ConstantPerf::CudaInit()
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -200,12 +204,12 @@ int ConstantPerf::CudaInit()
         cuSt = cudaGetDeviceProperties(&device->cudaDevProp, device->cudaDeviceIdx);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaGetDeviceProperties", cuSt, device->gpuId);
+            LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaGetDeviceProperties", cuSt, device->gpuId);
             return -1;
         }
 
         /* Initialize cuda streams */
-        for (i = 0; i < TS_MAX_STREAMS_PER_DEVICE; i++)
+        for (int i = 0; i < TS_MAX_STREAMS_PER_DEVICE; ++i)
         {
             cperf_stream_p cpStream = &device->streams[i];
             cuSt                    = cudaStreamCreate(&cpStream->cudaStream);
@@ -217,41 +221,41 @@ int ConstantPerf::CudaInit()
                 DcgmError d { device->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaStreamCreate");
                 d.AddDetail(ss.str());
-                AddErrorForGpu(TS_PLUGIN_NAME, device->gpuId, d);
+                AddError(GetTargetedStressTestName(), d);
                 return -1;
             }
 
             cuSt = cudaEventCreate(&cpStream->afterWorkBlock);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaEventCreate", cuSt, device->gpuId);
                 return -1;
             }
 
-            for (j = 0; j < m_atATime; j++)
+            for (int j = 0; j < m_atATime; ++j)
             {
                 cuSt = cudaEventCreate(&cpStream->beforeCopyH2D[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->beforeGemm[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->beforeCopyD2H[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
                 cuSt = cudaEventCreate(&cpStream->afterCopyD2H[j]);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaEventCreate", cuSt, device->gpuId);
+                    LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaEventCreate", cuSt, device->gpuId);
                     return -1;
                 }
             }
@@ -263,21 +267,21 @@ int ConstantPerf::CudaInit()
             cuSt = cudaHostAlloc(&cpStream->hostA, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaHostAlloc(&cpStream->hostB, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaHostAlloc(&cpStream->hostC, arrayByteSize, hostAllocFlags);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
@@ -287,7 +291,7 @@ int ConstantPerf::CudaInit()
                 double *doubleHostB = (double *)cpStream->hostB;
                 double *doubleHostC = (double *)cpStream->hostC;
 
-                for (j = 0; j < arrayNelem; j++)
+                for (size_t j = 0; j < arrayNelem; ++j)
                 {
                     doubleHostA[j] = (double)rand() / 100.0;
                     doubleHostB[j] = (double)rand() / 100.0;
@@ -301,7 +305,7 @@ int ConstantPerf::CudaInit()
                 float *floatHostB = (float *)cpStream->hostB;
                 float *floatHostC = (float *)cpStream->hostC;
 
-                for (j = 0; j < arrayNelem; j++)
+                for (size_t j = 0; j < arrayNelem; ++j)
                 {
                     floatHostA[j] = (float)rand() / 100.0;
                     floatHostB[j] = (float)rand() / 100.0;
@@ -316,33 +320,33 @@ int ConstantPerf::CudaInit()
         cubSt = CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR(TS_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(GetTargetedStressTestName(), "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         device->allocatedCublasHandle = 1;
 
-        for (i = 0; i < device->Nstreams; i++)
+        for (int i = 0; i < device->Nstreams; ++i)
         {
             cperf_stream_p cpStream = &device->streams[i];
 
             cuSt = cudaMalloc((void **)&cpStream->deviceA, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaMalloc((void **)&cpStream->deviceB, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
 
             cuSt = cudaMalloc((void **)&cpStream->deviceC, arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TS_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedStressTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
         }
@@ -353,12 +357,30 @@ int ConstantPerf::CudaInit()
 
 /*****************************************************************************/
 void ConstantPerf::Go(std::string const &testName,
+                      dcgmDiagPluginEntityList_v1 const *entityInfo,
                       unsigned int numParameters,
-                      const dcgmDiagPluginTestParameter_t *testParameters)
+                      dcgmDiagPluginTestParameter_t const *testParameters)
 {
-    InitializeForGpuList(testName, m_gpuInfo);
+    if (testName != GetTargetedStressTestName())
+    {
+        log_error("failed to test due to unknown test name [{}].", testName);
+        return;
+    }
 
-    if (UsingFakeGpus())
+    if (!entityInfo)
+    {
+        log_error("failed to test due to entityInfo is nullptr.");
+        return;
+    }
+    InitializeForEntityList(testName, *entityInfo);
+
+    if (!Init(entityInfo))
+    {
+        log_error("Failed to initialize devices for targeted stress plugin");
+        return;
+    }
+
+    if (UsingFakeGpus(testName))
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
@@ -386,7 +408,7 @@ void ConstantPerf::Go(std::string const &testName,
     m_atATime             = m_testParameters->GetDouble(TS_STR_CUDA_OPS_PER_STREAM);
     m_sbeFailureThreshold = m_testParameters->GetDouble(TS_STR_SBE_ERROR_THRESHOLD);
 
-    result = RunTest();
+    result = RunTest(entityInfo);
     if (main_should_stop)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -405,12 +427,12 @@ void ConstantPerf::Go(std::string const &testName,
 bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
                                 std::vector<DcgmError> &errorList,
                                 timelib64_t startTime,
-                                timelib64_t endTime)
+                                timelib64_t /* endTime */)
 {
     std::vector<dcgmTimeseriesInfo_t> data;
     std::stringstream buf;
 
-    data = GetCustomGpuStat(device->gpuId, PERF_STAT_NAME);
+    data = GetCustomGpuStat(GetTargetedStressTestName(), device->gpuId, PERF_STAT_NAME);
     if (data.size() == 0)
     {
         DcgmError d { device->gpuId };
@@ -446,7 +468,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
 
     double minRatio = m_testParameters->GetDouble(TS_STR_TARGET_PERF_MIN_RATIO);
 
-    RecordObservedMetric(device->gpuId, TS_STR_TARGET_PERF, maxVal);
+    RecordObservedMetric(GetTargetedStressTestName(), device->gpuId, TS_STR_TARGET_PERF, maxVal);
 
     if (maxVal < discountMultiplier * minRatio * m_targetPerf)
     {
@@ -466,7 +488,7 @@ bool ConstantPerf::CheckGpuPerf(CPerfDevice *device,
     ss.setf(std::ios::fixed, std::ios::floatfield);
     ss.precision(0);
     ss << "GPU " << device->gpuId << " relative stress level\t" << avg;
-    AddInfoVerboseForGpu(TS_PLUGIN_NAME, device->gpuId, ss.str());
+    AddInfoVerboseForGpu(GetTargetedStressTestName(), device->gpuId, ss.str());
     return true;
 }
 
@@ -498,12 +520,14 @@ bool ConstantPerf::CheckPassFail(timelib64_t startTime, timelib64_t earliestStop
 {
     bool passed, allPassed = true;
     std::vector<DcgmError> errorList;
+    auto const &gpuList = m_tests.at(GetTargetedStressTestName()).GetGpuList();
 
     for (size_t i = 0; i < m_device.size(); i++)
     {
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, TS_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(
+            this, GetTargetedStressTestName(), gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -520,7 +544,7 @@ class ConstantPerfWorker : public DcgmThread
 private:
     CPerfDevice *m_device;             /* Which device this worker thread is running on */
     ConstantPerf &m_plugin;            /* ConstantPerf plugin for logging and failure checks */
-    TestParameters *m_testParameters;  /* Read-only test parameters */
+    TestParameters *m_testParameters;  /* 'Read-only' test parameters */
     int m_useDgemm;                    /* Wheter to use dgemm (1) or sgemm (0) for operations */
     double m_targetPerf;               /* Target stress in gflops */
     double m_testDuration;             /* Target test duration in seconds */
@@ -572,7 +596,7 @@ public:
      * Worker thread main.
      *
      */
-    void run(void);
+    void run(void) override;
 
 private:
     /*****************************************************************************/
@@ -601,6 +625,11 @@ private:
                  double *doubleAlpha,
                  float *floatBeta,
                  double *doubleBeta);
+
+    std::string GetTargetedStressTestName()
+    {
+        return TS_PLUGIN_NAME;
+    }
 };
 
 /****************************************************************************/
@@ -610,13 +639,19 @@ private:
  * Method returns whether the test ran sucessfully - this is *not* the same as whether the test passed
  */
 /*****************************************************************************/
-bool ConstantPerf::RunTest()
+bool ConstantPerf::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
     int st, Nrunning = 0;
     ConstantPerfWorker *workerThreads[TS_MAX_DEVICES] = { 0 };
     unsigned int timeCount                            = 0;
     timelib64_t earliestStopTime;
     timelib64_t startTime = timelib_usecSince1970();
+
+    if (!entityInfo)
+    {
+        log_error("entityInfo is nullptr");
+        return false;
+    }
 
     st = CudaInit();
     if (st)
@@ -629,7 +664,7 @@ bool ConstantPerf::RunTest()
     bool failEarly                  = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
 
-    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
+    EarlyFailChecker efc(m_testParameters.get(), failEarly, failCheckInterval, *entityInfo);
 
     try /* Catch runtime errors */
     {
@@ -637,7 +672,7 @@ bool ConstantPerf::RunTest()
         for (size_t i = 0; i < m_device.size(); i++)
         {
             workerThreads[i] = new ConstantPerfWorker(
-                m_device[i], *this, m_testParameters, m_dcgmRecorder, failEarly, failCheckInterval);
+                m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
             workerThreads[i]->Start();
             Nrunning++;
         }
@@ -672,8 +707,8 @@ bool ConstantPerf::RunTest()
         log_error("Caught exception {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        AddError(TS_PLUGIN_NAME, d);
-        SetResult(TS_PLUGIN_NAME, NVVS_RESULT_FAIL);
+        AddError(GetTargetedStressTestName(), d);
+        SetResult(GetTargetedStressTestName(), NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -721,6 +756,10 @@ bool ConstantPerf::RunTest()
     return true;
 }
 
+std::string ConstantPerf::GetTargetedStressTestName() const
+{
+    return TS_PLUGIN_NAME;
+}
 
 /****************************************************************************/
 /*
@@ -780,11 +819,12 @@ int ConstantPerfWorker::RecordTiming(cperf_stream_p cpStream)
 
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventElapsedTime", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventElapsedTime", cuSt, m_device->gpuId);
         std::stringstream ss;
         ss << "Results for GPU " << m_device->gpuId << " will be inaccurate because there was an "
            << "error getting elapsed time.";
-        m_plugin.AddInfoVerboseForGpu(TS_PLUGIN_NAME, m_device->gpuId, ss.str());
+        m_plugin.AddInfoVerboseForGpu(GetTargetedStressTestName(), m_device->gpuId, ss.str());
         return -1;
     }
 
@@ -820,7 +860,8 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
     cuSt = cudaEventRecord(cpStream->beforeCopyH2D[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -829,28 +870,32 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
         cpStream->deviceA, cpStream->hostA, arrayByteSize, cudaMemcpyHostToDevice, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
     cuSt = cudaMemcpyAsync(
         cpStream->deviceB, cpStream->hostB, arrayByteSize, cudaMemcpyHostToDevice, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
 
     cuSt = cudaEventRecord(cpStream->beforeGemm[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
     cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, cpStream->cudaStream);
     if (cubSt != CUBLAS_STATUS_SUCCESS)
     {
-        LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasSetStream", cubSt, m_device->gpuId);
+        LOG_CUBLAS_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cublasSetStream", cubSt, m_device->gpuId);
         return -1;
     }
 
@@ -872,7 +917,8 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
                                          TS_TEST_DIMENSION);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasDgemm", cubSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetTargetedStressTestName(), "cublasDgemm", cubSt, m_device->gpuId);
             return -1;
         }
     }
@@ -894,7 +940,8 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
                                          TS_TEST_DIMENSION);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cublasSgemm", cubSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetTargetedStressTestName(), "cublasSgemm", cubSt, m_device->gpuId);
             return -1;
         }
     }
@@ -902,7 +949,8 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
     cuSt = cudaEventRecord(cpStream->beforeCopyD2H[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -911,14 +959,16 @@ int ConstantPerfWorker::QueueOne(int streamIdx,
         cpStream->hostC, cpStream->deviceC, arrayByteSize, cudaMemcpyDeviceToHost, cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         return -1;
     }
 
     cuSt = cudaEventRecord(cpStream->afterCopyD2H[opIdx], cpStream->cudaStream);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventRecord", cuSt, m_device->gpuId);
         return -1;
     }
 
@@ -967,17 +1017,19 @@ void ConstantPerfWorker::run(void)
     gflopsKey = std::string(PERF_STAT_NAME);
 
     /* Record some of our static calculated parameters in case we need them for debugging */
-    m_plugin.SetGpuStat(m_device->gpuId, std::string("flops_per_op"), flopsPerOp);
-    m_plugin.SetGpuStat(m_device->gpuId, std::string("bytes_copied_per_op"), copyBytesPerOp);
-    m_plugin.SetGpuStat(m_device->gpuId, std::string("num_cuda_streams"), (long long)useNstreams);
-    m_plugin.SetGpuStat(m_device->gpuId, std::string("try_ops_per_sec"), opsPerSec);
+    m_plugin.SetGpuStat(GetTargetedStressTestName(), m_device->gpuId, std::string("flops_per_op"), flopsPerOp);
+    m_plugin.SetGpuStat(
+        GetTargetedStressTestName(), m_device->gpuId, std::string("bytes_copied_per_op"), copyBytesPerOp);
+    m_plugin.SetGpuStat(
+        GetTargetedStressTestName(), m_device->gpuId, std::string("num_cuda_streams"), (long long)useNstreams);
+    m_plugin.SetGpuStat(GetTargetedStressTestName(), m_device->gpuId, std::string("try_ops_per_sec"), opsPerSec);
 
     /* Lock to our assigned GPU */
     cudaSetDevice(m_device->cudaDeviceIdx);
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";
-    m_plugin.AddInfo(TS_PLUGIN_NAME, ss.str());
+    m_plugin.AddInfo(GetTargetedStressTestName(), ss.str());
 
     startTime            = timelib_dsecSince1970();
     lastPrintTime        = startTime;
@@ -1035,7 +1087,8 @@ void ConstantPerfWorker::run(void)
                 cuSt = cudaEventRecord(cpStream->afterWorkBlock, m_device->streams[i].cudaStream);
                 if (cuSt != cudaSuccess)
                 {
-                    LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, TS_PLUGIN_NAME, "cudaEventRecord", cuSt, m_device->gpuId);
+                    LOG_CUDA_ERROR_FOR_PLUGIN(
+                        &m_plugin, m_plugin.GetTargetedStressTestName(), "cudaEventRecord", cuSt, m_device->gpuId);
                     /* An error here causes problems for the rest of the test due to time calculations. */
                     break;
                 }
@@ -1061,11 +1114,11 @@ void ConstantPerfWorker::run(void)
             elapsed       = now - startTime;
             double gflops = (flopsPerOp * (double)Nops) / (1000000000.0 * elapsed);
 
-            m_plugin.SetGpuStat(m_device->gpuId, gflopsKey, gflops);
-            m_plugin.SetGpuStat(m_device->gpuId, "nops_so_far", (long long)Nops);
+            m_plugin.SetGpuStat(GetTargetedStressTestName(), m_device->gpuId, gflopsKey, gflops);
+            m_plugin.SetGpuStat(GetTargetedStressTestName(), m_device->gpuId, "nops_so_far", (long long)Nops);
             ss.str("");
             ss << "DeviceIdx " << m_device->gpuId << ", ops " << Nops << ", gflops " << gflops;
-            m_plugin.AddInfo(TS_PLUGIN_NAME, ss.str());
+            m_plugin.AddInfo(GetTargetedStressTestName(), ss.str());
             lastPrintTime = now;
         }
 

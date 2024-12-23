@@ -13,22 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 #include <PassThruNvml.h>
 
-PassThruNvml *PassThruNvml::m_passThruInstance = nullptr;
+#pragma GCC diagnostic pop
 
-PassThruNvml::PassThruNvml()
-    : m_loadedFuncs()
-    , m_nvmlLib()
-    , m_lastError()
-{
-    m_passThruInstance = this;
-}
+#include <cassert>
+
+std::unique_ptr<PassThruNvml> PassThruNvml::m_passThruInstance;
 
 bool PassThruNvml::LoadNvmlLibrary()
 {
     static const char *nvmlLibPaths[]
-        = { "/opt/cross/x86_64-linux-gnu/usr/local/cuda-11.4/targets/x86_64-linux/lib/stubs/"
+        = { "/opt/cross/x86_64-linux-gnu/usr/local/cuda-11.8/targets/x86_64-linux/lib/stubs/",
             "/usr/lib/x86_64-linux-gnu",
             "/usr/lib",
             "/usr/lib64",
@@ -44,46 +43,40 @@ bool PassThruNvml::LoadNvmlLibrary()
             m_lastError.clear();
             return true;
         }
-        else
-        {
-            m_lastError = dlerror();
-        }
+        m_lastError = dlerror();
     }
 
-    return true;
+    return false;
 }
 
 PassThruNvml *PassThruNvml::Init()
 {
     if (m_passThruInstance == nullptr)
     {
-        m_passThruInstance = new PassThruNvml();
+        m_passThruInstance = std::unique_ptr<PassThruNvml>(new PassThruNvml {});
     }
 
-    return m_passThruInstance;
+    return m_passThruInstance.get();
 }
 
 bool PassThruNvml::IsLoaded(const std::string &funcname) const
 {
-    return (m_loadedFuncs.find(funcname) != m_loadedFuncs.end());
+    return m_loadedFuncs.contains(funcname);
 }
 
 bool PassThruNvml::LoadFunction(const std::string &funcname)
 {
     dlerror(); // Clear any old errors
     void *f = dlsym(m_nvmlLib, funcname.c_str());
-    if (f != nullptr)
-    {
-        m_lastError.clear();
-        m_loadedFuncs[funcname] = f;
-        return true;
-    }
-    else
+    if (f == nullptr)
     {
         m_lastError = dlerror();
+        return false;
     }
 
-    return false;
+    m_lastError.clear();
+    m_loadedFuncs[funcname] = f;
+    return true;
 }
 
 void *PassThruNvml::GetFunction(const std::string &funcname)
@@ -98,5 +91,6 @@ std::string PassThruNvml::GetLastError() const
 
 PassThruNvml *PassThruNvml::GetInstance()
 {
-    return m_passThruInstance;
+    assert(m_passThruInstance != nullptr); // We should have been initialized by now
+    return m_passThruInstance.get();
 }

@@ -45,15 +45,15 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
 {
     dcgmReturn_t result = DCGM_ST_OK;
     dcgmCacheManagerFieldInfo_v4_t fieldInfo;
-    dcgmGroupInfo_t stNvcmGroupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
     unsigned int gpuIds[DCGM_MAX_NUM_DEVICES];
     unsigned int numGpus = 0;
 
     // fetch gpus for group
     if (isGroup)
     {
-        stNvcmGroupInfo.version = dcgmGroupInfo_version;
-        result                  = dcgmGroupGetInfo(mDcgmHandle, (dcgmGpuGrp_t)(long long)gpuId, &stNvcmGroupInfo);
+        stNvcmGroupInfo->version = dcgmGroupInfo_version;
+        result                   = dcgmGroupGetInfo(mDcgmHandle, (dcgmGpuGrp_t)(long long)gpuId, stNvcmGroupInfo.get());
         if (DCGM_ST_OK != result)
         {
             std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -62,11 +62,11 @@ dcgmReturn_t DcgmiTest::IntrospectCache(dcgmHandle_t mDcgmHandle,
             return result;
         }
 
-        for (unsigned int i = 0; i < stNvcmGroupInfo.count; i++)
+        for (unsigned int i = 0; i < stNvcmGroupInfo->count; i++)
         {
-            if (stNvcmGroupInfo.entityList[i].entityGroupId == DCGM_FE_GPU)
+            if (stNvcmGroupInfo->entityList[i].entityGroupId == DCGM_FE_GPU)
             {
-                gpuIds[numGpus] = stNvcmGroupInfo.entityList[i].entityId;
+                gpuIds[numGpus] = stNvcmGroupInfo->entityList[i].entityId;
                 numGpus++;
             }
         }
@@ -243,7 +243,7 @@ dcgmReturn_t DcgmiTest::HelperInitFieldValue(dcgmInjectFieldValue_t &injectField
             injectFieldValue.value.i64 = atol(injectValue.c_str());
             break;
         case DCGM_FT_STRING:
-            dcgmStrncpy(injectFieldValue.value.str, injectValue.c_str(), sizeof(injectFieldValue.value.str));
+            SafeCopyTo(injectFieldValue.value.str, injectValue.c_str());
             break;
         case DCGM_FT_DOUBLE:
             injectFieldValue.value.dbl = atof(injectValue.c_str());

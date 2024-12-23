@@ -15,16 +15,18 @@
  */
 #include "ContextCreatePlugin.h"
 #include "ContextCreate.h"
+#include "PluginInterface.h"
 #include "PluginStrings.h"
+#include "dcgm_fields.h"
 
-ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
+ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle)
     : m_handle(handle)
-    , m_gpuInfo()
+    , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
     TestParameters *tp;
     m_infoStruct.testIndex        = DCGM_CONTEXT_CREATE_INDEX;
     m_infoStruct.shortDescription = "This plugin will attempt to create a CUDA context.";
-    m_infoStruct.testGroups       = "";
+    m_infoStruct.testCategories   = "";
     m_infoStruct.selfParallel     = true;
     m_infoStruct.logFileTag       = CTXCREATE_PLUGIN_NAME;
 
@@ -36,24 +38,27 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuL
     tp->AddString(PS_LOGFILE, "stats_context.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
-
-    if (gpuInfo != nullptr)
-    {
-        m_gpuInfo = *gpuInfo;
-        InitializeForGpuList(CTXCREATE_PLUGIN_NAME, *gpuInfo);
-    }
-    else
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(CTXCREATE_PLUGIN_NAME, d);
-    }
 }
 
 void ContextCreatePlugin::Go(std::string const &testName,
+                             dcgmDiagPluginEntityList_v1 const *entityInfo,
                              unsigned int numParameters,
-                             const dcgmDiagPluginTestParameter_t *tpStruct)
+                             dcgmDiagPluginTestParameter_t const *tpStruct)
 {
+    if (testName != GetCtxCreateTestName())
+    {
+        log_error("failed to test due to unknown test name [{}].", testName);
+        return;
+    }
+
+    if (!entityInfo)
+    {
+        log_error("failed to test due to entityInfo is nullptr.");
+        return;
+    }
+
+    InitializeForEntityList(testName, *entityInfo);
+
     // UNUSED function. Delete when the Plugin Interface's extra methods are eliminated.
     TestParameters testParameters(*m_infoStruct.defaultTestParameters);
     testParameters.SetFromStruct(numParameters, tpStruct);
@@ -62,46 +67,62 @@ void ContextCreatePlugin::Go(std::string const &testName,
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, CTXCREATE_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
+        AddInfo(GetCtxCreateTestName(), d.GetMessage());
+        SetResult(GetCtxCreateTestName(), NVVS_RESULT_SKIP);
         return;
     }
 
-    if (m_gpuInfo.numGpus)
+    int numGpus                = 0;
+    unsigned const numEntities = std::min(
+        entityInfo->numEntities, static_cast<unsigned>(sizeof(entityInfo->entities) / sizeof(entityInfo->entities[0])));
+    for (unsigned idx = 0; idx < numEntities; ++idx)
+    {
+        if (entityInfo->entities[idx].entity.entityGroupId == DCGM_FE_GPU)
+        {
+            numGpus += 1;
+        }
+    }
+
+    if (numGpus)
     {
         ContextCreate cc(&testParameters, this, GetHandle());
 
-        int st = cc.Run(m_gpuInfo);
+        int st = cc.Run(*entityInfo);
         if (!st)
         {
-            SetResult(testName, NVVS_RESULT_PASS);
+            SetResult(GetCtxCreateTestName(), NVVS_RESULT_PASS);
         }
         else if (main_should_stop)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(testName, d);
-            SetResult(testName, NVVS_RESULT_SKIP);
+            AddError(GetCtxCreateTestName(), d);
+            SetResult(GetCtxCreateTestName(), NVVS_RESULT_SKIP);
         }
         else if (st == CONTEXT_CREATE_SKIP)
         {
-            SetResult(testName, NVVS_RESULT_SKIP);
+            SetResult(GetCtxCreateTestName(), NVVS_RESULT_SKIP);
         }
         else
         {
-            SetResult(testName, NVVS_RESULT_FAIL);
+            SetResult(GetCtxCreateTestName(), NVVS_RESULT_FAIL);
         }
     }
     else
     {
-        SetResult(testName, NVVS_RESULT_FAIL);
+        SetResult(GetCtxCreateTestName(), NVVS_RESULT_FAIL);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EMPTY_GPU_LIST, d);
-        AddError(testName, d);
+        AddError(GetCtxCreateTestName(), d);
     }
 }
 
 dcgmHandle_t ContextCreatePlugin::GetHandle()
 {
     return m_handle;
+}
+
+std::string ContextCreatePlugin::GetCtxCreateTestName() const
+{
+    return CTXCREATE_PLUGIN_NAME;
 }

@@ -35,7 +35,7 @@ public:
      * Process a DCGM module message that was sent to this module
      * (inherited from DcgmModule)
      */
-    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand);
+    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand) override;
 
     /*************************************************************************/
     /*

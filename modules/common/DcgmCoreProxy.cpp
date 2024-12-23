@@ -456,44 +456,46 @@ dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEn
                                                          std::vector<unsigned short> const &fieldIds,
                                                          DcgmFvBuffer *fvBuffer) const
 {
-    dcgmCoreGetMultipleLatestLiveSamples_t gml = {};
-
-    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
     {
         DCGM_LOG_ERROR << fmt::format("Too many entities in the group. Provided {}, supported up to {}",
                                       entities.size(),
-                                      DCGM_GROUP_MAX_ENTITIES);
+                                      DCGM_GROUP_MAX_ENTITIES_V2);
         return DCGM_ST_MAX_LIMIT;
     }
 
-    gml.request.entityPairCount = entities.size();
+    std::unique_ptr<dcgmCoreGetMultipleLatestLiveSamples_t> gml
+        = std::make_unique<dcgmCoreGetMultipleLatestLiveSamples_t>();
+    memset(gml.get(), 0, sizeof(*gml));
+
+    gml->request.entityPairCount = entities.size();
     for (size_t i = 0; i < entities.size(); i++)
     {
-        gml.request.entityPairs[i] = entities[i];
+        gml->request.entityPairs[i] = entities[i];
     }
 
-    gml.request.fieldIds    = fieldIds.data();
-    gml.request.numFieldIds = fieldIds.size();
+    gml->request.fieldIds    = fieldIds.data();
+    gml->request.numFieldIds = fieldIds.size();
 
-    initializeCoreHeader(gml.header,
+    initializeCoreHeader(gml->header,
                          DcgmCoreReqIdCMGetMultipleLatestLiveSamples,
                          dcgmCoreGetMultipleLatestLiveSamples_version,
-                         sizeof(gml));
+                         sizeof(*gml));
 
     // coverity[overrun-buffer-val]
-    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gml.header, m_coreCallbacks.poster);
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gml->header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
     {
         Blob blob;
-        blob.AppendToBlob(gml.response.buffer, gml.response.bufferSize);
+        blob.AppendToBlob(gml->response.buffer, gml->response.bufferSize);
 
         // If the data didn't fit in one call, repeatedly call the API and copy off each portion until we're done.
-        while (gml.response.dataDidNotFit)
+        while (gml->response.dataDidNotFit)
         {
-            gml.request.bufferPosition = blob.GetUsed();
+            gml->request.bufferPosition = blob.GetUsed();
             // coverity[overrun-buffer-val]
-            ret = m_coreCallbacks.postfunc(&gml.header, m_coreCallbacks.poster);
+            ret = m_coreCallbacks.postfunc(&gml->header, m_coreCallbacks.poster);
 
             if (ret != DCGM_ST_OK)
             {
@@ -501,7 +503,7 @@ dcgmReturn_t DcgmCoreProxy::GetMultipleLatestLiveSamples(std::vector<dcgmGroupEn
             }
             else
             {
-                blob.AppendToBlob(gml.response.buffer, gml.response.bufferSize);
+                blob.AppendToBlob(gml->response.buffer, gml->response.bufferSize);
             }
         }
 
@@ -620,23 +622,24 @@ dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_s
 
 dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities) const
 {
-    dcgmCoreGetGroupEntities_t gge = {};
-    gge.request.connectionId       = 0;
-    gge.request.groupId            = groupId;
+    std::unique_ptr<dcgmCoreGetGroupEntities_t> gge = std::make_unique<dcgmCoreGetGroupEntities_t>();
+    memset(gge.get(), 0, sizeof(*gge));
+    gge->request.connectionId = 0;
+    gge->request.groupId      = groupId;
 
-    initializeCoreHeader(gge.header, DcgmCoreReqIdGMGetGroupEntities, dcgmCoreGetGroupEntities_version, sizeof(gge));
+    initializeCoreHeader(gge->header, DcgmCoreReqIdGMGetGroupEntities, dcgmCoreGetGroupEntities_version, sizeof(*gge));
 
     // coverity[overrun-buffer-val]
-    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gge.header, m_coreCallbacks.poster);
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gge->header, m_coreCallbacks.poster);
 
     if (ret == DCGM_ST_OK)
     {
-        for (unsigned int i = 0; i < gge.response.entityPairsCount; i++)
+        for (unsigned int i = 0; i < gge->response.entityPairsCount; i++)
         {
-            entities.push_back(gge.response.entityPairs[i]);
+            entities.push_back(gge->response.entityPairs[i]);
         }
 
-        ret = gge.response.ret;
+        ret = gge->response.ret;
     }
     else
     {
@@ -757,7 +760,7 @@ dcgmReturn_t DcgmCoreProxy::VerifyAndUpdateGroupId(unsigned int *groupId) const
     return ret;
 }
 
-DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(dcgm_connection_id_t connectionId, loggerCategory_t logger) const
+DcgmLoggingSeverity_t DcgmCoreProxy::GetLoggerSeverity(loggerCategory_t logger) const
 {
     dcgmCoreGetSeverity_t getSeverity = {};
 
@@ -967,12 +970,32 @@ dcgmReturn_t DcgmCoreProxy::GetMigComputeInstancePopulation(
     return GetMigUtilizationHelper(gpuId, instanceId, computeInstanceId, DCGM_FE_GPU_CI, capacityGpcs, usedGpcs);
 }
 
-dcgmReturn_t DcgmCoreProxy::GetMigUtilizationHelper(unsigned int gpuId,
-                                                    DcgmNs::Mig::Nvml::GpuInstanceId const &instanceId,
-                                                    DcgmNs::Mig::Nvml::ComputeInstanceId const &computeInstanceId,
-                                                    dcgm_field_entity_group_t const entityGroupId,
-                                                    size_t *capacityGpcs,
-                                                    size_t *usedGpcs) const
+dcgmReturn_t DcgmCoreProxy::GetGpuInstanceHierarchy(dcgmMigHierarchy_v2 &migHierarchy)
+{
+    dcgmCoreGetGpuInstanceHierarchy_t query {};
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqPopulateMigHierarchy, dcgmCoreGetGpuInstanceHierarchy_version1, sizeof(query));
+
+    // coverity[overrun-buffer-val]
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("[CoreProxy] Got error: {}, while getting the GPU instance hierachy.", errorString(ret));
+        return ret;
+    }
+
+    std::memcpy(&migHierarchy, &query.response, sizeof(migHierarchy));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreProxy::GetMigUtilizationHelper(
+    unsigned int gpuId,
+    DcgmNs::Mig::Nvml::GpuInstanceId const &instanceId,
+    DcgmNs::Mig::Nvml::ComputeInstanceId const & /* computeInstanceId */,
+    dcgm_field_entity_group_t const entityGroupId,
+    size_t *capacityGpcs,
+    size_t *usedGpcs) const
 {
     dcgmCoreGetMigUtilization_t query {};
     query.request.gpuId         = gpuId;

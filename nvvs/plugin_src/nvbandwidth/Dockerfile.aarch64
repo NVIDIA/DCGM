@@ -1,0 +1,58 @@
+FROM arm64v8/ubuntu:20.04 as base
+
+ARG GIT_COMMIT
+ARG GIT_ORIGIN
+LABEL git_commit=$GIT_COMMIT
+LABEL git_origin=$GIT_ORIGIN
+
+ARG SRC_DIR
+
+ARG TARGETARCH
+ARG CUDA_PUB_KEY_LINK
+ARG CUDA_PACKAGE_LINK
+ARG CUDA_VERSION_MAJOR
+ARG CUDA_VERSION_MINOR
+ARG CUDA_VERSION_PATCH
+ARG CUDA_ARCHITECTURES
+
+ENV NVIDIA_VISIBLE_DEVICES="all" \
+    NVIDIA_DRIVER_CAPABILITIES="compute,utility" 
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gnupg2 \
+    curl \
+    ca-certificates \
+    libxml2 \
+    build-essential \
+    libboost-program-options-dev \
+    numactl
+
+# ubuntu 20.04 has default cmake 3.16, nvbandwidth requires cmake >= 3.20
+# Download and install CMake
+RUN curl -LO https://github.com/Kitware/CMake/releases/download/v3.20.6/cmake-3.20.6-linux-aarch64.sh && \
+    chmod +x cmake-3.20.6-linux-aarch64.sh && \
+    ./cmake-3.20.6-linux-aarch64.sh --skip-license --prefix=/usr/local && \
+    rm cmake-3.20.6-linux-aarch64.sh
+
+# Verify CMake installation
+RUN cmake --version    
+
+RUN curl --proto '=https' -fsSL ${CUDA_PUB_KEY_LINK} | gpg --dearmor -o /usr/share/keyrings/nvidia-keyring.gpg && \
+    export PACKAGE="deb [signed-by=/usr/share/keyrings/nvidia-keyring.gpg] ${CUDA_PACKAGE_LINK} /" && \
+    echo $PACKAGE > /etc/apt/sources.list.d/cuda.list && \
+    apt-get purge --autoremove -y curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    $(apt-cache search cuda-nvml | grep ${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR} | awk '{print $1}') \
+    $(apt-cache search cuda-cudart | grep ${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR} | awk '{print $1}') \
+    $(apt-cache search cuda-nvcc | grep ${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR} | awk '{print $1}') && \
+    rm -rf /var/lib/apt/lists/*
+    
+ENV PATH="/usr/local/cuda-${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:${LD_LIBRARY_PATH}"
+

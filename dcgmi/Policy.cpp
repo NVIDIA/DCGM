@@ -48,12 +48,12 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
 {
     dcgmReturn_t result;
     dcgmPolicy_t *pPolicy;
-    dcgmGroupInfo_t stNvcmGroupInfo;
-    dcgmStatus_t stHandle = 0;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmStatus_t stHandle                            = 0;
     GPUErrorOutputController gpuErrView;
 
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -64,7 +64,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
     }
 
     // from here on must branch to cleanup
-    pPolicy = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * stNvcmGroupInfo.count);
+    pPolicy = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * stNvcmGroupInfo->count);
     if (NULL == pPolicy)
     {
         std::cout << "Error: Cannot malloc space for policy info. Return: " << errorString(result) << std::endl;
@@ -72,7 +72,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
         goto cleanup;
     }
 
-    for (unsigned int i = 0; i < stNvcmGroupInfo.count; i++)
+    for (unsigned int i = 0; i < stNvcmGroupInfo->count; i++)
     {
         pPolicy[i].version = dcgmPolicy_version;
     }
@@ -84,7 +84,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
         goto cleanup;
     }
 
-    result = dcgmPolicyGet(mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, stNvcmGroupInfo.count, pPolicy, stHandle);
+    result = dcgmPolicyGet(mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, stNvcmGroupInfo->count, pPolicy, stHandle);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Cannot get policy info from remote node. Return: " << errorString(result) << std::endl;
@@ -100,7 +100,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
         std::cout << "Policy information" << std::endl;
         bool allTheSame = true;
 
-        for (unsigned int i = 0; i < (!verbose ? 1 : stNvcmGroupInfo.count); i++)
+        for (unsigned int i = 0; i < (!verbose ? 1 : stNvcmGroupInfo->count); i++)
         {
             DcgmiOutputTree outTree(30, 50);
             DcgmiOutputJson outJson;
@@ -111,12 +111,12 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             // Display header
             if (!verbose)
             {
-                ss << stNvcmGroupInfo.groupName;
+                ss << stNvcmGroupInfo->groupName;
             }
             else
             {
-                ss << DcgmFieldsGetEntityGroupString(stNvcmGroupInfo.entityList[i].entityGroupId)
-                   << " ID: " << stNvcmGroupInfo.entityList[i].entityId;
+                ss << DcgmFieldsGetEntityGroupString(stNvcmGroupInfo->entityList[i].entityGroupId)
+                   << " ID: " << stNvcmGroupInfo->entityList[i].entityId;
             }
 
             out.addHeader(POLICY_HEADER);
@@ -126,7 +126,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             if (!verbose)
             {
                 allTheSame = true;
-                for (unsigned int j = 1; j < stNvcmGroupInfo.count; j++)
+                for (unsigned int j = 1; j < stNvcmGroupInfo->count; j++)
                 {
                     if (pPolicy[0].condition != pPolicy[j].condition)
                     {
@@ -195,7 +195,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             if (!verbose)
             {
                 allTheSame = true;
-                for (unsigned int j = 1; j < stNvcmGroupInfo.count; j++)
+                for (unsigned int j = 1; j < stNvcmGroupInfo->count; j++)
                 {
                     if (pPolicy[0].mode != pPolicy[j].mode)
                     {
@@ -223,7 +223,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             if (!verbose)
             {
                 allTheSame = true;
-                for (unsigned int j = 1; j < stNvcmGroupInfo.count; j++)
+                for (unsigned int j = 1; j < stNvcmGroupInfo->count; j++)
                 {
                     if (pPolicy[0].action != pPolicy[j].action)
                     {
@@ -252,7 +252,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             if (!verbose)
             {
                 allTheSame = true;
-                for (unsigned int j = 1; j < stNvcmGroupInfo.count; j++)
+                for (unsigned int j = 1; j < stNvcmGroupInfo->count; j++)
                 {
                     if (pPolicy[0].validation != pPolicy[j].validation)
                     {
@@ -288,7 +288,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
             if (!verbose)
             {
                 allTheSame = true;
-                for (unsigned int j = 1; j < stNvcmGroupInfo.count; j++)
+                for (unsigned int j = 1; j < stNvcmGroupInfo->count; j++)
                 {
                     if (pPolicy[0].response != pPolicy[j].response)
                     {
@@ -407,8 +407,8 @@ dcgmReturn_t Policy::RegisterForPolicyUpdates(dcgmHandle_t mNvcmHandle, unsigned
     condition = (DCGM_POLICY_COND_DBE | DCGM_POLICY_COND_PCI | DCGM_POLICY_COND_MAX_PAGES_RETIRED
                  | DCGM_POLICY_COND_THERMAL | DCGM_POLICY_COND_POWER | DCGM_POLICY_COND_NVLINK | DCGM_POLICY_COND_XID);
 
-    result = dcgmPolicyRegister(
-        mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, (dcgmPolicyCondition_t)condition, NULL, &ListenForViolations);
+    result = dcgmPolicyRegister_v2(
+        mNvcmHandle, (dcgmGpuGrp_t)(long long)groupId, (dcgmPolicyCondition_t)condition, &ListenForViolations, 0);
     if (DCGM_ST_OK != result)
     {
         std::string error = policy_dcgm_return_to_string(result);
@@ -446,11 +446,8 @@ dcgmReturn_t Policy::UnregisterPolicyUpdates(dcgmHandle_t mNvcmHandle, unsigned 
 }
 
 /*******************************************************************************************/
-int Policy::ListenForViolations(void *data)
+int Policy::ListenForViolations(dcgmPolicyCallbackResponse_t *callbackResponse, [[maybe_unused]] uint64_t userData)
 {
-    dcgmPolicyCallbackResponse_t *callbackResponse;
-
-    callbackResponse = (dcgmPolicyCallbackResponse_t *)data;
     switch (callbackResponse->condition)
     {
         case DCGM_POLICY_COND_DBE:

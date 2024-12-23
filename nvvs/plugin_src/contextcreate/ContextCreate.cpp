@@ -21,7 +21,7 @@
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 
-ContextCreate::ContextCreate(TestParameters *testParameters, Plugin *plugin, dcgmHandle_t handle)
+ContextCreate::ContextCreate(TestParameters *testParameters, ContextCreatePlugin *plugin, dcgmHandle_t handle)
     : m_plugin(plugin)
     , m_testParameters(testParameters)
     , m_device()
@@ -35,14 +35,14 @@ ContextCreate::~ContextCreate()
 
 bool ContextCreate::GpusAreNonExclusive()
 {
-    dcgmConfig_t current[DCGM_GROUP_MAX_ENTITIES];
-    unsigned int actualSize = 0;
-    dcgmReturn_t ret        = m_dcgmGroup.GetConfig(current, DCGM_GROUP_MAX_ENTITIES, actualSize);
+    std::unique_ptr<dcgmConfig_t[]> current = std::make_unique<dcgmConfig_t[]>(DCGM_GROUP_MAX_ENTITIES_V2);
+    unsigned int actualSize                 = 0;
+    dcgmReturn_t ret = m_dcgmGroup.GetConfig(current.get(), DCGM_GROUP_MAX_ENTITIES_V2, actualSize);
 
     if (ret != DCGM_ST_OK)
     {
         std::string err = m_dcgmHandle.RetToString(ret);
-        m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err);
+        m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err);
         log_debug(err);
         return false;
     }
@@ -53,7 +53,7 @@ bool ContextCreate::GpusAreNonExclusive()
         {
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in prohibited mode, so we must skip this test.";
-            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
+            m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err.str());
             log_debug(err.str());
             return false;
         }
@@ -61,7 +61,7 @@ bool ContextCreate::GpusAreNonExclusive()
         {
             std::stringstream err;
             err << "GPU " << current[i].gpuId << " is in exclusive mode, so we must skip this test.";
-            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
+            m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err.str());
             log_debug(err.str());
             return false;
         }
@@ -70,18 +70,26 @@ bool ContextCreate::GpusAreNonExclusive()
     return true;
 }
 
-std::string ContextCreate::Init(const dcgmDiagPluginGpuList_t &gpuList)
+std::string ContextCreate::Init(const dcgmDiagPluginEntityList_v1 &entityList)
 {
     std::vector<unsigned int> gpuVec;
 
-    for (size_t i = 0; i < gpuList.numGpus; i++)
+    for (size_t i = 0; i < entityList.numEntities; i++)
     {
+        if (entityList.entities[i].entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+
         ContextCreateDevice *ccd = 0;
 
         try
         {
-            ccd = new ContextCreateDevice(
-                gpuList.gpus[i].gpuId, gpuList.gpus[i].attributes.identifiers.pciBusId, m_plugin, m_dcgmHandle);
+            ccd = new ContextCreateDevice(m_plugin->GetCtxCreateTestName(),
+                                          entityList.entities[i].entity.entityId,
+                                          entityList.entities[i].auxField.gpu.attributes.identifiers.pciBusId,
+                                          m_plugin,
+                                          m_dcgmHandle);
         }
         catch (DcgmError &d)
         {
@@ -90,7 +98,7 @@ std::string ContextCreate::Init(const dcgmDiagPluginGpuList_t &gpuList)
                 delete ccd;
             }
 
-            m_plugin->AddError(CTXCREATE_PLUGIN_NAME, d);
+            m_plugin->AddError(m_plugin->GetCtxCreateTestName(), d);
             return d.GetMessage();
         }
         catch (std::runtime_error &re)
@@ -100,13 +108,13 @@ std::string ContextCreate::Init(const dcgmDiagPluginGpuList_t &gpuList)
                 delete ccd;
             }
 
-            DcgmError d { gpuList.gpus[i].gpuId };
+            DcgmError d { entityList.entities[i].entity.entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
             return d.GetMessage();
         }
 
         m_device.push_back(ccd);
-        gpuVec.push_back(gpuList.gpus[i].gpuId);
+        gpuVec.push_back(entityList.entities[i].entity.entityId);
     }
 
     dcgmReturn_t ret = m_dcgmGroup.Init(m_dcgmHandle.GetHandle(), "context_create_group", gpuVec);
@@ -150,7 +158,7 @@ int ContextCreate::CanCreateContext()
         else if (cuSt == CUDA_ERROR_UNKNOWN)
         {
             err << "GPU " << m_device[i]->gpuId << " is in prohibted mode; skipping test.";
-            m_plugin->AddInfo(CTXCREATE_PLUGIN_NAME, err.str());
+            m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err.str());
             log_debug(err.str());
             created |= CTX_SKIP;
         }
@@ -160,7 +168,7 @@ int ContextCreate::CanCreateContext()
             cuGetErrorString(cuSt, &errStr);
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, m_device[i]->gpuId, errStr);
-            m_plugin->AddErrorForGpu(CTXCREATE_PLUGIN_NAME, m_device[i]->gpuId, d);
+            m_plugin->AddError(m_plugin->GetCtxCreateTestName(), d);
             log_debug(error);
             created |= CTX_FAIL;
         }
@@ -169,9 +177,9 @@ int ContextCreate::CanCreateContext()
     return created;
 }
 
-int ContextCreate::Run(const dcgmDiagPluginGpuList_t &gpuList)
+int ContextCreate::Run(const dcgmDiagPluginEntityList_v1 &entityList)
 {
-    std::string error = Init(gpuList);
+    std::string error = Init(entityList);
 
     if (error.size() != 0)
     {

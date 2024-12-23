@@ -37,11 +37,12 @@ class Test
 {
     /***************************PUBLIC***********************************/
 public:
-    Test(dcgmPerGpuTestIndices_t index,
-         const std::string &description,
-         const std::string &testGroup,
-         const std::string &pluginName);
-    Test(Plugin *);
+    Test(unsigned pluginIndex,
+         std::string const &pluginName,
+         std::string const &testName,
+         std::string const &description,
+         dcgm_field_entity_group_t targetEntityGroup,
+         std::string category);
     ~Test();
 
     enum testClasses_enum
@@ -58,24 +59,14 @@ public:
     void go(TestParameters *, dcgmDiagGpuInfo_t &);
     void go(TestParameters *, dcgmDiagGpuList_t &);
 
-    std::string GetTestName()
+    std::string GetTestName() const
     {
-        return GetTestDisplayName(m_index);
+        return m_name;
     }
 
-    std::string GetPluginName()
-    {
-        return m_pluginName;
-    }
-
-    std::string getTestDesc()
+    std::string getTestDesc() const
     {
         return m_description;
-    }
-
-    std::string getTestGroup()
-    {
-        return m_testGroup;
     }
 
     unsigned int getArgVectorSize(testClasses_enum num)
@@ -100,14 +91,29 @@ public:
     }
 
     // Get per-test log file tag to distinguish tests' log files from each other
-    std::string getLogFileTag()
+    std::string GetLogFileTag() const
     {
-        return GetTestDisplayName(m_index);
+        return m_name;
     }
 
-    dcgmPerGpuTestIndices_t GetTestIndex() const
+    unsigned GetPluginIndex() const
     {
-        return m_index;
+        return m_pluginIdx;
+    }
+
+    dcgm_field_entity_group_t GetTargetEntityGroup() const
+    {
+        return m_targetEntityGroup;
+    }
+
+    std::string const &GetPluginName() const
+    {
+        return m_pluginName;
+    }
+
+    std::string const &GetCategory() const
+    {
+        return m_category;
     }
 
     /***************************PRIVATE**********************************/
@@ -116,12 +122,14 @@ private:
     void getOut(std::string error);
 
     /* Variables */
-    dcgmPerGpuTestIndices_t m_index;
+    unsigned m_pluginIdx;
+    std::string m_pluginName;
+    std::string m_name;
+    std::string m_category;
     std::map<testClasses_enum, std::vector<TestParameters *>> m_argMap;
     bool m_skipTest = false;
     std::string m_description;
-    std::string m_testGroup;
-    std::string m_pluginName; // which plugin this test belongs to
+    dcgm_field_entity_group_t m_targetEntityGroup;
     static const nvvsPluginGpuResults_t m_emptyGpuResults;
     static const nvvsPluginGpuMessages_t m_emptyGpuMessages;
     static const std::vector<std::string> m_emptyMessages;

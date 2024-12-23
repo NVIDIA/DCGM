@@ -27,26 +27,29 @@ logFile = "nvvs_diag.log"
 
 NAME_FIELD = "name"
 RESULTS_FIELD = "results"
-WARNING_FIELD = "warnings"
+WARNINGS_FIELD = "warnings"
 STATUS_FIELD = "status"
+TEST_SUMMARY_FIELD = "test_summary"
 INFO_FIELD = "info"
 GPU_FIELD = "gpu_ids"
 RUNTIME_ERROR_FIELD = "runtime_error"
 
-DIAG_THROTTLE_WARNING = "Clocks are being throttled for"
+TEST_STATUS_FAIL = 'Fail'
+
+DIAG_CLOCKS_EVENT_WARNING = "Clocks are being optimized for"
 DIAG_DBE_WARNING = "ecc_dbe_volatile_total"
 DIAG_ECC_MODE_WARNING = "Skipping test because ECC is not enabled on this GPU"
 DIAG_INFOROM_WARNING = "nvmlDeviceValidateInforom for nvml device"
 DIAG_THERMAL_WARNING = "Thermal violations totaling "
 
-DIAG_THROTTLE_SUGGEST = "A GPU's clocks are being throttled due to a cooling issue. Please make sure your GPUs are properly cooled."
+DIAG_CLOCKS_EVENT_SUGGEST = "A GPU's clocks are being optimized due to a cooling issue. Please make sure your GPUs are properly cooled."
 DIAG_DBE_SUGGEST = "This GPU needs to be drained and reset to clear the non-recoverable double bit errors."
 DIAG_ECC_MODE_SUGGEST = "Run nvidia-smi -i <gpu id> -e 1 and then reboot to enable."
 DIAG_INFOROM_SUGGEST = "A GPU's inforom is corrupt. You should re-flash it with iromflash or replace the GPU. run nvidia-smi without arguments to see which GPU."
 DIAG_THERMAL_SUGGEST = "A GPU has thermal violations happening. Please make sure your GPUs are properly cooled."
 DIAG_VARY_SUGGEST = "Please check for transient conditions on this machine that can disrupt consistency from run to run"
 
-errorTuples = [(dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, DIAG_THROTTLE_WARNING, DIAG_THROTTLE_SUGGEST),
+errorTuples = [(dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS, DIAG_CLOCKS_EVENT_WARNING, DIAG_CLOCKS_EVENT_SUGGEST),
                (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, DIAG_DBE_WARNING, DIAG_DBE_SUGGEST),
                (dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, DIAG_ECC_MODE_WARNING, DIAG_ECC_MODE_SUGGEST),
                (dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID, DIAG_INFOROM_WARNING, DIAG_INFOROM_SUGGEST),
@@ -57,24 +60,22 @@ errorTuples = [(dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, DIAG_THROTTLE_WA
 ################################################################################
 class FailedTestInfo():
     ################################################################################
-    def __init__(self, testname, warnings, gpuInfo=None):
+    def __init__(self, testname, warnings, info=None, entityPair=None):
         self.m_warning = warnings
         self.m_testname = testname
-        self.m_info = ''
-        self.m_gpuField = gpuInfo
-        self.m_gpuId = None
+        self.m_info = info
+        self.m_entityPair = entityPair
         self.m_isAnError = True
-        if gpuInfo:
-            self.m_gpuId = int(gpuInfo)
         self.m_fieldId = None
         self.m_suggestion = ''
         self.m_evaluatedMsg = ''
-        for errorTuple in errorTuples:
-            for warning in self.m_warning:
-                if warning['warning'].find(errorTuple[1]) != -1:
-                    # Matched, record field ID and suggestion
-                    self.m_fieldId = errorTuple[0]
-                    self.m_suggestion = errorTuple[2]
+        if self.m_warning:
+            for errorTuple in errorTuples:
+                for warning in self.m_warning:
+                    if warning['warning'].find(errorTuple[1]) != -1:
+                        # Matched, record field ID and suggestion
+                        self.m_fieldId = errorTuple[0]
+                        self.m_suggestion = errorTuple[2]
 
     ################################################################################
     def SetInfo(self, info):
@@ -84,16 +85,14 @@ class FailedTestInfo():
     def GetFullError(self):
         if self.m_evaluatedMsg:
             return self.m_evaluatedMsg
-
         if not self.m_warning:
             full = "%s is reported as failed but has no warning message" % self.m_testname
         else:
             full = "%s failed: '%s'" % (self.m_testname, self.m_warning)
         if self.m_info:
             full += "\n%s" % self.m_info
-        if self.m_gpuField:
-            full += "\n for GPU(s) %s" % self.m_gpuField
-
+        if self.m_entityPair:
+            full += f"\n for entity {self.m_entityPair}"
         return full
 
     ################################################################################
@@ -102,7 +101,14 @@ class FailedTestInfo():
 
     ################################################################################
     def GetGpuId(self):
-        return self.m_gpuId
+        (group, id) = self.m_entityPair
+        if group.lower() != 'gpu':
+            raise ValueError(f'Expected entity of type GPU, found {group}')
+        return id
+
+    ################################################################################
+    def GetEntityPair(self):
+        return self.m_entityPair
 
     ################################################################################
     def GetWarning(self):
@@ -239,31 +245,54 @@ class DcgmiDiag:
     
     ################################################################################
     def FindFailedTests(self, jsondict, failed_list):
+        ENTITY_ID_FIELD = 'entity_id'
+        ENTITY_GROUP_FIELD = 'entity_group'
+
+        def findFailuresInResults(testName, results, failed_list):
+            # { status, warnings[], info[] }
+            for result in results:
+                if result[STATUS_FIELD] == TEST_STATUS_FAIL:
+                    if WARNINGS_FIELD in result:
+                        if ENTITY_ID_FIELD in result:
+                            entityPair = (result[ENTITY_GROUP_FIELD], result[ENTITY_ID_FIELD])
+                        info = '\n'.join(result.get(INFO_FIELD) or [])
+                        failed_list.append(FailedTestInfo(testName, result.get(WARNINGS_FIELD), info, entityPair))
+                        return True
+            return False
+
+        def findFailuresInTestSummary(testName, summary, failed_list):
+            # { status, warnings[], info[] }
+            if summary[STATUS_FIELD] == TEST_STATUS_FAIL:
+                if WARNINGS_FIELD in summary:
+                    info = '\n'.join(summary.get(INFO_FIELD) or [])
+                    failed_list.append(FailedTestInfo(testName, summary.get(WARNINGS_FIELD), info))
+                    return True
+                if not failed_list:
+                    failed_list.append(FailedTestInfo(testName, [{ 'warning' : f'Status in \'{TEST_SUMMARY_FIELD}\' is ' \
+                                                                  f'\'{summary[STATUS_FIELD]}\'' }]))
+            return False
+
         if not isinstance(jsondict, dict):
             # Only inspect dictionaries
             return
 
         if RESULTS_FIELD in jsondict:
-            # We've found the test dictionary
-            testname = jsondict[NAME_FIELD]
-            for item in jsondict[RESULTS_FIELD]:
-                if item[STATUS_FIELD] == "Fail":
-                    warn = '' 
-                    gpuInfo = ''
-                    if WARNING_FIELD in item:
-                        warn = item[WARNING_FIELD]
-                    if GPU_FIELD in item:
-                        gpuInfo = item[GPU_FIELD]
-                    failed_test = FailedTestInfo(testname, warn, gpuInfo)
-                    if INFO_FIELD in item:
-                        failed_test.SetInfo(item[INFO_FIELD])
+            # This is a test entry.
+            testName = jsondict[NAME_FIELD]
+            assert isinstance(jsondict[RESULTS_FIELD], list)
+            findFailuresInResults(testName, jsondict[RESULTS_FIELD], failed_list)
 
-                    failed_list.append(failed_test)
+            assert NAME_FIELD in jsondict
+            assert isinstance(jsondict[NAME_FIELD], str)
+
+            assert TEST_SUMMARY_FIELD in jsondict
+            assert isinstance(jsondict[TEST_SUMMARY_FIELD], dict)
+            findFailuresInTestSummary(testName, jsondict[TEST_SUMMARY_FIELD], failed_list)
         elif RUNTIME_ERROR_FIELD in jsondict:
             # Experienced a complete failure while trying to run the diagnostic. No need
             # to parse for further errors because there will be no other json entries.
-            failInfo = FailedTestInfo('System_Failure', jsondict[RUNTIME_ERROR_FIELD])
-            failed_list.append(failInfo)
+            # failInfo wants something that looks like a 'warnings' array
+            failed_list.append(FailedTestInfo('System_Failure', [{ 'warning' : jsondict.get(RUNTIME_ERROR_FIELD) }] ))
         else:
             for key in jsondict:
                 if isinstance(jsondict[key], list):
@@ -271,11 +300,11 @@ class DcgmiDiag:
                         self.FindFailedTests(item, failed_list)
                 else:
                     self.FindFailedTests(jsondict[key], failed_list)
-    
+
     ################################################################################
     def IdentifyFailingTests(self, jsondict, nsc):
         failed_list = []
-            
+
         self.FindFailedTests(jsondict, failed_list)
         for failInfo in failed_list:
             fieldId = failInfo.GetFieldId()

@@ -1,130 +1,171 @@
 {
-  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$schema": "http://json-schema.org/schema#",
   "type": "object",
   "properties": {
-    "DCGM GPU Diagnostic": {
+    "DCGM Diagnostic": {
       "type": "object",
       "properties": {
         "test_categories": {
           "type": "array",
-          "minItems": 1,
-          "maxItems": 5,
-          "uniqueItems": true,
-          "items": [
-            {
-              "type": "object",
-              "properties": {
-                "category": {
-                  "type": "string"
-                },
-                "tests": {
-                  "type": "array",
-                  "minItems": 1,
-                  "maxItems": 10,
-                  "uniqueItems": true,
-                  "items": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "results": {
-                          "type": "array",
-                          "minItems": 1,
-                          "maxItems": 32,
-                          "uniqueItems": true,
-                          "items": [
-                            {
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "tests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "entity_group": {
+                            "type": "string"
+                          },
+                          "entity_group_id": {
+                            "type": "integer"
+                          },
+                          "entity_id": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
                               "type": "object",
                               "properties": {
-                                "status": {
-                                  "type": "string"
+                                "error_category": {
+                                  "type": "integer"
                                 },
-                                "gpu_id": {
-                                  "type": "string"
+                                "error_id": {
+                                  "type": "integer"
                                 },
-                                "info": {
-                                  "type": "string"
+                                "error_severity": {
+                                  "type": "integer"
                                 },
-                                "warnings": {
-                                  "type": "array",
-                                  "items": [
-                                    {
-                                      "type": "object",
-                                      "properties": {
-                                        "error_category": {
-                                          "type": "integer"
-                                        },
-                                        "error_id": {
-                                          "type": "integer"
-                                        },
-                                        "error_severity": {
-                                          "type": "integer"
-                                        },
-                                        "warning": {
-                                          "type": "string"
-                                        }
-                                      }
-                                    }
-                                  ]
+                                "warning": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
-                                "status"
+                                "error_category",
+                                "error_id",
+                                "error_severity",
+                                "warning"
                               ]
                             }
-                          ]
+                          }
+                        },
+                        "required": [
+                          "entity_group",
+                          "entity_group_id",
+                          "entity_id",
+                          "status"
+                        ]
+                      }
+                    },
+                    "test_summary": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string"
                         }
                       },
                       "required": [
-                        "name",
-                        "results"
+                        "status"
                       ]
                     }
+                  },
+                  "required": [
+                    "name",
+                    "results",
+                    "test_summary"
                   ]
                 }
-              },
-              "required": [
-                "category",
-                "tests"
-              ]
-            }
-          ]
-        }
-      },
-      "required": [
-        "test_categories"
-      ]
-    },
-    "Driver Version Detected": {
-      "type": "string"
-    },
-    "GPU Device IDs": {
-      "type": "array",
-      "items": [
-        {
-          "type": "string"
-        }
-      ]
-    },
-    "GPU Device Serials": {
-      "type": "object",
-      "properties": {
-        "0": {
+              }
+            },
+            "required": [
+              "category",
+              "tests"
+            ]
+          }
+        },
+        "runtime_error": {
           "type": "string"
         }
       }
     },
-    "version": {
-      "type": "string"
+    "entity_groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device_id": {
+                  "type": "string"
+                },
+                "entity_id": {
+                  "type": "integer"
+                },
+                "serial_num": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "device_id",
+                "entity_id"
+              ]
+            }
+          },
+          "entity_group": {
+            "type": "string"
+          },
+          "entity_group_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entities",
+          "entity_group",
+          "entity_group_id"
+        ]
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "Driver Version Detected": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "EUD Test Version": {
+          "type": "string"
+        },
+        "CPU EUD Test Version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ]
     }
   },
   "required": [
-    "DCGM GPU Diagnostic",
-    "Driver Version Detected",
-    "GPU Device IDs",
-    "GPU Device Serials",
-    "version"
+    "DCGM Diagnostic"
   ]
 }

@@ -38,7 +38,7 @@ typedef struct
     std::string uuid;
     std::string serial;
     unsigned int index;
-    nvmlDevice_t device;
+    AttributeHolder<nvmlDevice_t> ah;
 } nvmlDeviceWithIdentifiers;
 
 struct StringHash : std::hash<std::string_view>
@@ -118,10 +118,12 @@ public:
     nvmlReturn_t GetCompoundValue(nvmlDevice_t nvmlDevice, const std::string &key, CompoundValue &cv);
 
     /*****************************************************************************/
-    std::string GetString(InjectionArgument &arg, const std::string &key);
+    std::pair<nvmlReturn_t, std::string> GetString(InjectionArgument &arg, const std::string &key);
 
     /*****************************************************************************/
-    std::string GetString(InjectionArgument &arg, const std::string &key, const InjectionArgument &key2);
+    std::pair<nvmlReturn_t, std::string> GetString(InjectionArgument &arg,
+                                                   const std::string &key,
+                                                   const InjectionArgument &key2);
 
     /**
      * Change the function return to the key for a specific device. The changed value CANNOT be restored by DeviceReset.
@@ -194,6 +196,9 @@ public:
     void ResetFuncCallCounts();
     funcCallMap_t GetFuncCallCounts();
 
+    nvmlReturn_t RemoveGpu(std::string const &uuid);
+    nvmlReturn_t RestoreGpu(std::string const &uuid);
+
 
 private:
     static InjectedNvml *m_injectedNvmlInstance;
@@ -202,7 +207,6 @@ private:
     InjectedNvml();
 
     std::mutex m_mutex;
-    unsigned int m_nextDeviceId;
     static const unsigned int m_nvmlDeviceStart = 0xA0A0;
 
     std::map<nvmlVgpuInstance_t, AttributeHolder<nvmlVgpuInstance_t>> m_vgpuInstances;
@@ -214,7 +218,7 @@ private:
     std::unordered_map<std::string, std::list<AttributeHolder<nvmlDevice_t>>::iterator> m_busIdToDevice;
     std::unordered_map<std::string, std::list<AttributeHolder<nvmlDevice_t>>::iterator> m_uuidToDevice;
     std::unordered_map<std::string, std::list<AttributeHolder<nvmlDevice_t>>::iterator> m_serialToDevice;
-    std::map<unsigned int, std::list<AttributeHolder<nvmlDevice_t>>::iterator> m_indexToDevice;
+    std::vector<std::list<AttributeHolder<nvmlDevice_t>>::iterator> m_indexToDevice;
 
     // actual place to hold the device attributes.
     // other mapping (budId, uuid, serial, index) only maps the identifier to the iterator in this list
@@ -233,6 +237,10 @@ private:
     // compute instance of GPU istance {fake_gpu_instance}. nvml.h dose not define nvmlComputeInstance_t, use the
     // pointer of element in this list to represent it
     std::list<std::string> m_computeInstanceCollection;
+
+    // This map contains the UUIDs of the GPUs removed with the RemoveGPU API, which will be used to restore the GPUs
+    // with the RestoreGPU API using the saved device values.
+    std::unordered_map<std::string, nvmlDeviceWithIdentifiers> m_removedGpus;
 
     std::unordered_map<std::string, NvmlFuncReturn> m_globalAttributes;
 
@@ -286,7 +294,9 @@ private:
 
     // The following functions used for modified the NVML behavior
     nvmlReturn_t IncrementDeviceCount();
+    nvmlReturn_t DecrementDeviceCount();
     void InitializeGpuDefaults(nvmlDevice_t device, unsigned int index);
+
 
     nvmlReturn_t DeviceSetNoLock(nvmlDevice_t nvmlDevice,
                                  const std::string &key,

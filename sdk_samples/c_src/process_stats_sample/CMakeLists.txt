@@ -14,4 +14,4 @@
 
 add_executable(process_stats_sample)
 target_sources(process_stats_sample PRIVATE process_stats_sample.cpp)
-target_link_libraries(process_stats_sample PRIVATE $<BUILD_INTERFACE:dcgm> $<INSTALL_INTERFACE:Dcgm::dcgm>)
+target_link_libraries(process_stats_sample PRIVATE DCGM::dcgm)

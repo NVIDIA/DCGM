@@ -148,13 +148,17 @@ public:
         m_configFile = userConfig;
     }
 
+    void PrepareEntitySets(dcgmHandle_t dcgmHandle);
+
     void legacyGlobalStructHelper();
-    std::vector<std::unique_ptr<GpuSet>> &getGpuSetVec()
+    std::vector<std::unique_ptr<EntitySet>> &GetEntitySets()
     {
-        return gpuSets;
+        return m_entitySets;
     }
 
 private:
+    std::unique_ptr<EntitySet> PrepareGpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups);
+    std::unique_ptr<EntitySet> PrepareCpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups);
     /* Returns reference to m_skus[id]. Adds the GPU if it does not exist */
     YAML::Node &GetOrAddSku(const std::string &id);
     void ParseYaml();
@@ -164,7 +168,7 @@ private:
     YAML::Node m_userYaml;
     std::unordered_map<std::string, YAML::Node> m_skus;
 
-    std::vector<std::unique_ptr<GpuSet>> gpuSets;
+    std::vector<std::unique_ptr<EntitySet>> m_entitySets;
 };
 
 class CFPv2Exception : public std::runtime_error

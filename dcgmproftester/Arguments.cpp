@@ -207,9 +207,9 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
         ProcessIntegerList(m_gpuIdString.Value(),
                            arguments,
                            false,
-                           [](ArgumentSet_t &self,
+                           [](ArgumentSet_t & /* self */,
                               std::shared_ptr<Arguments_t> arguments,
-                              bool useDefaults,
+                              bool /* useDefaults */,
                               unsigned int gpuId) mutable -> dcgmReturn_t {
                                arguments->m_gpuIds.push_back(gpuId);
 
@@ -220,9 +220,9 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
     ProcessStringList(m_modeString.Value(),
                       arguments,
                       false,
-                      [](ArgumentSet_t &self,
+                      [](ArgumentSet_t & /* self */,
                          std::shared_ptr<Arguments_t> arguments,
-                         bool useDefaults,
+                         bool /* useDefaults */,
                          const std::string &mode) mutable -> dcgmReturn_t {
                           bool setting { true };
                           unsigned int pos { 0 };
@@ -411,7 +411,7 @@ void ArgumentSet_t::AddDefault(unsigned int fieldId, ValueRange_t valueRange)
 dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
 {
     unsigned int count;
-    for (unsigned int argPos = 0; argPos < (argc - 1); argPos += count)
+    for (unsigned int argPos = 0; argPos < static_cast<unsigned int>(argc - 1); argPos += count)
     {
         count = 2; // Presume a Value argument
 
@@ -421,7 +421,7 @@ dcgmReturn_t ArgumentSet_t::Parse(int argc, char *argv[])
          * offer a means to throw an exception on parse error and let the caller
          * decide how to recover.
          */
-        if (argPos == (argc - 2))
+        if (argPos == static_cast<unsigned int>(argc - 2))
         {
             count = 1;
         }

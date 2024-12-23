@@ -19,7 +19,6 @@
 #include "Brokenp2p.h"
 
 #include "Pcie.h"
-#include "PluginStrings.h"
 
 #define ERR_BUF_SIZE 2048
 
@@ -151,6 +150,63 @@ cleanup:
     return passed;
 }
 
+void GetP2PError(BusGrind *const bg,
+                 timelib64_t const &startTime,
+                 unsigned int const &gpuId,
+                 dcgmError_t &memoryError,
+                 dcgmError_t &writerError)
+{
+    auto fieldId                                 = DCGM_FI_PROF_NVLINK_TX_BYTES;
+    dcgmFieldSummaryRequest_t nvlinkFieldRequest = { .version         = dcgmFieldSummaryRequest_version1,
+                                                     .fieldId         = DCGM_FI_PROF_NVLINK_TX_BYTES,
+                                                     .entityGroupId   = DCGM_FE_GPU,
+                                                     .entityId        = gpuId,
+                                                     .summaryTypeMask = DCGM_SUMMARY_MAX,
+                                                     .startTime       = static_cast<uint64_t>(startTime),
+                                                     .endTime         = 0,
+                                                     .response        = {} };
+    enum class P2pLink : std::uint8_t
+    {
+        NvLink,
+        Pcie,
+        NoInfo
+    };
+    P2pLink p2pLink = P2pLink::Pcie;
+
+    DCGM_LOG_DEBUG << "Requesting field summary max for field " << fieldId << " from start time " << startTime;
+    dcgmReturn_t dcgmRet = dcgmGetFieldSummary(bg->GetHandle(), &nvlinkFieldRequest);
+    if (dcgmRet != DCGM_ST_OK && dcgmRet != DCGM_ST_NO_DATA)
+    {
+        DCGM_LOG_ERROR << "Error getting field summary for field " << fieldId << " : " << dcgmRet;
+        p2pLink = P2pLink::NoInfo;
+    }
+    else
+    {
+        DCGM_LOG_DEBUG << "Field " << fieldId << " summary value read for GPU " << gpuId << " : "
+                       << nvlinkFieldRequest.response.values[0].i64;
+        if (nvlinkFieldRequest.response.values[0].i64 != 0
+            && nvlinkFieldRequest.response.values[0].i64 != DCGM_INT64_BLANK)
+        {
+            p2pLink = P2pLink::NvLink;
+        }
+    }
+    switch (p2pLink)
+    {
+        case P2pLink::NvLink:
+            memoryError = DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE;
+            writerError = DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE;
+            break;
+        case P2pLink::Pcie:
+            memoryError = DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE;
+            writerError = DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE;
+            break;
+        case P2pLink::NoInfo:
+            memoryError = DCGM_FR_BROKEN_P2P_MEMORY_DEVICE;
+            writerError = DCGM_FR_BROKEN_P2P_WRITER_DEVICE;
+            break;
+    }
+}
+
 nvvsPluginResult_t Brokenp2p::RunTest()
 {
     if (m_gpus.size() < 2)
@@ -158,7 +214,6 @@ nvvsPluginResult_t Brokenp2p::RunTest()
         return NVVS_RESULT_PASS;
     }
 
-    char errBuf[ERR_BUF_SIZE];
     nvvsPluginResult_t ret = NVVS_RESULT_PASS;
 
     for (size_t d1 = 0; d1 < m_gpus.size(); d1++)
@@ -173,19 +228,22 @@ nvvsPluginResult_t Brokenp2p::RunTest()
             DCGM_LOG_DEBUG << "Testing GPUs " << m_gpus[d1]->gpuId << " and " << m_gpus[d2]->gpuId
                            << " for p2p issues.";
 
+            timelib64_t startTime = timelib_usecSince1970();
             std::string errStr;
             bool passed = CheckPairP2pWindow(m_gpus[d1]->cudaDeviceIdx, m_gpus[d2]->cudaDeviceIdx, errStr);
 
+            dcgmError_t memoryError, writerError;
+            GetP2PError(m_bg, startTime, m_gpus[d2]->gpuId, memoryError, writerError);
             if (!passed)
             {
-                DCGM_LOG_DEBUG << "Memory device" << m_gpus[d1]->gpuId << " and p2p writer device " << m_gpus[d2]->gpuId
-                               << " failed: '" << errBuf << "'.";
+                DCGM_LOG_DEBUG << "Memory device " << m_gpus[d1]->gpuId << " and p2p writer device "
+                               << m_gpus[d2]->gpuId << " failed: '" << errStr << "'.";
                 DcgmError d1Err { m_gpus[d1]->gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_MEMORY_DEVICE, d1Err, m_gpus[d1]->gpuId, errStr.c_str());
-                m_bg->AddErrorForGpu(PCIE_PLUGIN_NAME, m_gpus[d1]->gpuId, d1Err);
+                DCGM_ERROR_FORMAT_MESSAGE(memoryError, d1Err, m_gpus[d1]->gpuId, m_gpus[d2]->gpuId, errStr.c_str());
+                m_bg->AddError(m_bg->GetPcieTestName(), d1Err);
                 DcgmError d2Err { m_gpus[d2]->gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_WRITER_DEVICE, d2Err, m_gpus[d2]->gpuId, errStr.c_str());
-                m_bg->AddErrorForGpu(PCIE_PLUGIN_NAME, m_gpus[d2]->gpuId, d2Err);
+                DCGM_ERROR_FORMAT_MESSAGE(writerError, d2Err, m_gpus[d2]->gpuId, m_gpus[d1]->gpuId, errStr.c_str());
+                m_bg->AddError(m_bg->GetPcieTestName(), d2Err);
                 ret = NVVS_RESULT_FAIL;
             }
             else

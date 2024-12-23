@@ -23,12 +23,13 @@
 #include "dcgm_structs.h"
 
 /*****************************************************************************/
-DcgmPolicyRequest::DcgmPolicyRequest(fpRecvUpdates beginCB, fpRecvUpdates finishCB)
+DcgmPolicyRequest::DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData, std::mutex &cbMutex)
     : DcgmRequest(0)
+    , mCbMutex(cbMutex)
 {
     mIsAckRecvd = false;
-    mBeginCB    = beginCB;
-    mFinishCB   = finishCB;
+    mCallback   = callback;
+    mUserData   = userData;
 }
 
 /*****************************************************************************/
@@ -56,7 +57,6 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
                 m_status    = DCGM_ST_OK;
                 mIsAckRecvd = true;
                 m_messages.push_back(std::move(msg));
-                m_condition.notify_all(); /* The waiting thread will wake up and read the messages */
             }
             else
             {
@@ -66,24 +66,7 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
             return DCGM_ST_OK;
 
         case DCGM_MSG_POLICY_NOTIFY:
-            /* This #if is here because we can either ignore updates before the initial request
-               is ACKed or we can process them right away. The default behavior is to process
-               callbacks right away, meaning that if there is a policy violation, we are likely
-               to call our callbacks from within dcgmPolicyRegister because it sets up the watches,
-               calls UpdateAllFields(), and gets instant notifications of FV updates. Leaving the
-               alternative here in case customers complain too much :) */
-#if 1
             break; /* Code handled below */
-#else              /* Notify only after ACK */
-            if (mIsAckRecvd)
-                break; /* Code handled below */
-            else
-            {
-                log_debug("Request {} ignoring notification before the initial request was ACKed", (void *)this);
-            }
-            Unlock();
-#endif
-            return DCGM_ST_OK;
 
         default:
             log_error("Unexpected msgType {} received.", header->msgType);
@@ -95,18 +78,31 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
     auto msgBytes                    = msg->GetMsgBytesPtr();
     dcgm_msg_policy_notify_t *policy = (dcgm_msg_policy_notify_t *)msgBytes->data();
 
-    /* Make local copies of the callbacks so we can safely unlock. I don't want this code to deadlock if someone
+    /* Make local copies of the callback so we can safely unlock. I don't want this code to deadlock if someone
        removes this object from one of the callbacks */
-    fpRecvUpdates beginCB  = mBeginCB;
-    fpRecvUpdates finishCB = mFinishCB;
+    fpRecvUpdates callback = mCallback;
 
     Unlock();
 
-    /* Call the callbacks if they're present */
-    if (policy->begin && beginCB)
-        beginCB(&policy->response);
-    if (!policy->begin && finishCB)
-        finishCB(&policy->response);
+    /* Grab a callback mutex to prevent users from unregistering callback while we are handling them. */
+    std::lock_guard<std::mutex> guard(mCbMutex);
+
+    /* Call the callback if it is present */
+    if (callback)
+    {
+        try
+        {
+            callback(&policy->response, mUserData);
+        }
+        catch (std::exception const &e)
+        {
+            log_error("Callback thrown exception: {}.", e.what());
+        }
+        catch (...)
+        {
+            log_error("Callback thrown unknown exception.");
+        }
+    }
 
     return DCGM_ST_OK;
 }

@@ -13,8 +13,6 @@
 # limitations under the License.
 
 install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/dcgm_multi-node_health_check.py
-    DESTINATION
-        ${DCGM_SCRIPTS_INSTALL_DIR}
-    COMPONENT DCGM)
+    PROGRAMS dcgm_multi-node_health_check.py
+    DESTINATION "${CMAKE_INSTALL_SBINDIR}"
+    COMPONENT Core)

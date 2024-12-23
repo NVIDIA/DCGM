@@ -11,9 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_subdirectory(tests)
 
-find_package(fmt REQUIRED)
+add_subdirectory(tests)
 
 set(SRCS 
     DcgmCMUtils.cpp
@@ -28,6 +27,7 @@ set(SRCS
     DcgmGpuInstance.cpp
     DcgmCoreCommunication.cpp
     DcgmMigManager.cpp
+    DcgmProfiles.cpp
     DcgmTopology.cpp
     DcgmGpmManager.cpp
     DcgmVgpu.cpp
@@ -38,9 +38,7 @@ set(SRCS
     dcgm_helpers.c
 )
 
-set(INCLUDES
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+set(INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set(DEPS 
     dcgm_interface
@@ -63,34 +61,23 @@ set(DEPS
     fmt::fmt
 )
 
-add_library(dcgm_entity_types STATIC)
 target_sources(dcgm_entity_types PRIVATE DcgmEntityTypes.cpp)
-target_include_directories(dcgm_entity_types PRIVATE ${INCLUDES})
+target_include_directories(dcgm_entity_types PRIVATE "${INCLUDES}")
 target_link_libraries(dcgm_entity_types PRIVATE ${DEPS})
 
-add_library(dcgm_static_private STATIC)
 target_sources(dcgm_static_private PRIVATE ${SRCS})
-target_include_directories(dcgm_static_private PRIVATE ${INCLUDES})
+target_include_directories(dcgm_static_private PRIVATE "${INCLUDES}")
 target_link_libraries(dcgm_static_private PRIVATE ${DEPS})
 target_link_libraries(dcgm_static_private PRIVATE dcgm_entity_types)
 
-# add_library(dcgm_static_public STATIC)
-# target_compile_definitions(dcgm_static_public PUBLIC DCGM_API_EXPORT=1)
-# target_sources(dcgm_static_public PRIVATE ${SRCS})
-# target_include_directories(dcgm_static_public PRIVATE ${INCLUDES})
-# target_link_libraries(dcgm_static_public PRIVATE ${DEPS})
-
-add_library(dcgm SHARED)
-update_lib_ver(dcgm)
-
-
 target_sources(dcgm PRIVATE ${SRCS})
-target_include_directories(dcgm PRIVATE ${INCLUDES})
+target_include_directories(dcgm PRIVATE "${INCLUDES}")
 target_compile_definitions(dcgm PRIVATE DCGM_API_EXPORT=1)
 target_link_options(dcgm PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/../dcgmlib.linux_def)
 
-target_link_libraries(
-    dcgm
+target_link_libraries(dcgm
+    INTERFACE
+        dcgm_interface
     PRIVATE
         ${DEPS}
         modules_objects
@@ -111,5 +98,4 @@ target_link_libraries(
         dl
 )
 
-add_library(dcgmtest_interface INTERFACE)
 target_include_directories(dcgmtest_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include "PluginInterface.h"
+#include "dcgm_fields.h"
+#include <catch2/catch_all.hpp>
 
 #include <stdlib.h>
 
@@ -27,33 +29,40 @@ TEST_CASE("PluginLib: General")
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
     PluginLib pl;
-    dcgmReturn_t ret = pl.LoadPlugin("./libtestplugin.so", "software");
+    dcgmReturn_t ret = pl.LoadPlugin("./libtestplugin.so.4", "software");
     CHECK(ret == DCGM_ST_OK);
 
     ret = pl.GetPluginInfo();
     CHECK(ret == DCGM_ST_OK);
 
-    std::vector<dcgmDiagPluginGpuInfo_t> gpuInfo;
-    dcgmDiagPluginGpuInfo_t gi = {};
-    dcgmHandle_t handle        = {};
-    gi.gpuId                   = 0;
-    gpuInfo.push_back(gi);
-    gi.gpuId = 1;
-    gpuInfo.push_back(gi);
+    std::vector<dcgmDiagPluginEntityInfo_v1> entityInfo;
+    dcgmDiagPluginEntityInfo_v1 ei = {};
+    dcgmHandle_t handle            = {};
+    ei.entity.entityId             = 0;
+    ei.entity.entityGroupId        = DCGM_FE_GPU;
+    entityInfo.push_back(ei);
+    ei.entity.entityId = 1;
+    entityInfo.push_back(ei);
+    constexpr int pluginIdx = 0xc8763;
 
-    ret = pl.InitializePlugin(handle, gpuInfo);
+    ret = pl.InitializePlugin(handle, pluginIdx);
     CHECK(ret == DCGM_ST_OK);
 
     TestParameters tp;
     tp.AddDouble(PS_LOGFILE_TYPE, 0.0);
     setenv("result", "pass", 1);
-    pl.RunTest("test", 10, &tp);
+    pl.RunTest("software", entityInfo, 10, &tp);
+    pl.SetTestRunningState("software", TestRuningState::Done);
 
-    nvvsPluginResult_t result = pl.GetResult("test");
+    nvvsPluginResult_t result = pl.GetResult("software");
     CHECK(result == NVVS_RESULT_PASS);
 
     setenv("result", "fail", 1);
-    pl.RunTest("test", 10, &tp);
-    result = pl.GetResult("test");
+    pl.RunTest("software", entityInfo, 10, &tp);
+    pl.SetTestRunningState("software", TestRuningState::Done);
+    result = pl.GetResult("software");
     CHECK(result == NVVS_RESULT_FAIL);
+
+    // Need to wait for DCGM-3857: support RetrieveResults getting dcgmDiagError_v1 () for testing the correctness of
+    // plugin index
 }

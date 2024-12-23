@@ -18,6 +18,7 @@
 
 #include "DcgmDiagCommon.h"
 #include "DcgmStringHelpers.h"
+#include "EntityListHelpers.h"
 
 bool is_valid_gpu_list(const std::string &gpuList)
 {
@@ -37,23 +38,34 @@ bool is_valid_gpu_list(const std::string &gpuList)
     return true;
 }
 
-bool is_valid_expected_num_entities(dcgmRunDiag_v8 const &drd,
+bool is_valid_expected_num_entities(dcgmRunDiag_v9 const &drd,
                                     std::string const &expectedNumEntities,
                                     std::string &error)
 {
+    if (expectedNumEntities.size() > DCGM_EXPECTED_ENTITIES_LEN)
+    {
+        error = fmt::format("Error: expectedNumEntities size [{}] larger than the maximum allowable size [{}].",
+                            expectedNumEntities.size(),
+                            DCGM_EXPECTED_ENTITIES_LEN);
+        return false;
+    }
+
     if (!expectedNumEntities.empty())
     {
-        // expectedNumEntities is only supported with the default DCGM_GROUP_ALL_GPUS groupId
-        if (drd.groupId != DCGM_GROUP_ALL_GPUS)
+        // If the groupId option is used, only DCGM_GROUP_ALL_GPUS is supported,
+        // or else the default entityIds value.
+        if ((drd.groupId != DCGM_GROUP_NULL && drd.groupId != DCGM_GROUP_ALL_GPUS)
+            || (drd.groupId == DCGM_GROUP_NULL && std::string_view(drd.entityIds) != "*,cpu:*"))
         {
-            error = fmt::format("Error: expectedNumEntities can only be used with DCGM_GROUP_ALL_GPUS.");
+            error = fmt::format(
+                "Error: expectedNumEntities can only be used with DCGM_GROUP_ALL_GPUS, or the default entityIds parameter.");
             return false;
         }
     }
     return true;
 }
 
-dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
+dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v9 &drd,
                                                 const std::string &testNames,
                                                 const std::string &parms,
                                                 const std::string &configFileContents,
@@ -64,12 +76,14 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
                                                 const std::string &debugLogFile,
                                                 const std::string &statsPath,
                                                 unsigned int debugLevel,
-                                                const std::string &throttleMask,
+                                                const std::string &clocksEventMask,
                                                 unsigned int groupId,
                                                 bool failEarly,
                                                 unsigned int failCheckInterval,
                                                 unsigned int timeout,
+                                                std::string const &entityIds,
                                                 std::string const &expectedNumEntities,
+                                                unsigned int watchFrequency,
                                                 std::string &error)
 {
     std::stringstream errbuf;
@@ -145,9 +159,18 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
             return DCGM_ST_BADPARAM;
         }
 
-        snprintf(drd.gpuList, sizeof(drd.gpuList), "%s", gpuList.c_str());
+        snprintf(drd.entityIds, sizeof(drd.entityIds), "%s", gpuList.c_str());
     }
-
+    else
+    {
+        // entity-id has a default value
+        if (entityIds.empty() || entityIds.size() > DCGM_ENTITY_ID_LIST_LEN)
+        {
+            error = fmt::format("Error: Invalid entity id: [{}]", entityIds);
+            return DCGM_ST_BADPARAM;
+        }
+        SafeCopyTo(drd.entityIds, entityIds.data());
+    }
 
     if (statsOnFail)
     {
@@ -169,7 +192,7 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
     /* Parameters for newer versions of dcgmRunDiag_t */
     dcgm_diag_common_set_config_file_contents(configFileContents, drd);
 
-    snprintf(drd.throttleMask, sizeof(drd.throttleMask), "%s", throttleMask.c_str());
+    snprintf(drd.clocksEventMask, sizeof(drd.clocksEventMask), "%s", clocksEventMask.c_str());
     if (failEarly) // v5 and newer
     {
         drd.flags |= DCGM_RUN_FLAGS_FAIL_EARLY;
@@ -178,24 +201,23 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v8 &drd,
 
     drd.timeoutSeconds = timeout;
 
-    if (expectedNumEntities.size() > DCGM_EXPECTED_ENTITIES_LEN)
-    {
-        error = fmt::format("Error: expectedNumEntities size [{}] larger than the maximum allowable size [{}].",
-                            expectedNumEntities.size(),
-                            DCGM_EXPECTED_ENTITIES_LEN);
-        return DCGM_ST_BADPARAM;
-    }
-
     if (!is_valid_expected_num_entities(drd, expectedNumEntities, error))
     {
         return DCGM_ST_BADPARAM;
     }
     SafeCopyTo(drd.expectedNumEntities, expectedNumEntities.data());
 
+    if (watchFrequency < 100000 || watchFrequency > 60000000)
+    {
+        error = fmt::format("Error: watch frequency can only be set between 100000 and 60000000 microseconds");
+        return DCGM_ST_BADPARAM;
+    }
+    drd.watchFrequency = watchFrequency;
+
     return DCGM_ST_OK;
 }
 
-void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v8 &drd)
+void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v9 &drd)
 {
     snprintf(drd.configFileContents, sizeof(drd.configFileContents), "%s", configFileContents.c_str());
 }

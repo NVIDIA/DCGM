@@ -19,6 +19,7 @@
 #include "DcgmLogging.h"
 #include "dcgm_structs.h"
 #include <dcgm_api_export.h>
+#include <fmt/format.h>
 
 /*****************************************************************************/
 DcgmModuleConfig::DcgmModuleConfig(dcgmCoreCallbacks_t &dcc)

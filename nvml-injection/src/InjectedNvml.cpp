@@ -316,7 +316,6 @@ InjectedNvml *InjectedNvml::GetInstance()
 }
 
 InjectedNvml::InjectedNvml()
-    : m_nextDeviceId(0)
 {
     m_injectedNvmlInstance = this;
 }
@@ -360,8 +359,6 @@ void InjectedNvml::Reset()
 
 bool InjectedNvml::DeviceOrderParser(const YAML::Node &node)
 {
-    unsigned int idx = 0;
-
     for (const std::string &deviceUUID : node.as<std::vector<std::string>>())
     {
         nvmlDevice_t device = GenNextNvmlDevice();
@@ -370,8 +367,7 @@ bool InjectedNvml::DeviceOrderParser(const YAML::Node &node)
         m_deviceCollection.back().SetAttribute(INJECTION_UUID_KEY, NvmlFuncReturn(NVML_SUCCESS, deviceUUID));
         m_devices[device]          = std::prev(m_deviceCollection.end());
         m_uuidToDevice[deviceUUID] = std::prev(m_deviceCollection.end());
-        m_indexToDevice[idx]       = std::prev(m_deviceCollection.end());
-        idx += 1;
+        m_indexToDevice.emplace_back(std::prev(m_deviceCollection.end()));
     }
     return true;
 }
@@ -742,7 +738,7 @@ bool InjectedNvml::ParseOneDevice(const YAML::Node &device, AttributeHolder<nvml
         {
             if (!handlers[key](key, value, ah))
             {
-                NVML_LOG_ERR("faield to handle key [%s].", key.c_str());
+                NVML_LOG_ERR("failed to handle key [%s].", key.c_str());
             }
             continue;
         }
@@ -782,8 +778,9 @@ bool InjectedNvml::ParseDevices(const YAML::Node &devices)
         return true;
     }
 
-    for (auto &ah : m_deviceCollection)
+    for (auto iter = m_deviceCollection.begin(); iter != m_deviceCollection.end(); iter++)
     {
+        auto &ah = *iter;
         std::string deviceUUID
             = ah.GetAttribute(INJECTION_UUID_KEY).GetCompoundValue().AsInjectionArgument().AsString();
 
@@ -796,6 +793,19 @@ bool InjectedNvml::ParseDevices(const YAML::Node &devices)
         {
             NVML_LOG_ERR("failed to parse UUID [%s] in device section", deviceUUID.c_str());
             return false;
+        }
+
+        std::string deviceSerial
+            = ah.GetAttribute(INJECTION_SERIAL_KEY).GetCompoundValue().AsInjectionArgument().AsString();
+        if (!deviceSerial.empty()) // Some GPUs do not support serial number
+        {
+            m_serialToDevice[deviceSerial] = iter;
+        }
+        nvmlPciInfo_t *pciInfo
+            = ah.GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
+        if (pciInfo != nullptr)
+        {
+            m_busIdToDevice[pciInfo->busId] = iter;
         }
     }
 
@@ -1212,7 +1222,7 @@ bool InjectedNvml::LoadFromFile(const std::string &path)
     }
     catch (const std::exception &e)
     {
-        NVML_LOG_ERR("failed to YAML load [%s]", path.c_str());
+        NVML_LOG_ERR("failed to YAML load [%s], reason [%s]", path.c_str(), e.what());
         return false;
     }
 
@@ -1300,7 +1310,7 @@ bool InjectedNvml::IsGetter(const std::string &funcname) const
     if (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpuInstanceGet")
         || funcname == "nvmlEventSetWait_v2" || funcname.starts_with("nvmlComputeInstanceGet")
         || funcname.starts_with("nvmlVgpuInstanceGet") || funcname.starts_with("nvmlVgpuTypeGet")
-        || funcname == "nvmlDeviceValidateInforom")
+        || funcname.starts_with("nvmlDeviceWorkloadPowerProfileGet") || funcname == "nvmlDeviceValidateInforom")
     {
         return true;
     }
@@ -1308,7 +1318,7 @@ bool InjectedNvml::IsGetter(const std::string &funcname) const
 }
 
 /*****************************************************************************/
-bool InjectedNvml::IsSetter(const std::string &funcname) const
+bool InjectedNvml::IsSetter(const std::string & /* funcname */) const
 {
     return false;
 }
@@ -1468,7 +1478,7 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
             return NVML_ERROR_INSUFFICIENT_SIZE;
         }
         *values[1].AsUIntPtr() = records.size();
-        for (int i = 0; i < records.size(); ++i)
+        for (size_t i = 0; i < records.size(); ++i)
         {
             std::memcpy(&values[0].AsProcessUtilizationSamplePtr()[i], &records[i], sizeof(records[i]));
         }
@@ -1496,7 +1506,7 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
             return NVML_ERROR_INSUFFICIENT_SIZE;
         }
         *values[0].AsUIntPtr() = records.size();
-        for (int i = 0; i < records.size(); ++i)
+        for (size_t i = 0; i < records.size(); ++i)
         {
             std::memcpy(&values[1].AsVgpuProcessUtilizationSamplePtr()[i], &records[i], sizeof(records[i]));
         }
@@ -1529,7 +1539,7 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
             return NVML_ERROR_INSUFFICIENT_SIZE;
         }
         *values[1].AsUIntPtr() = records.size();
-        for (int i = 0; i < records.size(); ++i)
+        for (size_t i = 0; i < records.size(); ++i)
         {
             auto &[valueType, sample]   = records[i];
             *values[0].AsValueTypePtr() = valueType;
@@ -1721,7 +1731,7 @@ nvmlReturn_t InjectedNvml::GetWrapper(const std::string &funcname,
         return NVML_ERROR_INVALID_ARGUMENT;
     }
 
-    for (int i = 0; i < values.size(); ++i)
+    for (size_t i = 0; i < values.size(); ++i)
     {
         auto nvmlRet = values[i].SetValueFrom(nvmlFuncReturn.GetCompoundValue().RawValues()[i]);
         if (nvmlRet != NVML_SUCCESS)
@@ -1772,9 +1782,9 @@ nvmlReturn_t InjectedNvml::DeviceSetWrapper(const std::string &funcname,
 
 /*****************************************************************************/
 nvmlReturn_t InjectedNvml::SetWrapper(const std::string &funcname,
-                                      const std::string &key,
-                                      std::vector<InjectionArgument> &args,
-                                      std::vector<InjectionArgument> &values)
+                                      const std::string & /* key */,
+                                      std::vector<InjectionArgument> & /* args */,
+                                      std::vector<InjectionArgument> & /* values */)
 {
     // let event related flow control success to prevent failing on starting process.
     // we will return NVML_ERROR_TIMEOUT for nvmlEventSetWait_v2.
@@ -1820,11 +1830,12 @@ nvmlDevice_t InjectedNvml::GetNvmlDevice(InjectionArgument &arg, const std::stri
 
     if (arg.GetType() == INJECTION_UINT)
     {
-        if (!m_indexToDevice.contains(arg.AsUInt()))
+        auto index = arg.AsUInt();
+        if (index >= m_indexToDevice.size())
         {
             return (nvmlDevice_t)0;
         }
-        return m_indexToDevice[arg.AsUInt()]->GetIdentifier();
+        return m_indexToDevice[index]->GetIdentifier();
     }
     else if (identifier == "UUID")
     {
@@ -1857,6 +1868,7 @@ nvmlDevice_t InjectedNvml::GetNvmlDevice(InjectionArgument &arg, const std::stri
 InjectionArgument InjectedNvml::ObjectlessGet(const std::string &key)
 {
     std::lock_guard<std::mutex> guard(m_mutex);
+
     return m_globalAttributes[key].GetCompoundValue().AsInjectionArgument();
 }
 
@@ -1886,44 +1898,48 @@ nvmlReturn_t InjectedNvml::GetCompoundValue(nvmlDevice_t nvmlDevice, const std::
     return cv.SetValueFrom(m_devices[nvmlDevice]->GetAttribute(key).GetCompoundValue());
 }
 
-std::string InjectedNvml::GetString(InjectionArgument &arg, const std::string &key)
+std::pair<nvmlReturn_t, std::string> InjectedNvml::GetString(InjectionArgument &arg, const std::string &key)
 {
     std::lock_guard<std::mutex> guard(m_mutex);
     switch (arg.GetType())
     {
         case INJECTION_DEVICE:
+        {
             if (!m_devices.contains(arg.AsDevice()))
             {
-                return "";
+                return { NVML_ERROR_INVALID_ARGUMENT, "" };
             }
-            return m_devices[arg.AsDevice()]->GetAttribute(key).GetCompoundValue().AsInjectionArgument().AsString();
+            auto nvmlFuncRet = m_devices[arg.AsDevice()]->GetAttribute(key);
+            return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
             break;
+        }
         default:
             break;
     }
-    return "";
+    return { NVML_ERROR_INVALID_ARGUMENT, "" };
 }
 
-std::string InjectedNvml::GetString(InjectionArgument &arg, const std::string &key, const InjectionArgument &key2)
+std::pair<nvmlReturn_t, std::string> InjectedNvml::GetString(InjectionArgument &arg,
+                                                             const std::string &key,
+                                                             const InjectionArgument &key2)
 {
     std::lock_guard<std::mutex> guard(m_mutex);
     switch (arg.GetType())
     {
         case INJECTION_DEVICE:
+        {
             if (!m_devices.contains(arg.AsDevice()))
             {
-                return "";
+                return { NVML_ERROR_INVALID_ARGUMENT, "" };
             }
-            return m_devices[arg.AsDevice()]
-                ->GetAttribute(key, key2)
-                .GetCompoundValue()
-                .AsInjectionArgument()
-                .AsString();
+            auto nvmlFuncRet = m_devices[arg.AsDevice()]->GetAttribute(key, key2);
+            return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
             break;
+        }
         default:
             break;
     }
-    return "";
+    return { NVML_ERROR_INVALID_ARGUMENT, "" };
 }
 
 nvmlReturn_t InjectedNvml::DeviceSet(nvmlDevice_t nvmlDevice,
@@ -2052,6 +2068,18 @@ nvmlReturn_t InjectedNvml::IncrementDeviceCount()
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t InjectedNvml::DecrementDeviceCount()
+{
+    unsigned int count = ObjectlessGetNoLock(INJECTION_COUNT_KEY).AsUInt();
+    if (count == 0)
+    {
+        return NVML_ERROR_UNKNOWN;
+    }
+    count--;
+    ObjectlessSetNoLock(INJECTION_COUNT_KEY, InjectionArgument(count));
+    return NVML_SUCCESS;
+}
+
 unsigned int InjectedNvml::GetGpuCount()
 {
     std::lock_guard<std::mutex> guard(m_mutex);
@@ -2075,8 +2103,8 @@ void InjectedNvml::InitializeGpuDefaults(nvmlDevice_t device, unsigned int index
     std::string paramAttr(attribute);
 
     m_deviceCollection.emplace_back(device);
-    m_devices[device]      = std::prev(m_deviceCollection.end());
-    m_indexToDevice[index] = std::prev(m_deviceCollection.end());
+    m_devices[device] = std::prev(m_deviceCollection.end());
+    m_indexToDevice.emplace_back(std::prev(m_deviceCollection.end()));
 
     InjectionArgument uuid(paramAttr);
     m_deviceCollection.back().SetAttribute(INJECTION_UUID_KEY, NvmlFuncReturn(NVML_SUCCESS, uuid));
@@ -2116,22 +2144,25 @@ void InjectedNvml::InitializeGpuDefaults(nvmlDevice_t device, unsigned int index
 nvmlReturn_t InjectedNvml::SimpleDeviceCreate(const std::string &key, InjectionArgument &value)
 {
     std::lock_guard<std::mutex> guard(m_mutex);
-    unsigned int deviceInt = m_deviceCollection.size();
-    bool valid             = false;
-    nvmlDevice_t device    = GenNextNvmlDevice();
+    unsigned int const nextDeviceIndex = m_indexToDevice.size();
+    bool valid                         = false;
+    nvmlDevice_t device                = GenNextNvmlDevice();
 
     std::string identifier;
 
     if (value.GetType() == INJECTION_UINT && key == INJECTION_INDEX_KEY)
     {
-        if (m_indexToDevice.contains(value.AsUInt()))
+        auto givenIndex = value.AsUInt();
+        if (givenIndex != nextDeviceIndex)
         {
-            // This GPU already exists
+            // Either this GPU already exists, or the user is trying to insert a GPU
+            // out-of-order. Do not allow out-of-order device insertions. It is
+            // complicated to track the missing indices/devices. Keep it simple.
             return NVML_ERROR_INVALID_ARGUMENT;
         }
 
         valid = true;
-        InitializeGpuDefaults(device, value.AsUInt());
+        InitializeGpuDefaults(device, givenIndex);
         m_devices[device]->SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS, value));
     }
     else if (value.GetType() == INJECTION_CONST_CHAR_PTR)
@@ -2163,6 +2194,8 @@ nvmlReturn_t InjectedNvml::SimpleDeviceCreate(const std::string &key, InjectionA
         }
         else if (key == INJECTION_PCIBUSID_KEY)
         {
+            // The YAML file does not seem to contain this entry.
+            // This is available only if the user injects the value.
             if (m_busIdToDevice.count(identifier) > 0)
             {
                 // This GPU already exists
@@ -2170,7 +2203,7 @@ nvmlReturn_t InjectedNvml::SimpleDeviceCreate(const std::string &key, InjectionA
             }
         }
 
-        InitializeGpuDefaults(device, deviceInt);
+        InitializeGpuDefaults(device, nextDeviceIndex);
         m_devices[device]->SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS, value));
         valid = true;
     }
@@ -2178,7 +2211,6 @@ nvmlReturn_t InjectedNvml::SimpleDeviceCreate(const std::string &key, InjectionA
     if (valid)
     {
         IncrementDeviceCount();
-
         return NVML_SUCCESS;
     }
     else
@@ -2251,4 +2283,82 @@ void InjectedNvml::SetupDefaultEnv()
     // Create one GPU because DCGM quits if there are no GPUs
     InjectionArgument indexArg((unsigned int)0);
     SimpleDeviceCreate(INJECTION_INDEX_KEY, indexArg);
+}
+
+nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
+{
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (!m_uuidToDevice.contains(uuid))
+    {
+        NVML_LOG_ERR("Provided uuid [%s] does not exist.", uuid.c_str());
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    // Remove device from all cached containers
+    auto ahIter = m_uuidToDevice[uuid];
+    auto device = ahIter->GetIdentifier();
+    m_devices.erase(device);
+    m_uuidToDevice.erase(uuid);
+
+    std::string serial = ahIter->GetAttribute(INJECTION_SERIAL_KEY).GetCompoundValue().AsInjectionArgument().AsString();
+    unsigned int index = ahIter->GetAttribute(INJECTION_INDEX_KEY).GetCompoundValue().AsInjectionArgument().AsUInt();
+    nvmlPciInfo_t *pciInfo
+        = ahIter->GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
+
+    m_indexToDevice.erase(m_indexToDevice.begin() + index);
+    m_serialToDevice.erase(serial);
+    m_busIdToDevice.erase(pciInfo->busId);
+
+    // Update index attribute of remaining devices based on new index
+    for (unsigned int i = 0; i < m_indexToDevice.size(); i++)
+    {
+        auto curAhIter = m_indexToDevice[i];
+        curAhIter->SetAttribute(INJECTION_INDEX_KEY, NvmlFuncReturn(NVML_SUCCESS, i));
+    }
+
+    nvmlDeviceWithIdentifiers devIds = {
+        .pciBusId = pciInfo->busId,
+        .uuid     = uuid,
+        .serial   = serial,
+        .index    = index,
+        .ah       = std::move(*ahIter),
+    };
+
+    // Store removed device info for restoration later
+    m_removedGpus[uuid] = devIds;
+    m_deviceCollection.erase(ahIter);
+    DecrementDeviceCount();
+
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t InjectedNvml::RestoreGpu(std::string const &uuid)
+{
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (!m_removedGpus.contains(uuid))
+    {
+        NVML_LOG_ERR("Provided uuid [%s] does not exist.", uuid.c_str());
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    auto &devIds                = m_removedGpus[uuid];
+    auto &ah                    = devIds.ah;
+    unsigned int const newIndex = m_indexToDevice.size();
+
+    ah.SetAttribute(INJECTION_INDEX_KEY, NvmlFuncReturn(NVML_SUCCESS, newIndex));
+    auto const &device = ah.GetIdentifier();
+
+    auto const &deviceIter = m_deviceCollection.emplace(m_deviceCollection.end(), std::move(ah));
+
+    m_devices[device]    = deviceIter;
+    m_uuidToDevice[uuid] = deviceIter;
+    m_indexToDevice.emplace_back(deviceIter);
+    if (!devIds.serial.empty())
+    {
+        m_serialToDevice[devIds.serial] = deviceIter;
+    }
+    m_busIdToDevice[devIds.pciBusId] = deviceIter;
+
+    m_removedGpus.erase(uuid);
+    IncrementDeviceCount();
+    return NVML_SUCCESS;
 }

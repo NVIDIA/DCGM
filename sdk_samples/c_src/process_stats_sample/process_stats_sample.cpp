@@ -24,7 +24,7 @@
 // This sample goes through the process of enabling process watches on a group,
 // running a process and viewing the statistics of the group while the process ran.
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv)
+int main(int /* argc */, char ** /* argv */)
 {
     // DCGM calls return a dcgmReturn_t which can be useful for error handling and control flow.
     // Whenever we call DCGM we will store the return in result and check it for errors.

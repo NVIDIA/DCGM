@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_library(sdk_nvml_interface INTERFACE)
 target_link_libraries(sdk_nvml_interface INTERFACE sdk_nvidia)
 
 set(
@@ -35,7 +34,6 @@ target_include_directories(sdk_nvml_interface INTERFACE ${NVML_INCLUDE_DIRS})
 # target_include_directories(sdk_nvml_interface INTERFACE /usr/local/cuda100/include)
 # target_include_directories(sdk_nvml_interface INTERFACE /usr/local/cuda100/kernel/common/inc)
 
-add_library(sdk_nvml_essentials_objects STATIC)
 target_link_libraries(sdk_nvml_essentials_objects PUBLIC sdk_nvml_interface)
 target_sources(
     sdk_nvml_essentials_objects
@@ -50,7 +48,6 @@ target_sources(
     common/logging.c
 )
 
-add_library(sdk_nvml_loader STATIC)
 target_link_libraries(sdk_nvml_loader PUBLIC sdk_nvml_interface)
 if (${LINK_INJECTION_LIB} STREQUAL "true")
     target_link_libraries(sdk_nvml_loader PUBLIC nvmli_interface)

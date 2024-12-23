@@ -113,6 +113,7 @@ private:
     dcgmReturn_t ProcessGetMigUtilization(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetMigIndicesForEntity(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetServiceAccount(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_module_command_header_t *header);
 };
 
 #endif

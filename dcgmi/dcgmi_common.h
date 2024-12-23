@@ -111,19 +111,6 @@ typedef struct dcgmi_entity_pair_t
 
 /*****************************************************************************/
 /*
- * Parse an entity list string into an array of entity pairs
- *
- * input       IN: Comma-separated list of entities like "0,1,2" or "gpu:0,nvswitch:996"
- * entityList OUT: List of entities parsed. This is only populated if the return is DCGM_ST_OK
- *
- * Returns: DCGM_ST_OK if parsing was successful
- *          Other DCGM_ST_* error if a problem occurred. This will print an error to stdout
- *
- */
-dcgmReturn_t dcgmi_parse_entity_list_string(std::string const &input, std::vector<dcgmGroupEntityPair_t> &entityList);
-
-/*****************************************************************************/
-/*
  * Create an entity group with the entities in entityList as members
  *
  * This helper can be used if you don't care about the name of your entity group
@@ -214,69 +201,6 @@ const char *dcgmi_parse_hostname_string(const char *hostName, bool *isUnixSocket
 
 namespace DcgmNs
 {
-/**
- * This function acquires list of valid Entity Ids for GPUs and MIG instances from a hostengine and tries to
- * parse the provided string with entities list validating that every entity is known to the hostengine.
- * @param dcgmHandle A handle to a live connection to the hostengine
- * @param Ids Comma separated list of entity ids
- * @return Tuple of two things: <br>
- *          1) vector of validated entities <br>
- *          2) a comma separated list of unrecognized entities.
- * @note This function writes to stdout in case of errors. Directly and via PopulateEntitiesMap()
- */
-[[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(dcgmHandle_t dcgmHandle,
-                                                                                             std::string const &Ids);
-
-using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>;
-
-EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info);
-
-namespace detail
-{
-    struct GroupEntityPairHasher
-    {
-        size_t operator()(dcgmGroupEntityPair_t const &value) const
-        {
-            return Utils::Hash::CompoundHash(value.entityGroupId, value.entityId);
-        }
-    };
-
-    struct GroupEntityPairEq
-    {
-        constexpr bool operator()(dcgmGroupEntityPair_t const &left, dcgmGroupEntityPair_t const &right) const
-        {
-            return std::tie(left.entityGroupId, left.entityId) == std::tie(right.entityGroupId, right.entityId);
-        }
-    };
-
-    /**
-     * @brief Result type for the `HandleWildcard()` function
-     * @see `HandleWildcard()` for details about each value meaning.
-     */
-    enum class HandleWildcardResult
-    {
-        Handled,   /*!< Wildcards were found */
-        Unhandled, /*!< No Wildcards were found */
-        Error,     /*!< Error during parsing */
-    };
-
-    using EntityGroupContainer = std::unordered_set<dcgmGroupEntityPair_t, GroupEntityPairHasher, GroupEntityPairEq>;
-
-    /**
-     * @brief Handles cases if \a value has wildcards in one of its fields.
-     *
-     * @param[in]   value       Parsed Entity
-     * @param[in]   entities    Entities that will be used to satisfy wildcards
-     * @param[out]  result      Final list of entity pairs after the wildcards are unrolled
-     * @return \c `HandleWildcardResult::Handled` - if wildcards were found and the \a result was updated
-     * @return \c `HandleWildcardResult::Unhandled` - no wildcards were found and the \a result was unchanged
-     * @return \c `HandleWildcardResult::Error` - an error happened in the process. The state of the \a result is
-     *                                            undefined
-     */
-    HandleWildcardResult HandleWildcard(ParseResult const &value,
-                                        EntityMap const &entities,
-                                        EntityGroupContainer &result);
-} // namespace detail
 
 namespace Terminal
 {

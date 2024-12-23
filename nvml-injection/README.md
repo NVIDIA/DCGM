@@ -65,12 +65,12 @@ make
 
 ### Usage
 
-When `sdk/nvidia/nvml/entry_points.h` or `sdk/nvidia/nvml/nvml.h` updated. Please re-run `generate_nvml_stubs.py` to ensure we can inject corresponding functions. As `nvml.h` is not a well-consistency header. It may have chance that you need to slightly modify `generate_nvml_stubs.py` to support new added functions, defines, etc.
+When `sdk/nvidia/nvml/entry_points.h` or `sdk/nvidia/nvml/nvml.h` updated. Please re-run `generate_nvml_stubs.py` to ensure we can inject corresponding functions. As `nvml.h` is not a well-consistency header. It may have chance that you need to (slightly) modify `generate_nvml_stubs.py` to support new added functions, defines, etc.
 
 From the dcgm/ directory:
 
 ```sh
-env PYTHONPATH=$PYTHONPATH:/llvm/llvm-project-llvmorg-18.1.2/clang/bindings/python/ CLANG_LIBRARY_PATH=/llvm/llvm-project-llvmorg-18.1.2/build/lib/ python nvml-injection/scripts/generate_nvml_stubs.py -i sdk/nvidia/nvml/entry_points.h -o nvml-injection
+env PYTHONPATH=$PYTHONPATH:/llvm/llvm-project-llvmorg-18.1.2/clang/bindings/python/ CLANG_LIBRARY_PATH=/llvm/llvm-project-llvmorg-18.1.2/build/lib/ python nvml-injection/scripts/generate_nvml_stubs.py
 ```
 
 Please note that, the llvm library and binding path depend on your system and setup.
@@ -101,16 +101,110 @@ In this section, we will go through the process to show what to do to enable the
 
 1. Add new functions and definitions into `nvml.h` and `entry_points.h`
 
-2. Run `generate_nvml_stubs.py` and move the `nvml-injection/nvml_injection_structs.py` to `testing/python3/`
+2. Run `generate_nvml_stubs.py`
+
    * In dcgm root folder
-   * `python nvml-injection/scripts/generate_nvml_stubs.py -i sdk/nvidia/nvml/entry_points.h -o nvml-injection`
-      * Please see generate_nvml_stubs.py section for more information.
-   * `mv nvml-injection/nvml_injection_structs.py testing/python3/`
+   * `python nvml-injection/scripts/generate_nvml_stubs.py`
+     * Please see generate_nvml_stubs.py section for more information.
+
 3. Update `nvml_api_recorder.py` so that it can capture the value from new added functions
-   * Basically you need to write the python serializer to store return value into YAML file.
-   * You can skip this step if PyNVML has not supported new added functions yet.
+
+   * Basically we need to write the python serializer to store return value into YAML file.
+
+     * Take `nvmlDeviceGetPciInfo` as examples. From PyNVML, we know it returns `nvmlPciInfo_t()` which includes the following fields.
+
+       ```python
+       class nvmlPciInfo_t(_PrintableStructure):
+           _fields_ = [
+               # Moved to the new busId location below
+               ('busIdLegacy', c_char * NVML_DEVICE_PCI_BUS_ID_BUFFER_V2_SIZE),
+               ('domain', c_uint),
+               ('bus', c_uint),
+               ('device', c_uint),
+               ('pciDeviceId', c_uint),
+
+               # Added in 2.285
+               ('pciSubSystemId', c_uint),
+               # New busId replaced the long deprecated and reserved fields with a
+               # field of the same size in 9.0
+               ('busId', c_char * NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE),
+           ]
+
+       def nvmlDeviceGetPciInfo_v3(handle):
+           c_info = nvmlPciInfo_t()
+           fn = _nvmlGetFunctionPointer("nvmlDeviceGetPciInfo_v3")
+           ret = fn(handle, byref(c_info))
+           _nvmlCheckReturn(ret)
+           return c_info
+       ```
+
+       As it only has device handler as input, we can add a new entry in `_nvml_device_attr_funcs`.
+
+       ```python
+       NVMLSimpleFunc("nvmlDeviceGetPciInfo", pci_info_parser),
+       ```
+
+       Finally, we need to write down structure YAML serializer `pci_info_parser`.
+
+       ```python
+       def pci_info_parser(value):
+           return {
+               "busIdLegacy": value.busIdLegacy,
+               "domain": value.domain,
+               "bus": value.bus,
+               "device": value.device,
+               "pciDeviceId": value.pciDeviceId,
+               "pciSubSystemId": value.pciSubSystemId,
+               "busId": value.busId,
+           }
+       ```
+
+       Please note that if the field name is not the same as in C++ structure, please use C++ field name as the serialized key.
+
+     * If to be added function uses reference to return its value. For example, `nvmlDeviceGetGpuFabricInfo`. We can write down the wrapper function in `nvml_api_recorder.py` to use return value for output parameters.
+
+       ```python
+       def nvmlDeviceGetGpuFabricInfo(device):
+           import dcgm_nvml as pynvml
+           c_fabricInfo = c_nvmlGpuFabricInfo_t()
+           pynvml.nvmlDeviceGetGpuFabricInfo(device, byref(c_fabricInfo))
+           return c_fabricInfo
+       ```
+
+       After this, we can follow the same way mentioned to add YAML serializer.
+
+       ```python
+       NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfo", fabric_info_parser),
+       ```
+
+       ```python
+       def fabric_info_parser(value):
+           return {
+               "clusterUuid": value.clusterUuid,
+               "status": value.status,
+               "cliqueId": value.partitionId,
+               "state": value.state,
+           }
+       ```
+
+       We should use `cliqueId` instead of `partitionId` as in C++ the field name is `cliqueId`.
+
+     * If the function return basic type, for example, `nvmlDeviceGetComputeMode`, we can directly use `basic_type_value_parser` as YAML serializer.
+
+     * If the function needs more than one inputs, please add entry in `_nvml_device_extra_key_attr_funcs`. It accepts another parameter to indicate the extra input. Take `nvmlDeviceGetClockInfo` as example. We will add an entry in `_nvml_device_extra_key_attr_funcs`.
+
+       ```python
+       NVMLExtraKeyFunc("nvmlDeviceGetClockInfo", range(NVML_CLOCK_COUNT), basic_type_value_parser),
+       ```
+
+       It has an extra element `range(NVML_CLOCK_COUNT)` which indicates the all possibility of second parameter (i.e. 0, 1, 2, 3).
+
+   * You can skip this step if PyNVML has not supported new added functions yet (i.e. we cannot find the function in PyNVML).
+
 4. Update YAML file to include new key
+
    * If you are unable to access the machine that can produce informatiuon you want, you can also modify the YAML file directly to indicate the return values and use it for testing your code.
+
 5. Run program with `NVML_INJECTION_MODE` and `NVML_YAML_FILE` for testing
 
 ## Add Tests Using NVML Injection

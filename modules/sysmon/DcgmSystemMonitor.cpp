@@ -32,7 +32,6 @@ const std::string CPU_VENDOR_PATH("/sys/devices/soc0/soc_id");
 void DcgmSystemMonitor::Init()
 {
     PopulateSocketPowerMap(HWMON_BASE_PATH);
-    ReadCpuVendorAndModel(CPU_VENDOR_PATH);
 }
 
 dcgmPowerFileInfo_t DcgmSystemMonitor::GetCpuSocketIdFromContents(const std::string &contents)
@@ -293,59 +292,7 @@ std::string DcgmSystemMonitor::ReadEntireFile(std::ifstream &file)
     return contents;
 }
 
-static const std::string NVIDIA_VENDOR = "Nvidia";
-static const std::string GRACE_MODEL   = "Grace";
-
-void DcgmSystemMonitor::ReadCpuVendorAndModel(const std::string &path)
-{
-    /* We expect to see "jep106:036b:0241" in the file:
-     * jep106 specifies the standard
-     * 036b is the manufacturer's identification code for Nvidia
-     * 0241 signifies the chip that has Grace CPUs on it.
-     */
-    static const std::string GRACE_CHIP_ID           = "0241";
-    static const std::string NVIDIA_MANUFACTURERS_ID = "036b";
-    std::ifstream file(path);
-
-    m_cpuVendor = "Unknown";
-    m_cpuModel  = "Unknown";
-
-    if (file)
-    {
-        std::string contents;
-        file >> contents; // file should just have this string in it
-        auto tokens = DcgmNs::Split(contents, ':');
-        if (tokens.size() == 3)
-        {
-            if (tokens[1] == NVIDIA_MANUFACTURERS_ID)
-            {
-                m_cpuVendor = NVIDIA_VENDOR;
-                if (tokens[2] == GRACE_CHIP_ID)
-                {
-                    m_cpuModel = GRACE_MODEL;
-                }
-                else
-                {
-                    log_debug("Non-Grace chip ID '{}' found", tokens[2]);
-                }
-            }
-            else
-            {
-                log_debug("Non-Nvidia manufacturer '{}' found", tokens[1]);
-            }
-        }
-        else
-        {
-            log_error("Couldn't parse soc_id '{}'", contents);
-        }
-    }
-    else
-    {
-        SYSMON_LOG_IFSTREAM_ERROR(path, "CPU Vendor info file");
-    }
-}
-
 bool DcgmSystemMonitor::AreNvidiaCpusPresent() const
 {
-    return (m_cpuVendor == NVIDIA_VENDOR);
+    return (GetCpuVendor() == CpuHelpers::GetNvidiaVendorName());
 }

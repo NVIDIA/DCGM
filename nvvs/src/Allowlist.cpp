@@ -167,6 +167,7 @@ void Allowlist::PostProcessAllowlist(std::vector<Gpu *> &gpus)
 static bool isBoolParam(const std::string &param)
 {
     const static std::unordered_set<std::string> boolParams = {
+        "use_dgemv",
         "use_dgemm",
         "use_doubles",
         "l1_is_allowed",
@@ -261,36 +262,36 @@ void Allowlist::FillMap()
 
 void Allowlist::UpdateGlobalsForDeviceId(const std::string &deviceId)
 {
-    /* NOTE: As this function is updated we need to update testing/python/test_utils.py's is_throttling_masked()
+    /* NOTE: As this function is updated we need to update testing/python/test_utils.py's is_clocks_event_masked()
      * in order to avoid false positive test failures */
 
     // Tesla K80 ("Stella Duo" Gemini) and Tesla T4 - TU104_PG183_SKU200 or RTX 6000/8000 passive
     if (deviceId == "102d" || deviceId == "1eb8" || deviceId == "1e78")
     {
-        // K80 expects some throttling issues - see bug2454355/DCGM-865 for details
-        if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
+        // K80 expects some clocks event issues - see bug2454355/DCGM-865 for details
+        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
-            // Override the throttle mask only if the user has not specified a mask
-            nvvsCommon.throttleIgnoreMask = MAX_THROTTLE_IGNORE_MASK_VALUE;
+            // Override the clocks event mask only if the user has not specified a mask
+            nvvsCommon.clocksEventIgnoreMask = MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE;
         }
         return;
     }
-    // V100S experiences SW throttling
+    // V100S experiences SW clocks event
     else if (deviceId == "1df6")
     {
-        if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
+        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
-            nvvsCommon.throttleIgnoreMask = DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL;
+            nvvsCommon.clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
         }
     }
-    // RTX 6000 experiences HW throttling
+    // RTX 6000 experiences HW clocks event
     else if (deviceId == "1e30")
     {
-        if (nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK)
+        if (nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK)
         {
-            nvvsCommon.throttleIgnoreMask = DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN
-                                            | DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL
-                                            | DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL;
+            nvvsCommon.clocksEventIgnoreMask = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN
+                                               | DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
+                                               | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
         }
     }
 }

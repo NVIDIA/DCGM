@@ -30,6 +30,23 @@
 
 /*****************************************************************************/
 /**
+ * Subrequest DCGM_DIAG_SR_RUN version 10
+ */
+typedef struct dcgm_diag_msg_run_v10
+{
+    dcgm_module_command_header_t header; /* Command header */
+
+    dcgmPolicyAction_t action;         /*  IN: Action to perform after running the diagnostic */
+    dcgmRunDiag_v9 runDiag;            /*  IN: Parameters for how to run the diagnostic */
+    dcgmDiagResponse_v11 diagResponse; /* OUT: Detailed specifics about how the diag run went */
+} dcgm_diag_msg_run_v10;
+
+#define dcgm_diag_msg_run_version10 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v10, 10)
+
+#define dcgm_diag_msg_run_version dcgm_diag_msg_run_version10
+
+/*****************************************************************************/
+/**
  * Subrequest DCGM_DIAG_SR_RUN version 9
  */
 typedef struct dcgm_diag_msg_run_v9
@@ -42,8 +59,6 @@ typedef struct dcgm_diag_msg_run_v9
 } dcgm_diag_msg_run_v9;
 
 #define dcgm_diag_msg_run_version9 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v9, 9)
-
-#define dcgm_diag_msg_run_version dcgm_diag_msg_run_version9
 
 /*****************************************************************************/
 /**
@@ -59,8 +74,6 @@ typedef struct dcgm_diag_msg_run_v8
 } dcgm_diag_msg_run_v8;
 
 #define dcgm_diag_msg_run_version8 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v8, 8)
-
-typedef dcgm_diag_msg_run_v8 dcgm_diag_msg_run_t;
 
 /*****************************************************************************/
 /**
@@ -107,6 +120,7 @@ typedef struct dcgm_diag_msg_run_v5
 
 #define dcgm_diag_msg_run_version5 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v5, 5)
 
+typedef dcgm_diag_msg_run_v9 dcgm_diag_msg_run_t;
 
 /*****************************************************************************/
 /**
@@ -121,7 +135,5 @@ typedef struct dcgm_diag_msg_stop_v1
 #define dcgm_diag_msg_stop_version  dcgm_diag_msg_stop_version1
 
 typedef dcgm_diag_msg_stop_v1 dcgm_diag_msg_stop_t;
-
-/*****************************************************************************/
 
 #endif // DCGM_DIAG_STRUCTS_H

@@ -36,7 +36,7 @@ int verboseLogging = 1;
     } while (0)
 
 #define MIN(a, b)      ((a) < (b) ? (a) : (b))
-#define ROUND_UP(x, n) (((x) + ((n)-1)) & ~((n)-1))
+#define ROUND_UP(x, n) (((x) + ((n) - 1)) & ~((n) - 1))
 #define MAX_GPUS       64
 
 #define ASSERT(cond, string, ...)                                                                            \
@@ -284,8 +284,6 @@ int main(int argc, char **argv)
             CU_CHECK_ERROR(cuCtxPushCurrent(ctx[device]), "");
 #if _WIN64 || __amd64__
             CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu64.ptx"), "couldn't load busy_gpu.ptx module");
-#elif __powerpc64__
-            CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu_ppc64le.ptx"), "couldn't load busy_gpu.ptx module");
 #elif __aarch64__
             CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu_aarch64.ptx"), "couldn't load busy_gpu.ptx module");
 #else
@@ -403,8 +401,6 @@ int main(int argc, char **argv)
             CU_CHECK_ERROR(cuCtxPushCurrent(ctx[device]), "");
 #if _WIN64 || __amd64__
             CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu64.ptx"), "couldn't load busy_gpu.ptx module");
-#elif __powerpc64__
-            CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu_ppc64le.ptx"), "couldn't load busy_gpu.ptx module");
 #else
             CU_CHECK_ERROR(cuModuleLoad(&mod, "busy_gpu32.ptx"), "couldn't load busy_gpu.ptx module");
 #endif

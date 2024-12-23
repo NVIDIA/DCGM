@@ -23,8 +23,6 @@
 # dcgmGetPidInfo - Bug found
 # dcgmGroupGetInfo
 # dcgmHealthCheck 
-# dcgmIntrospectGetFieldsExecTime - Bug found
-# vtDcgmIntrospectGetFieldsMemoryUsage - Bug found
 # dcgmIntrospectGetHostengineCpuUtilization
 # dcgmIntrospectGetHostengineMemoryUsage
 # dcgmJobGetStats
@@ -35,8 +33,6 @@
 
 # vtDcgmGetVgpuDeviceAttributes
 # dcgmGetVgpuInstanceAttributes
-# dcgmIntrospectGetFieldExecTime
-# dcgmIntrospectGetFieldMemoryUsage
 # dcgmVgpuConfigGet
 # dcgmVgpuConfigSet
 ##
@@ -69,7 +65,6 @@ def vtDcgmConnect_v2(ip_address, connectParams, versionTest):
     return dcgm_handle
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_connect_validate(handle, gpuIds):
 
@@ -126,8 +121,8 @@ def test_dcgm_get_device_attributes_validate(handle, gpuIds):
 
 def vtDcgmGroupGetInfo(dcgm_handle, group_id, versionTest):
     fn = dcgmFP("dcgmGroupGetInfo")
-    device_values = dcgm_structs.c_dcgmGroupInfo_v2()
-    device_values.version = dcgm_structs.make_dcgm_version(device_values, 2)
+    device_values = dcgm_structs.c_dcgmGroupInfo_v3()
+    device_values.version = dcgm_structs.make_dcgm_version(device_values, 3)
     logger.debug("Structure version: %d" % device_values.version)
 
     device_values.version = versionTest
@@ -217,8 +212,8 @@ def test_dcgm_field_group_get_all_validate(handle):
 
 def vtDcgmConfigSet(dcgm_handle, group_id, configToSet, status_handle, versionTest):
     fn = dcgmFP("dcgmConfigSet")
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
-    config_values.version = dcgm_structs.make_dcgm_version(config_values, 1)
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
+    config_values.version = dcgm_structs.make_dcgm_version(config_values, 2)
     logger.debug("Structure version: %d" % config_values.version)
     configToSet.version = versionTest
     ret = fn(dcgm_handle, group_id, byref(configToSet), status_handle)
@@ -233,7 +228,7 @@ def test_dcgm_config_set_validate(handle):
     
     groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     status_handle = dcgm_agent.dcgmStatusCreate()
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
         versionTest = 0 #invalid version
@@ -246,7 +241,7 @@ def test_dcgm_config_set_validate(handle):
 def vtDcgmConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, versionTest):
     fn = dcgmFP("dcgmConfigGet")
 
-    config_values_array = count * dcgm_structs.c_dcgmDeviceConfig_v1
+    config_values_array = count * dcgm_structs.c_dcgmDeviceConfig_v2
     c_config_values = config_values_array()
 
     for index in range(0, count):
@@ -290,7 +285,7 @@ def vtDcgmPolicyGet(dcgm_handle, group_id, count, status_handle, versionTest):
     policy.version = dcgm_structs.make_dcgm_version(policy, 1)
     logger.debug("Structure version: %d" % policy.version)
 
-    policyCallback = dcgm_structs.c_dcgmPolicyCallbackResponse_v1()
+    policyCallback = dcgm_structs.c_dcgmPolicyCallbackResponse_v2()
     policyCallback.version = dcgm_structs.make_dcgm_version(policyCallback, 1)
     logger.debug("Structure version: %d" % policyCallback.version)
 
@@ -328,8 +323,8 @@ def test_dcgm_policy_get_validate(handle):
         ret = vtDcgmPolicyGet(handle, groupId, count, status_handle, versionTest)
 
 def vtDcgmHealthCheck(dcgm_handle, groupId, versionTest):
-    c_results = dcgm_structs.c_dcgmHealthResponse_v4()
-    c_results.version = dcgm_structs.make_dcgm_version(c_results, 4)
+    c_results = dcgm_structs.c_dcgmHealthResponse_v5()
+    c_results.version = dcgm_structs.make_dcgm_version(c_results, 5)
     logger.debug("Structure version: %d" % c_results.version)
 
     c_results.version = versionTest
@@ -357,12 +352,12 @@ def test_dcgm_health_check_validate(handle):
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
+    response = dcgm_structs.c_dcgmDiagResponse_v11()
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
     logger.debug("Structure version: %d" % runDiagInfo.version)
 
     runDiagInfo.version = versionTest
@@ -373,11 +368,11 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     return response
 
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
+    response = dcgm_structs.c_dcgmDiagResponse_v11()
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
     runDiagInfo.version = versionTest
     runDiagInfo.validate = validate
     runDiagInfo.groupId = group_id
@@ -388,7 +383,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     return response
 
 def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v10()
+    response = dcgm_structs.c_dcgmDiagResponse_v9()
     response.version = versionTest
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
@@ -422,11 +417,11 @@ def test_dcgm_run_diagnostic_validate(handle, gpuIds):
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
 
-    drd = dcgm_structs.c_dcgmRunDiag_v8()
-    drd.version = dcgm_structs.dcgmRunDiag_version8
+    drd = dcgm_structs.c_dcgmRunDiag_t()
+    drd.version = dcgm_structs.dcgmRunDiag_version
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = groupId
-    drd.gpuList = gpuIdStr
+    drd.entityIds = gpuIdStr
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
         versionTest = 0 #invalid version
@@ -619,7 +614,6 @@ def vtDcgmGetVgpuDeviceAttributes(dcgm_handle, gpuId, versionTest):
     return device_values
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_get_vgpu_device_attributes_validate(handle, gpuIds):
     """
@@ -647,7 +641,6 @@ def vtDcgmGetVgpuInstanceAttributes(dcgm_handle, vgpuId, versionTest):
     return device_values
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_get_vgpu_instance_attributes_validate(handle, gpuIds):
     """
@@ -677,7 +670,7 @@ def test_dcgm_vgpu_config_set_validate(handle):
     
     groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     status_handle = dcgm_agent.dcgmStatusCreate()
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
         versionTest = 0 #invalid version

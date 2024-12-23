@@ -36,12 +36,14 @@ void TestInfo::Clear()
     m_subtests.clear();
 }
 
+// TODO: HasParameter(), HasSubtest(), and HasSubtestParameter() are all the same
+// Clear this up in DCGM 3953 (https://jirasw.nvidia.com/browse/DCGM-3953)
 bool TestInfo::HasParameter(const std::string &parameter) const
 {
     return m_info.parameters.find(parameter) != m_info.parameters.end();
 }
 
-bool TestInfo::HasSubtestParameter(const std::string &subtest, const std::string &parameter) const
+bool TestInfo::HasSubtestParameter(const std::string & /* subtest */, const std::string &parameter) const
 {
     auto iter = m_info.parameters.find(parameter);
 

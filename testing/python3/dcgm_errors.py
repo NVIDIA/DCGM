@@ -24,9 +24,9 @@ DCGM_FR_PENDING_PAGE_RETIREMENTS            = 6  # Pending page retirements dete
 DCGM_FR_RETIRED_PAGES_LIMIT                 = 7  # Unacceptable total page retirements detected
 DCGM_FR_RETIRED_PAGES_DBE_LIMIT             = 8  # Unacceptable total page retirements due to uncorrectable errors
 DCGM_FR_CORRUPT_INFOROM                     = 9  # Corrupt inforom found
-DCGM_FR_CLOCK_THROTTLE_THERMAL              = 10 # Clocks being throttled due to overheating
+DCGM_FR_CLOCKS_EVENT_THERMAL                = 10 # Clocks being optimized due to overheating
 DCGM_FR_POWER_UNREADABLE                    = 11 # Cannot get a reading for power from NVML
-DCGM_FR_CLOCK_THROTTLE_POWER                = 12 # Clock being throttled due to power restrictions
+DCGM_FR_CLOCKS_EVENT_POWER                  = 12 # Clocks being optimized due to power restrictions
 DCGM_FR_NVLINK_ERROR_THRESHOLD              = 13 # Unacceptable rate of NVLink errors
 DCGM_FR_NVLINK_DOWN                         = 14 # NVLink is down
 DCGM_FR_NVSWITCH_FATAL_ERROR                = 15 # Fatal errors on the NVSwitch
@@ -57,7 +57,7 @@ DCGM_FR_FIELD_THRESHOLD_TS_DBL              = 39 # The value for the specified f
 DCGM_FR_THERMAL_VIOLATIONS                  = 40 # Thermal violations detected
 DCGM_FR_THERMAL_VIOLATIONS_TS               = 41 # Thermal violations detected with a timestamp
 DCGM_FR_TEMP_VIOLATION                      = 42 # Temperature is too high
-DCGM_FR_THROTTLING_VIOLATION                = 43 # Non-benign clock throttling is occurring
+DCGM_FR_CLOCKS_EVENT_VIOLATION              = 43 # Non-benign clocks event is occurring
 DCGM_FR_INTERNAL                            = 44 # An internal error was detected
 DCGM_FR_PCIE_GENERATION                     = 45 # PCIe generation is too low
 DCGM_FR_PCIE_WIDTH                          = 46 # PCIe width is too low
@@ -116,17 +116,29 @@ DCGM_FR_PCIE_H_REPLAY_VIOLATION             = 98 # Host PCIe replay count violat
 DCGM_FR_GPU_EXPECTED_NVLINKS_UP             = 99 # Expected nvlinks up per gpu */
 DCGM_FR_NVSWITCH_EXPECTED_NVLINKS_UP        = 100 # Expected nvlinks up per nvswitch */
 DCGM_FR_XID_ERROR                           = 101 # XID error detected
-DCGM_FR_SBE_VIOLATION                       = 102,
-DCGM_FR_DBE_VIOLATION                       = 103,
-DCGM_FR_PCIE_REPLAY_VIOLATION               = 104,
-DCGM_FR_SBE_THRESHOLD_VIOLATION             = 105,
-DCGM_FR_DBE_THRESHOLD_VIOLATION             = 106,
-DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION     = 107,
-DCGM_FR_CUDA_FM_NOT_INITIALIZED             = 108,
-DCGM_FR_SXID_ERROR                          = 109,
-DCGM_FR_GFLOPS_THRESHOLD_VIOLATION          = 110,
-DCGM_FR_NAN_VALUE                           = 111,
-DCGM_FR_ERROR_SENTINEL                      = 112 # MUST BE THE LAST ERROR CODE
+DCGM_FR_SBE_VIOLATION                       = 102
+DCGM_FR_DBE_VIOLATION                       = 103
+DCGM_FR_PCIE_REPLAY_VIOLATION               = 104
+DCGM_FR_SBE_THRESHOLD_VIOLATION             = 105
+DCGM_FR_DBE_THRESHOLD_VIOLATION             = 106
+DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION     = 107
+DCGM_FR_CUDA_FM_NOT_INITIALIZED             = 108
+DCGM_FR_SXID_ERROR                          = 109
+DCGM_FR_GFLOPS_THRESHOLD_VIOLATION          = 110
+DCGM_FR_NAN_VALUE                           = 111
+DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR       = 112
+DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE       = 113
+DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE       = 114
+DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE     = 115
+DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE     = 116
+DCGM_FR_TEST_SKIPPED                        = 117
+DCGM_FR_ERROR_SENTINEL                      = 118 # MUST BE THE LAST ERROR CODE
+
+# Deprecated throttling-related events
+DCGM_FR_CLOCK_THROTTLE_THERMAL              = DCGM_FR_CLOCKS_EVENT_THERMAL # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
+DCGM_FR_CLOCK_THROTTLE_POWER                = DCGM_FR_CLOCKS_EVENT_POWER # Deprecated: Use DCGM_FR_CLOCKS_EVENT_POWER instead
+DCGM_FR_THROTTLING_VIOLATION                = DCGM_FR_CLOCKS_EVENT_VIOLATION # Deprecated: Use DCGM_CLOCKS_EVENT_VIOLATION instead
+
 # Standard message for running a field diagnostic 
 TRIAGE_RUN_FIELD_DIAG_MSG = "Run a field diagnostic on the GPU."
 DEBUG_COOLING_MSG = "Verify that the cooling on this machine is functional, including external, thermal "\
@@ -183,11 +195,11 @@ DCGM_FR_RETIRED_PAGES_DBE_LIMIT_MSG   = "An excess of %u retired pages due to DB
 # gpu id
 DCGM_FR_CORRUPT_INFOROM_MSG          =  "A corrupt InfoROM has been detected in GPU %u."
 # gpu id
-DCGM_FR_CLOCK_THROTTLE_THERMAL_MSG   =  "Detected clock throttling due to thermal violation in GPU %u."
+DCGM_FR_CLOCKS_EVENT_THERMAL_MSG     =  "Detected clocks event due to thermal violation in GPU %u."
 # gpu id
 DCGM_FR_POWER_UNREADABLE_MSG         =  "Cannot reliably read the power usage for GPU %u."
 # gpu id
-DCGM_FR_CLOCK_THROTTLE_POWER_MSG     =  "Detected clock throttling due to power violation in GPU %u."
+DCGM_FR_CLOCKS_EVENT_POWER_MSG       =  "Detected clocks event due to power violation in GPU %u."
 # nvlink errors detected, nvlink id, error threshold
 DCGM_FR_NVLINK_ERROR_THRESHOLD_MSG   =  "Detected %ld NvLink errors on NvLink %u which exceeds threshold of %u"
 # gpu id, nvlink id
@@ -241,10 +253,10 @@ DCGM_FR_FIELD_THRESHOLD_TS_DBL_MSG    = "%s met or exceeded the threshold of %.1
 DCGM_FR_THERMAL_VIOLATIONS_MSG        = "There were thermal violations totaling %lu seconds for GPU %u"
 DCGM_FR_THERMAL_VIOLATIONS_TS_MSG     = "Thermal violations totaling %lu samples started at %.1f seconds "\
                                                 "into the test for GPU %u"
-DCGM_FR_TEMP_VIOLATION_MSG            = "Temperature %lld of GPU %u exceeded user-specified maximum "\
+DCGM_FR_TEMP_VIOLATION_MSG            = "Temperature %lld of %s %u exceeded user-specified maximum "\
                                                 "allowed temperature %lld"
-DCGM_FR_THROTTLING_VIOLATION_MSG      = "Clocks are being throttling for GPU %u because of clock "\
-                                                "throttling starting %.1f seconds into the test. %s"
+DCGM_FR_CLOCKS_EVENT_VIOLATION_MSG    = "Clocks are being optimized for GPU %u because of clocks "\
+                                            "event starting %.1f seconds into the test. %s"
 DCGM_FR_INTERNAL_MSG                  = "There was an internal error during the test: '%s'"
 DCGM_FR_PCIE_GENERATION_MSG           = "GPU %u is running at PCI link generation %d, which is below "\
                                                 "the minimum allowed link generation of %d (parameter '%s')"
@@ -299,8 +311,8 @@ DCGM_FR_EMPTY_GPU_LIST_MSG             = "No valid GPUs passed to plugin"
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG  = "Pending page retirements together with a DBE were detected on GPU %u."
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG   = "GPU %u has uncorrectable row remappings"
 DCGM_FR_PENDING_ROW_REMAP_MSG         = "GPU %u has pending row remappings"
-DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
-DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG  = "GPU %u was unsuccessfully written to by GPU %u in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG  = "GPU %u unsuccessfully wrote data to GPU %u in a peer-to-peer test: %s"
 DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG      = "NVSwitch %u's NvLink %u is down."
 DCGM_FR_PCIE_H_REPLAY_VIOLATION       = "GPU %u host-side correctable PCIe replay count violation, see dmesg for more information."
 DCGM_FR_FILE_CREATE_PERMISSIONS_MSG   = "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
@@ -315,6 +327,11 @@ DCGM_FR_SXID_ERROR_MSG                      = "Detected fatal NvSwitch SXID %u"
 DCGM_FR_CUDA_FM_NOT_INITIALIZED_MSG         = "FabricManager not initialized"
 DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_MSG      = "Detected %.2f %s for GPU %u which is below the threshold %.2f"
 DCGM_FR_NAN_VALUE_MSG                       = "Found %d NaN-value memory elements on GPU %u"
+DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG   = "Fabric Manager (Cluster UUID: %s, Clique ID: %ld): %s."
+DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE_MSG   = "GPU %u was unsuccessfully written to by GPU %u over PCIe in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE_MSG   = "GPU %u unsuccessfully wrote data to GPU %u over PCIe in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE_MSG = "GPU %u was unsuccessfully written to by GPU %u over NVLink in a peer-to-peer test: %s"
+DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE_MSG = "GPU %u unsuccessfully wrote data to GPU %u over NVLink in a peer-to-peer test: %s"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -331,9 +348,9 @@ DCGM_FR_PENDING_PAGE_RETIREMENTS_NEXT = "If volatile double bit errors exist, dr
 DCGM_FR_RETIRED_PAGES_LIMIT_NEXT      = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_RETIRED_PAGES_DBE_LIMIT_NEXT  = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_CORRUPT_INFOROM_NEXT          = "Flash the InfoROM to clear this corruption."
-DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   = DEBUG_COOLING_MSG 
+DCGM_FR_CLOCKS_EVENT_THERMAL_NEXT     = DEBUG_COOLING_MSG 
 DCGM_FR_POWER_UNREADABLE_NEXT         = ""
-DCGM_FR_CLOCK_THROTTLE_POWER_NEXT     = "Monitor the power conditions. This GPU can still perform workload."
+DCGM_FR_CLOCKS_EVENT_POWER_NEXT       = "Monitor the power conditions. This GPU can still perform workload."
 DCGM_FR_NVLINK_ERROR_THRESHOLD_NEXT   = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_NVLINK_DOWN_NEXT              = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_NVSWITCH_FATAL_ERROR_NEXT     = TRIAGE_RUN_FIELD_DIAG_MSG
@@ -373,7 +390,7 @@ DCGM_FR_THERMAL_VIOLATIONS_NEXT       = DEBUG_COOLING_MSG
 DCGM_FR_THERMAL_VIOLATIONS_TS_NEXT    = DEBUG_COOLING_MSG
 DCGM_FR_TEMP_VIOLATION_NEXT           = "Verify that the user-specified temperature maximum is set "\
                                                 "correctly. If it is, %s" % DEBUG_COOLING_MSG
-DCGM_FR_THROTTLING_VIOLATION_NEXT     = ""
+DCGM_FR_CLOCKS_EVENT_VIOLATION_NEXT   = ""
 DCGM_FR_INTERNAL_NEXT                 = ""
 DCGM_FR_PCIE_GENERATION_NEXT          = ""
 DCGM_FR_PCIE_WIDTH_NEXT               = ""
@@ -424,6 +441,10 @@ DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT  = ""
 DCGM_FR_PENDING_ROW_REMAP_NEXT        = ""
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
+DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE_NEXT   = BUG_REPORT_MSG
+DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE_NEXT   = BUG_REPORT_MSG
+DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE_NEXT = BUG_REPORT_MSG
+DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT     = "Please check fabric manager and initialization logs to figure out why the link is down. You may also need to run a field diagnostic."
 DCGM_FR_FILE_CREATE_PERMISSIONS_NEXT  = "Please restart the hostengine with parameter --home-dir to specify a different home directory for the " \
     "diagnostic or change permissions in the current directory to allow the user to write files there."
@@ -441,6 +462,7 @@ DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT      = \
     "Please verify your user-specified variance tolerance is set appropriately; " \
     "if so, and if errors are persistent, please run a field diagnostic."
 DCGM_FR_NAN_VALUE_NEXT                       = TRIAGE_RUN_FIELD_DIAG_MSG
+DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT   = DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

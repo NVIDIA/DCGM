@@ -19,12 +19,14 @@
  *  Created on: Oct 23, 2015
  *      Author: chris
  */
+/*** DCGM-3816: The tests in this file do not currently get built or executed. ***/
 
 #include "CommandOutputController.h"
 #include "dcgm_agent.h"
 #include <DcgmStringHelpers.h>
 #include <algorithm>
 #include <cstdarg>
+#include <functional>
 #include <iostream>
 #include <string>
 

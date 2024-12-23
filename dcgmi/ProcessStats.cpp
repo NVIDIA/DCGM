@@ -106,10 +106,10 @@ dcgmReturn_t ProcessStats::EnableWatches(dcgmHandle_t mNvcmHandle,
 dcgmReturn_t ProcessStats::DisableWatches(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t groupId)
 {
     dcgmReturn_t result;
-    dcgmGroupInfo_t stNvcmGroupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(mNvcmHandle, groupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(mNvcmHandle, groupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);

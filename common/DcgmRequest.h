@@ -17,6 +17,7 @@
 #define DCGMREQUEST_H
 
 #include "DcgmProtocol.h"
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <vector>
@@ -34,68 +35,28 @@ public:
     dcgm_request_id_t GetRequestId();
 
     /*************************************************************************/
-    /* Overridable method for processing an incoming message.
-     *
-     * Calling this method yields ownership of msg to this object.
+    /* Pure virtual for processing an incoming message that any child class
+     * needs to implement to processs incoming messages for this request
      *
      * Returns DCGM_ST_SUCCESS on success.
      *         Other DCGM_ST_? status code on error
      */
-    virtual int ProcessMessage(std::unique_ptr<DcgmMessage> msg);
-
-    /*************************************************************************/
-    /*
-     * Wait for object to leave pending state
-     *
-     * Returns DCGM_ST_OK if left pending state
-     *         DCGM_ST_TIMEOUT if waited timeoutMs milliseconds
-     *
-     **/
-    int Wait(int timeoutMs);
-
-    /*************************************************************************/
-    /*
-     * Change the status of this request object and broadcast any changes to
-     * its associated waiters. This can cause a Wait() in another thread to
-     * wake up
-     *
-     * status should be a DCGM_ST_? enum.
-     *
-     */
-    int SetStatus(int status);
-
-    /*************************************************************************/
-    /*
-     * Return number of responses ready to process
-     *
-     */
-    int MessageCount();
-
-    /*************************************************************************/
-    /*
-     * Get next message to process. Messages are returned in the order they
-     * were passed to ProcessMessage
-     *
-     * Returns Message pointer if found
-     *         NULL if not
-     */
-    std::unique_ptr<DcgmMessage> GetNextMessage();
+    virtual int ProcessMessage(std::unique_ptr<DcgmMessage> msg) = 0;
 
     /*************************************************************************/
 protected:
-    int m_status;                                         /* Status of this request. A DCGM_ST_? constant */
-    dcgm_request_id_t m_requestId;                        /* Request identifier of this request. Should be unique
-                                                        across all requests of this connection */
+    int m_status;                               /* Status of this request. A DCGM_ST_? constant */
+    std::atomic<dcgm_request_id_t> m_requestId; /* Request identifier of this request. Should be unique
+                                                   across all requests of this connection */
+
     std::vector<std::unique_ptr<DcgmMessage>> m_messages; /* Vector of responses in the order they
                                                              were received we will expect one for
                                                              now, but there could be more in the
                                                              future */
 
-    std::mutex m_mutex;                  /* We need a lock around this because we may be
-                                            updating this out of band after the initial
-                                            ack of our data has completed */
-    std::condition_variable m_condition; /* Condition used to signal Wait that we have
-                                            left pending state. */
+    std::mutex m_mutex; /* We need a lock around this because we may be
+                           updating this out of band after the initial
+                           ack of our data has completed */
 
     /*************************************************************************/
     /* Used for protecting the internal state of this class */

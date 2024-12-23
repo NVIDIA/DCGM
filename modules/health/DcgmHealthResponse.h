@@ -35,9 +35,9 @@ public:
                      dcgm_field_eid_t entityId);
 
     /*
-     * Populate the health response version 4 struct based on the incidents recorded
+     * Populate the health response version 5 struct based on the incidents recorded
      */
-    void PopulateHealthResponse(dcgmHealthResponse_v4 &response) const;
+    void PopulateHealthResponse(dcgmHealthResponse_v5 &response) const;
 
 private:
     std::vector<dcgmIncidentInfo_t> m_incidents;

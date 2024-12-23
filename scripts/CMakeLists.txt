@@ -13,8 +13,6 @@
 # limitations under the License.
 
 install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/gather-dcgm-logs.sh
-    DESTINATION
-        ${DCGM_SCRIPTS_INSTALL_DIR}
-    COMPONENT DCGM)
+    PROGRAMS gather-dcgm-logs.sh
+    DESTINATION "${CMAKE_INSTALL_SBINDIR}"
+    COMPONENT Core)

@@ -1,0 +1,4 @@
+/usr/lib/debug
+/usr/lib/debug/usr
+/usr/lib/debug/usr/lib64
+/usr/lib/debug/usr/lib64/libnvml_injection.so.1.0.0-<PACKAGEVERSION>-1.x86_64.debug

@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmProfTester.h"
+#include <DcgmLogging.h>
+#include <cuda.h>
+
 #include "Arguments.h"
-#include "DcgmLogging.h"
+#include "DcgmProfTester.h"
 #include "DcgmSettings.h"
 #include "DistributedCudaContext.h"
 #include "Entity.h"
@@ -27,7 +29,6 @@
 #include "timelib.h"
 #include "vector_types.h"
 #include <cublas_proxy.hpp>
-#include <cuda.h>
 #include <dcgm_agent.h>
 
 #include <tclap/Arg.h>
@@ -48,6 +49,7 @@
 #include <system_error>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 using namespace DcgmNs::ProfTester;
@@ -258,7 +260,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn_t dcgmReturn = dcgmInit();
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "dcgmInit() returned " << dcgmReturn << ".";
+        std::cout << "dcgmInit() returned " << std::to_underlying(dcgmReturn) << ".";
 
         return dcgmReturn;
     }
@@ -266,7 +268,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_dcgmHandle);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "dcgmStartEmbedded() returned " << dcgmReturn << ".";
+        std::cout << "dcgmStartEmbedded() returned " << std::to_underlying(dcgmReturn) << ".";
 
         return dcgmReturn;
     }
@@ -608,14 +610,14 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
         }
 
         dcgmReturn_t dcgmReturn = m_gpus[gpuInstance.m_gpuId]->HelperGetCudaVisibleGPUs(cudaVisibleDevices, entity);
-            if (dcgmReturn != DCGM_ST_OK)
-            {
-                AbortOtherChildren(gpuInstance.m_gpuId);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            AbortOtherChildren(gpuInstance.m_gpuId);
 
             DCGM_LOG_ERROR << "Could not get CUDA_VISIBLE_DEVICES environment variable (" << (int)dcgmReturn << ")";
 
-                return DCGM_ST_GENERIC_ERROR;
-            }
+            return DCGM_ST_GENERIC_ERROR;
+        }
 
         worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);
 
@@ -738,7 +740,7 @@ dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
 
         // Handle workers with data.
 
-        for (unsigned int fd = 0; (fd <= m_maxFd) && (readyWorkers > 0); fd++)
+        for (unsigned int fd = 0; (fd <= static_cast<unsigned int>(m_maxFd)) && (readyWorkers > 0); fd++)
         {
             if (!FD_ISSET(fd, &rfds))
             {
@@ -769,7 +771,7 @@ dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
                 m_dcgmCudaContexts[fd] = nullptr;
 
                 // We only check this when it makes a difference.
-                if (fd == m_maxFd)
+                if (fd == static_cast<unsigned int>(m_maxFd))
                 {
                     while ((m_maxFd > 0) && !FD_ISSET(m_maxFd, &m_parentReadFds))
                     {
@@ -1095,7 +1097,8 @@ int main(int argc, char **argv)
         auto cuResult  = cuDriverGetVersion(&cudaLoaded);
         if (cuResult != CUDA_SUCCESS)
         {
-            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << cuResult << ".";
+            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
+                      << ".";
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1131,7 +1134,7 @@ int main(int argc, char **argv)
         dcgmReturn = dpt->Init(argc, argv);
         if (dcgmReturn)
         {
-            std::cout << "Error " << dcgmReturn << " from Init(). Exiting.";
+            std::cout << "Error " << std::to_underlying(dcgmReturn) << " from Init(). Exiting.";
 
             return dcgmReturn;
         }

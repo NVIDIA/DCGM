@@ -197,6 +197,70 @@ def parse_options():
             default=None,
             help="Capture the current NVML state can be used for reporducuig testing environment later."
             )
+    
+    parser.add_option(
+            "-t",
+            dest="sort_by_time",
+            action="store_true",
+            default=False,
+            help="Sorts the output test_data.json by time of run of each test per module"
+            )
+
+    parser.add_option(
+            "--fast-run",
+            dest="fast_run",
+            action="store_true",
+            default=False,
+            help="Runs test modules as compiled into single file with common decorators (faster run)"
+            )
+
+    parser.add_option(
+            "--ignore-dmesg-checks",
+            dest="ignore_dmesg_checks",
+            action="store_true",
+            default=False,
+            help="Ignores result of dmesg checks for healthy hardware and software"
+            )
+
+    parser.add_option(
+            "--ignore-mem-checks",
+            dest="ignore_mem_checks",
+            action="store_true",
+            default=False,
+            help="Ignores result of checks for memory and swap pressure"
+            )
+
+    parser.add_option(
+            "--ignore-loadavg-checks",
+            dest="ignore_loadavg_checks",
+            action="store_true",
+            default=False,
+            help="Ignores result of checks for CPU load"
+            )
+
+    parser.add_option(
+            "--ignore-conflicting-procs",
+            dest="ignore_conflicting_procs",
+            action="store_true",
+            default=False,
+            help="Ignore result of check for any potentially conflicting processes at startup"
+            )
+
+    parser.add_option(
+            "--slow-run",
+            dest="slow_run",
+            default=True,
+            action="store_false",
+            help="Runs test modules individually. (Legacy mode.)"
+            )
+
+    parser.add_option(
+            "--ignore-init-diag",
+            dest="ignore_init_diag",
+            action="store_true",
+            default=False,
+            help="Ignores result of the initial diagnostic check"
+            )
 
     (options, args) = parser.parse_args()
 
@@ -214,11 +278,7 @@ def parse_options():
     #Change the backup value as well
     test_utils.noLoggingBackup = test_utils.noLogging
 
-    #Use a different logging level for ERIS as we log to the console
-    if options.eris:
-        test_utils.loggingLevel = "WARNING"
-    else:
-        test_utils.loggingLevel = "DEBUG"
+    test_utils.loggingLevel = "DEBUG"
 
 class OptionParserStub():
     def __init__(self):
@@ -242,7 +302,13 @@ class OptionParserStub():
         self.dvssc_testing = False
         self.no_root_check = False
         self.capture_nvml_environment_to = None
-
+        self.sort_by_time = False
+        self.fast_run = False
+        self.ignore_conflicting_procs = False
+        self.ignore_dmesg_checks = False
+        self.ignore_loadavg_checks = False
+        self.ignore_mem_checks = False
+        self.ignore_init_diag = False
 
 def initialize_as_stub():
     """

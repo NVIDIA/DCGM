@@ -28,16 +28,16 @@
 #define PCIE_MAX_GPUS 16
 
 /*****************************************************************************/
-int main_init(BusGrind &bg, const dcgmDiagPluginGpuList_t &gpuInfo);
+int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo);
 
 /*****************************************************************************/
-int main_entry(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo);
+int main_entry(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo);
 
 /*****************************************************************************/
-bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginGpuList_t &gpuInfo);
+bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginEntityList_v1 &entityInfo);
 
 /*****************************************************************************/
-void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginGpuList_t &gpuInfo);
+void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo);
 
 typedef struct
 {
@@ -53,4 +53,7 @@ unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
                                     BusGrind &bg,
                                     const std::string &groupName);
 
+std::unique_ptr<DcgmGroup> StartDcgmGroupWatch(BusGrind *bg,
+                                               std::vector<unsigned short> const &fieldIds,
+                                               std::vector<unsigned int> const &gpuIds);
 #endif // PCIEMAIN_H

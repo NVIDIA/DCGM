@@ -25,14 +25,14 @@ import time
 global callbackCalled
 callbackCalled = False
 
-C_FUNC = CFUNCTYPE(None, c_void_p)
+C_FUNC = CFUNCTYPE(None, POINTER(dcgm_structs.c_dcgmPolicyCallbackResponse_v2), c_uint64)
 
 
 def helper_verify_power_value_standalone(handle, groupId, expected_power):
     """
     Helper Method to verify power value
     """
-    groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version2)
+    groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version3)
     status_handle = dcgm_agent.dcgmStatusCreate()
     
     config_values = dcgm_agent.dcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
@@ -52,7 +52,7 @@ def helper_verify_power_value_standalone(handle, groupId, expected_power):
     
 
 
-def callback_function(data):
+def callback_function(callbackResp, userData):
     global callbackCalled
     callbackCalled = True
 
@@ -96,7 +96,7 @@ attributes = dcgm_agent.dcgmGetDeviceAttributes(handle, validDevice)
     
 ## Verify that power is supported on the GPUs in the group
 powerLimit_set = (attributes.powerLimits.maxPowerLimit + attributes.powerLimits.minPowerLimit)/2
-config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 config_values.mEccMode =    dcgmvalue.DCGM_INT32_BLANK
 config_values.mPerfState.syncBoost =  dcgmvalue.DCGM_INT32_BLANK
 config_values.mPerfState.autoBoost =  dcgmvalue.DCGM_INT32_BLANK
@@ -107,6 +107,8 @@ config_values.mPerfState.maxVPState.procClk = dcgmvalue.DCGM_INT32_BLANK
 config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
 config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
 config_values.mPowerLimit.val = powerLimit_set
+for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
 ## Set Config and verify the value
 ret = dcgm_agent.dcgmConfigSet(handle, groupId, config_values, statusHandle)
@@ -119,7 +121,7 @@ assert (ret == dcgm_structs.DCGM_ST_OK)
 
 time.sleep(5) # give the policy manager a chance to start
 
-requestId = dcgm_agent.dcgmPolicyRegister(handle, groupId, dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED, c_callback, c_callback)
+requestId = dcgm_agent.dcgmPolicyRegister_v2(handle, groupId, dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED, c_callback, 0)
 assert(requestId != None)
 
 # inject an error into page retirement

@@ -22,7 +22,6 @@ class RunNVpex2(app_runner.AppRunner):
     
     paths = {
             "Linux_64bit": "./apps/nvpex2/nvpex2",
-            "Linux_ppc64le": "./apps/nvpex2/nvpex2",
             "Linux_aarch64": "./apps/nvpex2/nvpex2",
             }
 

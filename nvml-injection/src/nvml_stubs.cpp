@@ -18,7 +18,6 @@
 #include "NvmlFuncReturn.h"
 #include "PassThruNvml.h"
 #include "nvml.h"
-#include "nvml_generated_declarations.h"
 #include "nvml_injection.h"
 
 #include <fmt/core.h>
@@ -35,7 +34,18 @@ typedef nvmlReturn_t (*nvmlInit_f)();
 
 #define NVML_YAML_FILE "NVML_YAML_FILE"
 
-nvmlReturn_t injectionNvmlInit()
+static nvmlReturn_t injectionNvmlShutdown()
+{
+    auto InjectedNvml = InjectedNvml::GetInstance();
+    if (InjectedNvml != nullptr)
+    {
+        delete InjectedNvml;
+        InjectedNvml::Reset();
+    }
+    return NVML_SUCCESS;
+}
+
+static nvmlReturn_t injectionNvmlInit()
 {
     char *passThru = getenv(PASS_THROUGH_MODE);
     if (passThru != nullptr)
@@ -69,19 +79,42 @@ nvmlReturn_t injectionNvmlInit()
     return NVML_SUCCESS;
 }
 
+static std::mutex g_mutexNvmlCounter;
+static unsigned int g_nvmlCounter = 0;
+
 nvmlReturn_t nvmlInit_v2()
 {
+    auto increaseCallCount = []() {
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        injectedNvml->AddFuncCallCount("nvmlInit_v2");
+    };
+    std::unique_lock<std::mutex> lock(g_mutexNvmlCounter);
+    if (g_nvmlCounter != 0)
+    {
+        g_nvmlCounter += 1;
+        lock.unlock();
+        increaseCallCount();
+        return NVML_SUCCESS;
+    }
+
     if (auto ret = injectionNvmlInit(); ret != NVML_SUCCESS)
     {
         return ret;
     }
-    auto *injectedNvml = InjectedNvml::GetInstance();
-    injectedNvml->AddFuncCallCount("nvmlInit_v2");
+    g_nvmlCounter += 1;
+    lock.unlock();
+    increaseCallCount();
     return NVML_SUCCESS;
 }
 
 nvmlReturn_t nvmlShutdown()
 {
+    std::lock_guard<std::mutex> lg(g_mutexNvmlCounter);
+    g_nvmlCounter -= 1;
+    if (g_nvmlCounter != 0)
+    {
+        return NVML_SUCCESS;
+    }
     return injectionNvmlShutdown();
 }
 
@@ -243,17 +276,6 @@ nvmlReturn_t nvmlDeviceInjectFieldValue(nvmlDevice_t nvmlDevice, const nvmlField
     return injectedNvml->InjectFieldValue(nvmlDevice, *value);
 }
 
-nvmlReturn_t injectionNvmlShutdown()
-{
-    auto InjectedNvml = InjectedNvml::GetInstance();
-    if (InjectedNvml != nullptr)
-    {
-        delete InjectedNvml;
-        InjectedNvml::Reset();
-    }
-    return NVML_SUCCESS;
-}
-
 char const *nvmlErrorString(nvmlReturn_t errorCode)
 {
     auto *injectedNvml = InjectedNvml::GetInstance();
@@ -268,17 +290,34 @@ char const *nvmlErrorString(nvmlReturn_t errorCode)
     std::lock_guard<std::mutex> lg(m);
     if (!errorStringMap.contains(errorCode))
     {
-        auto const &errorString = fmt::format("NVML Injection Stub, Code: {}", errorCode);
+        auto const &errorString = fmt::format("NVML Injection Stub, Code: {}", std::to_underlying(errorCode));
         errorStringMap.emplace(errorCode, errorString);
     }
     return errorStringMap[errorCode].c_str();
 }
 
-/*nvmlReturn_t nvmlDeviceInjectFieldValue(
-        nvmlDevice_t nvmlDevice, dcgmFieldValue_v2 *value, const injectNvmlVal_t *extraKey)
+nvmlReturn_t nvmlRemoveGpu(const char *uuid)
 {
-    auto InjectedNvml = InjectedNvml::GetInstance();
-}*/
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    if (injectedNvml)
+    {
+        return injectedNvml->RemoveGpu(uuid);
+    }
+
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlRestoreGpu(const char *uuid)
+{
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    if (injectedNvml)
+    {
+        return injectedNvml->RestoreGpu(uuid);
+    }
+
+    return NVML_SUCCESS;
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -77,14 +77,13 @@ public:
     /*****************************************************************************
      * This method is used to remove a group from the group manager
      *
-     * @param connectionId  IN  : ConnectionId
      * @param groupId       IN  : Group ID to be removed
      *
      * @return
      * DCGM_ST_OK       :   On Success
      * DCGM_ST_?        :   On Error
      *****************************************************************************/
-    dcgmReturn_t RemoveGroup(dcgm_connection_id_t connectionId, unsigned int groupId);
+    dcgmReturn_t RemoveGroup(unsigned int groupId);
 
 
     /*****************************************************************************

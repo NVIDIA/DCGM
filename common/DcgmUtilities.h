@@ -471,7 +471,36 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
  */
 int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd);
 
+/**
+ * @brief A helper function to run the given command and return it's output.
+ *
+ * @param cmd    a string containing the command to run, and it's arguments
+ * @param output a reference to the output from the command
+ *
+ * @return DCGM_ST_OK if the command was run and output read successfully, or DCGM_ST_INIT_ERROR on failure
+ */
+dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output);
+
+class RunCmdHelper
+{
+public:
+    virtual dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output) const;
+};
+
 bool IsRunningAsRoot();
+
+class RunningUserChecker
+{
+public:
+    virtual bool IsRoot() const;
+};
+
+/**
+ * Helper function to print out bitmasks as comma-separated list of indexes
+ *
+ * mask should be size DCGM_POWER_PROFILE_ARRAY_SIZE
+ */
+std::string HelperDisplayPowerBitmask(unsigned int const *mask);
 
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

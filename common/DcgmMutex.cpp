@@ -230,7 +230,7 @@ dcgmMutexReturn_t DcgmMutex::CondWait(std::condition_variable &cv,
     lockSt = Lock(0, __FILE__, __LINE__);
     if (lockSt != DCGM_MUTEX_ST_OK && lockSt != DCGM_MUTEX_ST_LOCKEDBYME)
     {
-        log_error("CondWait of mutex {} call to Lock() returned unexpected {}", (void *)this, lockSt);
+        log_error("CondWait of mutex {} call to Lock() returned unexpected {}", fmt::ptr(this), lockSt);
         return DCGM_MUTEX_ST_ERROR;
     }
 

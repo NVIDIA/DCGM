@@ -571,7 +571,7 @@ def conf_compute_state_parser(conf_compute_state):
     return {
         "environment": conf_compute_state.environment,
         "ccFeature": conf_compute_state.ccFeature,
-        "devMode": conf_compute_state.devToolsMode,
+        "devToolsMode": conf_compute_state.devToolsMode,
     }
 
 def runing_process_parser(processes):
@@ -649,6 +649,38 @@ class NVMLThreeKeysFunc(object):
         self._key2_possible_inputs = key2_possible_inputs
         self._key3_possible_inputs = key3_possible_inputs
         self._value_parser = value_parser
+
+def fabric_info_parser(value):
+    return {
+        "clusterUuid": value.clusterUuid,
+        "status": value.status,
+        "cliqueId": value.cliqueId,
+        "state": value.state,
+    }
+
+def nvmlDeviceGetGpuFabricInfo(device):
+    import dcgm_nvml as pynvml
+    c_fabricInfo = c_nvmlGpuFabricInfo_t()
+    pynvml.nvmlDeviceGetGpuFabricInfo(device, byref(c_fabricInfo))
+    return c_fabricInfo
+
+def fabric_infov_parser(value):
+    return {
+        "version": value.version,
+        "clusterUuid": value.clusterUuid,
+        "status": value.status,
+        "cliqueId": value.cliqueId,
+        "state": ord(value.state),
+        "healthMask": value.healthMask,
+    }
+
+def nvmlDeviceGetGpuFabricInfoV(device):
+    import dcgm_nvml as pynvml
+    import nvml_injection_structs
+    c_fabricInfo = nvml_injection_structs.c_nvmlGpuFabricInfoV_t_dcgm_ver()
+    c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v2
+    pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
+    return c_fabricInfo
 
 class NVMLApiRecorder(object):
     _attrs = {}
@@ -749,6 +781,8 @@ class NVMLApiRecorder(object):
         NVMLSimpleFunc("nvmlDeviceGetGridLicensableFeatures", grid_license_parser),
         NVMLSimpleFunc("nvmlDeviceGetEncoderSessions", encoder_sessions_parser),
         NVMLSimpleFunc("nvmlDeviceGetFBCSessions", fbc_sessions_parser),
+        NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfo", fabric_info_parser),
+        NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfoV", fabric_infov_parser),
     ]
 
     # which has one device input, version and produces one output

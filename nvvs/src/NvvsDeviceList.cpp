@@ -102,14 +102,18 @@ int NvvsDevice::RestoreState(std::string const &testName)
     }
 
     // Create a group
-    dcgmConfig_v1 config;
-    config.version                         = dcgmConfig_version1;
+    dcgmConfig_v2 config;
+    config.version                         = dcgmConfig_version2;
     config.gpuId                           = m_gpuId;
     config.eccMode                         = DCGM_INT32_BLANK;
     config.computeMode                     = m_savedState.computeMode;
     config.perfState.targetClocks.memClock = DCGM_INT32_BLANK;
     config.perfState.targetClocks.smClock  = DCGM_INT32_BLANK;
     config.powerLimit.val                  = DCGM_INT32_BLANK;
+    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        config.workloadPowerProfiles[i] = DCGM_INT32_BLANK;
+    }
 
     /* Auto boost clocks */
     if (m_savedState.computeModeSupported && m_savedState.computeMode != afterState.computeMode)
@@ -173,7 +177,9 @@ void NvvsDevice::RecordWarning(std::string const &testName, DcgmError const &d, 
 {
     if (m_plugin)
     {
-        m_plugin->AddErrorForGpu(testName, m_gpuId, d);
+        DcgmError d2 { d };
+        d2.SetGpuId(m_gpuId);
+        m_plugin->AddError(testName, d2);
         if (failPlugin)
         {
             m_plugin->SetResultForGpu(testName, m_gpuId, NVVS_RESULT_FAIL);

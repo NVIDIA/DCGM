@@ -27,6 +27,7 @@ import subprocess
 ################################################################################
 ### XML tags to search for
 ################################################################################
+CLOCKS_EVENT_FN  = "clocks_event_reasons"
 THROTTLE_FN      = "clocks_throttle_reasons"
 ECC_FN           = "ecc_errors"
 ECC_ENABLED_FN   = "ecc_mode"
@@ -49,7 +50,13 @@ MIG_MODE_FN      = "mig_mode"
 CURRENT_MIG_FN   = "current_mig"
 PENDING_MIG_FN   = "pending_mig"
 
-# list of relevant throttle reasons
+# list of relevant clocks event reasons
+relevant_clocks_events = ["clocks_event_reason_hw_slowdown",
+                          "clocks_event_reason_hw_thermal_slowdown",
+                          "clocks_event_reason_hw_power_brake_slowdown",
+                          "clocks_event_reason_sw_thermal_slowdown"]
+
+# list of relevant throttle (deprecated)
 relevant_throttling = ["clocks_throttle_reason_hw_slowdown",
                        "clocks_throttle_reason_hw_thermal_slowdown",
                        "clocks_throttle_reason_hw_power_brake_slowdown",
@@ -64,14 +71,14 @@ CHECKER_ANY_VALUE = 0
 CHECKER_MAX_VALUE = 1
 CHECKER_LAST_VALUE = 2
 CHECKER_INFOROM = 3
-supportedFields = [ (dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, CHECKER_ANY_VALUE, ''),
+supportedFields = [ (dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS, CHECKER_ANY_VALUE, ''),
                 (dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, CHECKER_ANY_VALUE, 'Active'),
                 (dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, CHECKER_MAX_VALUE, 0),
                 (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, CHECKER_LAST_VALUE, 0),
                 (dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID, CHECKER_INFOROM, True),
     ]
 # field ids where any value is an error
-anyCheckFields = [ dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT ]
+anyCheckFields = [ dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT ]
 # field ids where the max value should be returned as an error
 maxCheckFields = [ dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION ]
 # field ids where the last value should be returned as an error
@@ -81,7 +88,7 @@ lastCheckFields = [ dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL ]
 zeroIdealField = [ dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION ]
 
 # field ids where the ideal value is an empty string
-emptyStrIdealField = [dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS ]
+emptyStrIdealField = [dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS ]
 
 # field ids where False is the ideal value
 falseIdealField = [ dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID ]
@@ -156,16 +163,17 @@ class NvidiaSmiJob(threading.Thread):
         gpudata = {}
         gpu_id = -1
         for child in gpuxml_node:
-            if child.tag == THROTTLE_FN:
+            if child.tag == THROTTLE_FN or child.tag == CLOCKS_EVENT_FN:
                 reasons = ''
                 for grandchild in child:
-                    if grandchild.tag in relevant_throttling and grandchild.text == 'Active':
+                    if ((grandchild.tag in relevant_clocks_events) or (grandchild.tag in relevant_throttling)) and \
+                        grandchild.text == 'Active':
                         if not reasons:
                             reasons = grandchild.tag
                         else:
                             reasons += ",%s" % (grandchild.tag)
 
-                gpudata[dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS] = reasons
+                gpudata[dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS] = reasons
             elif child.tag == MINOR_NUM_FN:
                 gpu_id = parse_int_from_nvml_xml(child.text)
                 gpudata[dcgm_fields.DCGM_FI_DEV_NVML_INDEX] = gpu_id
@@ -225,7 +233,21 @@ class NvidiaSmiJob(threading.Thread):
         try:
             runner = subprocess.Popen(nvsmi_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             (output, error) = runner.communicate()
-            root = ET.fromstring(output)
+            output_str = output.decode()
+
+            # Try some prefix sanitization in case of file locking or other
+            # warnings.
+
+            xml_start = output_str.find("<?xml version=")
+
+            if xml_start < 0:
+                logger.error("Could not parse XML: %s" % output_str)
+                return None;
+            elif xml_start > 0:
+                logger.warning("Prefix %s found before XML" % output_str[:xml_start])
+                output_str = output_str[xml_start:]
+            
+            root = ET.fromstring(output_str)
             if parseData:
                 self.ParseDataFromXml(root)
             return root
@@ -233,7 +255,7 @@ class NvidiaSmiJob(threading.Thread):
             logger.error("Failed to run nvidia-smi.\nError: %s" % e)
             return None
         except ET.ParseError as e:
-            logger.error("Got exception %s while parsing XML: %s" % (str(e), str(output)))
+            logger.error("Got exception %s while parsing XML: %s" % (str(e), output_str))
             return None
 
     ################################################################################
@@ -276,13 +298,18 @@ class NvidiaSmiJob(threading.Thread):
             self.m_data[gpu_id][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION].append(violation)
 
     ################################################################################
-    def GetAnyThermalThrottlingReasons(self):
-        throttling = []
+    def GetAnyThermalClocksEventReasons(self):
+        reasons = []
         for gpuId in self.m_data:
             if dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION in self.m_data[gpuId]:
-                throttling.append(self.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION])
+                reasons.append(self.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION])
 
-        return throttling
+        return reasons
+
+    ################################################################################
+    # Deprecated: Use GetAnyThermalClocksEventReasons() instead
+    def GetAnyThermalThrottlingReasons(self):
+        return self.GetAnyThermalClocksEventReasons()
 
     ################################################################################
     def CheckInforom(self):

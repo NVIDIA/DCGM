@@ -22,7 +22,7 @@
 #include <set>
 #include <unordered_set>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 
 TEST_CASE("Utils: GetMaxAge")
@@ -115,5 +115,31 @@ TEST_CASE("DcgmException")
     catch (DcgmNs::DcgmException const &ex)
     {
         REQUIRE(ex.what() == nullptr);
+    }
+}
+
+TEST_CASE("Dcgmi Config: Bitmask helper")
+{
+    unsigned int mask[DCGM_POWER_PROFILE_ARRAY_SIZE] = {};
+
+    SECTION("multiple bits")
+    {
+        for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+        {
+            mask[i] |= (1 << 10);
+            mask[i] |= (1 << 20);
+            mask[i] |= (1 << 30);
+        }
+
+        auto result = DcgmNs::Utils::HelperDisplayPowerBitmask(mask);
+        REQUIRE(result == "10,20,30,42,52,62,74,84,94,106,116,126,138,148,158,170,180,190,202,212,222,234,244,254");
+    }
+
+    SECTION("empty")
+    {
+        memset(&mask, DCGM_INT32_BLANK, sizeof(mask));
+
+        auto result = DcgmNs::Utils::HelperDisplayPowerBitmask(mask);
+        REQUIRE(result == "Not Specified");
     }
 }

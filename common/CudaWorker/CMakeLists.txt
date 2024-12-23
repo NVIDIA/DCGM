@@ -11,38 +11,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(Cuda REQUIRED)
 
 macro(define_dcgm_cuda_worker cuda_version)
     set(dcgm_cuda_worker_lib dcgm_cuda_worker${cuda_version})
-    add_library(${dcgm_cuda_worker_lib} STATIC)
-    target_compile_definitions(${dcgm_cuda_worker_lib} PRIVATE CUDA_VERSION_USED=${cuda_version})
-    target_include_directories(${dcgm_cuda_worker_lib} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE dl rt)
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE dcgm_common)
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE dcgm_logging)
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE dcgm_cublas_proxy${cuda_version})
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE ${CUDA${cuda_version}_STATIC_LIBS})
-    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE ${CUDA${cuda_version}_LIBS})
-    target_sources(
-        ${dcgm_cuda_worker_lib}
-        PRIVATE
+    target_compile_definitions(${dcgm_cuda_worker_lib} PRIVATE
+        CUDA_VERSION_USED=${cuda_version})
+
+    target_include_directories(${dcgm_cuda_worker_lib} PRIVATE
+        "${CUDA${cuda_version}_INCLUDE_DIR}")
+
+    target_link_libraries(${dcgm_cuda_worker_lib} PRIVATE
+        ${CUDA${cuda_version}_LIBS}
+        ${CUDA${cuda_version}_STATIC_LIBS}
+        dcgm_common
+        dcgm_cublas_proxy${cuda_version}
+        dcgm_logging
+        dl
+        rt)
+
+    target_sources(${dcgm_cuda_worker_lib} PRIVATE
         CudaWorkerThread.cpp
         CudaWorkerThread.hpp
-    )
-
-    if (${cuda_version} GREATER 10)
-        target_sources(${dcgm_cuda_worker_lib} PRIVATE DcgmDgemm.cpp)
-    else()
-        target_compile_options(${dcgm_cuda_worker_lib} PRIVATE -Wno-volatile)
-    endif()
-
-    set(LOCAL_DCGM_CUDA_WORKER "${LOCAL_DCGM_CUDA_WORKER};${dcgm_cuda_worker_lib}" PARENT_SCOPE)
+        DcgmDgemm.cpp)
 endmacro()
-
-set(LOCAL_DCGM_CUDA_WORKER "")
 
 define_dcgm_cuda_worker(11)
 define_dcgm_cuda_worker(12)
-
-set(DCGM_CUDA_WORKER ${LOCAL_DCGM_CUDA_WORKER} PARENT_SCOPE)

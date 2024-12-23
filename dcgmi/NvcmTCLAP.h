@@ -62,7 +62,7 @@ public:
         }
     }
 
-    void parse(int argc, const char *const *argv)
+    void parse(int argc, const char *const *argv) override
     {
         std::vector<std::string> args;
         for (int i = 0; i < argc; i++)
@@ -109,7 +109,7 @@ public:
     }
 
 
-    virtual void usage(TCLAP::CmdLineInterface &_cmd)
+    virtual void usage(TCLAP::CmdLineInterface &_cmd) override
     {
         std::cout << std::endl;
         DCGMOutput::spacePrint(std::cout, description, 80, 1, 0);
@@ -336,7 +336,7 @@ protected:
         }
     }
 
-    virtual void failure(TCLAP::CmdLineInterface &_cmd, TCLAP::ArgException &e)
+    virtual void failure(TCLAP::CmdLineInterface &_cmd, TCLAP::ArgException &e) override
     {
         std::string progName = _cmd.getProgramName();
 
@@ -363,7 +363,7 @@ protected:
 
 class DCGMEntryOutput : public DCGMOutput
 {
-    virtual void _longUsage(TCLAP::CmdLineInterface &_cmd, std::ostream &os) const
+    void _longUsage(TCLAP::CmdLineInterface &_cmd, std::ostream &os) const override
     {
         std::string message = _cmd.getMessage();
         auto argGroups      = _cmd.getArgGroups();

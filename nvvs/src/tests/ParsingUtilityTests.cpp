@@ -14,10 +14,43 @@
  * limitations under the License.
  */
 #include <ParsingUtility.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 #include <fstream>
+
+SCENARIO("unsigned long long GetClocksEventsIgnoreReasonMaskFromString(std::string reasonStr)")
+{
+    long long mask;
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("hw_slowdown");
+    CHECK(mask == DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("sw_thermal");
+    CHECK(mask == DCGM_CLOCKS_EVENT_REASON_SW_THERMAL);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("hw_thermal");
+    CHECK(mask == DCGM_CLOCKS_EVENT_REASON_HW_THERMAL);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("hw_power_brake");
+    CHECK(mask == DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("hw_power_brake,hw_thermal");
+
+    CHECK((mask & DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE));
+    CHECK((mask & DCGM_CLOCKS_EVENT_REASON_HW_THERMAL));
+
+    // Unset the two bits and make sure only they are set
+    mask &= ~DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE;
+    mask &= ~DCGM_CLOCKS_EVENT_REASON_HW_THERMAL;
+    CHECK(mask == 0);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("hw_power_brake,invalid");
+    CHECK(mask == DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE);
+
+    mask = GetClocksEventIgnoreReasonMaskFromString("invalid");
+    CHECK(mask == DCGM_INT64_BLANK);
+}
 
 SCENARIO("unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)")
 {

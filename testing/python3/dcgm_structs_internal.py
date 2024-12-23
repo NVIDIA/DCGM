@@ -162,3 +162,12 @@ class c_dcgmSetNvLinkLinkState_v1(dcgm_structs._PrintableStructure):
     ]
 
 dcgmSetNvLinkLinkState_version1 = dcgm_structs.make_dcgm_version(c_dcgmSetNvLinkLinkState_v1, 1)
+
+DcgmEntityStatusUnknown      = 0  # Entity has not been referenced yet
+DcgmEntityStatusOk           = 1  # Entity is known and OK
+DcgmEntityStatusUnsupported  = 2  # Entity is unsupported by DCGM
+DcgmEntityStatusInaccessible = 3  # Entity is inaccessible, usually due to cgroups
+DcgmEntityStatusLost         = 4  # Entity has been lost. Usually set from NVML returning NVML_ERROR_GPU_IS_LOST
+DcgmEntityStatusFake         = 5  # Entity is a fake, injection-only entity for testing
+DcgmEntityStatusDisabled     = 6  # Don't collect values from this GPU
+DcgmEntityStatusDetached     = 7  # Entity is detached, not good for any uses

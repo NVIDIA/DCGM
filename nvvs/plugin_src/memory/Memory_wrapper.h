@@ -32,28 +32,21 @@
 class Memory : public Plugin
 {
 public:
-    Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    Memory(dcgmHandle_t handle);
     ~Memory()
     {}
 
-    void Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &info);
-    void Go(TestParameters * /*testParameters*/, const dcgmDiagGpuList_t & /*gpuList*/)
-    {
-        throw std::runtime_error("Not implemented in this test.");
-    }
-    void Go(TestParameters * /*testParameters*/)
-    {
-        throw std::runtime_error("Not implemented in this test.");
-    }
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
+    std::string GetMemoryTestName() const;
     dcgmHandle_t GetHandle();
 
 private:
     dcgmHandle_t m_handle;
-    dcgmDiagPluginGpuList_t m_gpuInfo;
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
 };
 
 

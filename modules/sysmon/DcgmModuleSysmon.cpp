@@ -29,9 +29,12 @@
 #include <fstream>
 #include <iostream>
 #include <stdio.h>
-
 namespace DcgmNs
 {
+/*****************************************************************************/
+/* Adding this macro to validate that we're indeed in the correct thread */
+#define ASSERT_IS_SYSMON_THREAD assert(std::this_thread::get_id() == m_sysmonThreadId)
+
 using namespace DcgmNs::Cpu;
 
 unsigned long long SysmonUtilizationSampleCore::GetTotal() const
@@ -48,6 +51,7 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
     : DcgmModuleWithCoreProxy(dcc)
     , m_procStat("/proc/stat")
     , m_paused(true)
+    , m_sysmonThreadId(0)
 {
     DCGM_LOG_DEBUG << "Constructing Sysmon Module";
 
@@ -197,12 +201,6 @@ dcgmReturn_t DcgmModuleSysmon::ProcessMessageFromTaskRunner(dcgm_module_command_
                 break;
             }
 
-            case DCGM_CORE_SR_PAUSE_RESUME:
-            {
-                retSt = ProcessPauseResumeMessage(moduleCommand);
-                break;
-            }
-
             default:
                 DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
                 return DCGM_ST_FUNCTION_NOT_FOUND;
@@ -213,8 +211,8 @@ dcgmReturn_t DcgmModuleSysmon::ProcessMessageFromTaskRunner(dcgm_module_command_
             //
             // Reset the RunOnce last run time, so it will be called once the TaskRunner handles all events
             //
-            [[maybe_unused]] auto _ = Enqueue(
-                DcgmNs::make_task("Call RunOnce after all events are processed", [this]() { TryRunOnce(true); }));
+            [[maybe_unused]] auto _ = Enqueue(DcgmNs::make_task("Call RunOnce after all events are processed",
+                                                                [this]() { ProcessTryRunOnce(true); }));
         }
     }
 
@@ -224,6 +222,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessMessageFromTaskRunner(dcgm_module_command_
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessGetCpus(GetCpusMessage msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     PopulateCpusIfNeeded();
     m_cpus.GetCpus(*msg.get());
     return DCGM_ST_OK;
@@ -232,6 +231,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessGetCpus(GetCpusMessage msg)
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     if (msg->numFieldIds >= SYSMON_MSG_WATCH_FIELDS_MAX_NUM_FIELDS || msg->numFieldIds == 0)
     {
         DCGM_LOG_ERROR << "Invalid numFields " << msg->numFieldIds;
@@ -316,6 +316,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::EnableMonitoring(unsigned int monitoringSwitch)
 {
+    ASSERT_IS_SYSMON_THREAD;
     switch (monitoringSwitch)
     {
         case SYSMON_MONITORING_SWITCH_UTILIZATION:
@@ -330,6 +331,7 @@ dcgmReturn_t DcgmModuleSysmon::EnableMonitoring(unsigned int monitoringSwitch)
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessUnwatchFields(UnwatchFieldsMessage msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     // Not needed for sysmon watches
     dcgmPostWatchInfo_t *postWatchInfo = nullptr;
     timelib64_t minSampleAgeUsec, maxSampleAgeUsec;
@@ -345,6 +347,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessUnwatchFields(UnwatchFieldsMessage msg)
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessGetEntityStatus(GetEntityStatusMessage msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     msg->entityStatus = DcgmEntityStatusUnknown;
 
     switch (msg->entityGroupId)
@@ -383,6 +386,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessGetEntityStatus(GetEntityStatusMessage msg
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessCreateFakeEntities(CreateFakeEntitiesMessage msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     for (unsigned int i = 0; i < msg->numToCreate; i++)
     {
         switch (msg->groupToCreate)
@@ -435,6 +439,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessCreateFakeEntities(CreateFakeEntitiesMessa
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessClientDisconnect(dcgm_core_msg_client_disconnect_t *msg)
 {
+    ASSERT_IS_SYSMON_THREAD;
     DCGM_LOG_INFO << "Unwatching fields watched by connection " << msg->connectionId;
     return DCGM_ST_OK;
 }
@@ -442,6 +447,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessClientDisconnect(dcgm_core_msg_client_disc
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand)
 {
+    ASSERT_IS_SYSMON_THREAD;
     dcgmReturn_t retSt = DCGM_ST_OK;
 
     switch (moduleCommand->subCommand)
@@ -452,6 +458,10 @@ dcgmReturn_t DcgmModuleSysmon::ProcessCoreMessage(dcgm_module_command_header_t *
 
         case DCGM_CORE_SR_LOGGING_CHANGED:
             OnLoggingSeverityChange((dcgm_core_msg_logging_changed_t *)moduleCommand);
+            break;
+
+        case DCGM_CORE_SR_PAUSE_RESUME:
+            retSt = ProcessPauseResumeMessage(moduleCommand);
             break;
 
         default:
@@ -580,17 +590,32 @@ void DcgmModuleSysmon::PopulateOwnedCoresBitmask(dcgm_sysmon_cpu_t &cpu)
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::PopulateCpusIfNeeded()
 {
+    // ASSERT_IS_SYSMON_THREAD; - Called before thread is started.
+
     if (!m_cpus.IsEmpty())
     {
         return DCGM_ST_ALREADY_INITIALIZED;
     }
     auto [firstNode, lastNode] = getFirstLastSystemNodes();
+    CpuHelpers cpuHelpers;
+    auto cpuSerialNumbers      = cpuHelpers.GetCpuSerials();
+    bool getSerialNumberFailed = false;
+    if (!cpuSerialNumbers.has_value() || cpuSerialNumbers->size() != (lastNode - firstNode + 1))
+    {
+        log_warning("Could not retrieve serial numbers for CPUs");
+        getSerialNumberFailed = true;
+    }
 
     for (unsigned int cpuId = firstNode; cpuId <= lastNode; cpuId++)
     {
         dcgm_sysmon_cpu_t cpu {};
         cpu.cpuId = cpuId;
         PopulateOwnedCoresBitmask(cpu);
+        if (!getSerialNumberFailed)
+        {
+            SafeCopyTo(cpu.serial, cpuSerialNumbers->at(cpuId).c_str());
+        }
+
         m_cpus.AddCpu(cpu);
     }
 
@@ -670,6 +695,8 @@ dcgmReturn_t DcgmModuleSysmon::ParseProcStatCpuLine(const std::string &line, Sys
 /*****************************************************************************/
 const SysmonUtilizationSample &DcgmModuleSysmon::ReadUtilizationSample(DcgmNs::Timelib::TimePoint now)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     // Check if we have already read the sample
     auto currentSampleIt = m_utilizationSamples.find(now);
     if (currentSampleIt != m_utilizationSamples.end())
@@ -702,6 +729,8 @@ const SysmonUtilizationSample &DcgmModuleSysmon::ReadUtilizationSample(DcgmNs::T
 
 dcgmReturn_t DcgmModuleSysmon::UpdateField(DcgmNs::Timelib::TimePoint now, const dcgm_field_update_info_t &updateInfo)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     using namespace DcgmNs::Timelib;
     using namespace std::chrono;
 
@@ -763,8 +792,9 @@ dcgmReturn_t DcgmModuleSysmon::UpdateField(DcgmNs::Timelib::TimePoint now, const
 }
 
 /*****************************************************************************/
-void DcgmModuleSysmon::PruneSamples(DcgmNs::Timelib::TimePoint now)
+void DcgmModuleSysmon::ProcessPruneSamples(DcgmNs::Timelib::TimePoint now)
 {
+    ASSERT_IS_SYSMON_THREAD;
     log_debug("Pruning samples");
 
     using namespace std::ranges;
@@ -786,6 +816,8 @@ void DcgmModuleSysmon::PruneSamples(DcgmNs::Timelib::TimePoint now)
 /*****************************************************************************/
 void DcgmModuleSysmon::UpdateFields(timelib64_t &nextUpdateTimeUsec)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     using namespace DcgmNs::Timelib;
     using namespace std::chrono;
 
@@ -832,7 +864,7 @@ void DcgmModuleSysmon::UpdateFields(timelib64_t &nextUpdateTimeUsec)
     }
 
     RecordMetrics(ToLegacyTimestamp(now), toUpdate);
-    PruneSamples(now);
+    ProcessPruneSamples(now);
 }
 
 /*****************************************************************************/
@@ -894,6 +926,8 @@ double DcgmModuleSysmon::CalculateCpuUtilization(CpuId cpu,
                                                  const SysmonUtilizationSample &baselineSample,
                                                  const SysmonUtilizationSample &currentSample)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     double value                      = 0;
     std::vector<unsigned int> coreIds = m_cpus.GetCoreIdList(cpu.id);
     for (auto &coreId : coreIds)
@@ -1036,6 +1070,8 @@ unsigned int DcgmModuleSysmon::GetSocketIdFromThermalFile(const std::string &pat
 /*****************************************************************************/
 void DcgmModuleSysmon::PopulateTemperatureFileMap()
 {
+    // ASSERT_IS_SYSMON_THREAD; -- Not invoked from thread.
+
     std::string THERMAL_BASE_PATH(fmt::format("{}/sys/class/thermal", m_tzBaseDir));
     static const std::string THERMAL_PATH_EXTENSION("device/description");
     static const std::string THERMAL_DIR_NAME_START("thermal_zone");
@@ -1051,10 +1087,19 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
         return;
     }
 
-    DIR *dir = opendir(THERMAL_BASE_PATH.c_str());
-    struct dirent *entry;
+    // Make opendir() obey RAII
+    auto dirDeleter = [](DIR *dir) {
+        if (dir != nullptr)
+        {
+            closedir(dir);
+            dir = nullptr;
+        }
+    };
 
-    while ((entry = readdir(dir)) != nullptr)
+    std::unique_ptr<DIR, decltype(dirDeleter)> dir(opendir(THERMAL_BASE_PATH.c_str()), dirDeleter);
+    struct dirent *entry {};
+
+    while ((entry = readdir(dir.get())) != nullptr)
     {
         if (strncmp(entry->d_name, THERMAL_DIR_NAME_START.c_str(), THERMAL_DIR_NAME_START.size()))
         {
@@ -1071,7 +1116,7 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
             std::string tempFilePath(
                 fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_FILENAME));
             log_debug("Recording temperature path '{}' for Socket {}", tempFilePath, socketId);
-            m_socketTemperatureFileMap[socketId] = tempFilePath;
+            m_socketTemperatureFileMap[socketId] = std::move(tempFilePath);
 
             std::string trip0TypePath(
                 fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_TRIPTYPE0_FILENAME));
@@ -1088,20 +1133,20 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
 
             if (!strncmp(type0Type.c_str(), "critical", 8))
             {
-                m_socketTemperatureCritFileMap[socketId] = trip0TempPath;
+                m_socketTemperatureCritFileMap[socketId] = std::move(trip0TempPath);
             }
             else if (!strncmp(type0Type.c_str(), "passive", 7))
             {
-                m_socketTemperatureWarnFileMap[socketId] = trip0TempPath;
+                m_socketTemperatureWarnFileMap[socketId] = std::move(trip0TempPath);
             }
 
             if (!strncmp(type1Type.c_str(), "critical", 8))
             {
-                m_socketTemperatureCritFileMap[socketId] = trip1TempPath;
+                m_socketTemperatureCritFileMap[socketId] = std::move(trip1TempPath);
             }
             else if (!strncmp(type1Type.c_str(), "passive", 7))
             {
-                m_socketTemperatureWarnFileMap[socketId] = trip1TempPath;
+                m_socketTemperatureWarnFileMap[socketId] = std::move(trip1TempPath);
             }
 
             if (!m_socketTemperatureWarnFileMap.contains(socketId))
@@ -1142,6 +1187,8 @@ uint64_t DcgmModuleSysmon::ReadCoreSpeed(unsigned int entityGroupId, unsigned in
 /*****************************************************************************/
 unsigned int DcgmModuleSysmon::GetSocketIdForEntity(unsigned char entityGroupId, dcgm_field_eid_t entityId)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     DcgmNs::Cpu::CpuId cpuId { entityId };
     if (entityGroupId == DCGM_FE_CPU_CORE)
     {
@@ -1152,15 +1199,11 @@ unsigned int DcgmModuleSysmon::GetSocketIdForEntity(unsigned char entityGroupId,
 
 /*****************************************************************************/
 void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_update_info_t> &toUpdate)
-
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     DcgmFvBuffer buf;
     dcgmReturn_t ret = DCGM_ST_OK;
-
-    if (ret != DCGM_ST_OK)
-    {
-        log_error("Received error code when getting watches: {}", errorString(ret));
-    }
 
     if (toUpdate.empty())
     {
@@ -1168,7 +1211,7 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
         return;
     }
 
-    for (auto const fieldToUpdate : toUpdate)
+    for (auto const &fieldToUpdate : toUpdate)
     {
         switch (fieldToUpdate.entityGroupId)
         {
@@ -1339,8 +1382,10 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
 }
 
 /*****************************************************************************/
-std::chrono::milliseconds DcgmModuleSysmon::RunOnce()
+std::chrono::milliseconds DcgmModuleSysmon::ProcessRunOnce()
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     timelib64_t nextUpdateTimeUsec = 0;
     UpdateFields(nextUpdateTimeUsec);
 
@@ -1351,14 +1396,16 @@ std::chrono::milliseconds DcgmModuleSysmon::RunOnce()
 }
 
 /*****************************************************************************/
-std::chrono::system_clock::time_point DcgmModuleSysmon::TryRunOnce(bool forceRun)
+std::chrono::system_clock::time_point DcgmModuleSysmon::ProcessTryRunOnce(bool forceRun)
 {
+    ASSERT_IS_SYSMON_THREAD;
+
     using namespace std::chrono;
     system_clock::time_point now = system_clock::now();
     if (forceRun || (now > m_nextWakeup))
     {
         log_verbose("Running at {}", now.time_since_epoch().count());
-        milliseconds sleepDuration = RunOnce();
+        milliseconds sleepDuration = ProcessRunOnce();
         // sleepDuration / nextUpdateTime is not playing nice with the
         // std::chrono constructs. Disabling for now and running every
         // m_runInterval, which is derived from the subscribed watches
@@ -1376,7 +1423,10 @@ std::chrono::system_clock::time_point DcgmModuleSysmon::TryRunOnce(bool forceRun
 void DcgmModuleSysmon::run()
 {
     using DcgmNs::TaskRunner;
-    TryRunOnce(true);
+    m_sysmonThreadId = std::this_thread::get_id();
+    ASSERT_IS_SYSMON_THREAD;
+
+    ProcessTryRunOnce(true);
     while (ShouldStop() == 0)
     {
         if (TaskRunner::Run(true) != TaskRunner::RunResult::Ok)
@@ -1384,18 +1434,19 @@ void DcgmModuleSysmon::run()
             break;
         }
 
-        TryRunOnce(false);
+        ProcessTryRunOnce(false);
     }
 }
 
 dcgmReturn_t DcgmModuleSysmon::ProcessPauseResumeMessage(PauseResumeMessage msg)
 {
+    // Called functions will ASSERT_IS_SYSMON_THREAD to avoid accidental bypass if check were placed here
     return msg->pause ? Pause() : Resume();
 }
 
-
 dcgmReturn_t DcgmModuleSysmon::Pause()
 {
+    ASSERT_IS_SYSMON_THREAD;
     log_debug("Pausing");
     m_paused = true;
     return DCGM_ST_OK;
@@ -1403,8 +1454,102 @@ dcgmReturn_t DcgmModuleSysmon::Pause()
 
 dcgmReturn_t DcgmModuleSysmon::Resume()
 {
+    ASSERT_IS_SYSMON_THREAD;
     log_debug("Resuming");
     m_paused = false;
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+/* Enqueues a request to determine whether there is a subscription for the specified entityPair and fieldId. */
+dcgmReturn_t DcgmModuleSysmon::GetSubscribed(dcgmGroupEntityPair_t entityPair,
+                                             unsigned short fieldId,
+                                             bool &isSubscribed)
+{
+    auto task = Enqueue(make_task("GetSubscribed request in TaskRunner", [this, entityPair, fieldId]() {
+        ASSERT_IS_SYSMON_THREAD;
+        return m_watchTable.GetIsSubscribed(entityPair.entityGroupId, entityPair.entityId, fieldId);
+    }));
+
+    if (!task.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Sysmon ProcessGetSubscribed task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    bool result  = (*task).get();
+    isSubscribed = result;
+    return DCGM_ST_OK;
+}
+
+/* Enqueues a request to run the main processing loop. Intended for testing. */
+dcgmReturn_t DcgmModuleSysmon::RunOnce(bool force)
+{
+    auto task = Enqueue(DcgmNs::make_task("TryRunOnce", [this, force]() {
+        ASSERT_IS_SYSMON_THREAD;
+        ProcessTryRunOnce(force);
+    }));
+
+    if (!task.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Sysmon TryRunOnce task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    (*task).get();
+    return DCGM_ST_OK;
+}
+
+/* Enqueues a request to prune samples treating the specified time as current. Intended for testing. */
+dcgmReturn_t DcgmModuleSysmon::PruneSamples(DcgmNs::Timelib::TimePoint now)
+{
+    auto task = Enqueue(DcgmNs::make_task("Prune Utilization Samples", [this, now]() {
+        ASSERT_IS_SYSMON_THREAD;
+        ProcessPruneSamples(now);
+    }));
+
+    if (!task.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Sysmon PruneSamples task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    (*task).get();
+    return DCGM_ST_OK;
+}
+
+/* Enqueues a request to determine the current number of utilization samples. Intended for testing. */
+dcgmReturn_t DcgmModuleSysmon::GetUtilizationSampleSize(size_t &numSamples)
+{
+    auto task = Enqueue(DcgmNs::make_task("GetUtilizationSampleSize", [this]() {
+        ASSERT_IS_SYSMON_THREAD;
+        return m_utilizationSamples.size();
+    }));
+
+    if (!task.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Sysmon GetUtilizationSampleSize task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    numSamples = (*task).get();
+    return DCGM_ST_OK;
+}
+
+/* Enqueues a request to add a utilization sample. Intended for testing. */
+dcgmReturn_t DcgmModuleSysmon::AddUtilizationSample(SysmonUtilizationSample &item)
+{
+    auto task = Enqueue(DcgmNs::make_task("AddUtilizationSample", [this, &item]() {
+        ASSERT_IS_SYSMON_THREAD;
+        m_utilizationSamples.emplace(item.m_timestamp, item);
+    }));
+
+    if (!task.has_value())
+    {
+        DCGM_LOG_ERROR << "Unable to enqueue Sysmon AddUtilizationSample task";
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    (*task).get();
     return DCGM_ST_OK;
 }
 

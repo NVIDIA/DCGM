@@ -49,6 +49,34 @@ typedef dcgm_profiling_msg_get_mgs_v2 dcgm_profiling_msg_get_mgs_t;
 /**
  * Subrequest DCGM_PROFILING_SR_WATCH_FIELDS
  */
+
+/* This used to be a separate public request. Now it is only used by dcgm_profiling_msg_watch_fields_v2 */
+typedef struct
+{
+    unsigned int version;        //!< Version of this request. Should be dcgmProfWatchFields_version
+    dcgmGpuGrp_t groupId;        //!< Group ID representing collection of one or more GPUs. Look at \ref dcgmGroupCreate
+                                 //!< for details on creating the group. Alternatively, pass in the group id as \a
+                                 //!< DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs. The GPUs of the group
+                                 //!< must all be identical or DCGM_ST_GROUP_INCOMPATIBLE will be returned by this API.
+    unsigned int numFieldIds;    //!< Number of field IDs that are being passed in fieldIds[]
+    unsigned short fieldIds[64]; //!< DCGM_FI_PROF_? field IDs to watch
+    long long updateFreq;        //!< How often to update this field in usec. Note that profiling metrics may need to be
+                                 //!< sampled more frequently than this value. See
+                                 //!< dcgmProfMetricGroupInfo_t.minUpdateFreqUsec of the metric group matching
+                                 //!< metricGroupTag to see what this minimum is. If minUpdateFreqUsec < updateFreq
+                                 //!< then samples will be aggregated to updateFreq intervals in DCGM's internal cache.
+    double maxKeepAge;           //!< How long to keep data for every fieldId in seconds
+    int maxKeepSamples;          //!< Maximum number of samples to keep for each fieldId. 0=no limit
+    unsigned int flags;          //!< For future use. Set to 0 for now.
+} dcgmProfWatchFields_v2;
+
+/**
+ * Version 2 of dcgmProfWatchFields_v2
+ */
+#define dcgmProfWatchFields_version2 MAKE_DCGM_VERSION(dcgmProfWatchFields_v2, 2)
+#define dcgmProfWatchFields_version  dcgmProfWatchFields_version2
+typedef dcgmProfWatchFields_v2 dcgmProfWatchFields_t;
+
 typedef struct dcgm_profiling_msg_watch_fields_v2
 {
     dcgm_module_command_header_t header; /* Command header */
@@ -65,6 +93,26 @@ typedef dcgm_profiling_msg_watch_fields_v2 dcgm_profiling_msg_watch_fields_t;
 /**
  * Subrequest DCGM_PROFILING_SR_UNWATCH_FIELDS
  */
+
+/* This used to be a separate public request. Now it's only used by dcgm_profiling_msg_unwatch_fields_v1 */
+typedef struct
+{
+    unsigned int version; //!< Version of this request. Should be dcgmProfUnwatchFields_version
+    dcgmGpuGrp_t groupId; //!< Group ID representing collection of one or more GPUs. Look at
+                          //!< \ref dcgmGroupCreate for details on creating the group.
+                          //!< Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS
+                          //!< to perform operation on all the GPUs. The GPUs of the group must all be
+                          //!< identical or DCGM_ST_GROUP_INCOMPATIBLE will be returned by this API.
+    unsigned int flags;   //!< For future use. Set to 0 for now.
+} dcgmProfUnwatchFields_v1;
+
+/**
+ * Version 1 of dcgmProfUnwatchFields_v1
+ */
+#define dcgmProfUnwatchFields_version1 MAKE_DCGM_VERSION(dcgmProfUnwatchFields_v1, 1)
+#define dcgmProfUnwatchFields_version  dcgmProfUnwatchFields_version1
+typedef dcgmProfUnwatchFields_v1 dcgmProfUnwatchFields_t;
+
 typedef struct dcgm_profiling_msg_unwatch_fields_v1
 {
     dcgm_module_command_header_t header; /* Command header */

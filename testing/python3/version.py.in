@@ -13,7 +13,7 @@
 # limitations under the License.
 DCGM_VERSION    = "@CMAKE_PROJECT_VERSION@"
 TARGET_ARCH     = "@CMAKE_SYSTEM_PROCESSOR@"
-BUILD_ID        = "@BUILD_ID@"
+BUILD_ID        = "@BUILD_NUMBER@"
 BUILD_DATE      = "@BUILD_DATE@"
 GIT_COMMIT      = "@COMMIT_ID@"
 GIT_BRANCH      = "@BUILD_BRANCH@"

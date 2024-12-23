@@ -363,8 +363,6 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGpuIdToNvmlIndex(dcgm_module_command_
 
 dcgmReturn_t DcgmCoreCommunication::ProcessGetMultipleLatestLiveSamples(dcgm_module_command_header_t *header)
 {
-    dcgmCoreGetMultipleLatestLiveSamples_t gml;
-
     if (header == nullptr)
     {
         return DCGM_ST_BADPARAM;
@@ -377,7 +375,10 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetMultipleLatestLiveSamples(dcgm_mod
         return ret;
     }
 
-    memcpy(&gml, header, sizeof(gml));
+    std::unique_ptr<dcgmCoreGetMultipleLatestLiveSamples_t> gml
+        = std::make_unique<dcgmCoreGetMultipleLatestLiveSamples_t>();
+
+    memcpy(gml.get(), header, sizeof(*gml));
 
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned short> fieldIds;
@@ -386,43 +387,43 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetMultipleLatestLiveSamples(dcgm_mod
     // caller has to request the follow-on pieces. The caller does so by setting the position of the buffer
     // to copy from. If the position is 0, then that means this is a new request and the cached buffer should
     // not be used even if there's data in it.
-    if (gml.request.bufferPosition == 0)
+    if (gml->request.bufferPosition == 0)
     {
         delete[] m_fvBufferCache;
         m_fvBufferCache = nullptr;
 
-        for (size_t i = 0; i < gml.request.numFieldIds; i++)
+        for (size_t i = 0; i < gml->request.numFieldIds; i++)
         {
-            fieldIds.push_back(gml.request.fieldIds[i]);
+            fieldIds.push_back(gml->request.fieldIds[i]);
         }
 
-        for (unsigned int i = 0; i < gml.request.entityPairCount; i++)
+        for (unsigned int i = 0; i < gml->request.entityPairCount; i++)
         {
-            entities.push_back(gml.request.entityPairs[i]);
+            entities.push_back(gml->request.entityPairs[i]);
         }
 
         DcgmFvBuffer fv;
 
-        gml.response.ret   = m_cacheManagerPtr->GetMultipleLatestLiveSamples(entities, fieldIds, &fv);
+        gml->response.ret  = m_cacheManagerPtr->GetMultipleLatestLiveSamples(entities, fieldIds, &fv);
         const char *buffer = fv.GetBuffer();
         size_t elementCount;
-        fv.GetSize(&gml.response.bufferSize, &elementCount);
+        fv.GetSize(&gml->response.bufferSize, &elementCount);
 
-        if (gml.response.bufferSize > sizeof(gml.response.buffer))
+        if (gml->response.bufferSize > sizeof(gml->response.buffer))
         {
             // We need to cache this response and copy it piecemeal
-            m_fvBufferCache = new char[gml.response.bufferSize];
-            memcpy(m_fvBufferCache, buffer, gml.response.bufferSize);
-            m_fvbufferCacheSize     = gml.response.bufferSize;
-            gml.response.bufferSize = sizeof(gml.response.buffer);
-            memcpy(&gml.response.buffer, buffer, sizeof(gml.response.buffer));
-            gml.response.dataDidNotFit = 1;
+            m_fvBufferCache = new char[gml->response.bufferSize];
+            memcpy(m_fvBufferCache, buffer, gml->response.bufferSize);
+            m_fvbufferCacheSize      = gml->response.bufferSize;
+            gml->response.bufferSize = sizeof(gml->response.buffer);
+            memcpy(&gml->response.buffer, buffer, sizeof(gml->response.buffer));
+            gml->response.dataDidNotFit = 1;
         }
         else
         {
             // The entire response fits, so copy the whole thing into the buffer
-            memcpy(&gml.response.buffer, buffer, gml.response.bufferSize);
-            gml.response.dataDidNotFit = 0;
+            memcpy(&gml->response.buffer, buffer, gml->response.bufferSize);
+            gml->response.dataDidNotFit = 0;
         }
     }
     else
@@ -435,30 +436,30 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetMultipleLatestLiveSamples(dcgm_mod
             return DCGM_ST_BADPARAM;
         }
 
-        size_t remainingToCopy = m_fvbufferCacheSize - gml.request.bufferPosition;
-        if (m_fvbufferCacheSize < gml.request.bufferPosition)
+        size_t remainingToCopy = m_fvbufferCacheSize - gml->request.bufferPosition;
+        if (m_fvbufferCacheSize < gml->request.bufferPosition)
         {
             // Somehow they're requesting data beyond our cached buffer size, send back an empty buffer
-            gml.response.dataDidNotFit = 0;
-            gml.response.bufferSize    = 0;
+            gml->response.dataDidNotFit = 0;
+            gml->response.bufferSize    = 0;
         }
-        else if (remainingToCopy > sizeof(gml.response.buffer))
+        else if (remainingToCopy > sizeof(gml->response.buffer))
         {
             // The remaining data doesn't fit either, copy a piece of it.
-            memcpy(&gml.response.buffer, m_fvBufferCache + gml.request.bufferPosition, sizeof(gml.response.buffer));
-            gml.response.dataDidNotFit = 1;
-            gml.response.bufferSize    = sizeof(gml.response.buffer);
+            memcpy(&gml->response.buffer, m_fvBufferCache + gml->request.bufferPosition, sizeof(gml->response.buffer));
+            gml->response.dataDidNotFit = 1;
+            gml->response.bufferSize    = sizeof(gml->response.buffer);
         }
         else
         {
             // The remaining data fits in the buffer, send it all.
-            memcpy(&gml.response.buffer, m_fvBufferCache + gml.request.bufferPosition, remainingToCopy);
-            gml.response.dataDidNotFit = 0;
-            gml.response.bufferSize    = remainingToCopy;
+            memcpy(&gml->response.buffer, m_fvBufferCache + gml->request.bufferPosition, remainingToCopy);
+            gml->response.dataDidNotFit = 0;
+            gml->response.bufferSize    = remainingToCopy;
         }
     }
 
-    memcpy(header, &gml, sizeof(gml));
+    memcpy(header, gml.get(), sizeof(*gml));
     return DCGM_ST_OK;
 }
 
@@ -647,8 +648,6 @@ dcgmReturn_t DcgmCoreCommunication::ProcessVerifyAndUpdateGroupId(dcgm_module_co
 
 dcgmReturn_t DcgmCoreCommunication::ProcessGetGroupEntities(dcgm_module_command_header_t *header)
 {
-    dcgmCoreGetGroupEntities_t gge;
-
     if (header == nullptr)
     {
         return DCGM_ST_BADPARAM;
@@ -661,28 +660,30 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGroupEntities(dcgm_module_command_
         return ret;
     }
 
-    memcpy(&gge, header, sizeof(gge));
+    std::unique_ptr<dcgmCoreGetGroupEntities_t> gge = std::make_unique<dcgmCoreGetGroupEntities_t>();
+
+    memcpy(gge.get(), header, sizeof(*gge));
 
     std::vector<dcgmGroupEntityPair_t> entities;
-    gge.response.ret = m_groupManagerPtr->GetGroupEntities(gge.request.groupId, entities);
+    gge->response.ret = m_groupManagerPtr->GetGroupEntities(gge->request.groupId, entities);
 
-    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
     {
         DCGM_LOG_ERROR << fmt::format("Too many entities in the group {}. Provided {}, supported up to {}",
-                                      gge.request.groupId,
+                                      gge->request.groupId,
                                       entities.size(),
-                                      DCGM_GROUP_MAX_ENTITIES);
+                                      DCGM_GROUP_MAX_ENTITIES_V2);
         return DCGM_ST_MAX_LIMIT;
     }
 
     for (size_t i = 0; i < entities.size(); i++)
     {
-        gge.response.entityPairs[i] = entities[i];
+        gge->response.entityPairs[i] = entities[i];
     }
 
-    gge.response.entityPairsCount = entities.size();
+    gge->response.entityPairsCount = entities.size();
 
-    memcpy(header, &gge, sizeof(gge));
+    memcpy(header, gge.get(), sizeof(*gge));
 
     return DCGM_ST_OK;
 }
@@ -1086,6 +1087,28 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetServiceAccount(dcgm_module_command
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuInstanceHierarchy(dcgm_module_command_header_t *header)
+{
+    if (header == nullptr || header->length != sizeof(dcgmCoreGetGpuInstanceHierarchy_t))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (auto const ret = DcgmModule::CheckVersion(header, dcgmCoreGetGpuInstanceHierarchy_version1); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    auto *query = reinterpret_cast<dcgmCoreGetGpuInstanceHierarchy_t *>(header);
+    auto ret    = m_cacheManagerPtr->PopulateMigHierarchy(query->response);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_header_t *header)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
@@ -1279,6 +1302,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqGetServiceAccount:
         {
             ret = ProcessGetServiceAccount(header);
+            break;
+        }
+
+        case DcgmCoreReqPopulateMigHierarchy:
+        {
+            ret = ProcessGetGpuInstanceHierarchy(header);
             break;
         }
 

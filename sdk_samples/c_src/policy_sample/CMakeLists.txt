@@ -14,4 +14,4 @@
 
 add_executable(policy_sample)
 target_sources(policy_sample PRIVATE policy_sample.cpp)
-target_link_libraries(policy_sample PRIVATE $<BUILD_INTERFACE:dcgm> $<INSTALL_INTERFACE:Dcgm::dcgm>)
+target_link_libraries(policy_sample PRIVATE DCGM::dcgm)

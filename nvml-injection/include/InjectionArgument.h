@@ -61,513 +61,1862 @@ private:
         {
             case INJECTION_CHAR_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.str = reinterpret_cast<char *>(malloc(allocateNum * sizeof(*other.m_value.str)));
-                std::memcpy(m_value.str, other.m_value.str, allocateNum * sizeof(*other.m_value.str));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.Str = static_cast<char *>(malloc(allocateNum * sizeof(*other.m_value.Str)));
+                if (m_value.Str != nullptr)
+                {
+                    std::memcpy(m_value.Str, other.m_value.Str, allocateNum * sizeof(*other.m_value.Str));
+                }
+                break;
+            }
+            case INJECTION_DOUBLE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DoublePtr = static_cast<double *>(malloc(allocateNum * sizeof(*other.m_value.DoublePtr)));
+                if (m_value.DoublePtr != nullptr)
+                {
+                    std::memcpy(m_value.DoublePtr, other.m_value.DoublePtr, allocateNum * sizeof(*other.m_value.DoublePtr));
+                }
                 break;
             }
             case INJECTION_INT_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.iPtr = reinterpret_cast<int *>(malloc(allocateNum * sizeof(*other.m_value.iPtr)));
-                std::memcpy(m_value.iPtr, other.m_value.iPtr, allocateNum * sizeof(*other.m_value.iPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.IntPtr = static_cast<int *>(malloc(allocateNum * sizeof(*other.m_value.IntPtr)));
+                if (m_value.IntPtr != nullptr)
+                {
+                    std::memcpy(m_value.IntPtr, other.m_value.IntPtr, allocateNum * sizeof(*other.m_value.IntPtr));
+                }
+                break;
+            }
+            case INJECTION_LONG_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.LongPtr = static_cast<long *>(malloc(allocateNum * sizeof(*other.m_value.LongPtr)));
+                if (m_value.LongPtr != nullptr)
+                {
+                    std::memcpy(m_value.LongPtr, other.m_value.LongPtr, allocateNum * sizeof(*other.m_value.LongPtr));
+                }
+                break;
+            }
+            case INJECTION_LONG_LONG_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.LongLongPtr = static_cast<long long *>(malloc(allocateNum * sizeof(*other.m_value.LongLongPtr)));
+                if (m_value.LongLongPtr != nullptr)
+                {
+                    std::memcpy(m_value.LongLongPtr, other.m_value.LongLongPtr, allocateNum * sizeof(*other.m_value.LongLongPtr));
+                }
                 break;
             }
             case INJECTION_ACCOUNTINGSTATS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.accountingStatsPtr = reinterpret_cast<nvmlAccountingStats_t *>(malloc(allocateNum * sizeof(*other.m_value.accountingStatsPtr)));
-                std::memcpy(m_value.accountingStatsPtr, other.m_value.accountingStatsPtr, allocateNum * sizeof(*other.m_value.accountingStatsPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.AccountingStatsPtr = static_cast<nvmlAccountingStats_t *>(malloc(allocateNum * sizeof(*other.m_value.AccountingStatsPtr)));
+                if (m_value.AccountingStatsPtr != nullptr)
+                {
+                    std::memcpy(m_value.AccountingStatsPtr, other.m_value.AccountingStatsPtr, allocateNum * sizeof(*other.m_value.AccountingStatsPtr));
+                }
+                break;
+            }
+            case INJECTION_AFFINITYSCOPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.AffinityScopePtr = static_cast<nvmlAffinityScope_t *>(malloc(allocateNum * sizeof(*other.m_value.AffinityScopePtr)));
+                if (m_value.AffinityScopePtr != nullptr)
+                {
+                    std::memcpy(m_value.AffinityScopePtr, other.m_value.AffinityScopePtr, allocateNum * sizeof(*other.m_value.AffinityScopePtr));
+                }
                 break;
             }
             case INJECTION_BAR1MEMORY_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.bar1MemoryPtr = reinterpret_cast<nvmlBAR1Memory_t *>(malloc(allocateNum * sizeof(*other.m_value.bar1MemoryPtr)));
-                std::memcpy(m_value.bar1MemoryPtr, other.m_value.bar1MemoryPtr, allocateNum * sizeof(*other.m_value.bar1MemoryPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BAR1MemoryPtr = static_cast<nvmlBAR1Memory_t *>(malloc(allocateNum * sizeof(*other.m_value.BAR1MemoryPtr)));
+                if (m_value.BAR1MemoryPtr != nullptr)
+                {
+                    std::memcpy(m_value.BAR1MemoryPtr, other.m_value.BAR1MemoryPtr, allocateNum * sizeof(*other.m_value.BAR1MemoryPtr));
+                }
                 break;
             }
             case INJECTION_BRANDTYPE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.brandTypePtr = reinterpret_cast<nvmlBrandType_t *>(malloc(allocateNum * sizeof(*other.m_value.brandTypePtr)));
-                std::memcpy(m_value.brandTypePtr, other.m_value.brandTypePtr, allocateNum * sizeof(*other.m_value.brandTypePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BrandTypePtr = static_cast<nvmlBrandType_t *>(malloc(allocateNum * sizeof(*other.m_value.BrandTypePtr)));
+                if (m_value.BrandTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.BrandTypePtr, other.m_value.BrandTypePtr, allocateNum * sizeof(*other.m_value.BrandTypePtr));
+                }
                 break;
             }
             case INJECTION_BRIDGECHIPHIERARCHY_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.bridgeChipHierarchyPtr = reinterpret_cast<nvmlBridgeChipHierarchy_t *>(malloc(allocateNum * sizeof(*other.m_value.bridgeChipHierarchyPtr)));
-                std::memcpy(m_value.bridgeChipHierarchyPtr, other.m_value.bridgeChipHierarchyPtr, allocateNum * sizeof(*other.m_value.bridgeChipHierarchyPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BridgeChipHierarchyPtr = static_cast<nvmlBridgeChipHierarchy_t *>(malloc(allocateNum * sizeof(*other.m_value.BridgeChipHierarchyPtr)));
+                if (m_value.BridgeChipHierarchyPtr != nullptr)
+                {
+                    std::memcpy(m_value.BridgeChipHierarchyPtr, other.m_value.BridgeChipHierarchyPtr, allocateNum * sizeof(*other.m_value.BridgeChipHierarchyPtr));
+                }
+                break;
+            }
+            case INJECTION_BRIDGECHIPINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BridgeChipInfoPtr = static_cast<nvmlBridgeChipInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.BridgeChipInfoPtr)));
+                if (m_value.BridgeChipInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.BridgeChipInfoPtr, other.m_value.BridgeChipInfoPtr, allocateNum * sizeof(*other.m_value.BridgeChipInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_BRIDGECHIPTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BridgeChipTypePtr = static_cast<nvmlBridgeChipType_t *>(malloc(allocateNum * sizeof(*other.m_value.BridgeChipTypePtr)));
+                if (m_value.BridgeChipTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.BridgeChipTypePtr, other.m_value.BridgeChipTypePtr, allocateNum * sizeof(*other.m_value.BridgeChipTypePtr));
+                }
+                break;
+            }
+            case INJECTION_BUSTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.BusTypePtr = static_cast<nvmlBusType_t *>(malloc(allocateNum * sizeof(*other.m_value.BusTypePtr)));
+                if (m_value.BusTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.BusTypePtr, other.m_value.BusTypePtr, allocateNum * sizeof(*other.m_value.BusTypePtr));
+                }
+                break;
+            }
+            case INJECTION_C2CMODEINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.C2cModeInfo_v1Ptr = static_cast<nvmlC2cModeInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.C2cModeInfo_v1Ptr)));
+                if (m_value.C2cModeInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.C2cModeInfo_v1Ptr, other.m_value.C2cModeInfo_v1Ptr, allocateNum * sizeof(*other.m_value.C2cModeInfo_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_CLKMONFAULTINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClkMonFaultInfoPtr = static_cast<nvmlClkMonFaultInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ClkMonFaultInfoPtr)));
+                if (m_value.ClkMonFaultInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ClkMonFaultInfoPtr, other.m_value.ClkMonFaultInfoPtr, allocateNum * sizeof(*other.m_value.ClkMonFaultInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_CLKMONSTATUS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClkMonStatusPtr = static_cast<nvmlClkMonStatus_t *>(malloc(allocateNum * sizeof(*other.m_value.ClkMonStatusPtr)));
+                if (m_value.ClkMonStatusPtr != nullptr)
+                {
+                    std::memcpy(m_value.ClkMonStatusPtr, other.m_value.ClkMonStatusPtr, allocateNum * sizeof(*other.m_value.ClkMonStatusPtr));
+                }
+                break;
+            }
+            case INJECTION_CLOCKID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClockIdPtr = static_cast<nvmlClockId_t *>(malloc(allocateNum * sizeof(*other.m_value.ClockIdPtr)));
+                if (m_value.ClockIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.ClockIdPtr, other.m_value.ClockIdPtr, allocateNum * sizeof(*other.m_value.ClockIdPtr));
+                }
+                break;
+            }
+            case INJECTION_CLOCKLIMITID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClockLimitIdPtr = static_cast<nvmlClockLimitId_t *>(malloc(allocateNum * sizeof(*other.m_value.ClockLimitIdPtr)));
+                if (m_value.ClockLimitIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.ClockLimitIdPtr, other.m_value.ClockLimitIdPtr, allocateNum * sizeof(*other.m_value.ClockLimitIdPtr));
+                }
+                break;
+            }
+            case INJECTION_CLOCKOFFSET_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClockOffsetPtr = static_cast<nvmlClockOffset_t *>(malloc(allocateNum * sizeof(*other.m_value.ClockOffsetPtr)));
+                if (m_value.ClockOffsetPtr != nullptr)
+                {
+                    std::memcpy(m_value.ClockOffsetPtr, other.m_value.ClockOffsetPtr, allocateNum * sizeof(*other.m_value.ClockOffsetPtr));
+                }
+                break;
+            }
+            case INJECTION_CLOCKTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ClockTypePtr = static_cast<nvmlClockType_t *>(malloc(allocateNum * sizeof(*other.m_value.ClockTypePtr)));
+                if (m_value.ClockTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.ClockTypePtr, other.m_value.ClockTypePtr, allocateNum * sizeof(*other.m_value.ClockTypePtr));
+                }
                 break;
             }
             case INJECTION_COMPUTEINSTANCEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.computeInstanceInfoPtr = reinterpret_cast<nvmlComputeInstanceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.computeInstanceInfoPtr)));
-                std::memcpy(m_value.computeInstanceInfoPtr, other.m_value.computeInstanceInfoPtr, allocateNum * sizeof(*other.m_value.computeInstanceInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstanceInfoPtr = static_cast<nvmlComputeInstanceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstanceInfoPtr)));
+                if (m_value.ComputeInstanceInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstanceInfoPtr, other.m_value.ComputeInstanceInfoPtr, allocateNum * sizeof(*other.m_value.ComputeInstanceInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_COMPUTEINSTANCEPLACEMENT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstancePlacementPtr = static_cast<nvmlComputeInstancePlacement_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstancePlacementPtr)));
+                if (m_value.ComputeInstancePlacementPtr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstancePlacementPtr, other.m_value.ComputeInstancePlacementPtr, allocateNum * sizeof(*other.m_value.ComputeInstancePlacementPtr));
+                }
                 break;
             }
             case INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.computeInstanceProfileInfoPtr = reinterpret_cast<nvmlComputeInstanceProfileInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.computeInstanceProfileInfoPtr)));
-                std::memcpy(m_value.computeInstanceProfileInfoPtr, other.m_value.computeInstanceProfileInfoPtr, allocateNum * sizeof(*other.m_value.computeInstanceProfileInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstanceProfileInfoPtr = static_cast<nvmlComputeInstanceProfileInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfoPtr)));
+                if (m_value.ComputeInstanceProfileInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstanceProfileInfoPtr, other.m_value.ComputeInstanceProfileInfoPtr, allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfoPtr));
+                }
                 break;
             }
             case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.computeInstanceProfileInfo_v2Ptr = reinterpret_cast<nvmlComputeInstanceProfileInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.computeInstanceProfileInfo_v2Ptr)));
-                std::memcpy(m_value.computeInstanceProfileInfo_v2Ptr, other.m_value.computeInstanceProfileInfo_v2Ptr, allocateNum * sizeof(*other.m_value.computeInstanceProfileInfo_v2Ptr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstanceProfileInfo_v2Ptr = static_cast<nvmlComputeInstanceProfileInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfo_v2Ptr)));
+                if (m_value.ComputeInstanceProfileInfo_v2Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstanceProfileInfo_v2Ptr, other.m_value.ComputeInstanceProfileInfo_v2Ptr, allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfo_v2Ptr));
+                }
+                break;
+            }
+            case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstanceProfileInfo_v3Ptr = static_cast<nvmlComputeInstanceProfileInfo_v3_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfo_v3Ptr)));
+                if (m_value.ComputeInstanceProfileInfo_v3Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstanceProfileInfo_v3Ptr, other.m_value.ComputeInstanceProfileInfo_v3Ptr, allocateNum * sizeof(*other.m_value.ComputeInstanceProfileInfo_v3Ptr));
+                }
                 break;
             }
             case INJECTION_COMPUTEINSTANCE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.computeInstancePtr = reinterpret_cast<nvmlComputeInstance_t *>(malloc(allocateNum * sizeof(*other.m_value.computeInstancePtr)));
-                std::memcpy(m_value.computeInstancePtr, other.m_value.computeInstancePtr, allocateNum * sizeof(*other.m_value.computeInstancePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeInstancePtr = static_cast<nvmlComputeInstance_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeInstancePtr)));
+                if (m_value.ComputeInstancePtr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeInstancePtr, other.m_value.ComputeInstancePtr, allocateNum * sizeof(*other.m_value.ComputeInstancePtr));
+                }
                 break;
             }
             case INJECTION_COMPUTEMODE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.computeModePtr = reinterpret_cast<nvmlComputeMode_t *>(malloc(allocateNum * sizeof(*other.m_value.computeModePtr)));
-                std::memcpy(m_value.computeModePtr, other.m_value.computeModePtr, allocateNum * sizeof(*other.m_value.computeModePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ComputeModePtr = static_cast<nvmlComputeMode_t *>(malloc(allocateNum * sizeof(*other.m_value.ComputeModePtr)));
+                if (m_value.ComputeModePtr != nullptr)
+                {
+                    std::memcpy(m_value.ComputeModePtr, other.m_value.ComputeModePtr, allocateNum * sizeof(*other.m_value.ComputeModePtr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr = static_cast<nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr)));
+                if (m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, allocateNum * sizeof(*other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeGpuAttestationReportPtr = static_cast<nvmlConfComputeGpuAttestationReport_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeGpuAttestationReportPtr)));
+                if (m_value.ConfComputeGpuAttestationReportPtr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeGpuAttestationReportPtr, other.m_value.ConfComputeGpuAttestationReportPtr, allocateNum * sizeof(*other.m_value.ConfComputeGpuAttestationReportPtr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeGpuCertificatePtr = static_cast<nvmlConfComputeGpuCertificate_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeGpuCertificatePtr)));
+                if (m_value.ConfComputeGpuCertificatePtr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeGpuCertificatePtr, other.m_value.ConfComputeGpuCertificatePtr, allocateNum * sizeof(*other.m_value.ConfComputeGpuCertificatePtr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeMemSizeInfoPtr = static_cast<nvmlConfComputeMemSizeInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeMemSizeInfoPtr)));
+                if (m_value.ConfComputeMemSizeInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeMemSizeInfoPtr, other.m_value.ConfComputeMemSizeInfoPtr, allocateNum * sizeof(*other.m_value.ConfComputeMemSizeInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr = static_cast<nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr)));
+                if (m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, allocateNum * sizeof(*other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_CONFCOMPUTESYSTEMCAPS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeSystemCapsPtr = static_cast<nvmlConfComputeSystemCaps_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeSystemCapsPtr)));
+                if (m_value.ConfComputeSystemCapsPtr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeSystemCapsPtr, other.m_value.ConfComputeSystemCapsPtr, allocateNum * sizeof(*other.m_value.ConfComputeSystemCapsPtr));
+                }
                 break;
             }
             case INJECTION_CONFCOMPUTESYSTEMSTATE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.confComputeSystemStatePtr = reinterpret_cast<nvmlConfComputeSystemState_t *>(malloc(allocateNum * sizeof(*other.m_value.confComputeSystemStatePtr)));
-                std::memcpy(m_value.confComputeSystemStatePtr, other.m_value.confComputeSystemStatePtr, allocateNum * sizeof(*other.m_value.confComputeSystemStatePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ConfComputeSystemStatePtr = static_cast<nvmlConfComputeSystemState_t *>(malloc(allocateNum * sizeof(*other.m_value.ConfComputeSystemStatePtr)));
+                if (m_value.ConfComputeSystemStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.ConfComputeSystemStatePtr, other.m_value.ConfComputeSystemStatePtr, allocateNum * sizeof(*other.m_value.ConfComputeSystemStatePtr));
+                }
+                break;
+            }
+            case INJECTION_COOLERCONTROL_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.CoolerControlPtr = static_cast<nvmlCoolerControl_t *>(malloc(allocateNum * sizeof(*other.m_value.CoolerControlPtr)));
+                if (m_value.CoolerControlPtr != nullptr)
+                {
+                    std::memcpy(m_value.CoolerControlPtr, other.m_value.CoolerControlPtr, allocateNum * sizeof(*other.m_value.CoolerControlPtr));
+                }
+                break;
+            }
+            case INJECTION_COOLERINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.CoolerInfoPtr = static_cast<nvmlCoolerInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.CoolerInfoPtr)));
+                if (m_value.CoolerInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.CoolerInfoPtr, other.m_value.CoolerInfoPtr, allocateNum * sizeof(*other.m_value.CoolerInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_COOLERTARGET_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.CoolerTargetPtr = static_cast<nvmlCoolerTarget_t *>(malloc(allocateNum * sizeof(*other.m_value.CoolerTargetPtr)));
+                if (m_value.CoolerTargetPtr != nullptr)
+                {
+                    std::memcpy(m_value.CoolerTargetPtr, other.m_value.CoolerTargetPtr, allocateNum * sizeof(*other.m_value.CoolerTargetPtr));
+                }
+                break;
+            }
+            case INJECTION_DETACHGPUSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DetachGpuStatePtr = static_cast<nvmlDetachGpuState_t *>(malloc(allocateNum * sizeof(*other.m_value.DetachGpuStatePtr)));
+                if (m_value.DetachGpuStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.DetachGpuStatePtr, other.m_value.DetachGpuStatePtr, allocateNum * sizeof(*other.m_value.DetachGpuStatePtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICEARCHITECTURE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceArchitecturePtr = static_cast<nvmlDeviceArchitecture_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceArchitecturePtr)));
+                if (m_value.DeviceArchitecturePtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceArchitecturePtr, other.m_value.DeviceArchitecturePtr, allocateNum * sizeof(*other.m_value.DeviceArchitecturePtr));
+                }
                 break;
             }
             case INJECTION_DEVICEATTRIBUTES_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.deviceAttributesPtr = reinterpret_cast<nvmlDeviceAttributes_t *>(malloc(allocateNum * sizeof(*other.m_value.deviceAttributesPtr)));
-                std::memcpy(m_value.deviceAttributesPtr, other.m_value.deviceAttributesPtr, allocateNum * sizeof(*other.m_value.deviceAttributesPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceAttributesPtr = static_cast<nvmlDeviceAttributes_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceAttributesPtr)));
+                if (m_value.DeviceAttributesPtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceAttributesPtr, other.m_value.DeviceAttributesPtr, allocateNum * sizeof(*other.m_value.DeviceAttributesPtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICECAPABILITIES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceCapabilitiesPtr = static_cast<nvmlDeviceCapabilities_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceCapabilitiesPtr)));
+                if (m_value.DeviceCapabilitiesPtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceCapabilitiesPtr, other.m_value.DeviceCapabilitiesPtr, allocateNum * sizeof(*other.m_value.DeviceCapabilitiesPtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICECURRENTCLOCKFREQS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceCurrentClockFreqsPtr = static_cast<nvmlDeviceCurrentClockFreqs_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceCurrentClockFreqsPtr)));
+                if (m_value.DeviceCurrentClockFreqsPtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceCurrentClockFreqsPtr, other.m_value.DeviceCurrentClockFreqsPtr, allocateNum * sizeof(*other.m_value.DeviceCurrentClockFreqsPtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICEGPURECOVERYACTION_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceGpuRecoveryActionPtr = static_cast<nvmlDeviceGpuRecoveryAction_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceGpuRecoveryActionPtr)));
+                if (m_value.DeviceGpuRecoveryActionPtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceGpuRecoveryActionPtr, other.m_value.DeviceGpuRecoveryActionPtr, allocateNum * sizeof(*other.m_value.DeviceGpuRecoveryActionPtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICEPERFMODES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DevicePerfModesPtr = static_cast<nvmlDevicePerfModes_t *>(malloc(allocateNum * sizeof(*other.m_value.DevicePerfModesPtr)));
+                if (m_value.DevicePerfModesPtr != nullptr)
+                {
+                    std::memcpy(m_value.DevicePerfModesPtr, other.m_value.DevicePerfModesPtr, allocateNum * sizeof(*other.m_value.DevicePerfModesPtr));
+                }
+                break;
+            }
+            case INJECTION_DEVICEVGPUCAPABILITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DeviceVgpuCapabilityPtr = static_cast<nvmlDeviceVgpuCapability_t *>(malloc(allocateNum * sizeof(*other.m_value.DeviceVgpuCapabilityPtr)));
+                if (m_value.DeviceVgpuCapabilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.DeviceVgpuCapabilityPtr, other.m_value.DeviceVgpuCapabilityPtr, allocateNum * sizeof(*other.m_value.DeviceVgpuCapabilityPtr));
+                }
                 break;
             }
             case INJECTION_DEVICE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.devicePtr = reinterpret_cast<nvmlDevice_t *>(malloc(allocateNum * sizeof(*other.m_value.devicePtr)));
-                std::memcpy(m_value.devicePtr, other.m_value.devicePtr, allocateNum * sizeof(*other.m_value.devicePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DevicePtr = static_cast<nvmlDevice_t *>(malloc(allocateNum * sizeof(*other.m_value.DevicePtr)));
+                if (m_value.DevicePtr != nullptr)
+                {
+                    std::memcpy(m_value.DevicePtr, other.m_value.DevicePtr, allocateNum * sizeof(*other.m_value.DevicePtr));
+                }
                 break;
             }
             case INJECTION_DRIVERMODEL_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.driverModelPtr = reinterpret_cast<nvmlDriverModel_t *>(malloc(allocateNum * sizeof(*other.m_value.driverModelPtr)));
-                std::memcpy(m_value.driverModelPtr, other.m_value.driverModelPtr, allocateNum * sizeof(*other.m_value.driverModelPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DriverModelPtr = static_cast<nvmlDriverModel_t *>(malloc(allocateNum * sizeof(*other.m_value.DriverModelPtr)));
+                if (m_value.DriverModelPtr != nullptr)
+                {
+                    std::memcpy(m_value.DriverModelPtr, other.m_value.DriverModelPtr, allocateNum * sizeof(*other.m_value.DriverModelPtr));
+                }
+                break;
+            }
+            case INJECTION_ECCCOUNTERTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EccCounterTypePtr = static_cast<nvmlEccCounterType_t *>(malloc(allocateNum * sizeof(*other.m_value.EccCounterTypePtr)));
+                if (m_value.EccCounterTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.EccCounterTypePtr, other.m_value.EccCounterTypePtr, allocateNum * sizeof(*other.m_value.EccCounterTypePtr));
+                }
                 break;
             }
             case INJECTION_ECCERRORCOUNTS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.eccErrorCountsPtr = reinterpret_cast<nvmlEccErrorCounts_t *>(malloc(allocateNum * sizeof(*other.m_value.eccErrorCountsPtr)));
-                std::memcpy(m_value.eccErrorCountsPtr, other.m_value.eccErrorCountsPtr, allocateNum * sizeof(*other.m_value.eccErrorCountsPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EccErrorCountsPtr = static_cast<nvmlEccErrorCounts_t *>(malloc(allocateNum * sizeof(*other.m_value.EccErrorCountsPtr)));
+                if (m_value.EccErrorCountsPtr != nullptr)
+                {
+                    std::memcpy(m_value.EccErrorCountsPtr, other.m_value.EccErrorCountsPtr, allocateNum * sizeof(*other.m_value.EccErrorCountsPtr));
+                }
+                break;
+            }
+            case INJECTION_ECCSRAMERRORSTATUS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EccSramErrorStatusPtr = static_cast<nvmlEccSramErrorStatus_t *>(malloc(allocateNum * sizeof(*other.m_value.EccSramErrorStatusPtr)));
+                if (m_value.EccSramErrorStatusPtr != nullptr)
+                {
+                    std::memcpy(m_value.EccSramErrorStatusPtr, other.m_value.EccSramErrorStatusPtr, allocateNum * sizeof(*other.m_value.EccSramErrorStatusPtr));
+                }
                 break;
             }
             case INJECTION_ENABLESTATE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.enableStatePtr = reinterpret_cast<nvmlEnableState_t *>(malloc(allocateNum * sizeof(*other.m_value.enableStatePtr)));
-                std::memcpy(m_value.enableStatePtr, other.m_value.enableStatePtr, allocateNum * sizeof(*other.m_value.enableStatePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EnableStatePtr = static_cast<nvmlEnableState_t *>(malloc(allocateNum * sizeof(*other.m_value.EnableStatePtr)));
+                if (m_value.EnableStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.EnableStatePtr, other.m_value.EnableStatePtr, allocateNum * sizeof(*other.m_value.EnableStatePtr));
+                }
                 break;
             }
             case INJECTION_ENCODERSESSIONINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.encoderSessionInfoPtr = reinterpret_cast<nvmlEncoderSessionInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.encoderSessionInfoPtr)));
-                std::memcpy(m_value.encoderSessionInfoPtr, other.m_value.encoderSessionInfoPtr, allocateNum * sizeof(*other.m_value.encoderSessionInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EncoderSessionInfoPtr = static_cast<nvmlEncoderSessionInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.EncoderSessionInfoPtr)));
+                if (m_value.EncoderSessionInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.EncoderSessionInfoPtr, other.m_value.EncoderSessionInfoPtr, allocateNum * sizeof(*other.m_value.EncoderSessionInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_ENCODERTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EncoderTypePtr = static_cast<nvmlEncoderType_t *>(malloc(allocateNum * sizeof(*other.m_value.EncoderTypePtr)));
+                if (m_value.EncoderTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.EncoderTypePtr, other.m_value.EncoderTypePtr, allocateNum * sizeof(*other.m_value.EncoderTypePtr));
+                }
                 break;
             }
             case INJECTION_EVENTDATA_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.eventDataPtr = reinterpret_cast<nvmlEventData_t *>(malloc(allocateNum * sizeof(*other.m_value.eventDataPtr)));
-                std::memcpy(m_value.eventDataPtr, other.m_value.eventDataPtr, allocateNum * sizeof(*other.m_value.eventDataPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventDataPtr = static_cast<nvmlEventData_t *>(malloc(allocateNum * sizeof(*other.m_value.EventDataPtr)));
+                if (m_value.EventDataPtr != nullptr)
+                {
+                    std::memcpy(m_value.EventDataPtr, other.m_value.EventDataPtr, allocateNum * sizeof(*other.m_value.EventDataPtr));
+                }
                 break;
             }
             case INJECTION_EVENTSET_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.eventSetPtr = reinterpret_cast<nvmlEventSet_t *>(malloc(allocateNum * sizeof(*other.m_value.eventSetPtr)));
-                std::memcpy(m_value.eventSetPtr, other.m_value.eventSetPtr, allocateNum * sizeof(*other.m_value.eventSetPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetPtr = static_cast<nvmlEventSet_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetPtr)));
+                if (m_value.EventSetPtr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetPtr, other.m_value.EventSetPtr, allocateNum * sizeof(*other.m_value.EventSetPtr));
+                }
                 break;
             }
             case INJECTION_EXCLUDEDDEVICEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.excludedDeviceInfoPtr = reinterpret_cast<nvmlExcludedDeviceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.excludedDeviceInfoPtr)));
-                std::memcpy(m_value.excludedDeviceInfoPtr, other.m_value.excludedDeviceInfoPtr, allocateNum * sizeof(*other.m_value.excludedDeviceInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ExcludedDeviceInfoPtr = static_cast<nvmlExcludedDeviceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ExcludedDeviceInfoPtr)));
+                if (m_value.ExcludedDeviceInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ExcludedDeviceInfoPtr, other.m_value.ExcludedDeviceInfoPtr, allocateNum * sizeof(*other.m_value.ExcludedDeviceInfoPtr));
+                }
                 break;
             }
             case INJECTION_FBCSESSIONINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.fBCSessionInfoPtr = reinterpret_cast<nvmlFBCSessionInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.fBCSessionInfoPtr)));
-                std::memcpy(m_value.fBCSessionInfoPtr, other.m_value.fBCSessionInfoPtr, allocateNum * sizeof(*other.m_value.fBCSessionInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FBCSessionInfoPtr = static_cast<nvmlFBCSessionInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.FBCSessionInfoPtr)));
+                if (m_value.FBCSessionInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.FBCSessionInfoPtr, other.m_value.FBCSessionInfoPtr, allocateNum * sizeof(*other.m_value.FBCSessionInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_FBCSESSIONTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FBCSessionTypePtr = static_cast<nvmlFBCSessionType_t *>(malloc(allocateNum * sizeof(*other.m_value.FBCSessionTypePtr)));
+                if (m_value.FBCSessionTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.FBCSessionTypePtr, other.m_value.FBCSessionTypePtr, allocateNum * sizeof(*other.m_value.FBCSessionTypePtr));
+                }
                 break;
             }
             case INJECTION_FBCSTATS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.fBCStatsPtr = reinterpret_cast<nvmlFBCStats_t *>(malloc(allocateNum * sizeof(*other.m_value.fBCStatsPtr)));
-                std::memcpy(m_value.fBCStatsPtr, other.m_value.fBCStatsPtr, allocateNum * sizeof(*other.m_value.fBCStatsPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FBCStatsPtr = static_cast<nvmlFBCStats_t *>(malloc(allocateNum * sizeof(*other.m_value.FBCStatsPtr)));
+                if (m_value.FBCStatsPtr != nullptr)
+                {
+                    std::memcpy(m_value.FBCStatsPtr, other.m_value.FBCStatsPtr, allocateNum * sizeof(*other.m_value.FBCStatsPtr));
+                }
+                break;
+            }
+            case INJECTION_FANCONTROLPOLICY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FanControlPolicyPtr = static_cast<nvmlFanControlPolicy_t *>(malloc(allocateNum * sizeof(*other.m_value.FanControlPolicyPtr)));
+                if (m_value.FanControlPolicyPtr != nullptr)
+                {
+                    std::memcpy(m_value.FanControlPolicyPtr, other.m_value.FanControlPolicyPtr, allocateNum * sizeof(*other.m_value.FanControlPolicyPtr));
+                }
+                break;
+            }
+            case INJECTION_FANSPEEDINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FanSpeedInfoPtr = static_cast<nvmlFanSpeedInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.FanSpeedInfoPtr)));
+                if (m_value.FanSpeedInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.FanSpeedInfoPtr, other.m_value.FanSpeedInfoPtr, allocateNum * sizeof(*other.m_value.FanSpeedInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_FANSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FanStatePtr = static_cast<nvmlFanState_t *>(malloc(allocateNum * sizeof(*other.m_value.FanStatePtr)));
+                if (m_value.FanStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.FanStatePtr, other.m_value.FanStatePtr, allocateNum * sizeof(*other.m_value.FanStatePtr));
+                }
                 break;
             }
             case INJECTION_FIELDVALUE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.fieldValuePtr = reinterpret_cast<nvmlFieldValue_t *>(malloc(allocateNum * sizeof(*other.m_value.fieldValuePtr)));
-                std::memcpy(m_value.fieldValuePtr, other.m_value.fieldValuePtr, allocateNum * sizeof(*other.m_value.fieldValuePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.FieldValuePtr = static_cast<nvmlFieldValue_t *>(malloc(allocateNum * sizeof(*other.m_value.FieldValuePtr)));
+                if (m_value.FieldValuePtr != nullptr)
+                {
+                    std::memcpy(m_value.FieldValuePtr, other.m_value.FieldValuePtr, allocateNum * sizeof(*other.m_value.FieldValuePtr));
+                }
+                break;
+            }
+            case INJECTION_GPMMETRICID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpmMetricIdPtr = static_cast<nvmlGpmMetricId_t *>(malloc(allocateNum * sizeof(*other.m_value.GpmMetricIdPtr)));
+                if (m_value.GpmMetricIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpmMetricIdPtr, other.m_value.GpmMetricIdPtr, allocateNum * sizeof(*other.m_value.GpmMetricIdPtr));
+                }
+                break;
+            }
+            case INJECTION_GPMMETRIC_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpmMetricPtr = static_cast<nvmlGpmMetric_t *>(malloc(allocateNum * sizeof(*other.m_value.GpmMetricPtr)));
+                if (m_value.GpmMetricPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpmMetricPtr, other.m_value.GpmMetricPtr, allocateNum * sizeof(*other.m_value.GpmMetricPtr));
+                }
                 break;
             }
             case INJECTION_GPMMETRICSGET_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpmMetricsGetPtr = reinterpret_cast<nvmlGpmMetricsGet_t *>(malloc(allocateNum * sizeof(*other.m_value.gpmMetricsGetPtr)));
-                std::memcpy(m_value.gpmMetricsGetPtr, other.m_value.gpmMetricsGetPtr, allocateNum * sizeof(*other.m_value.gpmMetricsGetPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpmMetricsGetPtr = static_cast<nvmlGpmMetricsGet_t *>(malloc(allocateNum * sizeof(*other.m_value.GpmMetricsGetPtr)));
+                if (m_value.GpmMetricsGetPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpmMetricsGetPtr, other.m_value.GpmMetricsGetPtr, allocateNum * sizeof(*other.m_value.GpmMetricsGetPtr));
+                }
                 break;
             }
             case INJECTION_GPMSAMPLE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpmSamplePtr = reinterpret_cast<nvmlGpmSample_t *>(malloc(allocateNum * sizeof(*other.m_value.gpmSamplePtr)));
-                std::memcpy(m_value.gpmSamplePtr, other.m_value.gpmSamplePtr, allocateNum * sizeof(*other.m_value.gpmSamplePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpmSamplePtr = static_cast<nvmlGpmSample_t *>(malloc(allocateNum * sizeof(*other.m_value.GpmSamplePtr)));
+                if (m_value.GpmSamplePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpmSamplePtr, other.m_value.GpmSamplePtr, allocateNum * sizeof(*other.m_value.GpmSamplePtr));
+                }
                 break;
             }
             case INJECTION_GPMSUPPORT_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpmSupportPtr = reinterpret_cast<nvmlGpmSupport_t *>(malloc(allocateNum * sizeof(*other.m_value.gpmSupportPtr)));
-                std::memcpy(m_value.gpmSupportPtr, other.m_value.gpmSupportPtr, allocateNum * sizeof(*other.m_value.gpmSupportPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpmSupportPtr = static_cast<nvmlGpmSupport_t *>(malloc(allocateNum * sizeof(*other.m_value.GpmSupportPtr)));
+                if (m_value.GpmSupportPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpmSupportPtr, other.m_value.GpmSupportPtr, allocateNum * sizeof(*other.m_value.GpmSupportPtr));
+                }
                 break;
             }
             case INJECTION_GPUDYNAMICPSTATESINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuDynamicPstatesInfoPtr = reinterpret_cast<nvmlGpuDynamicPstatesInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuDynamicPstatesInfoPtr)));
-                std::memcpy(m_value.gpuDynamicPstatesInfoPtr, other.m_value.gpuDynamicPstatesInfoPtr, allocateNum * sizeof(*other.m_value.gpuDynamicPstatesInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuDynamicPstatesInfoPtr = static_cast<nvmlGpuDynamicPstatesInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuDynamicPstatesInfoPtr)));
+                if (m_value.GpuDynamicPstatesInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuDynamicPstatesInfoPtr, other.m_value.GpuDynamicPstatesInfoPtr, allocateNum * sizeof(*other.m_value.GpuDynamicPstatesInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_GPUFABRICINFOV_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuFabricInfoVPtr = static_cast<nvmlGpuFabricInfoV_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuFabricInfoVPtr)));
+                if (m_value.GpuFabricInfoVPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuFabricInfoVPtr, other.m_value.GpuFabricInfoVPtr, allocateNum * sizeof(*other.m_value.GpuFabricInfoVPtr));
+                }
+                break;
+            }
+            case INJECTION_GPUFABRICINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuFabricInfoPtr = static_cast<nvmlGpuFabricInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuFabricInfoPtr)));
+                if (m_value.GpuFabricInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuFabricInfoPtr, other.m_value.GpuFabricInfoPtr, allocateNum * sizeof(*other.m_value.GpuFabricInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_GPUFABRICSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuFabricStatePtr = static_cast<nvmlGpuFabricState_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuFabricStatePtr)));
+                if (m_value.GpuFabricStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuFabricStatePtr, other.m_value.GpuFabricStatePtr, allocateNum * sizeof(*other.m_value.GpuFabricStatePtr));
+                }
                 break;
             }
             case INJECTION_GPUINSTANCEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuInstanceInfoPtr = reinterpret_cast<nvmlGpuInstanceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuInstanceInfoPtr)));
-                std::memcpy(m_value.gpuInstanceInfoPtr, other.m_value.gpuInstanceInfoPtr, allocateNum * sizeof(*other.m_value.gpuInstanceInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstanceInfoPtr = static_cast<nvmlGpuInstanceInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstanceInfoPtr)));
+                if (m_value.GpuInstanceInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstanceInfoPtr, other.m_value.GpuInstanceInfoPtr, allocateNum * sizeof(*other.m_value.GpuInstanceInfoPtr));
+                }
                 break;
             }
             case INJECTION_GPUINSTANCEPLACEMENT_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuInstancePlacementPtr = reinterpret_cast<nvmlGpuInstancePlacement_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuInstancePlacementPtr)));
-                std::memcpy(m_value.gpuInstancePlacementPtr, other.m_value.gpuInstancePlacementPtr, allocateNum * sizeof(*other.m_value.gpuInstancePlacementPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstancePlacementPtr = static_cast<nvmlGpuInstancePlacement_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstancePlacementPtr)));
+                if (m_value.GpuInstancePlacementPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstancePlacementPtr, other.m_value.GpuInstancePlacementPtr, allocateNum * sizeof(*other.m_value.GpuInstancePlacementPtr));
+                }
                 break;
             }
             case INJECTION_GPUINSTANCEPROFILEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuInstanceProfileInfoPtr = reinterpret_cast<nvmlGpuInstanceProfileInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuInstanceProfileInfoPtr)));
-                std::memcpy(m_value.gpuInstanceProfileInfoPtr, other.m_value.gpuInstanceProfileInfoPtr, allocateNum * sizeof(*other.m_value.gpuInstanceProfileInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstanceProfileInfoPtr = static_cast<nvmlGpuInstanceProfileInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfoPtr)));
+                if (m_value.GpuInstanceProfileInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstanceProfileInfoPtr, other.m_value.GpuInstanceProfileInfoPtr, allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfoPtr));
+                }
                 break;
             }
             case INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuInstanceProfileInfo_v2Ptr = reinterpret_cast<nvmlGpuInstanceProfileInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuInstanceProfileInfo_v2Ptr)));
-                std::memcpy(m_value.gpuInstanceProfileInfo_v2Ptr, other.m_value.gpuInstanceProfileInfo_v2Ptr, allocateNum * sizeof(*other.m_value.gpuInstanceProfileInfo_v2Ptr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstanceProfileInfo_v2Ptr = static_cast<nvmlGpuInstanceProfileInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfo_v2Ptr)));
+                if (m_value.GpuInstanceProfileInfo_v2Ptr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstanceProfileInfo_v2Ptr, other.m_value.GpuInstanceProfileInfo_v2Ptr, allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfo_v2Ptr));
+                }
+                break;
+            }
+            case INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstanceProfileInfo_v3Ptr = static_cast<nvmlGpuInstanceProfileInfo_v3_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfo_v3Ptr)));
+                if (m_value.GpuInstanceProfileInfo_v3Ptr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstanceProfileInfo_v3Ptr, other.m_value.GpuInstanceProfileInfo_v3Ptr, allocateNum * sizeof(*other.m_value.GpuInstanceProfileInfo_v3Ptr));
+                }
                 break;
             }
             case INJECTION_GPUINSTANCE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuInstancePtr = reinterpret_cast<nvmlGpuInstance_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuInstancePtr)));
-                std::memcpy(m_value.gpuInstancePtr, other.m_value.gpuInstancePtr, allocateNum * sizeof(*other.m_value.gpuInstancePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuInstancePtr = static_cast<nvmlGpuInstance_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuInstancePtr)));
+                if (m_value.GpuInstancePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuInstancePtr, other.m_value.GpuInstancePtr, allocateNum * sizeof(*other.m_value.GpuInstancePtr));
+                }
                 break;
             }
             case INJECTION_GPUOPERATIONMODE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuOperationModePtr = reinterpret_cast<nvmlGpuOperationMode_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuOperationModePtr)));
-                std::memcpy(m_value.gpuOperationModePtr, other.m_value.gpuOperationModePtr, allocateNum * sizeof(*other.m_value.gpuOperationModePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuOperationModePtr = static_cast<nvmlGpuOperationMode_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuOperationModePtr)));
+                if (m_value.GpuOperationModePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuOperationModePtr, other.m_value.GpuOperationModePtr, allocateNum * sizeof(*other.m_value.GpuOperationModePtr));
+                }
+                break;
+            }
+            case INJECTION_GPUP2PCAPSINDEX_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuP2PCapsIndexPtr = static_cast<nvmlGpuP2PCapsIndex_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuP2PCapsIndexPtr)));
+                if (m_value.GpuP2PCapsIndexPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuP2PCapsIndexPtr, other.m_value.GpuP2PCapsIndexPtr, allocateNum * sizeof(*other.m_value.GpuP2PCapsIndexPtr));
+                }
                 break;
             }
             case INJECTION_GPUP2PSTATUS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuP2PStatusPtr = reinterpret_cast<nvmlGpuP2PStatus_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuP2PStatusPtr)));
-                std::memcpy(m_value.gpuP2PStatusPtr, other.m_value.gpuP2PStatusPtr, allocateNum * sizeof(*other.m_value.gpuP2PStatusPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuP2PStatusPtr = static_cast<nvmlGpuP2PStatus_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuP2PStatusPtr)));
+                if (m_value.GpuP2PStatusPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuP2PStatusPtr, other.m_value.GpuP2PStatusPtr, allocateNum * sizeof(*other.m_value.GpuP2PStatusPtr));
+                }
                 break;
             }
             case INJECTION_GPUTHERMALSETTINGS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuThermalSettingsPtr = reinterpret_cast<nvmlGpuThermalSettings_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuThermalSettingsPtr)));
-                std::memcpy(m_value.gpuThermalSettingsPtr, other.m_value.gpuThermalSettingsPtr, allocateNum * sizeof(*other.m_value.gpuThermalSettingsPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuThermalSettingsPtr = static_cast<nvmlGpuThermalSettings_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuThermalSettingsPtr)));
+                if (m_value.GpuThermalSettingsPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuThermalSettingsPtr, other.m_value.GpuThermalSettingsPtr, allocateNum * sizeof(*other.m_value.GpuThermalSettingsPtr));
+                }
                 break;
             }
             case INJECTION_GPUTOPOLOGYLEVEL_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuTopologyLevelPtr = reinterpret_cast<nvmlGpuTopologyLevel_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuTopologyLevelPtr)));
-                std::memcpy(m_value.gpuTopologyLevelPtr, other.m_value.gpuTopologyLevelPtr, allocateNum * sizeof(*other.m_value.gpuTopologyLevelPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuTopologyLevelPtr = static_cast<nvmlGpuTopologyLevel_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuTopologyLevelPtr)));
+                if (m_value.GpuTopologyLevelPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuTopologyLevelPtr, other.m_value.GpuTopologyLevelPtr, allocateNum * sizeof(*other.m_value.GpuTopologyLevelPtr));
+                }
+                break;
+            }
+            case INJECTION_GPUUTILIZATIONDOMAINID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuUtilizationDomainIdPtr = static_cast<nvmlGpuUtilizationDomainId_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuUtilizationDomainIdPtr)));
+                if (m_value.GpuUtilizationDomainIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuUtilizationDomainIdPtr, other.m_value.GpuUtilizationDomainIdPtr, allocateNum * sizeof(*other.m_value.GpuUtilizationDomainIdPtr));
+                }
                 break;
             }
             case INJECTION_GPUVIRTUALIZATIONMODE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gpuVirtualizationModePtr = reinterpret_cast<nvmlGpuVirtualizationMode_t *>(malloc(allocateNum * sizeof(*other.m_value.gpuVirtualizationModePtr)));
-                std::memcpy(m_value.gpuVirtualizationModePtr, other.m_value.gpuVirtualizationModePtr, allocateNum * sizeof(*other.m_value.gpuVirtualizationModePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuVirtualizationModePtr = static_cast<nvmlGpuVirtualizationMode_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuVirtualizationModePtr)));
+                if (m_value.GpuVirtualizationModePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuVirtualizationModePtr, other.m_value.GpuVirtualizationModePtr, allocateNum * sizeof(*other.m_value.GpuVirtualizationModePtr));
+                }
+                break;
+            }
+            case INJECTION_GRIDLICENSABLEFEATURE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GridLicensableFeaturePtr = static_cast<nvmlGridLicensableFeature_t *>(malloc(allocateNum * sizeof(*other.m_value.GridLicensableFeaturePtr)));
+                if (m_value.GridLicensableFeaturePtr != nullptr)
+                {
+                    std::memcpy(m_value.GridLicensableFeaturePtr, other.m_value.GridLicensableFeaturePtr, allocateNum * sizeof(*other.m_value.GridLicensableFeaturePtr));
+                }
                 break;
             }
             case INJECTION_GRIDLICENSABLEFEATURES_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.gridLicensableFeaturesPtr = reinterpret_cast<nvmlGridLicensableFeatures_t *>(malloc(allocateNum * sizeof(*other.m_value.gridLicensableFeaturesPtr)));
-                std::memcpy(m_value.gridLicensableFeaturesPtr, other.m_value.gridLicensableFeaturesPtr, allocateNum * sizeof(*other.m_value.gridLicensableFeaturesPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GridLicensableFeaturesPtr = static_cast<nvmlGridLicensableFeatures_t *>(malloc(allocateNum * sizeof(*other.m_value.GridLicensableFeaturesPtr)));
+                if (m_value.GridLicensableFeaturesPtr != nullptr)
+                {
+                    std::memcpy(m_value.GridLicensableFeaturesPtr, other.m_value.GridLicensableFeaturesPtr, allocateNum * sizeof(*other.m_value.GridLicensableFeaturesPtr));
+                }
+                break;
+            }
+            case INJECTION_GRIDLICENSEEXPIRY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GridLicenseExpiryPtr = static_cast<nvmlGridLicenseExpiry_t *>(malloc(allocateNum * sizeof(*other.m_value.GridLicenseExpiryPtr)));
+                if (m_value.GridLicenseExpiryPtr != nullptr)
+                {
+                    std::memcpy(m_value.GridLicenseExpiryPtr, other.m_value.GridLicenseExpiryPtr, allocateNum * sizeof(*other.m_value.GridLicenseExpiryPtr));
+                }
+                break;
+            }
+            case INJECTION_GRIDLICENSEFEATURECODE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GridLicenseFeatureCodePtr = static_cast<nvmlGridLicenseFeatureCode_t *>(malloc(allocateNum * sizeof(*other.m_value.GridLicenseFeatureCodePtr)));
+                if (m_value.GridLicenseFeatureCodePtr != nullptr)
+                {
+                    std::memcpy(m_value.GridLicenseFeatureCodePtr, other.m_value.GridLicenseFeatureCodePtr, allocateNum * sizeof(*other.m_value.GridLicenseFeatureCodePtr));
+                }
                 break;
             }
             case INJECTION_HOSTVGPUMODE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.hostVgpuModePtr = reinterpret_cast<nvmlHostVgpuMode_t *>(malloc(allocateNum * sizeof(*other.m_value.hostVgpuModePtr)));
-                std::memcpy(m_value.hostVgpuModePtr, other.m_value.hostVgpuModePtr, allocateNum * sizeof(*other.m_value.hostVgpuModePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.HostVgpuModePtr = static_cast<nvmlHostVgpuMode_t *>(malloc(allocateNum * sizeof(*other.m_value.HostVgpuModePtr)));
+                if (m_value.HostVgpuModePtr != nullptr)
+                {
+                    std::memcpy(m_value.HostVgpuModePtr, other.m_value.HostVgpuModePtr, allocateNum * sizeof(*other.m_value.HostVgpuModePtr));
+                }
                 break;
             }
             case INJECTION_HWBCENTRY_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.hwbcEntryPtr = reinterpret_cast<nvmlHwbcEntry_t *>(malloc(allocateNum * sizeof(*other.m_value.hwbcEntryPtr)));
-                std::memcpy(m_value.hwbcEntryPtr, other.m_value.hwbcEntryPtr, allocateNum * sizeof(*other.m_value.hwbcEntryPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.HwbcEntryPtr = static_cast<nvmlHwbcEntry_t *>(malloc(allocateNum * sizeof(*other.m_value.HwbcEntryPtr)));
+                if (m_value.HwbcEntryPtr != nullptr)
+                {
+                    std::memcpy(m_value.HwbcEntryPtr, other.m_value.HwbcEntryPtr, allocateNum * sizeof(*other.m_value.HwbcEntryPtr));
+                }
+                break;
+            }
+            case INJECTION_INFOROMOBJECT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.InforomObjectPtr = static_cast<nvmlInforomObject_t *>(malloc(allocateNum * sizeof(*other.m_value.InforomObjectPtr)));
+                if (m_value.InforomObjectPtr != nullptr)
+                {
+                    std::memcpy(m_value.InforomObjectPtr, other.m_value.InforomObjectPtr, allocateNum * sizeof(*other.m_value.InforomObjectPtr));
+                }
                 break;
             }
             case INJECTION_INTNVLINKDEVICETYPE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.intNvLinkDeviceTypePtr = reinterpret_cast<nvmlIntNvLinkDeviceType_t *>(malloc(allocateNum * sizeof(*other.m_value.intNvLinkDeviceTypePtr)));
-                std::memcpy(m_value.intNvLinkDeviceTypePtr, other.m_value.intNvLinkDeviceTypePtr, allocateNum * sizeof(*other.m_value.intNvLinkDeviceTypePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.IntNvLinkDeviceTypePtr = static_cast<nvmlIntNvLinkDeviceType_t *>(malloc(allocateNum * sizeof(*other.m_value.IntNvLinkDeviceTypePtr)));
+                if (m_value.IntNvLinkDeviceTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.IntNvLinkDeviceTypePtr, other.m_value.IntNvLinkDeviceTypePtr, allocateNum * sizeof(*other.m_value.IntNvLinkDeviceTypePtr));
+                }
+                break;
+            }
+            case INJECTION_LEDCOLOR_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.LedColorPtr = static_cast<nvmlLedColor_t *>(malloc(allocateNum * sizeof(*other.m_value.LedColorPtr)));
+                if (m_value.LedColorPtr != nullptr)
+                {
+                    std::memcpy(m_value.LedColorPtr, other.m_value.LedColorPtr, allocateNum * sizeof(*other.m_value.LedColorPtr));
+                }
                 break;
             }
             case INJECTION_LEDSTATE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.ledStatePtr = reinterpret_cast<nvmlLedState_t *>(malloc(allocateNum * sizeof(*other.m_value.ledStatePtr)));
-                std::memcpy(m_value.ledStatePtr, other.m_value.ledStatePtr, allocateNum * sizeof(*other.m_value.ledStatePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.LedStatePtr = static_cast<nvmlLedState_t *>(malloc(allocateNum * sizeof(*other.m_value.LedStatePtr)));
+                if (m_value.LedStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.LedStatePtr, other.m_value.LedStatePtr, allocateNum * sizeof(*other.m_value.LedStatePtr));
+                }
+                break;
+            }
+            case INJECTION_MASK255_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.Mask255Ptr = static_cast<nvmlMask255_t *>(malloc(allocateNum * sizeof(*other.m_value.Mask255Ptr)));
+                if (m_value.Mask255Ptr != nullptr)
+                {
+                    std::memcpy(m_value.Mask255Ptr, other.m_value.Mask255Ptr, allocateNum * sizeof(*other.m_value.Mask255Ptr));
+                }
+                break;
+            }
+            case INJECTION_MEMORYERRORTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.MemoryErrorTypePtr = static_cast<nvmlMemoryErrorType_t *>(malloc(allocateNum * sizeof(*other.m_value.MemoryErrorTypePtr)));
+                if (m_value.MemoryErrorTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.MemoryErrorTypePtr, other.m_value.MemoryErrorTypePtr, allocateNum * sizeof(*other.m_value.MemoryErrorTypePtr));
+                }
+                break;
+            }
+            case INJECTION_MEMORYLOCATION_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.MemoryLocationPtr = static_cast<nvmlMemoryLocation_t *>(malloc(allocateNum * sizeof(*other.m_value.MemoryLocationPtr)));
+                if (m_value.MemoryLocationPtr != nullptr)
+                {
+                    std::memcpy(m_value.MemoryLocationPtr, other.m_value.MemoryLocationPtr, allocateNum * sizeof(*other.m_value.MemoryLocationPtr));
+                }
                 break;
             }
             case INJECTION_MEMORY_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.memoryPtr = reinterpret_cast<nvmlMemory_t *>(malloc(allocateNum * sizeof(*other.m_value.memoryPtr)));
-                std::memcpy(m_value.memoryPtr, other.m_value.memoryPtr, allocateNum * sizeof(*other.m_value.memoryPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.MemoryPtr = static_cast<nvmlMemory_t *>(malloc(allocateNum * sizeof(*other.m_value.MemoryPtr)));
+                if (m_value.MemoryPtr != nullptr)
+                {
+                    std::memcpy(m_value.MemoryPtr, other.m_value.MemoryPtr, allocateNum * sizeof(*other.m_value.MemoryPtr));
+                }
                 break;
             }
             case INJECTION_MEMORY_V2_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.memory_v2Ptr = reinterpret_cast<nvmlMemory_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.memory_v2Ptr)));
-                std::memcpy(m_value.memory_v2Ptr, other.m_value.memory_v2Ptr, allocateNum * sizeof(*other.m_value.memory_v2Ptr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.Memory_v2Ptr = static_cast<nvmlMemory_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.Memory_v2Ptr)));
+                if (m_value.Memory_v2Ptr != nullptr)
+                {
+                    std::memcpy(m_value.Memory_v2Ptr, other.m_value.Memory_v2Ptr, allocateNum * sizeof(*other.m_value.Memory_v2Ptr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKCAPABILITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkCapabilityPtr = static_cast<nvmlNvLinkCapability_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkCapabilityPtr)));
+                if (m_value.NvLinkCapabilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkCapabilityPtr, other.m_value.NvLinkCapabilityPtr, allocateNum * sizeof(*other.m_value.NvLinkCapabilityPtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKERRORCOUNTER_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkErrorCounterPtr = static_cast<nvmlNvLinkErrorCounter_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkErrorCounterPtr)));
+                if (m_value.NvLinkErrorCounterPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkErrorCounterPtr, other.m_value.NvLinkErrorCounterPtr, allocateNum * sizeof(*other.m_value.NvLinkErrorCounterPtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKPOWERTHRES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkPowerThresPtr = static_cast<nvmlNvLinkPowerThres_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkPowerThresPtr)));
+                if (m_value.NvLinkPowerThresPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkPowerThresPtr, other.m_value.NvLinkPowerThresPtr, allocateNum * sizeof(*other.m_value.NvLinkPowerThresPtr));
+                }
                 break;
             }
             case INJECTION_NVLINKUTILIZATIONCONTROL_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.nvLinkUtilizationControlPtr = reinterpret_cast<nvmlNvLinkUtilizationControl_t *>(malloc(allocateNum * sizeof(*other.m_value.nvLinkUtilizationControlPtr)));
-                std::memcpy(m_value.nvLinkUtilizationControlPtr, other.m_value.nvLinkUtilizationControlPtr, allocateNum * sizeof(*other.m_value.nvLinkUtilizationControlPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkUtilizationControlPtr = static_cast<nvmlNvLinkUtilizationControl_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkUtilizationControlPtr)));
+                if (m_value.NvLinkUtilizationControlPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkUtilizationControlPtr, other.m_value.NvLinkUtilizationControlPtr, allocateNum * sizeof(*other.m_value.NvLinkUtilizationControlPtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkUtilizationCountPktTypesPtr = static_cast<nvmlNvLinkUtilizationCountPktTypes_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkUtilizationCountPktTypesPtr)));
+                if (m_value.NvLinkUtilizationCountPktTypesPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkUtilizationCountPktTypesPtr, other.m_value.NvLinkUtilizationCountPktTypesPtr, allocateNum * sizeof(*other.m_value.NvLinkUtilizationCountPktTypesPtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvLinkUtilizationCountUnitsPtr = static_cast<nvmlNvLinkUtilizationCountUnits_t *>(malloc(allocateNum * sizeof(*other.m_value.NvLinkUtilizationCountUnitsPtr)));
+                if (m_value.NvLinkUtilizationCountUnitsPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvLinkUtilizationCountUnitsPtr, other.m_value.NvLinkUtilizationCountUnitsPtr, allocateNum * sizeof(*other.m_value.NvLinkUtilizationCountUnitsPtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKVERSION_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvlinkVersionPtr = static_cast<nvmlNvlinkVersion_t *>(malloc(allocateNum * sizeof(*other.m_value.NvlinkVersionPtr)));
+                if (m_value.NvlinkVersionPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvlinkVersionPtr, other.m_value.NvlinkVersionPtr, allocateNum * sizeof(*other.m_value.NvlinkVersionPtr));
+                }
                 break;
             }
             case INJECTION_PSUINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.pSUInfoPtr = reinterpret_cast<nvmlPSUInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.pSUInfoPtr)));
-                std::memcpy(m_value.pSUInfoPtr, other.m_value.pSUInfoPtr, allocateNum * sizeof(*other.m_value.pSUInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PSUInfoPtr = static_cast<nvmlPSUInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.PSUInfoPtr)));
+                if (m_value.PSUInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.PSUInfoPtr, other.m_value.PSUInfoPtr, allocateNum * sizeof(*other.m_value.PSUInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_PAGERETIREMENTCAUSE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PageRetirementCausePtr = static_cast<nvmlPageRetirementCause_t *>(malloc(allocateNum * sizeof(*other.m_value.PageRetirementCausePtr)));
+                if (m_value.PageRetirementCausePtr != nullptr)
+                {
+                    std::memcpy(m_value.PageRetirementCausePtr, other.m_value.PageRetirementCausePtr, allocateNum * sizeof(*other.m_value.PageRetirementCausePtr));
+                }
+                break;
+            }
+            case INJECTION_PCIINFOEXT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PciInfoExtPtr = static_cast<nvmlPciInfoExt_t *>(malloc(allocateNum * sizeof(*other.m_value.PciInfoExtPtr)));
+                if (m_value.PciInfoExtPtr != nullptr)
+                {
+                    std::memcpy(m_value.PciInfoExtPtr, other.m_value.PciInfoExtPtr, allocateNum * sizeof(*other.m_value.PciInfoExtPtr));
+                }
                 break;
             }
             case INJECTION_PCIINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.pciInfoPtr = reinterpret_cast<nvmlPciInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.pciInfoPtr)));
-                std::memcpy(m_value.pciInfoPtr, other.m_value.pciInfoPtr, allocateNum * sizeof(*other.m_value.pciInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PciInfoPtr = static_cast<nvmlPciInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.PciInfoPtr)));
+                if (m_value.PciInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.PciInfoPtr, other.m_value.PciInfoPtr, allocateNum * sizeof(*other.m_value.PciInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_PCIELINKSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PcieLinkStatePtr = static_cast<nvmlPcieLinkState_t *>(malloc(allocateNum * sizeof(*other.m_value.PcieLinkStatePtr)));
+                if (m_value.PcieLinkStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.PcieLinkStatePtr, other.m_value.PcieLinkStatePtr, allocateNum * sizeof(*other.m_value.PcieLinkStatePtr));
+                }
+                break;
+            }
+            case INJECTION_PCIEUTILCOUNTER_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PcieUtilCounterPtr = static_cast<nvmlPcieUtilCounter_t *>(malloc(allocateNum * sizeof(*other.m_value.PcieUtilCounterPtr)));
+                if (m_value.PcieUtilCounterPtr != nullptr)
+                {
+                    std::memcpy(m_value.PcieUtilCounterPtr, other.m_value.PcieUtilCounterPtr, allocateNum * sizeof(*other.m_value.PcieUtilCounterPtr));
+                }
+                break;
+            }
+            case INJECTION_PERFPOLICYTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PerfPolicyTypePtr = static_cast<nvmlPerfPolicyType_t *>(malloc(allocateNum * sizeof(*other.m_value.PerfPolicyTypePtr)));
+                if (m_value.PerfPolicyTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.PerfPolicyTypePtr, other.m_value.PerfPolicyTypePtr, allocateNum * sizeof(*other.m_value.PerfPolicyTypePtr));
+                }
+                break;
+            }
+            case INJECTION_PLATFORMINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PlatformInfoPtr = static_cast<nvmlPlatformInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.PlatformInfoPtr)));
+                if (m_value.PlatformInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.PlatformInfoPtr, other.m_value.PlatformInfoPtr, allocateNum * sizeof(*other.m_value.PlatformInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_POWERPROFILETYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PowerProfileTypePtr = static_cast<nvmlPowerProfileType_t *>(malloc(allocateNum * sizeof(*other.m_value.PowerProfileTypePtr)));
+                if (m_value.PowerProfileTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.PowerProfileTypePtr, other.m_value.PowerProfileTypePtr, allocateNum * sizeof(*other.m_value.PowerProfileTypePtr));
+                }
+                break;
+            }
+            case INJECTION_POWERSCOPETYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PowerScopeTypePtr = static_cast<nvmlPowerScopeType_t *>(malloc(allocateNum * sizeof(*other.m_value.PowerScopeTypePtr)));
+                if (m_value.PowerScopeTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.PowerScopeTypePtr, other.m_value.PowerScopeTypePtr, allocateNum * sizeof(*other.m_value.PowerScopeTypePtr));
+                }
+                break;
+            }
+            case INJECTION_POWERSOURCE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PowerSourcePtr = static_cast<nvmlPowerSource_t *>(malloc(allocateNum * sizeof(*other.m_value.PowerSourcePtr)));
+                if (m_value.PowerSourcePtr != nullptr)
+                {
+                    std::memcpy(m_value.PowerSourcePtr, other.m_value.PowerSourcePtr, allocateNum * sizeof(*other.m_value.PowerSourcePtr));
+                }
+                break;
+            }
+            case INJECTION_POWERVALUE_V2_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PowerValue_v2Ptr = static_cast<nvmlPowerValue_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.PowerValue_v2Ptr)));
+                if (m_value.PowerValue_v2Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PowerValue_v2Ptr, other.m_value.PowerValue_v2Ptr, allocateNum * sizeof(*other.m_value.PowerValue_v2Ptr));
+                }
+                break;
+            }
+            case INJECTION_PROCESSDETAILLIST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessDetailListPtr = static_cast<nvmlProcessDetailList_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessDetailListPtr)));
+                if (m_value.ProcessDetailListPtr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessDetailListPtr, other.m_value.ProcessDetailListPtr, allocateNum * sizeof(*other.m_value.ProcessDetailListPtr));
+                }
+                break;
+            }
+            case INJECTION_PROCESSDETAIL_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessDetail_v1Ptr = static_cast<nvmlProcessDetail_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessDetail_v1Ptr)));
+                if (m_value.ProcessDetail_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessDetail_v1Ptr, other.m_value.ProcessDetail_v1Ptr, allocateNum * sizeof(*other.m_value.ProcessDetail_v1Ptr));
+                }
                 break;
             }
             case INJECTION_PROCESSINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.processInfoPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.processInfoPtr)));
-                std::memcpy(m_value.processInfoPtr, other.m_value.processInfoPtr, allocateNum * sizeof(*other.m_value.processInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessInfoPtr = static_cast<nvmlProcessInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessInfoPtr)));
+                if (m_value.ProcessInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessInfoPtr, other.m_value.ProcessInfoPtr, allocateNum * sizeof(*other.m_value.ProcessInfoPtr));
+                }
                 break;
             }
             case INJECTION_PROCESSINFO_V1_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.processInfo_v1Ptr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.processInfo_v1Ptr)));
-                std::memcpy(m_value.processInfo_v1Ptr, other.m_value.processInfo_v1Ptr, allocateNum * sizeof(*other.m_value.processInfo_v1Ptr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessInfo_v1Ptr = static_cast<nvmlProcessInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessInfo_v1Ptr)));
+                if (m_value.ProcessInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessInfo_v1Ptr, other.m_value.ProcessInfo_v1Ptr, allocateNum * sizeof(*other.m_value.ProcessInfo_v1Ptr));
+                }
                 break;
             }
-            case INJECTION_PROCESSINFO_V2_PTR:
+            case INJECTION_PROCESSUTILIZATIONINFO_V1_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.processInfo_v2Ptr = reinterpret_cast<nvmlProcessInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.processInfo_v2Ptr)));
-                std::memcpy(m_value.processInfo_v2Ptr, other.m_value.processInfo_v2Ptr, allocateNum * sizeof(*other.m_value.processInfo_v2Ptr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessUtilizationInfo_v1Ptr = static_cast<nvmlProcessUtilizationInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessUtilizationInfo_v1Ptr)));
+                if (m_value.ProcessUtilizationInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessUtilizationInfo_v1Ptr, other.m_value.ProcessUtilizationInfo_v1Ptr, allocateNum * sizeof(*other.m_value.ProcessUtilizationInfo_v1Ptr));
+                }
                 break;
             }
             case INJECTION_PROCESSUTILIZATIONSAMPLE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.processUtilizationSamplePtr = reinterpret_cast<nvmlProcessUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.processUtilizationSamplePtr)));
-                std::memcpy(m_value.processUtilizationSamplePtr, other.m_value.processUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.processUtilizationSamplePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessUtilizationSamplePtr = static_cast<nvmlProcessUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessUtilizationSamplePtr)));
+                if (m_value.ProcessUtilizationSamplePtr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessUtilizationSamplePtr, other.m_value.ProcessUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.ProcessUtilizationSamplePtr));
+                }
+                break;
+            }
+            case INJECTION_PROCESSESUTILIZATIONINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ProcessesUtilizationInfoPtr = static_cast<nvmlProcessesUtilizationInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.ProcessesUtilizationInfoPtr)));
+                if (m_value.ProcessesUtilizationInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.ProcessesUtilizationInfoPtr, other.m_value.ProcessesUtilizationInfoPtr, allocateNum * sizeof(*other.m_value.ProcessesUtilizationInfoPtr));
+                }
                 break;
             }
             case INJECTION_PSTATES_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.pstatesPtr = reinterpret_cast<nvmlPstates_t *>(malloc(allocateNum * sizeof(*other.m_value.pstatesPtr)));
-                std::memcpy(m_value.pstatesPtr, other.m_value.pstatesPtr, allocateNum * sizeof(*other.m_value.pstatesPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PstatesPtr = static_cast<nvmlPstates_t *>(malloc(allocateNum * sizeof(*other.m_value.PstatesPtr)));
+                if (m_value.PstatesPtr != nullptr)
+                {
+                    std::memcpy(m_value.PstatesPtr, other.m_value.PstatesPtr, allocateNum * sizeof(*other.m_value.PstatesPtr));
+                }
+                break;
+            }
+            case INJECTION_RESTRICTEDAPI_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.RestrictedAPIPtr = static_cast<nvmlRestrictedAPI_t *>(malloc(allocateNum * sizeof(*other.m_value.RestrictedAPIPtr)));
+                if (m_value.RestrictedAPIPtr != nullptr)
+                {
+                    std::memcpy(m_value.RestrictedAPIPtr, other.m_value.RestrictedAPIPtr, allocateNum * sizeof(*other.m_value.RestrictedAPIPtr));
+                }
                 break;
             }
             case INJECTION_RETURN_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.nvmlReturnPtr = reinterpret_cast<nvmlReturn_t *>(malloc(allocateNum * sizeof(*other.m_value.nvmlReturnPtr)));
-                std::memcpy(m_value.nvmlReturnPtr, other.m_value.nvmlReturnPtr, allocateNum * sizeof(*other.m_value.nvmlReturnPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ReturnPtr = static_cast<nvmlReturn_t *>(malloc(allocateNum * sizeof(*other.m_value.ReturnPtr)));
+                if (m_value.ReturnPtr != nullptr)
+                {
+                    std::memcpy(m_value.ReturnPtr, other.m_value.ReturnPtr, allocateNum * sizeof(*other.m_value.ReturnPtr));
+                }
                 break;
             }
             case INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.rowRemapperHistogramValuesPtr = reinterpret_cast<nvmlRowRemapperHistogramValues_t *>(malloc(allocateNum * sizeof(*other.m_value.rowRemapperHistogramValuesPtr)));
-                std::memcpy(m_value.rowRemapperHistogramValuesPtr, other.m_value.rowRemapperHistogramValuesPtr, allocateNum * sizeof(*other.m_value.rowRemapperHistogramValuesPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.RowRemapperHistogramValuesPtr = static_cast<nvmlRowRemapperHistogramValues_t *>(malloc(allocateNum * sizeof(*other.m_value.RowRemapperHistogramValuesPtr)));
+                if (m_value.RowRemapperHistogramValuesPtr != nullptr)
+                {
+                    std::memcpy(m_value.RowRemapperHistogramValuesPtr, other.m_value.RowRemapperHistogramValuesPtr, allocateNum * sizeof(*other.m_value.RowRemapperHistogramValuesPtr));
+                }
                 break;
             }
             case INJECTION_SAMPLE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.samplePtr = reinterpret_cast<nvmlSample_t *>(malloc(allocateNum * sizeof(*other.m_value.samplePtr)));
-                std::memcpy(m_value.samplePtr, other.m_value.samplePtr, allocateNum * sizeof(*other.m_value.samplePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SamplePtr = static_cast<nvmlSample_t *>(malloc(allocateNum * sizeof(*other.m_value.SamplePtr)));
+                if (m_value.SamplePtr != nullptr)
+                {
+                    std::memcpy(m_value.SamplePtr, other.m_value.SamplePtr, allocateNum * sizeof(*other.m_value.SamplePtr));
+                }
+                break;
+            }
+            case INJECTION_SAMPLINGTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SamplingTypePtr = static_cast<nvmlSamplingType_t *>(malloc(allocateNum * sizeof(*other.m_value.SamplingTypePtr)));
+                if (m_value.SamplingTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.SamplingTypePtr, other.m_value.SamplingTypePtr, allocateNum * sizeof(*other.m_value.SamplingTypePtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemConfComputeSettingsPtr = static_cast<nvmlSystemConfComputeSettings_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemConfComputeSettingsPtr)));
+                if (m_value.SystemConfComputeSettingsPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemConfComputeSettingsPtr, other.m_value.SystemConfComputeSettingsPtr, allocateNum * sizeof(*other.m_value.SystemConfComputeSettingsPtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMDRIVERBRANCHINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemDriverBranchInfoPtr = static_cast<nvmlSystemDriverBranchInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemDriverBranchInfoPtr)));
+                if (m_value.SystemDriverBranchInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemDriverBranchInfoPtr, other.m_value.SystemDriverBranchInfoPtr, allocateNum * sizeof(*other.m_value.SystemDriverBranchInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_TEMPERATURESENSORS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.TemperatureSensorsPtr = static_cast<nvmlTemperatureSensors_t *>(malloc(allocateNum * sizeof(*other.m_value.TemperatureSensorsPtr)));
+                if (m_value.TemperatureSensorsPtr != nullptr)
+                {
+                    std::memcpy(m_value.TemperatureSensorsPtr, other.m_value.TemperatureSensorsPtr, allocateNum * sizeof(*other.m_value.TemperatureSensorsPtr));
+                }
+                break;
+            }
+            case INJECTION_TEMPERATURETHRESHOLDS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.TemperatureThresholdsPtr = static_cast<nvmlTemperatureThresholds_t *>(malloc(allocateNum * sizeof(*other.m_value.TemperatureThresholdsPtr)));
+                if (m_value.TemperatureThresholdsPtr != nullptr)
+                {
+                    std::memcpy(m_value.TemperatureThresholdsPtr, other.m_value.TemperatureThresholdsPtr, allocateNum * sizeof(*other.m_value.TemperatureThresholdsPtr));
+                }
+                break;
+            }
+            case INJECTION_TEMPERATURE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.TemperaturePtr = static_cast<nvmlTemperature_t *>(malloc(allocateNum * sizeof(*other.m_value.TemperaturePtr)));
+                if (m_value.TemperaturePtr != nullptr)
+                {
+                    std::memcpy(m_value.TemperaturePtr, other.m_value.TemperaturePtr, allocateNum * sizeof(*other.m_value.TemperaturePtr));
+                }
+                break;
+            }
+            case INJECTION_THERMALCONTROLLER_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ThermalControllerPtr = static_cast<nvmlThermalController_t *>(malloc(allocateNum * sizeof(*other.m_value.ThermalControllerPtr)));
+                if (m_value.ThermalControllerPtr != nullptr)
+                {
+                    std::memcpy(m_value.ThermalControllerPtr, other.m_value.ThermalControllerPtr, allocateNum * sizeof(*other.m_value.ThermalControllerPtr));
+                }
+                break;
+            }
+            case INJECTION_THERMALTARGET_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ThermalTargetPtr = static_cast<nvmlThermalTarget_t *>(malloc(allocateNum * sizeof(*other.m_value.ThermalTargetPtr)));
+                if (m_value.ThermalTargetPtr != nullptr)
+                {
+                    std::memcpy(m_value.ThermalTargetPtr, other.m_value.ThermalTargetPtr, allocateNum * sizeof(*other.m_value.ThermalTargetPtr));
+                }
+                break;
+            }
+            case INJECTION_UNITFANINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UnitFanInfoPtr = static_cast<nvmlUnitFanInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.UnitFanInfoPtr)));
+                if (m_value.UnitFanInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.UnitFanInfoPtr, other.m_value.UnitFanInfoPtr, allocateNum * sizeof(*other.m_value.UnitFanInfoPtr));
+                }
                 break;
             }
             case INJECTION_UNITFANSPEEDS_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.unitFanSpeedsPtr = reinterpret_cast<nvmlUnitFanSpeeds_t *>(malloc(allocateNum * sizeof(*other.m_value.unitFanSpeedsPtr)));
-                std::memcpy(m_value.unitFanSpeedsPtr, other.m_value.unitFanSpeedsPtr, allocateNum * sizeof(*other.m_value.unitFanSpeedsPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UnitFanSpeedsPtr = static_cast<nvmlUnitFanSpeeds_t *>(malloc(allocateNum * sizeof(*other.m_value.UnitFanSpeedsPtr)));
+                if (m_value.UnitFanSpeedsPtr != nullptr)
+                {
+                    std::memcpy(m_value.UnitFanSpeedsPtr, other.m_value.UnitFanSpeedsPtr, allocateNum * sizeof(*other.m_value.UnitFanSpeedsPtr));
+                }
                 break;
             }
             case INJECTION_UNITINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.unitInfoPtr = reinterpret_cast<nvmlUnitInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.unitInfoPtr)));
-                std::memcpy(m_value.unitInfoPtr, other.m_value.unitInfoPtr, allocateNum * sizeof(*other.m_value.unitInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UnitInfoPtr = static_cast<nvmlUnitInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.UnitInfoPtr)));
+                if (m_value.UnitInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.UnitInfoPtr, other.m_value.UnitInfoPtr, allocateNum * sizeof(*other.m_value.UnitInfoPtr));
+                }
                 break;
             }
             case INJECTION_UNIT_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.unitPtr = reinterpret_cast<nvmlUnit_t *>(malloc(allocateNum * sizeof(*other.m_value.unitPtr)));
-                std::memcpy(m_value.unitPtr, other.m_value.unitPtr, allocateNum * sizeof(*other.m_value.unitPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UnitPtr = static_cast<nvmlUnit_t *>(malloc(allocateNum * sizeof(*other.m_value.UnitPtr)));
+                if (m_value.UnitPtr != nullptr)
+                {
+                    std::memcpy(m_value.UnitPtr, other.m_value.UnitPtr, allocateNum * sizeof(*other.m_value.UnitPtr));
+                }
                 break;
             }
             case INJECTION_UTILIZATION_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.utilizationPtr = reinterpret_cast<nvmlUtilization_t *>(malloc(allocateNum * sizeof(*other.m_value.utilizationPtr)));
-                std::memcpy(m_value.utilizationPtr, other.m_value.utilizationPtr, allocateNum * sizeof(*other.m_value.utilizationPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UtilizationPtr = static_cast<nvmlUtilization_t *>(malloc(allocateNum * sizeof(*other.m_value.UtilizationPtr)));
+                if (m_value.UtilizationPtr != nullptr)
+                {
+                    std::memcpy(m_value.UtilizationPtr, other.m_value.UtilizationPtr, allocateNum * sizeof(*other.m_value.UtilizationPtr));
+                }
                 break;
             }
             case INJECTION_VALUETYPE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.valueTypePtr = reinterpret_cast<nvmlValueType_t *>(malloc(allocateNum * sizeof(*other.m_value.valueTypePtr)));
-                std::memcpy(m_value.valueTypePtr, other.m_value.valueTypePtr, allocateNum * sizeof(*other.m_value.valueTypePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ValueTypePtr = static_cast<nvmlValueType_t *>(malloc(allocateNum * sizeof(*other.m_value.ValueTypePtr)));
+                if (m_value.ValueTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.ValueTypePtr, other.m_value.ValueTypePtr, allocateNum * sizeof(*other.m_value.ValueTypePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUCAPABILITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuCapabilityPtr = static_cast<nvmlVgpuCapability_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuCapabilityPtr)));
+                if (m_value.VgpuCapabilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuCapabilityPtr, other.m_value.VgpuCapabilityPtr, allocateNum * sizeof(*other.m_value.VgpuCapabilityPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUDRIVERCAPABILITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuDriverCapabilityPtr = static_cast<nvmlVgpuDriverCapability_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuDriverCapabilityPtr)));
+                if (m_value.VgpuDriverCapabilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuDriverCapabilityPtr, other.m_value.VgpuDriverCapabilityPtr, allocateNum * sizeof(*other.m_value.VgpuDriverCapabilityPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUGUESTINFOSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuGuestInfoStatePtr = static_cast<nvmlVgpuGuestInfoState_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuGuestInfoStatePtr)));
+                if (m_value.VgpuGuestInfoStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuGuestInfoStatePtr, other.m_value.VgpuGuestInfoStatePtr, allocateNum * sizeof(*other.m_value.VgpuGuestInfoStatePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUHETEROGENEOUSMODE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuHeterogeneousModePtr = static_cast<nvmlVgpuHeterogeneousMode_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuHeterogeneousModePtr)));
+                if (m_value.VgpuHeterogeneousModePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuHeterogeneousModePtr, other.m_value.VgpuHeterogeneousModePtr, allocateNum * sizeof(*other.m_value.VgpuHeterogeneousModePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuInstanceUtilizationInfo_v1Ptr = static_cast<nvmlVgpuInstanceUtilizationInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuInstanceUtilizationInfo_v1Ptr)));
+                if (m_value.VgpuInstanceUtilizationInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuInstanceUtilizationInfo_v1Ptr, other.m_value.VgpuInstanceUtilizationInfo_v1Ptr, allocateNum * sizeof(*other.m_value.VgpuInstanceUtilizationInfo_v1Ptr));
+                }
                 break;
             }
             case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuInstanceUtilizationSamplePtr = reinterpret_cast<nvmlVgpuInstanceUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuInstanceUtilizationSamplePtr)));
-                std::memcpy(m_value.vgpuInstanceUtilizationSamplePtr, other.m_value.vgpuInstanceUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.vgpuInstanceUtilizationSamplePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuInstanceUtilizationSamplePtr = static_cast<nvmlVgpuInstanceUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuInstanceUtilizationSamplePtr)));
+                if (m_value.VgpuInstanceUtilizationSamplePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuInstanceUtilizationSamplePtr, other.m_value.VgpuInstanceUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.VgpuInstanceUtilizationSamplePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUINSTANCE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuInstancePtr = static_cast<nvmlVgpuInstance_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuInstancePtr)));
+                if (m_value.VgpuInstancePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuInstancePtr, other.m_value.VgpuInstancePtr, allocateNum * sizeof(*other.m_value.VgpuInstancePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuInstancesUtilizationInfoPtr = static_cast<nvmlVgpuInstancesUtilizationInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuInstancesUtilizationInfoPtr)));
+                if (m_value.VgpuInstancesUtilizationInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuInstancesUtilizationInfoPtr, other.m_value.VgpuInstancesUtilizationInfoPtr, allocateNum * sizeof(*other.m_value.VgpuInstancesUtilizationInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPULICENSEEXPIRY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuLicenseExpiryPtr = static_cast<nvmlVgpuLicenseExpiry_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuLicenseExpiryPtr)));
+                if (m_value.VgpuLicenseExpiryPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuLicenseExpiryPtr, other.m_value.VgpuLicenseExpiryPtr, allocateNum * sizeof(*other.m_value.VgpuLicenseExpiryPtr));
+                }
                 break;
             }
             case INJECTION_VGPULICENSEINFO_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuLicenseInfoPtr = reinterpret_cast<nvmlVgpuLicenseInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuLicenseInfoPtr)));
-                std::memcpy(m_value.vgpuLicenseInfoPtr, other.m_value.vgpuLicenseInfoPtr, allocateNum * sizeof(*other.m_value.vgpuLicenseInfoPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuLicenseInfoPtr = static_cast<nvmlVgpuLicenseInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuLicenseInfoPtr)));
+                if (m_value.VgpuLicenseInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuLicenseInfoPtr, other.m_value.VgpuLicenseInfoPtr, allocateNum * sizeof(*other.m_value.VgpuLicenseInfoPtr));
+                }
                 break;
             }
             case INJECTION_VGPUMETADATA_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuMetadataPtr = reinterpret_cast<nvmlVgpuMetadata_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuMetadataPtr)));
-                std::memcpy(m_value.vgpuMetadataPtr, other.m_value.vgpuMetadataPtr, allocateNum * sizeof(*other.m_value.vgpuMetadataPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuMetadataPtr = static_cast<nvmlVgpuMetadata_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuMetadataPtr)));
+                if (m_value.VgpuMetadataPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuMetadataPtr, other.m_value.VgpuMetadataPtr, allocateNum * sizeof(*other.m_value.VgpuMetadataPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPgpuCompatibilityLimitCodePtr = static_cast<nvmlVgpuPgpuCompatibilityLimitCode_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPgpuCompatibilityLimitCodePtr)));
+                if (m_value.VgpuPgpuCompatibilityLimitCodePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPgpuCompatibilityLimitCodePtr, other.m_value.VgpuPgpuCompatibilityLimitCodePtr, allocateNum * sizeof(*other.m_value.VgpuPgpuCompatibilityLimitCodePtr));
+                }
                 break;
             }
             case INJECTION_VGPUPGPUCOMPATIBILITY_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuPgpuCompatibilityPtr = reinterpret_cast<nvmlVgpuPgpuCompatibility_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuPgpuCompatibilityPtr)));
-                std::memcpy(m_value.vgpuPgpuCompatibilityPtr, other.m_value.vgpuPgpuCompatibilityPtr, allocateNum * sizeof(*other.m_value.vgpuPgpuCompatibilityPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPgpuCompatibilityPtr = static_cast<nvmlVgpuPgpuCompatibility_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPgpuCompatibilityPtr)));
+                if (m_value.VgpuPgpuCompatibilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPgpuCompatibilityPtr, other.m_value.VgpuPgpuCompatibilityPtr, allocateNum * sizeof(*other.m_value.VgpuPgpuCompatibilityPtr));
+                }
                 break;
             }
             case INJECTION_VGPUPGPUMETADATA_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuPgpuMetadataPtr = reinterpret_cast<nvmlVgpuPgpuMetadata_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuPgpuMetadataPtr)));
-                std::memcpy(m_value.vgpuPgpuMetadataPtr, other.m_value.vgpuPgpuMetadataPtr, allocateNum * sizeof(*other.m_value.vgpuPgpuMetadataPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPgpuMetadataPtr = static_cast<nvmlVgpuPgpuMetadata_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPgpuMetadataPtr)));
+                if (m_value.VgpuPgpuMetadataPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPgpuMetadataPtr, other.m_value.VgpuPgpuMetadataPtr, allocateNum * sizeof(*other.m_value.VgpuPgpuMetadataPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPLACEMENTID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPlacementIdPtr = static_cast<nvmlVgpuPlacementId_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPlacementIdPtr)));
+                if (m_value.VgpuPlacementIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPlacementIdPtr, other.m_value.VgpuPlacementIdPtr, allocateNum * sizeof(*other.m_value.VgpuPlacementIdPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPLACEMENTLIST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPlacementListPtr = static_cast<nvmlVgpuPlacementList_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPlacementListPtr)));
+                if (m_value.VgpuPlacementListPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPlacementListPtr, other.m_value.VgpuPlacementListPtr, allocateNum * sizeof(*other.m_value.VgpuPlacementListPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPLACEMENTLIST_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuPlacementList_v1Ptr = static_cast<nvmlVgpuPlacementList_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuPlacementList_v1Ptr)));
+                if (m_value.VgpuPlacementList_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuPlacementList_v1Ptr, other.m_value.VgpuPlacementList_v1Ptr, allocateNum * sizeof(*other.m_value.VgpuPlacementList_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuProcessUtilizationInfo_v1Ptr = static_cast<nvmlVgpuProcessUtilizationInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuProcessUtilizationInfo_v1Ptr)));
+                if (m_value.VgpuProcessUtilizationInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuProcessUtilizationInfo_v1Ptr, other.m_value.VgpuProcessUtilizationInfo_v1Ptr, allocateNum * sizeof(*other.m_value.VgpuProcessUtilizationInfo_v1Ptr));
+                }
                 break;
             }
             case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuProcessUtilizationSamplePtr = reinterpret_cast<nvmlVgpuProcessUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuProcessUtilizationSamplePtr)));
-                std::memcpy(m_value.vgpuProcessUtilizationSamplePtr, other.m_value.vgpuProcessUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.vgpuProcessUtilizationSamplePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuProcessUtilizationSamplePtr = static_cast<nvmlVgpuProcessUtilizationSample_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuProcessUtilizationSamplePtr)));
+                if (m_value.VgpuProcessUtilizationSamplePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuProcessUtilizationSamplePtr, other.m_value.VgpuProcessUtilizationSamplePtr, allocateNum * sizeof(*other.m_value.VgpuProcessUtilizationSamplePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuProcessesUtilizationInfoPtr = static_cast<nvmlVgpuProcessesUtilizationInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuProcessesUtilizationInfoPtr)));
+                if (m_value.VgpuProcessesUtilizationInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuProcessesUtilizationInfoPtr, other.m_value.VgpuProcessesUtilizationInfoPtr, allocateNum * sizeof(*other.m_value.VgpuProcessesUtilizationInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUSCHEDULERCAPABILITIES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuSchedulerCapabilitiesPtr = static_cast<nvmlVgpuSchedulerCapabilities_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuSchedulerCapabilitiesPtr)));
+                if (m_value.VgpuSchedulerCapabilitiesPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuSchedulerCapabilitiesPtr, other.m_value.VgpuSchedulerCapabilitiesPtr, allocateNum * sizeof(*other.m_value.VgpuSchedulerCapabilitiesPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUSCHEDULERGETSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuSchedulerGetStatePtr = static_cast<nvmlVgpuSchedulerGetState_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuSchedulerGetStatePtr)));
+                if (m_value.VgpuSchedulerGetStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuSchedulerGetStatePtr, other.m_value.VgpuSchedulerGetStatePtr, allocateNum * sizeof(*other.m_value.VgpuSchedulerGetStatePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUSCHEDULERLOGENTRY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuSchedulerLogEntryPtr = static_cast<nvmlVgpuSchedulerLogEntry_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuSchedulerLogEntryPtr)));
+                if (m_value.VgpuSchedulerLogEntryPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuSchedulerLogEntryPtr, other.m_value.VgpuSchedulerLogEntryPtr, allocateNum * sizeof(*other.m_value.VgpuSchedulerLogEntryPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUSCHEDULERLOG_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuSchedulerLogPtr = static_cast<nvmlVgpuSchedulerLog_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuSchedulerLogPtr)));
+                if (m_value.VgpuSchedulerLogPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuSchedulerLogPtr, other.m_value.VgpuSchedulerLogPtr, allocateNum * sizeof(*other.m_value.VgpuSchedulerLogPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUSCHEDULERSETSTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuSchedulerSetStatePtr = static_cast<nvmlVgpuSchedulerSetState_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuSchedulerSetStatePtr)));
+                if (m_value.VgpuSchedulerSetStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuSchedulerSetStatePtr, other.m_value.VgpuSchedulerSetStatePtr, allocateNum * sizeof(*other.m_value.VgpuSchedulerSetStatePtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUTYPEBAR1INFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuTypeBar1InfoPtr = static_cast<nvmlVgpuTypeBar1Info_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuTypeBar1InfoPtr)));
+                if (m_value.VgpuTypeBar1InfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuTypeBar1InfoPtr, other.m_value.VgpuTypeBar1InfoPtr, allocateNum * sizeof(*other.m_value.VgpuTypeBar1InfoPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUTYPEID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuTypeIdPtr = static_cast<nvmlVgpuTypeId_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuTypeIdPtr)));
+                if (m_value.VgpuTypeIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuTypeIdPtr, other.m_value.VgpuTypeIdPtr, allocateNum * sizeof(*other.m_value.VgpuTypeIdPtr));
+                }
                 break;
             }
             case INJECTION_VGPUVERSION_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuVersionPtr = reinterpret_cast<nvmlVgpuVersion_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuVersionPtr)));
-                std::memcpy(m_value.vgpuVersionPtr, other.m_value.vgpuVersionPtr, allocateNum * sizeof(*other.m_value.vgpuVersionPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuVersionPtr = static_cast<nvmlVgpuVersion_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuVersionPtr)));
+                if (m_value.VgpuVersionPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuVersionPtr, other.m_value.VgpuVersionPtr, allocateNum * sizeof(*other.m_value.VgpuVersionPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPUVMCOMPATIBILITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuVmCompatibilityPtr = static_cast<nvmlVgpuVmCompatibility_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuVmCompatibilityPtr)));
+                if (m_value.VgpuVmCompatibilityPtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuVmCompatibilityPtr, other.m_value.VgpuVmCompatibilityPtr, allocateNum * sizeof(*other.m_value.VgpuVmCompatibilityPtr));
+                }
                 break;
             }
             case INJECTION_VGPUVMIDTYPE_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.vgpuVmIdTypePtr = reinterpret_cast<nvmlVgpuVmIdType_t *>(malloc(allocateNum * sizeof(*other.m_value.vgpuVmIdTypePtr)));
-                std::memcpy(m_value.vgpuVmIdTypePtr, other.m_value.vgpuVmIdTypePtr, allocateNum * sizeof(*other.m_value.vgpuVmIdTypePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuVmIdTypePtr = static_cast<nvmlVgpuVmIdType_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuVmIdTypePtr)));
+                if (m_value.VgpuVmIdTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuVmIdTypePtr, other.m_value.VgpuVmIdTypePtr, allocateNum * sizeof(*other.m_value.VgpuVmIdTypePtr));
+                }
                 break;
             }
             case INJECTION_VIOLATIONTIME_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.violationTimePtr = reinterpret_cast<nvmlViolationTime_t *>(malloc(allocateNum * sizeof(*other.m_value.violationTimePtr)));
-                std::memcpy(m_value.violationTimePtr, other.m_value.violationTimePtr, allocateNum * sizeof(*other.m_value.violationTimePtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ViolationTimePtr = static_cast<nvmlViolationTime_t *>(malloc(allocateNum * sizeof(*other.m_value.ViolationTimePtr)));
+                if (m_value.ViolationTimePtr != nullptr)
+                {
+                    std::memcpy(m_value.ViolationTimePtr, other.m_value.ViolationTimePtr, allocateNum * sizeof(*other.m_value.ViolationTimePtr));
+                }
+                break;
+            }
+            case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.WorkloadPowerProfileCurrentProfilesPtr = static_cast<nvmlWorkloadPowerProfileCurrentProfiles_t *>(malloc(allocateNum * sizeof(*other.m_value.WorkloadPowerProfileCurrentProfilesPtr)));
+                if (m_value.WorkloadPowerProfileCurrentProfilesPtr != nullptr)
+                {
+                    std::memcpy(m_value.WorkloadPowerProfileCurrentProfilesPtr, other.m_value.WorkloadPowerProfileCurrentProfilesPtr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileCurrentProfilesPtr));
+                }
+                break;
+            }
+            case INJECTION_WORKLOADPOWERPROFILEINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.WorkloadPowerProfileInfoPtr = static_cast<nvmlWorkloadPowerProfileInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.WorkloadPowerProfileInfoPtr)));
+                if (m_value.WorkloadPowerProfileInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.WorkloadPowerProfileInfoPtr, other.m_value.WorkloadPowerProfileInfoPtr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.WorkloadPowerProfileProfilesInfoPtr = static_cast<nvmlWorkloadPowerProfileProfilesInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.WorkloadPowerProfileProfilesInfoPtr)));
+                if (m_value.WorkloadPowerProfileProfilesInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.WorkloadPowerProfileProfilesInfoPtr, other.m_value.WorkloadPowerProfileProfilesInfoPtr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileProfilesInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.WorkloadPowerProfileRequestedProfilesPtr = static_cast<nvmlWorkloadPowerProfileRequestedProfiles_t *>(malloc(allocateNum * sizeof(*other.m_value.WorkloadPowerProfileRequestedProfilesPtr)));
+                if (m_value.WorkloadPowerProfileRequestedProfilesPtr != nullptr)
+                {
+                    std::memcpy(m_value.WorkloadPowerProfileRequestedProfilesPtr, other.m_value.WorkloadPowerProfileRequestedProfilesPtr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileRequestedProfilesPtr));
+                }
+                break;
+            }
+            case INJECTION_SHORT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ShortPtr = static_cast<short *>(malloc(allocateNum * sizeof(*other.m_value.ShortPtr)));
+                if (m_value.ShortPtr != nullptr)
+                {
+                    std::memcpy(m_value.ShortPtr, other.m_value.ShortPtr, allocateNum * sizeof(*other.m_value.ShortPtr));
+                }
+                break;
+            }
+            case INJECTION_UCHAR_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UCharPtr = static_cast<unsigned char *>(malloc(allocateNum * sizeof(*other.m_value.UCharPtr)));
+                if (m_value.UCharPtr != nullptr)
+                {
+                    std::memcpy(m_value.UCharPtr, other.m_value.UCharPtr, allocateNum * sizeof(*other.m_value.UCharPtr));
+                }
                 break;
             }
             case INJECTION_UINT_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.uiPtr = reinterpret_cast<unsigned int *>(malloc(allocateNum * sizeof(*other.m_value.uiPtr)));
-                std::memcpy(m_value.uiPtr, other.m_value.uiPtr, allocateNum * sizeof(*other.m_value.uiPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UIntPtr = static_cast<unsigned int *>(malloc(allocateNum * sizeof(*other.m_value.UIntPtr)));
+                if (m_value.UIntPtr != nullptr)
+                {
+                    std::memcpy(m_value.UIntPtr, other.m_value.UIntPtr, allocateNum * sizeof(*other.m_value.UIntPtr));
+                }
                 break;
             }
             case INJECTION_ULONG_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.ulPtr = reinterpret_cast<unsigned long *>(malloc(allocateNum * sizeof(*other.m_value.ulPtr)));
-                std::memcpy(m_value.ulPtr, other.m_value.ulPtr, allocateNum * sizeof(*other.m_value.ulPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ULongPtr = static_cast<unsigned long *>(malloc(allocateNum * sizeof(*other.m_value.ULongPtr)));
+                if (m_value.ULongPtr != nullptr)
+                {
+                    std::memcpy(m_value.ULongPtr, other.m_value.ULongPtr, allocateNum * sizeof(*other.m_value.ULongPtr));
+                }
                 break;
             }
             case INJECTION_ULONG_LONG_PTR:
             {
-                unsigned allocateNum = m_isArray ? m_arrLen : 1;
-                m_value.ullPtr = reinterpret_cast<unsigned long long *>(malloc(allocateNum * sizeof(*other.m_value.ullPtr)));
-                std::memcpy(m_value.ullPtr, other.m_value.ullPtr, allocateNum * sizeof(*other.m_value.ullPtr));
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.ULongLongPtr = static_cast<unsigned long long *>(malloc(allocateNum * sizeof(*other.m_value.ULongLongPtr)));
+                if (m_value.ULongLongPtr != nullptr)
+                {
+                    std::memcpy(m_value.ULongLongPtr, other.m_value.ULongLongPtr, allocateNum * sizeof(*other.m_value.ULongLongPtr));
+                }
+                break;
+            }
+            case INJECTION_USHORT_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UShortPtr = static_cast<unsigned short *>(malloc(allocateNum * sizeof(*other.m_value.UShortPtr)));
+                if (m_value.UShortPtr != nullptr)
+                {
+                    std::memcpy(m_value.UShortPtr, other.m_value.UShortPtr, allocateNum * sizeof(*other.m_value.UShortPtr));
+                }
                 break;
             }
             default:
@@ -628,2556 +1977,5427 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(char c)
-        : m_type(INJECTION_CHAR)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.c = c;
-    }
-    const char &AsChar() const
-    {
-        return m_value.c;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(char *str, bool inHeap = false)
+    InjectionArgument(char *Str, bool inHeap = false)
         : m_type(INJECTION_CHAR_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.str = str;
+        m_value.Str = Str;
     }
-    char *AsStr() const
+    InjectionArgument(char Char)
+        : m_type(INJECTION_CHAR)
     {
-        return m_value.str;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Char = Char;
     }
-
-    InjectionArgument(char *str, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(char *Str, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_CHAR_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.str = str;
+        m_value.Str = Str;
+    }
+
+    char *AsStr() const
+    {
+        return m_value.Str;
+    }
+
+    char const &AsChar() const
+    {
+        return m_value.Char;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(const char *const_str, bool inHeap = false)
-        : m_type(INJECTION_CONST_CHAR_PTR), m_inHeap(inHeap)
+    InjectionArgument(double *DoublePtr, bool inHeap = false)
+        : m_type(INJECTION_DOUBLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.const_str = const_str;
+        m_value.DoublePtr = DoublePtr;
     }
-    const char *AsConstStr() const
+    InjectionArgument(double Double)
+        : m_type(INJECTION_DOUBLE)
     {
-        return m_value.const_str;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Double = Double;
+    }
+    InjectionArgument(double *DoublePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DOUBLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DoublePtr = DoublePtr;
     }
 
-    InjectionArgument(const char *const_str, unsigned int arrLen, bool inHeap = false)
-        : m_type(INJECTION_CONST_CHAR_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    double *AsDoublePtr() const
     {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.const_str = const_str;
+        return m_value.DoublePtr;
     }
 
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(const nvmlGpuInstancePlacement_t *cnPtr, bool inHeap = false)
-        : m_type(INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR), m_inHeap(inHeap)
+    double const &AsDouble() const
     {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.cnPtr = cnPtr;
-    }
-    const nvmlGpuInstancePlacement_t *AsConstNvmlGpuInstancePlacement_tPtr() const
-    {
-        return m_value.cnPtr;
-    }
-
-    InjectionArgument(const nvmlGpuInstancePlacement_t *cnPtr, unsigned int arrLen, bool inHeap = false)
-        : m_type(INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.cnPtr = cnPtr;
+        return m_value.Double;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(int i)
-        : m_type(INJECTION_INT)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.i = i;
-    }
-    const int &AsInt() const
-    {
-        return m_value.i;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(int *iPtr, bool inHeap = false)
+    InjectionArgument(int *IntPtr, bool inHeap = false)
         : m_type(INJECTION_INT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.iPtr = iPtr;
+        m_value.IntPtr = IntPtr;
     }
-    int *AsIntPtr() const
+    InjectionArgument(int Int)
+        : m_type(INJECTION_INT)
     {
-        return m_value.iPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Int = Int;
     }
-
-    InjectionArgument(int *iPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(int *IntPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_INT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.iPtr = iPtr;
+        m_value.IntPtr = IntPtr;
+    }
+
+    int *AsIntPtr() const
+    {
+        return m_value.IntPtr;
+    }
+
+    int const &AsInt() const
+    {
+        return m_value.Int;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlAccountingStats_t accountingStats)
-        : m_type(INJECTION_ACCOUNTINGSTATS)
+    InjectionArgument(long *LongPtr, bool inHeap = false)
+        : m_type(INJECTION_LONG_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.accountingStats = accountingStats;
+        m_value.LongPtr = LongPtr;
     }
-    const nvmlAccountingStats_t &AsAccountingStats() const
+    InjectionArgument(long Long)
+        : m_type(INJECTION_LONG)
     {
-        return m_value.accountingStats;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Long = Long;
+    }
+    InjectionArgument(long *LongPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_LONG_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LongPtr = LongPtr;
+    }
+
+    long *AsLongPtr() const
+    {
+        return m_value.LongPtr;
+    }
+
+    long const &AsLong() const
+    {
+        return m_value.Long;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlAccountingStats_t *accountingStatsPtr, bool inHeap = false)
+    InjectionArgument(long long *LongLongPtr, bool inHeap = false)
+        : m_type(INJECTION_LONG_LONG_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LongLongPtr = LongLongPtr;
+    }
+    InjectionArgument(long long LongLong)
+        : m_type(INJECTION_LONG_LONG)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LongLong = LongLong;
+    }
+    InjectionArgument(long long *LongLongPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_LONG_LONG_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LongLongPtr = LongLongPtr;
+    }
+
+    long long *AsLongLongPtr() const
+    {
+        return m_value.LongLongPtr;
+    }
+
+    long long const &AsLongLong() const
+    {
+        return m_value.LongLong;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlAccountingStats_t *AccountingStatsPtr, bool inHeap = false)
         : m_type(INJECTION_ACCOUNTINGSTATS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.accountingStatsPtr = accountingStatsPtr;
+        m_value.AccountingStatsPtr = AccountingStatsPtr;
     }
-    nvmlAccountingStats_t *AsAccountingStatsPtr() const
+    InjectionArgument(nvmlAccountingStats_t AccountingStats)
+        : m_type(INJECTION_ACCOUNTINGSTATS)
     {
-        return m_value.accountingStatsPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.AccountingStats = AccountingStats;
     }
-
-    InjectionArgument(nvmlAccountingStats_t *accountingStatsPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlAccountingStats_t *AccountingStatsPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ACCOUNTINGSTATS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.accountingStatsPtr = accountingStatsPtr;
+        m_value.AccountingStatsPtr = AccountingStatsPtr;
+    }
+
+    nvmlAccountingStats_t *AsAccountingStatsPtr() const
+    {
+        return m_value.AccountingStatsPtr;
+    }
+
+    nvmlAccountingStats_t const &AsAccountingStats() const
+    {
+        return m_value.AccountingStats;
+    }
+
+    nvmlAffinityScope_t *AsAffinityScopePtr() const
+    {
+        return static_cast<nvmlAffinityScope_t *>(m_value.UIntPtr);
+    }
+
+    nvmlAffinityScope_t AsAffinityScope() const
+    {
+        return static_cast<nvmlAffinityScope_t>(m_value.UInt);
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBAR1Memory_t bar1Memory)
-        : m_type(INJECTION_BAR1MEMORY)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.bar1Memory = bar1Memory;
-    }
-    const nvmlBAR1Memory_t &AsBAR1Memory() const
-    {
-        return m_value.bar1Memory;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBAR1Memory_t *bar1MemoryPtr, bool inHeap = false)
+    InjectionArgument(nvmlBAR1Memory_t *BAR1MemoryPtr, bool inHeap = false)
         : m_type(INJECTION_BAR1MEMORY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.bar1MemoryPtr = bar1MemoryPtr;
+        m_value.BAR1MemoryPtr = BAR1MemoryPtr;
     }
-    nvmlBAR1Memory_t *AsBAR1MemoryPtr() const
+    InjectionArgument(nvmlBAR1Memory_t BAR1Memory)
+        : m_type(INJECTION_BAR1MEMORY)
     {
-        return m_value.bar1MemoryPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BAR1Memory = BAR1Memory;
     }
-
-    InjectionArgument(nvmlBAR1Memory_t *bar1MemoryPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlBAR1Memory_t *BAR1MemoryPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_BAR1MEMORY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.bar1MemoryPtr = bar1MemoryPtr;
+        m_value.BAR1MemoryPtr = BAR1MemoryPtr;
+    }
+
+    nvmlBAR1Memory_t *AsBAR1MemoryPtr() const
+    {
+        return m_value.BAR1MemoryPtr;
+    }
+
+    nvmlBAR1Memory_t const &AsBAR1Memory() const
+    {
+        return m_value.BAR1Memory;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBrandType_t brandType)
-        : m_type(INJECTION_BRANDTYPE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.brandType = brandType;
-    }
-    const nvmlBrandType_t &AsBrandType() const
-    {
-        return m_value.brandType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBrandType_t *brandTypePtr, bool inHeap = false)
+    InjectionArgument(nvmlBrandType_t *BrandTypePtr, bool inHeap = false)
         : m_type(INJECTION_BRANDTYPE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.brandTypePtr = brandTypePtr;
+        m_value.BrandTypePtr = BrandTypePtr;
     }
-    nvmlBrandType_t *AsBrandTypePtr() const
+    InjectionArgument(nvmlBrandType_t BrandType)
+        : m_type(INJECTION_BRANDTYPE)
     {
-        return m_value.brandTypePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BrandType = BrandType;
     }
-
-    InjectionArgument(nvmlBrandType_t *brandTypePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlBrandType_t *BrandTypePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_BRANDTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.brandTypePtr = brandTypePtr;
+        m_value.BrandTypePtr = BrandTypePtr;
+    }
+
+    nvmlBrandType_t *AsBrandTypePtr() const
+    {
+        return m_value.BrandTypePtr;
+    }
+
+    nvmlBrandType_t const &AsBrandType() const
+    {
+        return m_value.BrandType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBridgeChipHierarchy_t bridgeChipHierarchy)
-        : m_type(INJECTION_BRIDGECHIPHIERARCHY)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.bridgeChipHierarchy = bridgeChipHierarchy;
-    }
-    const nvmlBridgeChipHierarchy_t &AsBridgeChipHierarchy() const
-    {
-        return m_value.bridgeChipHierarchy;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlBridgeChipHierarchy_t *bridgeChipHierarchyPtr, bool inHeap = false)
+    InjectionArgument(nvmlBridgeChipHierarchy_t *BridgeChipHierarchyPtr, bool inHeap = false)
         : m_type(INJECTION_BRIDGECHIPHIERARCHY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.bridgeChipHierarchyPtr = bridgeChipHierarchyPtr;
+        m_value.BridgeChipHierarchyPtr = BridgeChipHierarchyPtr;
     }
-    nvmlBridgeChipHierarchy_t *AsBridgeChipHierarchyPtr() const
+    InjectionArgument(nvmlBridgeChipHierarchy_t BridgeChipHierarchy)
+        : m_type(INJECTION_BRIDGECHIPHIERARCHY)
     {
-        return m_value.bridgeChipHierarchyPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipHierarchy = BridgeChipHierarchy;
     }
-
-    InjectionArgument(nvmlBridgeChipHierarchy_t *bridgeChipHierarchyPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlBridgeChipHierarchy_t *BridgeChipHierarchyPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_BRIDGECHIPHIERARCHY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.bridgeChipHierarchyPtr = bridgeChipHierarchyPtr;
+        m_value.BridgeChipHierarchyPtr = BridgeChipHierarchyPtr;
+    }
+
+    nvmlBridgeChipHierarchy_t *AsBridgeChipHierarchyPtr() const
+    {
+        return m_value.BridgeChipHierarchyPtr;
+    }
+
+    nvmlBridgeChipHierarchy_t const &AsBridgeChipHierarchy() const
+    {
+        return m_value.BridgeChipHierarchy;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlClockId_t clockId)
+    InjectionArgument(nvmlBridgeChipInfo_t *BridgeChipInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_BRIDGECHIPINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipInfoPtr = BridgeChipInfoPtr;
+    }
+    InjectionArgument(nvmlBridgeChipInfo_t BridgeChipInfo)
+        : m_type(INJECTION_BRIDGECHIPINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipInfo = BridgeChipInfo;
+    }
+    InjectionArgument(nvmlBridgeChipInfo_t *BridgeChipInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_BRIDGECHIPINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipInfoPtr = BridgeChipInfoPtr;
+    }
+
+    nvmlBridgeChipInfo_t *AsBridgeChipInfoPtr() const
+    {
+        return m_value.BridgeChipInfoPtr;
+    }
+
+    nvmlBridgeChipInfo_t const &AsBridgeChipInfo() const
+    {
+        return m_value.BridgeChipInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlBridgeChipType_t *BridgeChipTypePtr, bool inHeap = false)
+        : m_type(INJECTION_BRIDGECHIPTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipTypePtr = BridgeChipTypePtr;
+    }
+    InjectionArgument(nvmlBridgeChipType_t BridgeChipType)
+        : m_type(INJECTION_BRIDGECHIPTYPE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipType = BridgeChipType;
+    }
+    InjectionArgument(nvmlBridgeChipType_t *BridgeChipTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_BRIDGECHIPTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.BridgeChipTypePtr = BridgeChipTypePtr;
+    }
+
+    nvmlBridgeChipType_t *AsBridgeChipTypePtr() const
+    {
+        return m_value.BridgeChipTypePtr;
+    }
+
+    nvmlBridgeChipType_t const &AsBridgeChipType() const
+    {
+        return m_value.BridgeChipType;
+    }
+
+    nvmlBusType_t *AsBusTypePtr() const
+    {
+        return static_cast<nvmlBusType_t *>(m_value.UIntPtr);
+    }
+
+    nvmlBusType_t AsBusType() const
+    {
+        return static_cast<nvmlBusType_t>(m_value.UInt);
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlC2cModeInfo_v1_t *C2cModeInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_C2CMODEINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.C2cModeInfo_v1Ptr = C2cModeInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlC2cModeInfo_v1_t C2cModeInfo_v1)
+        : m_type(INJECTION_C2CMODEINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.C2cModeInfo_v1 = C2cModeInfo_v1;
+    }
+    InjectionArgument(nvmlC2cModeInfo_v1_t *C2cModeInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_C2CMODEINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.C2cModeInfo_v1Ptr = C2cModeInfo_v1Ptr;
+    }
+
+    nvmlC2cModeInfo_v1_t *AsC2cModeInfo_v1Ptr() const
+    {
+        return m_value.C2cModeInfo_v1Ptr;
+    }
+
+    nvmlC2cModeInfo_v1_t const &AsC2cModeInfo_v1() const
+    {
+        return m_value.C2cModeInfo_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlClkMonFaultInfo_t *ClkMonFaultInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_CLKMONFAULTINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonFaultInfoPtr = ClkMonFaultInfoPtr;
+    }
+    InjectionArgument(nvmlClkMonFaultInfo_t ClkMonFaultInfo)
+        : m_type(INJECTION_CLKMONFAULTINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonFaultInfo = ClkMonFaultInfo;
+    }
+    InjectionArgument(nvmlClkMonFaultInfo_t *ClkMonFaultInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLKMONFAULTINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonFaultInfoPtr = ClkMonFaultInfoPtr;
+    }
+
+    nvmlClkMonFaultInfo_t *AsClkMonFaultInfoPtr() const
+    {
+        return m_value.ClkMonFaultInfoPtr;
+    }
+
+    nvmlClkMonFaultInfo_t const &AsClkMonFaultInfo() const
+    {
+        return m_value.ClkMonFaultInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlClkMonStatus_t *ClkMonStatusPtr, bool inHeap = false)
+        : m_type(INJECTION_CLKMONSTATUS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonStatusPtr = ClkMonStatusPtr;
+    }
+    InjectionArgument(nvmlClkMonStatus_t ClkMonStatus)
+        : m_type(INJECTION_CLKMONSTATUS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonStatus = ClkMonStatus;
+    }
+    InjectionArgument(nvmlClkMonStatus_t *ClkMonStatusPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLKMONSTATUS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClkMonStatusPtr = ClkMonStatusPtr;
+    }
+
+    nvmlClkMonStatus_t *AsClkMonStatusPtr() const
+    {
+        return m_value.ClkMonStatusPtr;
+    }
+
+    nvmlClkMonStatus_t const &AsClkMonStatus() const
+    {
+        return m_value.ClkMonStatus;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlClockId_t *ClockIdPtr, bool inHeap = false)
+        : m_type(INJECTION_CLOCKID_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockIdPtr = ClockIdPtr;
+    }
+    InjectionArgument(nvmlClockId_t ClockId)
         : m_type(INJECTION_CLOCKID)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.clockId = clockId;
+        m_value.ClockId = ClockId;
     }
-    const nvmlClockId_t &AsClockId() const
+    InjectionArgument(nvmlClockId_t *ClockIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLOCKID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.clockId;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockIdPtr = ClockIdPtr;
+    }
+
+    nvmlClockId_t *AsClockIdPtr() const
+    {
+        return m_value.ClockIdPtr;
+    }
+
+    nvmlClockId_t const &AsClockId() const
+    {
+        return m_value.ClockId;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlClockType_t clockType)
+    InjectionArgument(nvmlClockLimitId_t *ClockLimitIdPtr, bool inHeap = false)
+        : m_type(INJECTION_CLOCKLIMITID_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockLimitIdPtr = ClockLimitIdPtr;
+    }
+    InjectionArgument(nvmlClockLimitId_t ClockLimitId)
+        : m_type(INJECTION_CLOCKLIMITID)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockLimitId = ClockLimitId;
+    }
+    InjectionArgument(nvmlClockLimitId_t *ClockLimitIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLOCKLIMITID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockLimitIdPtr = ClockLimitIdPtr;
+    }
+
+    nvmlClockLimitId_t *AsClockLimitIdPtr() const
+    {
+        return m_value.ClockLimitIdPtr;
+    }
+
+    nvmlClockLimitId_t const &AsClockLimitId() const
+    {
+        return m_value.ClockLimitId;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlClockOffset_t *ClockOffsetPtr, bool inHeap = false)
+        : m_type(INJECTION_CLOCKOFFSET_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockOffsetPtr = ClockOffsetPtr;
+    }
+    InjectionArgument(nvmlClockOffset_t ClockOffset)
+        : m_type(INJECTION_CLOCKOFFSET)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockOffset = ClockOffset;
+    }
+    InjectionArgument(nvmlClockOffset_t *ClockOffsetPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLOCKOFFSET_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockOffsetPtr = ClockOffsetPtr;
+    }
+
+    nvmlClockOffset_t *AsClockOffsetPtr() const
+    {
+        return m_value.ClockOffsetPtr;
+    }
+
+    nvmlClockOffset_t const &AsClockOffset() const
+    {
+        return m_value.ClockOffset;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlClockType_t *ClockTypePtr, bool inHeap = false)
+        : m_type(INJECTION_CLOCKTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ClockTypePtr = ClockTypePtr;
+    }
+    InjectionArgument(nvmlClockType_t ClockType)
         : m_type(INJECTION_CLOCKTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.clockType = clockType;
+        m_value.ClockType = ClockType;
     }
-    const nvmlClockType_t &AsClockType() const
-    {
-        return m_value.clockType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceInfo_t computeInstanceInfo)
-        : m_type(INJECTION_COMPUTEINSTANCEINFO)
+    InjectionArgument(nvmlClockType_t *ClockTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CLOCKTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceInfo = computeInstanceInfo;
+        m_value.ClockTypePtr = ClockTypePtr;
     }
-    const nvmlComputeInstanceInfo_t &AsComputeInstanceInfo() const
+
+    nvmlClockType_t *AsClockTypePtr() const
     {
-        return m_value.computeInstanceInfo;
+        return m_value.ClockTypePtr;
+    }
+
+    nvmlClockType_t const &AsClockType() const
+    {
+        return m_value.ClockType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceInfo_t *computeInstanceInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceInfo_t *ComputeInstanceInfoPtr, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceInfoPtr = computeInstanceInfoPtr;
+        m_value.ComputeInstanceInfoPtr = ComputeInstanceInfoPtr;
     }
-    nvmlComputeInstanceInfo_t *AsComputeInstanceInfoPtr() const
+    InjectionArgument(nvmlComputeInstanceInfo_t ComputeInstanceInfo)
+        : m_type(INJECTION_COMPUTEINSTANCEINFO)
     {
-        return m_value.computeInstanceInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstanceInfo = ComputeInstanceInfo;
     }
-
-    InjectionArgument(nvmlComputeInstanceInfo_t *computeInstanceInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceInfo_t *ComputeInstanceInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceInfoPtr = computeInstanceInfoPtr;
+        m_value.ComputeInstanceInfoPtr = ComputeInstanceInfoPtr;
+    }
+
+    nvmlComputeInstanceInfo_t *AsComputeInstanceInfoPtr() const
+    {
+        return m_value.ComputeInstanceInfoPtr;
+    }
+
+    nvmlComputeInstanceInfo_t const &AsComputeInstanceInfo() const
+    {
+        return m_value.ComputeInstanceInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceProfileInfo_t computeInstanceProfileInfo)
-        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO)
+    InjectionArgument(nvmlComputeInstancePlacement_t *ComputeInstancePlacementPtr, bool inHeap = false)
+        : m_type(INJECTION_COMPUTEINSTANCEPLACEMENT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfo = computeInstanceProfileInfo;
+        m_value.ComputeInstancePlacementPtr = ComputeInstancePlacementPtr;
     }
-    const nvmlComputeInstanceProfileInfo_t &AsComputeInstanceProfileInfo() const
+    InjectionArgument(nvmlComputeInstancePlacement_t ComputeInstancePlacement)
+        : m_type(INJECTION_COMPUTEINSTANCEPLACEMENT)
     {
-        return m_value.computeInstanceProfileInfo;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstancePlacement = ComputeInstancePlacement;
+    }
+    InjectionArgument(nvmlComputeInstancePlacement_t *ComputeInstancePlacementPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_COMPUTEINSTANCEPLACEMENT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstancePlacementPtr = ComputeInstancePlacementPtr;
+    }
+
+    nvmlComputeInstancePlacement_t *AsComputeInstancePlacementPtr() const
+    {
+        return m_value.ComputeInstancePlacementPtr;
+    }
+
+    nvmlComputeInstancePlacement_t const &AsComputeInstancePlacement() const
+    {
+        return m_value.ComputeInstancePlacement;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceProfileInfo_t *computeInstanceProfileInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceProfileInfo_t *ComputeInstanceProfileInfoPtr, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfoPtr = computeInstanceProfileInfoPtr;
+        m_value.ComputeInstanceProfileInfoPtr = ComputeInstanceProfileInfoPtr;
     }
-    nvmlComputeInstanceProfileInfo_t *AsComputeInstanceProfileInfoPtr() const
+    InjectionArgument(nvmlComputeInstanceProfileInfo_t ComputeInstanceProfileInfo)
+        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO)
     {
-        return m_value.computeInstanceProfileInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstanceProfileInfo = ComputeInstanceProfileInfo;
     }
-
-    InjectionArgument(nvmlComputeInstanceProfileInfo_t *computeInstanceProfileInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceProfileInfo_t *ComputeInstanceProfileInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfoPtr = computeInstanceProfileInfoPtr;
+        m_value.ComputeInstanceProfileInfoPtr = ComputeInstanceProfileInfoPtr;
+    }
+
+    nvmlComputeInstanceProfileInfo_t *AsComputeInstanceProfileInfoPtr() const
+    {
+        return m_value.ComputeInstanceProfileInfoPtr;
+    }
+
+    nvmlComputeInstanceProfileInfo_t const &AsComputeInstanceProfileInfo() const
+    {
+        return m_value.ComputeInstanceProfileInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t computeInstanceProfileInfo_v2)
-        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V2)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfo_v2 = computeInstanceProfileInfo_v2;
-    }
-    const nvmlComputeInstanceProfileInfo_v2_t &AsComputeInstanceProfileInfo_v2() const
-    {
-        return m_value.computeInstanceProfileInfo_v2;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t *computeInstanceProfileInfo_v2Ptr, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t *ComputeInstanceProfileInfo_v2Ptr, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfo_v2Ptr = computeInstanceProfileInfo_v2Ptr;
+        m_value.ComputeInstanceProfileInfo_v2Ptr = ComputeInstanceProfileInfo_v2Ptr;
     }
-    nvmlComputeInstanceProfileInfo_v2_t *AsComputeInstanceProfileInfo_v2Ptr() const
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t ComputeInstanceProfileInfo_v2)
+        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V2)
     {
-        return m_value.computeInstanceProfileInfo_v2Ptr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstanceProfileInfo_v2 = ComputeInstanceProfileInfo_v2;
     }
-
-    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t *computeInstanceProfileInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v2_t *ComputeInstanceProfileInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstanceProfileInfo_v2Ptr = computeInstanceProfileInfo_v2Ptr;
+        m_value.ComputeInstanceProfileInfo_v2Ptr = ComputeInstanceProfileInfo_v2Ptr;
+    }
+
+    nvmlComputeInstanceProfileInfo_v2_t *AsComputeInstanceProfileInfo_v2Ptr() const
+    {
+        return m_value.ComputeInstanceProfileInfo_v2Ptr;
+    }
+
+    nvmlComputeInstanceProfileInfo_v2_t const &AsComputeInstanceProfileInfo_v2() const
+    {
+        return m_value.ComputeInstanceProfileInfo_v2;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstance_t computeInstance)
-        : m_type(INJECTION_COMPUTEINSTANCE)
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v3_t *ComputeInstanceProfileInfo_v3Ptr, bool inHeap = false)
+        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstance = computeInstance;
+        m_value.ComputeInstanceProfileInfo_v3Ptr = ComputeInstanceProfileInfo_v3Ptr;
     }
-    const nvmlComputeInstance_t &AsComputeInstance() const
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v3_t ComputeInstanceProfileInfo_v3)
+        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V3)
     {
-        return m_value.computeInstance;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstanceProfileInfo_v3 = ComputeInstanceProfileInfo_v3;
+    }
+    InjectionArgument(nvmlComputeInstanceProfileInfo_v3_t *ComputeInstanceProfileInfo_v3Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstanceProfileInfo_v3Ptr = ComputeInstanceProfileInfo_v3Ptr;
+    }
+
+    nvmlComputeInstanceProfileInfo_v3_t *AsComputeInstanceProfileInfo_v3Ptr() const
+    {
+        return m_value.ComputeInstanceProfileInfo_v3Ptr;
+    }
+
+    nvmlComputeInstanceProfileInfo_v3_t const &AsComputeInstanceProfileInfo_v3() const
+    {
+        return m_value.ComputeInstanceProfileInfo_v3;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeInstance_t *computeInstancePtr, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstance_t *ComputeInstancePtr, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstancePtr = computeInstancePtr;
+        m_value.ComputeInstancePtr = ComputeInstancePtr;
     }
-    nvmlComputeInstance_t *AsComputeInstancePtr() const
+    InjectionArgument(nvmlComputeInstance_t ComputeInstance)
+        : m_type(INJECTION_COMPUTEINSTANCE)
     {
-        return m_value.computeInstancePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeInstance = ComputeInstance;
     }
-
-    InjectionArgument(nvmlComputeInstance_t *computeInstancePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlComputeInstance_t *ComputeInstancePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_COMPUTEINSTANCE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeInstancePtr = computeInstancePtr;
+        m_value.ComputeInstancePtr = ComputeInstancePtr;
+    }
+
+    nvmlComputeInstance_t *AsComputeInstancePtr() const
+    {
+        return m_value.ComputeInstancePtr;
+    }
+
+    nvmlComputeInstance_t const &AsComputeInstance() const
+    {
+        return m_value.ComputeInstance;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeMode_t computeMode)
-        : m_type(INJECTION_COMPUTEMODE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.computeMode = computeMode;
-    }
-    const nvmlComputeMode_t &AsComputeMode() const
-    {
-        return m_value.computeMode;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlComputeMode_t *computeModePtr, bool inHeap = false)
+    InjectionArgument(nvmlComputeMode_t *ComputeModePtr, bool inHeap = false)
         : m_type(INJECTION_COMPUTEMODE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeModePtr = computeModePtr;
+        m_value.ComputeModePtr = ComputeModePtr;
     }
-    nvmlComputeMode_t *AsComputeModePtr() const
+    InjectionArgument(nvmlComputeMode_t ComputeMode)
+        : m_type(INJECTION_COMPUTEMODE)
     {
-        return m_value.computeModePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ComputeMode = ComputeMode;
     }
-
-    InjectionArgument(nvmlComputeMode_t *computeModePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlComputeMode_t *ComputeModePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_COMPUTEMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.computeModePtr = computeModePtr;
+        m_value.ComputeModePtr = ComputeModePtr;
+    }
+
+    nvmlComputeMode_t *AsComputeModePtr() const
+    {
+        return m_value.ComputeModePtr;
+    }
+
+    nvmlComputeMode_t const &AsComputeMode() const
+    {
+        return m_value.ComputeMode;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlConfComputeSystemState_t confComputeSystemState)
-        : m_type(INJECTION_CONFCOMPUTESYSTEMSTATE)
+    InjectionArgument(nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *ConfComputeGetKeyRotationThresholdInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.confComputeSystemState = confComputeSystemState;
+        m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr = ConfComputeGetKeyRotationThresholdInfo_v1Ptr;
     }
-    const nvmlConfComputeSystemState_t &AsConfComputeSystemState() const
+    InjectionArgument(nvmlConfComputeGetKeyRotationThresholdInfo_v1_t ConfComputeGetKeyRotationThresholdInfo_v1)
+        : m_type(INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1)
     {
-        return m_value.confComputeSystemState;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGetKeyRotationThresholdInfo_v1 = ConfComputeGetKeyRotationThresholdInfo_v1;
+    }
+    InjectionArgument(nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *ConfComputeGetKeyRotationThresholdInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr = ConfComputeGetKeyRotationThresholdInfo_v1Ptr;
+    }
+
+    nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *AsConfComputeGetKeyRotationThresholdInfo_v1Ptr() const
+    {
+        return m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr;
+    }
+
+    nvmlConfComputeGetKeyRotationThresholdInfo_v1_t const &AsConfComputeGetKeyRotationThresholdInfo_v1() const
+    {
+        return m_value.ConfComputeGetKeyRotationThresholdInfo_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlConfComputeSystemState_t *confComputeSystemStatePtr, bool inHeap = false)
+    InjectionArgument(nvmlConfComputeGpuAttestationReport_t *ConfComputeGpuAttestationReportPtr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuAttestationReportPtr = ConfComputeGpuAttestationReportPtr;
+    }
+    InjectionArgument(nvmlConfComputeGpuAttestationReport_t ConfComputeGpuAttestationReport)
+        : m_type(INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuAttestationReport = ConfComputeGpuAttestationReport;
+    }
+    InjectionArgument(nvmlConfComputeGpuAttestationReport_t *ConfComputeGpuAttestationReportPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuAttestationReportPtr = ConfComputeGpuAttestationReportPtr;
+    }
+
+    nvmlConfComputeGpuAttestationReport_t *AsConfComputeGpuAttestationReportPtr() const
+    {
+        return m_value.ConfComputeGpuAttestationReportPtr;
+    }
+
+    nvmlConfComputeGpuAttestationReport_t const &AsConfComputeGpuAttestationReport() const
+    {
+        return m_value.ConfComputeGpuAttestationReport;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlConfComputeGpuCertificate_t *ConfComputeGpuCertificatePtr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuCertificatePtr = ConfComputeGpuCertificatePtr;
+    }
+    InjectionArgument(nvmlConfComputeGpuCertificate_t ConfComputeGpuCertificate)
+        : m_type(INJECTION_CONFCOMPUTEGPUCERTIFICATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuCertificate = ConfComputeGpuCertificate;
+    }
+    InjectionArgument(nvmlConfComputeGpuCertificate_t *ConfComputeGpuCertificatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeGpuCertificatePtr = ConfComputeGpuCertificatePtr;
+    }
+
+    nvmlConfComputeGpuCertificate_t *AsConfComputeGpuCertificatePtr() const
+    {
+        return m_value.ConfComputeGpuCertificatePtr;
+    }
+
+    nvmlConfComputeGpuCertificate_t const &AsConfComputeGpuCertificate() const
+    {
+        return m_value.ConfComputeGpuCertificate;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlConfComputeMemSizeInfo_t *ConfComputeMemSizeInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeMemSizeInfoPtr = ConfComputeMemSizeInfoPtr;
+    }
+    InjectionArgument(nvmlConfComputeMemSizeInfo_t ConfComputeMemSizeInfo)
+        : m_type(INJECTION_CONFCOMPUTEMEMSIZEINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeMemSizeInfo = ConfComputeMemSizeInfo;
+    }
+    InjectionArgument(nvmlConfComputeMemSizeInfo_t *ConfComputeMemSizeInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeMemSizeInfoPtr = ConfComputeMemSizeInfoPtr;
+    }
+
+    nvmlConfComputeMemSizeInfo_t *AsConfComputeMemSizeInfoPtr() const
+    {
+        return m_value.ConfComputeMemSizeInfoPtr;
+    }
+
+    nvmlConfComputeMemSizeInfo_t const &AsConfComputeMemSizeInfo() const
+    {
+        return m_value.ConfComputeMemSizeInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *ConfComputeSetKeyRotationThresholdInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr = ConfComputeSetKeyRotationThresholdInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlConfComputeSetKeyRotationThresholdInfo_v1_t ConfComputeSetKeyRotationThresholdInfo_v1)
+        : m_type(INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSetKeyRotationThresholdInfo_v1 = ConfComputeSetKeyRotationThresholdInfo_v1;
+    }
+    InjectionArgument(nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *ConfComputeSetKeyRotationThresholdInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr = ConfComputeSetKeyRotationThresholdInfo_v1Ptr;
+    }
+
+    nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *AsConfComputeSetKeyRotationThresholdInfo_v1Ptr() const
+    {
+        return m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr;
+    }
+
+    nvmlConfComputeSetKeyRotationThresholdInfo_v1_t const &AsConfComputeSetKeyRotationThresholdInfo_v1() const
+    {
+        return m_value.ConfComputeSetKeyRotationThresholdInfo_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlConfComputeSystemCaps_t *ConfComputeSystemCapsPtr, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTESYSTEMCAPS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSystemCapsPtr = ConfComputeSystemCapsPtr;
+    }
+    InjectionArgument(nvmlConfComputeSystemCaps_t ConfComputeSystemCaps)
+        : m_type(INJECTION_CONFCOMPUTESYSTEMCAPS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSystemCaps = ConfComputeSystemCaps;
+    }
+    InjectionArgument(nvmlConfComputeSystemCaps_t *ConfComputeSystemCapsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_CONFCOMPUTESYSTEMCAPS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSystemCapsPtr = ConfComputeSystemCapsPtr;
+    }
+
+    nvmlConfComputeSystemCaps_t *AsConfComputeSystemCapsPtr() const
+    {
+        return m_value.ConfComputeSystemCapsPtr;
+    }
+
+    nvmlConfComputeSystemCaps_t const &AsConfComputeSystemCaps() const
+    {
+        return m_value.ConfComputeSystemCaps;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlConfComputeSystemState_t *ConfComputeSystemStatePtr, bool inHeap = false)
         : m_type(INJECTION_CONFCOMPUTESYSTEMSTATE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.confComputeSystemStatePtr = confComputeSystemStatePtr;
+        m_value.ConfComputeSystemStatePtr = ConfComputeSystemStatePtr;
     }
-    nvmlConfComputeSystemState_t *AsConfComputeSystemStatePtr() const
+    InjectionArgument(nvmlConfComputeSystemState_t ConfComputeSystemState)
+        : m_type(INJECTION_CONFCOMPUTESYSTEMSTATE)
     {
-        return m_value.confComputeSystemStatePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConfComputeSystemState = ConfComputeSystemState;
     }
-
-    InjectionArgument(nvmlConfComputeSystemState_t *confComputeSystemStatePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlConfComputeSystemState_t *ConfComputeSystemStatePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_CONFCOMPUTESYSTEMSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.confComputeSystemStatePtr = confComputeSystemStatePtr;
+        m_value.ConfComputeSystemStatePtr = ConfComputeSystemStatePtr;
+    }
+
+    nvmlConfComputeSystemState_t *AsConfComputeSystemStatePtr() const
+    {
+        return m_value.ConfComputeSystemStatePtr;
+    }
+
+    nvmlConfComputeSystemState_t const &AsConfComputeSystemState() const
+    {
+        return m_value.ConfComputeSystemState;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDetachGpuState_t detachGpuState)
+    InjectionArgument(nvmlCoolerControl_t *CoolerControlPtr, bool inHeap = false)
+        : m_type(INJECTION_COOLERCONTROL_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerControlPtr = CoolerControlPtr;
+    }
+    InjectionArgument(nvmlCoolerControl_t CoolerControl)
+        : m_type(INJECTION_COOLERCONTROL)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerControl = CoolerControl;
+    }
+    InjectionArgument(nvmlCoolerControl_t *CoolerControlPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_COOLERCONTROL_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerControlPtr = CoolerControlPtr;
+    }
+
+    nvmlCoolerControl_t *AsCoolerControlPtr() const
+    {
+        return m_value.CoolerControlPtr;
+    }
+
+    nvmlCoolerControl_t const &AsCoolerControl() const
+    {
+        return m_value.CoolerControl;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlCoolerInfo_t *CoolerInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_COOLERINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerInfoPtr = CoolerInfoPtr;
+    }
+    InjectionArgument(nvmlCoolerInfo_t CoolerInfo)
+        : m_type(INJECTION_COOLERINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerInfo = CoolerInfo;
+    }
+    InjectionArgument(nvmlCoolerInfo_t *CoolerInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_COOLERINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerInfoPtr = CoolerInfoPtr;
+    }
+
+    nvmlCoolerInfo_t *AsCoolerInfoPtr() const
+    {
+        return m_value.CoolerInfoPtr;
+    }
+
+    nvmlCoolerInfo_t const &AsCoolerInfo() const
+    {
+        return m_value.CoolerInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlCoolerTarget_t *CoolerTargetPtr, bool inHeap = false)
+        : m_type(INJECTION_COOLERTARGET_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerTargetPtr = CoolerTargetPtr;
+    }
+    InjectionArgument(nvmlCoolerTarget_t CoolerTarget)
+        : m_type(INJECTION_COOLERTARGET)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerTarget = CoolerTarget;
+    }
+    InjectionArgument(nvmlCoolerTarget_t *CoolerTargetPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_COOLERTARGET_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.CoolerTargetPtr = CoolerTargetPtr;
+    }
+
+    nvmlCoolerTarget_t *AsCoolerTargetPtr() const
+    {
+        return m_value.CoolerTargetPtr;
+    }
+
+    nvmlCoolerTarget_t const &AsCoolerTarget() const
+    {
+        return m_value.CoolerTarget;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDetachGpuState_t *DetachGpuStatePtr, bool inHeap = false)
+        : m_type(INJECTION_DETACHGPUSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DetachGpuStatePtr = DetachGpuStatePtr;
+    }
+    InjectionArgument(nvmlDetachGpuState_t DetachGpuState)
         : m_type(INJECTION_DETACHGPUSTATE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.detachGpuState = detachGpuState;
+        m_value.DetachGpuState = DetachGpuState;
     }
-    const nvmlDetachGpuState_t &AsDetachGpuState() const
-    {
-        return m_value.detachGpuState;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDeviceAttributes_t deviceAttributes)
-        : m_type(INJECTION_DEVICEATTRIBUTES)
+    InjectionArgument(nvmlDetachGpuState_t *DetachGpuStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DETACHGPUSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.deviceAttributes = deviceAttributes;
+        m_value.DetachGpuStatePtr = DetachGpuStatePtr;
     }
-    const nvmlDeviceAttributes_t &AsDeviceAttributes() const
+
+    nvmlDetachGpuState_t *AsDetachGpuStatePtr() const
     {
-        return m_value.deviceAttributes;
+        return m_value.DetachGpuStatePtr;
+    }
+
+    nvmlDetachGpuState_t const &AsDetachGpuState() const
+    {
+        return m_value.DetachGpuState;
+    }
+
+    nvmlDeviceArchitecture_t *AsDeviceArchitecturePtr() const
+    {
+        return static_cast<nvmlDeviceArchitecture_t *>(m_value.UIntPtr);
+    }
+
+    nvmlDeviceArchitecture_t AsDeviceArchitecture() const
+    {
+        return static_cast<nvmlDeviceArchitecture_t>(m_value.UInt);
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDeviceAttributes_t *deviceAttributesPtr, bool inHeap = false)
+    InjectionArgument(nvmlDeviceAttributes_t *DeviceAttributesPtr, bool inHeap = false)
         : m_type(INJECTION_DEVICEATTRIBUTES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.deviceAttributesPtr = deviceAttributesPtr;
+        m_value.DeviceAttributesPtr = DeviceAttributesPtr;
     }
-    nvmlDeviceAttributes_t *AsDeviceAttributesPtr() const
+    InjectionArgument(nvmlDeviceAttributes_t DeviceAttributes)
+        : m_type(INJECTION_DEVICEATTRIBUTES)
     {
-        return m_value.deviceAttributesPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceAttributes = DeviceAttributes;
     }
-
-    InjectionArgument(nvmlDeviceAttributes_t *deviceAttributesPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlDeviceAttributes_t *DeviceAttributesPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_DEVICEATTRIBUTES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.deviceAttributesPtr = deviceAttributesPtr;
+        m_value.DeviceAttributesPtr = DeviceAttributesPtr;
+    }
+
+    nvmlDeviceAttributes_t *AsDeviceAttributesPtr() const
+    {
+        return m_value.DeviceAttributesPtr;
+    }
+
+    nvmlDeviceAttributes_t const &AsDeviceAttributes() const
+    {
+        return m_value.DeviceAttributes;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDevice_t device)
-        : m_type(INJECTION_DEVICE)
+    InjectionArgument(nvmlDeviceCapabilities_t *DeviceCapabilitiesPtr, bool inHeap = false)
+        : m_type(INJECTION_DEVICECAPABILITIES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.device = device;
+        m_value.DeviceCapabilitiesPtr = DeviceCapabilitiesPtr;
     }
-    const nvmlDevice_t &AsDevice() const
+    InjectionArgument(nvmlDeviceCapabilities_t DeviceCapabilities)
+        : m_type(INJECTION_DEVICECAPABILITIES)
     {
-        return m_value.device;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceCapabilities = DeviceCapabilities;
+    }
+    InjectionArgument(nvmlDeviceCapabilities_t *DeviceCapabilitiesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DEVICECAPABILITIES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceCapabilitiesPtr = DeviceCapabilitiesPtr;
+    }
+
+    nvmlDeviceCapabilities_t *AsDeviceCapabilitiesPtr() const
+    {
+        return m_value.DeviceCapabilitiesPtr;
+    }
+
+    nvmlDeviceCapabilities_t const &AsDeviceCapabilities() const
+    {
+        return m_value.DeviceCapabilities;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDevice_t *devicePtr, bool inHeap = false)
+    InjectionArgument(nvmlDeviceCurrentClockFreqs_t *DeviceCurrentClockFreqsPtr, bool inHeap = false)
+        : m_type(INJECTION_DEVICECURRENTCLOCKFREQS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceCurrentClockFreqsPtr = DeviceCurrentClockFreqsPtr;
+    }
+    InjectionArgument(nvmlDeviceCurrentClockFreqs_t DeviceCurrentClockFreqs)
+        : m_type(INJECTION_DEVICECURRENTCLOCKFREQS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceCurrentClockFreqs = DeviceCurrentClockFreqs;
+    }
+    InjectionArgument(nvmlDeviceCurrentClockFreqs_t *DeviceCurrentClockFreqsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DEVICECURRENTCLOCKFREQS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceCurrentClockFreqsPtr = DeviceCurrentClockFreqsPtr;
+    }
+
+    nvmlDeviceCurrentClockFreqs_t *AsDeviceCurrentClockFreqsPtr() const
+    {
+        return m_value.DeviceCurrentClockFreqsPtr;
+    }
+
+    nvmlDeviceCurrentClockFreqs_t const &AsDeviceCurrentClockFreqs() const
+    {
+        return m_value.DeviceCurrentClockFreqs;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDeviceGpuRecoveryAction_t *DeviceGpuRecoveryActionPtr, bool inHeap = false)
+        : m_type(INJECTION_DEVICEGPURECOVERYACTION_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceGpuRecoveryActionPtr = DeviceGpuRecoveryActionPtr;
+    }
+    InjectionArgument(nvmlDeviceGpuRecoveryAction_t DeviceGpuRecoveryAction)
+        : m_type(INJECTION_DEVICEGPURECOVERYACTION)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceGpuRecoveryAction = DeviceGpuRecoveryAction;
+    }
+    InjectionArgument(nvmlDeviceGpuRecoveryAction_t *DeviceGpuRecoveryActionPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DEVICEGPURECOVERYACTION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceGpuRecoveryActionPtr = DeviceGpuRecoveryActionPtr;
+    }
+
+    nvmlDeviceGpuRecoveryAction_t *AsDeviceGpuRecoveryActionPtr() const
+    {
+        return m_value.DeviceGpuRecoveryActionPtr;
+    }
+
+    nvmlDeviceGpuRecoveryAction_t const &AsDeviceGpuRecoveryAction() const
+    {
+        return m_value.DeviceGpuRecoveryAction;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDevicePerfModes_t *DevicePerfModesPtr, bool inHeap = false)
+        : m_type(INJECTION_DEVICEPERFMODES_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DevicePerfModesPtr = DevicePerfModesPtr;
+    }
+    InjectionArgument(nvmlDevicePerfModes_t DevicePerfModes)
+        : m_type(INJECTION_DEVICEPERFMODES)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DevicePerfModes = DevicePerfModes;
+    }
+    InjectionArgument(nvmlDevicePerfModes_t *DevicePerfModesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DEVICEPERFMODES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DevicePerfModesPtr = DevicePerfModesPtr;
+    }
+
+    nvmlDevicePerfModes_t *AsDevicePerfModesPtr() const
+    {
+        return m_value.DevicePerfModesPtr;
+    }
+
+    nvmlDevicePerfModes_t const &AsDevicePerfModes() const
+    {
+        return m_value.DevicePerfModes;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDeviceVgpuCapability_t *DeviceVgpuCapabilityPtr, bool inHeap = false)
+        : m_type(INJECTION_DEVICEVGPUCAPABILITY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceVgpuCapabilityPtr = DeviceVgpuCapabilityPtr;
+    }
+    InjectionArgument(nvmlDeviceVgpuCapability_t DeviceVgpuCapability)
+        : m_type(INJECTION_DEVICEVGPUCAPABILITY)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceVgpuCapability = DeviceVgpuCapability;
+    }
+    InjectionArgument(nvmlDeviceVgpuCapability_t *DeviceVgpuCapabilityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DEVICEVGPUCAPABILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DeviceVgpuCapabilityPtr = DeviceVgpuCapabilityPtr;
+    }
+
+    nvmlDeviceVgpuCapability_t *AsDeviceVgpuCapabilityPtr() const
+    {
+        return m_value.DeviceVgpuCapabilityPtr;
+    }
+
+    nvmlDeviceVgpuCapability_t const &AsDeviceVgpuCapability() const
+    {
+        return m_value.DeviceVgpuCapability;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDevice_t *DevicePtr, bool inHeap = false)
         : m_type(INJECTION_DEVICE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.devicePtr = devicePtr;
+        m_value.DevicePtr = DevicePtr;
     }
-    nvmlDevice_t *AsDevicePtr() const
+    InjectionArgument(nvmlDevice_t Device)
+        : m_type(INJECTION_DEVICE)
     {
-        return m_value.devicePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Device = Device;
     }
-
-    InjectionArgument(nvmlDevice_t *devicePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlDevice_t *DevicePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_DEVICE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.devicePtr = devicePtr;
+        m_value.DevicePtr = DevicePtr;
+    }
+
+    nvmlDevice_t *AsDevicePtr() const
+    {
+        return m_value.DevicePtr;
+    }
+
+    nvmlDevice_t const &AsDevice() const
+    {
+        return m_value.Device;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDriverModel_t driverModel)
-        : m_type(INJECTION_DRIVERMODEL)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.driverModel = driverModel;
-    }
-    const nvmlDriverModel_t &AsDriverModel() const
-    {
-        return m_value.driverModel;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlDriverModel_t *driverModelPtr, bool inHeap = false)
+    InjectionArgument(nvmlDriverModel_t *DriverModelPtr, bool inHeap = false)
         : m_type(INJECTION_DRIVERMODEL_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.driverModelPtr = driverModelPtr;
+        m_value.DriverModelPtr = DriverModelPtr;
     }
-    nvmlDriverModel_t *AsDriverModelPtr() const
+    InjectionArgument(nvmlDriverModel_t DriverModel)
+        : m_type(INJECTION_DRIVERMODEL)
     {
-        return m_value.driverModelPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DriverModel = DriverModel;
     }
-
-    InjectionArgument(nvmlDriverModel_t *driverModelPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlDriverModel_t *DriverModelPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_DRIVERMODEL_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.driverModelPtr = driverModelPtr;
+        m_value.DriverModelPtr = DriverModelPtr;
+    }
+
+    nvmlDriverModel_t *AsDriverModelPtr() const
+    {
+        return m_value.DriverModelPtr;
+    }
+
+    nvmlDriverModel_t const &AsDriverModel() const
+    {
+        return m_value.DriverModel;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEccCounterType_t eccCounterType)
+    InjectionArgument(nvmlEccCounterType_t *EccCounterTypePtr, bool inHeap = false)
+        : m_type(INJECTION_ECCCOUNTERTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EccCounterTypePtr = EccCounterTypePtr;
+    }
+    InjectionArgument(nvmlEccCounterType_t EccCounterType)
         : m_type(INJECTION_ECCCOUNTERTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eccCounterType = eccCounterType;
+        m_value.EccCounterType = EccCounterType;
     }
-    const nvmlEccCounterType_t &AsEccCounterType() const
-    {
-        return m_value.eccCounterType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEccErrorCounts_t eccErrorCounts)
-        : m_type(INJECTION_ECCERRORCOUNTS)
+    InjectionArgument(nvmlEccCounterType_t *EccCounterTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_ECCCOUNTERTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eccErrorCounts = eccErrorCounts;
+        m_value.EccCounterTypePtr = EccCounterTypePtr;
     }
-    const nvmlEccErrorCounts_t &AsEccErrorCounts() const
+
+    nvmlEccCounterType_t *AsEccCounterTypePtr() const
     {
-        return m_value.eccErrorCounts;
+        return m_value.EccCounterTypePtr;
+    }
+
+    nvmlEccCounterType_t const &AsEccCounterType() const
+    {
+        return m_value.EccCounterType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEccErrorCounts_t *eccErrorCountsPtr, bool inHeap = false)
+    InjectionArgument(nvmlEccErrorCounts_t *EccErrorCountsPtr, bool inHeap = false)
         : m_type(INJECTION_ECCERRORCOUNTS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eccErrorCountsPtr = eccErrorCountsPtr;
+        m_value.EccErrorCountsPtr = EccErrorCountsPtr;
     }
-    nvmlEccErrorCounts_t *AsEccErrorCountsPtr() const
+    InjectionArgument(nvmlEccErrorCounts_t EccErrorCounts)
+        : m_type(INJECTION_ECCERRORCOUNTS)
     {
-        return m_value.eccErrorCountsPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EccErrorCounts = EccErrorCounts;
     }
-
-    InjectionArgument(nvmlEccErrorCounts_t *eccErrorCountsPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlEccErrorCounts_t *EccErrorCountsPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ECCERRORCOUNTS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eccErrorCountsPtr = eccErrorCountsPtr;
+        m_value.EccErrorCountsPtr = EccErrorCountsPtr;
+    }
+
+    nvmlEccErrorCounts_t *AsEccErrorCountsPtr() const
+    {
+        return m_value.EccErrorCountsPtr;
+    }
+
+    nvmlEccErrorCounts_t const &AsEccErrorCounts() const
+    {
+        return m_value.EccErrorCounts;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEnableState_t enableState)
-        : m_type(INJECTION_ENABLESTATE)
+    InjectionArgument(nvmlEccSramErrorStatus_t *EccSramErrorStatusPtr, bool inHeap = false)
+        : m_type(INJECTION_ECCSRAMERRORSTATUS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.enableState = enableState;
+        m_value.EccSramErrorStatusPtr = EccSramErrorStatusPtr;
     }
-    const nvmlEnableState_t &AsEnableState() const
+    InjectionArgument(nvmlEccSramErrorStatus_t EccSramErrorStatus)
+        : m_type(INJECTION_ECCSRAMERRORSTATUS)
     {
-        return m_value.enableState;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EccSramErrorStatus = EccSramErrorStatus;
+    }
+    InjectionArgument(nvmlEccSramErrorStatus_t *EccSramErrorStatusPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_ECCSRAMERRORSTATUS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EccSramErrorStatusPtr = EccSramErrorStatusPtr;
+    }
+
+    nvmlEccSramErrorStatus_t *AsEccSramErrorStatusPtr() const
+    {
+        return m_value.EccSramErrorStatusPtr;
+    }
+
+    nvmlEccSramErrorStatus_t const &AsEccSramErrorStatus() const
+    {
+        return m_value.EccSramErrorStatus;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEnableState_t *enableStatePtr, bool inHeap = false)
+    InjectionArgument(nvmlEnableState_t *EnableStatePtr, bool inHeap = false)
         : m_type(INJECTION_ENABLESTATE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.enableStatePtr = enableStatePtr;
+        m_value.EnableStatePtr = EnableStatePtr;
     }
-    nvmlEnableState_t *AsEnableStatePtr() const
+    InjectionArgument(nvmlEnableState_t EnableState)
+        : m_type(INJECTION_ENABLESTATE)
     {
-        return m_value.enableStatePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EnableState = EnableState;
     }
-
-    InjectionArgument(nvmlEnableState_t *enableStatePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlEnableState_t *EnableStatePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ENABLESTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.enableStatePtr = enableStatePtr;
+        m_value.EnableStatePtr = EnableStatePtr;
+    }
+
+    nvmlEnableState_t *AsEnableStatePtr() const
+    {
+        return m_value.EnableStatePtr;
+    }
+
+    nvmlEnableState_t const &AsEnableState() const
+    {
+        return m_value.EnableState;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEncoderSessionInfo_t encoderSessionInfo)
-        : m_type(INJECTION_ENCODERSESSIONINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.encoderSessionInfo = encoderSessionInfo;
-    }
-    const nvmlEncoderSessionInfo_t &AsEncoderSessionInfo() const
-    {
-        return m_value.encoderSessionInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEncoderSessionInfo_t *encoderSessionInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlEncoderSessionInfo_t *EncoderSessionInfoPtr, bool inHeap = false)
         : m_type(INJECTION_ENCODERSESSIONINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.encoderSessionInfoPtr = encoderSessionInfoPtr;
+        m_value.EncoderSessionInfoPtr = EncoderSessionInfoPtr;
     }
-    nvmlEncoderSessionInfo_t *AsEncoderSessionInfoPtr() const
+    InjectionArgument(nvmlEncoderSessionInfo_t EncoderSessionInfo)
+        : m_type(INJECTION_ENCODERSESSIONINFO)
     {
-        return m_value.encoderSessionInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EncoderSessionInfo = EncoderSessionInfo;
     }
-
-    InjectionArgument(nvmlEncoderSessionInfo_t *encoderSessionInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlEncoderSessionInfo_t *EncoderSessionInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ENCODERSESSIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.encoderSessionInfoPtr = encoderSessionInfoPtr;
+        m_value.EncoderSessionInfoPtr = EncoderSessionInfoPtr;
+    }
+
+    nvmlEncoderSessionInfo_t *AsEncoderSessionInfoPtr() const
+    {
+        return m_value.EncoderSessionInfoPtr;
+    }
+
+    nvmlEncoderSessionInfo_t const &AsEncoderSessionInfo() const
+    {
+        return m_value.EncoderSessionInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEncoderType_t encoderType)
+    InjectionArgument(nvmlEncoderType_t *EncoderTypePtr, bool inHeap = false)
+        : m_type(INJECTION_ENCODERTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EncoderTypePtr = EncoderTypePtr;
+    }
+    InjectionArgument(nvmlEncoderType_t EncoderType)
         : m_type(INJECTION_ENCODERTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.encoderType = encoderType;
+        m_value.EncoderType = EncoderType;
     }
-    const nvmlEncoderType_t &AsEncoderType() const
-    {
-        return m_value.encoderType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEventData_t eventData)
-        : m_type(INJECTION_EVENTDATA)
+    InjectionArgument(nvmlEncoderType_t *EncoderTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_ENCODERTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eventData = eventData;
+        m_value.EncoderTypePtr = EncoderTypePtr;
     }
-    const nvmlEventData_t &AsEventData() const
+
+    nvmlEncoderType_t *AsEncoderTypePtr() const
     {
-        return m_value.eventData;
+        return m_value.EncoderTypePtr;
+    }
+
+    nvmlEncoderType_t const &AsEncoderType() const
+    {
+        return m_value.EncoderType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEventData_t *eventDataPtr, bool inHeap = false)
+    InjectionArgument(nvmlEventData_t *EventDataPtr, bool inHeap = false)
         : m_type(INJECTION_EVENTDATA_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eventDataPtr = eventDataPtr;
+        m_value.EventDataPtr = EventDataPtr;
     }
-    nvmlEventData_t *AsEventDataPtr() const
+    InjectionArgument(nvmlEventData_t EventData)
+        : m_type(INJECTION_EVENTDATA)
     {
-        return m_value.eventDataPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventData = EventData;
     }
-
-    InjectionArgument(nvmlEventData_t *eventDataPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlEventData_t *EventDataPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_EVENTDATA_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eventDataPtr = eventDataPtr;
+        m_value.EventDataPtr = EventDataPtr;
+    }
+
+    nvmlEventData_t *AsEventDataPtr() const
+    {
+        return m_value.EventDataPtr;
+    }
+
+    nvmlEventData_t const &AsEventData() const
+    {
+        return m_value.EventData;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEventSet_t eventSet)
-        : m_type(INJECTION_EVENTSET)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.eventSet = eventSet;
-    }
-    const nvmlEventSet_t &AsEventSet() const
-    {
-        return m_value.eventSet;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlEventSet_t *eventSetPtr, bool inHeap = false)
+    InjectionArgument(nvmlEventSet_t *EventSetPtr, bool inHeap = false)
         : m_type(INJECTION_EVENTSET_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eventSetPtr = eventSetPtr;
+        m_value.EventSetPtr = EventSetPtr;
     }
-    nvmlEventSet_t *AsEventSetPtr() const
+    InjectionArgument(nvmlEventSet_t EventSet)
+        : m_type(INJECTION_EVENTSET)
     {
-        return m_value.eventSetPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSet = EventSet;
     }
-
-    InjectionArgument(nvmlEventSet_t *eventSetPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlEventSet_t *EventSetPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_EVENTSET_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.eventSetPtr = eventSetPtr;
+        m_value.EventSetPtr = EventSetPtr;
+    }
+
+    nvmlEventSet_t *AsEventSetPtr() const
+    {
+        return m_value.EventSetPtr;
+    }
+
+    nvmlEventSet_t const &AsEventSet() const
+    {
+        return m_value.EventSet;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlExcludedDeviceInfo_t excludedDeviceInfo)
-        : m_type(INJECTION_EXCLUDEDDEVICEINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.excludedDeviceInfo = excludedDeviceInfo;
-    }
-    const nvmlExcludedDeviceInfo_t &AsExcludedDeviceInfo() const
-    {
-        return m_value.excludedDeviceInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlExcludedDeviceInfo_t *excludedDeviceInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlExcludedDeviceInfo_t *ExcludedDeviceInfoPtr, bool inHeap = false)
         : m_type(INJECTION_EXCLUDEDDEVICEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.excludedDeviceInfoPtr = excludedDeviceInfoPtr;
+        m_value.ExcludedDeviceInfoPtr = ExcludedDeviceInfoPtr;
     }
-    nvmlExcludedDeviceInfo_t *AsExcludedDeviceInfoPtr() const
+    InjectionArgument(nvmlExcludedDeviceInfo_t ExcludedDeviceInfo)
+        : m_type(INJECTION_EXCLUDEDDEVICEINFO)
     {
-        return m_value.excludedDeviceInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ExcludedDeviceInfo = ExcludedDeviceInfo;
     }
-
-    InjectionArgument(nvmlExcludedDeviceInfo_t *excludedDeviceInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlExcludedDeviceInfo_t *ExcludedDeviceInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_EXCLUDEDDEVICEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.excludedDeviceInfoPtr = excludedDeviceInfoPtr;
+        m_value.ExcludedDeviceInfoPtr = ExcludedDeviceInfoPtr;
+    }
+
+    nvmlExcludedDeviceInfo_t *AsExcludedDeviceInfoPtr() const
+    {
+        return m_value.ExcludedDeviceInfoPtr;
+    }
+
+    nvmlExcludedDeviceInfo_t const &AsExcludedDeviceInfo() const
+    {
+        return m_value.ExcludedDeviceInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFBCSessionInfo_t fBCSessionInfo)
-        : m_type(INJECTION_FBCSESSIONINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCSessionInfo = fBCSessionInfo;
-    }
-    const nvmlFBCSessionInfo_t &AsFBCSessionInfo() const
-    {
-        return m_value.fBCSessionInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFBCSessionInfo_t *fBCSessionInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlFBCSessionInfo_t *FBCSessionInfoPtr, bool inHeap = false)
         : m_type(INJECTION_FBCSESSIONINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCSessionInfoPtr = fBCSessionInfoPtr;
+        m_value.FBCSessionInfoPtr = FBCSessionInfoPtr;
     }
-    nvmlFBCSessionInfo_t *AsFBCSessionInfoPtr() const
+    InjectionArgument(nvmlFBCSessionInfo_t FBCSessionInfo)
+        : m_type(INJECTION_FBCSESSIONINFO)
     {
-        return m_value.fBCSessionInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FBCSessionInfo = FBCSessionInfo;
     }
-
-    InjectionArgument(nvmlFBCSessionInfo_t *fBCSessionInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlFBCSessionInfo_t *FBCSessionInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_FBCSESSIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCSessionInfoPtr = fBCSessionInfoPtr;
+        m_value.FBCSessionInfoPtr = FBCSessionInfoPtr;
+    }
+
+    nvmlFBCSessionInfo_t *AsFBCSessionInfoPtr() const
+    {
+        return m_value.FBCSessionInfoPtr;
+    }
+
+    nvmlFBCSessionInfo_t const &AsFBCSessionInfo() const
+    {
+        return m_value.FBCSessionInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFBCStats_t fBCStats)
-        : m_type(INJECTION_FBCSTATS)
+    InjectionArgument(nvmlFBCSessionType_t *FBCSessionTypePtr, bool inHeap = false)
+        : m_type(INJECTION_FBCSESSIONTYPE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCStats = fBCStats;
+        m_value.FBCSessionTypePtr = FBCSessionTypePtr;
     }
-    const nvmlFBCStats_t &AsFBCStats() const
+    InjectionArgument(nvmlFBCSessionType_t FBCSessionType)
+        : m_type(INJECTION_FBCSESSIONTYPE)
     {
-        return m_value.fBCStats;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FBCSessionType = FBCSessionType;
+    }
+    InjectionArgument(nvmlFBCSessionType_t *FBCSessionTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_FBCSESSIONTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FBCSessionTypePtr = FBCSessionTypePtr;
+    }
+
+    nvmlFBCSessionType_t *AsFBCSessionTypePtr() const
+    {
+        return m_value.FBCSessionTypePtr;
+    }
+
+    nvmlFBCSessionType_t const &AsFBCSessionType() const
+    {
+        return m_value.FBCSessionType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFBCStats_t *fBCStatsPtr, bool inHeap = false)
+    InjectionArgument(nvmlFBCStats_t *FBCStatsPtr, bool inHeap = false)
         : m_type(INJECTION_FBCSTATS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCStatsPtr = fBCStatsPtr;
+        m_value.FBCStatsPtr = FBCStatsPtr;
     }
-    nvmlFBCStats_t *AsFBCStatsPtr() const
+    InjectionArgument(nvmlFBCStats_t FBCStats)
+        : m_type(INJECTION_FBCSTATS)
     {
-        return m_value.fBCStatsPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FBCStats = FBCStats;
     }
-
-    InjectionArgument(nvmlFBCStats_t *fBCStatsPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlFBCStats_t *FBCStatsPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_FBCSTATS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fBCStatsPtr = fBCStatsPtr;
+        m_value.FBCStatsPtr = FBCStatsPtr;
+    }
+
+    nvmlFBCStats_t *AsFBCStatsPtr() const
+    {
+        return m_value.FBCStatsPtr;
+    }
+
+    nvmlFBCStats_t const &AsFBCStats() const
+    {
+        return m_value.FBCStats;
+    }
+
+    nvmlFanControlPolicy_t *AsFanControlPolicyPtr() const
+    {
+        return static_cast<nvmlFanControlPolicy_t *>(m_value.UIntPtr);
+    }
+
+    nvmlFanControlPolicy_t AsFanControlPolicy() const
+    {
+        return static_cast<nvmlFanControlPolicy_t>(m_value.UInt);
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFieldValue_t fieldValue)
-        : m_type(INJECTION_FIELDVALUE)
+    InjectionArgument(nvmlFanSpeedInfo_t *FanSpeedInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_FANSPEEDINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fieldValue = fieldValue;
+        m_value.FanSpeedInfoPtr = FanSpeedInfoPtr;
     }
-    const nvmlFieldValue_t &AsFieldValue() const
+    InjectionArgument(nvmlFanSpeedInfo_t FanSpeedInfo)
+        : m_type(INJECTION_FANSPEEDINFO)
     {
-        return m_value.fieldValue;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FanSpeedInfo = FanSpeedInfo;
+    }
+    InjectionArgument(nvmlFanSpeedInfo_t *FanSpeedInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_FANSPEEDINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FanSpeedInfoPtr = FanSpeedInfoPtr;
+    }
+
+    nvmlFanSpeedInfo_t *AsFanSpeedInfoPtr() const
+    {
+        return m_value.FanSpeedInfoPtr;
+    }
+
+    nvmlFanSpeedInfo_t const &AsFanSpeedInfo() const
+    {
+        return m_value.FanSpeedInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlFieldValue_t *fieldValuePtr, bool inHeap = false)
+    InjectionArgument(nvmlFanState_t *FanStatePtr, bool inHeap = false)
+        : m_type(INJECTION_FANSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FanStatePtr = FanStatePtr;
+    }
+    InjectionArgument(nvmlFanState_t FanState)
+        : m_type(INJECTION_FANSTATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FanState = FanState;
+    }
+    InjectionArgument(nvmlFanState_t *FanStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_FANSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FanStatePtr = FanStatePtr;
+    }
+
+    nvmlFanState_t *AsFanStatePtr() const
+    {
+        return m_value.FanStatePtr;
+    }
+
+    nvmlFanState_t const &AsFanState() const
+    {
+        return m_value.FanState;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlFieldValue_t *FieldValuePtr, bool inHeap = false)
         : m_type(INJECTION_FIELDVALUE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fieldValuePtr = fieldValuePtr;
+        m_value.FieldValuePtr = FieldValuePtr;
     }
-    nvmlFieldValue_t *AsFieldValuePtr() const
+    InjectionArgument(nvmlFieldValue_t FieldValue)
+        : m_type(INJECTION_FIELDVALUE)
     {
-        return m_value.fieldValuePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.FieldValue = FieldValue;
     }
-
-    InjectionArgument(nvmlFieldValue_t *fieldValuePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlFieldValue_t *FieldValuePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_FIELDVALUE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.fieldValuePtr = fieldValuePtr;
+        m_value.FieldValuePtr = FieldValuePtr;
+    }
+
+    nvmlFieldValue_t *AsFieldValuePtr() const
+    {
+        return m_value.FieldValuePtr;
+    }
+
+    nvmlFieldValue_t const &AsFieldValue() const
+    {
+        return m_value.FieldValue;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmMetricsGet_t gpmMetricsGet)
-        : m_type(INJECTION_GPMMETRICSGET)
+    InjectionArgument(nvmlGpmMetricId_t *GpmMetricIdPtr, bool inHeap = false)
+        : m_type(INJECTION_GPMMETRICID_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmMetricsGet = gpmMetricsGet;
+        m_value.GpmMetricIdPtr = GpmMetricIdPtr;
     }
-    const nvmlGpmMetricsGet_t &AsGpmMetricsGet() const
+    InjectionArgument(nvmlGpmMetricId_t GpmMetricId)
+        : m_type(INJECTION_GPMMETRICID)
     {
-        return m_value.gpmMetricsGet;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetricId = GpmMetricId;
+    }
+    InjectionArgument(nvmlGpmMetricId_t *GpmMetricIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPMMETRICID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetricIdPtr = GpmMetricIdPtr;
+    }
+
+    nvmlGpmMetricId_t *AsGpmMetricIdPtr() const
+    {
+        return m_value.GpmMetricIdPtr;
+    }
+
+    nvmlGpmMetricId_t const &AsGpmMetricId() const
+    {
+        return m_value.GpmMetricId;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmMetricsGet_t *gpmMetricsGetPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpmMetric_t *GpmMetricPtr, bool inHeap = false)
+        : m_type(INJECTION_GPMMETRIC_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetricPtr = GpmMetricPtr;
+    }
+    InjectionArgument(nvmlGpmMetric_t GpmMetric)
+        : m_type(INJECTION_GPMMETRIC)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetric = GpmMetric;
+    }
+    InjectionArgument(nvmlGpmMetric_t *GpmMetricPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPMMETRIC_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetricPtr = GpmMetricPtr;
+    }
+
+    nvmlGpmMetric_t *AsGpmMetricPtr() const
+    {
+        return m_value.GpmMetricPtr;
+    }
+
+    nvmlGpmMetric_t const &AsGpmMetric() const
+    {
+        return m_value.GpmMetric;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpmMetricsGet_t *GpmMetricsGetPtr, bool inHeap = false)
         : m_type(INJECTION_GPMMETRICSGET_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmMetricsGetPtr = gpmMetricsGetPtr;
+        m_value.GpmMetricsGetPtr = GpmMetricsGetPtr;
     }
-    nvmlGpmMetricsGet_t *AsGpmMetricsGetPtr() const
+    InjectionArgument(nvmlGpmMetricsGet_t GpmMetricsGet)
+        : m_type(INJECTION_GPMMETRICSGET)
     {
-        return m_value.gpmMetricsGetPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmMetricsGet = GpmMetricsGet;
     }
-
-    InjectionArgument(nvmlGpmMetricsGet_t *gpmMetricsGetPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpmMetricsGet_t *GpmMetricsGetPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPMMETRICSGET_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmMetricsGetPtr = gpmMetricsGetPtr;
+        m_value.GpmMetricsGetPtr = GpmMetricsGetPtr;
+    }
+
+    nvmlGpmMetricsGet_t *AsGpmMetricsGetPtr() const
+    {
+        return m_value.GpmMetricsGetPtr;
+    }
+
+    nvmlGpmMetricsGet_t const &AsGpmMetricsGet() const
+    {
+        return m_value.GpmMetricsGet;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmSample_t gpmSample)
-        : m_type(INJECTION_GPMSAMPLE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSample = gpmSample;
-    }
-    const nvmlGpmSample_t &AsGpmSample() const
-    {
-        return m_value.gpmSample;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmSample_t *gpmSamplePtr, bool inHeap = false)
+    InjectionArgument(nvmlGpmSample_t *GpmSamplePtr, bool inHeap = false)
         : m_type(INJECTION_GPMSAMPLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSamplePtr = gpmSamplePtr;
+        m_value.GpmSamplePtr = GpmSamplePtr;
     }
-    nvmlGpmSample_t *AsGpmSamplePtr() const
+    InjectionArgument(nvmlGpmSample_t GpmSample)
+        : m_type(INJECTION_GPMSAMPLE)
     {
-        return m_value.gpmSamplePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmSample = GpmSample;
     }
-
-    InjectionArgument(nvmlGpmSample_t *gpmSamplePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpmSample_t *GpmSamplePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPMSAMPLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSamplePtr = gpmSamplePtr;
+        m_value.GpmSamplePtr = GpmSamplePtr;
+    }
+
+    nvmlGpmSample_t *AsGpmSamplePtr() const
+    {
+        return m_value.GpmSamplePtr;
+    }
+
+    nvmlGpmSample_t const &AsGpmSample() const
+    {
+        return m_value.GpmSample;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmSupport_t gpmSupport)
-        : m_type(INJECTION_GPMSUPPORT)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSupport = gpmSupport;
-    }
-    const nvmlGpmSupport_t &AsGpmSupport() const
-    {
-        return m_value.gpmSupport;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpmSupport_t *gpmSupportPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpmSupport_t *GpmSupportPtr, bool inHeap = false)
         : m_type(INJECTION_GPMSUPPORT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSupportPtr = gpmSupportPtr;
+        m_value.GpmSupportPtr = GpmSupportPtr;
     }
-    nvmlGpmSupport_t *AsGpmSupportPtr() const
+    InjectionArgument(nvmlGpmSupport_t GpmSupport)
+        : m_type(INJECTION_GPMSUPPORT)
     {
-        return m_value.gpmSupportPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpmSupport = GpmSupport;
     }
-
-    InjectionArgument(nvmlGpmSupport_t *gpmSupportPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpmSupport_t *GpmSupportPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPMSUPPORT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpmSupportPtr = gpmSupportPtr;
+        m_value.GpmSupportPtr = GpmSupportPtr;
+    }
+
+    nvmlGpmSupport_t *AsGpmSupportPtr() const
+    {
+        return m_value.GpmSupportPtr;
+    }
+
+    nvmlGpmSupport_t const &AsGpmSupport() const
+    {
+        return m_value.GpmSupport;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuDynamicPstatesInfo_t gpuDynamicPstatesInfo)
-        : m_type(INJECTION_GPUDYNAMICPSTATESINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuDynamicPstatesInfo = gpuDynamicPstatesInfo;
-    }
-    const nvmlGpuDynamicPstatesInfo_t &AsGpuDynamicPstatesInfo() const
-    {
-        return m_value.gpuDynamicPstatesInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuDynamicPstatesInfo_t *gpuDynamicPstatesInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuDynamicPstatesInfo_t *GpuDynamicPstatesInfoPtr, bool inHeap = false)
         : m_type(INJECTION_GPUDYNAMICPSTATESINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuDynamicPstatesInfoPtr = gpuDynamicPstatesInfoPtr;
+        m_value.GpuDynamicPstatesInfoPtr = GpuDynamicPstatesInfoPtr;
     }
-    nvmlGpuDynamicPstatesInfo_t *AsGpuDynamicPstatesInfoPtr() const
+    InjectionArgument(nvmlGpuDynamicPstatesInfo_t GpuDynamicPstatesInfo)
+        : m_type(INJECTION_GPUDYNAMICPSTATESINFO)
     {
-        return m_value.gpuDynamicPstatesInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuDynamicPstatesInfo = GpuDynamicPstatesInfo;
     }
-
-    InjectionArgument(nvmlGpuDynamicPstatesInfo_t *gpuDynamicPstatesInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuDynamicPstatesInfo_t *GpuDynamicPstatesInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUDYNAMICPSTATESINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuDynamicPstatesInfoPtr = gpuDynamicPstatesInfoPtr;
+        m_value.GpuDynamicPstatesInfoPtr = GpuDynamicPstatesInfoPtr;
+    }
+
+    nvmlGpuDynamicPstatesInfo_t *AsGpuDynamicPstatesInfoPtr() const
+    {
+        return m_value.GpuDynamicPstatesInfoPtr;
+    }
+
+    nvmlGpuDynamicPstatesInfo_t const &AsGpuDynamicPstatesInfo() const
+    {
+        return m_value.GpuDynamicPstatesInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceInfo_t gpuInstanceInfo)
-        : m_type(INJECTION_GPUINSTANCEINFO)
+    InjectionArgument(nvmlGpuFabricInfoV_t *GpuFabricInfoVPtr, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFOV_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceInfo = gpuInstanceInfo;
+        m_value.GpuFabricInfoVPtr = GpuFabricInfoVPtr;
     }
-    const nvmlGpuInstanceInfo_t &AsGpuInstanceInfo() const
+    InjectionArgument(nvmlGpuFabricInfoV_t GpuFabricInfoV)
+        : m_type(INJECTION_GPUFABRICINFOV)
     {
-        return m_value.gpuInstanceInfo;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfoV = GpuFabricInfoV;
+    }
+    InjectionArgument(nvmlGpuFabricInfoV_t *GpuFabricInfoVPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFOV_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfoVPtr = GpuFabricInfoVPtr;
+    }
+
+    nvmlGpuFabricInfoV_t *AsGpuFabricInfoVPtr() const
+    {
+        return m_value.GpuFabricInfoVPtr;
+    }
+
+    nvmlGpuFabricInfoV_t const &AsGpuFabricInfoV() const
+    {
+        return m_value.GpuFabricInfoV;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceInfo_t *gpuInstanceInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuFabricInfo_t *GpuFabricInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfoPtr = GpuFabricInfoPtr;
+    }
+    InjectionArgument(nvmlGpuFabricInfo_t GpuFabricInfo)
+        : m_type(INJECTION_GPUFABRICINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfo = GpuFabricInfo;
+    }
+    InjectionArgument(nvmlGpuFabricInfo_t *GpuFabricInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfoPtr = GpuFabricInfoPtr;
+    }
+
+    nvmlGpuFabricInfo_t *AsGpuFabricInfoPtr() const
+    {
+        return m_value.GpuFabricInfoPtr;
+    }
+
+    nvmlGpuFabricInfo_t const &AsGpuFabricInfo() const
+    {
+        return m_value.GpuFabricInfo;
+    }
+
+    nvmlGpuFabricState_t *AsGpuFabricStatePtr() const
+    {
+        return static_cast<nvmlGpuFabricState_t *>(m_value.UCharPtr);
+    }
+
+    nvmlGpuFabricState_t AsGpuFabricState() const
+    {
+        return static_cast<nvmlGpuFabricState_t>(m_value.UChar);
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpuInstanceInfo_t *GpuInstanceInfoPtr, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceInfoPtr = gpuInstanceInfoPtr;
+        m_value.GpuInstanceInfoPtr = GpuInstanceInfoPtr;
     }
-    nvmlGpuInstanceInfo_t *AsGpuInstanceInfoPtr() const
+    InjectionArgument(nvmlGpuInstanceInfo_t GpuInstanceInfo)
+        : m_type(INJECTION_GPUINSTANCEINFO)
     {
-        return m_value.gpuInstanceInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstanceInfo = GpuInstanceInfo;
     }
-
-    InjectionArgument(nvmlGpuInstanceInfo_t *gpuInstanceInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstanceInfo_t *GpuInstanceInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceInfoPtr = gpuInstanceInfoPtr;
+        m_value.GpuInstanceInfoPtr = GpuInstanceInfoPtr;
+    }
+
+    nvmlGpuInstanceInfo_t *AsGpuInstanceInfoPtr() const
+    {
+        return m_value.GpuInstanceInfoPtr;
+    }
+
+    nvmlGpuInstanceInfo_t const &AsGpuInstanceInfo() const
+    {
+        return m_value.GpuInstanceInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstancePlacement_t gpuInstancePlacement)
-        : m_type(INJECTION_GPUINSTANCEPLACEMENT)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstancePlacement = gpuInstancePlacement;
-    }
-    const nvmlGpuInstancePlacement_t &AsGpuInstancePlacement() const
-    {
-        return m_value.gpuInstancePlacement;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstancePlacement_t *gpuInstancePlacementPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstancePlacement_t *GpuInstancePlacementPtr, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPLACEMENT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstancePlacementPtr = gpuInstancePlacementPtr;
+        m_value.GpuInstancePlacementPtr = GpuInstancePlacementPtr;
     }
-    nvmlGpuInstancePlacement_t *AsGpuInstancePlacementPtr() const
+    InjectionArgument(nvmlGpuInstancePlacement_t GpuInstancePlacement)
+        : m_type(INJECTION_GPUINSTANCEPLACEMENT)
     {
-        return m_value.gpuInstancePlacementPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstancePlacement = GpuInstancePlacement;
     }
-
-    InjectionArgument(nvmlGpuInstancePlacement_t *gpuInstancePlacementPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstancePlacement_t *GpuInstancePlacementPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPLACEMENT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstancePlacementPtr = gpuInstancePlacementPtr;
+        m_value.GpuInstancePlacementPtr = GpuInstancePlacementPtr;
+    }
+
+    nvmlGpuInstancePlacement_t *AsGpuInstancePlacementPtr() const
+    {
+        return m_value.GpuInstancePlacementPtr;
+    }
+
+    nvmlGpuInstancePlacement_t const &AsGpuInstancePlacement() const
+    {
+        return m_value.GpuInstancePlacement;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceProfileInfo_t gpuInstanceProfileInfo)
-        : m_type(INJECTION_GPUINSTANCEPROFILEINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfo = gpuInstanceProfileInfo;
-    }
-    const nvmlGpuInstanceProfileInfo_t &AsGpuInstanceProfileInfo() const
-    {
-        return m_value.gpuInstanceProfileInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceProfileInfo_t *gpuInstanceProfileInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstanceProfileInfo_t *GpuInstanceProfileInfoPtr, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPROFILEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfoPtr = gpuInstanceProfileInfoPtr;
+        m_value.GpuInstanceProfileInfoPtr = GpuInstanceProfileInfoPtr;
     }
-    nvmlGpuInstanceProfileInfo_t *AsGpuInstanceProfileInfoPtr() const
+    InjectionArgument(nvmlGpuInstanceProfileInfo_t GpuInstanceProfileInfo)
+        : m_type(INJECTION_GPUINSTANCEPROFILEINFO)
     {
-        return m_value.gpuInstanceProfileInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstanceProfileInfo = GpuInstanceProfileInfo;
     }
-
-    InjectionArgument(nvmlGpuInstanceProfileInfo_t *gpuInstanceProfileInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstanceProfileInfo_t *GpuInstanceProfileInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPROFILEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfoPtr = gpuInstanceProfileInfoPtr;
+        m_value.GpuInstanceProfileInfoPtr = GpuInstanceProfileInfoPtr;
+    }
+
+    nvmlGpuInstanceProfileInfo_t *AsGpuInstanceProfileInfoPtr() const
+    {
+        return m_value.GpuInstanceProfileInfoPtr;
+    }
+
+    nvmlGpuInstanceProfileInfo_t const &AsGpuInstanceProfileInfo() const
+    {
+        return m_value.GpuInstanceProfileInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t gpuInstanceProfileInfo_v2)
-        : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V2)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfo_v2 = gpuInstanceProfileInfo_v2;
-    }
-    const nvmlGpuInstanceProfileInfo_v2_t &AsGpuInstanceProfileInfo_v2() const
-    {
-        return m_value.gpuInstanceProfileInfo_v2;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t *gpuInstanceProfileInfo_v2Ptr, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t *GpuInstanceProfileInfo_v2Ptr, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfo_v2Ptr = gpuInstanceProfileInfo_v2Ptr;
+        m_value.GpuInstanceProfileInfo_v2Ptr = GpuInstanceProfileInfo_v2Ptr;
     }
-    nvmlGpuInstanceProfileInfo_v2_t *AsGpuInstanceProfileInfo_v2Ptr() const
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t GpuInstanceProfileInfo_v2)
+        : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V2)
     {
-        return m_value.gpuInstanceProfileInfo_v2Ptr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstanceProfileInfo_v2 = GpuInstanceProfileInfo_v2;
     }
-
-    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t *gpuInstanceProfileInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v2_t *GpuInstanceProfileInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstanceProfileInfo_v2Ptr = gpuInstanceProfileInfo_v2Ptr;
+        m_value.GpuInstanceProfileInfo_v2Ptr = GpuInstanceProfileInfo_v2Ptr;
+    }
+
+    nvmlGpuInstanceProfileInfo_v2_t *AsGpuInstanceProfileInfo_v2Ptr() const
+    {
+        return m_value.GpuInstanceProfileInfo_v2Ptr;
+    }
+
+    nvmlGpuInstanceProfileInfo_v2_t const &AsGpuInstanceProfileInfo_v2() const
+    {
+        return m_value.GpuInstanceProfileInfo_v2;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstance_t gpuInstance)
-        : m_type(INJECTION_GPUINSTANCE)
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v3_t *GpuInstanceProfileInfo_v3Ptr, bool inHeap = false)
+        : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstance = gpuInstance;
+        m_value.GpuInstanceProfileInfo_v3Ptr = GpuInstanceProfileInfo_v3Ptr;
     }
-    const nvmlGpuInstance_t &AsGpuInstance() const
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v3_t GpuInstanceProfileInfo_v3)
+        : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V3)
     {
-        return m_value.gpuInstance;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstanceProfileInfo_v3 = GpuInstanceProfileInfo_v3;
+    }
+    InjectionArgument(nvmlGpuInstanceProfileInfo_v3_t *GpuInstanceProfileInfo_v3Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstanceProfileInfo_v3Ptr = GpuInstanceProfileInfo_v3Ptr;
+    }
+
+    nvmlGpuInstanceProfileInfo_v3_t *AsGpuInstanceProfileInfo_v3Ptr() const
+    {
+        return m_value.GpuInstanceProfileInfo_v3Ptr;
+    }
+
+    nvmlGpuInstanceProfileInfo_v3_t const &AsGpuInstanceProfileInfo_v3() const
+    {
+        return m_value.GpuInstanceProfileInfo_v3;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuInstance_t *gpuInstancePtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstance_t *GpuInstancePtr, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstancePtr = gpuInstancePtr;
+        m_value.GpuInstancePtr = GpuInstancePtr;
     }
-    nvmlGpuInstance_t *AsGpuInstancePtr() const
+    InjectionArgument(nvmlGpuInstance_t GpuInstance)
+        : m_type(INJECTION_GPUINSTANCE)
     {
-        return m_value.gpuInstancePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuInstance = GpuInstance;
     }
-
-    InjectionArgument(nvmlGpuInstance_t *gpuInstancePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuInstance_t *GpuInstancePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUINSTANCE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuInstancePtr = gpuInstancePtr;
+        m_value.GpuInstancePtr = GpuInstancePtr;
+    }
+
+    nvmlGpuInstance_t *AsGpuInstancePtr() const
+    {
+        return m_value.GpuInstancePtr;
+    }
+
+    nvmlGpuInstance_t const &AsGpuInstance() const
+    {
+        return m_value.GpuInstance;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuOperationMode_t gpuOperationMode)
-        : m_type(INJECTION_GPUOPERATIONMODE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuOperationMode = gpuOperationMode;
-    }
-    const nvmlGpuOperationMode_t &AsGpuOperationMode() const
-    {
-        return m_value.gpuOperationMode;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuOperationMode_t *gpuOperationModePtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuOperationMode_t *GpuOperationModePtr, bool inHeap = false)
         : m_type(INJECTION_GPUOPERATIONMODE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuOperationModePtr = gpuOperationModePtr;
+        m_value.GpuOperationModePtr = GpuOperationModePtr;
     }
-    nvmlGpuOperationMode_t *AsGpuOperationModePtr() const
+    InjectionArgument(nvmlGpuOperationMode_t GpuOperationMode)
+        : m_type(INJECTION_GPUOPERATIONMODE)
     {
-        return m_value.gpuOperationModePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationMode = GpuOperationMode;
     }
-
-    InjectionArgument(nvmlGpuOperationMode_t *gpuOperationModePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuOperationMode_t *GpuOperationModePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUOPERATIONMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuOperationModePtr = gpuOperationModePtr;
+        m_value.GpuOperationModePtr = GpuOperationModePtr;
+    }
+
+    nvmlGpuOperationMode_t *AsGpuOperationModePtr() const
+    {
+        return m_value.GpuOperationModePtr;
+    }
+
+    nvmlGpuOperationMode_t const &AsGpuOperationMode() const
+    {
+        return m_value.GpuOperationMode;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuP2PCapsIndex_t gpuP2PCapsIndex)
+    InjectionArgument(nvmlGpuP2PCapsIndex_t *GpuP2PCapsIndexPtr, bool inHeap = false)
+        : m_type(INJECTION_GPUP2PCAPSINDEX_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuP2PCapsIndexPtr = GpuP2PCapsIndexPtr;
+    }
+    InjectionArgument(nvmlGpuP2PCapsIndex_t GpuP2PCapsIndex)
         : m_type(INJECTION_GPUP2PCAPSINDEX)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuP2PCapsIndex = gpuP2PCapsIndex;
+        m_value.GpuP2PCapsIndex = GpuP2PCapsIndex;
     }
-    const nvmlGpuP2PCapsIndex_t &AsGpuP2PCapsIndex() const
-    {
-        return m_value.gpuP2PCapsIndex;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuP2PStatus_t gpuP2PStatus)
-        : m_type(INJECTION_GPUP2PSTATUS)
+    InjectionArgument(nvmlGpuP2PCapsIndex_t *GpuP2PCapsIndexPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUP2PCAPSINDEX_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuP2PStatus = gpuP2PStatus;
+        m_value.GpuP2PCapsIndexPtr = GpuP2PCapsIndexPtr;
     }
-    const nvmlGpuP2PStatus_t &AsGpuP2PStatus() const
+
+    nvmlGpuP2PCapsIndex_t *AsGpuP2PCapsIndexPtr() const
     {
-        return m_value.gpuP2PStatus;
+        return m_value.GpuP2PCapsIndexPtr;
+    }
+
+    nvmlGpuP2PCapsIndex_t const &AsGpuP2PCapsIndex() const
+    {
+        return m_value.GpuP2PCapsIndex;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuP2PStatus_t *gpuP2PStatusPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuP2PStatus_t *GpuP2PStatusPtr, bool inHeap = false)
         : m_type(INJECTION_GPUP2PSTATUS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuP2PStatusPtr = gpuP2PStatusPtr;
+        m_value.GpuP2PStatusPtr = GpuP2PStatusPtr;
     }
-    nvmlGpuP2PStatus_t *AsGpuP2PStatusPtr() const
+    InjectionArgument(nvmlGpuP2PStatus_t GpuP2PStatus)
+        : m_type(INJECTION_GPUP2PSTATUS)
     {
-        return m_value.gpuP2PStatusPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuP2PStatus = GpuP2PStatus;
     }
-
-    InjectionArgument(nvmlGpuP2PStatus_t *gpuP2PStatusPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuP2PStatus_t *GpuP2PStatusPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUP2PSTATUS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuP2PStatusPtr = gpuP2PStatusPtr;
+        m_value.GpuP2PStatusPtr = GpuP2PStatusPtr;
+    }
+
+    nvmlGpuP2PStatus_t *AsGpuP2PStatusPtr() const
+    {
+        return m_value.GpuP2PStatusPtr;
+    }
+
+    nvmlGpuP2PStatus_t const &AsGpuP2PStatus() const
+    {
+        return m_value.GpuP2PStatus;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuThermalSettings_t gpuThermalSettings)
-        : m_type(INJECTION_GPUTHERMALSETTINGS)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuThermalSettings = gpuThermalSettings;
-    }
-    const nvmlGpuThermalSettings_t &AsGpuThermalSettings() const
-    {
-        return m_value.gpuThermalSettings;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuThermalSettings_t *gpuThermalSettingsPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuThermalSettings_t *GpuThermalSettingsPtr, bool inHeap = false)
         : m_type(INJECTION_GPUTHERMALSETTINGS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuThermalSettingsPtr = gpuThermalSettingsPtr;
+        m_value.GpuThermalSettingsPtr = GpuThermalSettingsPtr;
     }
-    nvmlGpuThermalSettings_t *AsGpuThermalSettingsPtr() const
+    InjectionArgument(nvmlGpuThermalSettings_t GpuThermalSettings)
+        : m_type(INJECTION_GPUTHERMALSETTINGS)
     {
-        return m_value.gpuThermalSettingsPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuThermalSettings = GpuThermalSettings;
     }
-
-    InjectionArgument(nvmlGpuThermalSettings_t *gpuThermalSettingsPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuThermalSettings_t *GpuThermalSettingsPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUTHERMALSETTINGS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuThermalSettingsPtr = gpuThermalSettingsPtr;
+        m_value.GpuThermalSettingsPtr = GpuThermalSettingsPtr;
+    }
+
+    nvmlGpuThermalSettings_t *AsGpuThermalSettingsPtr() const
+    {
+        return m_value.GpuThermalSettingsPtr;
+    }
+
+    nvmlGpuThermalSettings_t const &AsGpuThermalSettings() const
+    {
+        return m_value.GpuThermalSettings;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuTopologyLevel_t gpuTopologyLevel)
-        : m_type(INJECTION_GPUTOPOLOGYLEVEL)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuTopologyLevel = gpuTopologyLevel;
-    }
-    const nvmlGpuTopologyLevel_t &AsGpuTopologyLevel() const
-    {
-        return m_value.gpuTopologyLevel;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuTopologyLevel_t *gpuTopologyLevelPtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuTopologyLevel_t *GpuTopologyLevelPtr, bool inHeap = false)
         : m_type(INJECTION_GPUTOPOLOGYLEVEL_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuTopologyLevelPtr = gpuTopologyLevelPtr;
+        m_value.GpuTopologyLevelPtr = GpuTopologyLevelPtr;
     }
-    nvmlGpuTopologyLevel_t *AsGpuTopologyLevelPtr() const
+    InjectionArgument(nvmlGpuTopologyLevel_t GpuTopologyLevel)
+        : m_type(INJECTION_GPUTOPOLOGYLEVEL)
     {
-        return m_value.gpuTopologyLevelPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuTopologyLevel = GpuTopologyLevel;
     }
-
-    InjectionArgument(nvmlGpuTopologyLevel_t *gpuTopologyLevelPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuTopologyLevel_t *GpuTopologyLevelPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUTOPOLOGYLEVEL_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuTopologyLevelPtr = gpuTopologyLevelPtr;
+        m_value.GpuTopologyLevelPtr = GpuTopologyLevelPtr;
+    }
+
+    nvmlGpuTopologyLevel_t *AsGpuTopologyLevelPtr() const
+    {
+        return m_value.GpuTopologyLevelPtr;
+    }
+
+    nvmlGpuTopologyLevel_t const &AsGpuTopologyLevel() const
+    {
+        return m_value.GpuTopologyLevel;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuVirtualizationMode_t gpuVirtualizationMode)
-        : m_type(INJECTION_GPUVIRTUALIZATIONMODE)
+    InjectionArgument(nvmlGpuUtilizationDomainId_t *GpuUtilizationDomainIdPtr, bool inHeap = false)
+        : m_type(INJECTION_GPUUTILIZATIONDOMAINID_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuVirtualizationMode = gpuVirtualizationMode;
+        m_value.GpuUtilizationDomainIdPtr = GpuUtilizationDomainIdPtr;
     }
-    const nvmlGpuVirtualizationMode_t &AsGpuVirtualizationMode() const
+    InjectionArgument(nvmlGpuUtilizationDomainId_t GpuUtilizationDomainId)
+        : m_type(INJECTION_GPUUTILIZATIONDOMAINID)
     {
-        return m_value.gpuVirtualizationMode;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuUtilizationDomainId = GpuUtilizationDomainId;
+    }
+    InjectionArgument(nvmlGpuUtilizationDomainId_t *GpuUtilizationDomainIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUUTILIZATIONDOMAINID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuUtilizationDomainIdPtr = GpuUtilizationDomainIdPtr;
+    }
+
+    nvmlGpuUtilizationDomainId_t *AsGpuUtilizationDomainIdPtr() const
+    {
+        return m_value.GpuUtilizationDomainIdPtr;
+    }
+
+    nvmlGpuUtilizationDomainId_t const &AsGpuUtilizationDomainId() const
+    {
+        return m_value.GpuUtilizationDomainId;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGpuVirtualizationMode_t *gpuVirtualizationModePtr, bool inHeap = false)
+    InjectionArgument(nvmlGpuVirtualizationMode_t *GpuVirtualizationModePtr, bool inHeap = false)
         : m_type(INJECTION_GPUVIRTUALIZATIONMODE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuVirtualizationModePtr = gpuVirtualizationModePtr;
+        m_value.GpuVirtualizationModePtr = GpuVirtualizationModePtr;
     }
-    nvmlGpuVirtualizationMode_t *AsGpuVirtualizationModePtr() const
+    InjectionArgument(nvmlGpuVirtualizationMode_t GpuVirtualizationMode)
+        : m_type(INJECTION_GPUVIRTUALIZATIONMODE)
     {
-        return m_value.gpuVirtualizationModePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuVirtualizationMode = GpuVirtualizationMode;
     }
-
-    InjectionArgument(nvmlGpuVirtualizationMode_t *gpuVirtualizationModePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGpuVirtualizationMode_t *GpuVirtualizationModePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GPUVIRTUALIZATIONMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gpuVirtualizationModePtr = gpuVirtualizationModePtr;
+        m_value.GpuVirtualizationModePtr = GpuVirtualizationModePtr;
+    }
+
+    nvmlGpuVirtualizationMode_t *AsGpuVirtualizationModePtr() const
+    {
+        return m_value.GpuVirtualizationModePtr;
+    }
+
+    nvmlGpuVirtualizationMode_t const &AsGpuVirtualizationMode() const
+    {
+        return m_value.GpuVirtualizationMode;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGridLicensableFeatures_t gridLicensableFeatures)
-        : m_type(INJECTION_GRIDLICENSABLEFEATURES)
+    InjectionArgument(nvmlGridLicensableFeature_t *GridLicensableFeaturePtr, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSABLEFEATURE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gridLicensableFeatures = gridLicensableFeatures;
+        m_value.GridLicensableFeaturePtr = GridLicensableFeaturePtr;
     }
-    const nvmlGridLicensableFeatures_t &AsGridLicensableFeatures() const
+    InjectionArgument(nvmlGridLicensableFeature_t GridLicensableFeature)
+        : m_type(INJECTION_GRIDLICENSABLEFEATURE)
     {
-        return m_value.gridLicensableFeatures;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicensableFeature = GridLicensableFeature;
+    }
+    InjectionArgument(nvmlGridLicensableFeature_t *GridLicensableFeaturePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSABLEFEATURE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicensableFeaturePtr = GridLicensableFeaturePtr;
+    }
+
+    nvmlGridLicensableFeature_t *AsGridLicensableFeaturePtr() const
+    {
+        return m_value.GridLicensableFeaturePtr;
+    }
+
+    nvmlGridLicensableFeature_t const &AsGridLicensableFeature() const
+    {
+        return m_value.GridLicensableFeature;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlGridLicensableFeatures_t *gridLicensableFeaturesPtr, bool inHeap = false)
+    InjectionArgument(nvmlGridLicensableFeatures_t *GridLicensableFeaturesPtr, bool inHeap = false)
         : m_type(INJECTION_GRIDLICENSABLEFEATURES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gridLicensableFeaturesPtr = gridLicensableFeaturesPtr;
+        m_value.GridLicensableFeaturesPtr = GridLicensableFeaturesPtr;
     }
-    nvmlGridLicensableFeatures_t *AsGridLicensableFeaturesPtr() const
+    InjectionArgument(nvmlGridLicensableFeatures_t GridLicensableFeatures)
+        : m_type(INJECTION_GRIDLICENSABLEFEATURES)
     {
-        return m_value.gridLicensableFeaturesPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicensableFeatures = GridLicensableFeatures;
     }
-
-    InjectionArgument(nvmlGridLicensableFeatures_t *gridLicensableFeaturesPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlGridLicensableFeatures_t *GridLicensableFeaturesPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_GRIDLICENSABLEFEATURES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.gridLicensableFeaturesPtr = gridLicensableFeaturesPtr;
+        m_value.GridLicensableFeaturesPtr = GridLicensableFeaturesPtr;
+    }
+
+    nvmlGridLicensableFeatures_t *AsGridLicensableFeaturesPtr() const
+    {
+        return m_value.GridLicensableFeaturesPtr;
+    }
+
+    nvmlGridLicensableFeatures_t const &AsGridLicensableFeatures() const
+    {
+        return m_value.GridLicensableFeatures;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlHostVgpuMode_t hostVgpuMode)
-        : m_type(INJECTION_HOSTVGPUMODE)
+    InjectionArgument(nvmlGridLicenseExpiry_t *GridLicenseExpiryPtr, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSEEXPIRY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.hostVgpuMode = hostVgpuMode;
+        m_value.GridLicenseExpiryPtr = GridLicenseExpiryPtr;
     }
-    const nvmlHostVgpuMode_t &AsHostVgpuMode() const
+    InjectionArgument(nvmlGridLicenseExpiry_t GridLicenseExpiry)
+        : m_type(INJECTION_GRIDLICENSEEXPIRY)
     {
-        return m_value.hostVgpuMode;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicenseExpiry = GridLicenseExpiry;
+    }
+    InjectionArgument(nvmlGridLicenseExpiry_t *GridLicenseExpiryPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSEEXPIRY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicenseExpiryPtr = GridLicenseExpiryPtr;
+    }
+
+    nvmlGridLicenseExpiry_t *AsGridLicenseExpiryPtr() const
+    {
+        return m_value.GridLicenseExpiryPtr;
+    }
+
+    nvmlGridLicenseExpiry_t const &AsGridLicenseExpiry() const
+    {
+        return m_value.GridLicenseExpiry;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlHostVgpuMode_t *hostVgpuModePtr, bool inHeap = false)
+    InjectionArgument(nvmlGridLicenseFeatureCode_t *GridLicenseFeatureCodePtr, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSEFEATURECODE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicenseFeatureCodePtr = GridLicenseFeatureCodePtr;
+    }
+    InjectionArgument(nvmlGridLicenseFeatureCode_t GridLicenseFeatureCode)
+        : m_type(INJECTION_GRIDLICENSEFEATURECODE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicenseFeatureCode = GridLicenseFeatureCode;
+    }
+    InjectionArgument(nvmlGridLicenseFeatureCode_t *GridLicenseFeatureCodePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GRIDLICENSEFEATURECODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GridLicenseFeatureCodePtr = GridLicenseFeatureCodePtr;
+    }
+
+    nvmlGridLicenseFeatureCode_t *AsGridLicenseFeatureCodePtr() const
+    {
+        return m_value.GridLicenseFeatureCodePtr;
+    }
+
+    nvmlGridLicenseFeatureCode_t const &AsGridLicenseFeatureCode() const
+    {
+        return m_value.GridLicenseFeatureCode;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlHostVgpuMode_t *HostVgpuModePtr, bool inHeap = false)
         : m_type(INJECTION_HOSTVGPUMODE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.hostVgpuModePtr = hostVgpuModePtr;
+        m_value.HostVgpuModePtr = HostVgpuModePtr;
     }
-    nvmlHostVgpuMode_t *AsHostVgpuModePtr() const
+    InjectionArgument(nvmlHostVgpuMode_t HostVgpuMode)
+        : m_type(INJECTION_HOSTVGPUMODE)
     {
-        return m_value.hostVgpuModePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.HostVgpuMode = HostVgpuMode;
     }
-
-    InjectionArgument(nvmlHostVgpuMode_t *hostVgpuModePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlHostVgpuMode_t *HostVgpuModePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_HOSTVGPUMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.hostVgpuModePtr = hostVgpuModePtr;
+        m_value.HostVgpuModePtr = HostVgpuModePtr;
+    }
+
+    nvmlHostVgpuMode_t *AsHostVgpuModePtr() const
+    {
+        return m_value.HostVgpuModePtr;
+    }
+
+    nvmlHostVgpuMode_t const &AsHostVgpuMode() const
+    {
+        return m_value.HostVgpuMode;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlHwbcEntry_t hwbcEntry)
-        : m_type(INJECTION_HWBCENTRY)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.hwbcEntry = hwbcEntry;
-    }
-    const nvmlHwbcEntry_t &AsHwbcEntry() const
-    {
-        return m_value.hwbcEntry;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlHwbcEntry_t *hwbcEntryPtr, bool inHeap = false)
+    InjectionArgument(nvmlHwbcEntry_t *HwbcEntryPtr, bool inHeap = false)
         : m_type(INJECTION_HWBCENTRY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.hwbcEntryPtr = hwbcEntryPtr;
+        m_value.HwbcEntryPtr = HwbcEntryPtr;
     }
-    nvmlHwbcEntry_t *AsHwbcEntryPtr() const
+    InjectionArgument(nvmlHwbcEntry_t HwbcEntry)
+        : m_type(INJECTION_HWBCENTRY)
     {
-        return m_value.hwbcEntryPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.HwbcEntry = HwbcEntry;
     }
-
-    InjectionArgument(nvmlHwbcEntry_t *hwbcEntryPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlHwbcEntry_t *HwbcEntryPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_HWBCENTRY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.hwbcEntryPtr = hwbcEntryPtr;
+        m_value.HwbcEntryPtr = HwbcEntryPtr;
+    }
+
+    nvmlHwbcEntry_t *AsHwbcEntryPtr() const
+    {
+        return m_value.HwbcEntryPtr;
+    }
+
+    nvmlHwbcEntry_t const &AsHwbcEntry() const
+    {
+        return m_value.HwbcEntry;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlInforomObject_t inforomObject)
+    InjectionArgument(nvmlInforomObject_t *InforomObjectPtr, bool inHeap = false)
+        : m_type(INJECTION_INFOROMOBJECT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.InforomObjectPtr = InforomObjectPtr;
+    }
+    InjectionArgument(nvmlInforomObject_t InforomObject)
         : m_type(INJECTION_INFOROMOBJECT)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.inforomObject = inforomObject;
+        m_value.InforomObject = InforomObject;
     }
-    const nvmlInforomObject_t &AsInforomObject() const
-    {
-        return m_value.inforomObject;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlIntNvLinkDeviceType_t intNvLinkDeviceType)
-        : m_type(INJECTION_INTNVLINKDEVICETYPE)
+    InjectionArgument(nvmlInforomObject_t *InforomObjectPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_INFOROMOBJECT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.intNvLinkDeviceType = intNvLinkDeviceType;
+        m_value.InforomObjectPtr = InforomObjectPtr;
     }
-    const nvmlIntNvLinkDeviceType_t &AsIntNvLinkDeviceType() const
+
+    nvmlInforomObject_t *AsInforomObjectPtr() const
     {
-        return m_value.intNvLinkDeviceType;
+        return m_value.InforomObjectPtr;
+    }
+
+    nvmlInforomObject_t const &AsInforomObject() const
+    {
+        return m_value.InforomObject;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlIntNvLinkDeviceType_t *intNvLinkDeviceTypePtr, bool inHeap = false)
+    InjectionArgument(nvmlIntNvLinkDeviceType_t *IntNvLinkDeviceTypePtr, bool inHeap = false)
         : m_type(INJECTION_INTNVLINKDEVICETYPE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.intNvLinkDeviceTypePtr = intNvLinkDeviceTypePtr;
+        m_value.IntNvLinkDeviceTypePtr = IntNvLinkDeviceTypePtr;
     }
-    nvmlIntNvLinkDeviceType_t *AsIntNvLinkDeviceTypePtr() const
+    InjectionArgument(nvmlIntNvLinkDeviceType_t IntNvLinkDeviceType)
+        : m_type(INJECTION_INTNVLINKDEVICETYPE)
     {
-        return m_value.intNvLinkDeviceTypePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.IntNvLinkDeviceType = IntNvLinkDeviceType;
     }
-
-    InjectionArgument(nvmlIntNvLinkDeviceType_t *intNvLinkDeviceTypePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlIntNvLinkDeviceType_t *IntNvLinkDeviceTypePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_INTNVLINKDEVICETYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.intNvLinkDeviceTypePtr = intNvLinkDeviceTypePtr;
+        m_value.IntNvLinkDeviceTypePtr = IntNvLinkDeviceTypePtr;
+    }
+
+    nvmlIntNvLinkDeviceType_t *AsIntNvLinkDeviceTypePtr() const
+    {
+        return m_value.IntNvLinkDeviceTypePtr;
+    }
+
+    nvmlIntNvLinkDeviceType_t const &AsIntNvLinkDeviceType() const
+    {
+        return m_value.IntNvLinkDeviceType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlLedColor_t ledColor)
+    InjectionArgument(nvmlLedColor_t *LedColorPtr, bool inHeap = false)
+        : m_type(INJECTION_LEDCOLOR_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LedColorPtr = LedColorPtr;
+    }
+    InjectionArgument(nvmlLedColor_t LedColor)
         : m_type(INJECTION_LEDCOLOR)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ledColor = ledColor;
+        m_value.LedColor = LedColor;
     }
-    const nvmlLedColor_t &AsLedColor() const
-    {
-        return m_value.ledColor;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlLedState_t ledState)
-        : m_type(INJECTION_LEDSTATE)
+    InjectionArgument(nvmlLedColor_t *LedColorPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_LEDCOLOR_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ledState = ledState;
+        m_value.LedColorPtr = LedColorPtr;
     }
-    const nvmlLedState_t &AsLedState() const
+
+    nvmlLedColor_t *AsLedColorPtr() const
     {
-        return m_value.ledState;
+        return m_value.LedColorPtr;
+    }
+
+    nvmlLedColor_t const &AsLedColor() const
+    {
+        return m_value.LedColor;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlLedState_t *ledStatePtr, bool inHeap = false)
+    InjectionArgument(nvmlLedState_t *LedStatePtr, bool inHeap = false)
         : m_type(INJECTION_LEDSTATE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ledStatePtr = ledStatePtr;
+        m_value.LedStatePtr = LedStatePtr;
     }
-    nvmlLedState_t *AsLedStatePtr() const
+    InjectionArgument(nvmlLedState_t LedState)
+        : m_type(INJECTION_LEDSTATE)
     {
-        return m_value.ledStatePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.LedState = LedState;
     }
-
-    InjectionArgument(nvmlLedState_t *ledStatePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlLedState_t *LedStatePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_LEDSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ledStatePtr = ledStatePtr;
+        m_value.LedStatePtr = LedStatePtr;
+    }
+
+    nvmlLedState_t *AsLedStatePtr() const
+    {
+        return m_value.LedStatePtr;
+    }
+
+    nvmlLedState_t const &AsLedState() const
+    {
+        return m_value.LedState;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemoryErrorType_t memoryErrorType)
+    InjectionArgument(nvmlMask255_t *Mask255Ptr, bool inHeap = false)
+        : m_type(INJECTION_MASK255_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Mask255Ptr = Mask255Ptr;
+    }
+    InjectionArgument(nvmlMask255_t Mask255)
+        : m_type(INJECTION_MASK255)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Mask255 = Mask255;
+    }
+    InjectionArgument(nvmlMask255_t *Mask255Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_MASK255_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Mask255Ptr = Mask255Ptr;
+    }
+
+    nvmlMask255_t *AsMask255Ptr() const
+    {
+        return m_value.Mask255Ptr;
+    }
+
+    nvmlMask255_t const &AsMask255() const
+    {
+        return m_value.Mask255;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlMemoryErrorType_t *MemoryErrorTypePtr, bool inHeap = false)
+        : m_type(INJECTION_MEMORYERRORTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MemoryErrorTypePtr = MemoryErrorTypePtr;
+    }
+    InjectionArgument(nvmlMemoryErrorType_t MemoryErrorType)
         : m_type(INJECTION_MEMORYERRORTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memoryErrorType = memoryErrorType;
+        m_value.MemoryErrorType = MemoryErrorType;
     }
-    const nvmlMemoryErrorType_t &AsMemoryErrorType() const
+    InjectionArgument(nvmlMemoryErrorType_t *MemoryErrorTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_MEMORYERRORTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.memoryErrorType;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MemoryErrorTypePtr = MemoryErrorTypePtr;
+    }
+
+    nvmlMemoryErrorType_t *AsMemoryErrorTypePtr() const
+    {
+        return m_value.MemoryErrorTypePtr;
+    }
+
+    nvmlMemoryErrorType_t const &AsMemoryErrorType() const
+    {
+        return m_value.MemoryErrorType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemoryLocation_t memoryLocation)
+    InjectionArgument(nvmlMemoryLocation_t *MemoryLocationPtr, bool inHeap = false)
+        : m_type(INJECTION_MEMORYLOCATION_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MemoryLocationPtr = MemoryLocationPtr;
+    }
+    InjectionArgument(nvmlMemoryLocation_t MemoryLocation)
         : m_type(INJECTION_MEMORYLOCATION)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memoryLocation = memoryLocation;
+        m_value.MemoryLocation = MemoryLocation;
     }
-    const nvmlMemoryLocation_t &AsMemoryLocation() const
-    {
-        return m_value.memoryLocation;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemory_t memory)
-        : m_type(INJECTION_MEMORY)
+    InjectionArgument(nvmlMemoryLocation_t *MemoryLocationPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_MEMORYLOCATION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memory = memory;
+        m_value.MemoryLocationPtr = MemoryLocationPtr;
     }
-    const nvmlMemory_t &AsMemory() const
+
+    nvmlMemoryLocation_t *AsMemoryLocationPtr() const
     {
-        return m_value.memory;
+        return m_value.MemoryLocationPtr;
+    }
+
+    nvmlMemoryLocation_t const &AsMemoryLocation() const
+    {
+        return m_value.MemoryLocation;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemory_t *memoryPtr, bool inHeap = false)
+    InjectionArgument(nvmlMemory_t *MemoryPtr, bool inHeap = false)
         : m_type(INJECTION_MEMORY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memoryPtr = memoryPtr;
+        m_value.MemoryPtr = MemoryPtr;
     }
-    nvmlMemory_t *AsMemoryPtr() const
+    InjectionArgument(nvmlMemory_t Memory)
+        : m_type(INJECTION_MEMORY)
     {
-        return m_value.memoryPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Memory = Memory;
     }
-
-    InjectionArgument(nvmlMemory_t *memoryPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlMemory_t *MemoryPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_MEMORY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memoryPtr = memoryPtr;
+        m_value.MemoryPtr = MemoryPtr;
+    }
+
+    nvmlMemory_t *AsMemoryPtr() const
+    {
+        return m_value.MemoryPtr;
+    }
+
+    nvmlMemory_t const &AsMemory() const
+    {
+        return m_value.Memory;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemory_v2_t memory_v2)
-        : m_type(INJECTION_MEMORY_V2)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.memory_v2 = memory_v2;
-    }
-    const nvmlMemory_v2_t &AsMemory_v2() const
-    {
-        return m_value.memory_v2;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlMemory_v2_t *memory_v2Ptr, bool inHeap = false)
+    InjectionArgument(nvmlMemory_v2_t *Memory_v2Ptr, bool inHeap = false)
         : m_type(INJECTION_MEMORY_V2_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memory_v2Ptr = memory_v2Ptr;
+        m_value.Memory_v2Ptr = Memory_v2Ptr;
     }
-    nvmlMemory_v2_t *AsMemory_v2Ptr() const
+    InjectionArgument(nvmlMemory_v2_t Memory_v2)
+        : m_type(INJECTION_MEMORY_V2)
     {
-        return m_value.memory_v2Ptr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Memory_v2 = Memory_v2;
     }
-
-    InjectionArgument(nvmlMemory_v2_t *memory_v2Ptr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlMemory_v2_t *Memory_v2Ptr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_MEMORY_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.memory_v2Ptr = memory_v2Ptr;
+        m_value.Memory_v2Ptr = Memory_v2Ptr;
+    }
+
+    nvmlMemory_v2_t *AsMemory_v2Ptr() const
+    {
+        return m_value.Memory_v2Ptr;
+    }
+
+    nvmlMemory_v2_t const &AsMemory_v2() const
+    {
+        return m_value.Memory_v2;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlNvLinkCapability_t nvLinkCapability)
+    InjectionArgument(nvmlNvLinkCapability_t *NvLinkCapabilityPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKCAPABILITY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkCapabilityPtr = NvLinkCapabilityPtr;
+    }
+    InjectionArgument(nvmlNvLinkCapability_t NvLinkCapability)
         : m_type(INJECTION_NVLINKCAPABILITY)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvLinkCapability = nvLinkCapability;
+        m_value.NvLinkCapability = NvLinkCapability;
     }
-    const nvmlNvLinkCapability_t &AsNvLinkCapability() const
+    InjectionArgument(nvmlNvLinkCapability_t *NvLinkCapabilityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKCAPABILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.nvLinkCapability;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkCapabilityPtr = NvLinkCapabilityPtr;
+    }
+
+    nvmlNvLinkCapability_t *AsNvLinkCapabilityPtr() const
+    {
+        return m_value.NvLinkCapabilityPtr;
+    }
+
+    nvmlNvLinkCapability_t const &AsNvLinkCapability() const
+    {
+        return m_value.NvLinkCapability;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlNvLinkErrorCounter_t nvLinkErrorCounter)
+    InjectionArgument(nvmlNvLinkErrorCounter_t *NvLinkErrorCounterPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKERRORCOUNTER_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkErrorCounterPtr = NvLinkErrorCounterPtr;
+    }
+    InjectionArgument(nvmlNvLinkErrorCounter_t NvLinkErrorCounter)
         : m_type(INJECTION_NVLINKERRORCOUNTER)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvLinkErrorCounter = nvLinkErrorCounter;
+        m_value.NvLinkErrorCounter = NvLinkErrorCounter;
     }
-    const nvmlNvLinkErrorCounter_t &AsNvLinkErrorCounter() const
-    {
-        return m_value.nvLinkErrorCounter;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlNvLinkUtilizationControl_t nvLinkUtilizationControl)
-        : m_type(INJECTION_NVLINKUTILIZATIONCONTROL)
+    InjectionArgument(nvmlNvLinkErrorCounter_t *NvLinkErrorCounterPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKERRORCOUNTER_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvLinkUtilizationControl = nvLinkUtilizationControl;
+        m_value.NvLinkErrorCounterPtr = NvLinkErrorCounterPtr;
     }
-    const nvmlNvLinkUtilizationControl_t &AsNvLinkUtilizationControl() const
+
+    nvmlNvLinkErrorCounter_t *AsNvLinkErrorCounterPtr() const
     {
-        return m_value.nvLinkUtilizationControl;
+        return m_value.NvLinkErrorCounterPtr;
+    }
+
+    nvmlNvLinkErrorCounter_t const &AsNvLinkErrorCounter() const
+    {
+        return m_value.NvLinkErrorCounter;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlNvLinkUtilizationControl_t *nvLinkUtilizationControlPtr, bool inHeap = false)
+    InjectionArgument(nvmlNvLinkPowerThres_t *NvLinkPowerThresPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKPOWERTHRES_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkPowerThresPtr = NvLinkPowerThresPtr;
+    }
+    InjectionArgument(nvmlNvLinkPowerThres_t NvLinkPowerThres)
+        : m_type(INJECTION_NVLINKPOWERTHRES)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkPowerThres = NvLinkPowerThres;
+    }
+    InjectionArgument(nvmlNvLinkPowerThres_t *NvLinkPowerThresPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKPOWERTHRES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkPowerThresPtr = NvLinkPowerThresPtr;
+    }
+
+    nvmlNvLinkPowerThres_t *AsNvLinkPowerThresPtr() const
+    {
+        return m_value.NvLinkPowerThresPtr;
+    }
+
+    nvmlNvLinkPowerThres_t const &AsNvLinkPowerThres() const
+    {
+        return m_value.NvLinkPowerThres;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlNvLinkUtilizationControl_t *NvLinkUtilizationControlPtr, bool inHeap = false)
         : m_type(INJECTION_NVLINKUTILIZATIONCONTROL_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvLinkUtilizationControlPtr = nvLinkUtilizationControlPtr;
+        m_value.NvLinkUtilizationControlPtr = NvLinkUtilizationControlPtr;
     }
-    nvmlNvLinkUtilizationControl_t *AsNvLinkUtilizationControlPtr() const
+    InjectionArgument(nvmlNvLinkUtilizationControl_t NvLinkUtilizationControl)
+        : m_type(INJECTION_NVLINKUTILIZATIONCONTROL)
     {
-        return m_value.nvLinkUtilizationControlPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationControl = NvLinkUtilizationControl;
     }
-
-    InjectionArgument(nvmlNvLinkUtilizationControl_t *nvLinkUtilizationControlPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlNvLinkUtilizationControl_t *NvLinkUtilizationControlPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_NVLINKUTILIZATIONCONTROL_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvLinkUtilizationControlPtr = nvLinkUtilizationControlPtr;
+        m_value.NvLinkUtilizationControlPtr = NvLinkUtilizationControlPtr;
+    }
+
+    nvmlNvLinkUtilizationControl_t *AsNvLinkUtilizationControlPtr() const
+    {
+        return m_value.NvLinkUtilizationControlPtr;
+    }
+
+    nvmlNvLinkUtilizationControl_t const &AsNvLinkUtilizationControl() const
+    {
+        return m_value.NvLinkUtilizationControl;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPSUInfo_t pSUInfo)
-        : m_type(INJECTION_PSUINFO)
+    InjectionArgument(nvmlNvLinkUtilizationCountPktTypes_t *NvLinkUtilizationCountPktTypesPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pSUInfo = pSUInfo;
+        m_value.NvLinkUtilizationCountPktTypesPtr = NvLinkUtilizationCountPktTypesPtr;
     }
-    const nvmlPSUInfo_t &AsPSUInfo() const
+    InjectionArgument(nvmlNvLinkUtilizationCountPktTypes_t NvLinkUtilizationCountPktTypes)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES)
     {
-        return m_value.pSUInfo;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationCountPktTypes = NvLinkUtilizationCountPktTypes;
+    }
+    InjectionArgument(nvmlNvLinkUtilizationCountPktTypes_t *NvLinkUtilizationCountPktTypesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationCountPktTypesPtr = NvLinkUtilizationCountPktTypesPtr;
+    }
+
+    nvmlNvLinkUtilizationCountPktTypes_t *AsNvLinkUtilizationCountPktTypesPtr() const
+    {
+        return m_value.NvLinkUtilizationCountPktTypesPtr;
+    }
+
+    nvmlNvLinkUtilizationCountPktTypes_t const &AsNvLinkUtilizationCountPktTypes() const
+    {
+        return m_value.NvLinkUtilizationCountPktTypes;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPSUInfo_t *pSUInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlNvLinkUtilizationCountUnits_t *NvLinkUtilizationCountUnitsPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationCountUnitsPtr = NvLinkUtilizationCountUnitsPtr;
+    }
+    InjectionArgument(nvmlNvLinkUtilizationCountUnits_t NvLinkUtilizationCountUnits)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTUNITS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationCountUnits = NvLinkUtilizationCountUnits;
+    }
+    InjectionArgument(nvmlNvLinkUtilizationCountUnits_t *NvLinkUtilizationCountUnitsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvLinkUtilizationCountUnitsPtr = NvLinkUtilizationCountUnitsPtr;
+    }
+
+    nvmlNvLinkUtilizationCountUnits_t *AsNvLinkUtilizationCountUnitsPtr() const
+    {
+        return m_value.NvLinkUtilizationCountUnitsPtr;
+    }
+
+    nvmlNvLinkUtilizationCountUnits_t const &AsNvLinkUtilizationCountUnits() const
+    {
+        return m_value.NvLinkUtilizationCountUnits;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlNvlinkVersion_t *NvlinkVersionPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKVERSION_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkVersionPtr = NvlinkVersionPtr;
+    }
+    InjectionArgument(nvmlNvlinkVersion_t NvlinkVersion)
+        : m_type(INJECTION_NVLINKVERSION)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkVersion = NvlinkVersion;
+    }
+    InjectionArgument(nvmlNvlinkVersion_t *NvlinkVersionPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKVERSION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkVersionPtr = NvlinkVersionPtr;
+    }
+
+    nvmlNvlinkVersion_t *AsNvlinkVersionPtr() const
+    {
+        return m_value.NvlinkVersionPtr;
+    }
+
+    nvmlNvlinkVersion_t const &AsNvlinkVersion() const
+    {
+        return m_value.NvlinkVersion;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPSUInfo_t *PSUInfoPtr, bool inHeap = false)
         : m_type(INJECTION_PSUINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pSUInfoPtr = pSUInfoPtr;
+        m_value.PSUInfoPtr = PSUInfoPtr;
     }
-    nvmlPSUInfo_t *AsPSUInfoPtr() const
+    InjectionArgument(nvmlPSUInfo_t PSUInfo)
+        : m_type(INJECTION_PSUINFO)
     {
-        return m_value.pSUInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PSUInfo = PSUInfo;
     }
-
-    InjectionArgument(nvmlPSUInfo_t *pSUInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlPSUInfo_t *PSUInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PSUINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pSUInfoPtr = pSUInfoPtr;
+        m_value.PSUInfoPtr = PSUInfoPtr;
+    }
+
+    nvmlPSUInfo_t *AsPSUInfoPtr() const
+    {
+        return m_value.PSUInfoPtr;
+    }
+
+    nvmlPSUInfo_t const &AsPSUInfo() const
+    {
+        return m_value.PSUInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPageRetirementCause_t pageRetirementCause)
+    InjectionArgument(nvmlPageRetirementCause_t *PageRetirementCausePtr, bool inHeap = false)
+        : m_type(INJECTION_PAGERETIREMENTCAUSE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PageRetirementCausePtr = PageRetirementCausePtr;
+    }
+    InjectionArgument(nvmlPageRetirementCause_t PageRetirementCause)
         : m_type(INJECTION_PAGERETIREMENTCAUSE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pageRetirementCause = pageRetirementCause;
+        m_value.PageRetirementCause = PageRetirementCause;
     }
-    const nvmlPageRetirementCause_t &AsPageRetirementCause() const
-    {
-        return m_value.pageRetirementCause;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPciInfo_t pciInfo)
-        : m_type(INJECTION_PCIINFO)
+    InjectionArgument(nvmlPageRetirementCause_t *PageRetirementCausePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PAGERETIREMENTCAUSE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pciInfo = pciInfo;
+        m_value.PageRetirementCausePtr = PageRetirementCausePtr;
     }
-    const nvmlPciInfo_t &AsPciInfo() const
+
+    nvmlPageRetirementCause_t *AsPageRetirementCausePtr() const
     {
-        return m_value.pciInfo;
+        return m_value.PageRetirementCausePtr;
+    }
+
+    nvmlPageRetirementCause_t const &AsPageRetirementCause() const
+    {
+        return m_value.PageRetirementCause;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPciInfo_t *pciInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlPciInfoExt_t *PciInfoExtPtr, bool inHeap = false)
+        : m_type(INJECTION_PCIINFOEXT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PciInfoExtPtr = PciInfoExtPtr;
+    }
+    InjectionArgument(nvmlPciInfoExt_t PciInfoExt)
+        : m_type(INJECTION_PCIINFOEXT)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PciInfoExt = PciInfoExt;
+    }
+    InjectionArgument(nvmlPciInfoExt_t *PciInfoExtPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PCIINFOEXT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PciInfoExtPtr = PciInfoExtPtr;
+    }
+
+    nvmlPciInfoExt_t *AsPciInfoExtPtr() const
+    {
+        return m_value.PciInfoExtPtr;
+    }
+
+    nvmlPciInfoExt_t const &AsPciInfoExt() const
+    {
+        return m_value.PciInfoExt;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPciInfo_t *PciInfoPtr, bool inHeap = false)
         : m_type(INJECTION_PCIINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pciInfoPtr = pciInfoPtr;
+        m_value.PciInfoPtr = PciInfoPtr;
     }
-    nvmlPciInfo_t *AsPciInfoPtr() const
+    InjectionArgument(nvmlPciInfo_t PciInfo)
+        : m_type(INJECTION_PCIINFO)
     {
-        return m_value.pciInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PciInfo = PciInfo;
     }
-
-    InjectionArgument(nvmlPciInfo_t *pciInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlPciInfo_t *PciInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PCIINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pciInfoPtr = pciInfoPtr;
+        m_value.PciInfoPtr = PciInfoPtr;
+    }
+
+    nvmlPciInfo_t *AsPciInfoPtr() const
+    {
+        return m_value.PciInfoPtr;
+    }
+
+    nvmlPciInfo_t const &AsPciInfo() const
+    {
+        return m_value.PciInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPcieLinkState_t pcieLinkState)
+    InjectionArgument(nvmlPcieLinkState_t *PcieLinkStatePtr, bool inHeap = false)
+        : m_type(INJECTION_PCIELINKSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PcieLinkStatePtr = PcieLinkStatePtr;
+    }
+    InjectionArgument(nvmlPcieLinkState_t PcieLinkState)
         : m_type(INJECTION_PCIELINKSTATE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pcieLinkState = pcieLinkState;
+        m_value.PcieLinkState = PcieLinkState;
     }
-    const nvmlPcieLinkState_t &AsPcieLinkState() const
+    InjectionArgument(nvmlPcieLinkState_t *PcieLinkStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PCIELINKSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.pcieLinkState;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PcieLinkStatePtr = PcieLinkStatePtr;
+    }
+
+    nvmlPcieLinkState_t *AsPcieLinkStatePtr() const
+    {
+        return m_value.PcieLinkStatePtr;
+    }
+
+    nvmlPcieLinkState_t const &AsPcieLinkState() const
+    {
+        return m_value.PcieLinkState;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPcieUtilCounter_t pcieUtilCounter)
+    InjectionArgument(nvmlPcieUtilCounter_t *PcieUtilCounterPtr, bool inHeap = false)
+        : m_type(INJECTION_PCIEUTILCOUNTER_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PcieUtilCounterPtr = PcieUtilCounterPtr;
+    }
+    InjectionArgument(nvmlPcieUtilCounter_t PcieUtilCounter)
         : m_type(INJECTION_PCIEUTILCOUNTER)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pcieUtilCounter = pcieUtilCounter;
+        m_value.PcieUtilCounter = PcieUtilCounter;
     }
-    const nvmlPcieUtilCounter_t &AsPcieUtilCounter() const
+    InjectionArgument(nvmlPcieUtilCounter_t *PcieUtilCounterPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PCIEUTILCOUNTER_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.pcieUtilCounter;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PcieUtilCounterPtr = PcieUtilCounterPtr;
+    }
+
+    nvmlPcieUtilCounter_t *AsPcieUtilCounterPtr() const
+    {
+        return m_value.PcieUtilCounterPtr;
+    }
+
+    nvmlPcieUtilCounter_t const &AsPcieUtilCounter() const
+    {
+        return m_value.PcieUtilCounter;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPerfPolicyType_t perfPolicyType)
+    InjectionArgument(nvmlPerfPolicyType_t *PerfPolicyTypePtr, bool inHeap = false)
+        : m_type(INJECTION_PERFPOLICYTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PerfPolicyTypePtr = PerfPolicyTypePtr;
+    }
+    InjectionArgument(nvmlPerfPolicyType_t PerfPolicyType)
         : m_type(INJECTION_PERFPOLICYTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.perfPolicyType = perfPolicyType;
+        m_value.PerfPolicyType = PerfPolicyType;
     }
-    const nvmlPerfPolicyType_t &AsPerfPolicyType() const
-    {
-        return m_value.perfPolicyType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_t processInfo)
-        : m_type(INJECTION_PROCESSINFO)
+    InjectionArgument(nvmlPerfPolicyType_t *PerfPolicyTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PERFPOLICYTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo = processInfo;
+        m_value.PerfPolicyTypePtr = PerfPolicyTypePtr;
     }
-    const nvmlProcessInfo_t &AsProcessInfo() const
+
+    nvmlPerfPolicyType_t *AsPerfPolicyTypePtr() const
     {
-        return m_value.processInfo;
+        return m_value.PerfPolicyTypePtr;
+    }
+
+    nvmlPerfPolicyType_t const &AsPerfPolicyType() const
+    {
+        return m_value.PerfPolicyType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_t *processInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlPlatformInfo_t *PlatformInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_PLATFORMINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfoPtr = PlatformInfoPtr;
+    }
+    InjectionArgument(nvmlPlatformInfo_t PlatformInfo)
+        : m_type(INJECTION_PLATFORMINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfo = PlatformInfo;
+    }
+    InjectionArgument(nvmlPlatformInfo_t *PlatformInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PLATFORMINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfoPtr = PlatformInfoPtr;
+    }
+
+    nvmlPlatformInfo_t *AsPlatformInfoPtr() const
+    {
+        return m_value.PlatformInfoPtr;
+    }
+
+    nvmlPlatformInfo_t const &AsPlatformInfo() const
+    {
+        return m_value.PlatformInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPowerProfileType_t *PowerProfileTypePtr, bool inHeap = false)
+        : m_type(INJECTION_POWERPROFILETYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileTypePtr = PowerProfileTypePtr;
+    }
+    InjectionArgument(nvmlPowerProfileType_t PowerProfileType)
+        : m_type(INJECTION_POWERPROFILETYPE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileType = PowerProfileType;
+    }
+    InjectionArgument(nvmlPowerProfileType_t *PowerProfileTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_POWERPROFILETYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileTypePtr = PowerProfileTypePtr;
+    }
+
+    nvmlPowerProfileType_t *AsPowerProfileTypePtr() const
+    {
+        return m_value.PowerProfileTypePtr;
+    }
+
+    nvmlPowerProfileType_t const &AsPowerProfileType() const
+    {
+        return m_value.PowerProfileType;
+    }
+
+    nvmlPowerScopeType_t *AsPowerScopeTypePtr() const
+    {
+        return static_cast<nvmlPowerScopeType_t *>(m_value.UCharPtr);
+    }
+
+    nvmlPowerScopeType_t AsPowerScopeType() const
+    {
+        return static_cast<nvmlPowerScopeType_t>(m_value.UChar);
+    }
+
+    nvmlPowerSource_t *AsPowerSourcePtr() const
+    {
+        return static_cast<nvmlPowerSource_t *>(m_value.UIntPtr);
+    }
+
+    nvmlPowerSource_t AsPowerSource() const
+    {
+        return static_cast<nvmlPowerSource_t>(m_value.UInt);
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPowerValue_v2_t *PowerValue_v2Ptr, bool inHeap = false)
+        : m_type(INJECTION_POWERVALUE_V2_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerValue_v2Ptr = PowerValue_v2Ptr;
+    }
+    InjectionArgument(nvmlPowerValue_v2_t PowerValue_v2)
+        : m_type(INJECTION_POWERVALUE_V2)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerValue_v2 = PowerValue_v2;
+    }
+    InjectionArgument(nvmlPowerValue_v2_t *PowerValue_v2Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_POWERVALUE_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerValue_v2Ptr = PowerValue_v2Ptr;
+    }
+
+    nvmlPowerValue_v2_t *AsPowerValue_v2Ptr() const
+    {
+        return m_value.PowerValue_v2Ptr;
+    }
+
+    nvmlPowerValue_v2_t const &AsPowerValue_v2() const
+    {
+        return m_value.PowerValue_v2;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlProcessDetailList_t *ProcessDetailListPtr, bool inHeap = false)
+        : m_type(INJECTION_PROCESSDETAILLIST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetailListPtr = ProcessDetailListPtr;
+    }
+    InjectionArgument(nvmlProcessDetailList_t ProcessDetailList)
+        : m_type(INJECTION_PROCESSDETAILLIST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetailList = ProcessDetailList;
+    }
+    InjectionArgument(nvmlProcessDetailList_t *ProcessDetailListPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PROCESSDETAILLIST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetailListPtr = ProcessDetailListPtr;
+    }
+
+    nvmlProcessDetailList_t *AsProcessDetailListPtr() const
+    {
+        return m_value.ProcessDetailListPtr;
+    }
+
+    nvmlProcessDetailList_t const &AsProcessDetailList() const
+    {
+        return m_value.ProcessDetailList;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlProcessDetail_v1_t *ProcessDetail_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PROCESSDETAIL_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetail_v1Ptr = ProcessDetail_v1Ptr;
+    }
+    InjectionArgument(nvmlProcessDetail_v1_t ProcessDetail_v1)
+        : m_type(INJECTION_PROCESSDETAIL_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetail_v1 = ProcessDetail_v1;
+    }
+    InjectionArgument(nvmlProcessDetail_v1_t *ProcessDetail_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PROCESSDETAIL_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessDetail_v1Ptr = ProcessDetail_v1Ptr;
+    }
+
+    nvmlProcessDetail_v1_t *AsProcessDetail_v1Ptr() const
+    {
+        return m_value.ProcessDetail_v1Ptr;
+    }
+
+    nvmlProcessDetail_v1_t const &AsProcessDetail_v1() const
+    {
+        return m_value.ProcessDetail_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlProcessInfo_t *ProcessInfoPtr, bool inHeap = false)
         : m_type(INJECTION_PROCESSINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfoPtr = processInfoPtr;
+        m_value.ProcessInfoPtr = ProcessInfoPtr;
     }
-    nvmlProcessInfo_t *AsProcessInfoPtr() const
+    InjectionArgument(nvmlProcessInfo_t ProcessInfo)
+        : m_type(INJECTION_PROCESSINFO)
     {
-        return m_value.processInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessInfo = ProcessInfo;
     }
-
-    InjectionArgument(nvmlProcessInfo_t *processInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlProcessInfo_t *ProcessInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PROCESSINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfoPtr = processInfoPtr;
+        m_value.ProcessInfoPtr = ProcessInfoPtr;
+    }
+
+    nvmlProcessInfo_t *AsProcessInfoPtr() const
+    {
+        return m_value.ProcessInfoPtr;
+    }
+
+    nvmlProcessInfo_t const &AsProcessInfo() const
+    {
+        return m_value.ProcessInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_v1_t processInfo_v1)
-        : m_type(INJECTION_PROCESSINFO_V1)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v1 = processInfo_v1;
-    }
-    const nvmlProcessInfo_v1_t &AsProcessInfo_v1() const
-    {
-        return m_value.processInfo_v1;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_v1_t *processInfo_v1Ptr, bool inHeap = false)
+    InjectionArgument(nvmlProcessInfo_v1_t *ProcessInfo_v1Ptr, bool inHeap = false)
         : m_type(INJECTION_PROCESSINFO_V1_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v1Ptr = processInfo_v1Ptr;
+        m_value.ProcessInfo_v1Ptr = ProcessInfo_v1Ptr;
     }
-    nvmlProcessInfo_v1_t *AsProcessInfo_v1Ptr() const
+    InjectionArgument(nvmlProcessInfo_v1_t ProcessInfo_v1)
+        : m_type(INJECTION_PROCESSINFO_V1)
     {
-        return m_value.processInfo_v1Ptr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessInfo_v1 = ProcessInfo_v1;
     }
-
-    InjectionArgument(nvmlProcessInfo_v1_t *processInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlProcessInfo_v1_t *ProcessInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PROCESSINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v1Ptr = processInfo_v1Ptr;
+        m_value.ProcessInfo_v1Ptr = ProcessInfo_v1Ptr;
+    }
+
+    nvmlProcessInfo_v1_t *AsProcessInfo_v1Ptr() const
+    {
+        return m_value.ProcessInfo_v1Ptr;
+    }
+
+    nvmlProcessInfo_v1_t const &AsProcessInfo_v1() const
+    {
+        return m_value.ProcessInfo_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_v2_t processInfo_v2)
-        : m_type(INJECTION_PROCESSINFO_V2)
+    InjectionArgument(nvmlProcessUtilizationInfo_v1_t *ProcessUtilizationInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PROCESSUTILIZATIONINFO_V1_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v2 = processInfo_v2;
+        m_value.ProcessUtilizationInfo_v1Ptr = ProcessUtilizationInfo_v1Ptr;
     }
-    const nvmlProcessInfo_v2_t &AsProcessInfo_v2() const
+    InjectionArgument(nvmlProcessUtilizationInfo_v1_t ProcessUtilizationInfo_v1)
+        : m_type(INJECTION_PROCESSUTILIZATIONINFO_V1)
     {
-        return m_value.processInfo_v2;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessUtilizationInfo_v1 = ProcessUtilizationInfo_v1;
+    }
+    InjectionArgument(nvmlProcessUtilizationInfo_v1_t *ProcessUtilizationInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PROCESSUTILIZATIONINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessUtilizationInfo_v1Ptr = ProcessUtilizationInfo_v1Ptr;
+    }
+
+    nvmlProcessUtilizationInfo_v1_t *AsProcessUtilizationInfo_v1Ptr() const
+    {
+        return m_value.ProcessUtilizationInfo_v1Ptr;
+    }
+
+    nvmlProcessUtilizationInfo_v1_t const &AsProcessUtilizationInfo_v1() const
+    {
+        return m_value.ProcessUtilizationInfo_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessInfo_v2_t *processInfo_v2Ptr, bool inHeap = false)
-        : m_type(INJECTION_PROCESSINFO_V2_PTR), m_inHeap(inHeap)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v2Ptr = processInfo_v2Ptr;
-    }
-    nvmlProcessInfo_v2_t *AsProcessInfo_v2Ptr() const
-    {
-        return m_value.processInfo_v2Ptr;
-    }
-
-    InjectionArgument(nvmlProcessInfo_v2_t *processInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
-        : m_type(INJECTION_PROCESSINFO_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.processInfo_v2Ptr = processInfo_v2Ptr;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessUtilizationSample_t processUtilizationSample)
-        : m_type(INJECTION_PROCESSUTILIZATIONSAMPLE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.processUtilizationSample = processUtilizationSample;
-    }
-    const nvmlProcessUtilizationSample_t &AsProcessUtilizationSample() const
-    {
-        return m_value.processUtilizationSample;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlProcessUtilizationSample_t *processUtilizationSamplePtr, bool inHeap = false)
+    InjectionArgument(nvmlProcessUtilizationSample_t *ProcessUtilizationSamplePtr, bool inHeap = false)
         : m_type(INJECTION_PROCESSUTILIZATIONSAMPLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processUtilizationSamplePtr = processUtilizationSamplePtr;
+        m_value.ProcessUtilizationSamplePtr = ProcessUtilizationSamplePtr;
     }
-    nvmlProcessUtilizationSample_t *AsProcessUtilizationSamplePtr() const
+    InjectionArgument(nvmlProcessUtilizationSample_t ProcessUtilizationSample)
+        : m_type(INJECTION_PROCESSUTILIZATIONSAMPLE)
     {
-        return m_value.processUtilizationSamplePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessUtilizationSample = ProcessUtilizationSample;
     }
-
-    InjectionArgument(nvmlProcessUtilizationSample_t *processUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlProcessUtilizationSample_t *ProcessUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PROCESSUTILIZATIONSAMPLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.processUtilizationSamplePtr = processUtilizationSamplePtr;
+        m_value.ProcessUtilizationSamplePtr = ProcessUtilizationSamplePtr;
+    }
+
+    nvmlProcessUtilizationSample_t *AsProcessUtilizationSamplePtr() const
+    {
+        return m_value.ProcessUtilizationSamplePtr;
+    }
+
+    nvmlProcessUtilizationSample_t const &AsProcessUtilizationSample() const
+    {
+        return m_value.ProcessUtilizationSample;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPstates_t pstates)
-        : m_type(INJECTION_PSTATES)
+    InjectionArgument(nvmlProcessesUtilizationInfo_t *ProcessesUtilizationInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_PROCESSESUTILIZATIONINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pstates = pstates;
+        m_value.ProcessesUtilizationInfoPtr = ProcessesUtilizationInfoPtr;
     }
-    const nvmlPstates_t &AsPstates() const
+    InjectionArgument(nvmlProcessesUtilizationInfo_t ProcessesUtilizationInfo)
+        : m_type(INJECTION_PROCESSESUTILIZATIONINFO)
     {
-        return m_value.pstates;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessesUtilizationInfo = ProcessesUtilizationInfo;
+    }
+    InjectionArgument(nvmlProcessesUtilizationInfo_t *ProcessesUtilizationInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PROCESSESUTILIZATIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ProcessesUtilizationInfoPtr = ProcessesUtilizationInfoPtr;
+    }
+
+    nvmlProcessesUtilizationInfo_t *AsProcessesUtilizationInfoPtr() const
+    {
+        return m_value.ProcessesUtilizationInfoPtr;
+    }
+
+    nvmlProcessesUtilizationInfo_t const &AsProcessesUtilizationInfo() const
+    {
+        return m_value.ProcessesUtilizationInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlPstates_t *pstatesPtr, bool inHeap = false)
+    InjectionArgument(nvmlPstates_t *PstatesPtr, bool inHeap = false)
         : m_type(INJECTION_PSTATES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pstatesPtr = pstatesPtr;
+        m_value.PstatesPtr = PstatesPtr;
     }
-    nvmlPstates_t *AsPstatesPtr() const
+    InjectionArgument(nvmlPstates_t Pstates)
+        : m_type(INJECTION_PSTATES)
     {
-        return m_value.pstatesPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Pstates = Pstates;
     }
-
-    InjectionArgument(nvmlPstates_t *pstatesPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlPstates_t *PstatesPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_PSTATES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.pstatesPtr = pstatesPtr;
+        m_value.PstatesPtr = PstatesPtr;
+    }
+
+    nvmlPstates_t *AsPstatesPtr() const
+    {
+        return m_value.PstatesPtr;
+    }
+
+    nvmlPstates_t const &AsPstates() const
+    {
+        return m_value.Pstates;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlRestrictedAPI_t restrictedAPI)
+    InjectionArgument(nvmlRestrictedAPI_t *RestrictedAPIPtr, bool inHeap = false)
+        : m_type(INJECTION_RESTRICTEDAPI_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.RestrictedAPIPtr = RestrictedAPIPtr;
+    }
+    InjectionArgument(nvmlRestrictedAPI_t RestrictedAPI)
         : m_type(INJECTION_RESTRICTEDAPI)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.restrictedAPI = restrictedAPI;
+        m_value.RestrictedAPI = RestrictedAPI;
     }
-    const nvmlRestrictedAPI_t &AsRestrictedAPI() const
-    {
-        return m_value.restrictedAPI;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlReturn_t nvmlReturn)
-        : m_type(INJECTION_RETURN)
+    InjectionArgument(nvmlRestrictedAPI_t *RestrictedAPIPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_RESTRICTEDAPI_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvmlReturn = nvmlReturn;
+        m_value.RestrictedAPIPtr = RestrictedAPIPtr;
     }
-    const nvmlReturn_t &AsNvmlReturn() const
+
+    nvmlRestrictedAPI_t *AsRestrictedAPIPtr() const
     {
-        return m_value.nvmlReturn;
+        return m_value.RestrictedAPIPtr;
+    }
+
+    nvmlRestrictedAPI_t const &AsRestrictedAPI() const
+    {
+        return m_value.RestrictedAPI;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlReturn_t *nvmlReturnPtr, bool inHeap = false)
+    InjectionArgument(nvmlReturn_t *ReturnPtr, bool inHeap = false)
         : m_type(INJECTION_RETURN_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvmlReturnPtr = nvmlReturnPtr;
+        m_value.ReturnPtr = ReturnPtr;
     }
-    nvmlReturn_t *AsNvmlReturnPtr() const
+    InjectionArgument(nvmlReturn_t Return)
+        : m_type(INJECTION_RETURN)
     {
-        return m_value.nvmlReturnPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Return = Return;
     }
-
-    InjectionArgument(nvmlReturn_t *nvmlReturnPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlReturn_t *ReturnPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_RETURN_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.nvmlReturnPtr = nvmlReturnPtr;
+        m_value.ReturnPtr = ReturnPtr;
+    }
+
+    nvmlReturn_t *AsReturnPtr() const
+    {
+        return m_value.ReturnPtr;
+    }
+
+    nvmlReturn_t const &AsReturn() const
+    {
+        return m_value.Return;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlRowRemapperHistogramValues_t rowRemapperHistogramValues)
-        : m_type(INJECTION_ROWREMAPPERHISTOGRAMVALUES)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.rowRemapperHistogramValues = rowRemapperHistogramValues;
-    }
-    const nvmlRowRemapperHistogramValues_t &AsRowRemapperHistogramValues() const
-    {
-        return m_value.rowRemapperHistogramValues;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlRowRemapperHistogramValues_t *rowRemapperHistogramValuesPtr, bool inHeap = false)
+    InjectionArgument(nvmlRowRemapperHistogramValues_t *RowRemapperHistogramValuesPtr, bool inHeap = false)
         : m_type(INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.rowRemapperHistogramValuesPtr = rowRemapperHistogramValuesPtr;
+        m_value.RowRemapperHistogramValuesPtr = RowRemapperHistogramValuesPtr;
     }
-    nvmlRowRemapperHistogramValues_t *AsRowRemapperHistogramValuesPtr() const
+    InjectionArgument(nvmlRowRemapperHistogramValues_t RowRemapperHistogramValues)
+        : m_type(INJECTION_ROWREMAPPERHISTOGRAMVALUES)
     {
-        return m_value.rowRemapperHistogramValuesPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.RowRemapperHistogramValues = RowRemapperHistogramValues;
     }
-
-    InjectionArgument(nvmlRowRemapperHistogramValues_t *rowRemapperHistogramValuesPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlRowRemapperHistogramValues_t *RowRemapperHistogramValuesPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.rowRemapperHistogramValuesPtr = rowRemapperHistogramValuesPtr;
+        m_value.RowRemapperHistogramValuesPtr = RowRemapperHistogramValuesPtr;
+    }
+
+    nvmlRowRemapperHistogramValues_t *AsRowRemapperHistogramValuesPtr() const
+    {
+        return m_value.RowRemapperHistogramValuesPtr;
+    }
+
+    nvmlRowRemapperHistogramValues_t const &AsRowRemapperHistogramValues() const
+    {
+        return m_value.RowRemapperHistogramValues;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlSample_t sample)
-        : m_type(INJECTION_SAMPLE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.sample = sample;
-    }
-    const nvmlSample_t &AsSample() const
-    {
-        return m_value.sample;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlSample_t *samplePtr, bool inHeap = false)
+    InjectionArgument(nvmlSample_t *SamplePtr, bool inHeap = false)
         : m_type(INJECTION_SAMPLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.samplePtr = samplePtr;
+        m_value.SamplePtr = SamplePtr;
     }
-    nvmlSample_t *AsSamplePtr() const
+    InjectionArgument(nvmlSample_t Sample)
+        : m_type(INJECTION_SAMPLE)
     {
-        return m_value.samplePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Sample = Sample;
     }
-
-    InjectionArgument(nvmlSample_t *samplePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlSample_t *SamplePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_SAMPLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.samplePtr = samplePtr;
+        m_value.SamplePtr = SamplePtr;
+    }
+
+    nvmlSample_t *AsSamplePtr() const
+    {
+        return m_value.SamplePtr;
+    }
+
+    nvmlSample_t const &AsSample() const
+    {
+        return m_value.Sample;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlSamplingType_t samplingType)
+    InjectionArgument(nvmlSamplingType_t *SamplingTypePtr, bool inHeap = false)
+        : m_type(INJECTION_SAMPLINGTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SamplingTypePtr = SamplingTypePtr;
+    }
+    InjectionArgument(nvmlSamplingType_t SamplingType)
         : m_type(INJECTION_SAMPLINGTYPE)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.samplingType = samplingType;
+        m_value.SamplingType = SamplingType;
     }
-    const nvmlSamplingType_t &AsSamplingType() const
+    InjectionArgument(nvmlSamplingType_t *SamplingTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SAMPLINGTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.samplingType;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SamplingTypePtr = SamplingTypePtr;
+    }
+
+    nvmlSamplingType_t *AsSamplingTypePtr() const
+    {
+        return m_value.SamplingTypePtr;
+    }
+
+    nvmlSamplingType_t const &AsSamplingType() const
+    {
+        return m_value.SamplingType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlTemperatureSensors_t temperatureSensors)
+    InjectionArgument(nvmlSystemConfComputeSettings_t *SystemConfComputeSettingsPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemConfComputeSettingsPtr = SystemConfComputeSettingsPtr;
+    }
+    InjectionArgument(nvmlSystemConfComputeSettings_t SystemConfComputeSettings)
+        : m_type(INJECTION_SYSTEMCONFCOMPUTESETTINGS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemConfComputeSettings = SystemConfComputeSettings;
+    }
+    InjectionArgument(nvmlSystemConfComputeSettings_t *SystemConfComputeSettingsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemConfComputeSettingsPtr = SystemConfComputeSettingsPtr;
+    }
+
+    nvmlSystemConfComputeSettings_t *AsSystemConfComputeSettingsPtr() const
+    {
+        return m_value.SystemConfComputeSettingsPtr;
+    }
+
+    nvmlSystemConfComputeSettings_t const &AsSystemConfComputeSettings() const
+    {
+        return m_value.SystemConfComputeSettings;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemDriverBranchInfo_t *SystemDriverBranchInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMDRIVERBRANCHINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemDriverBranchInfoPtr = SystemDriverBranchInfoPtr;
+    }
+    InjectionArgument(nvmlSystemDriverBranchInfo_t SystemDriverBranchInfo)
+        : m_type(INJECTION_SYSTEMDRIVERBRANCHINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemDriverBranchInfo = SystemDriverBranchInfo;
+    }
+    InjectionArgument(nvmlSystemDriverBranchInfo_t *SystemDriverBranchInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMDRIVERBRANCHINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemDriverBranchInfoPtr = SystemDriverBranchInfoPtr;
+    }
+
+    nvmlSystemDriverBranchInfo_t *AsSystemDriverBranchInfoPtr() const
+    {
+        return m_value.SystemDriverBranchInfoPtr;
+    }
+
+    nvmlSystemDriverBranchInfo_t const &AsSystemDriverBranchInfo() const
+    {
+        return m_value.SystemDriverBranchInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlTemperatureSensors_t *TemperatureSensorsPtr, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURESENSORS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.TemperatureSensorsPtr = TemperatureSensorsPtr;
+    }
+    InjectionArgument(nvmlTemperatureSensors_t TemperatureSensors)
         : m_type(INJECTION_TEMPERATURESENSORS)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.temperatureSensors = temperatureSensors;
+        m_value.TemperatureSensors = TemperatureSensors;
     }
-    const nvmlTemperatureSensors_t &AsTemperatureSensors() const
+    InjectionArgument(nvmlTemperatureSensors_t *TemperatureSensorsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURESENSORS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
-        return m_value.temperatureSensors;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.TemperatureSensorsPtr = TemperatureSensorsPtr;
+    }
+
+    nvmlTemperatureSensors_t *AsTemperatureSensorsPtr() const
+    {
+        return m_value.TemperatureSensorsPtr;
+    }
+
+    nvmlTemperatureSensors_t const &AsTemperatureSensors() const
+    {
+        return m_value.TemperatureSensors;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlTemperatureThresholds_t temperatureThresholds)
+    InjectionArgument(nvmlTemperatureThresholds_t *TemperatureThresholdsPtr, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURETHRESHOLDS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.TemperatureThresholdsPtr = TemperatureThresholdsPtr;
+    }
+    InjectionArgument(nvmlTemperatureThresholds_t TemperatureThresholds)
         : m_type(INJECTION_TEMPERATURETHRESHOLDS)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.temperatureThresholds = temperatureThresholds;
+        m_value.TemperatureThresholds = TemperatureThresholds;
     }
-    const nvmlTemperatureThresholds_t &AsTemperatureThresholds() const
-    {
-        return m_value.temperatureThresholds;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnitFanSpeeds_t unitFanSpeeds)
-        : m_type(INJECTION_UNITFANSPEEDS)
+    InjectionArgument(nvmlTemperatureThresholds_t *TemperatureThresholdsPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURETHRESHOLDS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitFanSpeeds = unitFanSpeeds;
+        m_value.TemperatureThresholdsPtr = TemperatureThresholdsPtr;
     }
-    const nvmlUnitFanSpeeds_t &AsUnitFanSpeeds() const
+
+    nvmlTemperatureThresholds_t *AsTemperatureThresholdsPtr() const
     {
-        return m_value.unitFanSpeeds;
+        return m_value.TemperatureThresholdsPtr;
+    }
+
+    nvmlTemperatureThresholds_t const &AsTemperatureThresholds() const
+    {
+        return m_value.TemperatureThresholds;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnitFanSpeeds_t *unitFanSpeedsPtr, bool inHeap = false)
+    InjectionArgument(nvmlTemperature_t *TemperaturePtr, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.TemperaturePtr = TemperaturePtr;
+    }
+    InjectionArgument(nvmlTemperature_t Temperature)
+        : m_type(INJECTION_TEMPERATURE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Temperature = Temperature;
+    }
+    InjectionArgument(nvmlTemperature_t *TemperaturePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_TEMPERATURE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.TemperaturePtr = TemperaturePtr;
+    }
+
+    nvmlTemperature_t *AsTemperaturePtr() const
+    {
+        return m_value.TemperaturePtr;
+    }
+
+    nvmlTemperature_t const &AsTemperature() const
+    {
+        return m_value.Temperature;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlThermalController_t *ThermalControllerPtr, bool inHeap = false)
+        : m_type(INJECTION_THERMALCONTROLLER_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalControllerPtr = ThermalControllerPtr;
+    }
+    InjectionArgument(nvmlThermalController_t ThermalController)
+        : m_type(INJECTION_THERMALCONTROLLER)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalController = ThermalController;
+    }
+    InjectionArgument(nvmlThermalController_t *ThermalControllerPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_THERMALCONTROLLER_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalControllerPtr = ThermalControllerPtr;
+    }
+
+    nvmlThermalController_t *AsThermalControllerPtr() const
+    {
+        return m_value.ThermalControllerPtr;
+    }
+
+    nvmlThermalController_t const &AsThermalController() const
+    {
+        return m_value.ThermalController;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlThermalTarget_t *ThermalTargetPtr, bool inHeap = false)
+        : m_type(INJECTION_THERMALTARGET_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalTargetPtr = ThermalTargetPtr;
+    }
+    InjectionArgument(nvmlThermalTarget_t ThermalTarget)
+        : m_type(INJECTION_THERMALTARGET)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalTarget = ThermalTarget;
+    }
+    InjectionArgument(nvmlThermalTarget_t *ThermalTargetPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_THERMALTARGET_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ThermalTargetPtr = ThermalTargetPtr;
+    }
+
+    nvmlThermalTarget_t *AsThermalTargetPtr() const
+    {
+        return m_value.ThermalTargetPtr;
+    }
+
+    nvmlThermalTarget_t const &AsThermalTarget() const
+    {
+        return m_value.ThermalTarget;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlUnitFanInfo_t *UnitFanInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_UNITFANINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnitFanInfoPtr = UnitFanInfoPtr;
+    }
+    InjectionArgument(nvmlUnitFanInfo_t UnitFanInfo)
+        : m_type(INJECTION_UNITFANINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnitFanInfo = UnitFanInfo;
+    }
+    InjectionArgument(nvmlUnitFanInfo_t *UnitFanInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_UNITFANINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnitFanInfoPtr = UnitFanInfoPtr;
+    }
+
+    nvmlUnitFanInfo_t *AsUnitFanInfoPtr() const
+    {
+        return m_value.UnitFanInfoPtr;
+    }
+
+    nvmlUnitFanInfo_t const &AsUnitFanInfo() const
+    {
+        return m_value.UnitFanInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlUnitFanSpeeds_t *UnitFanSpeedsPtr, bool inHeap = false)
         : m_type(INJECTION_UNITFANSPEEDS_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitFanSpeedsPtr = unitFanSpeedsPtr;
+        m_value.UnitFanSpeedsPtr = UnitFanSpeedsPtr;
     }
-    nvmlUnitFanSpeeds_t *AsUnitFanSpeedsPtr() const
+    InjectionArgument(nvmlUnitFanSpeeds_t UnitFanSpeeds)
+        : m_type(INJECTION_UNITFANSPEEDS)
     {
-        return m_value.unitFanSpeedsPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnitFanSpeeds = UnitFanSpeeds;
     }
-
-    InjectionArgument(nvmlUnitFanSpeeds_t *unitFanSpeedsPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlUnitFanSpeeds_t *UnitFanSpeedsPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_UNITFANSPEEDS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitFanSpeedsPtr = unitFanSpeedsPtr;
+        m_value.UnitFanSpeedsPtr = UnitFanSpeedsPtr;
+    }
+
+    nvmlUnitFanSpeeds_t *AsUnitFanSpeedsPtr() const
+    {
+        return m_value.UnitFanSpeedsPtr;
+    }
+
+    nvmlUnitFanSpeeds_t const &AsUnitFanSpeeds() const
+    {
+        return m_value.UnitFanSpeeds;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnitInfo_t unitInfo)
-        : m_type(INJECTION_UNITINFO)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.unitInfo = unitInfo;
-    }
-    const nvmlUnitInfo_t &AsUnitInfo() const
-    {
-        return m_value.unitInfo;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnitInfo_t *unitInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlUnitInfo_t *UnitInfoPtr, bool inHeap = false)
         : m_type(INJECTION_UNITINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitInfoPtr = unitInfoPtr;
+        m_value.UnitInfoPtr = UnitInfoPtr;
     }
-    nvmlUnitInfo_t *AsUnitInfoPtr() const
+    InjectionArgument(nvmlUnitInfo_t UnitInfo)
+        : m_type(INJECTION_UNITINFO)
     {
-        return m_value.unitInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnitInfo = UnitInfo;
     }
-
-    InjectionArgument(nvmlUnitInfo_t *unitInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlUnitInfo_t *UnitInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_UNITINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitInfoPtr = unitInfoPtr;
+        m_value.UnitInfoPtr = UnitInfoPtr;
+    }
+
+    nvmlUnitInfo_t *AsUnitInfoPtr() const
+    {
+        return m_value.UnitInfoPtr;
+    }
+
+    nvmlUnitInfo_t const &AsUnitInfo() const
+    {
+        return m_value.UnitInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnit_t unit)
-        : m_type(INJECTION_UNIT)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.unit = unit;
-    }
-    const nvmlUnit_t &AsUnit() const
-    {
-        return m_value.unit;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUnit_t *unitPtr, bool inHeap = false)
+    InjectionArgument(nvmlUnit_t *UnitPtr, bool inHeap = false)
         : m_type(INJECTION_UNIT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitPtr = unitPtr;
+        m_value.UnitPtr = UnitPtr;
     }
-    nvmlUnit_t *AsUnitPtr() const
+    InjectionArgument(nvmlUnit_t Unit)
+        : m_type(INJECTION_UNIT)
     {
-        return m_value.unitPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Unit = Unit;
     }
-
-    InjectionArgument(nvmlUnit_t *unitPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlUnit_t *UnitPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_UNIT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.unitPtr = unitPtr;
+        m_value.UnitPtr = UnitPtr;
+    }
+
+    nvmlUnit_t *AsUnitPtr() const
+    {
+        return m_value.UnitPtr;
+    }
+
+    nvmlUnit_t const &AsUnit() const
+    {
+        return m_value.Unit;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUtilization_t utilization)
-        : m_type(INJECTION_UTILIZATION)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.utilization = utilization;
-    }
-    const nvmlUtilization_t &AsUtilization() const
-    {
-        return m_value.utilization;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlUtilization_t *utilizationPtr, bool inHeap = false)
+    InjectionArgument(nvmlUtilization_t *UtilizationPtr, bool inHeap = false)
         : m_type(INJECTION_UTILIZATION_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.utilizationPtr = utilizationPtr;
+        m_value.UtilizationPtr = UtilizationPtr;
     }
-    nvmlUtilization_t *AsUtilizationPtr() const
+    InjectionArgument(nvmlUtilization_t Utilization)
+        : m_type(INJECTION_UTILIZATION)
     {
-        return m_value.utilizationPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Utilization = Utilization;
     }
-
-    InjectionArgument(nvmlUtilization_t *utilizationPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlUtilization_t *UtilizationPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_UTILIZATION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.utilizationPtr = utilizationPtr;
+        m_value.UtilizationPtr = UtilizationPtr;
+    }
+
+    nvmlUtilization_t *AsUtilizationPtr() const
+    {
+        return m_value.UtilizationPtr;
+    }
+
+    nvmlUtilization_t const &AsUtilization() const
+    {
+        return m_value.Utilization;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlValueType_t valueType)
-        : m_type(INJECTION_VALUETYPE)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.valueType = valueType;
-    }
-    const nvmlValueType_t &AsValueType() const
-    {
-        return m_value.valueType;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlValueType_t *valueTypePtr, bool inHeap = false)
+    InjectionArgument(nvmlValueType_t *ValueTypePtr, bool inHeap = false)
         : m_type(INJECTION_VALUETYPE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.valueTypePtr = valueTypePtr;
+        m_value.ValueTypePtr = ValueTypePtr;
     }
-    nvmlValueType_t *AsValueTypePtr() const
+    InjectionArgument(nvmlValueType_t ValueType)
+        : m_type(INJECTION_VALUETYPE)
     {
-        return m_value.valueTypePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ValueType = ValueType;
     }
-
-    InjectionArgument(nvmlValueType_t *valueTypePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlValueType_t *ValueTypePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VALUETYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.valueTypePtr = valueTypePtr;
+        m_value.ValueTypePtr = ValueTypePtr;
+    }
+
+    nvmlValueType_t *AsValueTypePtr() const
+    {
+        return m_value.ValueTypePtr;
+    }
+
+    nvmlValueType_t const &AsValueType() const
+    {
+        return m_value.ValueType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuCapability_t vgpuCapability)
+    InjectionArgument(nvmlVgpuCapability_t *VgpuCapabilityPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUCAPABILITY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuCapabilityPtr = VgpuCapabilityPtr;
+    }
+    InjectionArgument(nvmlVgpuCapability_t VgpuCapability)
         : m_type(INJECTION_VGPUCAPABILITY)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuCapability = vgpuCapability;
+        m_value.VgpuCapability = VgpuCapability;
     }
-    const nvmlVgpuCapability_t &AsVgpuCapability() const
-    {
-        return m_value.vgpuCapability;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t vgpuInstanceUtilizationSample)
-        : m_type(INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE)
+    InjectionArgument(nvmlVgpuCapability_t *VgpuCapabilityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUCAPABILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuInstanceUtilizationSample = vgpuInstanceUtilizationSample;
+        m_value.VgpuCapabilityPtr = VgpuCapabilityPtr;
     }
-    const nvmlVgpuInstanceUtilizationSample_t &AsVgpuInstanceUtilizationSample() const
+
+    nvmlVgpuCapability_t *AsVgpuCapabilityPtr() const
     {
-        return m_value.vgpuInstanceUtilizationSample;
+        return m_value.VgpuCapabilityPtr;
+    }
+
+    nvmlVgpuCapability_t const &AsVgpuCapability() const
+    {
+        return m_value.VgpuCapability;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t *vgpuInstanceUtilizationSamplePtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuDriverCapability_t *VgpuDriverCapabilityPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUDRIVERCAPABILITY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuDriverCapabilityPtr = VgpuDriverCapabilityPtr;
+    }
+    InjectionArgument(nvmlVgpuDriverCapability_t VgpuDriverCapability)
+        : m_type(INJECTION_VGPUDRIVERCAPABILITY)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuDriverCapability = VgpuDriverCapability;
+    }
+    InjectionArgument(nvmlVgpuDriverCapability_t *VgpuDriverCapabilityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUDRIVERCAPABILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuDriverCapabilityPtr = VgpuDriverCapabilityPtr;
+    }
+
+    nvmlVgpuDriverCapability_t *AsVgpuDriverCapabilityPtr() const
+    {
+        return m_value.VgpuDriverCapabilityPtr;
+    }
+
+    nvmlVgpuDriverCapability_t const &AsVgpuDriverCapability() const
+    {
+        return m_value.VgpuDriverCapability;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuGuestInfoState_t *VgpuGuestInfoStatePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUGUESTINFOSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuGuestInfoStatePtr = VgpuGuestInfoStatePtr;
+    }
+    InjectionArgument(nvmlVgpuGuestInfoState_t VgpuGuestInfoState)
+        : m_type(INJECTION_VGPUGUESTINFOSTATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuGuestInfoState = VgpuGuestInfoState;
+    }
+    InjectionArgument(nvmlVgpuGuestInfoState_t *VgpuGuestInfoStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUGUESTINFOSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuGuestInfoStatePtr = VgpuGuestInfoStatePtr;
+    }
+
+    nvmlVgpuGuestInfoState_t *AsVgpuGuestInfoStatePtr() const
+    {
+        return m_value.VgpuGuestInfoStatePtr;
+    }
+
+    nvmlVgpuGuestInfoState_t const &AsVgpuGuestInfoState() const
+    {
+        return m_value.VgpuGuestInfoState;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuHeterogeneousMode_t *VgpuHeterogeneousModePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUHETEROGENEOUSMODE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuHeterogeneousModePtr = VgpuHeterogeneousModePtr;
+    }
+    InjectionArgument(nvmlVgpuHeterogeneousMode_t VgpuHeterogeneousMode)
+        : m_type(INJECTION_VGPUHETEROGENEOUSMODE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuHeterogeneousMode = VgpuHeterogeneousMode;
+    }
+    InjectionArgument(nvmlVgpuHeterogeneousMode_t *VgpuHeterogeneousModePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUHETEROGENEOUSMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuHeterogeneousModePtr = VgpuHeterogeneousModePtr;
+    }
+
+    nvmlVgpuHeterogeneousMode_t *AsVgpuHeterogeneousModePtr() const
+    {
+        return m_value.VgpuHeterogeneousModePtr;
+    }
+
+    nvmlVgpuHeterogeneousMode_t const &AsVgpuHeterogeneousMode() const
+    {
+        return m_value.VgpuHeterogeneousMode;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuInstanceUtilizationInfo_v1_t *VgpuInstanceUtilizationInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstanceUtilizationInfo_v1Ptr = VgpuInstanceUtilizationInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlVgpuInstanceUtilizationInfo_v1_t VgpuInstanceUtilizationInfo_v1)
+        : m_type(INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstanceUtilizationInfo_v1 = VgpuInstanceUtilizationInfo_v1;
+    }
+    InjectionArgument(nvmlVgpuInstanceUtilizationInfo_v1_t *VgpuInstanceUtilizationInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstanceUtilizationInfo_v1Ptr = VgpuInstanceUtilizationInfo_v1Ptr;
+    }
+
+    nvmlVgpuInstanceUtilizationInfo_v1_t *AsVgpuInstanceUtilizationInfo_v1Ptr() const
+    {
+        return m_value.VgpuInstanceUtilizationInfo_v1Ptr;
+    }
+
+    nvmlVgpuInstanceUtilizationInfo_v1_t const &AsVgpuInstanceUtilizationInfo_v1() const
+    {
+        return m_value.VgpuInstanceUtilizationInfo_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t *VgpuInstanceUtilizationSamplePtr, bool inHeap = false)
         : m_type(INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuInstanceUtilizationSamplePtr = vgpuInstanceUtilizationSamplePtr;
+        m_value.VgpuInstanceUtilizationSamplePtr = VgpuInstanceUtilizationSamplePtr;
     }
-    nvmlVgpuInstanceUtilizationSample_t *AsVgpuInstanceUtilizationSamplePtr() const
+    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t VgpuInstanceUtilizationSample)
+        : m_type(INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE)
     {
-        return m_value.vgpuInstanceUtilizationSamplePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstanceUtilizationSample = VgpuInstanceUtilizationSample;
     }
-
-    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t *vgpuInstanceUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuInstanceUtilizationSample_t *VgpuInstanceUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuInstanceUtilizationSamplePtr = vgpuInstanceUtilizationSamplePtr;
+        m_value.VgpuInstanceUtilizationSamplePtr = VgpuInstanceUtilizationSamplePtr;
+    }
+
+    nvmlVgpuInstanceUtilizationSample_t *AsVgpuInstanceUtilizationSamplePtr() const
+    {
+        return m_value.VgpuInstanceUtilizationSamplePtr;
+    }
+
+    nvmlVgpuInstanceUtilizationSample_t const &AsVgpuInstanceUtilizationSample() const
+    {
+        return m_value.VgpuInstanceUtilizationSample;
+    }
+
+    nvmlVgpuInstance_t *AsVgpuInstancePtr() const
+    {
+        return static_cast<nvmlVgpuInstance_t *>(m_value.UIntPtr);
+    }
+
+    nvmlVgpuInstance_t AsVgpuInstance() const
+    {
+        return static_cast<nvmlVgpuInstance_t>(m_value.UInt);
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuLicenseInfo_t vgpuLicenseInfo)
-        : m_type(INJECTION_VGPULICENSEINFO)
+    InjectionArgument(nvmlVgpuInstancesUtilizationInfo_t *VgpuInstancesUtilizationInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuLicenseInfo = vgpuLicenseInfo;
+        m_value.VgpuInstancesUtilizationInfoPtr = VgpuInstancesUtilizationInfoPtr;
     }
-    const nvmlVgpuLicenseInfo_t &AsVgpuLicenseInfo() const
+    InjectionArgument(nvmlVgpuInstancesUtilizationInfo_t VgpuInstancesUtilizationInfo)
+        : m_type(INJECTION_VGPUINSTANCESUTILIZATIONINFO)
     {
-        return m_value.vgpuLicenseInfo;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstancesUtilizationInfo = VgpuInstancesUtilizationInfo;
+    }
+    InjectionArgument(nvmlVgpuInstancesUtilizationInfo_t *VgpuInstancesUtilizationInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuInstancesUtilizationInfoPtr = VgpuInstancesUtilizationInfoPtr;
+    }
+
+    nvmlVgpuInstancesUtilizationInfo_t *AsVgpuInstancesUtilizationInfoPtr() const
+    {
+        return m_value.VgpuInstancesUtilizationInfoPtr;
+    }
+
+    nvmlVgpuInstancesUtilizationInfo_t const &AsVgpuInstancesUtilizationInfo() const
+    {
+        return m_value.VgpuInstancesUtilizationInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuLicenseInfo_t *vgpuLicenseInfoPtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuLicenseExpiry_t *VgpuLicenseExpiryPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPULICENSEEXPIRY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuLicenseExpiryPtr = VgpuLicenseExpiryPtr;
+    }
+    InjectionArgument(nvmlVgpuLicenseExpiry_t VgpuLicenseExpiry)
+        : m_type(INJECTION_VGPULICENSEEXPIRY)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuLicenseExpiry = VgpuLicenseExpiry;
+    }
+    InjectionArgument(nvmlVgpuLicenseExpiry_t *VgpuLicenseExpiryPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPULICENSEEXPIRY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuLicenseExpiryPtr = VgpuLicenseExpiryPtr;
+    }
+
+    nvmlVgpuLicenseExpiry_t *AsVgpuLicenseExpiryPtr() const
+    {
+        return m_value.VgpuLicenseExpiryPtr;
+    }
+
+    nvmlVgpuLicenseExpiry_t const &AsVgpuLicenseExpiry() const
+    {
+        return m_value.VgpuLicenseExpiry;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuLicenseInfo_t *VgpuLicenseInfoPtr, bool inHeap = false)
         : m_type(INJECTION_VGPULICENSEINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuLicenseInfoPtr = vgpuLicenseInfoPtr;
+        m_value.VgpuLicenseInfoPtr = VgpuLicenseInfoPtr;
     }
-    nvmlVgpuLicenseInfo_t *AsVgpuLicenseInfoPtr() const
+    InjectionArgument(nvmlVgpuLicenseInfo_t VgpuLicenseInfo)
+        : m_type(INJECTION_VGPULICENSEINFO)
     {
-        return m_value.vgpuLicenseInfoPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuLicenseInfo = VgpuLicenseInfo;
     }
-
-    InjectionArgument(nvmlVgpuLicenseInfo_t *vgpuLicenseInfoPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuLicenseInfo_t *VgpuLicenseInfoPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPULICENSEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuLicenseInfoPtr = vgpuLicenseInfoPtr;
+        m_value.VgpuLicenseInfoPtr = VgpuLicenseInfoPtr;
+    }
+
+    nvmlVgpuLicenseInfo_t *AsVgpuLicenseInfoPtr() const
+    {
+        return m_value.VgpuLicenseInfoPtr;
+    }
+
+    nvmlVgpuLicenseInfo_t const &AsVgpuLicenseInfo() const
+    {
+        return m_value.VgpuLicenseInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuMetadata_t vgpuMetadata)
-        : m_type(INJECTION_VGPUMETADATA)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuMetadata = vgpuMetadata;
-    }
-    const nvmlVgpuMetadata_t &AsVgpuMetadata() const
-    {
-        return m_value.vgpuMetadata;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuMetadata_t *vgpuMetadataPtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuMetadata_t *VgpuMetadataPtr, bool inHeap = false)
         : m_type(INJECTION_VGPUMETADATA_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuMetadataPtr = vgpuMetadataPtr;
+        m_value.VgpuMetadataPtr = VgpuMetadataPtr;
     }
-    nvmlVgpuMetadata_t *AsVgpuMetadataPtr() const
+    InjectionArgument(nvmlVgpuMetadata_t VgpuMetadata)
+        : m_type(INJECTION_VGPUMETADATA)
     {
-        return m_value.vgpuMetadataPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuMetadata = VgpuMetadata;
     }
-
-    InjectionArgument(nvmlVgpuMetadata_t *vgpuMetadataPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuMetadata_t *VgpuMetadataPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUMETADATA_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuMetadataPtr = vgpuMetadataPtr;
+        m_value.VgpuMetadataPtr = VgpuMetadataPtr;
+    }
+
+    nvmlVgpuMetadata_t *AsVgpuMetadataPtr() const
+    {
+        return m_value.VgpuMetadataPtr;
+    }
+
+    nvmlVgpuMetadata_t const &AsVgpuMetadata() const
+    {
+        return m_value.VgpuMetadata;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuPgpuCompatibility_t vgpuPgpuCompatibility)
-        : m_type(INJECTION_VGPUPGPUCOMPATIBILITY)
+    InjectionArgument(nvmlVgpuPgpuCompatibilityLimitCode_t *VgpuPgpuCompatibilityLimitCodePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuCompatibility = vgpuPgpuCompatibility;
+        m_value.VgpuPgpuCompatibilityLimitCodePtr = VgpuPgpuCompatibilityLimitCodePtr;
     }
-    const nvmlVgpuPgpuCompatibility_t &AsVgpuPgpuCompatibility() const
+    InjectionArgument(nvmlVgpuPgpuCompatibilityLimitCode_t VgpuPgpuCompatibilityLimitCode)
+        : m_type(INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE)
     {
-        return m_value.vgpuPgpuCompatibility;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPgpuCompatibilityLimitCode = VgpuPgpuCompatibilityLimitCode;
+    }
+    InjectionArgument(nvmlVgpuPgpuCompatibilityLimitCode_t *VgpuPgpuCompatibilityLimitCodePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPgpuCompatibilityLimitCodePtr = VgpuPgpuCompatibilityLimitCodePtr;
+    }
+
+    nvmlVgpuPgpuCompatibilityLimitCode_t *AsVgpuPgpuCompatibilityLimitCodePtr() const
+    {
+        return m_value.VgpuPgpuCompatibilityLimitCodePtr;
+    }
+
+    nvmlVgpuPgpuCompatibilityLimitCode_t const &AsVgpuPgpuCompatibilityLimitCode() const
+    {
+        return m_value.VgpuPgpuCompatibilityLimitCode;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuPgpuCompatibility_t *vgpuPgpuCompatibilityPtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuPgpuCompatibility_t *VgpuPgpuCompatibilityPtr, bool inHeap = false)
         : m_type(INJECTION_VGPUPGPUCOMPATIBILITY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuCompatibilityPtr = vgpuPgpuCompatibilityPtr;
+        m_value.VgpuPgpuCompatibilityPtr = VgpuPgpuCompatibilityPtr;
     }
-    nvmlVgpuPgpuCompatibility_t *AsVgpuPgpuCompatibilityPtr() const
+    InjectionArgument(nvmlVgpuPgpuCompatibility_t VgpuPgpuCompatibility)
+        : m_type(INJECTION_VGPUPGPUCOMPATIBILITY)
     {
-        return m_value.vgpuPgpuCompatibilityPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPgpuCompatibility = VgpuPgpuCompatibility;
     }
-
-    InjectionArgument(nvmlVgpuPgpuCompatibility_t *vgpuPgpuCompatibilityPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuPgpuCompatibility_t *VgpuPgpuCompatibilityPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUPGPUCOMPATIBILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuCompatibilityPtr = vgpuPgpuCompatibilityPtr;
+        m_value.VgpuPgpuCompatibilityPtr = VgpuPgpuCompatibilityPtr;
+    }
+
+    nvmlVgpuPgpuCompatibility_t *AsVgpuPgpuCompatibilityPtr() const
+    {
+        return m_value.VgpuPgpuCompatibilityPtr;
+    }
+
+    nvmlVgpuPgpuCompatibility_t const &AsVgpuPgpuCompatibility() const
+    {
+        return m_value.VgpuPgpuCompatibility;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuPgpuMetadata_t vgpuPgpuMetadata)
-        : m_type(INJECTION_VGPUPGPUMETADATA)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuMetadata = vgpuPgpuMetadata;
-    }
-    const nvmlVgpuPgpuMetadata_t &AsVgpuPgpuMetadata() const
-    {
-        return m_value.vgpuPgpuMetadata;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuPgpuMetadata_t *vgpuPgpuMetadataPtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuPgpuMetadata_t *VgpuPgpuMetadataPtr, bool inHeap = false)
         : m_type(INJECTION_VGPUPGPUMETADATA_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuMetadataPtr = vgpuPgpuMetadataPtr;
+        m_value.VgpuPgpuMetadataPtr = VgpuPgpuMetadataPtr;
     }
-    nvmlVgpuPgpuMetadata_t *AsVgpuPgpuMetadataPtr() const
+    InjectionArgument(nvmlVgpuPgpuMetadata_t VgpuPgpuMetadata)
+        : m_type(INJECTION_VGPUPGPUMETADATA)
     {
-        return m_value.vgpuPgpuMetadataPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPgpuMetadata = VgpuPgpuMetadata;
     }
-
-    InjectionArgument(nvmlVgpuPgpuMetadata_t *vgpuPgpuMetadataPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuPgpuMetadata_t *VgpuPgpuMetadataPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUPGPUMETADATA_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuPgpuMetadataPtr = vgpuPgpuMetadataPtr;
+        m_value.VgpuPgpuMetadataPtr = VgpuPgpuMetadataPtr;
+    }
+
+    nvmlVgpuPgpuMetadata_t *AsVgpuPgpuMetadataPtr() const
+    {
+        return m_value.VgpuPgpuMetadataPtr;
+    }
+
+    nvmlVgpuPgpuMetadata_t const &AsVgpuPgpuMetadata() const
+    {
+        return m_value.VgpuPgpuMetadata;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuProcessUtilizationSample_t vgpuProcessUtilizationSample)
-        : m_type(INJECTION_VGPUPROCESSUTILIZATIONSAMPLE)
+    InjectionArgument(nvmlVgpuPlacementId_t *VgpuPlacementIdPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTID_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuProcessUtilizationSample = vgpuProcessUtilizationSample;
+        m_value.VgpuPlacementIdPtr = VgpuPlacementIdPtr;
     }
-    const nvmlVgpuProcessUtilizationSample_t &AsVgpuProcessUtilizationSample() const
+    InjectionArgument(nvmlVgpuPlacementId_t VgpuPlacementId)
+        : m_type(INJECTION_VGPUPLACEMENTID)
     {
-        return m_value.vgpuProcessUtilizationSample;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementId = VgpuPlacementId;
+    }
+    InjectionArgument(nvmlVgpuPlacementId_t *VgpuPlacementIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementIdPtr = VgpuPlacementIdPtr;
+    }
+
+    nvmlVgpuPlacementId_t *AsVgpuPlacementIdPtr() const
+    {
+        return m_value.VgpuPlacementIdPtr;
+    }
+
+    nvmlVgpuPlacementId_t const &AsVgpuPlacementId() const
+    {
+        return m_value.VgpuPlacementId;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuProcessUtilizationSample_t *vgpuProcessUtilizationSamplePtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuPlacementList_t *VgpuPlacementListPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTLIST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementListPtr = VgpuPlacementListPtr;
+    }
+    InjectionArgument(nvmlVgpuPlacementList_t VgpuPlacementList)
+        : m_type(INJECTION_VGPUPLACEMENTLIST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementList = VgpuPlacementList;
+    }
+    InjectionArgument(nvmlVgpuPlacementList_t *VgpuPlacementListPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTLIST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementListPtr = VgpuPlacementListPtr;
+    }
+
+    nvmlVgpuPlacementList_t *AsVgpuPlacementListPtr() const
+    {
+        return m_value.VgpuPlacementListPtr;
+    }
+
+    nvmlVgpuPlacementList_t const &AsVgpuPlacementList() const
+    {
+        return m_value.VgpuPlacementList;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuPlacementList_v1_t *VgpuPlacementList_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTLIST_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementList_v1Ptr = VgpuPlacementList_v1Ptr;
+    }
+    InjectionArgument(nvmlVgpuPlacementList_v1_t VgpuPlacementList_v1)
+        : m_type(INJECTION_VGPUPLACEMENTLIST_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementList_v1 = VgpuPlacementList_v1;
+    }
+    InjectionArgument(nvmlVgpuPlacementList_v1_t *VgpuPlacementList_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPLACEMENTLIST_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuPlacementList_v1Ptr = VgpuPlacementList_v1Ptr;
+    }
+
+    nvmlVgpuPlacementList_v1_t *AsVgpuPlacementList_v1Ptr() const
+    {
+        return m_value.VgpuPlacementList_v1Ptr;
+    }
+
+    nvmlVgpuPlacementList_v1_t const &AsVgpuPlacementList_v1() const
+    {
+        return m_value.VgpuPlacementList_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuProcessUtilizationInfo_v1_t *VgpuProcessUtilizationInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessUtilizationInfo_v1Ptr = VgpuProcessUtilizationInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlVgpuProcessUtilizationInfo_v1_t VgpuProcessUtilizationInfo_v1)
+        : m_type(INJECTION_VGPUPROCESSUTILIZATIONINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessUtilizationInfo_v1 = VgpuProcessUtilizationInfo_v1;
+    }
+    InjectionArgument(nvmlVgpuProcessUtilizationInfo_v1_t *VgpuProcessUtilizationInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessUtilizationInfo_v1Ptr = VgpuProcessUtilizationInfo_v1Ptr;
+    }
+
+    nvmlVgpuProcessUtilizationInfo_v1_t *AsVgpuProcessUtilizationInfo_v1Ptr() const
+    {
+        return m_value.VgpuProcessUtilizationInfo_v1Ptr;
+    }
+
+    nvmlVgpuProcessUtilizationInfo_v1_t const &AsVgpuProcessUtilizationInfo_v1() const
+    {
+        return m_value.VgpuProcessUtilizationInfo_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuProcessUtilizationSample_t *VgpuProcessUtilizationSamplePtr, bool inHeap = false)
         : m_type(INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuProcessUtilizationSamplePtr = vgpuProcessUtilizationSamplePtr;
+        m_value.VgpuProcessUtilizationSamplePtr = VgpuProcessUtilizationSamplePtr;
     }
-    nvmlVgpuProcessUtilizationSample_t *AsVgpuProcessUtilizationSamplePtr() const
+    InjectionArgument(nvmlVgpuProcessUtilizationSample_t VgpuProcessUtilizationSample)
+        : m_type(INJECTION_VGPUPROCESSUTILIZATIONSAMPLE)
     {
-        return m_value.vgpuProcessUtilizationSamplePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessUtilizationSample = VgpuProcessUtilizationSample;
     }
-
-    InjectionArgument(nvmlVgpuProcessUtilizationSample_t *vgpuProcessUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuProcessUtilizationSample_t *VgpuProcessUtilizationSamplePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuProcessUtilizationSamplePtr = vgpuProcessUtilizationSamplePtr;
+        m_value.VgpuProcessUtilizationSamplePtr = VgpuProcessUtilizationSamplePtr;
+    }
+
+    nvmlVgpuProcessUtilizationSample_t *AsVgpuProcessUtilizationSamplePtr() const
+    {
+        return m_value.VgpuProcessUtilizationSamplePtr;
+    }
+
+    nvmlVgpuProcessUtilizationSample_t const &AsVgpuProcessUtilizationSample() const
+    {
+        return m_value.VgpuProcessUtilizationSample;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuVersion_t vgpuVersion)
-        : m_type(INJECTION_VGPUVERSION)
+    InjectionArgument(nvmlVgpuProcessesUtilizationInfo_t *VgpuProcessesUtilizationInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVersion = vgpuVersion;
+        m_value.VgpuProcessesUtilizationInfoPtr = VgpuProcessesUtilizationInfoPtr;
     }
-    const nvmlVgpuVersion_t &AsVgpuVersion() const
+    InjectionArgument(nvmlVgpuProcessesUtilizationInfo_t VgpuProcessesUtilizationInfo)
+        : m_type(INJECTION_VGPUPROCESSESUTILIZATIONINFO)
     {
-        return m_value.vgpuVersion;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessesUtilizationInfo = VgpuProcessesUtilizationInfo;
+    }
+    InjectionArgument(nvmlVgpuProcessesUtilizationInfo_t *VgpuProcessesUtilizationInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuProcessesUtilizationInfoPtr = VgpuProcessesUtilizationInfoPtr;
+    }
+
+    nvmlVgpuProcessesUtilizationInfo_t *AsVgpuProcessesUtilizationInfoPtr() const
+    {
+        return m_value.VgpuProcessesUtilizationInfoPtr;
+    }
+
+    nvmlVgpuProcessesUtilizationInfo_t const &AsVgpuProcessesUtilizationInfo() const
+    {
+        return m_value.VgpuProcessesUtilizationInfo;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuVersion_t *vgpuVersionPtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuSchedulerCapabilities_t *VgpuSchedulerCapabilitiesPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERCAPABILITIES_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerCapabilitiesPtr = VgpuSchedulerCapabilitiesPtr;
+    }
+    InjectionArgument(nvmlVgpuSchedulerCapabilities_t VgpuSchedulerCapabilities)
+        : m_type(INJECTION_VGPUSCHEDULERCAPABILITIES)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerCapabilities = VgpuSchedulerCapabilities;
+    }
+    InjectionArgument(nvmlVgpuSchedulerCapabilities_t *VgpuSchedulerCapabilitiesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERCAPABILITIES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerCapabilitiesPtr = VgpuSchedulerCapabilitiesPtr;
+    }
+
+    nvmlVgpuSchedulerCapabilities_t *AsVgpuSchedulerCapabilitiesPtr() const
+    {
+        return m_value.VgpuSchedulerCapabilitiesPtr;
+    }
+
+    nvmlVgpuSchedulerCapabilities_t const &AsVgpuSchedulerCapabilities() const
+    {
+        return m_value.VgpuSchedulerCapabilities;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuSchedulerGetState_t *VgpuSchedulerGetStatePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERGETSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerGetStatePtr = VgpuSchedulerGetStatePtr;
+    }
+    InjectionArgument(nvmlVgpuSchedulerGetState_t VgpuSchedulerGetState)
+        : m_type(INJECTION_VGPUSCHEDULERGETSTATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerGetState = VgpuSchedulerGetState;
+    }
+    InjectionArgument(nvmlVgpuSchedulerGetState_t *VgpuSchedulerGetStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERGETSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerGetStatePtr = VgpuSchedulerGetStatePtr;
+    }
+
+    nvmlVgpuSchedulerGetState_t *AsVgpuSchedulerGetStatePtr() const
+    {
+        return m_value.VgpuSchedulerGetStatePtr;
+    }
+
+    nvmlVgpuSchedulerGetState_t const &AsVgpuSchedulerGetState() const
+    {
+        return m_value.VgpuSchedulerGetState;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuSchedulerLogEntry_t *VgpuSchedulerLogEntryPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERLOGENTRY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLogEntryPtr = VgpuSchedulerLogEntryPtr;
+    }
+    InjectionArgument(nvmlVgpuSchedulerLogEntry_t VgpuSchedulerLogEntry)
+        : m_type(INJECTION_VGPUSCHEDULERLOGENTRY)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLogEntry = VgpuSchedulerLogEntry;
+    }
+    InjectionArgument(nvmlVgpuSchedulerLogEntry_t *VgpuSchedulerLogEntryPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERLOGENTRY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLogEntryPtr = VgpuSchedulerLogEntryPtr;
+    }
+
+    nvmlVgpuSchedulerLogEntry_t *AsVgpuSchedulerLogEntryPtr() const
+    {
+        return m_value.VgpuSchedulerLogEntryPtr;
+    }
+
+    nvmlVgpuSchedulerLogEntry_t const &AsVgpuSchedulerLogEntry() const
+    {
+        return m_value.VgpuSchedulerLogEntry;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuSchedulerLog_t *VgpuSchedulerLogPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERLOG_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLogPtr = VgpuSchedulerLogPtr;
+    }
+    InjectionArgument(nvmlVgpuSchedulerLog_t VgpuSchedulerLog)
+        : m_type(INJECTION_VGPUSCHEDULERLOG)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLog = VgpuSchedulerLog;
+    }
+    InjectionArgument(nvmlVgpuSchedulerLog_t *VgpuSchedulerLogPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERLOG_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerLogPtr = VgpuSchedulerLogPtr;
+    }
+
+    nvmlVgpuSchedulerLog_t *AsVgpuSchedulerLogPtr() const
+    {
+        return m_value.VgpuSchedulerLogPtr;
+    }
+
+    nvmlVgpuSchedulerLog_t const &AsVgpuSchedulerLog() const
+    {
+        return m_value.VgpuSchedulerLog;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuSchedulerSetState_t *VgpuSchedulerSetStatePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERSETSTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerSetStatePtr = VgpuSchedulerSetStatePtr;
+    }
+    InjectionArgument(nvmlVgpuSchedulerSetState_t VgpuSchedulerSetState)
+        : m_type(INJECTION_VGPUSCHEDULERSETSTATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerSetState = VgpuSchedulerSetState;
+    }
+    InjectionArgument(nvmlVgpuSchedulerSetState_t *VgpuSchedulerSetStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUSCHEDULERSETSTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuSchedulerSetStatePtr = VgpuSchedulerSetStatePtr;
+    }
+
+    nvmlVgpuSchedulerSetState_t *AsVgpuSchedulerSetStatePtr() const
+    {
+        return m_value.VgpuSchedulerSetStatePtr;
+    }
+
+    nvmlVgpuSchedulerSetState_t const &AsVgpuSchedulerSetState() const
+    {
+        return m_value.VgpuSchedulerSetState;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuTypeBar1Info_t *VgpuTypeBar1InfoPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUTYPEBAR1INFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuTypeBar1InfoPtr = VgpuTypeBar1InfoPtr;
+    }
+    InjectionArgument(nvmlVgpuTypeBar1Info_t VgpuTypeBar1Info)
+        : m_type(INJECTION_VGPUTYPEBAR1INFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuTypeBar1Info = VgpuTypeBar1Info;
+    }
+    InjectionArgument(nvmlVgpuTypeBar1Info_t *VgpuTypeBar1InfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUTYPEBAR1INFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuTypeBar1InfoPtr = VgpuTypeBar1InfoPtr;
+    }
+
+    nvmlVgpuTypeBar1Info_t *AsVgpuTypeBar1InfoPtr() const
+    {
+        return m_value.VgpuTypeBar1InfoPtr;
+    }
+
+    nvmlVgpuTypeBar1Info_t const &AsVgpuTypeBar1Info() const
+    {
+        return m_value.VgpuTypeBar1Info;
+    }
+
+    nvmlVgpuTypeId_t *AsVgpuTypeIdPtr() const
+    {
+        return static_cast<nvmlVgpuTypeId_t *>(m_value.UIntPtr);
+    }
+
+    nvmlVgpuTypeId_t AsVgpuTypeId() const
+    {
+        return static_cast<nvmlVgpuTypeId_t>(m_value.UInt);
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuVersion_t *VgpuVersionPtr, bool inHeap = false)
         : m_type(INJECTION_VGPUVERSION_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVersionPtr = vgpuVersionPtr;
+        m_value.VgpuVersionPtr = VgpuVersionPtr;
     }
-    nvmlVgpuVersion_t *AsVgpuVersionPtr() const
+    InjectionArgument(nvmlVgpuVersion_t VgpuVersion)
+        : m_type(INJECTION_VGPUVERSION)
     {
-        return m_value.vgpuVersionPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuVersion = VgpuVersion;
     }
-
-    InjectionArgument(nvmlVgpuVersion_t *vgpuVersionPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuVersion_t *VgpuVersionPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUVERSION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVersionPtr = vgpuVersionPtr;
+        m_value.VgpuVersionPtr = VgpuVersionPtr;
+    }
+
+    nvmlVgpuVersion_t *AsVgpuVersionPtr() const
+    {
+        return m_value.VgpuVersionPtr;
+    }
+
+    nvmlVgpuVersion_t const &AsVgpuVersion() const
+    {
+        return m_value.VgpuVersion;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuVmIdType_t vgpuVmIdType)
-        : m_type(INJECTION_VGPUVMIDTYPE)
+    InjectionArgument(nvmlVgpuVmCompatibility_t *VgpuVmCompatibilityPtr, bool inHeap = false)
+        : m_type(INJECTION_VGPUVMCOMPATIBILITY_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVmIdType = vgpuVmIdType;
+        m_value.VgpuVmCompatibilityPtr = VgpuVmCompatibilityPtr;
     }
-    const nvmlVgpuVmIdType_t &AsVgpuVmIdType() const
+    InjectionArgument(nvmlVgpuVmCompatibility_t VgpuVmCompatibility)
+        : m_type(INJECTION_VGPUVMCOMPATIBILITY)
     {
-        return m_value.vgpuVmIdType;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuVmCompatibility = VgpuVmCompatibility;
+    }
+    InjectionArgument(nvmlVgpuVmCompatibility_t *VgpuVmCompatibilityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPUVMCOMPATIBILITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuVmCompatibilityPtr = VgpuVmCompatibilityPtr;
+    }
+
+    nvmlVgpuVmCompatibility_t *AsVgpuVmCompatibilityPtr() const
+    {
+        return m_value.VgpuVmCompatibilityPtr;
+    }
+
+    nvmlVgpuVmCompatibility_t const &AsVgpuVmCompatibility() const
+    {
+        return m_value.VgpuVmCompatibility;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlVgpuVmIdType_t *vgpuVmIdTypePtr, bool inHeap = false)
+    InjectionArgument(nvmlVgpuVmIdType_t *VgpuVmIdTypePtr, bool inHeap = false)
         : m_type(INJECTION_VGPUVMIDTYPE_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVmIdTypePtr = vgpuVmIdTypePtr;
+        m_value.VgpuVmIdTypePtr = VgpuVmIdTypePtr;
     }
-    nvmlVgpuVmIdType_t *AsVgpuVmIdTypePtr() const
+    InjectionArgument(nvmlVgpuVmIdType_t VgpuVmIdType)
+        : m_type(INJECTION_VGPUVMIDTYPE)
     {
-        return m_value.vgpuVmIdTypePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuVmIdType = VgpuVmIdType;
     }
-
-    InjectionArgument(nvmlVgpuVmIdType_t *vgpuVmIdTypePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlVgpuVmIdType_t *VgpuVmIdTypePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VGPUVMIDTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.vgpuVmIdTypePtr = vgpuVmIdTypePtr;
+        m_value.VgpuVmIdTypePtr = VgpuVmIdTypePtr;
+    }
+
+    nvmlVgpuVmIdType_t *AsVgpuVmIdTypePtr() const
+    {
+        return m_value.VgpuVmIdTypePtr;
+    }
+
+    nvmlVgpuVmIdType_t const &AsVgpuVmIdType() const
+    {
+        return m_value.VgpuVmIdType;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlViolationTime_t violationTime)
-        : m_type(INJECTION_VIOLATIONTIME)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.violationTime = violationTime;
-    }
-    const nvmlViolationTime_t &AsViolationTime() const
-    {
-        return m_value.violationTime;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(nvmlViolationTime_t *violationTimePtr, bool inHeap = false)
+    InjectionArgument(nvmlViolationTime_t *ViolationTimePtr, bool inHeap = false)
         : m_type(INJECTION_VIOLATIONTIME_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.violationTimePtr = violationTimePtr;
+        m_value.ViolationTimePtr = ViolationTimePtr;
     }
-    nvmlViolationTime_t *AsViolationTimePtr() const
+    InjectionArgument(nvmlViolationTime_t ViolationTime)
+        : m_type(INJECTION_VIOLATIONTIME)
     {
-        return m_value.violationTimePtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ViolationTime = ViolationTime;
     }
-
-    InjectionArgument(nvmlViolationTime_t *violationTimePtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(nvmlViolationTime_t *ViolationTimePtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_VIOLATIONTIME_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.violationTimePtr = violationTimePtr;
+        m_value.ViolationTimePtr = ViolationTimePtr;
+    }
+
+    nvmlViolationTime_t *AsViolationTimePtr() const
+    {
+        return m_value.ViolationTimePtr;
+    }
+
+    nvmlViolationTime_t const &AsViolationTime() const
+    {
+        return m_value.ViolationTime;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned int ui)
-        : m_type(INJECTION_UINT)
+    InjectionArgument(nvmlWorkloadPowerProfileCurrentProfiles_t *WorkloadPowerProfileCurrentProfilesPtr, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ui = ui;
+        m_value.WorkloadPowerProfileCurrentProfilesPtr = WorkloadPowerProfileCurrentProfilesPtr;
     }
-    const unsigned int &AsUInt() const
+    InjectionArgument(nvmlWorkloadPowerProfileCurrentProfiles_t WorkloadPowerProfileCurrentProfiles)
+        : m_type(INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES)
     {
-        return m_value.ui;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileCurrentProfiles = WorkloadPowerProfileCurrentProfiles;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileCurrentProfiles_t *WorkloadPowerProfileCurrentProfilesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileCurrentProfilesPtr = WorkloadPowerProfileCurrentProfilesPtr;
+    }
+
+    nvmlWorkloadPowerProfileCurrentProfiles_t *AsWorkloadPowerProfileCurrentProfilesPtr() const
+    {
+        return m_value.WorkloadPowerProfileCurrentProfilesPtr;
+    }
+
+    nvmlWorkloadPowerProfileCurrentProfiles_t const &AsWorkloadPowerProfileCurrentProfiles() const
+    {
+        return m_value.WorkloadPowerProfileCurrentProfiles;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned int *uiPtr, bool inHeap = false)
+    InjectionArgument(nvmlWorkloadPowerProfileInfo_t *WorkloadPowerProfileInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileInfoPtr = WorkloadPowerProfileInfoPtr;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileInfo_t WorkloadPowerProfileInfo)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileInfo = WorkloadPowerProfileInfo;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileInfo_t *WorkloadPowerProfileInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileInfoPtr = WorkloadPowerProfileInfoPtr;
+    }
+
+    nvmlWorkloadPowerProfileInfo_t *AsWorkloadPowerProfileInfoPtr() const
+    {
+        return m_value.WorkloadPowerProfileInfoPtr;
+    }
+
+    nvmlWorkloadPowerProfileInfo_t const &AsWorkloadPowerProfileInfo() const
+    {
+        return m_value.WorkloadPowerProfileInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlWorkloadPowerProfileProfilesInfo_t *WorkloadPowerProfileProfilesInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileProfilesInfoPtr = WorkloadPowerProfileProfilesInfoPtr;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileProfilesInfo_t WorkloadPowerProfileProfilesInfo)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEPROFILESINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileProfilesInfo = WorkloadPowerProfileProfilesInfo;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileProfilesInfo_t *WorkloadPowerProfileProfilesInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileProfilesInfoPtr = WorkloadPowerProfileProfilesInfoPtr;
+    }
+
+    nvmlWorkloadPowerProfileProfilesInfo_t *AsWorkloadPowerProfileProfilesInfoPtr() const
+    {
+        return m_value.WorkloadPowerProfileProfilesInfoPtr;
+    }
+
+    nvmlWorkloadPowerProfileProfilesInfo_t const &AsWorkloadPowerProfileProfilesInfo() const
+    {
+        return m_value.WorkloadPowerProfileProfilesInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlWorkloadPowerProfileRequestedProfiles_t *WorkloadPowerProfileRequestedProfilesPtr, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileRequestedProfilesPtr = WorkloadPowerProfileRequestedProfilesPtr;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileRequestedProfiles_t WorkloadPowerProfileRequestedProfiles)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileRequestedProfiles = WorkloadPowerProfileRequestedProfiles;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileRequestedProfiles_t *WorkloadPowerProfileRequestedProfilesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileRequestedProfilesPtr = WorkloadPowerProfileRequestedProfilesPtr;
+    }
+
+    nvmlWorkloadPowerProfileRequestedProfiles_t *AsWorkloadPowerProfileRequestedProfilesPtr() const
+    {
+        return m_value.WorkloadPowerProfileRequestedProfilesPtr;
+    }
+
+    nvmlWorkloadPowerProfileRequestedProfiles_t const &AsWorkloadPowerProfileRequestedProfiles() const
+    {
+        return m_value.WorkloadPowerProfileRequestedProfiles;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(short *ShortPtr, bool inHeap = false)
+        : m_type(INJECTION_SHORT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ShortPtr = ShortPtr;
+    }
+    InjectionArgument(short Short)
+        : m_type(INJECTION_SHORT)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.Short = Short;
+    }
+    InjectionArgument(short *ShortPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SHORT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ShortPtr = ShortPtr;
+    }
+
+    short *AsShortPtr() const
+    {
+        return m_value.ShortPtr;
+    }
+
+    short const &AsShort() const
+    {
+        return m_value.Short;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(unsigned char *UCharPtr, bool inHeap = false)
+        : m_type(INJECTION_UCHAR_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UCharPtr = UCharPtr;
+    }
+    InjectionArgument(unsigned char UChar)
+        : m_type(INJECTION_UCHAR)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UChar = UChar;
+    }
+    InjectionArgument(unsigned char *UCharPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_UCHAR_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UCharPtr = UCharPtr;
+    }
+
+    unsigned char *AsUCharPtr() const
+    {
+        return m_value.UCharPtr;
+    }
+
+    unsigned char const &AsUChar() const
+    {
+        return m_value.UChar;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(unsigned int *UIntPtr, bool inHeap = false)
         : m_type(INJECTION_UINT_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.uiPtr = uiPtr;
+        m_value.UIntPtr = UIntPtr;
     }
-    unsigned int *AsUIntPtr() const
+    InjectionArgument(unsigned int UInt)
+        : m_type(INJECTION_UINT)
     {
-        return m_value.uiPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UInt = UInt;
     }
-
-    InjectionArgument(unsigned int *uiPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(unsigned int *UIntPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_UINT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.uiPtr = uiPtr;
+        m_value.UIntPtr = UIntPtr;
+    }
+
+    unsigned int *AsUIntPtr() const
+    {
+        return m_value.UIntPtr;
+    }
+
+    unsigned int const &AsUInt() const
+    {
+        return m_value.UInt;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned long ul)
-        : m_type(INJECTION_ULONG)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.ul = ul;
-    }
-    const unsigned long &AsULong() const
-    {
-        return m_value.ul;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned long *ulPtr, bool inHeap = false)
+    InjectionArgument(unsigned long *ULongPtr, bool inHeap = false)
         : m_type(INJECTION_ULONG_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ulPtr = ulPtr;
+        m_value.ULongPtr = ULongPtr;
     }
-    unsigned long *AsULongPtr() const
+    InjectionArgument(unsigned long ULong)
+        : m_type(INJECTION_ULONG)
     {
-        return m_value.ulPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ULong = ULong;
     }
-
-    InjectionArgument(unsigned long *ulPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(unsigned long *ULongPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ULONG_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ulPtr = ulPtr;
+        m_value.ULongPtr = ULongPtr;
+    }
+
+    unsigned long *AsULongPtr() const
+    {
+        return m_value.ULongPtr;
+    }
+
+    unsigned long const &AsULong() const
+    {
+        return m_value.ULong;
     }
 
     // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned long long ull)
-        : m_type(INJECTION_ULONG_LONG)
-    {
-        memset(&m_value, 0, sizeof(m_value));
-        m_value.ull = ull;
-    }
-    const unsigned long long &AsULongLong() const
-    {
-        return m_value.ull;
-    }
-
-    // The following snippet is generated from write_injection_argument_header
-    InjectionArgument(unsigned long long *ullPtr, bool inHeap = false)
+    InjectionArgument(unsigned long long *ULongLongPtr, bool inHeap = false)
         : m_type(INJECTION_ULONG_LONG_PTR), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ullPtr = ullPtr;
+        m_value.ULongLongPtr = ULongLongPtr;
     }
-    unsigned long long *AsULongLongPtr() const
+    InjectionArgument(unsigned long long ULongLong)
+        : m_type(INJECTION_ULONG_LONG)
     {
-        return m_value.ullPtr;
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ULongLong = ULongLong;
     }
-
-    InjectionArgument(unsigned long long *ullPtr, unsigned int arrLen, bool inHeap = false)
+    InjectionArgument(unsigned long long *ULongLongPtr, unsigned int arrLen, bool inHeap = false)
         : m_type(INJECTION_ULONG_LONG_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
     {
         memset(&m_value, 0, sizeof(m_value));
-        m_value.ullPtr = ullPtr;
+        m_value.ULongLongPtr = ULongLongPtr;
+    }
+
+    unsigned long long *AsULongLongPtr() const
+    {
+        return m_value.ULongLongPtr;
+    }
+
+    unsigned long long const &AsULongLong() const
+    {
+        return m_value.ULongLong;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(unsigned short *UShortPtr, bool inHeap = false)
+        : m_type(INJECTION_USHORT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UShortPtr = UShortPtr;
+    }
+    InjectionArgument(unsigned short UShort)
+        : m_type(INJECTION_USHORT)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UShort = UShort;
+    }
+    InjectionArgument(unsigned short *UShortPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_USHORT_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UShortPtr = UShortPtr;
+    }
+
+    unsigned short *AsUShortPtr() const
+    {
+        return m_value.UShortPtr;
+    }
+
+    unsigned short const &AsUShort() const
+    {
+        return m_value.UShort;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(const nvmlGpuInstancePlacement_t *ConstGpuInstancePlacementPtr, bool inHeap = false)
+        : m_type(INJECTION_CONST_GPUINSTANCEPLACEMENT_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConstGpuInstancePlacementPtr = ConstGpuInstancePlacementPtr;
+    }
+    const nvmlGpuInstancePlacement_t *AsConstGpuInstancePlacementPtr() const
+    {
+        return m_value.ConstGpuInstancePlacementPtr;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(const char *ConstStr, bool inHeap = false)
+        : m_type(INJECTION_CONST_CHAR_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConstStr = ConstStr;
+    }
+    const char *AsConstStr() const
+    {
+        return m_value.ConstStr;
     }
 
     // The following snippet is generated from write_injection_argument_copy_constructor
@@ -3212,17 +7432,17 @@ public:
                 break;
             case INJECTION_CHAR_PTR:
             {
-                if (m_value.str != nullptr)
+                if (m_value.Str != nullptr)
                 {
-                    return std::string(m_value.str);
+                    return std::string(m_value.Str);
                 }
                 break;
             }
             case INJECTION_CONST_CHAR_PTR:
             {
-                if (m_value.const_str != nullptr)
+                if (m_value.ConstStr != nullptr)
                 {
-                    return std::string(m_value.const_str);
+                    return std::string(m_value.ConstStr);
                 }
                 break;
             }

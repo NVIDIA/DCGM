@@ -16,19 +16,21 @@
 
 #include "DcgmDiagManager.h"
 
-#include "DcgmError.h"
-#include "DcgmStringHelpers.h"
-#include "DcgmUtilities.h"
-#include "Defer.hpp"
-#include "NvvsJsonStrings.h"
-#include "dcgm_config_structs.h"
-#include "dcgm_core_structs.h"
-#include "dcgm_structs.h"
-#include "serialize/DcgmJsonSerialize.hpp"
-
-#include <JsonResult.hpp>
+#include <ChildProcess/ChildProcess.hpp>
+#include <ChildProcess/ChildProcessBuilder.hpp>
+#include <DcgmError.h>
+#include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
+#include <Defer.hpp>
+#include <EntityListHelpers.h>
+#include <NvvsExitCode.h>
+#include <UniquePtrUtil.h>
+#include <dcgm_config_structs.h>
+#include <dcgm_core_structs.h>
+#include <dcgm_structs.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -42,6 +44,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+
+#define NVVS_CHANNEL_FD 3
 
 namespace
 {
@@ -99,6 +103,8 @@ DcgmDiagManager::~DcgmDiagManager()
         DCGM_LOG_DEBUG << "Cleaning up leftover nvvs process with pid " << m_nvvsPID;
         KillActiveNvvs((unsigned int)-1); // don't stop until it's dead
     }
+    // The lock guard above will obey RAII. m_mutex will be destructed with this instance.
+    // coverity[missing_unlock: FALSE]
 }
 
 dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
@@ -123,29 +129,32 @@ dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
         {
             if (sigkilled == false)
             {
-                DCGM_LOG_ERROR << "Unable to kill nvvs pid with 3 SIGTERM attempts, escalating to SIGKILL. pid: "
-                               << childPid;
+                DCGM_LOG_ERROR << "Unable to kill nvvs pid with " << MAX_SIGTERM_ATTEMPTS
+                               << " SIGTERM attempts, escalating to SIGKILL. pid: " << childPid;
             }
 
             kill(childPid, SIGKILL);
             sigkilled = true;
         }
 
-        // sleep on subsequent retry attempts
-        if (kill_count > 0)
+        dcgm_mutex_unlock(&m_mutex);
+        if (kill_count == 0)
         {
-            dcgm_mutex_unlock(&m_mutex);
-            // Yield, then wait for the process to exit.
+            // Only yield on first attempt, perhaps the process exits quickly
             std::this_thread::yield();
+        }
+        else
+        {
+            // Sleep on subsequent retry attempts
             // The lock was just released.
             // coverity[sleep: FALSE]
             std::this_thread::sleep_for(SIGTERM_RETRY_DELAY);
-            dcgm_mutex_lock(&m_mutex);
         }
+        dcgm_mutex_lock(&m_mutex);
         kill_count++;
     }
 
-    if (kill_count > maxRetries)
+    if (kill_count >= maxRetries)
     {
         // Child process died and may not resume hostengine (EUD only?)
         // Resume request may block, temporary release of lock.
@@ -181,7 +190,7 @@ std::string DcgmDiagManager::GetNvvsBinPath()
     int result;
 
     // Default NVVS binary path
-    cmd = "/usr/share/nvidia-validation-suite/nvvs";
+    cmd = "/usr/libexec/datacenter-gpu-manager-4/nvvs";
 
     // Check for NVVS binary path enviroment variable
     value = std::getenv("NVVS_BIN_PATH");
@@ -246,7 +255,7 @@ dcgmReturn_t DcgmDiagManager::EnforceGPUConfiguration(unsigned int gpuId, dcgm_c
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v8 *drd) const
+dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v9 *drd) const
 {
     std::string testParms;
     std::string testNames;
@@ -302,7 +311,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v8 *drd, std::vector<std::string> &cmdArgs) const
+dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v9 *drd, std::vector<std::string> &cmdArgs) const
 {
     static const unsigned int MAX_RETRIES = 3;
 
@@ -400,8 +409,9 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v8 *drd, std::vector<std
 
 /*****************************************************************************/
 void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                                  dcgmRunDiag_v8 *drd,
-                                                  const std::string &gpuIds) const
+                                                  dcgmRunDiag_v9 *drd,
+                                                  std::string const &fakeGpuIds,
+                                                  std::string const &entityIds) const
 {
     if (drd->flags & DCGM_RUN_FLAGS_STATSONFAIL)
     {
@@ -428,15 +438,15 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
     }
 
     // Gpu ids
-    if (strlen(drd->fakeGpuList) > 0)
+    if (!fakeGpuIds.empty())
     {
         cmdArgs.push_back("-f");
-        cmdArgs.push_back(gpuIds);
+        cmdArgs.push_back(fakeGpuIds);
     }
-    else if (gpuIds.length())
+    else if (entityIds.size())
     {
-        cmdArgs.push_back("--indexes");
-        cmdArgs.push_back(gpuIds);
+        cmdArgs.push_back("--entity-id");
+        cmdArgs.push_back(entityIds);
     }
 
     // Logging severity
@@ -454,10 +464,10 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
         cmdArgs.push_back(std::string(pluginDir));
     }
 
-    if (drd->throttleMask[0] != '\0')
+    if (drd->clocksEventMask[0] != '\0')
     {
-        cmdArgs.push_back("--throttle-mask");
-        cmdArgs.push_back(std::string(drd->throttleMask));
+        cmdArgs.push_back("--clocksevent-mask");
+        cmdArgs.push_back(std::string(drd->clocksEventMask));
     }
 
     if (drd->flags & DCGM_RUN_FLAGS_FAIL_EARLY)
@@ -479,12 +489,22 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
         cmdArgs.push_back("--total-iterations");
         cmdArgs.push_back(fmt::format("{}", drd->totalIterations));
     }
+
+    unsigned int constexpr DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS { 5000000 };
+    if (drd->watchFrequency > 0 && drd->watchFrequency != DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS)
+    {
+        cmdArgs.push_back("--watch-frequency");
+        cmdArgs.push_back(fmt::format("{}", drd->watchFrequency));
+    }
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                                dcgmRunDiag_v8 *drd,
-                                                std::string const &gpuIds) const
+                                                dcgmRunDiag_v9 *drd,
+                                                unsigned int diagResponseVersion,
+                                                std::string const &fakeGpuIds,
+                                                std::string const &entityIds,
+                                                ExecuteWithServiceAccount useServiceAccount) const
 {
     dcgmReturn_t ret;
 
@@ -495,11 +515,17 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
     }
     // Reserve enough space for args
     cmdArgs.reserve(25);
-    cmdArgs.push_back(m_nvvsPath);
 
-    // Request json output and say we're DCGM
-    cmdArgs.push_back("-j");
-    cmdArgs.push_back("-z");
+    cmdArgs.push_back(m_nvvsPath);
+    cmdArgs.push_back("--channel-fd");
+    cmdArgs.push_back(std::to_string(NVVS_CHANNEL_FD));
+    cmdArgs.push_back("--response-version");
+    cmdArgs.push_back(std::to_string(diagResponseVersion));
+
+    if (useServiceAccount == ExecuteWithServiceAccount::No)
+    {
+        cmdArgs.push_back("--rerun-as-root");
+    }
 
     ret = AddRunOptions(cmdArgs, drd);
     if (ret != DCGM_ST_OK)
@@ -513,7 +539,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
         return ret;
     }
 
-    AddMiscellaneousNvvsOptions(cmdArgs, drd, gpuIds);
+    AddMiscellaneousNvvsOptions(cmdArgs, drd, fakeGpuIds, entityIds);
 
     return DCGM_ST_OK;
 }
@@ -521,26 +547,33 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  std::string *stderrStr,
-                                                 dcgmRunDiag_v8 *drd,
-                                                 std::string const &gpuIds,
+                                                 dcgmRunDiag_v9 *drd,
+                                                 DcgmDiagResponseWrapper &response,
+                                                 std::string const &fakeGpuIds,
+                                                 std::string const &entityIds,
                                                  ExecuteWithServiceAccount useServiceAccount) const
 {
     std::vector<std::string> args;
 
-    if (auto const ret = CreateNvvsCommand(args, drd, gpuIds); ret != DCGM_ST_OK)
+    if (auto const ret = CreateNvvsCommand(args, drd, response.GetVersion(), fakeGpuIds, entityIds, useServiceAccount);
+        ret != DCGM_ST_OK)
     {
         return ret;
     }
 
-    return PerformExternalCommand(args, stdoutStr, stderrStr, useServiceAccount);
+    return PerformExternalCommand(args, response, stdoutStr, stderrStr, useServiceAccount);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const
 {
     std::vector<std::string> args;
+    std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
+    DcgmDiagResponseWrapper response;
+
+    response.SetVersion11(responseUptr.get());
     args.emplace_back("dummy");
-    return PerformExternalCommand(args, stdoutStr, stderrStr);
+    return PerformExternalCommand(args, response, stdoutStr, stderrStr);
 }
 
 /****************************************************************************/
@@ -564,36 +597,96 @@ void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket) const
     m_nvvsPID = value;
 }
 
+static unsigned int GetStructVersion(std::string_view data)
+{
+    // Get the version from the first four bytes of data. If data
+    // is smaller than expected, return a blank value.
+    if (data.size() < sizeof(unsigned int))
+    {
+        return DCGM_INT32_BLANK;
+    }
+
+    unsigned int version;
+    std::memcpy(&version, data.data(), sizeof(version));
+    return version;
+}
+
+static void PrintDiagStatus(dcgmDiagStatus_v1 const &diagStatus)
+{
+    std::stringstream diagStatusStr;
+    diagStatusStr << "version " << diagStatus.version << "\ttotalTests " << diagStatus.totalTests << "\tcompletedTests "
+                  << diagStatus.completedTests << "\tplugin name " << diagStatus.testName << "\terror code "
+                  << diagStatus.errorCode;
+    log_debug("Diag status : {}", diagStatusStr.str());
+}
+
+void DcgmDiagManager::UpdateDiagStatus(std::string_view data) const
+{
+    dcgmDiagStatus_v1 diagStatus {};
+    DcgmFvBuffer buf;
+    if (sizeof(diagStatus) != data.size())
+    {
+        log_debug("Data size {} does not match dcgmDiagStatus_v1 size {}", data.size(), sizeof(diagStatus));
+        return;
+    }
+
+    memcpy(&diagStatus, data.data(), data.size());
+    PrintDiagStatus(diagStatus);
+
+    auto mapIt = m_testNameResultFieldId.find(diagStatus.testName);
+    if (mapIt == m_testNameResultFieldId.end())
+    {
+        log_debug("Test name '{}' cannot be mapped to a result field id. Skipping updating test result field id.",
+                  diagStatus.testName);
+    }
+    else
+    {
+        auto fieldId = mapIt->second;
+        auto now     = timelib_usecSince1970();
+        buf.AddInt64Value(DCGM_FE_NONE, 0, fieldId, diagStatus.errorCode, now, DCGM_ST_OK);
+    }
+
+    auto now = timelib_usecSince1970();
+    buf.AddBlobValue(DCGM_FE_NONE, 0, DCGM_FI_DEV_DIAG_STATUS, &diagStatus, sizeof(diagStatus), now, DCGM_ST_OK);
+    auto ret = m_coreProxy.AppendSamples(&buf);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Unable to append DCGM_FI_DEV_DIAG_STATUS to the cache manager");
+    }
+}
+
 /****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &args,
+                                                     DcgmDiagResponseWrapper &response,
                                                      std::string *const stdoutStr,
                                                      std::string *const stderrStr,
                                                      ExecuteWithServiceAccount useServiceAccount) const
 {
-    if (stdoutStr == nullptr || stderrStr == nullptr)
+    if (args.empty() || stdoutStr == nullptr || stderrStr == nullptr)
     {
-        DCGM_LOG_ERROR << "PerformExternalCommand: NULL stdoutStr or stderrStr";
+        DCGM_LOG_ERROR << "PerformExternalCommand: args is empty or NULL stdoutStr or stderrStr";
         return DCGM_ST_BADPARAM;
     }
 
+    DcgmNs::Common::Subprocess::ChildProcessBuilder builder;
+    DcgmNs::Common::Subprocess::ChildProcess process;
     std::string filename;
     fmt::memory_buffer stdoutStream;
     fmt::memory_buffer stderrStream;
     struct stat fileStat = {};
     int statSt;
-    int childStatus;
     DcgmNs::Utils::FileHandle stdoutFd;
     DcgmNs::Utils::FileHandle stderrFd;
     pid_t pid = -1;
     uint64_t myTicket;
-    int errno_cached; /* Cached value of errno for logging */
 
     AppendDummyArgs(args);
+    std::string nvvsPath = args[0];
 
     /* See if the program we're planning to run even exists. We have to do this because popen() will still
      * succeed, even if the program isn't found.
      */
-    filename = args[0];
+    filename = nvvsPath;
 
     if (statSt = stat(filename.c_str(), &fileStat); statSt != 0)
     {
@@ -670,14 +763,18 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
             }
         }
 
-        // Run command
-        pid = DcgmNs::Utils::ForkAndExecCommand(args,
-                                                nullptr,
-                                                &stdoutFd,
-                                                &stderrFd,
-                                                false,
-                                                serviceAccount.has_value() ? (*serviceAccount).c_str() : nullptr,
-                                                nullptr);
+        // skip args[0] as it is executable path
+        builder.SetExecutable(nvvsPath)
+            .SetChannelFd(NVVS_CHANNEL_FD)
+            .AddArgs(std::vector(args.begin() + 1, args.end()));
+        if (serviceAccount.has_value())
+        {
+            builder.SetRunningUser(*serviceAccount);
+        }
+        process = builder.Build();
+        process.Run();
+        auto pidOpt = process.GetPid();
+        pid         = pidOpt.has_value() ? *pidOpt : -1;
         // Update the nvvs pid
         myTicket = GetTicket();
         UpdateChildPID(pid, myTicket);
@@ -685,97 +782,99 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
 
     if (pid < 0)
     {
-        DCGM_LOG_ERROR << fmt::format("Unable to run external command '{}'.", args[0]);
+        DCGM_LOG_ERROR << fmt::format("Unable to run external command '{}'.", nvvsPath);
         return DCGM_ST_DIAG_BAD_LAUNCH;
     }
+
     /* Do not return DCGM_ST_DIAG_BAD_LAUNCH for errors after this point since the child has been launched - use
        DCGM_ST_NVVS_ERROR or DCGM_ST_GENERIC_ERROR instead */
-    log_debug("Launched external command '[{}]' (PID: {})", fmt::join(args, " "), pid);
+    log_debug("Launched external command '{}' (PID: {})", fmt::to_string(fmt::join(args, " ")), pid);
 
-    auto killPidGuard = DcgmNs::Defer { [&]() {
-        if (pid > 0)
-        {
-            DCGM_LOG_ERROR << "Killing DCGM diagnostic subprocess due to a communication error. External command: "
-                           << args[0];
-            kill(pid, SIGKILL);
-            // Prevent zombie child
-            if (waitpid(pid, nullptr, 0) == -1)
-            {
-                log_error("waitpid returned -1 for pid {}", pid);
-            }
-            DCGM_LOG_DEBUG << "The child process has been killed.";
-            UpdateChildPID(-1, myTicket);
-            pid = -1;
-        }
-    } };
-
-    if (auto const ret = ReadProcessOutput(stdoutStream, stderrStream, std::move(stdoutFd), std::move(stderrFd));
-        ret != DCGM_ST_OK)
+    unsigned int receivedResultFrameNum = 0;
+    auto &frameChannel                  = process.GetFdChannel();
+    for (auto const &frame : frameChannel)
     {
-        *stdoutStr = fmt::to_string(stdoutStream);
-        *stderrStr = fmt::to_string(stderrStream);
-        DCGM_LOG_DEBUG << "External command stdout (partial): " << SanitizedString(*stdoutStr);
-        DCGM_LOG_DEBUG << "External command stderr (partial): " << SanitizedString(*stderrStr);
-        return ret;
+        std::string_view data(reinterpret_cast<char const *>(frame.data()), frame.size());
+        auto const &version = GetStructVersion(data);
+        switch (version)
+        {
+            case dcgmDiagStatus_version1:
+                UpdateDiagStatus(data);
+                break;
+            case dcgmDiagResponse_version11:
+            case dcgmDiagResponse_version10:
+            case dcgmDiagResponse_version9:
+            case dcgmDiagResponse_version8:
+            case dcgmDiagResponse_version7:
+            {
+                auto const &ret = response.SetResult(data);
+                if (ret != DCGM_ST_OK)
+                {
+                    log_error("failed to set results, err: [{}]", ret);
+                    return ret;
+                }
+                receivedResultFrameNum += 1;
+                break;
+            }
+            default:
+                log_error("Unexpected struct with version {} from nvvs channel", version);
+        }
+        // Discard any results received beyond the first result; this is unexpected
+        if (receivedResultFrameNum == 1)
+        {
+            break;
+        }
     }
-
-    // Disarming the killPidGuard as at this point the child process exit status will be handled explicitly
-    killPidGuard.Disarm();
+    if (receivedResultFrameNum == 0)
+    {
+        log_error("Diag result struct not received from NVVS.");
+    }
 
     // Set output string in caller's context
     // Do this before the error check so that if there are errors, we have more useful error messages
-    *stdoutStr = fmt::to_string(stdoutStream);
-    *stderrStr = fmt::to_string(stderrStream);
+    auto &stdoutLines = process.StdOut();
+    *stdoutStr        = fmt::to_string(fmt::join(stdoutLines.begin(), stdoutLines.end(), "\n"));
+
+    auto &stderrLines = process.StdErr();
+    *stderrStr        = fmt::to_string(fmt::join(stderrLines.begin(), stderrLines.end(), "\n"));
     DCGM_LOG_DEBUG << "External command stdout: " << SanitizedString(*stdoutStr);
     DCGM_LOG_DEBUG << "External command stderr: " << SanitizedString(*stderrStr);
-
-    // Get exit status of child
-    if (waitpid(pid, &childStatus, 0) == -1)
-    {
-        errno_cached = errno;
-        DCGM_LOG_ERROR << fmt::format("There was an error waiting for external command '{}' (PID: {}) to exit: {}",
-                                      args[0],
-                                      pid,
-                                      strerror(errno_cached));
-
-        UpdateChildPID(-1, myTicket);
-        return DCGM_ST_NVVS_ERROR;
-    }
 
     // Reset pid so that future runs know that nvvs is no longer running
     UpdateChildPID(-1, myTicket);
 
-    // Check exit status
-    if (WIFEXITED(childStatus))
+    process.Wait();
+    auto exitCodeOpt = process.GetExitCode();
+    if (!exitCodeOpt)
     {
-        // Exited normally - check for non-zero exit code
-        childStatus = WEXITSTATUS(childStatus);
-        if (childStatus != EXIT_SUCCESS)
-        {
-            /* If the nvvs has a non-zero exit code, that may mean some handled exception is properly wrapped into a
-             * json object and printed to stdout. The nvvs command itself was successful from our point of view. Now
-             * it's up to the upper caller logic to decide if the stdout is valid */
-            DCGM_LOG_DEBUG << fmt::format(
-                "The external command '{}' returned a non-zero exit code: {}", args[0], childStatus);
-            return DCGM_ST_OK;
-        }
-    }
-    else if (WIFSIGNALED(childStatus))
-    {
-        // Child terminated due to signal
-        childStatus = WTERMSIG(childStatus);
-        DCGM_LOG_ERROR << "The external command '" << args[0] << "' was terminated due to signal " << childStatus;
-        stderrStr->insert(0,
-                          fmt::format("The DCGM diagnostic subprocess was terminated due to signal {}"
-                                      "\n**************\n",
-                                      childStatus));
-        return DCGM_ST_NVVS_KILLED;
-    }
-    else
-    {
-        // We should never hit this in practice, but it is possible if the child process is being traced via ptrace
-        DCGM_LOG_DEBUG << "The external command '" << args[0] << "' is being traced";
+        log_error("The external command '{}' may still be running.", args[0]);
         return DCGM_ST_NVVS_ERROR;
+    }
+
+    if (*exitCodeOpt != 0)
+    {
+        /* If the nvvs has a non-zero exit code, that may mean some handled exception is properly wrapped into a
+         * json object and printed to stdout. The nvvs command itself was successful from our point of view. Now
+         * it's up to the upper caller logic to decide if the stdout is valid */
+        auto receivedSignal = process.ReceivedSignal();
+        if (receivedSignal.has_value())
+        {
+            log_error("The external command '{}' returned a non-zero exit code: {}, received signal: {}.",
+                      args[0],
+                      *exitCodeOpt,
+                      receivedSignal.has_value() ? std::to_string(*receivedSignal) : "None");
+            stderrStr->insert(0,
+                              fmt::format("The DCGM diagnostic subprocess was terminated due to signal {}"
+                                          "\n**************\n",
+                                          *receivedSignal));
+            return DCGM_ST_NVVS_KILLED;
+        }
+        if (*exitCodeOpt == NVVS_ST_TEST_NOT_FOUND)
+        {
+            return DCGM_ST_NVVS_NO_AVAILABLE_TEST;
+        }
+        log_error("The external command '{}' returned a non-zero exit code: {}", args[0], *exitCodeOpt);
+        return DCGM_ST_OK;
     }
 
     return DCGM_ST_OK;
@@ -837,27 +936,7 @@ struct ExecuteAndParseNvvsResult
 {
     dcgmReturn_t ret = DCGM_ST_GENERIC_ERROR; /*!< Return code of the nvvs execution. If value is DCGM_ST_OK, the
                                                * \c results field is guaranteed to be populated. */
-    std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> results {}; /*!< Parsed results of the nvvs execution.
-                                                                      * This field is populated only if \c ret is
-                                                                      * DCGM_ST_OK.*/
 };
-
-static std::string_view SanitizeNvvsJson(std::string_view stdoutStr)
-{
-    /*
-     *  Sometimes during the tests NVML outputs warnings like
-     *  WARNING: Failed to acquire log file lock. File is in use by a different instance
-     *  right to the stdout where we expect only JSON objects.
-     */
-    std::string_view jsonStr = stdoutStr;
-    jsonStr.remove_prefix(std::min(jsonStr.find_first_of('{'), jsonStr.size()));
-    if (jsonStr.length() != stdoutStr.length())
-    {
-        log_warning("NVVS JSON output has some non-JSON prefix");
-        log_debug("NVVS non-JSON prefix: {}", stdoutStr.substr(0, stdoutStr.length() - jsonStr.length()));
-    }
-    return jsonStr;
-}
 
 /**
  * @brief Executes nvvs and parses the JSON output to the DiagnosticResults structure
@@ -871,9 +950,10 @@ static std::string_view SanitizeNvvsJson(std::string_view stdoutStr)
  * @note This function fills in the response system error information in case of an error.
  */
 auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
-                         DcgmDiagResponseWrapper const &response,
-                         dcgmRunDiag_v8 *drd,
-                         std::string const &gpuIds,
+                         DcgmDiagResponseWrapper &response,
+                         dcgmRunDiag_v9 *drd,
+                         std::string const &fakeGpuIds,
+                         std::string const &entityIds,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
                          = DcgmDiagManager::ExecuteWithServiceAccount::Yes) -> ExecuteAndParseNvvsResult
 {
@@ -881,53 +961,34 @@ auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
     std::string stdoutStr;
     std::string stderrStr;
 
-    result.ret = self.PerformNVVSExecute(&stdoutStr, &stderrStr, drd, gpuIds, useServiceAccount);
+    result.ret
+        = self.PerformNVVSExecute(&stdoutStr, &stderrStr, drd, response, fakeGpuIds, entityIds, useServiceAccount);
     if (result.ret != DCGM_ST_OK)
     {
         auto const msg = fmt::format("Error when executing the diagnostic: {}\n"
                                      "Nvvs stderr: \n{}\n",
                                      errorString(result.ret),
                                      stderrStr);
-        log_error(msg);
-        response.RecordSystemError({ msg.data(), msg.size() });
+        if (result.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST)
+        {
+            log_error(msg);
+            response.RecordSystemError({ msg.data(), msg.size() });
+        }
+        else
+        {
+            log_debug(msg);
+        }
 
         return result;
     }
 
-    auto tmpResults
-        = DcgmNs::JsonSerialize::TryDeserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(SanitizeNvvsJson(stdoutStr));
-    if (!tmpResults.has_value())
+    if (!response.GetSystemErr().empty())
     {
-        auto const msg = fmt::format("Failed to parse the NVVS JSON output\n"
-                                     "Nvvs stderr: \n{}\n",
-                                     SanitizedString(stderrStr));
-        log_error(msg);
-        response.RecordSystemError({ msg.data(), msg.size() });
-        log_debug("Sanitized raw NVVS output: {}", SanitizedString(stdoutStr));
-
-        return { DCGM_ST_NVVS_ERROR, std::nullopt };
+        // If original return was OK, change return code to indicate NVVS error
+        result.ret = (result.ret == DCGM_ST_OK) ? DCGM_ST_NVVS_ERROR : result.ret;
     }
-
-    log_debug("NVVS parsed JSON: {}", SanitizeNvvsJson(stdoutStr));
-
-    result.results = std::move(*tmpResults);
 
     return result;
-}
-
-/**
- * @brief Checks if the plugin is missing from the NVVS JSON results
- * @param results Parsed NVVS results
- * @return true if the error code indicates that the plugin is missing (NVVS_ST_TEST_NOT_FOUND), false otherwise
- */
-bool IsPluginMissing(DcgmNs::Nvvs::Json::DiagnosticResults const &results)
-{
-    if (results.errorCode.has_value() && results.errorCode.value() == NVVS_ST_TEST_NOT_FOUND)
-    {
-        return true;
-    }
-
-    return false;
 }
 
 /**
@@ -956,160 +1017,212 @@ std::vector<std::uint32_t> ParseAndFilterGpuList(std::string_view input)
 }
 
 /**
+ * @brief Parses an entity ids string and filters out GPU with valid IDs.
+ * @param[in] input A string containing entity ids (e.g. gpu:0,1).
+ * @return A vector of valid GPU IDs parsed from the input string.
+ */
+std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(DcgmCoreProxy &coreProxy, std::string_view entityIds)
+{
+    dcgmReturn_t ret;
+
+    std::vector<dcgmcm_gpu_info_cached_t> gpuInfos;
+    ret = coreProxy.GetAllGpuInfo(gpuInfos);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("failed to get gpu info from core proxy: {}", errorString(ret));
+        return {};
+    }
+    std::vector<std::pair<unsigned, std::string>> gpuIdUuids;
+    for (auto const &gpuInfo : gpuInfos)
+    {
+        // Skip GPUs that are lost to the CM
+        if (gpuInfo.status == DcgmEntityStatusLost)
+        {
+            continue;
+        }
+        gpuIdUuids.emplace_back(gpuInfo.gpuId, gpuInfo.uuid);
+    }
+
+    dcgmMigHierarchy_v2 migHierarchy;
+    ret = coreProxy.GetGpuInstanceHierarchy(migHierarchy);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("failed to get gpu instance hierachy from core proxy: {}", errorString(ret));
+        return {};
+    }
+    return DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, gpuIdUuids, entityIds);
+}
+
+/**
  * @brief Executes EUD with root permissions if the service account does not have root permissions
  * @param[in] diagManager DiagManager instance
  * @param[in] drd Diagnostic request data
  * @param[in] response Response wrapper
  * @param[in] serviceAccount Service account name
- * @param[in] indexList Comma-separated list of GPU IDs
- * @param[in,out] nvvsResults NVVS results of previously run tests. The EUD results will be merged into this structure
- * @return DCGM_ST_OK if the EUD was executed successfully, an error code otherwise
+ * @param[in] fakeGpuIds Comma-separated list of fake GPU IDs
+ * @param[in,out] entityIds Entity-id list
+ * @param[in] testNames List of EUD tests to run
+ * @return true if the EUD was executed, false otherwise
  */
-dcgmReturn_t ExecuteEudAsRoot(DcgmDiagManager const &diagManager,
-                              dcgmRunDiag_v8 const *drd,
-                              DcgmDiagResponseWrapper const &response,
-                              char const *serviceAccount,
-                              std::string const &indexList,
-                              std::optional<DcgmNs::Nvvs::Json::DiagnosticResults> &nvvsResults,
-                              std::vector<std::string> const &eudTestNames)
+bool ExecuteEudPluginsAsRoot(DcgmDiagManager const &diagManager,
+                             dcgmRunDiag_v9 const *drd,
+                             DcgmDiagResponseWrapper &eudResponse,
+                             char const *serviceAccount,
+                             std::string const &fakeGpuIds,
+                             std::string const &entityIds,
+                             std::vector<std::string> const &testNames)
 {
     if (auto serviceAccountCredentials = GetUserCredentials(serviceAccount);
         !serviceAccountCredentials.has_value() || (*serviceAccountCredentials).gid == 0
         || (*serviceAccountCredentials).uid == 0 || std::ranges::count((*serviceAccountCredentials).groups, 0) > 0)
     {
-        log_debug("Skip second EUD if the service account has root permissions");
-        return DCGM_ST_OK;
-    }
-
-    log_debug("Run EUD with root permissions");
-    auto eudDrd     = *drd;
-    eudDrd.validate = DCGM_POLICY_VALID_NONE;
-    memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
-    for (unsigned int i = 0; i < eudTestNames.size() && i < DCGM_MAX_TEST_NAMES; ++i)
-    {
-        SafeCopyTo(eudDrd.testNames[i], eudTestNames[i].c_str());
-    }
-
-    auto eudResults = ExecuteAndParseNvvs(
-        diagManager, response, &eudDrd, indexList, DcgmDiagManager::ExecuteWithServiceAccount::No);
-
-    if (eudResults.ret != DCGM_ST_OK)
-    {
-        // Do not overwrite the response system error here
-        return eudResults.ret;
-    }
-
-    if (!eudResults.results.has_value())
-    {
-        log_warning("EUD results are missing (empty optional)");
-        return DCGM_ST_OK;
-    }
-
-    if (IsPluginMissing(*eudResults.results))
-    {
-        log_warning("EUD plugin is missing");
-        return DCGM_ST_OK;
-    }
-
-    auto tmpResult = nvvsResults.value_or(DcgmNs::Nvvs::Json::DiagnosticResults {});
-
-    if (!DcgmNs::Nvvs::Json::MergeResults(tmpResult, std::move(*eudResults.results)))
-    {
-        log_error("Failed to merge the NVVS JSON output");
-        nvvsResults = std::move(tmpResult);
-        response.RecordSystemError("Unable to merge JSON results for regular Diag and EUD tests");
-        return DCGM_ST_NVVS_ERROR;
-    }
-
-    nvvsResults = std::move(tmpResult);
-
-    return DCGM_ST_OK;
-}
-
-bool AllTestsCanRunWithoutGpu(dcgmRunDiag_v8 const *drd)
-{
-    int numTests = 0;
-
-    for (unsigned int i = 0; i < DCGM_MAX_TEST_NAMES && drd->testNames[i][0] != '\0'; i++)
-    {
-        numTests += 1;
-        if (std::string_view(drd->testNames[i]) != "cpu_eud")
-        {
-            return false;
-        }
-    }
-    // if no tests indicated, it will run short which needs GPU.
-    return numTests > 0;
-}
-
-bool AllDigits(std::string const &str)
-{
-    if (str.empty())
-    {
+        log_debug("Skip second EUD plugin's run if the service account has root permissions");
         return false;
     }
 
-    for (auto const c : str)
+    log_debug("Run EUD plugin with root permissions");
+    auto eudDrd     = *drd;
+    eudDrd.validate = DCGM_POLICY_VALID_NONE;
+    memset(eudDrd.testNames, 0, sizeof(eudDrd.testNames));
+    for (unsigned int index = 0; auto const &test : testNames)
     {
-        if (!isdigit(c))
+        SafeCopyTo(eudDrd.testNames[index++], test.c_str());
+    }
+
+    if (auto ret = ExecuteAndParseNvvs(
+            diagManager, eudResponse, &eudDrd, fakeGpuIds, entityIds, DcgmDiagManager::ExecuteWithServiceAccount::No);
+        ret.ret != DCGM_ST_OK)
+    {
+        log_debug("failed to rerun NVVS with root, ret: [{}].", ret.ret);
+        return false;
+    }
+
+    for (auto const &test : testNames)
+    {
+        if (eudResponse.HasTest(test) == false)
         {
-            return false;
+            log_warning("{} test is missing from results", test);
         }
     }
+
     return true;
 }
 
 } // namespace
 
-std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntities, unsigned int &gpuCount)
+std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
+    dcgmRunDiag_v9 *drd,
+    std::string const &fakeGpuIds,
+    std::string const &entityIds,
+    std::unordered_set<std::string_view> const &testNames,
+    dcgmReturn_t lastRunRet,
+    DcgmDiagResponseWrapper &response)
 {
-    gpuCount = 0;
-    if (expectedNumEntities.empty())
+    std::vector<std::string> eudRerunTestNames;
+    static const std::string EUD_TEST     = "eud";
+    static const std::string CPU_EUD_TEST = "cpu_eud";
+    WasExecuted_t wasExecuted { WasExecuted_t::WAS_NOT_EXECUTED };
+
+    if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG
+        || testNames.contains("production_testing"))
     {
-        return "";
+        eudRerunTestNames.push_back(EUD_TEST);
+        eudRerunTestNames.push_back(CPU_EUD_TEST);
     }
-
-    std::string gpuCountStr;
-    size_t colonPos = expectedNumEntities.find_first_of(":");
-    if (colonPos != std::string::npos)
+    else
     {
-        std::string loweredStr = expectedNumEntities.substr(0, colonPos);
-        std::transform(
-            loweredStr.begin(), loweredStr.end(), loweredStr.begin(), [](unsigned char c) { return std::tolower(c); });
-
-        if (!loweredStr.starts_with("gpu"))
+        if (testNames.contains(EUD_TEST))
         {
-            std::string err = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed.",
-                                          expectedNumEntities);
-            return err;
+            eudRerunTestNames.push_back(EUD_TEST);
         }
-        gpuCountStr = expectedNumEntities.substr(colonPos + 1);
+        if (testNames.contains(CPU_EUD_TEST))
+        {
+            eudRerunTestNames.push_back(CPU_EUD_TEST);
+        }
     }
-    if (!AllDigits(gpuCountStr))
+
+    if (eudRerunTestNames.empty())
     {
-        std::string err
-            = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed.", expectedNumEntities);
-        return err;
+        return { wasExecuted, DCGM_ST_OK };
     }
-    try
+
+    std::unique_ptr<dcgmDiagResponse_v11> v11;
+    std::unique_ptr<dcgmDiagResponse_v10> v10;
+    std::unique_ptr<dcgmDiagResponse_v9> v9;
+    std::unique_ptr<dcgmDiagResponse_v8> v8;
+    DcgmDiagResponseWrapper eudResponse;
+
+    switch (response.GetVersion())
     {
-        gpuCount = stol(gpuCountStr);
+        case dcgmDiagResponse_version11:
+            v11          = MakeUniqueZero<dcgmDiagResponse_v11>();
+            v11->version = dcgmDiagResponse_version11;
+            eudResponse.SetVersion11(v11.get());
+            break;
+        case dcgmDiagResponse_version10:
+            v10          = MakeUniqueZero<dcgmDiagResponse_v10>();
+            v10->version = dcgmDiagResponse_version10;
+            eudResponse.SetVersion10(v10.get());
+            break;
+        case dcgmDiagResponse_version9:
+            v9          = MakeUniqueZero<dcgmDiagResponse_v9>();
+            v9->version = dcgmDiagResponse_version9;
+            eudResponse.SetVersion9(v9.get());
+            break;
+        case dcgmDiagResponse_version8:
+            v8          = MakeUniqueZero<dcgmDiagResponse_v8>();
+            v8->version = dcgmDiagResponse_version8;
+            eudResponse.SetVersion8(v8.get());
+            break;
+        case dcgmDiagResponse_version7:
+            log_error("dcgmDiagResponse_version7 does not support eud.");
+            return { wasExecuted, DCGM_ST_OK };
+        default:
+            log_error("unknown version: [{}].", response.GetVersion());
+            return { wasExecuted, DCGM_ST_VER_MISMATCH };
     }
-    catch (const std::exception &e)
+
+    auto serviceAccount = GetServiceAccount(m_coreProxy);
+    if (!serviceAccount.has_value())
     {
-        std::string err = fmt::format("Parameter expectedNumEntities {} format incorrect, cannot be parsed. Error: {}",
-                                      expectedNumEntities,
-                                      e.what());
-        return err;
+        return { wasExecuted, DCGM_ST_OK };
     }
-    return "";
+
+    if (!ExecuteEudPluginsAsRoot(
+            *this, drd, eudResponse, (*serviceAccount).c_str(), fakeGpuIds, entityIds, eudRerunTestNames))
+    {
+        return { wasExecuted, DCGM_ST_OK };
+    }
+
+    wasExecuted = WasExecuted_t::WAS_EXECUTED;
+
+    dcgmReturn_t eudRet = DCGM_ST_OK;
+    if (lastRunRet == DCGM_ST_OK)
+    {
+        eudRet = response.MergeEudResponse(eudResponse);
+    }
+    else if (lastRunRet == DCGM_ST_NVVS_NO_AVAILABLE_TEST)
+    {
+        // If the last execution was DCGM_ST_NVVS_NO_AVAILABLE_TEST, most fields of the response will be
+        // empty. In this case, we're relying on the EUD response instead.
+        eudRet = response.AdoptEudResponse(eudResponse);
+    }
+
+    if (eudRet != DCGM_ST_OK)
+    {
+        log_error("failed to apply eud response, ret: [{}]", eudRet);
+        return { wasExecuted, eudRet };
+    }
+
+    return { wasExecuted, DCGM_ST_OK };
 }
 
-dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapper &response)
+dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v9 *drd, DcgmDiagResponseWrapper &response)
 {
-    dcgmReturn_t ret   = DCGM_ST_OK;
     bool areAllSameSku = true;
     std::vector<unsigned int> gpuIds;
+    std::string fakeGpuIds;
+    std::string entityIds;
 
     /* NVVS is only allowed to run on a single SKU at a time. Returning this error gives
      * users a deterministic response. See bug 1714115 and its related bugs for details
@@ -1119,15 +1232,11 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapp
         log_debug("Parsing fake GPU list: {}", drd->fakeGpuList);
         gpuIds        = ParseAndFilterGpuList(drd->fakeGpuList);
         areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
+        fakeGpuIds    = fmt::format("{}", fmt::join(gpuIds, ","));
     }
-    else if (strlen(drd->gpuList) != 0U)
+    else if (drd->groupId != DCGM_GROUP_NULL)
     {
-        log_debug("Parsing GPU list: {}", drd->gpuList);
-        gpuIds        = ParseAndFilterGpuList(drd->gpuList);
-        areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
-    }
-    else
-    {
+        dcgmReturn_t ret = DCGM_ST_OK;
         // Check the group
         ret = m_coreProxy.AreAllTheSameSku(0, static_cast<unsigned int>(drd->groupId), &areAllSameSku);
         if (ret != DCGM_ST_OK)
@@ -1142,27 +1251,31 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapp
             log_error("Got st {} from GetGroupGpuIds()", (int)ret);
             return ret;
         }
-    }
-
-    if (gpuIds.empty())
-    {
-        log_debug("No GPU detected.");
-        if (!AllTestsCanRunWithoutGpu(drd))
-        {
-            return DCGM_ST_GROUP_IS_EMPTY;
-        }
+        entityIds = fmt::format("{}", fmt::join(gpuIds, ","));
     }
     else
     {
-        if (!areAllSameSku)
-        {
-            DCGM_LOG_DEBUG << "GPUs are incompatible for Validation";
-            return DCGM_ST_GROUP_INCOMPATIBLE;
-        }
+        // Check entity ids
+        log_debug("Parsing entity ids: {}", drd->entityIds);
+        gpuIds        = ParseEntityIdsAndFilterGpu(m_coreProxy, drd->entityIds);
+        areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
+        entityIds     = drd->entityIds;
+    }
+
+    if (fakeGpuIds.empty() && entityIds.empty())
+    {
+        log_debug("Cannot perform diag: {}", errorString(DCGM_ST_GROUP_IS_EMPTY));
+        return DCGM_ST_GROUP_IS_EMPTY;
+    }
+
+    if (!areAllSameSku)
+    {
+        DCGM_LOG_DEBUG << "GPUs are incompatible for Validation";
+        return DCGM_ST_GROUP_INCOMPATIBLE;
     }
 
     unsigned int expectedNumGpus = 0;
-    auto err                     = ParseExpectedNumEntitiesForGpus(drd->expectedNumEntities, expectedNumGpus);
+    auto err                     = DcgmNs::ParseExpectedNumEntitiesForGpus(drd->expectedNumEntities, expectedNumGpus);
     if (!err.empty())
     {
         log_error(err);
@@ -1177,16 +1290,24 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapp
         return DCGM_ST_BADPARAM;
     }
 
-    std::string indexList = fmt::format("{}", fmt::join(gpuIds, ","));
-    log_debug("Running diag on GPUs: {}", indexList);
+    if (!fakeGpuIds.empty())
+    {
+        log_debug("Running diag on fake gpu ids: {}", fakeGpuIds);
+    }
+    else
+    {
+        log_debug("Running diag on entities: {}", entityIds);
+    }
 
     if ((drd->validate == DCGM_POLICY_VALID_NONE) && (strlen(drd->testNames[0]) == 0))
     {
         return DCGM_ST_OK;
     }
 
-    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, indexList);
-    if (nvvsResults.ret != DCGM_ST_OK)
+    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, fakeGpuIds, entityIds);
+    // Some tests require root access. If no tests are found to run, consider re-running them
+    // with root privileges to attempt execution again. Need to check again below for NO_AVAILABLE_TEST.
+    if (nvvsResults.ret != DCGM_ST_OK && nvvsResults.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST)
     {
         // Do not overwrite the response system error here as it should already have more specific information
         return nvvsResults.ret;
@@ -1204,7 +1325,6 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapp
      * It should be forbidden to have validation level other than none if the test names are specified.
      */
     std::unordered_set<std::string_view> testNames;
-    std::vector<std::string> eudTestNames;
     if (drd->validate == DCGM_POLICY_VALID_NONE)
     {
         for (auto const &testName : drd->testNames)
@@ -1216,47 +1336,26 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapp
         }
     }
 
-    if (testNames.contains("eud") || drd->validate == DCGM_POLICY_VALID_SV_LONG
-        || drd->validate == DCGM_POLICY_VALID_SV_XLONG || testNames.contains("production_testing"))
+    auto [eudWasRerun, eudRet] = RerunEudDiagAsRoot(drd, fakeGpuIds, entityIds, testNames, nvvsResults.ret, response);
+    if (eudRet != DCGM_ST_OK)
     {
-        eudTestNames.push_back("eud");
-    }
-    if (testNames.contains("cpu_eud"))
-    {
-        eudTestNames.push_back("cpu_eud");
+        log_error("failed to rerun eud as root, err: [{}].", eudRet);
+        return eudRet;
     }
 
-    if (!eudTestNames.empty())
+    // NVVS may lack of root permission, we add cpu serials in host engine here.
+    if (!response.AddCpuSerials())
     {
-        if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
-        {
-            if (auto eudRet = ExecuteEudAsRoot(
-                    *this, drd, response, (*serviceAccount).c_str(), indexList, nvvsResults.results, eudTestNames);
-                eudRet != DCGM_ST_OK)
-            {
-                return eudRet;
-            }
-        }
+        log_debug("failed to add cpu serials to response.");
     }
 
-    /*
-     * The FillResponseStructure function may return DCGM_ST_NVVS_ERROR if the results contain runtime errors.
-     * Otherwise, the oldRet (ret) is returned.
-     * In this execution branch the ret is never touched and is always DCGM_ST_OK as the previous non-OK results
-     * are returned and logged immediately.
-     *
-     * If we see the ret == DCGM_ST_NVVS_ERROR here, that means we got some runtime errors in the nvvs execution
-     * and we are reporting such errors back to the user.
-     */
-    ret = FillResponseStructure(
-        nvvsResults.results.value_or(DcgmNs::Nvvs::Json::DiagnosticResults {}), response, drd->groupId, ret);
-    if (ret != DCGM_ST_OK)
+    // Return any results previously skipped for RerunEudDiagAsRoot()
+    if (eudWasRerun == WasExecuted_t::WAS_NOT_EXECUTED && nvvsResults.ret != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << fmt::format("Error happened during JSON parsing of NVVS output: {}", errorString(ret));
-        // Do not overwrite the response system error here as there may be a more specific one already
+        return nvvsResults.ret;
     }
 
-    return ret;
+    return DCGM_ST_OK;
 }
 
 std::string DcgmDiagManager::GetCompareTestName(const std::string &testname)
@@ -1303,227 +1402,16 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
     {
         index = DCGM_EUD_TEST_INDEX;
     }
-    else if (compareName == "cpu_eud")
+    else if (compareName == "nvbandwidth")
     {
-        index = DCGM_CPU_EUD_TEST_INDEX;
+        index = DCGM_NVBANDWIDTH_INDEX;
     }
 
     return index;
 }
 
-static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Warning const &warning, dcgmDiagErrorDetail_v2 &ed)
-{
-    if (warning.error_code.has_value())
-    {
-        ed.code = *warning.error_code;
-    }
-
-    if (warning.error_severity.has_value())
-    {
-        ed.severity = *warning.error_severity;
-    }
-
-    if (warning.error_category.has_value())
-    {
-        ed.category = *warning.error_category;
-    }
-
-    snprintf(ed.msg, sizeof(ed.msg), "%s", warning.message.c_str());
-}
-
-static void PopulateErrorDetail(DcgmNs::Nvvs::Json::Info const &info, dcgmDiagErrorDetail_v2 &ed)
-{
-    int errCode = DCGM_FR_OK;
-    fmt::format_to_n(ed.msg, sizeof(ed.msg), "{}", fmt::join(info.messages, ","));
-
-    ed.code = errCode;
-}
-
-dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult)
-{
-    switch (nvvsResult)
-    {
-        case NVVS_RESULT_PASS:
-            return DCGM_DIAG_RESULT_PASS;
-        case NVVS_RESULT_WARN:
-            return DCGM_DIAG_RESULT_WARN;
-        case NVVS_RESULT_FAIL:
-            return DCGM_DIAG_RESULT_FAIL;
-        case NVVS_RESULT_SKIP:
-            return DCGM_DIAG_RESULT_SKIP;
-        default:
-        {
-            log_error("Unknown NVVS result {}", static_cast<int>(nvvsResult));
-            return DCGM_DIAG_RESULT_FAIL;
-        }
-    }
-}
-
-static std::string InfoToCsvString(DcgmNs::Nvvs::Json::Info const &info)
-{
-    return fmt::format("{}", fmt::join(info.messages, ", "));
-}
-
-void DcgmDiagManager::FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
-                                     DcgmDiagResponseWrapper &response,
-                                     std::unordered_set<unsigned int> &gpuIdSet)
-{
-    if (test.name.empty() || (test.results.empty() && !test.auxData))
-    {
-        return;
-    }
-
-    for (auto const &result : test.results)
-    {
-        auto testIndex = GetTestIndex(test.name);
-        if (testIndex == DCGM_CONTEXT_CREATE_INDEX)
-        {
-            testIndex = 0; // Context create is only ever run by itself, and its result is stored in index 0.
-        }
-
-        dcgmDiagResult_t const ret = NvvsPluginResultToDiagResult(result.status.result);
-
-        if (testIndex >= DCGM_PER_GPU_TEST_COUNT_V8)
-        {
-            // Software test
-            for (auto const gpuId : result.gpuIds.ids)
-            {
-                dcgmDiagErrorDetail_v2 id = { { 0 }, 0, 0, 0, 0 };
-                response.SetGpuIndex(gpuId);
-                gpuIdSet.insert(gpuId);
-
-                if (result.info.has_value())
-                {
-                    ::PopulateErrorDetail(*result.info, id);
-                }
-
-                response.AddInfoDetail(0, testIndex, test.name, id, ret);
-
-                if (!result.warnings.has_value())
-                {
-                    /* Populate empty error details */
-                    dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
-                    response.AddErrorDetail(0, testIndex, test.name, ed, 0, ret);
-                    continue;
-                }
-
-                unsigned int edIndex = 0;
-
-                for (auto const &warning : *result.warnings)
-                {
-                    dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
-
-                    ::PopulateErrorDetail(warning, ed);
-                    response.AddErrorDetail(0, testIndex, test.name, ed, edIndex, ret);
-                    edIndex++;
-                }
-            }
-
-            continue; // To next test.results item
-        }
-
-        for (auto const gpuId : result.gpuIds.ids)
-        {
-            unsigned int edIndex = 0;
-            response.SetGpuIndex(gpuId);
-            gpuIdSet.insert(gpuId);
-            response.SetPerGpuResponseState(testIndex, ret, gpuId);
-
-            if (result.info.has_value() && !(*result.info).messages.empty())
-            {
-                std::string info = InfoToCsvString(*result.info);
-                response.AddPerGpuMessage(testIndex, info, gpuId, false);
-            }
-
-            if (!result.warnings.has_value())
-            {
-                continue;
-            }
-
-            for (auto const &warning : *result.warnings)
-            {
-                dcgmDiagErrorDetail_v2 ed = { { 0 }, 0, 0, 0, 0 };
-                ::PopulateErrorDetail(warning, ed);
-                response.AddErrorDetail(gpuId, testIndex, "", ed, edIndex, ret);
-
-                edIndex++;
-            }
-        }
-    }
-
-    if (test.auxData)
-    {
-        const auto testIndex = GetTestIndex(test.name);
-        response.AddAuxData(testIndex, *test.auxData);
-    }
-}
-
-
-/**
- * @brief Fills the response structure from the parsed NVVS results
- *
- * @param[in] results Parsed NVVS results
- * @param[out] response Diag response
- * @param[in] groupId Group ID to get the GPU count from
- * @param[in] oldRet Previous return code
- *
- * @return \a oldRet if the results do not contain runtime errors
- *         \ref DCGM_ST_NVVS_ERROR otherwise
- */
-dcgmReturn_t DcgmDiagManager::FillResponseStructure(DcgmNs::Nvvs::Json::DiagnosticResults const &results,
-                                                    DcgmDiagResponseWrapper &response,
-                                                    int groupId,
-                                                    dcgmReturn_t oldRet)
-{
-    unsigned int const numGpus = m_coreProxy.GetGpuCount(groupId);
-    std::unordered_set<unsigned int> gpuIdSet;
-    response.InitializeResponseStruct(numGpus);
-
-    if (results.version.has_value())
-    {
-        response.RecordDcgmVersion(*results.version);
-    }
-
-    if (results.devIds.has_value())
-    {
-        response.RecordDevIds(*results.devIds);
-    }
-
-    if (results.devSerials.has_value())
-    {
-        response.RecordGpuSerials(*results.devSerials);
-    }
-
-    if (results.driverVersion.has_value())
-    {
-        response.RecordDriverVersion(*results.driverVersion);
-    }
-
-    if (results.runtimeError.has_value())
-    {
-        response.RecordSystemError((*results.runtimeError));
-        // If oldRet was OK, change return code to indicate NVVS error
-        return oldRet == DCGM_ST_OK ? DCGM_ST_NVVS_ERROR : oldRet;
-    }
-    else if (results.categories.has_value())
-    {
-        for (auto const &category : (*results.categories))
-        {
-            for (auto const &test : category.tests)
-            {
-                FillTestResult(test, response, gpuIdSet);
-            }
-        }
-
-        response.SetGpuCount(gpuIdSet.size());
-    }
-
-    // Do not mask old errors if there are any
-    return oldRet;
-}
-
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v8 *drd,
+dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v9 *drd,
                                                dcgmPolicyAction_t action,
                                                DcgmDiagResponseWrapper &response,
                                                dcgm_connection_id_t connectionId)
@@ -1536,7 +1424,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v8 *drd,
 
     log_debug("performing action {} on group {} with validation {}", action, drd->groupId, drd->validate);
 
-    if (drd->gpuList[0] == '\0')
+    if (drd->groupId != DCGM_GROUP_NULL)
     {
         // Verify group id is valid and update it if no GPU list was specified
         unsigned int gId = (uintptr_t)drd->groupId;
@@ -1608,119 +1496,7 @@ dcgmReturn_t DcgmDiagManager::CanRunNewNvvsInstance() const
 
     return DCGM_ST_OK;
 }
-dcgmReturn_t DcgmDiagManager::ReadProcessOutput(fmt::memory_buffer &stdoutStream,
-                                                fmt::memory_buffer &stderrStream,
-                                                DcgmNs::Utils::FileHandle stdoutFd,
-                                                DcgmNs::Utils::FileHandle stderrFd) const
-{
-    std::array<char, 1024> buff = {};
 
-    int epollFd = epoll_create1(EPOLL_CLOEXEC);
-    if (epollFd < 0)
-    {
-        auto const err = errno;
-        DCGM_LOG_ERROR << "epoll_create1 failed. errno " << err;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-    auto cleanupEpollFd = DcgmNs::Defer { [&]() {
-        close(epollFd);
-    } };
-
-    struct epoll_event event = {};
-
-    event.events  = EPOLLIN | EPOLLHUP;
-    event.data.fd = stdoutFd.Get();
-    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, stdoutFd.Get(), &event) < 0)
-    {
-        auto const err = errno;
-        DCGM_LOG_ERROR << "epoll_ctl failed. errno " << err;
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    event.data.fd = stderrFd.Get();
-    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, stderrFd.Get(), &event) < 0)
-    {
-        log_error("epoll_ctl failed. errno {}", errno);
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    int pipesLeft = 2;
-    while (pipesLeft > 0)
-    {
-        int numEvents = epoll_wait(epollFd, &event, 1, -1);
-        if (numEvents < 0)
-        {
-            auto const err = errno;
-            DCGM_LOG_ERROR << "epoll_wait failed. errno " << err;
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
-        if (numEvents == 0)
-        {
-            // Timeout
-            continue;
-        }
-
-        if (event.data.fd == stdoutFd.Get())
-        {
-            auto const bytesRead = read(stdoutFd.Get(), buff.data(), buff.size());
-            if (bytesRead < 0)
-            {
-                auto const err = errno;
-                if (err == EAGAIN || err == EINTR)
-                {
-                    continue;
-                }
-                DCGM_LOG_ERROR << "read from stdout failed. errno " << err;
-                return DCGM_ST_GENERIC_ERROR;
-            }
-            if (bytesRead == 0)
-            {
-                if (epoll_ctl(epollFd, EPOLL_CTL_DEL, stdoutFd.Get(), nullptr) < 0)
-                {
-                    auto const err = errno;
-                    DCGM_LOG_ERROR << "epoll_ctl to remove stdoutFd failed. errno " << err;
-                    return DCGM_ST_GENERIC_ERROR;
-                }
-                pipesLeft -= 1;
-            }
-            else
-            {
-                stdoutStream.append(buff.data(), buff.data() + bytesRead);
-            }
-        }
-
-        if (event.data.fd == stderrFd.Get())
-        {
-            auto const bytesRead = read(stderrFd.Get(), buff.data(), buff.size());
-            if (bytesRead < 0)
-            {
-                auto const err = errno;
-                if (err == EAGAIN || err == EINTR)
-                {
-                    continue;
-                }
-                DCGM_LOG_ERROR << "read from stderr failed. errno " << err;
-                return DCGM_ST_GENERIC_ERROR;
-            }
-            if (bytesRead == 0)
-            {
-                if (epoll_ctl(epollFd, EPOLL_CTL_DEL, stderrFd.Get(), nullptr) < 0)
-                {
-                    auto const err = errno;
-                    DCGM_LOG_ERROR << "epoll_ctl to remove stderrFd failed. errno " << err;
-                    return DCGM_ST_GENERIC_ERROR;
-                }
-                pipesLeft -= 1;
-            }
-            else
-            {
-                stderrStream.append(buff.data(), buff.data() + bytesRead);
-            }
-        }
-    }
-    return DCGM_ST_OK;
-}
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PauseResumeHostEngine(bool pause = false)
 {

@@ -29,6 +29,7 @@
 #include <climits>
 #include <csignal>
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -55,6 +56,31 @@ struct FieldDetails
     char m_padding[4] {}; /*!< Padding for alignment */
 };
 
+/**
+ * We use EntityStatItem elements in the EntityStats map to keep track of the
+ * field ID with the field values. We do this because field values are reported
+ * based on similar requested field Entity Group Ids on a line, and we can't
+ * reliably match returned fields to requested field headers on the basis of
+ * the output line Entity Group Id: Sometimes we get N/A values when the
+ * requested field does not exist for the output line Entity Group Id (CI
+ * DRAM Activity, for example), and field metadata only lists lowest level
+ * Entity Group Id for a field. So, we might request a CI DRAM Utility level,
+ * but there is no such thing. We return N/A but it is not clear to *which*
+ * output line field that N/A applies. Remembering the Field ID makes it much
+ * easier, since we know fields are returned in the same order as the output
+ * headers, with some missing, based on the line's Entity Group ID.
+ */
+struct EntityStatItem
+{
+    short fieldId;
+    std::string value;
+
+    EntityStatItem(short fieldId, std::string value)
+        : fieldId(fieldId)
+        , value(std::move(value))
+    {}
+};
+
 class DeviceMonitor : public Command
 {
 public:
@@ -67,7 +93,19 @@ public:
                   int numOfIterations,
                   bool listOptionMentioned);
 
-    using EntityStats = std::unordered_map<dcgmi_entity_pair_t, std::vector<std::string>>;
+    using EntityStats = std::unordered_map<dcgmi_entity_pair_t, std::vector<EntityStatItem>>;
+
+    /**
+     * MergeGpuAndMigEntities: merge groupInfo and MIG hierarchies.
+     *
+     * This ensures we order Cis under corresponding GIs and Gis under GPUs.
+     *
+     * @param dcgmGroupInfo: a reference to Group info to be sorted
+     * @param dcgmMigHierarchy: a reference to the MIG hierarchy.
+     *
+     * return dcgmReturn_t result
+     */
+    static dcgmReturn_t MergeGpuAndMigEntities(dcgmGroupInfo_t &dcgmGroupInfo, const dcgmMigHierarchy_v2 &migHierarchy);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -119,6 +157,15 @@ private:
     dcgmReturn_t CreateFieldGroupAndGpuGroup(void);
 
     dcgmReturn_t CreateEntityGroupFromEntityList(void);
+
+    /**
+     * GetSortedEntities: return a list of MIG and non-MIG entities to watch.
+     *
+     * @param  dcgmGroupInfo: a dcgmGroupInfo reference to populate.
+     *
+     * @return dcgmReturn_t: DCGM return code.
+     */
+    dcgmReturn_t GetSortedEntities(dcgmGroupInfo_t &dcgmGroupInfo);
 
     dcgmReturn_t LockWatchAndUpdate();
     void PrintHeaderForOutput() const;

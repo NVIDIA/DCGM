@@ -16,11 +16,12 @@
 #pragma once
 
 #include <dlfcn.h>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
 
-class PassThruNvml
+class PassThruNvml final
 {
 public:
     /*****************************************************************************/
@@ -60,13 +61,13 @@ public:
 
 private:
     std::unordered_map<std::string, void *> m_loadedFuncs;
-    void *m_nvmlLib;
+    void *m_nvmlLib = nullptr;
     std::string m_lastError;
 
-    static PassThruNvml *m_passThruInstance;
+    static std::unique_ptr<PassThruNvml> m_passThruInstance;
 
     /*****************************************************************************/
-    PassThruNvml();
+    PassThruNvml() = default;
 
     /*****************************************************************************/
     /*

@@ -13,15 +13,18 @@
 # limitations under the License.
 import signal
 from _test_helpers import maybemock
+from _test_helpers import KeywordizeLastArgument
 
 from common import dcgm_client_main as m
 
 @maybemock.patch('builtins.exit')
+@KeywordizeLastArgument("mock_exit")
 def test_exit_handler(mock_exit):
     m.exit_handler(None, None)
     mock_exit.assert_called()
 
 @maybemock.patch('signal.signal')
+@KeywordizeLastArgument("mock_signal")
 def test_initialize_signal_handlers(mock_signal):
     m.initialize_signal_handlers()
     assert mock_signal.mock_calls[0][1] == (signal.SIGINT, m.exit_handler)

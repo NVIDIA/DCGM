@@ -99,6 +99,7 @@ private:
     void HelperDisplayThermals(dcgmDeviceThermals_t thermals, unsigned int bitvector);
     void HelperDisplayPowerLimits(dcgmDevicePowerLimits_t powerLimits, unsigned int bitvector);
     void HelperDisplayIdentifiers(dcgmDeviceIdentifiers_t &identifiers, unsigned int bitvector);
+    void HelperDisplayWorkloadPowerProfiles(dcgmHandle_t dcgmHandle, unsigned int gpuId);
 
     dcgmReturn_t HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle);
 };
@@ -196,7 +197,6 @@ std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_
  *****************************************************************************/
 std::string HelperBuildCpuListFromRanges(std::vector<std::pair<uint32_t, uint32_t>> ranges);
 
-void TopologicalSort(dcgmMigHierarchy_v2 &hierarchy);
 std::string FormatMigHierarchy(dcgmMigHierarchy_v2 &hierarchy);
 
 #endif /* QUERY_H_ */

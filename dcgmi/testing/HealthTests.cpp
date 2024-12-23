@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <Health.h>
 #include <dcgm_errors.h>
@@ -28,7 +28,7 @@ void add_incident(dcgmHealthResponse_t &response,
                   dcgmHealthWatchResults_t health,
                   const std::string &errorMsg)
 {
-    if (response.incidentCount >= DCGM_HEALTH_WATCH_MAX_INCIDENTS)
+    if (response.incidentCount >= DCGM_HEALTH_WATCH_MAX_INCIDENTS_V2)
     {
         std::cout << "Can't add more incidents, we're full";
         return;
@@ -53,25 +53,25 @@ void add_incident(dcgmHealthResponse_t &response,
 
 SCENARIO("Health::GenerateOutputFromResponse")
 {
-    dcgmHealthResponse_t response;
-    memset(&response, 0, sizeof(response));
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgm_field_eid_t entityId               = 0;
     dcgm_field_eid_t entityId2              = 1;
     dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
 
-    add_incident(response,
+    add_incident(*(response),
                  entityId,
                  entityGroupId,
                  DCGM_HEALTH_WATCH_MEM,
                  DCGM_HEALTH_RESULT_WARN,
                  "The car is red? Are you sure because that doesn't seem like the color I ordered.");
-    add_incident(response,
+    add_incident(*(response),
                  entityId2,
                  entityGroupId,
                  DCGM_HEALTH_WATCH_MEM,
                  DCGM_HEALTH_RESULT_FAIL,
                  "Green can be emerald and beautiful, but there are shades of green which are sure to disappoint.");
-    add_incident(response,
+    add_incident(*(response),
                  entityId2,
                  entityGroupId,
                  DCGM_HEALTH_WATCH_SM,
@@ -80,7 +80,7 @@ SCENARIO("Health::GenerateOutputFromResponse")
 
     Health h;
     DcgmiOutputTree outTree(28, 60);
-    std::string output = h.GenerateOutputFromResponse(response, outTree);
+    std::string output = h.GenerateOutputFromResponse(*(response), outTree);
     CHECK(output.find("| Overall Health            | Failure") != std::string::npos);
     CHECK(output.find("| -> 0                      | Warning") != std::string::npos);
     CHECK(output.find("| The car is red? Are you sure because that doesn't seem   |") != std::string::npos);
@@ -96,48 +96,49 @@ SCENARIO("Health::GenerateOutputFromResponse")
 
 SCENARIO("Health::HandleOneEntity")
 {
-    dcgmHealthResponse_t response;
-    memset(&response, 0, sizeof(response));
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgm_field_eid_t entityId               = 0;
     dcgm_field_eid_t entityId2              = 1;
     dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
 
-    add_incident(response, entityId, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_WARN, "red");
-    add_incident(response, entityId2, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_FAIL, "green");
-    add_incident(response, entityId2, entityGroupId, DCGM_HEALTH_WATCH_SM, DCGM_HEALTH_RESULT_WARN, "blue");
+    add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_WARN, "red");
+    add_incident(*(response), entityId2, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_FAIL, "green");
+    add_incident(*(response), entityId2, entityGroupId, DCGM_HEALTH_WATCH_SM, DCGM_HEALTH_RESULT_WARN, "blue");
 
     Health h;
     DcgmiOutputTree outTree(28, 60);
-    unsigned int incidentsProcessed = h.HandleOneEntity(response, 0, entityId, entityGroupId, outTree);
+    unsigned int incidentsProcessed = h.HandleOneEntity(*(response), 0, entityId, entityGroupId, outTree);
     CHECK(incidentsProcessed == 1);
 
-    incidentsProcessed = h.HandleOneEntity(response, 1, entityId2, entityGroupId, outTree);
+    incidentsProcessed = h.HandleOneEntity(*(response), 1, entityId2, entityGroupId, outTree);
     CHECK(incidentsProcessed == 2);
 
     // Make sure we ignore out of bounds indices
-    incidentsProcessed = h.HandleOneEntity(response, response.incidentCount, entityId2, entityGroupId, outTree);
+    incidentsProcessed = h.HandleOneEntity(*(response), response->incidentCount, entityId2, entityGroupId, outTree);
     CHECK(incidentsProcessed == 0);
 }
 
 SCENARIO("Health::AppendSystemIncidents")
 {
-    dcgmHealthResponse_t response;
-    memset(&response, 0, sizeof(response));
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgm_field_eid_t entityId               = 0;
     dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
 
-    add_incident(response, entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
-    add_incident(response, entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_FAIL, "robby rob");
-    add_incident(response, entityId, entityGroupId, DCGM_HEALTH_WATCH_NVLINK, DCGM_HEALTH_RESULT_WARN, "snobby snob");
+    add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
+    add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_FAIL, "robby rob");
+    add_incident(
+        *(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_NVLINK, DCGM_HEALTH_RESULT_WARN, "snobby snob");
 
     Health h;
     std::stringstream buf;
-    buf << response.incidents[0].error.msg;
+    buf << response->incidents[0].error.msg;
 
     dcgmHealthSystems_t system      = DCGM_HEALTH_WATCH_PCIE;
     dcgmHealthWatchResults_t health = DCGM_HEALTH_RESULT_WARN;
 
-    unsigned int numAppended = h.AppendSystemIncidents(response, 1, entityId, entityGroupId, system, buf, health);
+    unsigned int numAppended = h.AppendSystemIncidents(*(response), 1, entityId, entityGroupId, system, buf, health);
     CHECK(numAppended == 1);
     CHECK(health == DCGM_HEALTH_RESULT_FAIL);
     CHECK(buf.str() == "bobby bob, robby rob");
@@ -145,21 +146,23 @@ SCENARIO("Health::AppendSystemIncidents")
     system = DCGM_HEALTH_WATCH_NVLINK;
     health = DCGM_HEALTH_RESULT_PASS;
     buf.str("");
-    numAppended = h.AppendSystemIncidents(response, 2, entityId, entityGroupId, system, buf, health);
+    numAppended = h.AppendSystemIncidents(*(response), 2, entityId, entityGroupId, system, buf, health);
     CHECK(numAppended == 1);
     CHECK(health == DCGM_HEALTH_RESULT_WARN);
     CHECK(buf.str() == ", snobby snob");
 
-    dcgmHealthResponse_t response2;
-    memset(&response2, 0, sizeof(response2));
+    std::unique_ptr<dcgmHealthResponse_t> response2 = std::make_unique<dcgmHealthResponse_t>();
+    memset(response2.get(), 0, sizeof(*response2));
 
-    add_incident(response2, entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
-    add_incident(response2, entityId, entityGroupId, DCGM_HEALTH_WATCH_NVLINK, DCGM_HEALTH_RESULT_WARN, "snobby snob");
-    add_incident(response2, entityId + 1, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_FAIL, "robby rob");
+    add_incident(*(response2), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
+    add_incident(
+        *(response2), entityId, entityGroupId, DCGM_HEALTH_WATCH_NVLINK, DCGM_HEALTH_RESULT_WARN, "snobby snob");
+    add_incident(
+        *(response2), entityId + 1, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_FAIL, "robby rob");
     system = DCGM_HEALTH_WATCH_PCIE;
     health = DCGM_HEALTH_RESULT_WARN;
     buf.str("bobby bob");
-    numAppended = h.AppendSystemIncidents(response2, 1, entityId, entityGroupId, system, buf, health);
+    numAppended = h.AppendSystemIncidents(*(response2), 1, entityId, entityGroupId, system, buf, health);
     CHECK(numAppended == 0);
     CHECK(health == DCGM_HEALTH_RESULT_WARN);
     CHECK(buf.str() == "bobby bob");
@@ -167,12 +170,12 @@ SCENARIO("Health::AppendSystemIncidents")
     system = DCGM_HEALTH_WATCH_MEM;
     health = DCGM_HEALTH_RESULT_PASS;
     buf.str("");
-    numAppended = h.AppendSystemIncidents(response2, 0, entityId, entityGroupId, system, buf, health);
+    numAppended = h.AppendSystemIncidents(*(response2), 0, entityId, entityGroupId, system, buf, health);
     CHECK(numAppended == 0);
     CHECK(health == DCGM_HEALTH_RESULT_PASS);
     CHECK(buf.str() == "");
 
     // Make sure we ignore out of bounds indices
     numAppended
-        = h.AppendSystemIncidents(response2, response2.incidentCount, entityId, entityGroupId, system, buf, health);
+        = h.AppendSystemIncidents(*(response2), response2->incidentCount, entityId, entityGroupId, system, buf, health);
 }

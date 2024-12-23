@@ -47,7 +47,8 @@ public:
 
         *errorCount = 0;
     }
-    ~DcgmConfigManagerStatusList() {};
+    ~DcgmConfigManagerStatusList()
+    {}
 
     void AddStatus(unsigned int gpuId, int fieldId, dcgmReturn_t errorCode)
     {
@@ -155,6 +156,13 @@ private:
      * Helper method to set Compute Mode
      *****************************************************************************/
     dcgmReturn_t HelperSetComputeMode(unsigned int gpuId, dcgmConfig_t *setConfig);
+
+    /*****************************************************************************
+     * Helper method to set requested workload power profiles
+     *****************************************************************************/
+    dcgmReturn_t HelperSetWorkloadPowerProfiles(unsigned int gpuId,
+                                                dcgmConfig_t *setConfig,
+                                                dcgmConfig_t const *curConfig);
 
     /*****************************************************************************
      * This method is used to set sync boost on a group of GPUs

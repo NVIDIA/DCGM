@@ -14,106 +14,16 @@
 # Sample script to test python bindings for DCGM
 
 import os
-import re
 import dcgm_structs
 import dcgm_structs_internal
 import dcgm_agent_internal
 import dcgm_agent
 import logger
 import test_utils
-import option_parser
-import utils
 import dcgm_fields
-import apps
-import inspect
-import dcgmvalue
 import pydcgm
-import time
-import shlex
 from dcgm_structs import dcgmExceptionClass
 from subprocess import check_output, check_call, Popen, CalledProcessError
-
-# Helper function to find out if DCGM is actually installed
-def is_dcgm_package_installed():
-    """ Find out if DCGM package is already installed """ 
-
-    # Looks for the nv-hostengine in the $PATH and hides possible error output
-    with open(os.devnull, "w") as fnull:
-        nv_host_find = Popen(["which","nv-hostengine"], stdout=fnull, stderr=fnull)
-        nv_host_find.wait()
-
-    if nv_host_find.returncode == 0:
-        return True
-    else:
-        return False
-
-# Helper function to get the path to libdcgm.so.3
-# Returns the path to libdcgm.so.3 as a string on success
-# Returns None on failure
-def get_libdcgm_path():
-    """ 
-    Returns relative path to libdcgm.so.3
-    """
-    return "../../lib/libdcgm.so.3"
-
-@test_utils.run_only_as_root()
-@test_utils.run_only_on_bare_metal()
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_stub_library(handle):
-    """ 
-    Verifies that DCGM fails gracefully using the stub library
-    if a proper DCGM installation is not present or shared 
-    libraries are not included in the library search path
-    """
-
-    if utils.is_esx_hypervisor_system():
-        test_utils.skip_test("Compute Mode tests are not supported in VMware ESX Environments")
-
-    if is_dcgm_package_installed():
-        test_utils.skip_test("A DCGM package is already installed on this machine")
-
-    # Checks if libdcgm.so.3 is set within LD_LIBRARY_PATH
-    libdcgm_path = get_libdcgm_path()
-    assert libdcgm_path is not None
-
-    if libdcgm_path is not None:
-        # Verify is stub library is present
-        if not (os.path.isfile(libdcgm_path + "/libdcgm_stub.a")):
-            test_utils.skip_test("Unable to find \"libdcgm_stub.a\" in %s" % libdcgm_path)
-        else:
-            dcgm_lib_original = libdcgm_path + "/libdcgm.so.3"
-            dcgm_lib_modified = dcgm_lib_original + "_modified"
-    else:
-        # Tear down the environment by finding and renaming "libdcgm.so.3" to "libdcgm.so.3_orig"
-        # gets the path to libdcgm.so.3, like: /usr/lib/libdcgm.so.3
-        try:
-            ldconfig_out_buf = check_output(["ldconfig","-p"])
-            ldconfig_out = ldconfig_out_buf.decode('utf-8')
-            dcgm_lib = [x for x in ldconfig_out.split("\n") if "libdcgm.so.3" in x]
-            dcgm_lib_original = [x for x in dcgm_lib[0].split("=>")[-1] if x[0]!=" "]
-            dcgm_lib_modified = [x for x in dcgm_lib_original + "_modified" if x[0]!=" "]
-        except:
-            test_utils.skip_test("Unable to find libdcgm.so.3 library")
-
-    # Renaming the file
-    try:
-        os.rename(dcgm_lib_original,dcgm_lib_modified)
-    except:
-        test_utils.skip_test("Unable to rename libdcgm.so.3 library")
-
-    try:
-        stub_app = apps.DcgmStubRunnerApp()
-        stub_app.start()
-        pid = stub_app.getpid()
-        stub_app.wait()
-    finally:
-        # Restore environment
-        os.rename(dcgm_lib_modified,dcgm_lib_original)
-        logger.info("stub_library_tet PID was %d" % pid)
-
-    assert "!!!!!!!!" in stub_app.stdout_lines[1], "Failed to collect stub library output"
-    assert "WARNING:" in stub_app.stdout_lines[2], "Failed to collect stub library output"
-
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -252,7 +162,6 @@ def test_dcgm_unwatch_field_values_public_embedded(handle, gpuIds):
     helper_unwatch_field_values_public(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_unwatch_field_values_public_remote(handle, gpuIds):
     helper_unwatch_field_values_public(handle, gpuIds)
@@ -309,7 +218,6 @@ def test_dcgm_promote_field_values_watch_public_embedded(handle, gpuIds):
     helper_promote_field_values_watch_public(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_promote_field_values_watch_public_remote(handle, gpuIds):
     helper_promote_field_values_watch_public(handle, gpuIds)
@@ -408,7 +316,7 @@ def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
     #Will throw an exception on API error
     linkStatus = systemObj.discovery.GetNvLinkLinkStatus()
 
-    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version3, "Version mismatch %d != %d" % (linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version3)
+    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version4, "Version mismatch %d != %d" % (linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version4)
 
     if len(systemObj.discovery.GetAllGpuIds()) == len(gpuIds):
         assert linkStatus.numGpus == len(gpuIds), "Gpu count mismatch: %d != %d" % (linkStatus.numGpus, len(gpuIds))

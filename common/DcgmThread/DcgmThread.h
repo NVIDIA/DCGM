@@ -29,8 +29,6 @@
 #include <condition_variable>
 #include <mutex>
 
-#define DCGM_THREAD_SIGNUM SIGUSR2 /* Which signal should DcgmThread use to wake wake up threads? */
-
 class DcgmThread
 {
 private:
@@ -42,10 +40,6 @@ private:
     std::atomic_bool m_alreadyJoined; /* Already called pthread_join; calling a second time is undefined behavior */
 
     pthread_t m_pthread;
-    bool m_sendSignalOnStop; /* Should we send a signal to this thread when someone calls Stop() or
-                                     StopAndWait() on it? Only set this to true if you have a signal handler
-                                     installed or it will cause a seg fault in this thread due to an unhandled
-                                     exception. */
 
     std::exception_ptr m_exception; /*!< Exception preserved from the running thread. Will be thrown on Wait */
 
@@ -58,16 +52,11 @@ public:
     /*
      * Constructor
      *
-     * sendSignalOnStop IN: Should we send a signal to this thread when someone calls Stop() or
-                            StopAndWait() on it? Only set this to true if you have a signal
-                            handler installed for signal DCGM_THREAD_SIGNUM or it will cause
-                            a seg fault in this thread due to an unhandled. exception.
-                            Alternatively, you can call DcgmThread::InstallSignalHandler() to
-                            mitigate this.
-        threadName      IN: Text name for this thread that will appear in GDB and other debugging tools.
+     * threadName       IN: Text name for this thread that will appear in GDB
+     *                      and other debugging tools.
      */
 
-    DcgmThread(bool sendSignalOnStop = false, std::string threadName = "");
+    DcgmThread(std::string threadName = "");
 
     /*************************************************************************/
     /*
@@ -208,17 +197,6 @@ public:
      *          0 If the thread has not exited yet
      */
     int HasExited();
-
-    /*************************************************************************/
-    /*
-     * Method to install a signal handler for DCGM_THREAD_SIGNUM if one isn't
-     * already installed.
-     *
-     * Note: This routine is not thread safe.
-     *
-     * RETURNS: Nothing.
-     */
-    static void InstallSignalHandler();
 
     /*************************************************************************/
     /*

@@ -36,7 +36,6 @@ except ImportError:
         raise
 
 import option_parser
-import test_utils
 from subprocess import check_output
 
 _CacheInfo = namedtuple("CacheInfo", "hits misses maxsize currsize")
@@ -149,7 +148,7 @@ def get_name_by_uid(uid):
 
 script_dir = os.path.realpath(sys.path[0])
 
-def find_files(path = script_dir, mask = "*", skipdirs=None, recurse=True):
+def find_files(path = script_dir, mask = "*", skipdirs=None, recurse=True, test_file_name="", skip_file_name=""):
     skipdirs = skipdirs or []
     #Recurse subdirectories?
     if recurse:
@@ -157,13 +156,22 @@ def find_files(path = script_dir, mask = "*", skipdirs=None, recurse=True):
             if skipdirs is not None:
                 [dirnames.remove(skip) for skip in skipdirs if skip in dirnames]  # don't visit directories in skipdirs list
             for filename in fnmatch.filter(filenames, mask):
-                yield os.path.abspath(os.path.join(root, filename))
+                if test_file_name != "":
+                    if test_file_name==filename:
+                        yield os.path.abspath(os.path.join(root, filename))
+                else:
+                    if filename != skip_file_name:
+                        yield os.path.abspath(os.path.join(root, filename))
     else:
         #Just list files inside "path"
         filenames = os.listdir(path)
         for filename in fnmatch.filter(filenames, mask):
-            yield os.path.abspath(os.path.join(path, filename))
-
+            if test_file_name != "":
+                if test_file_name==filename:
+                    yield os.path.abspath(os.path.join(root, filename))
+            else:
+                if filename != skip_file_name:
+                    yield os.path.abspath(os.path.join(root, filename))
 
 def which(name):
     """
@@ -182,7 +190,6 @@ expected returned values
 "Linux_64bit"
 "Linux_32bit"
 "Windows_64bit"
-"Linux_ppc64le"
 "Linux_aarch64"
 
 treats VMkernel platform as Linux
@@ -270,11 +277,9 @@ def is_system_64bit():
 
 # 32-bit Python on 64-bit Windows reports incorrect architecture, therefore not using platform.architecture() directly
 platform_identifier = current_os + "_" + ("64bit" if is_64bit() else "32bit")
-if platform.machine() ==  "ppc64le":
-    platform_identifier = "Linux_ppc64le"
 if platform.machine() == "aarch64":
     platform_identifier = "Linux_aarch64"
-assert platform_identifier in ["Linux_32bit", "Linux_64bit", "Windows_64bit", "Linux_ppc64le", "Linux_aarch64"], "Result %s is not of expected platform" % platform_identifier
+assert platform_identifier in ["Linux_32bit", "Linux_64bit", "Windows_64bit", "Linux_aarch64"], "Result %s is not of expected platform" % platform_identifier
 
 valid_file_name_characters = "-_.() " + string.ascii_letters + string.digits
 def string_to_valid_file_name(s):
@@ -364,6 +369,7 @@ def verify_file_permissions(user):
 # Exit if either the current user, or specified non-root user appear to lack sufficient
 # file system permissions for the test framework
 def verify_user_file_permissions():
+    import test_utils
 
     # Check current user
     verify_file_permissions(getpass.getuser())
@@ -376,7 +382,6 @@ def verify_user_file_permissions():
         except KeyError:
             print("User '%s' doesn't exist" % user)
             sys.exit(1)
-
         with test_utils.RunAsNonRoot(reload_driver=False):
             verify_file_permissions(user)
 
@@ -470,6 +475,188 @@ def verify_nvidia_fabricmanager_service_active_if_needed():
     if not "running" in out.rstrip():
         logException("Tests cannot run because the Nvidia Fabricmanager service is not active on systems with nvswitches")
 
+    # Check for version mismatch
+    cmd = "/usr/bin/dmesg | /usr/bin/grep -F 'nvidia-nvswitch: Version mismatch' | /usr/bin/tail -1"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out_buf, _ = p.communicate()
+    if out_buf:
+        out_buf = out_buf.decode('utf-8')
+        errmsg = f'Tests cannot run because dmesg contains this problem: "{out_buf}".'
+        if option_parser.options.ignore_dmesg_checks:
+            logger.warning(f'{errmsg} Resolve the problem and retry before filing a bug report. (Ignored by user request).')
+        else:
+            logException(f'{errmsg} Resolve the problem before proceeding.')
+
+def checkDmesgForProblems():
+    suspect_phrases = \
+    [
+        r'NVRM: .*Possible bad register read'
+    ]
+
+    problem_phrases = \
+    [
+        r'NVRM: A GPU crash dump has been created',
+        r'NVRM: .*GPU recovery action changed.*Reboot Required',
+        r'NVRM: .*GPU has fallen off the bus',
+        r'NVRM: .*Assertion failed:',
+    ]
+
+    sus_pattern = '|'.join(suspect_phrases)
+    pattern = '|'.join(problem_phrases)
+
+    history_len = 25000
+    cmd = f"/usr/bin/dmesg | /usr/bin/tail -{int(history_len)}"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out_buf, _ = p.communicate(timeout=15)
+
+    if out_buf:
+        import re
+        out_buf = out_buf.decode('utf-8').split('\n')
+        problem_match = next(filter(lambda s: re.search(pattern, s), out_buf), None)
+
+        if problem_match:
+            errmsg = f'Tests cannot run because dmesg contains this problem: "{problem_match}".'
+            if option_parser.options.ignore_dmesg_checks:
+                logger.warning(f'{errmsg} Resolve the problem and retry before filing a bug report. (Ignored by user request).')
+            else:
+                logException(f'{errmsg} Resolve the problem before proceeding.')
+
+        sus_match = next(filter(lambda s: re.search(sus_pattern, s), out_buf), None)
+        if sus_match:
+            logger.info(f'Potential problem found in dmesg: "{sus_match}".')
+
+def checkProcesses():
+    process_list = \
+    [
+        'nv-hostengine',
+        'nvvs'
+    ]
+
+    for procname in process_list:
+        if option_parser.options.use_running_hostengine and procname == 'nv-hostengine':
+            continue
+        cmd = f'/usr/bin/pidof {procname}'
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out_buf, _ = p.communicate(timeout=5)
+        if out_buf:
+            out_buf = out_buf.decode('utf-8')
+            errmsg = f'Tests cannot run because one or more potentially conflicting process \'{procname}\' is running with pid(s): {out_buf}.\n'
+            if option_parser.options.ignore_conflicting_procs:
+                logger.warning(f'{errmsg} Remove the conflicting processes and retry before filing a bug report. (Ignored by user request).')
+            else:
+                logException(f'{errmsg} Remove the conflicting processes before proceeding.')
+
+def checkSystemLoad():
+    try:
+        nproc = os.cpu_count()
+        warnAt = 0.85 * nproc
+        failAt = 1.0 * nproc
+    except:
+        logger.warning("Unable to get system cpu count, host CPU load not checked")
+        return
+
+    try:
+        load1, load5, _ = os.getloadavg()
+        if max(load1, load5) > failAt:
+            errmsg = f'Tests cannot run because load average exceeds {failAt}.'
+            if option_parser.options.ignore_loadavg_checks:
+                logger.warning(f'{errmsg} Terminate other disruptive processes and retry before filing a bug report. (Ignored by user request).')
+            else:
+                logException(f'{errmsg} Terminate other disruptive processes before proceeding.')
+        elif max(load1, load5) > warnAt:
+            errmsg = f'Load average exceeds {warnAt}. Terminate other disruptive processes and retry before filing a bug report.'
+            logger.warning(errmsg)
+
+    except OSError:
+        logger.warning('Unable to retrieve load average, host CPU load not checked')
+        return
+
+def checkMemoryPressure():
+    failAtMem = 0.95
+    warnAtMem = 0.90
+    failAtSwap = 1.00
+    warnAtSwap = 0.50
+
+    def normalizeToKb(val, units):
+        if not units:
+            if val == 0:
+                return val
+            else:
+                return val / 1024.0
+        if units == 'kB':
+            return val
+        elif units == 'MB':
+            return val * (1024.0 ** 2)
+        elif units == 'GB':
+            return val * (1024.0 ** 3)
+        elif units == 'TB':
+            return val * (1024.0 ** 4)
+        elif units == 'PB':
+            return val * (1024.0 ** 5)
+        else:
+            raise ValueError(f'Unhandled unit type \"{units}\"')
+
+    def collectNormalizedVal(line):
+        _, valWithUnits = line.split(':', 1)
+        valWithUnits = valWithUnits.strip()
+        try:
+            val, units = valWithUnits.split(' ', 1)
+            return normalizeToKb(int(val), units)
+        except ValueError:
+            return normalizeToKb(int(val), "")
+
+    memTotal = memAvail = swapTotal = swapFree = None
+
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            meminfo = f.readlines()
+            for line in meminfo:
+                if 'MemTotal:' in line:
+                    memTotal = collectNormalizedVal(line)
+                elif 'MemAvailable:' in line:
+                    memAvail = collectNormalizedVal(line)
+                elif 'SwapTotal:' in line:
+                    swapTotal = collectNormalizedVal(line)
+                elif 'SwapFree:' in line:
+                    swapFree = collectNormalizedVal(line)
+                if memTotal and memAvail and swapTotal and swapFree:
+                    break
+    except IOError as e:
+        logger.warning(f'Unable to read \'/proc/meminfo\': {e}: skipping memory and swap utilization check')
+        return
+
+    memUsed = (memTotal - memAvail) / memTotal
+    if memUsed > failAtMem:
+        msg = f"Tests cannot run because memory available memory is {round(memUsed * 100.0),1}%."
+        if option_parser.options.ignore_mem_checks:
+            logger.warning(f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
+        else:
+            logException(f'{msg} Resolve memory pressure before proceeding.')
+    if memUsed > warnAtMem:
+        logger.Warning(f'Available memory is {round(memUsed * 100.0, 1)}%. Resolve memory pressure and ' \
+                       'retry before filing a bug report.')
+
+    if swapTotal > 0:
+        swapUsed = (swapTotal - swapFree) / swapTotal
+        if swapUsed > failAtSwap:
+            msg = f'Tests cannot run because available swap is {round(swapUsed * 100.0, 1)}%.'
+            if option_parser.options.ignore_mem_checks:
+                logger.warning(f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
+            else:
+                logException(f'{msg} Resolve memory pressure before proceeding.')
+        if swapUsed > warnAtSwap:
+            logger.Warning(f'Available swap is {round(swapUsed * 100.0, 1)}%. Resolve memory pressure and ' \
+                           'retry before filing a bug report.')
+
+def verifyEcosystem():
+    if option_parser.options.filter_tests:
+        logger.warning("filter_tests has been selected, skipping preflight checks.")
+        return
+    checkSystemLoad()
+    checkMemoryPressure()
+    checkProcesses()
+    checkDmesgForProblems()
+
 def find_process_using_hostengine_port():
     cmd = 'lsof -i -P -n | grep 5555'
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -531,8 +718,6 @@ def get_testing_framework_library_path():
         # type: () -> string
         if platform.machine() in ["x86_64", "AMD64"]:
             return 'amd64'
-        elif platform.machine() == 'ppc64le':
-            return 'ppc64le'
         elif platform.machine().lower().startswith('aarch64'):
             return 'aarch64'
 

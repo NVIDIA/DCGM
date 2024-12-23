@@ -19,7 +19,8 @@
 #include <DcgmTaskRunner.h>
 #include <dcgm_core_structs.h>
 
-#include "DcgmNvSwitchManager.h"
+#include "DcgmNscqManager.h"
+#include "DcgmNvsdmManager.h"
 #include "MessageGuard.hpp"
 #include "dcgm_nvswitch_structs.h"
 
@@ -59,7 +60,8 @@ public:
     unsigned int RunOnce();
 
 private:
-    DcgmNvSwitchManager m_switchMgr;
+    std::unique_ptr<DcgmNvSwitchManagerBase> m_nvswitchMgrPtr;
+    DcgmNvSwitchManagerBase &m_nvswitchMgr;
     std::chrono::system_clock::time_point m_nextWakeup
         = std::chrono::system_clock::time_point::min(); /*!< Next time when RunOnce should be called. */
     std::chrono::milliseconds m_runInterval {}; /*!< Last result of the latest successful RunOnce function call made in
@@ -84,6 +86,8 @@ private:
     dcgmReturn_t ProcessClientDisconnect(dcgm_core_msg_client_disconnect_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
     dcgmReturn_t ProcessPauseResumeMessage(PauseResumeMessage msg);
+    dcgmReturn_t ProcessGetLinkIds(dcgm_nvswitch_msg_get_links_v1 *moduleCommand);
+    dcgmReturn_t ProcessGetBackend(dcgm_nvswitch_msg_get_backend_t *moduleCommand);
     std::chrono::system_clock::time_point TryRunOnce(bool forceRun);
 
     /*

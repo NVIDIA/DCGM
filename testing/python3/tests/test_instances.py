@@ -185,8 +185,8 @@ def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
         value += 0.01
     
     #Truncate the group to the max size
-    if len(entities) > dcgm_structs.DCGM_GROUP_MAX_ENTITIES:
-        entities = entities[:dcgm_structs.DCGM_GROUP_MAX_ENTITIES]
+    if len(entities) > dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2:
+        entities = entities[:dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2]
     
     dcgmGroup = dcgmSystem.GetGroupWithEntities("biggroup", entities)
 
@@ -255,8 +255,8 @@ def test_instances_fetch_global_fields(handle, gpuIds):
         entities.append(entityPair)
     
     #Truncate the group to the max size
-    if len(entities) > dcgm_structs.DCGM_GROUP_MAX_ENTITIES:
-        entities = entities[:dcgm_structs.DCGM_GROUP_MAX_ENTITIES]
+    if len(entities) > dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2:
+        entities = entities[:dcgm_structs.DCGM_GROUP_MAX_ENTITIES_V2]
 
     logger.debug("entities: %s" % str(entities))
     
@@ -340,14 +340,8 @@ def helper_test_inject_instance_fields(handle, gpuIds):
                 v.value.i64, v.entityId, v.entityGroupId)
 
 @test_utils.run_with_standalone_host_engine(240)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_inject_instance_fields_standalone(handle, gpuIds):
-    helper_test_inject_instance_fields(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_inject_instance_fields_embedded(handle, gpuIds):
     helper_test_inject_instance_fields(handle, gpuIds)
 
 def verify_fake_profile_names(handle, fakeEntities, isGpuInstance):
@@ -403,14 +397,8 @@ def helper_test_fake_mig_device_profile_names(handle, gpuIds):
     verify_fake_profile_names(handle, list(fakeCIMap.keys()), False)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_fake_mig_device_profile_names_standalone(handle, gpuIds):
-    helper_test_fake_mig_device_profile_names(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_fake_mig_device_profile_names_embedded(handle, gpuIds):
     helper_test_fake_mig_device_profile_names(handle, gpuIds)
 
 def helper_test_health_check_instances(handle, gpuIds):
@@ -428,8 +416,8 @@ def helper_test_health_check_instances(handle, gpuIds):
     groupObj.health.Set(newSystems)
     
     # Verify health prior to testing
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    if responseV4.incidentCount != 0:
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    if responseV5.incidentCount != 0:
         test_utils.skip_test("Cannot test on unhealthy systems.")
 
     # Inject one error per system
@@ -437,25 +425,19 @@ def helper_test_health_check_instances(handle, gpuIds):
                                        2, 5, verifyInsertion=True,
                                        entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.incidentCount == 1), "Should have 1 total incidents but found %d" % responseV4.incidentCount
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.incidentCount == 1), "Should have 1 total incidents but found %d" % responseV5.incidentCount
 
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuIds[0])
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuIds[0])
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_health_check_instances_standalone(handle, gpuIds):
-    helper_test_health_check_instances(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_health_check_instances_embedded(handle, gpuIds):
     helper_test_health_check_instances(handle, gpuIds)
 
 def populate_counts_per_gpu(hierarchy):
@@ -692,18 +674,10 @@ def helper_test_mig_reconfigure(handle, gpuIds):
     assert instanceFailMsg == '', instanceFailMsg
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_enabled()
 @test_utils.run_only_as_root()
 def test_mig_reconfigure_standalone(handle, gpuIds):
-    helper_test_mig_reconfigure(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_if_mig_is_enabled()
-@test_utils.run_only_as_root()
-def test_mig_reconfigure_embedded(handle, gpuIds):
     helper_test_mig_reconfigure(handle, gpuIds)
 
 def helper_test_mig_cuda_visible_devices_string(handle, gpuIds):
@@ -728,15 +702,7 @@ def helper_test_mig_cuda_visible_devices_string(handle, gpuIds):
                 assert secondSlashIndex != -1, "Expected to find two '/' marks in CUDA_VISIBLE_DEVICES, but didn't: '%s'" % (cuda_vis)
             
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_if_mig_is_enabled()
-@test_utils.run_only_as_root()
-def test_mig_cuda_visible_devices_string_embedded(handle, gpuIds):
-    helper_test_mig_cuda_visible_devices_string(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_enabled()
 @test_utils.run_only_as_root()
@@ -816,15 +782,7 @@ def helper_test_mig_value_reporting(handle, gpuIds):
 
     assert errMsg == '', errMsg
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_if_mig_is_enabled()
-@test_utils.run_only_as_root()
-def test_mig_value_reporting_embedded(handle, gpuIds):
-    helper_test_mig_value_reporting(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_enabled()
 @test_utils.run_only_as_root()

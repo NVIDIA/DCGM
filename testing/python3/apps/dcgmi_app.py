@@ -24,7 +24,6 @@ class DcgmiApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/x86/dcgmi",
             "Linux_64bit": "./apps/amd64/dcgmi",
-            "Linux_ppc64le": "./apps/ppc64le/dcgmi",
             "Linux_aarch64": "./apps/aarch64/dcgmi",
             "Windows_64bit": "./apps/amd64/dcgmi.exe"
             }

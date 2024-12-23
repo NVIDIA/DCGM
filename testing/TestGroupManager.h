@@ -33,9 +33,9 @@ public:
     virtual ~TestGroupManager();
 
     int Init(const TestDcgmModuleInitParams &initParams) override;
-    int Run();
-    int Cleanup();
-    std::string GetTag();
+    int Run() override;
+    int Cleanup() override;
+    std::string GetTag() override;
     void GetConfig(TestDcgmModuleConfig &config) override;
 
 private:
@@ -45,10 +45,7 @@ private:
     int TestGroupReportErrOnDuplicate();
     int TestDefaultGpusAreDynamic();
 
-    int HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
-                                unsigned int groupId,
-                                std::string groupName,
-                                DcgmCacheManager *cacheManager);
+    int HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager, unsigned int groupId, std::string groupName);
 
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
 };

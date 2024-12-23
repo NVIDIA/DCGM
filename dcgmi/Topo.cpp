@@ -149,11 +149,11 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
     DcgmiOutputJson outJson;
     DcgmiOutput &out = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
     std::stringstream ss;
-    dcgmGroupInfo_t stNvcmGroupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
     // Get group name
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(mNvcmHandle, requestedGroupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(mNvcmHandle, requestedGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -181,7 +181,7 @@ dcgmReturn_t Topo::DisplayGroupTopology(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t r
 
     // Header
     out.addHeader(HEADER_NAME);
-    ss << stNvcmGroupInfo.groupName;
+    ss << stNvcmGroupInfo->groupName;
     out.addHeader(ss.str());
 
     // Affinity

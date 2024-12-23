@@ -14,4 +14,4 @@
 
 add_executable(configuration_sample)
 target_sources(configuration_sample PRIVATE configuration_sample.cpp)
-target_link_libraries(configuration_sample PRIVATE $<BUILD_INTERFACE:dcgm> $<INSTALL_INTERFACE:Dcgm::dcgm>)
+target_link_libraries(configuration_sample PRIVATE DCGM::dcgm)

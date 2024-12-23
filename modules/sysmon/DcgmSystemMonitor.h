@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "CpuHelpers.h"
 #include <unordered_map>
 
 #include <dcgm_structs.h>
@@ -102,13 +103,13 @@ public:
     /*************************************************************************/
     std::string GetCpuVendor() const
     {
-        return m_cpuVendor;
+        return cpuHelpers.GetVendor();
     }
 
     /*************************************************************************/
     std::string GetCpuModel() const
     {
-        return m_cpuModel;
+        return cpuHelpers.GetModel();
     }
 
 #ifndef DCGM_SYSMON_TEST // Allow sysmon tests to peek in
@@ -118,8 +119,7 @@ private:
     std::unordered_map<unsigned int, std::string> m_moduleSocketToPowerUsagePath;
     std::unordered_map<unsigned int, std::string> m_sysioSocketToPowerUsagePath;
     std::unordered_map<unsigned int, std::string> m_socketToPowerCapPath;
-    std::string m_cpuVendor;
-    std::string m_cpuModel;
+    CpuHelpers cpuHelpers;
 
     /*************************************************************************/
     dcgmPowerFileInfo_t GetCpuSocketIdFromContents(const std::string &contents);

@@ -101,19 +101,7 @@ def helper_investigate_status(statusHandle):
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 '''
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_nvml()
-def test_dcgm_vgpu_config_embedded_get_devices(handle):
-    """
-    Verifies that DCGM Engine returns list of devices
-    """
-    handleObj = pydcgm.DcgmHandle(handle=handle)
-    systemObj = handleObj.GetSystem()
-    gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_nvml()
 def test_dcgm_vgpu_config_standalone_get_devices(handle):
     """
@@ -138,15 +126,7 @@ def helper_dcgm_vgpu_config_get_attributes(handle):
             and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
             and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_PERMISSIONED), "Not able to find attributes"
 
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_vgpu_config_embedded_get_attributes(handle):
-    """
-    Get Device attributes for each GPU ID
-    """
-    helper_dcgm_vgpu_config_get_attributes(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_vgpu_config_standalone_get_attributes(handle):
     """
 	Get Device attributes for each GPU ID
@@ -165,16 +145,7 @@ def helper_dcgm_vgpu_config_set(handle):
     #Will throw an exception on error
     groupObj.vgpu.Set(vgpu_config_values)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_config_set_embedded(handle):
-    """
-    Verifies that the configuration can be set for a group
-    """
-    helper_dcgm_vgpu_config_set(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_set_standalone(handle):
     """
@@ -207,17 +178,7 @@ def helper_dcgm_vgpu_config_get(handle):
         assert config_values[x].mComputeMode == dcgmvalue.DCGM_INT32_BLANK, "Failed to get matching value for power limit. Expected: %d Received: %d" % (dcgmvalue.DCGM_INT32_BLANK, vgpu_config_values[x].mComputeMode)
         pass
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_config_get_embedded(handle, gpuIds):
-    """
-    Verifies "Get vGPU Configuration" Basic functionality
-    """
-    helper_dcgm_vgpu_config_get(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_get_standalone(handle, gpuIds):
@@ -240,17 +201,7 @@ def helper_dcgm_vgpu_config_enforce(handle):
     groupObj.vgpu.Enforce()
 
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_config_enforce_embedded(handle, gpuIds):
-    """
-    Verifies that the vGPU configuration can be enforced for a group
-    """
-    helper_dcgm_vgpu_config_enforce(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_enforce_standalone(handle, gpuIds):
@@ -304,17 +255,7 @@ def helper_dcgm_vgpu_config_injection(handle):
         assert vgpu_config_values[x].mPowerLimit.val == valToInsert, "Failed to get matching value for power limit. Expected: %d Received: %d" % (valToInsert, vgpu_config_values[x].mPowerLimit.val)
         pass
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_config_injection_embedded(handle, gpuIds):
-    """
-    Injects values to the Cache manager and verifies if Config Manager can fetch those values
-    """
-    helper_dcgm_vgpu_config_injection(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_injection_standalone(handle, gpuIds):
@@ -356,17 +297,7 @@ def helper_dcgm_vgpu_config_powerbudget(handle, gpuIds):
             assert vgpu_config_values[x].mPowerLimit.val == powerLimit, "The power limit value for gpuID %d is incorrect. Returned: %d Expected: %s" % (x, vgpu_config_values[x].mPowerLimit.val, powerLimit)
         pass
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_vgpu_config_powerbudget_embedded(handle, gpuIds):
-    """
-    This method verfies setting power budget for a group of GPUs
-    """
-    helper_dcgm_vgpu_config_powerbudget(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_powerbudget_standalone(handle, gpuIds):
@@ -393,7 +324,6 @@ def helper_verify_power_value_standalone(groupObj, expected_power):
         pass
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_config_power_enforce_standalone(handle, gpuIds):
@@ -451,7 +381,6 @@ def test_dcgm_vgpu_config_power_enforce_standalone(handle, gpuIds):
     helper_verify_power_value_standalone(groupObj, powerLimit_set_dcgmi)
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_default_status_handler(handle, gpuIds):
@@ -485,7 +414,6 @@ def test_dcgm_vgpu_default_status_handler(handle, gpuIds):
 '''
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
@@ -568,7 +496,6 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     assert config_values[0].mEccMode == (eccmodeOnGroupToSet), "ECC mode different from the set value"
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_vgpu_attributes(handle, gpuIds):
     """

@@ -16,26 +16,17 @@
 #ifndef _NVVS_NVVS_GpuSet_H_
 #define _NVVS_NVVS_GpuSet_H_
 
+#include "EntitySet.h"
 #include "Gpu.h"
 #include "Test.h"
 #include <string>
 #include <vector>
 
-extern const int CUSTOM_TEST_OBJS;
-extern const int SOFTWARE_TEST_OBJS;
-extern const int HARDWARE_TEST_OBJS;
-extern const int INTEGRATION_TEST_OBJS;
-extern const int PERFORMANCE_TEST_OBJS;
-
-class GpuSet
+class GpuSet final : public EntitySet
 {
-    /***************************PUBLIC***********************************/
 public:
-    // Default initializers?
     GpuSet();
-    ~GpuSet() {};
 
-    std::string name;
     struct Props
     {
         bool present;
@@ -46,23 +37,17 @@ public:
         std::string uuid;
     };
 
-    Props properties;
+    Props &GetProperties();
 
-    std::vector<std::map<std::string, std::string>> testsRequested;
-    std::vector<Gpu *> gpuObjs; // corresponding GPU objects
+    void AddGpuObj(Gpu *gpu);
+    void SetGpuObjs(std::vector<Gpu *> gpuObjs);
+    std::vector<Gpu *> const &GetGpuObjs() const;
 
-    std::vector<Test *> m_customTestObjs;      // user-specified test objects
-    std::vector<Test *> m_softwareTestObjs;    // software-class test objects
-    std::vector<Test *> m_hardwareTestObjs;    // hardware-class test objects
-    std::vector<Test *> m_integrationTestObjs; // integration-class test objects
-    std::vector<Test *> m_performanceTestObjs; // performance-class test objects
-
-    int AddTestObject(int testClass, Test *test);
-
-    /***************************PRIVATE**********************************/
 private:
-    /***************************PROTECTED********************************/
-protected:
+    Props m_properties;
+    std::vector<Gpu *> m_gpuObjs; // corresponding GPU objects
 };
+
+GpuSet *ToGpuSet(EntitySet *entitySet);
 
 #endif //_NVVS_NVVS_GpuSet_H_

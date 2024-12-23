@@ -38,14 +38,14 @@ import math
 
 def skip_test_if_unhealthy(groupObj):
     # Skip the test if the GPU is already failing health checks
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    if responseV4.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    if responseV5.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
         msg = "Skipping health check test because we are already unhealthy: "
-        for i in range(0, responseV4.incidentCount):
+        for i in range(0, responseV5.incidentCount):
             if i == 0:
-                msg += "%s" % responseV4.incidents[i].error.msg
+                msg += "%s" % responseV5.incidents[i].error.msg
             else:
-                msg += ", %s" % responseV4.incidents[i].error.msg
+                msg += ", %s" % responseV5.incidents[i].error.msg
 
         test_utils.skip_test(msg)
 
@@ -75,12 +75,7 @@ def helper_dcgm_health_set_pcie(handle):
     currentSystems = groupObj.health.Get()
     assert (currentSystems == 0)
 
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_health_set_pcie_embedded(handle):
-    helper_dcgm_health_set_pcie(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_health_set_pcie_standalone(handle):
     helper_dcgm_health_set_pcie(handle)
 
@@ -102,7 +97,7 @@ def test_dcgm_health_invalid_group_embedded(handle):
         groupObj.health.Get()
 
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
-        groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+        groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
 def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg):
     """
@@ -141,61 +136,21 @@ def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplay
             pcieReplayCounter, 100) # set the injected data into the future
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
     if expectingPcieIncident:
-        assert (responseV4.incidentCount == 1), errmsg
-        assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-        assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-        assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+        assert (responseV5.incidentCount == 1), errmsg
+        assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+        assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+        assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
     else:
-        assert (responseV4.incidentCount == 0), errmsg
+        assert (responseV5.incidentCount == 0), errmsg
 
 def helper_reset_pcie_replay_counter(handle, gpuIds):
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              0, 100)
+            0, 100)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_health_check_pcie_embedded(handle, gpuIds):
-    # PCIe replay rate thresholds for each generation per lane.
-    pcieGenReplayRatesPerLane = [
-        2.5 / 1000 * 60,  # Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min per lane.
-        5.0 / 1000 * 60,  # Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per lane.
-        8.0 / 1000 * 60,  # Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per lane.
-        16.0 / 1000 * 60, # Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min per lane.
-        32.0 / 1000 * 60, # Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min per lane.
-        64.0 / 1000 * 60  # Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min per lane.
-    ]
-
-    # Run it multiple times to cover more combinations of pcieGen and pcieLanes.
-    for i in range(3):
-        pcieGen = 1
-        # For each Gen, randomly select number of lanes and PCIe replay counter to inject to dcgm.
-        # If replay counter rate > expected rate, then make sure PCIe incident is present, no incident otherwise.
-        for pcieGenReplayRatePerLane in pcieGenReplayRatesPerLane:
-            pcieLanes = random.randint(1, 16)
-            expectedPcieReplayCounterLimit = math.ceil(pcieGenReplayRatePerLane * pcieLanes)
-            # Multiply by 2 to have uniform probability for pcieReplayCounter to give success or failure scenario.
-            pcieReplayCounter = random.randint(1, 2 * expectedPcieReplayCounterLimit)
-            expectingPcieIncident = True if pcieReplayCounter > expectedPcieReplayCounterLimit else False
-            errmsg = ("pcieGen={} pcieGenReplayRatePerLane={} pcieLanes={} expectedPcieReplayCounterLimit={} "
-                      "pcieReplayCounter={} expectingPcieIncident={}").format(
-                pcieGen,
-                pcieGenReplayRatePerLane,
-                pcieLanes,
-                expectedPcieReplayCounterLimit,
-                pcieReplayCounter,
-                expectingPcieIncident
-            )
-            helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg)
-            # Reset after testing each failure test case i.e. if expecting PCIe incident.
-            if expectingPcieIncident:
-                helper_reset_pcie_replay_counter(handle, gpuIds)
-            pcieGen += 1
-
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
     # PCIe replay rate thresholds for each generation per lane.
@@ -217,23 +172,16 @@ def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
             pcieLanes = random.randint(1, 16)
             expectedPcieReplayCounterLimit = math.ceil(pcieGenReplayRatePerLane * pcieLanes)
             # Multiply by 2 to have uniform probability for pcieReplayCounter to give success or failure scenario.
-            pcieReplayCounter = random.randint(1, 2 * expectedPcieReplayCounterLimit)
+            pcieReplayCounter = random.randint(1, 2 * expectedPcieReplayCounterLimit) 
             expectingPcieIncident = True if pcieReplayCounter > expectedPcieReplayCounterLimit else False
-            errmsg = ("pcieGen={} pcieGenReplayRatePerLane={} pcieLanes={} expectedPcieReplayCounterLimit={} "
-                      "pcieReplayCounter={} expectingPcieIncident={}").format(
-                pcieGen,
-                pcieGenReplayRatePerLane,
-                pcieLanes,
-                expectedPcieReplayCounterLimit,
-                pcieReplayCounter,
-                expectingPcieIncident
-            )
+            errmsg = (f"pcieGen={pcieGen} pcieGenReplayRatePerLane={pcieGenReplayRatePerLane} pcieLanes={pcieLanes} "\
+                      f"expectedPcieReplayCounterLimit={expectedPcieReplayCounterLimit} pcieReplayCounter={pcieReplayCounter} "\
+                      f"expectingPcieIncident={expectingPcieIncident}")
             helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg)
             # Reset after testing each failure test case i.e. if expecting PCIe incident.
             if expectingPcieIncident:
                 helper_reset_pcie_replay_counter(handle, gpuIds)
             pcieGen += 1
-
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -251,19 +199,19 @@ def test_dcgm_health_check_pcie_embedded_using_nvml_injection(handle, gpuIds):
     injectedRets = injectedRetsArray()
     injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[0].values[0].value.ui = 40
+    injectedRets[0].values[0].value.UInt = 40
     injectedRets[0].valueCount = 1
     injectedRets[1].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[1].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[1].values[0].value.ui = 50
+    injectedRets[1].values[0].value.UInt = 50
     injectedRets[1].valueCount = 1
     injectedRets[2].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[2].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[2].values[0].value.ui = 60
+    injectedRets[2].values[0].value.UInt = 60
     injectedRets[2].valueCount = 1
     injectedRets[3].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[3].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[3].values[0].value.ui = 70
+    injectedRets[3].values[0].value.UInt = 70
     injectedRets[3].valueCount = 1
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "PcieReplayCounter", None, 0, injectedRets, 4)
@@ -274,20 +222,20 @@ def test_dcgm_health_check_pcie_embedded_using_nvml_injection(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    response = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    response = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
     # we expect that there will be no data here
     assert (response.incidentCount == 0)
 
     # Wait for cache refresh
     for _ in range(10000):
-        responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-        if responseV4.incidentCount == 1:
+        responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+        if responseV5.incidentCount == 1:
             break
         time.sleep(0.001)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
 
 def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
     """
@@ -310,39 +258,38 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
             2, -50) # set the injected data to 50 seconds ago
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
 
     # Give it the same failure 45 seconds ago and make sure we fail again
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
             2, -45)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
 
     # Make the failure count go down to zero. This should clear the error
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
             0, -40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_dbe(handle, gpuIds):
     helper_test_dcgm_health_check_mem_dbe(handle, gpuIds)
@@ -352,18 +299,18 @@ def helper_verify_dcgm_health_watch_mem_result(groupObj, errorCode, verifyFail=F
     Verify that memory health check result is what was expected. If verifyFail is False, verify a pass result,
     otherwise verify a failure occurred.
     """
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     if not verifyFail:
-        assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
+        assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
         return
 
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 def helper_reset_page_retirements(handle, gpuId=0, reset_sbe=False):
     """
@@ -483,14 +430,8 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
     helper_verify_dcgm_health_watch_mem_result(groupObj, 0, gpuId=gpuId)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_retirements_standalone(handle, gpuIds):
-    helper_test_dcgm_health_check_mem_retirements(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_health_check_mem_retirements_embedded(handle, gpuIds):
     helper_test_dcgm_health_check_mem_retirements(handle, gpuIds)
 
 def helper_test_dcgm_health_check_mem(handle, gpuIds):
@@ -518,17 +459,17 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
             100, -40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1), "Expected 1 incident but found %d" % responseV4.incidentCount
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PENDING_PAGE_RETIREMENTS),\
+    assert (responseV5.incidentCount == 1), "Expected 1 incident but found %d" % responseV5.incidentCount
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_PENDING_PAGE_RETIREMENTS),\
             "Expected %d but found %d" % (dcgm_errors.DCGM_FR_PENDING_PAGE_RETIREMENTS, \
-                responseV4.incidents[0].error.code)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN),\
-            "Expected warning but found %d" % responseV4.incidents[0].health
+                responseV5.incidents[0].error.code)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN),\
+            "Expected warning but found %d" % responseV5.incidents[0].health
 
     # Clear the error
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
@@ -541,18 +482,11 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
     assert cmFieldInfo.monitorIntervalUsec < 35000000
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_standalone(handle, gpuIds):
     helper_test_dcgm_health_check_mem(handle, gpuIds)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_health_check_mem_embedded(handle, gpuIds):
-    helper_test_dcgm_health_check_mem(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_standalone_health_set_thermal(handle):
     """
     Verifies that the set/get path for the health monitor is working
@@ -575,7 +509,6 @@ def test_dcgm_standalone_health_set_thermal(handle):
     assert (currentSystems == newSystems)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
     """
@@ -597,7 +530,7 @@ def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
                                                        dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
     # we expect that there will be no data here
     #assert (dcgm_structs.DCGM_ST_OK == result or dcgm_structs.DCGM_ST_NO_DATA == result)
 
@@ -606,16 +539,16 @@ def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
                                                        dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuIds[0])
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCK_THROTTLE_THERMAL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuIds[0])
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCK_THROTTLE_THERMAL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCKS_EVENT_THERMAL)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_standalone_health_set_power(handle):
     """
     Verifies that the set/get path for the health monitor is working
@@ -667,104 +600,54 @@ def helper_run_dcgm_health_check_sanity(handle, gpuIds, system_to_check):
     systemObj.UpdateAllFields(1)
 
     #This will throw an exception on error
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     #Check that our response comes back clean
-    helper_check_health_response_v4(gpuIds, responseV4)
+    helper_check_health_response_v4(gpuIds, responseV5)
 
 ################ Start health sanity checks
 # The health sanity checks verify that that the DCGM health checks return healthy for all GPUs on live systems.
 # Note: These tests can fail if a GPU is really unhealthy. We should give detailed feedback so that this is attributed
 # to the GPU and not the test
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_pcie(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_pcie_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_mem(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_mem_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_MEM)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_inforom(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_INFOROM)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_inforom_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_INFOROM)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_thermal(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_thermal_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_power(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_POWER)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_power_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_POWER)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_nvlink(handle, gpuIds):
-    #We will get false failures if any nvlinks are down on the GPUs
-    test_utils.skip_test_if_any_nvlinks_down(handle)
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_nvlink_standalone(handle, gpuIds):
     #We will get false failures if any nvlinks are down on the GPUs
     test_utils.skip_test_if_any_nvlinks_down(handle)
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_nvswitch_nonfatal(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_nvswitch_nonfatal_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_health_check_sanity_nvswitch_fatal(handle, gpuIds):
-    helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL)
-
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_health_check_sanity_nvswitch_fatal_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL)
@@ -772,7 +655,6 @@ def test_dcgm_health_check_sanity_nvswitch_fatal_standalone(handle, gpuIds):
 ################ End health sanity checks
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_power(handle, gpuIds):
     """
@@ -795,7 +677,7 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
     # we expect that there will be no data here
 
     # inject an error into power
@@ -803,16 +685,16 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
             1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuIds[0])
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCK_THROTTLE_POWER)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuIds[0])
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCK_THROTTLE_POWER)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CLOCKS_EVENT_POWER)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_nvlink(handle, gpuIds):
     helper_health_check_nvlink_error_counters(handle, gpuIds)
@@ -823,7 +705,6 @@ def test_dcgm_embedded_health_check_nvlink(handle, gpuIds):
     helper_health_check_nvlink_error_counters(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_standalone_health_set_nvlink(handle):
     """
     Verifies that the set/get path for the health monitor is working
@@ -868,7 +749,7 @@ def helper_health_check_nvlink_error_counters(handle, gpuIds):
                                                        0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
                                                        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
@@ -882,14 +763,14 @@ def helper_health_check_nvlink_error_counters(handle, gpuIds):
                                                        100, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_THRESHOLD)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_THRESHOLD)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
 
 def helper_nvlink_check_fatal_errors(handle, gpuIds):
     test_utils.skip_test_if_any_nvlinks_down(handle)
@@ -909,25 +790,24 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
                                                        0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
                                                        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
                                                        1, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_fatal(handle, gpuIds):
     helper_nvlink_check_fatal_errors(handle, gpuIds)
@@ -955,25 +835,24 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
                                                        0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
     # Trigger a failure by having more than 100 CRC errors per second
     ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
                                                        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
                                                        1000000, -20)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_CRC_ERROR_THRESHOLD)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_CRC_ERROR_THRESHOLD)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
@@ -984,7 +863,6 @@ def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_standalone_health_large_groupid(handle, gpuIds):
     """
@@ -1043,7 +921,7 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
                                                          switchId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     field.ts = int((time.time()-50) * 1000000.0)
     field.value.i64 = 0
@@ -1061,17 +939,16 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
                                                          switchId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_SWITCH)
-    assert (responseV4.incidents[0].entityInfo.entityId == switchId)
-    assert (responseV4.incidents[0].health == healthResult)
-    assert (responseV4.incidents[0].system == healthSystem)
-    assert (responseV4.incidents[0].error.code == errorCode)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_SWITCH)
+    assert (responseV5.incidents[0].entityInfo.entityId == switchId)
+    assert (responseV5.incidents[0].health == healthResult)
+    assert (responseV5.incidents[0].system == healthSystem)
+    assert (responseV5.incidents[0].error.code == errorCode)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_fatal_errors_standalone(handle, switchIds):
     helper_health_check_nvswitch_errors(handle, switchIds,
@@ -1080,28 +957,9 @@ def test_health_check_nvswitch_fatal_errors_standalone(handle, switchIds):
                                         dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
                                         dcgm_errors.DCGM_FR_NVSWITCH_FATAL_ERROR)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_nvswitches()
-def test_health_check_nvswitch_fatal_errors_embedded(handle, switchIds):
-    helper_health_check_nvswitch_errors(handle, switchIds,
-                                        dcgm_fields.DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
-                                        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL,
-                                        dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
-                                        dcgm_errors.DCGM_FR_NVSWITCH_FATAL_ERROR)
-
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_nonfatal_errors_standalone(handle, switchIds):
-    helper_health_check_nvswitch_errors(handle, switchIds,
-                                        dcgm_fields.DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS,
-                                        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL,
-                                        dcgm_structs.DCGM_HEALTH_RESULT_WARN,
-                                        dcgm_errors.DCGM_FR_NVSWITCH_NON_FATAL_ERROR)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_nvswitches()
-def test_health_check_nvswitch_nonfatal_errors_embedded(handle, switchIds):
     helper_health_check_nvswitch_errors(handle, switchIds,
                                         dcgm_fields.DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS,
                                         dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL,
@@ -1128,34 +986,28 @@ def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
 
     #By default, the health check should pass
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert responseV4.incidentCount == 0, "Expected no errors. Got %d errors" % responseV4.incidentCount
+    assert responseV5.incidentCount == 0, "Expected no errors. Got %d errors" % responseV5.incidentCount
 
     #Set a link to Down
     linkId = 3
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(handle, dcgm_fields.DCGM_FE_GPU, gpuId, linkId, dcgm_structs.DcgmNvLinkLinkStateDown)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    logger.info("Health String: " + responseV4.incidents[0].error.msg)
+    logger.info("Health String: " + responseV5.incidents[0].error.msg)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN)
-    assert str(linkId) in (responseV4.incidents[0].error.msg), "Didn't find linkId %d in %s" % (linkId, responseV4.incidents[0].error.msg)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN)
+    assert str(linkId) in (responseV5.incidents[0].error.msg), "Didn't find linkId %d in %s" % (linkId, responseV5.incidents[0].error.msg)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_link_down_gpu_standalone(handle, gpuIds):
-    helper_health_check_nvlink_link_down_gpu(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_health_check_nvlink_link_down_gpu_embedded(handle, gpuIds):
     helper_health_check_nvlink_link_down_gpu(handle, gpuIds)
 
 def helper_health_check_nvlink_link_down_nvswitch(handle, switchIds):
@@ -1173,30 +1025,24 @@ def helper_health_check_nvlink_link_down_nvswitch(handle, switchIds):
     groupObj.health.Set(newSystems)
 
     #By default, the health check should pass
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert responseV4.incidentCount == 0, "Expected no errors. Got %d entities with errors: %s" % (responseV4.incidentCount, responseV4.incidents[0].error.msg)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert responseV5.incidentCount == 0, "Expected no errors. Got %d entities with errors: %s" % (responseV5.incidentCount, responseV5.incidents[0].error.msg)
 
     #Set a link to Down
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(handle, dcgm_fields.DCGM_FE_SWITCH, switchId, linkId, dcgm_structs.DcgmNvLinkLinkStateDown)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == switchId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_SWITCH)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN)
-    assert str(linkId) in responseV4.incidents[0].error.msg, "Didn't find linkId %d in %s" % (linkId, responseV4.incidents[0].error.msg)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == switchId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_SWITCH)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN)
+    assert str(linkId) in responseV5.incidents[0].error.msg, "Didn't find linkId %d in %s" % (linkId, responseV5.incidents[0].error.msg)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvlink_link_down_nvswitch_standalone(handle, switchIds):
-    helper_health_check_nvlink_link_down_nvswitch(handle, switchIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_nvswitches()
-def test_health_check_nvlink_link_down_nvswitch_embedded(handle, switchIds):
     helper_health_check_nvlink_link_down_nvswitch(handle, switchIds)
 
 def helper_health_check_multiple_failures(handle, gpuIds):
@@ -1233,37 +1079,31 @@ def helper_health_check_multiple_failures(handle, gpuIds):
             100, 100)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.incidentCount == 2)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[1].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[1].entityInfo.entityId == gpuId)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.incidentCount == 2)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[1].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[1].entityInfo.entityId == gpuId)
 
-    if responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM:
+    if responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM:
         # The memory error is in position 0 here
-        assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
+        assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
 
         # PCIE error is in position 1 here
-        assert (responseV4.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-        assert (responseV4.incidents[1].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+        assert (responseV5.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+        assert (responseV5.incidents[1].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
     else:
-        assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
-        assert (responseV4.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+        assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_PCIE)
+        assert (responseV5.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
 
         # Mem is in position 1 now
-        assert (responseV4.incidents[1].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
-        assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
+        assert (responseV5.incidents[1].error.code == dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
+        assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_multiple_failures(handle, gpuIds):
-    helper_health_check_multiple_failures(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_health_check_embedded_multiple_failures(handle, gpuIds):
     helper_health_check_multiple_failures(handle, gpuIds)
 
 def helper_health_check_unreadable_power_usage(handle, gpuIds):
@@ -1281,26 +1121,19 @@ def helper_health_check_unreadable_power_usage(handle, gpuIds):
             dcgmvalue.DCGM_FP64_BLANK, 50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_POWER_UNREADABLE)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_POWER_UNREADABLE)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_unreadable_power_usage(handle, gpuIds):
     helper_health_check_unreadable_power_usage(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_health_check_embedded_unreadable_power_usage(handle, gpuIds):
-    helper_health_check_unreadable_power_usage(handle, gpuIds)
-
 
 def helper_health_set_version2(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -1321,14 +1154,8 @@ def helper_health_set_version2(handle, gpuIds):
         assert cmfi.maxAgeUsec == maxKeepAgeUsec, "%d != %d" % (cmfi.maxAgeUsec, maxKeepAgeUsec)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(2)
 def test_health_set_version2_standalone(handle, gpuIds):
-    helper_health_set_version2(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus(2)
-def test_health_set_version2_embedded(handle, gpuIds):
     helper_health_set_version2(handle, gpuIds)
 
 def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
@@ -1351,14 +1178,14 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
             95, 0) # set the injected data to now
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_UNCONTAINED_ERROR)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_UNCONTAINED_ERROR)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
@@ -1385,14 +1212,14 @@ def helper_test_dcgm_health_check_row_remap_failure(handle, gpuIds):
             1, 0) # set the injected data to now
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == gpuId)
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE)
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
@@ -1425,19 +1252,19 @@ def test_dcgm_health_cpu_thermal(handle, cpuIds, coreIds):
                                ii[1], 50, verifyInsertion=True,
                                entityType=entityPair.entityGroupId)
 
-    responseV4 = dcgmGroup.health.Check(dcgm_structs.dcgmHealthResponse_version4);
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 2)
-    assert (responseV4.incidents[0].entityInfo.entityId == cpuIds[0])
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
-    assert (responseV4.incidents[1].entityInfo.entityId == cpuIds[0])
-    assert (responseV4.incidents[1].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
-    assert (responseV4.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
-    assert (responseV4.incidents[1].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[1].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
+    responseV5 = dcgmGroup.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 2)
+    assert (responseV5.incidents[0].entityInfo.entityId == cpuIds[0])
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
+    assert (responseV5.incidents[1].entityInfo.entityId == cpuIds[0])
+    assert (responseV5.incidents[1].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
+    assert (responseV5.incidents[1].system == dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
+    assert (responseV5.incidents[1].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[1].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_cpus(1)
@@ -1460,11 +1287,11 @@ def test_dcgm_health_cpu_power(handle, cpuIds, coreIds):
                                ii[1], 5, verifyInsertion=True,
                                entityType=entityPair.entityGroupId)
 
-    responseV4 = dcgmGroup.health.Check(dcgm_structs.dcgmHealthResponse_version4);
-    assert (responseV4.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidentCount == 1)
-    assert (responseV4.incidents[0].entityInfo.entityId == cpuIds[0])
-    assert (responseV4.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
-    assert (responseV4.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
-    assert (responseV4.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
-    assert (responseV4.incidents[0].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
+    responseV5 = dcgmGroup.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityId == cpuIds[0])
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CPU)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)

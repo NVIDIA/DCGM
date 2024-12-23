@@ -30,7 +30,6 @@ class LsofApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "lsof",
             "Linux_64bit": "lsof",
-            "Linux_ppc64le": "lsof",
             "Linux_aarch64": "lsof",
             }
     def __init__(self, fname):
@@ -77,7 +76,7 @@ class LsofApp(app_runner.AppRunner):
         self.processes = []
         if utils.is_esx_hypervisor_system():
             # ESX lsof ignores input args and outputs data in its own format
-            lsofre = re.compile("^(\d+)\s+(\S+)\s+(\S+)\s+(-?\d+)\s+(.*)")
+            lsofre = re.compile(r"^(\d+)\s+(\S+)\s+(\S+)\s+(-?\d+)\s+(.*)")
             for line in self.stdout_lines[2:]:
                 (pid, pname, fdtype, fd, fpath) = lsofre.match(line).groups()
                 if fpath == self.fname:

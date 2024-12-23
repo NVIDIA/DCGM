@@ -11,68 +11,66 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(Cuda REQUIRED)
-find_package(Threads REQUIRED)
-find_package(fmt REQUIRED)
 
 macro(define_dcgmproftester cuda_version)
     set(dcgmproftester_exec dcgmproftester${cuda_version})
-    add_executable(${dcgmproftester_exec})
-    list(APPEND DCGMPROFTESTER_TARGETS ${dcgmproftester_exec})
-    target_compile_definitions(${dcgmproftester_exec} PRIVATE CUDA_VERSION_USED=${cuda_version})
-    target_link_libraries(
-        ${dcgmproftester_exec}
+
+    target_compile_definitions(${dcgmproftester_exec}
+        PRIVATE CUDA_VERSION_USED=${cuda_version})
+
+    target_link_libraries(${dcgmproftester_exec}
         PRIVATE
+            ${CMAKE_THREAD_LIBS_INIT}
+            ${CUDA${cuda_version}_LIBS}
+            ${CUDA${cuda_version}_STATIC_LIBS}
+            common_interface
             dcgm
+            dcgm_common
+            dcgm_cublas_proxy${cuda_version}
+            dcgm_cuda_worker${cuda_version}
             dcgm_interface
             dcgm_logging
             dcgm_mutex
-            common_interface
-            transport_objects
-            sdk_nvml_essentials_objects
+            dl
             fmt::fmt
-    )
-    target_include_directories(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_INCLUDE_DIR})
-    target_link_libraries(${dcgmproftester_exec} PRIVATE dl rt)
-    target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_common)
-    target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cublas_proxy${cuda_version})
-    target_link_libraries(${dcgmproftester_exec} PRIVATE dcgm_cuda_worker${cuda_version})
-    target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_STATIC_LIBS})
-    target_link_libraries(${dcgmproftester_exec} PRIVATE ${CUDA${cuda_version}_LIBS})
-    target_sources(
-        ${dcgmproftester_exec}
+            rt
+            sdk_nvml_essentials_objects
+            transport_objects)
+
+    target_include_directories(${dcgmproftester_exec}
         PRIVATE
-        DcgmProfTester.cpp
-        DcgmProfTester.h
-        DistributedCudaContext.cpp
-        DistributedCudaContext.h
-        Entity.h
-        Entity.cpp
-        PhysicalGpu.cpp
-        PhysicalGpu.h
-        Arguments.cpp
-        Arguments.h
-        Reporter.cpp
-        Reporter.h
-        ${COMMON_SRCS}
-    )
+            "${CUDA${cuda_version}_INCLUDE_DIR}")
 
-    if (${cuda_version} EQUAL 10)
-        target_compile_options(${dcgmproftester_exec} PRIVATE -Wno-volatile)
-    endif()
+    target_link_options(${dcgmproftester_exec}
+        PRIVATE
+            -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/proftester.linux_def)
 
-    find_package(Threads REQUIRED)
-    target_link_libraries(${dcgmproftester_exec} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-    target_link_options(${dcgmproftester_exec} PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/proftester.linux_def)
+    target_sources(${dcgmproftester_exec}
+        PRIVATE
+            DcgmProfTester.cpp
+            DcgmProfTester.h
+            DistributedCudaContext.cpp
+            DistributedCudaContext.h
+            Entity.h
+            Entity.cpp
+            PhysicalGpu.cpp
+            PhysicalGpu.h
+            Arguments.cpp
+            Arguments.h
+            Reporter.cpp
+            Reporter.h
+            ${COMMON_SRCS})
 endmacro()
 
 define_dcgmproftester(11)
 define_dcgmproftester(12)
 
-set(DCGMPROFTESTER ${DCGMPROFTESTER_TARGETS} PARENT_SCOPE)
+install(
+    FILES DcgmProfTesterKernels.ptx
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+    COMPONENT Core)
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION bin COMPONENT DCGM)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/DcgmProfTesterKernels.ptx DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests)
-
-set(DCGMPROFTESTER_PTX ${CMAKE_CURRENT_SOURCE_DIR}/DcgmProfTesterKernels.ptx PARENT_SCOPE)
+install(
+    FILES DcgmProfTesterKernels.ptx
+    DESTINATION "${DCGM_TESTS_APP_DIR}/../${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+    COMPONENT Tests)

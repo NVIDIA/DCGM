@@ -80,7 +80,7 @@ class TestParameters
 public:
     TestParameters();
     ~TestParameters();
-    TestParameters(TestParameters &copyMe);
+    TestParameters(TestParameters const &copyMe);
     TestParameters &operator=(const TestParameters &other);
 
     /*************************************************************************/

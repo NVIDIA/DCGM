@@ -74,7 +74,7 @@ public:
     {
         return m_pciSubSystemId;
     }
-    std::string getDeviceName()
+    std::string getDeviceName() const
     {
         return m_attributes.identifiers.deviceName;
     }
@@ -154,10 +154,12 @@ public:
         return m_attributes.settings.persistenceModeEnabled;
     }
 
-    dcgmDeviceAttributes_t GetAttributes() const
+    dcgmDeviceAttributes_t const &GetAttributes() const
     {
         return m_attributes;
     }
+
+    void SetAttributes(dcgmDeviceAttributes_v3 const &attr);
 
     /*
      * Returns true if the MIG mode is compatible with running the diagnostic.

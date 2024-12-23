@@ -1,0 +1,8 @@
+/usr/lib/debug
+/usr/lib/debug/usr
+/usr/lib/debug/usr/libexec
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libMemoryBandwidth.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.x86_64.debug
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libPulseTest.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.x86_64.debug

@@ -16,7 +16,7 @@
 #include "DcgmDiagUnitTestCommon.h"
 #include <DcgmRecorder.h>
 #include <NvvsCommon.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <fstream>
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
@@ -117,9 +117,9 @@ SCENARIO("void DcgmRecorder::ClearCustomData()")
 
     CHECK(i64Res.size() == 2);
     CHECK(i64Res[0].isInt);
-    CHECK(i64Res[0].val.i64 == i64Vals[0]);
+    CHECK(i64Res[0].val.i64 == static_cast<uint64_t>(i64Vals[0]));
     CHECK(i64Res[1].isInt);
-    CHECK(i64Res[1].val.i64 == i64Vals[1]);
+    CHECK(i64Res[1].val.i64 == static_cast<uint64_t>(i64Vals[1]));
 
     CHECK(dblRes.size() == 1);
     CHECK(dblRes[0].val.fp64 == doubleVals[0]);
@@ -149,9 +149,9 @@ SCENARIO("void DcgmRecorder::InsertGroupedData(const std::string &groupName, con
 
     CHECK(i64Res.size() == 2);
     CHECK(i64Res[0].isInt);
-    CHECK(i64Res[0].val.i64 == i64Vals[0]);
+    CHECK(i64Res[0].val.i64 == static_cast<uint64_t>(i64Vals[0]));
     CHECK(i64Res[1].isInt);
-    CHECK(i64Res[1].val.i64 == i64Vals[1]);
+    CHECK(i64Res[1].val.i64 == static_cast<uint64_t>(i64Vals[1]));
 
     CHECK(dblRes.size() == 1);
     CHECK(dblRes[0].val.fp64 == doubleVals[0]);
@@ -206,7 +206,10 @@ SCENARIO("int DcgmRecorder::GetValueIndex(unsigned short fieldId)")
     CHECK(dr.GetValueIndex(DCGM_FI_DEV_THERMAL_VIOLATION) == 1);
 }
 
-dcgmReturn_t dcgmGroupCreate(dcgmHandle_t handle, dcgmGroupType_t type, const char *groupName, dcgmGpuGrp_t *groupId)
+dcgmReturn_t dcgmGroupCreate(dcgmHandle_t /* handle */,
+                             dcgmGroupType_t /* type */,
+                             const char * /* groupName */,
+                             dcgmGpuGrp_t *groupId)
 {
     if (groupId != nullptr)
     {
@@ -215,10 +218,10 @@ dcgmReturn_t dcgmGroupCreate(dcgmHandle_t handle, dcgmGroupType_t type, const ch
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t handle,
-                                  int numFieldIds,
-                                  unsigned short *fieldIdArray,
-                                  const char *name,
+dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t /* handle */,
+                                  int /* numFieldIds */,
+                                  unsigned short * /* fieldIdArray */,
+                                  const char * /* name */,
                                   dcgmFieldGrp_t *m_fieldGroupId)
 {
     if (m_fieldGroupId != nullptr)
@@ -228,17 +231,17 @@ dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t handle,
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t dcgmGroupAddDevice(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, unsigned int gpuId)
+dcgmReturn_t dcgmGroupAddDevice(dcgmHandle_t /* pDcgmHandle */, dcgmGpuGrp_t /* groupId */, unsigned int /* gpuId */)
 {
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t dcgmWatchFields(dcgmHandle_t pDcgmHandle,
-                             dcgmGpuGrp_t groupId,
-                             dcgmFieldGrp_t fieldGroupId,
-                             long long updateFreq,
-                             double maxKeepAge,
-                             int maxKeepSamples)
+dcgmReturn_t dcgmWatchFields(dcgmHandle_t /* pDcgmHandle */,
+                             dcgmGpuGrp_t /* groupId */,
+                             dcgmFieldGrp_t /* fieldGroupId */,
+                             long long /* updateFreq */,
+                             double /* maxKeepAge */,
+                             int /* maxKeepSamples */)
 {
     return g_watchFieldsRet;
 }

@@ -21,7 +21,6 @@
 #include "PluginDevice.h"
 
 
-#include <PluginStrings.h>
 #include <cublas_proxy.hpp>
 #include <dcgm_structs.h>
 #include <iostream>
@@ -46,8 +45,8 @@ public:
     void *hostB;
     void *hostC;
 
-    SmPerfDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(PCIE_PLUGIN_NAME, ndi, pciBusId, p)
+    SmPerfDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
+        : PluginDevice(testName, ndi, pciBusId, p)
         , allocatedCublasHandle(0)
         , cublasHandle(0)
         , deviceA(0)
@@ -89,12 +88,17 @@ public:
     }
 };
 
-const unsigned int PCIE_DEFAULT_ITERATIONS = 50;
+namespace
+{
+constexpr double PCIE_DEFAULT_INTS_PER_COPY    = (512.0 / sizeof(int)) * 1024.0 * 1024.0;
+constexpr double PCIE_DEFAULT_BROKEN_P2P_SIZE  = 512.0 * 1024.0;
+constexpr unsigned int PCIE_DEFAULT_ITERATIONS = 50;
+}; //namespace
 
 class BusGrind : public Plugin
 {
 public:
-    BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    BusGrind(dcgmHandle_t handle);
     ~BusGrind();
 
     /* Cached parameters */
@@ -135,8 +139,9 @@ public:
     std::vector<PluginDevice *> gpu; /* Per-gpu information */
 
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     dcgmHandle_t GetHandle();
 
@@ -164,8 +169,9 @@ public:
      * Returns: true on success
      *          false on error
      */
-    bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
+    bool Init(dcgmDiagPluginEntityList_v1 const *entityInfo);
 
+    std::string GetPcieTestName() const;
 
 private:
     /*************************************************************************/
@@ -185,7 +191,7 @@ private:
      *      false if there were issues running the test (test failures are not considered issues),
      *      true otherwise.
      */
-    bool RunTest_sm();
+    bool RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo);
 
     /*************************************************************************/
     /*
@@ -233,7 +239,6 @@ private:
     unsigned int m_maxAer;    /* max aer failures */
 
     dcgmHandle_t m_handle;
-    dcgmDiagPluginGpuList_t m_gpuInfo;
 };
 
 /*****************************************************************************/

@@ -412,7 +412,7 @@ public:
      * actually does the work
      *
      */
-    void run(void);
+    void run(void) override;
 };
 
 /*****************************************************************************/
@@ -531,6 +531,21 @@ public:
 
     /*************************************************************************/
     /*
+     * Get profile info and status for the specified GPU
+     *
+     * gpuId: specific GPU to query
+     * profileInfo: information about the various workload power profiles supported by this GPU
+     * profileStatus: the status of the various workload power profiles supported by this GPU
+     *
+     * Returns: 0 on success
+     *          DCGM_ST_? #define on error
+     */
+    dcgmReturn_t GetWorkloadPowerProfilesInfo(unsigned int gpuId,
+                                              dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                                              dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus);
+
+    /*************************************************************************/
+    /*
      * Get the entities seen by DCGM of a given entityGroupId
      *
      * activeOnly     IN: If set to 1, will not count GPUs that are inaccessible for any
@@ -612,7 +627,7 @@ public:
      *
      */
 
-    void run(void);
+    void run(void) override;
 
     /*************************************************************************/
     /*
@@ -1073,10 +1088,10 @@ public:
 
     /*************************************************************************/
     /*
-     * Populate a dcgmNvLinkStatus_v3 response with the NvLink link states
+     * Populate a dcgmNvLinkStatus_v4 response with the NvLink link states
      * of every GPU and NvSwitch in the system
      */
-    dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v3 &nvLinkStatus);
+    dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvLinkStatus);
 
     /*************************************************************************/
     /*
@@ -1513,14 +1528,25 @@ public:
 
     /*************************************************************************/
     /**
-     * Function to return whether the given entity supports GPU Performance Monitoring (GPM)
+     * Function to return whether the given entity pair supports GPU Performance Monitoring (GPM)
      *
      * If is this true, then the entity's profiling metrics are serviced by the
      * cache manager rather than the profiling module.
      *
      * @return true if the entity supports GPM. false if not.
      */
-    bool EntitySupportsGpm(const dcgm_entity_key_t &entityKey);
+    bool EntityPairSupportsGpm(dcgmGroupEntityPair_t const &entityPair);
+
+    /*************************************************************************/
+    /**
+     * Function to return whether the given entity key supports GPU Performance Monitoring (GPM)
+     *
+     * If is this true, then the entity's profiling metrics are serviced by the
+     * cache manager rather than the profiling module.
+     *
+     * @return true if the entity supports GPM. false if not.
+     */
+    bool EntityKeySupportsGpm(const dcgm_entity_key_t &entityKey);
 
     /*************************************************************************/
 
@@ -1579,6 +1605,10 @@ public:
     dcgmReturn_t GetNvmlInjectFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts);
 
     dcgmReturn_t ResetNvmlInjectFuncCallCount();
+
+    dcgmReturn_t RemoveNvmlInjectedGpu(char const *uuid);
+
+    dcgmReturn_t RestoreNvmlInjectedGpu(char const *uuid);
 #endif
 
     dcgmReturn_t CreateNvmlInjectionDevice(unsigned int index);
@@ -1586,6 +1616,26 @@ public:
     dcgmReturn_t InjectNvmlFieldValue(dcgm_field_eid_t gpuId,
                                       const dcgmFieldValue_v1 &value,
                                       dcgm_field_meta_p fieldMeta);
+
+    /*
+     * Inspects the nvmlGpuFabricInfoV_t struct to find fabric manager and error (if any)
+     *
+     * @param gpuFabricInfo (I) - the struct returned from NVML
+     * @param status        (O) - the status of the fabric manager
+     * @param fmError       (O) - the error reported. This is set to a blank value unless the fabric manager has
+     * finished coming up
+     *
+     * @return DCGM_ST_BADPARAM if a status couldn't be read from gpuFabricInfo, else DCGM_ST_OK
+     */
+    static dcgmReturn_t GetFMStatusFromStruct(nvmlGpuFabricInfoV_t const &gpuFabricInfo,
+                                              dcgmFabricManagerStatus_t &status,
+                                              uint64_t &fmError);
+
+    dcgmReturn_t ReadFabricManagerStatusField(dcgmcm_update_thread_t *threadCtx,
+                                              nvmlDevice_t nvmlDevice,
+                                              dcgm_field_meta_p fieldMeta,
+                                              timelib64_t now,
+                                              timelib64_t expireTime);
 
 private:
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
@@ -1604,6 +1654,7 @@ private:
 
     unsigned int m_driverMajorVersion;                          /* Major driver version, eg. 470, 510, etc */
     unsigned int m_numGpus;                                     /* Number of entries in m_gpus[] that are valid */
+    unsigned int m_numFakeGpus;                                 /* Number of entries in m_gpus[] that are fake */
     unsigned int m_numInstances;                                // Number of total GPU instances created
     unsigned int m_numComputeInstances;                         // Number of total compute instances created
     std::array<dcgmcm_gpu_info_t, DCGM_MAX_NUM_DEVICES> m_gpus; /* All of the GPUs we know about, indexed by gpuId */
@@ -1671,6 +1722,11 @@ private:
         *m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
 
     bool m_nvmlLoaded; /* true if NVML was successfully loaded */
+
+    /*
+     * UUIDs of GPUs in m_gpus[] whose status have been set to DcgmEntityStatusLost
+     */
+    std::unordered_set<std::string> m_lostGpus;
 
     std::unordered_map<std::string, unsigned int> pciBusGpuIdMap;
 
@@ -2289,4 +2345,11 @@ private:
      * @param threadPtr - the DcgmThread that needs to be stopped
      */
     void StopThread(DcgmThread *threadPtr);
+
+    /*************************************************************************/
+    /*
+     * Finds lost GPUs by reading the list of available GPUs from NVML and comparing to
+     * the cached GPU list. Updates the status of lost GPUs to DcgmEntityStatusLost.
+     */
+    void UpdateLostGpus();
 };

@@ -1403,7 +1403,7 @@ CLEANUP:
 }
 
 /*****************************************************************************/
-bool AllowEntryCB(timeseries_entry_p entry, void *userData)
+bool AllowEntryCB(timeseries_entry_p entry, void * /* userData */)
 {
     if (entry->val2.i64 % 2 == 0)
     {
@@ -1974,54 +1974,6 @@ int TestCacheManager::TestCountBasedQuota()
 CLEANUP:
     return retSt;
 }
-
-class IterateFieldsFunctor
-{
-public:
-    IterateFieldsFunctor()
-        : gpuTempIterated(false)
-        , driverVersionIterated(false)
-        , itCount(0)
-    {}
-    dcgmReturn_t operator()(unsigned short fieldId)
-    {
-        itCount++;
-        if (fieldId == DCGM_FI_DEV_GPU_TEMP)
-            gpuTempIterated = true;
-        if (fieldId == DCGM_FI_DRIVER_VERSION)
-            driverVersionIterated = true;
-
-        return DCGM_ST_OK;
-    }
-
-    bool gpuTempIterated;
-    bool driverVersionIterated;
-    unsigned int itCount;
-};
-
-class IterateGpuFieldsFunctor
-{
-public:
-    bool gpuTempIterated;
-    bool driverVersionIterated;
-    unsigned int itCount;
-
-    IterateGpuFieldsFunctor()
-        : gpuTempIterated(false)
-        , driverVersionIterated(false)
-        , itCount(0)
-    {}
-    dcgmReturn_t operator()(unsigned short fieldId, unsigned int gpuId)
-    {
-        itCount++;
-        if (fieldId == DCGM_FI_DEV_GPU_TEMP)
-            gpuTempIterated = true;
-        if (fieldId == DCGM_FI_DRIVER_VERSION)
-            driverVersionIterated = true;
-
-        return DCGM_ST_OK;
-    }
-};
 
 /*****************************************************************************/
 int TestCacheManager::TestTimedModeAwakeTime()

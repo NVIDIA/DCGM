@@ -41,7 +41,7 @@ std::string TestFieldGroups::GetTag()
 }
 
 /*****************************************************************************/
-int TestFieldGroups::Init(const TestDcgmModuleInitParams &initParams)
+int TestFieldGroups::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }

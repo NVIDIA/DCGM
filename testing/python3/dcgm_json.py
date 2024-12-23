@@ -21,12 +21,6 @@ import dcgm_structs
 import time
 import logger
 
-try:
-    from prometheus_client import start_http_server, Gauge
-except ImportError:
-    pass
-    logger.warning("prometheus_client not installed, please run: \"pip install prometheus_client\"")
-
 ignore_List = [dcgm_fields.DCGM_FI_DEV_PCI_BUSID, dcgm_fields.DCGM_FI_DEV_UUID]
 
 

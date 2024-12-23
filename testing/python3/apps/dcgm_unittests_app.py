@@ -24,7 +24,6 @@ class TestDcgmUnittestsApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/x86/testdcgmunittests",
             "Linux_64bit": "./apps/amd64/testdcgmunittests",
-            "Linux_ppc64le": "./apps/ppc64le/testdcgmunittests",
             "Linux_aarch64": "./apps/aarch64/testdcgmunittests",
             "Windows_64bit": "./apps/amd64/testdcgmunittests.exe"
             }

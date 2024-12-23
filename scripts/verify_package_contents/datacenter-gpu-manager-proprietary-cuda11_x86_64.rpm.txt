@@ -1,0 +1,11 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libMemoryBandwidth.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libMemoryBandwidth.so.<SOFTWAREVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libPulseTest.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libPulseTest.so.<SOFTWAREVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libcurand.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/ubergemm
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda11-<PACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda11-<PACKAGEVERSION>/LICENSE

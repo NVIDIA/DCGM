@@ -47,7 +47,7 @@ def _time_str(num_list):
 class DebugLine:
     """ Class that matches DEBUG lines in trace log """
     #                                             tid        timestamp     path         fname  line         content
-    regexpDebugLine = re.compile("^DEBUG:\s*\[tid \d*\]\s*\[(\d+\.\d+)s - (\w?:?[^:]+):?(\w+)?:([0-9]+)\]\s*(.*)")
+    regexpDebugLine = re.compile(r"^DEBUG:\s*\[tid \d*\]\s*\[(\d+\.\d+)s - (\w?:?[^:]+):?(\w+)?:([0-9]+)\]\s*(.*)")
 
     @staticmethod
     def construct(text):
@@ -84,12 +84,12 @@ class DebugLine:
 
 class RmCall:
     """ Class that matches Rm Calls """
-    regexpRmCallRelease        = re.compile("^([0-9a-f]*) ([0-9a-f]*)$")
-    regexpRmCallReleaseReturn  = re.compile("^([0-9a-f]*) ([0-9a-f]*) ## 0x([0-9a-f]*)$")
-    regexpRmCallDebug          = re.compile("^dcgmRmCall\(([a-zA-Z0-9_.]* [0-9a-f]*), (\w*), \.\.\.\)$")
-    regexpRmCallDebugReturn    = re.compile("^dcgmRmCall\(([a-zA-Z0-9_.]* [0-9a-f]*), (\w*), \.\.\.\) returned 0x([0-9a-f]*)$")
-    regexpFilePath             = re.compile(".*dmal/rm/.*\.c$")
-    regexpRmCallSrc            = re.compile(".*dcgmRmCall.*(NV\d{4}_CTRL_CMD_[A-Z0-9_]*).*")
+    regexpRmCallRelease        = re.compile(r"^([0-9a-f]*) ([0-9a-f]*)$")
+    regexpRmCallReleaseReturn  = re.compile(r"^([0-9a-f]*) ([0-9a-f]*) ## 0x([0-9a-f]*)$")
+    regexpRmCallDebug          = re.compile(r"^dcgmRmCall\(([a-zA-Z0-9_.]* [0-9a-f]*), (\w*), \.\.\.\)$")
+    regexpRmCallDebugReturn    = re.compile(r"^dcgmRmCall\(([a-zA-Z0-9_.]* [0-9a-f]*), (\w*), \.\.\.\) returned 0x([0-9a-f]*)$")
+    regexpFilePath             = re.compile(r".*dmal/rm/.*\.c$")
+    regexpRmCallSrc            = re.compile(r".*dcgmRmCall.*(NV\d{4}_CTRL_CMD_[A-Z0-9_]*).*")
     
     @staticmethod
     def construct(debugLines, i, dcgmParent):
@@ -150,13 +150,13 @@ class RmCall:
 class NvmlCall:
     """ Class that matches Nvml Calls """
     # TODO doesn't handle apiEnter failures!
-    regexpNvmlCall             = re.compile("^Entering (dcgm[a-zA-Z0-9_]*)(\(.*\)) *(\(.*\))$")
-    regexpNvmlIntRelCall       = re.compile("^()()(\(.*\))$")
-    regexpNvmlCallReturn       = re.compile("^Returning (\d*) \(([a-zA-Z ]*)\)$")
-    regexpNvmlIntRelCallReturn = re.compile("^(\d*) ([a-zA-Z ]*)$")
-    regexpFilePath             = re.compile(".*entry_points.h$")
-    regexpFilePathNonTsapi     = re.compile(".*dcgm.c$")
-    regexpNvmlCallSrc          = re.compile("^ *NVML_INT_ENTRY_POINT\((dcgm[A-Z][a-zA-Z0-9_]*) *,.*")
+    regexpNvmlCall             = re.compile(r"^Entering (dcgm[a-zA-Z0-9_]*)(\(.*\)) *(\(.*\))$")
+    regexpNvmlIntRelCall       = re.compile(r"^()()(\(.*\))$")
+    regexpNvmlCallReturn       = re.compile(r"^Returning (\d*) \(([a-zA-Z ]*)\)$")
+    regexpNvmlIntRelCallReturn = re.compile(r"^(\d*) ([a-zA-Z ]*)$")
+    regexpFilePath             = re.compile(r".*entry_points.h$")
+    regexpFilePathNonTsapi     = re.compile(r".*dcgm.c$")
+    regexpNvmlCallSrc          = re.compile(r"^ *NVML_INT_ENTRY_POINT\((dcgm[A-Z][a-zA-Z0-9_]*) *,.*")
     
     @staticmethod
     def construct(debugLines, i):
@@ -365,7 +365,7 @@ class PerformanceStats(object):
                 f2.close()
 
         # TODO get rid of this requirement by merging the logs with difflib
-        # Some dcgm calls (e.g. dcgmDeviceGetCurrentClocksThrottleReasons) can take different RM calls depending on the
+        # Some dcgm calls (e.g. dcgmDeviceGetCurrentClocksEventReasons) can take different RM calls depending on the
         # state of the GPU (e.g. clock changes that can happen at any point).
         
         ## Comment strict matching of log length. The perf data will be collected for atleast 1 run anyways

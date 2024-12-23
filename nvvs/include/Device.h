@@ -26,8 +26,10 @@ class Device
 {
     /***************************PUBLIC***********************************/
 public:
-    Device() {};
-    ~Device() {};
+    Device()
+    {}
+    ~Device()
+    {}
 
     void setDeviceName(std::string name)
     {

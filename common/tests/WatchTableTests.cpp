@@ -16,7 +16,7 @@
 #include <DcgmWatchTable.h>
 #include <Defer.hpp>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 
 TEST_CASE("WatchTable: adding a few watches")
@@ -86,7 +86,7 @@ TEST_CASE("WatchTable: RemoveConnectionWatches")
     REQUIRE(postWatchInfo.size() == 0);
     REQUIRE(wt.RemoveConnectionWatches(1, &postWatchInfo) == DCGM_ST_OK);
     REQUIRE(postWatchInfo.size() == 4);
-    for (int i = 0; i < postWatchInfo.size(); i++)
+    for (size_t i = 0; i < postWatchInfo.size(); i++)
     {
         REQUIRE(postWatchInfo[i].size() == 1);
         REQUIRE(postWatchInfo[i][0] == DCGM_FI_DEV_GPU_TEMP);

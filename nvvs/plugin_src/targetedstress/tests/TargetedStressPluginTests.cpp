@@ -13,38 +13,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <unordered_map>
 
 #define TARGETED_STRESS_TESTS
 #include <DcgmSystem.h>
 #include <PluginInterface.h>
-#include <PluginStrings.h>
 #include <TargetedStress_wrapper.h>
+#include <UniquePtrUtil.h>
 
 #include <CudaStubControl.h>
 #include <dcgm_errors.h>
 
 TEST_CASE("TargetedStress::CudaInit()")
 {
-    dcgmDiagPluginGpuList_t gpuList = {};
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
-    gpuList.numGpus = 4;
-    for (unsigned int i = 0; i < gpuList.numGpus; i++)
+    entityList->numEntities = 4;
+    for (unsigned int i = 0; i < entityList->numEntities; i++)
     {
-        gpuList.gpus[i].gpuId                              = i;
-        gpuList.gpus[i].status                             = DcgmEntityStatusOk;
-        gpuList.gpus[i].attributes.identifiers.pciDeviceId = 1;
+        entityList->entities[i].entity.entityId                                 = i;
+        entityList->entities[i].entity.entityGroupId                            = DCGM_FE_GPU;
+        entityList->entities[i].auxField.gpu.status                             = DcgmEntityStatusOk;
+        entityList->entities[i].auxField.gpu.attributes.identifiers.pciDeviceId = 1;
     }
 
-    ConstantPerf cp((dcgmHandle_t)1, &gpuList);
+    ConstantPerf cp((dcgmHandle_t)1);
     cudaStreamCreateResult = cudaErrorInvalidValue;
-    CHECK(cp.Init(&gpuList) == true);
+    cp.InitializeForEntityList(cp.GetTargetedStressTestName(), *entityList);
+    CHECK(cp.Init(entityList.get()) == true);
 
     CHECK(cp.CudaInit() == -1);
-    dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = cp.GetResults(TS_PLUGIN_NAME, &results);
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
+    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+
+    dcgmReturn_t ret = cp.GetResults(cp.GetTargetedStressTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
 
     /*
@@ -53,10 +57,10 @@ TEST_CASE("TargetedStress::CudaInit()")
      * test code yet. We can fix this in a later ticket.
      */
     std::unordered_map<unsigned int, unsigned int> errorCodeCounts;
-    unsigned int streamErrorIndex = results.numErrors;
-    for (unsigned int i = 0; i < results.numErrors; i++)
+    unsigned int streamErrorIndex = entityResults.numErrors;
+    for (unsigned int i = 0; i < entityResults.numErrors; i++)
     {
-        unsigned int code = results.errors[i].code;
+        unsigned int code = entityResults.errors[i].code;
         errorCodeCounts[code]++;
         if (code == DCGM_FR_CUDA_API)
         {
@@ -64,6 +68,6 @@ TEST_CASE("TargetedStress::CudaInit()")
         }
     }
     CHECK(errorCodeCounts[DCGM_FR_CUDA_API] == 1);
-    REQUIRE(streamErrorIndex < results.numErrors);
-    CHECK(results.errors[streamErrorIndex].gpuId == 0);
+    REQUIRE(streamErrorIndex < entityResults.numErrors);
+    CHECK(entityResults.errors[streamErrorIndex].entity.entityId == 0);
 }

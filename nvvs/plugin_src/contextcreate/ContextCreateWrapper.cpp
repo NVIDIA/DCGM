@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 #include "ContextCreatePlugin.h"
-
 #include "DcgmStringHelpers.h"
+#include "dcgm_fields.h"
 
 #include <PluginCommon.h>
 #include <PluginInterface.h>
@@ -29,80 +29,77 @@ unsigned int GetPluginInterfaceVersion(void)
     return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
 }
 
-dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
+dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPluginInfo_t *info)
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
-    const char *parameterNames[] = { CTXCREATE_IS_ALLOWED, CTXCREATE_IGNORE_EXCLUSIVE, nullptr };
-
+    const char *parameterNames[]         = { CTXCREATE_IS_ALLOWED, CTXCREATE_IGNORE_EXCLUSIVE, nullptr };
+    char const *description              = "This plugin will create a context on one of a given list of GPUs.";
     const dcgmPluginValue_t paramTypes[] = { DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
     unsigned int paramCount = 0;
 
-    info->numValidTests = 1;
-
+    info->numTests = 1;
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->tests[0].validParameters[paramCount].parameterName,
-                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
-                 "%s",
-                 parameterNames[paramCount]);
+        SafeCopyTo(info->tests[0].validParameters[paramCount].parameterName, parameterNames[paramCount]);
         info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
 
-    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(CTXCREATE_PLUGIN_NAME)>(info->tests[0].testeName,
-                                                                                CTXCREATE_PLUGIN_NAME);
     info->tests[0].numValidParameters = paramCount;
 
-    snprintf(info->pluginName, sizeof(info->pluginName), "%s", CTXCREATE_PLUGIN_NAME);
-    memset(info->tests[0].testGroup, 0, sizeof(info->tests[0].testGroup));
-    snprintf(info->description,
-             sizeof(info->description),
-             "This plugin will create a context on one of a given list of GPUs.");
+    SafeCopyTo(info->pluginName, static_cast<char const *>(CTXCREATE_PLUGIN_NAME));
+    SafeCopyTo(info->description, description);
+    SafeCopyTo(info->tests[0].testName, static_cast<char const *>(CTXCREATE_PLUGIN_NAME));
+    SafeCopyTo(info->tests[0].description, description);
+    SafeCopyTo(info->tests[0].testCategory, CTXCREATE_PLUGIN_CATEGORY);
+    info->tests[0].targetEntityGroup = DCGM_FE_GPU;
 
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                              dcgmDiagPluginGpuList_t *gpuInfo,
-                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
+                              dcgmDiagPluginStatFieldIds_t * /* statFieldIds */,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
-                              hostEngineAppenderCallbackFp_t loggingCallback)
+                              hostEngineAppenderCallbackFp_t loggingCallback,
+                              dcgmDiagPluginAttr_v1 const *pluginAttr)
 {
-    ContextCreatePlugin *ctx = new ContextCreatePlugin(handle, gpuInfo);
+    ContextCreatePlugin *ctx = new ContextCreatePlugin(handle);
     *userData                = ctx;
 
+    ctx->SetPluginAttr(pluginAttr);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, ctx->GetDisplayName());
     return DCGM_ST_OK;
 }
 
-void RunTest(const char *testName,
-             unsigned int timeout,
+void RunTest(char const *testName,
+             unsigned int /* timeout */,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
+             dcgmDiagPluginEntityList_v1 const *entityInfo,
              void *userData)
 {
-    auto ctx = (ContextCreatePlugin *)userData;
-    ctx->Go(testName, numParameters, testParameters);
+    auto *ctx = static_cast<ContextCreatePlugin *>(userData);
+    ctx->Go(testName, entityInfo, numParameters, testParameters);
 }
 
 
 void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
-    if (customStats != nullptr)
+    if (testName != nullptr && customStats != nullptr)
     {
-        auto ctx = (ContextCreatePlugin *)userData;
-        ctx->PopulateCustomStats(*customStats);
+        auto *ctx = static_cast<ContextCreatePlugin *>(userData);
+        ctx->PopulateCustomStats(testName, *customStats);
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
 {
-    auto ctx = (ContextCreatePlugin *)userData;
-    ctx->GetResults(testName, results);
+    auto *ctx = static_cast<ContextCreatePlugin *>(userData);
+    ctx->GetResults(testName, entityResults);
 }
 
 } // END extern "C"

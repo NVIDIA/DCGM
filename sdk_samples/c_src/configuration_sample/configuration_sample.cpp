@@ -18,6 +18,7 @@
 #include "dcgm_structs.h"
 #include "string.h"
 #include <iostream>
+#include <memory>
 
 void displayError(dcgmStatus_t &statusHandle);
 
@@ -25,7 +26,7 @@ void displayError(dcgmStatus_t &statusHandle);
 // In this program we will create a group, get the configuration of the GPUs in
 // in the group, set a configuration on those GPUs and demonstrate enforcing.
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv)
+int main(int /* argc */, char ** /* argv */)
 {
     // DCGM calls return a dcgmReturn_t which can be useful for error handling and control flow.
     // Whenever we call DCGM we will store the return in result and check it for errors.
@@ -37,12 +38,12 @@ int main(int argc, char **argv)
     char hostIpAddress[16]  = { 0 };
     unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
     int count;
-    char groupName[]       = "MyGroup";
-    dcgmGpuGrp_t myGroupId = (dcgmGpuGrp_t)NULL;
-    dcgmGroupInfo_t myGroupInfo;
+    char groupName[]               = "MyGroup";
+    dcgmGpuGrp_t myGroupId         = (dcgmGpuGrp_t)NULL;
     dcgmStatus_t statusHandle      = (dcgmStatus_t)NULL;
     dcgmConfig_t *deviceConfigList = NULL;
     dcgmConfig_t myGroupConfig;
+    std::unique_ptr<dcgmGroupInfo_t> myGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
 
     // In our case we do not know whether to run in standalone or embedded so we will get the user
@@ -208,9 +209,9 @@ int main(int argc, char **argv)
     // our object/struct. This will tell the Host Engine what type of struct to fill in. If the client has
     // a greater version number than the Host Engine then an error will be returned since the host engine
     // will unaware of how to handle that type of request.
-    myGroupInfo.version = dcgmGroupInfo_version;
+    myGroupInfo->version = dcgmGroupInfo_version;
 
-    result = dcgmGroupGetInfo(dcgmHandle, myGroupId, &myGroupInfo);
+    result = dcgmGroupGetInfo(dcgmHandle, myGroupId, myGroupInfo.get());
 
     // Check the result to see if our DCGM operation was successful.
     if (result != DCGM_ST_OK)
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
     // Check to see if our group has some GPUs in it. This error shouldn't happen since we have already checked
     // if we had GPUs on our system and normally the first GPU should be indexed at 0. This may not be the case
     // if a GPU falls off the bus however, so it may be best to check for this here.
-    if (!myGroupInfo.count)
+    if (!myGroupInfo->count)
     {
         std::cout << "No GPUs in group. Exiting.\n";
         goto cleanup;
@@ -252,10 +253,10 @@ int main(int argc, char **argv)
     // an array of dcgmConfig_t structs that is the size of our group and update the version of each struct in
     // the array.
 
-    deviceConfigList = new dcgmConfig_t[myGroupInfo.count];
+    deviceConfigList = new dcgmConfig_t[myGroupInfo->count];
 
     // Update version for each dcmgConfig_t struct.
-    for (unsigned int i = 0; i < myGroupInfo.count; i++)
+    for (unsigned int i = 0; i < myGroupInfo->count; i++)
     {
         deviceConfigList[i].version = dcgmConfig_version;
     }
@@ -264,7 +265,7 @@ int main(int argc, char **argv)
     // each GPU in our group. Likewise we could have gotten the target configuration for this group,
     // but we will be setting the configuration next so we don't need it right now.
     result = dcgmConfigGet(
-        dcgmHandle, myGroupId, DCGM_CONFIG_CURRENT_STATE, myGroupInfo.count, deviceConfigList, statusHandle);
+        dcgmHandle, myGroupId, DCGM_CONFIG_CURRENT_STATE, myGroupInfo->count, deviceConfigList, statusHandle);
 
     // Check the result to see if our DCGM operation was successful. However we now have a status
     // handle which we will use to display our errors per GPU. We will simply pass our status handle
@@ -280,7 +281,7 @@ int main(int argc, char **argv)
         // If successful we will display the compute mode of each GPU in our group. This isn't the best
         // formatting for outputting the compute mode but it gets the job done.
         std::cout << "GPU : Compute Mode\n";
-        for (unsigned int i = 0; i < myGroupInfo.count; i++)
+        for (unsigned int i = 0; i < myGroupInfo->count; i++)
         {
             if ((DCGM_INT32_NOT_SUPPORTED == deviceConfigList[i].computeMode))
             {
@@ -323,6 +324,10 @@ int main(int argc, char **argv)
     myGroupConfig.powerLimit.val                  = DCGM_INT32_BLANK;
     myGroupConfig.computeMode                     = DCGM_INT32_BLANK;
     myGroupConfig.gpuId                           = DCGM_INT32_BLANK;
+    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        myGroupConfig.workloadPowerProfiles[i] = DCGM_INT32_BLANK;
+    }
 
     // Set compute mode
     myGroupConfig.computeMode = DCGM_CONFIG_COMPUTEMODE_DEFAULT;

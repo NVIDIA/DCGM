@@ -16,11 +16,11 @@
 
 #include "DcgmVgpu.hpp"
 
-#include "DcgmCMUtils.h"
-#include "DcgmUtilities.h"
-#include "dcgm_structs.h"
-#include "dcgm_structs_internal.h"
+#include <DcgmCMUtils.h>
 #include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
+#include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
 
 /*****************************************************************************/
 static std::string_view ConvertNvmlGridLicenseStateToString(unsigned int licenseState)

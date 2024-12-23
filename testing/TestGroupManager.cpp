@@ -170,7 +170,7 @@ int TestGroupManager::TestGroupCreation()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->RemoveGroup(0, groupId);
+    st = pDcgmGrpManager->RemoveGroup(groupId);
     if (DCGM_ST_OK != st)
     {
         fprintf(stderr, "pDcgmGrpManager->RemoveGroup returned %d\n", st);
@@ -185,8 +185,7 @@ CLEANUP:
 /*****************************************************************************/
 int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
                                               unsigned int groupId,
-                                              std::string groupName,
-                                              DcgmCacheManager *cacheManager)
+                                              std::string groupName)
 {
     int st;
     std::string str;
@@ -286,7 +285,7 @@ int TestGroupManager::TestGroupManageGpus()
             goto CLEANUP;
         }
 
-        st = HelperOperationsOnGroup(pDcgmGrpManager.get(), groupId, groupName, cacheManager.get());
+        st = HelperOperationsOnGroup(pDcgmGrpManager.get(), groupId, groupName);
         if (DCGM_ST_OK != st)
         {
             retSt = 4;
@@ -296,7 +295,7 @@ int TestGroupManager::TestGroupManageGpus()
 
     for (unsigned int g = 0; g < numGroups; ++g)
     {
-        st = pDcgmGrpManager->RemoveGroup(0, vecGroupIds[g]);
+        st = pDcgmGrpManager->RemoveGroup(vecGroupIds[g]);
         if (DCGM_ST_OK != st)
         {
             fprintf(stderr, "pDcgmGrpManager->RemoveGroup returned %d\n", st);
@@ -346,7 +345,7 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
         goto CLEANUP;
     }
 
-    st = pDcgmGrpManager->RemoveGroup(0, groupId);
+    st = pDcgmGrpManager->RemoveGroup(groupId);
     if (DCGM_ST_OK != st)
     {
         fprintf(stderr, "pDcgmGrpManager->RemoveGroup returned %d\n", st);

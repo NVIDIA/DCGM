@@ -28,38 +28,31 @@ import logging
 # It will match something in the form of:
 # funcname, tsapiFuncname, (argument list), "(argument type matching)", arg1[, arg2, ...])
 # We place funcname, (argument list), and arg1[, arg2, ...] into groups for use later
-preg = re.compile("(nvml\w+),[^)]+(\([^)]+\)),\s+\"[^\"]+\",\s+([^)]+)")
+preg = re.compile(r"(nvml\w+),[^)]+(\([^)]+\)),\s+\"[^\"]+\",\s+([^)]+)")
 
 MAX_NVML_ARGS = 20
 INJECTION_ARG_COUNT_STR = 'InjectionArgCount'
 NVML_RET = 'nvmlReturn_t'
 
-#######################################################################################
 # Globals
 g_key_to_function = {}
 
-#######################################################################################
 # Generated file names
-STUB_PATH = 'src/nvml_generated_stubs.cpp'
+STUB_PATH = 'nvml-injection/src/nvml_generated_stubs.cpp'
 INJECTION_ARGUMENT_HEADER = 'InjectionArgument.h'
 INJECTION_STRUCTS_NAME = 'nvml_injection_structs.h'
 INJECTION_STRUCTS_PY_NAME = 'nvml_injection_structs.py'
-INJECTION_STRUCTS_PATH = 'include/%s' % INJECTION_STRUCTS_NAME
-INJECTION_ARGUMENT_PATH = 'include/%s' % INJECTION_ARGUMENT_HEADER
-INJECTION_CPP_PATH = 'src/InjectionArgument.cpp'
-NVML_RETURN_DESERIALIZER_CPP_PATH = 'src/NvmlReturnDeserializer.cpp'
-NVML_RETURN_DESERIALIZER_HEADER_PATH = 'include/NvmlReturnDeserializer.h'
-FUNCTION_DECLARATIONS_HEADER = 'nvml_generated_declarations.h'
-FUNCTION_DECLARATIONS_PATH = 'include/%s' % FUNCTION_DECLARATIONS_HEADER
-PASS_THRU_GENERATED_SRC_PATH = 'src/nvml_pass_through_generated.cpp'
-KEY_LIST_PATH = 'src/InjectionKeys.cpp'
-KEY_LIST_HEADER_PATH = 'include/InjectionKeys.h'
-LINUX_DEFS_PATH = 'src/nvml-injection.linux_defs'
+INJECTION_STRUCTS_PATH = 'nvml-injection/include/%s' % INJECTION_STRUCTS_NAME
+INJECTION_ARGUMENT_PATH = 'nvml-injection/include/%s' % INJECTION_ARGUMENT_HEADER
+INJECTION_CPP_PATH = 'nvml-injection/src/InjectionArgument.cpp'
+NVML_RETURN_DESERIALIZER_CPP_PATH = 'nvml-injection/src/NvmlReturnDeserializer.cpp'
+NVML_RETURN_DESERIALIZER_HEADER_PATH = 'nvml-injection/include/NvmlReturnDeserializer.h'
+KEY_LIST_PATH = 'nvml-injection/src/InjectionKeys.cpp'
+KEY_LIST_HEADER_PATH = 'nvml-injection/include/InjectionKeys.h'
+LINUX_DEFS_PATH = 'nvml-injection/src/nvml-injection.linux_defs'
 
-#######################################################################################
 skip_functions = [ 'nvmlGetBlacklistDeviceCount', 'nvmlGetBlacklistDeviceInfoByIndex' ]
 
-#######################################################################################
 uint_aliases = [
     'nvmlBusType_t',
     'nvmlVgpuTypeId_t',
@@ -76,7 +69,6 @@ def get_version(funcname):
 
     return 0
 
-#######################################################################################
 class AllFunctionTypes(object):
     def __init__(self):
         self.all_func_declarations = []
@@ -85,7 +77,6 @@ class AllFunctionTypes(object):
         self.arg_types_to_func_type = {}
 
     def AddFunctionType(self, funcname, funcinfo):
-#        arg_types = funcinfo.GetArgumentTypes()
         arg_type_str = funcinfo.GetArgumentTypesAsString()
         if arg_type_str not in self.all_argument_type_strs:
             func_declaration = "typedef nvmlReturn_t (*%s_f)%s;" % (funcname, funcinfo.GetArgumentList())
@@ -94,7 +85,6 @@ class AllFunctionTypes(object):
             self.arg_types_to_func_type[arg_type_str] = func_type
             self.funcname_to_func_type[funcname] = func_type
             self.all_argument_type_strs.append(arg_type_str)
-#            print("Adding arg_list: '%s'" % arg_types)
         else:
             self.funcname_to_func_type[funcname] = self.arg_types_to_func_type[arg_type_str]
 
@@ -104,14 +94,11 @@ class AllFunctionTypes(object):
     def GetFunctionType(self, funcname):
         return self.funcname_to_func_type[funcname]
 
-#######################################################################################
 class AllFunctions(object):
-    ###################################################################################
     def __init__(self):
         self.func_dict = {}
         self.versioned_funcs = {}
 
-    ###################################################################################
     def AddFunction(self, funcinfo):
         if funcinfo.GetName() not in skip_functions:
             funcname = funcinfo.GetName()
@@ -121,11 +108,9 @@ class AllFunctions(object):
             if version > 0:
                 self.versioned_funcs[funcname] = version
 
-    ###################################################################################
     def GetFunctionDict(self):
         return self.func_dict
 
-    ###################################################################################
     def RemoveEarlierVersions(self):
         for funcname in self.versioned_funcs:
             version = self.versioned_funcs[funcname]
@@ -143,16 +128,13 @@ class AllFunctions(object):
         self.versioned_funcs = {}
 
 
-#######################################################################################
 class FunctionInfo(object):
-    ###################################################################################
     def __init__(self, funcname, arg_list, arg_names):
         self.funcname  = funcname.strip()
         self.arg_list  = self.CleanArgList(arg_list)
         self.arg_names = arg_names
         self.arg_types = get_argument_types_from_argument_list(arg_list)
 
-    ###################################################################################
     def CleanArgList(self, arg_list):
         # Make sure '*' is always 'T *' and not 'T* ' for our formatter
         tokens = arg_list.split('*')
@@ -171,23 +153,18 @@ class FunctionInfo(object):
 
         return new_list
 
-    ###################################################################################
     def GetName(self):
         return self.funcname
 
-    ###################################################################################
     def GetArgumentList(self):
         return self.arg_list
 
-    ###################################################################################
     def GetArgumentNames(self):
         return self.arg_names
 
-    ###################################################################################
     def GetArgumentTypes(self):
         return self.arg_types
 
-    ###################################################################################
     def GetArgumentTypesAsString(self):
         type_str = ''
         for arg_type in self.arg_types:
@@ -198,7 +175,6 @@ class FunctionInfo(object):
         return type_str
 
 
-#######################################################################################
 def get_true_arg_type(arg_type):
     if is_pointer_type(arg_type):
         if arg_type[:-2] in uint_aliases:
@@ -208,13 +184,11 @@ def get_true_arg_type(arg_type):
 
     return arg_type
 
-#######################################################################################
 def remove_extra_spaces(text):
     while text.find('  ') != -1:
         text = text.replace('  ', ' ')
     return text
 
-#######################################################################################
 def get_function_signature(entry_point, first):
     # Remove all line breaks, remove the extra whitespace on the ends, and then get
     # get rid of the parenthesis around the string
@@ -232,14 +206,12 @@ def get_function_signature(entry_point, first):
             print("no match found in entry point = '%s'" % entry_point)
         return None, None, None
 
-#######################################################################################
 def print_body_line(line, file, extra_indent):
     indent = "    "
-    for i in range(0, extra_indent):
+    for _ in range(0, extra_indent):
         indent += "    "
     file.write("%s%s\n" % (indent, line))
 
-#######################################################################################
 def add_function_type(function_type_dict, funcname, arg_list, function_types):
     func_declaration = "typedef nvmlReturn_t (*%s_f)%s;" % (funcname, arg_list)
     function_types.append(func_declaration)
@@ -294,10 +266,9 @@ HandlerGetter = [
 
 gpmPrefix = 'nvmlGpm'
 
-def is_basic_type(type_name):
-    basic = {
+def get_basic_type():
+    return {
         "int",
-        "unsigned",
         "unsigned int",
         "char",
         "unsigned char",
@@ -309,7 +280,9 @@ def is_basic_type(type_name):
         "unsigned short",
         "double",
     }
-    return type_name in basic
+
+def is_basic_type(type_name):
+    return type_name in get_basic_type() or type_name == "unsigned"
 
 def is_basic_ptr_type(type_name):
     basic = {
@@ -336,7 +309,6 @@ def remove_ptr_if_any(type_name):
 def is_enum_type(type_name, all_enum):
     return type_name in all_enum
 
-#######################################################################################
 def get_suffix_if_match(funcname, prefix):
     if funcname[:len(prefix)] == prefix:
         key = funcname[len(prefix):]
@@ -344,11 +316,9 @@ def get_suffix_if_match(funcname, prefix):
 
     return None
 
-#######################################################################################
 def get_function_info_from_name(funcname):
     key = None
     version = 1
-    matched = False
 
     for prefix in keyPrefixes:
         key = get_suffix_if_match(funcname, prefix)
@@ -369,7 +339,6 @@ def get_function_info_from_name(funcname):
 
         if key in g_key_to_function:
             func_list = "%s, %s" % (g_key_to_function[key], funcname)
-#            print("Key %s maps to two functions: %s" % (key, func_list))
             g_key_to_function[key] = func_list
         else:
             g_key_to_function[key] = funcname
@@ -379,13 +348,11 @@ def get_function_info_from_name(funcname):
 def print_generator_source_info(out_file, indent):
     frame = inspect.currentframe().f_back
     function_name = frame.f_code.co_name
-    line_number = frame.f_lineno
     if indent == 0:
         out_file.write(f"// The following snippet is generated from {function_name}\n")
     else:
         print_body_line(f"// The following snippet is generated from {function_name}", out_file, indent - 1)
 
-#######################################################################################
 def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
     if is_pointer(arg_types[0]):
         return False
@@ -412,9 +379,14 @@ def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
     print_generator_source_info(stub_file, 2)
     print_body_line("InjectionArgument arg(%s);" % arg_names[0], stub_file, 1)
     if len(arg_types) == 3:
-        print_body_line("std::string buf = injectedNvml->GetString(arg, \"%s\");" % (key), stub_file, 1)
+        print_body_line("auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\");" % (key), stub_file, 1)
     if len(arg_types) == 4:
-        print_body_line("std::string buf = injectedNvml->GetString(arg, \"%s\", InjectionArgument(%s));" % (key, arg_names[1]), stub_file, 1)
+        print_body_line("auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\", InjectionArgument(%s));" % (key, arg_names[1]), stub_file, 1)
+
+    print_body_line("if (tmpNvmlRet != NVML_SUCCESS)", stub_file, 1)
+    print_body_line("{", stub_file, 1)
+    print_body_line("return tmpNvmlRet;", stub_file, 2)
+    print_body_line("}", stub_file, 1)
 
     if len(arg_types) == 3:
         if arg_types[2] == UINT:
@@ -429,7 +401,6 @@ def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
 
     return True
 
-#######################################################################################
 def is_pointer(arg_type):
     if arg_type[-1] == '*':
         return True
@@ -448,7 +419,6 @@ VGPUTYPEID = 'nvmlVgpuTypeId_t'
 UNIT = 'nvmlUnit_t'
 VGPU_INSTANCE = 'nvmlVgpuInstance_t'
 
-#######################################################################################
 def print_ungenerated_function(funcname, arg_types):
     arg_type_string = ''
     for arg_type in arg_types:
@@ -500,7 +470,6 @@ def write_auto_generate_py_file_header(out_file):
     out_file.write(copyright_notice)
     out_file.write(auto_generated_notice)
 
-#######################################################################################
 def generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_names, justifyLen):
     generated = True
     key, version = get_function_info_from_name(funcname)
@@ -540,21 +509,18 @@ def generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_name
 
     return generated
 
-#######################################################################################
 def is_getter(funcname):
     if funcname.find("Get") != -1:
         return True
 
     return False
 
-#######################################################################################
 def is_setter(funcname):
     if funcname.find("Set") != -1:
         return True
 
     return False
 
-#######################################################################################
 def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_names):
     generated = True
     key, version = get_function_info_from_name(funcname)
@@ -589,7 +555,6 @@ cant_generate = [
     'nvmlDeviceSetDriverModel', # Windows only
     'nvmlDeviceSetMigMode', # Too unique - requires specific checks
 ]
-#######################################################################################
 def generate_injection_function(stub_file, funcname, arg_list, arg_types, arg_names, justifyLen):
     if funcname in cant_generate:
         return False
@@ -605,7 +570,6 @@ def generate_injection_function(stub_file, funcname, arg_list, arg_types, arg_na
 
     return generated
 
-#######################################################################################
 def write_function_definition_start(fileHandle, funcname, arg_list):
     first_part = "%s %s" % (NVML_RET, funcname)
     line = "%s%s" % (first_part, arg_list)
@@ -623,7 +587,6 @@ def write_function_definition_start(fileHandle, funcname, arg_list):
                 index = index + 1
         fileHandle.write("%s %s\n{\n" % (" ".ljust(len(first_part)), tokens[-1].strip()))
 
-#######################################################################################
 def write_function(stub_file, funcinfo, all_functypes):
     funcname = funcinfo.GetName()
     arg_list = funcinfo.GetArgumentList()
@@ -698,40 +661,17 @@ def write_function(stub_file, funcinfo, all_functypes):
     stub_file.write("}\n\n")
     return generated
 
-#######################################################################################
-def write_declarations_file(function_declarations, output_dir):
-    declFilePath = '%s/%s' % (output_dir, FUNCTION_DECLARATIONS_PATH)
-    with open(declFilePath, 'w') as decl_file:
-        write_auto_generate_c_file_header(decl_file)
-        decl_file.write("#pragma once\n\n")
-
-        decl_file.write('#include <nvml.h>\n\n')
-
-        decl_file.write("#define MAX_NVML_ARGS %d\n" % MAX_NVML_ARGS)
-        decl_file.write("typedef struct\n")
-        decl_file.write("{\n")
-        print_body_line('const char *funcname;', decl_file, 0)
-        print_body_line('unsigned int argCount;', decl_file, 0)
-        print_body_line('injectionArgType_t argTypes[MAX_NVML_ARGS];', decl_file, 0)
-        decl_file.write('} functionInfo_t;\n\n')
-
-        decl_file.write('// clang-format off\n')
-        for declaration in function_declarations:
-            decl_file.write("%s\n" % declaration)
-
-#######################################################################################
 def write_stub_file_header(stub_file):
     write_auto_generate_c_file_header(stub_file)
+    stub_file.write('#pragma GCC diagnostic push\n#pragma GCC diagnostic ignored "-Wunused-parameter"\n\n')
     stub_file.write('// clang-format off\n')
     stub_file.write("#include \"InjectedNvml.h\"\n")
     stub_file.write("#include \"nvml.h\"\n")
-    stub_file.write("#include \"%s\"\n\n" % FUNCTION_DECLARATIONS_HEADER)
     stub_file.write("#include \"PassThruNvml.h\"\n\n")
     stub_file.write("#ifdef __cplusplus\n")
     stub_file.write("extern \"C\"\n{\n#endif\n\n")
     stub_file.write("bool GLOBAL_PASS_THROUGH_MODE = false;\n\n")
 
-#######################################################################################
 def get_argument_types_from_argument_list(arg_list):
     argument_types = []
     arg_list = arg_list.strip()
@@ -760,12 +700,23 @@ def get_argument_types_from_argument_list(arg_list):
 
     return argument_types
 
-#######################################################################################
+def get_duplicate_types():
+    return {
+        # nvmlProcessInfo_v2_t and nvmlProcessInfo_t are the same
+        "nvmlProcessInfo_t",
+        # unsigned and unsigned int are the same
+        "unsigned",
+    }
+
 def build_argument_type_list(arg_list, all_argument_types):
     argument_types = get_argument_types_from_argument_list(arg_list)
+    duplicate_types = get_duplicate_types()
 
     for arg_type in argument_types:
         check_type = get_true_arg_type(arg_type)
+        # skip nvmlProcessInfo_t as nvmlProcessInfo_v2_t and nvmlProcessInfo_t are the same
+        if remove_ptr_if_any(check_type) in duplicate_types:
+            continue
         if check_type not in all_argument_types:
             all_argument_types.append(check_type)
         # also build non-pointer version in InjectionArgument for easier use.
@@ -776,156 +727,65 @@ def build_argument_type_list(arg_list, all_argument_types):
 
     return argument_types
 
-#######################################################################################
 def is_pointer_type(arg_type):
     return arg_type[-2:] == ' *'
 
-#######################################################################################
 def is_nvml_enum(arg_type):
     return arg_type[:4] == 'nvml'
 
-#######################################################################################
 def ends_with_t(arg_type):
     return arg_type[-2:] == '_t'
 
-#######################################################################################
-def transform_arg_type(arg_type, arg_type_dict):
-    originalType = arg_type
-    if arg_type == 'char *':
-        arg_type_dict[originalType] = ['str', True, 'Str']
-        return 'str', True
-    elif arg_type == 'const char *':
-        arg_type_dict[originalType] = ['const_str', True, 'ConstStr']
-        return 'const_str', True
-
-    isPtr = False
-    if is_pointer_type(arg_type):
-        isPtr = True
-        # Remove the ' *' to generate the name
-        arg_type = arg_type[:-2]
-
-    arg_type_name = ''
-    arg_type_as_suffix = ''
-    if arg_type == 'nvmlBAR1Memory_t':
-        arg_type_name = 'bar1Memory'
-        arg_type_as_suffix = 'BAR1Memory'
-    elif is_nvml_enum(arg_type):
-        # Handle nvml enum type e.g. nvmlDevice_t => device
-        if arg_type == "nvmlReturn_t":
-            arg_type_name = 'nvmlReturn'
-            arg_type_as_suffix = 'NvmlReturn'
-        elif ends_with_t(arg_type):
-            arg_type_name = '%s%s' % (arg_type[4].lower(), arg_type[5:-2])
-            arg_type_as_suffix = '%s' % (arg_type[4:-2])
-        else:
-            arg_type_name = '%s%s' % (arg_type[4].lower(), arg_type[5:])
-            arg_type_as_suffix = '%s' % (arg_type[4:])
-    else:
-        words = arg_type.strip().split(' ')
-        # Make the variable name the first letter of each word
-        for word in words:
-            arg_type_name += word[0]
-            if word == 'unsigned':
-                arg_type_as_suffix = 'U'
-            else:
-                arg_type_as_suffix += '%s%s' % (word[0].upper(), word[1:])
-
-    if isPtr:
-        arg_type_name += 'Ptr'
-        arg_type_as_suffix += 'Ptr'
-
-    arg_type_dict[originalType] = [arg_type_name, isPtr, arg_type_as_suffix]
-
-    return arg_type_name, isPtr
-
-#######################################################################################
-def get_enum_name(arg_type):
+def get_enum_name(arg_type, const=False):
+    ret = ''
+    ptr_ret = ''
     prefix = 'INJECTION_'
-    isPointer = False
-    suffix = ''
-
-    if is_pointer_type(arg_type):
-        isPointer = True
-        arg_type = arg_type[:-2]
+    if const:
+        prefix += 'CONST_'
 
     if is_nvml_enum(arg_type):
-        if isPointer:
-            suffix = '_PTR'
-
         if ends_with_t(arg_type):
-            enum_name = '%s%s%s' % (prefix, arg_type[4:-2].upper(), suffix)
+            ret = '%s%s' % (prefix, arg_type[4:-2].upper())
         else:
-            enum_name = '%s%s%s' % (prefix, arg_type[4:].upper(), suffix)
+            ret = '%s%s' % (prefix, arg_type[4:].upper())
     else:
         words = arg_type.strip().split(' ')
         if len(words) == 1:
-            if isPointer:
-                suffix = '_PTR'
-            enum_name = '%s%s%s' % (prefix, arg_type.upper(), suffix)
+            ret = '%s%s' % (prefix, arg_type.upper())
         else:
-            enum_name = prefix
+            ret = prefix
             for word in words:
                 if word == 'unsigned':
-                    enum_name += 'U'
+                    ret += 'U'
                 else:
-                    enum_name += '%s_' % word.upper()
+                    ret += '%s_' % word.upper()
+            ret = ret[:-1]
 
-            if isPointer:
-                enum_name += 'PTR'
-            else:
-                enum_name = enum_name[:-1]
+    ptr_ret = ret + "_PTR"
+    return ret, ptr_ret
 
-    return enum_name
-
-#######################################################################################
-def print_memcpy(fileHandle, indentLevel, destName, srcName, destIsRef, srcIsRef):
-    firstPos = ''
-    secondPos = ''
-    thirdPos = ''
-
-    if destIsRef:
-        firstPos = '&m_value.%s' % destName
-        thirdPos = 'sizeof(m_value.%s)' % destName
-    else:
-        firstPos = 'm_value.%s' % destName
-        thirdPos = 'sizeof(*m_value.%s) * (m_isArray ? m_arrLen : 1)' % destName
-
-    if srcIsRef:
-        secondPos = '&other.m_value.%s' % srcName
-    else:
-        secondPos = 'other.m_value.%s' % srcName
-
-    line = 'memcpy(%s, %s, %s);' % (firstPos, secondPos, thirdPos)
-    print_body_line(line, fileHandle, indentLevel)
-
-#######################################################################################
-def print_equals_and_set(fileHandle, indentLevel, lhName, rhName, lIsPtr, rIsPtr):
+def print_memcpy(fileHandle, indentLevel, destName, srcName, destIsPtr, srcIsPtr):
     src = ''
     dst = ''
     sizeof = ''
-    if lIsPtr:
-        dst = "this->m_value.%s" % lhName
+
+    if destIsPtr:
+        dst = 'm_value.%s' % destName
     else:
-        dst = "&this->m_value.%s" % lhName
+        dst = '&m_value.%s' % destName
 
-    if not rhName:
-        rhName = lhName
-
-    if rIsPtr:
-        src = f"other.m_value.{rhName}"
+    if srcIsPtr:
+        src = 'other.m_value.%s' % srcName
     else:
-        src = f"&other.m_value.{rhName}"
+        src = '&other.m_value.%s' % srcName
 
-    if lIsPtr and rIsPtr:
-        sizeof = f"sizeof(*{dst}) * (other.m_isArray ? other.m_arrLen : 1)"
-    else:
-        sizeof = f"sizeof(*{dst})"
+    sizeof = f'sizeof(*{dst})'
+    if srcIsPtr and destIsPtr:
+        sizeof = f'sizeof(*{dst}) * (other.m_isArray ? other.m_arrLen : 1)'
 
-    print_generator_source_info(fileHandle, indentLevel + 1)
-    print_body_line(f"std::memcpy({dst}, {src}, {sizeof});", fileHandle, indentLevel)
-    print_body_line("set = true;", fileHandle, indentLevel)
+    line = 'memcpy(%s, %s, %s);' % (dst, src, sizeof)
+    print_body_line(line, fileHandle, indentLevel)
 
-#######################################################################################
 def write_string_case_entry(injectionCpp):
     print_generator_source_info(injectionCpp, 2)
     print_body_line('case INJECTION_STRING:', injectionCpp, 1)
@@ -935,163 +795,137 @@ def write_string_case_entry(injectionCpp):
     print_body_line('this->m_str = other.m_str;', injectionCpp, 3)
     print_body_line('set         = true;', injectionCpp, 3)
     print_body_line('}', injectionCpp, 2)
-    print_body_line('else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.str != nullptr)', injectionCpp, 2)
+    print_body_line('else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.Str != nullptr)', injectionCpp, 2)
     print_body_line('{', injectionCpp, 2)
-    print_body_line('this->m_str = other.m_value.str;', injectionCpp, 3)
-    print_body_line('set         = true;', injectionCpp, 3)
-    print_body_line('}', injectionCpp, 2)
-    print_body_line('else if (other.m_type == INJECTION_CONST_CHAR_PTR && other.m_value.const_str != nullptr)', injectionCpp, 2)
-    print_body_line('{', injectionCpp, 2)
-    print_body_line('this->m_str = other.m_value.const_str;', injectionCpp, 3)
+    print_body_line('this->m_str = other.m_value.Str;', injectionCpp, 3)
     print_body_line('set         = true;', injectionCpp, 3)
     print_body_line('}', injectionCpp, 2)
     print_body_line('break;', injectionCpp, 2)
     print_body_line('}', injectionCpp, 1)
 
-#######################################################################################
-def write_case_entry(enum_name, enum_name_to_type_dict, injectionCpp, arg_type_dict, all_enum):
-    if enum_name == 'INJECTION_CONST_CHAR_PTR' or enum_name == 'INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR':
-        # Don't support setting const pointers
-        return
+def write_set_value_from_case_entry(injectionCpp, struct_name, all_enum):
+    variable_name, variable_name_ptr = get_struct_variable_name(struct_name)
+    enum_name, enum_nam_ptr = get_enum_name(struct_name)
+    int_variable_name, int_variable_name_ptr = get_struct_variable_name('int')
+    uint_variable_name, uint_variable_name_ptr = get_struct_variable_name('unsigned int')
 
     print_generator_source_info(injectionCpp, 2)
-    print_body_line('case %s:' % enum_name, injectionCpp, 1)
+    print_body_line(f'case {enum_name}:', injectionCpp, 1)
     print_body_line('{', injectionCpp, 1)
     print_body_line('if (other.m_type == %s)' % enum_name, injectionCpp, 2)
     print_body_line('{', injectionCpp, 2)
-    arg_type = enum_name_to_type_dict[enum_name]
-    argInfoTuple = arg_type_dict[arg_type]
-    structVarName = argInfoTuple[0]
-    isPtr = argInfoTuple[1]
-    if arg_type[:4] == 'nvml':
-        # Handle ptr types
-        if isPtr:
-            print_memcpy(injectionCpp, 3, structVarName, structVarName, False, False)
-        else:
-            print_memcpy(injectionCpp, 3, structVarName, structVarName, True, True)
-        print_body_line('set = true;', injectionCpp, 3)
-    elif enum_name == 'INJECTION_CHAR_PTR':
-        print_body_line('return NVML_ERROR_INVALID_ARGUMENT;', injectionCpp, 3)
-        pass
-    else:
-        print_equals_and_set(injectionCpp, 3, structVarName, structVarName, isPtr, isPtr)
-
-    print_body_line('}', injectionCpp, 2) # close generated if statement
-
-    if not isPtr:
-        # Add setting a non-pointer from a pointer to the same arg
-        ptrVersion = '%s_PTR' % enum_name
-        if enum_name == 'INJECTION_CHAR':
-            # INJECTION_CHAR has special name str rather than cPtr
-            structVarPtrVersion = 'str'
-        else:
-            structVarPtrVersion = '%sPtr' % structVarName
-        if ptrVersion in enum_name_to_type_dict:
-            print_generator_source_info(injectionCpp, 3)
-            print_body_line('else if (other.m_type == %s)' % ptrVersion, injectionCpp, 2)
-            print_body_line('{', injectionCpp, 2)
-            if arg_type[:4] == 'nvml':
-                print_memcpy(injectionCpp, 3, structVarName, structVarPtrVersion, True, False)
-                print_body_line('set = true;', injectionCpp, 3)
-            else:
-                print_equals_and_set(injectionCpp, 3, structVarName, structVarPtrVersion, False, True)
-            print_body_line('}', injectionCpp, 2) # close generated if statement
-    else:
-        sansPtr = enum_name[:-4]
-        sansPtrStruct = structVarName[:-3]
-        if sansPtr in enum_name_to_type_dict:
-            print_generator_source_info(injectionCpp, 3)
-            print_body_line('else if (other.m_type == %s)' % sansPtr, injectionCpp, 2)
-            print_body_line('{', injectionCpp, 2)
-            if arg_type[:4] == 'nvml':
-                print_memcpy(injectionCpp, 3, structVarName, sansPtrStruct, False, True)
-                print_body_line('set = true;', injectionCpp, 3)
-            else:
-                print_equals_and_set(injectionCpp, 3, structVarName, sansPtrStruct, True, False)
-            print_body_line('}', injectionCpp, 2)
-
+    print_memcpy(injectionCpp, 3, variable_name, variable_name, False, False)
+    print_body_line('set = true;', injectionCpp, 3)
+    print_body_line('}', injectionCpp, 2)
+    # Add setting a non-pointer from a pointer to the same arg
+    print_generator_source_info(injectionCpp, 3)
+    print_body_line('else if (other.m_type == %s)' % enum_nam_ptr, injectionCpp, 2)
+    print_body_line('{', injectionCpp, 2)
+    print_memcpy(injectionCpp, 3, variable_name, variable_name_ptr, False, True)
+    print_body_line('set = true;', injectionCpp, 3)
+    print_body_line('}', injectionCpp, 2)
     if enum_name == 'INJECTION_UINT':
         # Add method to convert int to uint
         print_generator_source_info(injectionCpp, 3)
-        print_body_line('else if (other.m_type == INJECTION_INT && other.m_value.i > 0)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('this->m_value.ui = other.m_value.i;', injectionCpp, 3)
+        print_body_line(f'this->m_value.{uint_variable_name} = other.m_value.{int_variable_name};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
-        print_body_line('else if (other.m_type == INJECTION_INT_PTR && *other.m_value.iPtr > 0)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('this->m_value.ui = *other.m_value.iPtr;', injectionCpp, 3)
-        print_body_line('set = true;', injectionCpp, 3)
-        print_body_line('}', injectionCpp, 2)
-    elif enum_name == 'INJECTION_UINT_PTR':
-        # Add method to convert int to uint pointer
-        print_generator_source_info(injectionCpp, 3)
-        print_body_line('else if (other.m_type == INJECTION_INT && other.m_value.i > 0)', injectionCpp, 2)
-        print_body_line('{', injectionCpp, 2)
-        print_body_line('*this->m_value.uiPtr = other.m_value.i;', injectionCpp, 3)
-        print_body_line('set = true;', injectionCpp, 3)
-        print_body_line('}', injectionCpp, 2)
-        print_body_line('else if (other.m_type == INJECTION_INT_PTR && *other.m_value.iPtr > 0)', injectionCpp, 2)
-        print_body_line('{', injectionCpp, 2)
-        print_body_line('*this->m_value.uiPtr = *other.m_value.iPtr;', injectionCpp, 3)
+        print_body_line(f'this->m_value.{uint_variable_name} = *other.m_value.{int_variable_name_ptr};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
     elif enum_name == 'INJECTION_INT':
         # Add method to convert uint to int
         print_generator_source_info(injectionCpp, 3)
-        print_body_line('else if (other.m_type == INJECTION_UINT && other.m_value.ui <= INT_MAX)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('this->m_value.i = other.m_value.ui;', injectionCpp, 3)
+        print_body_line(f'this->m_value.{int_variable_name} = other.m_value.{uint_variable_name};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
-        print_body_line('else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.uiPtr <= INT_MAX)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('this->m_value.i = *other.m_value.uiPtr;', injectionCpp, 3)
+        print_body_line(f'this->m_value.{int_variable_name} = *other.m_value.{uint_variable_name_ptr};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
-    elif enum_name == 'INJECTION_INT_PTR':
+    print_body_line('break;', injectionCpp, 2)
+    print_body_line('}', injectionCpp, 1)
+
+    print_body_line(f'case {enum_nam_ptr}:', injectionCpp, 1)
+    print_body_line('{', injectionCpp, 1)
+    print_body_line('if (other.m_type == %s)' % enum_nam_ptr, injectionCpp, 2)
+    print_body_line('{', injectionCpp, 2)
+    print_memcpy(injectionCpp, 3, variable_name_ptr, variable_name_ptr, True, True)
+    print_body_line('set = true;', injectionCpp, 3)
+    print_body_line('}', injectionCpp, 2)
+    # Add setting a pointer from a non-pointer to the same arg
+    print_generator_source_info(injectionCpp, 3)
+    print_body_line('else if (other.m_type == %s)' % enum_name, injectionCpp, 2)
+    print_body_line('{', injectionCpp, 2)
+    print_memcpy(injectionCpp, 3, variable_name_ptr, variable_name, True, False)
+    print_body_line('set = true;', injectionCpp, 3)
+    print_body_line('}', injectionCpp, 2)
+    if enum_nam_ptr == 'INJECTION_UINT_PTR':
+        # Add method to convert int to uint pointer
+        print_generator_source_info(injectionCpp, 3)
+        print_body_line(f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)', injectionCpp, 2)
+        print_body_line('{', injectionCpp, 2)
+        print_body_line(f'*this->m_value.{uint_variable_name_ptr} = other.m_value.{int_variable_name};', injectionCpp, 3)
+        print_body_line('set = true;', injectionCpp, 3)
+        print_body_line('}', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)', injectionCpp, 2)
+        print_body_line('{', injectionCpp, 2)
+        print_body_line(f'*this->m_value.{uint_variable_name_ptr} = *other.m_value.{int_variable_name_ptr};', injectionCpp, 3)
+        print_body_line('set = true;', injectionCpp, 3)
+        print_body_line('}', injectionCpp, 2)
+    elif enum_nam_ptr == 'INJECTION_INT_PTR':
         # Add method to convert uint to int pointer
         print_generator_source_info(injectionCpp, 3)
-        print_body_line('else if (other.m_type == INJECTION_UINT && other.m_value.ui <= INT_MAX)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('*this->m_value.iPtr = other.m_value.ui;', injectionCpp, 3)
+        print_body_line(f'*this->m_value.{int_variable_name_ptr} = other.m_value.{uint_variable_name};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
-        print_body_line('else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.uiPtr <= INT_MAX)', injectionCpp, 2)
+        print_body_line(f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line('*this->m_value.iPtr = *other.m_value.uiPtr;', injectionCpp, 3)
+        print_body_line(f'*this->m_value.{int_variable_name_ptr} = *other.m_value.{uint_variable_name_ptr};', injectionCpp, 3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
-
     print_body_line('break;', injectionCpp, 2)
-    print_body_line('}', injectionCpp, 1) # close case block
+    print_body_line('}', injectionCpp, 1)
 
-#######################################################################################
-def write_injection_free_function(injectionCpp, enum_name_to_type_dict, arg_type_dict):
+def get_all_type_name_arr(struct_with_member, all_enum):
+    all_type_name_arr = list(struct_with_member.keys())
+    all_type_name_arr += get_basic_type()
+    all_type_name_arr += all_enum
+    all_type_name_arr += get_handlers()
+    all_type_name_arr += get_not_well_defined_type()
+    all_type_name_arr.sort()
+    return all_type_name_arr
+
+def write_injection_free_function(injectionCpp, struct_with_member, all_enum):
     injectionCpp.write('// InjectionArgument may be copied for serveral cases.\n')
     injectionCpp.write('// But we keep the ownership of pointer in nvml injection lib.\n')
     injectionCpp.write('// We free it when we shutdown the injection lib.\n')
     print_generator_source_info(injectionCpp, 0)
+
+    all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
     injectionCpp.write('InjectionArgument::~InjectionArgument()\n{\n')
     print_body_line('switch (this->m_type)', injectionCpp, 0)
     print_body_line('{', injectionCpp, 0)
-    for enum_name in enum_name_to_type_dict:
-        arg_type = enum_name_to_type_dict[enum_name]
-        arg_info_tuple = arg_type_dict[arg_type]
-        struct_name = arg_info_tuple[0]
-        is_ptr = arg_info_tuple[1]
-        if not is_ptr:
-            continue
-        if enum_name == "INJECTION_CONST_CHAR_PTR" or enum_name == "INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR":
-            continue
-        print_body_line('case %s:' % enum_name, injectionCpp, 1)
+    for type_name in all_type_name_arr:
+        variable_name, variable_name_ptr = get_struct_variable_name(type_name)
+        enum_name, enum_name_ptr = get_enum_name(type_name)
+        print_body_line('case %s:' % enum_name_ptr, injectionCpp, 1)
         print_body_line('{', injectionCpp, 1)
-        print_body_line(f'if (m_inHeap && m_value.{struct_name})', injectionCpp, 2)
+        print_body_line(f'if (m_inHeap && m_value.{variable_name_ptr})', injectionCpp, 2)
         print_body_line('{', injectionCpp, 2)
-        print_body_line(f'free(m_value.{struct_name});', injectionCpp, 3)
+        print_body_line(f'free(m_value.{variable_name_ptr});', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
+        print_body_line('break;', injectionCpp, 2)
         print_body_line('}', injectionCpp, 1)
-        print_body_line('break;', injectionCpp, 1)
     print_body_line('default:', injectionCpp, 1)
     print_body_line('break;', injectionCpp, 2)
     print_body_line('}', injectionCpp, 0)
@@ -1117,7 +951,9 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
         out_file.write(f"int {func_name}(const {struct_name} &a, const {struct_name} &b)\n")
         out_file.write("{\n")
         for member_type, member_name in member_list:
-            if is_basic_type(member_type) or is_enum_type(member_type, all_enum) or 'nvmlDevice_t' == member_type or 'nvmlGpuInstance_t' == member_type:
+            if member_type == "nvmlVgpuSchedulerParams_t" or member_type == "nvmlVgpuSchedulerSetParams_t":
+                print_body_line(f'NVML_LOG_ERR("{member_type} conatins union, and cannot compare now. May cause problems...");', out_file, 0)
+            elif is_basic_type(member_type) or is_enum_type(member_type, all_enum) or 'nvmlDevice_t' == member_type or 'nvmlGpuInstance_t' == member_type:
                 # basic type directly compares the value
                 print_generator_source_info(out_file, 1)
                 print_body_line(f"if (a.{member_name} != b.{member_name})", out_file, 0)
@@ -1165,6 +1001,20 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                     print_body_line(f"return ret;", out_file, 2)
                     print_body_line("}", out_file, 1)
                 print_body_line("}", out_file, 0)
+            elif is_basic_ptr_type(member_type):
+                print_generator_source_info(out_file, 1)
+                print_body_line(f"if (*a.{member_name} != *b.{member_name})", out_file, 0)
+                print_body_line("{", out_file, 0)
+                print_body_line(f"return *a.{member_name} < *b.{member_name};", out_file, 1)
+                print_body_line("}", out_file, 0)
+            elif is_pointer_type(member_type):
+                # call the appropriate compare function to compare for member type is another struct
+                compare_func_name = struct_compare_func_name(remove_ptr_if_any(member_type))
+                print_generator_source_info(out_file, 1)
+                print_body_line(f"if (auto ret = {compare_func_name}(*a.{member_name}, *b.{member_name}); ret)", out_file, 0)
+                print_body_line("{", out_file, 0)
+                print_body_line(f"return ret;", out_file, 1)
+                print_body_line("}", out_file, 0)
             else:
                 # call the appropriate compare function to compare for member type is another struct
                 compare_func_name = struct_compare_func_name(member_type)
@@ -1176,7 +1026,7 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
         print_body_line("return 0;", out_file, 0)
         out_file.write("}\n\n")
 
-def write_injection_argument_compare(out_file, all_argument_types, arg_type_dict, enum_dict, all_enum):
+def write_injection_argument_compare(out_file, struct_with_member, all_enum):
     print_generator_source_info(out_file, 0)
     out_file.write('int InjectionArgument::Compare(const InjectionArgument &other) const\n')
     out_file.write('{\n')
@@ -1205,91 +1055,103 @@ def write_injection_argument_compare(out_file, all_argument_types, arg_type_dict
     print_body_line('return 0;', out_file, 3)
     print_body_line('}', out_file, 2)
     print_body_line('}', out_file, 1)
+    print_body_line('else if (m_type == INJECTION_CONST_CHAR_PTR)', out_file, 1)
+    print_body_line('{', out_file, 1)
+    print_body_line('return strcmp(m_value.ConstStr, other.m_value.ConstStr);', out_file, 2)
+    print_body_line('}', out_file, 1)
     print_body_line('else', out_file, 1)
     print_body_line('{', out_file, 1)
     print_body_line('switch (m_type)', out_file, 2)
     print_body_line('{', out_file, 2)
-    for arg_type in all_argument_types:
-        typeTuple = arg_type_dict[arg_type]
-        is_ptr = typeTuple[1]
-        enumName = enum_dict[arg_type]
-        print_body_line('case %s:' % enumName, out_file, 3)
+
+    all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
+
+    for type_name in all_type_name_arr:
+        variable_name, variable_name_ptr = get_struct_variable_name(type_name)
+        enum_name, enum_name_ptr = get_enum_name(type_name)
+
+        # pointer case
+        print_body_line('case %s:' % enum_name_ptr, out_file, 3)
         print_body_line('{', out_file, 3)
-        if is_ptr:
-            if enumName == 'INJECTION_CHAR_PTR' or enumName == 'INJECTION_CONST_CHAR_PTR':
-                # c-string uses strcmp
-                print_body_line('return strcmp(m_value.%s, other.m_value.%s);' % (typeTuple[0], typeTuple[0]), out_file, 4)
-            elif is_basic_ptr_type(arg_type) or is_enum_type(remove_ptr_if_any(arg_type), all_enum):
-                # pointer type should take whether it is array or not in account
-                print_generator_source_info(out_file, 5)
-                print_body_line('if (!m_isArray)', out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line('if (*m_value.%s == *other.m_value.%s)' % (typeTuple[0], typeTuple[0]), out_file, 5)
-                print_body_line('{', out_file, 5)
-                print_body_line('return 0;', out_file, 6)
-                print_body_line('}', out_file, 5)
-                print_body_line(f'return *m_value.{typeTuple[0]} < *other.m_value.{typeTuple[0]} ? -1 : 1;', out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line('for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line('if (m_value.%s[i] == other.m_value.%s[i])' % (typeTuple[0], typeTuple[0]), out_file, 5)
-                print_body_line('{', out_file, 5)
-                print_body_line('continue;', out_file, 6)
-                print_body_line('}', out_file, 5)
-                print_body_line(f'return m_value.{typeTuple[0]}[i] < other.m_value.{typeTuple[0]}[i] ? -1 : 1;', out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line(f'return 0;', out_file, 4)
-            elif remove_ptr_if_any(arg_type) == "nvmlDevice_t" or remove_ptr_if_any(arg_type) == "nvmlComputeInstance_t" or remove_ptr_if_any(arg_type) == "nvmlEventSet_t" or remove_ptr_if_any(arg_type) == "nvmlGpmMetricsGet_t" or remove_ptr_if_any(arg_type) == "nvmlGpmSample_t" or remove_ptr_if_any(arg_type) == "nvmlGpuDynamicPstatesInfo_t" or remove_ptr_if_any(arg_type) == "nvmlGpuInstance_t" or remove_ptr_if_any(arg_type) == "nvmlGpuThermalSettings_t" or remove_ptr_if_any(arg_type) == "nvmlUnit_t":
-                # Listed types are not well-defined or may have inner struct defined, use memcmp for them
-                print_generator_source_info(out_file, 5)
-                print_body_line('unsigned size = m_isArray ? m_arrLen : 1;', out_file, 4)
-                print_body_line(f'return memcmp(m_value.{typeTuple[0]}, other.m_value.{typeTuple[0]}, size * sizeof(*m_value.{typeTuple[0]}));', out_file, 4)
-            else:
-                # Otherwise use generated compare function to check
-                print_generator_source_info(out_file, 5)
-                compare_func = struct_compare_func_name(remove_ptr_if_any(arg_type))
-                if compare_func.startswith('const '):
-                    compare_func = compare_func[6:]
-                print_body_line('if (!m_isArray)', out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line(f'return {compare_func}(*m_value.%s, *other.m_value.%s);' % (typeTuple[0], typeTuple[0]), out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line('for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line(f'if (auto ret = {compare_func}(*m_value.{typeTuple[0]}, *other.m_value.{typeTuple[0]}); ret)', out_file, 5)
-                print_body_line('{', out_file, 5)
-                print_body_line('return ret;', out_file, 6)
-                print_body_line('}', out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line(f'return 0;', out_file, 4)
+        if enum_name_ptr == 'INJECTION_CHAR_PTR' or enum_name_ptr == 'INJECTION_CONST_CHAR_PTR':
+            # c-string uses strcmp
+            print_body_line('return strcmp(m_value.%s, other.m_value.%s);' % (variable_name_ptr, variable_name_ptr), out_file, 4)
+        elif is_basic_type(type_name) or is_enum_type(remove_ptr_if_any(type_name), all_enum):
+            # pointer type should take whether it is array or not in account
+            print_generator_source_info(out_file, 5)
+            print_body_line('if (!m_isArray)', out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line('if (*m_value.%s == *other.m_value.%s)' % (variable_name_ptr, variable_name_ptr), out_file, 5)
+            print_body_line('{', out_file, 5)
+            print_body_line('return 0;', out_file, 6)
+            print_body_line('}', out_file, 5)
+            print_body_line(f'return *m_value.{variable_name_ptr} < *other.m_value.{variable_name_ptr} ? -1 : 1;', out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line('for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line('if (m_value.%s[i] == other.m_value.%s[i])' % (variable_name_ptr, variable_name_ptr), out_file, 5)
+            print_body_line('{', out_file, 5)
+            print_body_line('continue;', out_file, 6)
+            print_body_line('}', out_file, 5)
+            print_body_line(f'return m_value.{variable_name_ptr}[i] < other.m_value.{variable_name_ptr}[i] ? -1 : 1;', out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line(f'return 0;', out_file, 4)
+        elif remove_ptr_if_any(type_name) == "nvmlDevice_t" or remove_ptr_if_any(type_name) == "nvmlComputeInstance_t" or remove_ptr_if_any(type_name) == "nvmlEventSet_t" or remove_ptr_if_any(type_name) == "nvmlGpmMetricsGet_t" or remove_ptr_if_any(type_name) == "nvmlGpmSample_t" or remove_ptr_if_any(type_name) == "nvmlGpuDynamicPstatesInfo_t" or remove_ptr_if_any(type_name) == "nvmlGpuInstance_t" or remove_ptr_if_any(type_name) == "nvmlGpuThermalSettings_t" or remove_ptr_if_any(type_name) == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t":
+            # Listed types are not well-defined or may have inner struct defined, use memcmp for them
+            print_generator_source_info(out_file, 5)
+            print_body_line('unsigned size = m_isArray ? m_arrLen : 1;', out_file, 4)
+            print_body_line(f'return memcmp(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, size * sizeof(*m_value.{variable_name_ptr}));', out_file, 4)
         else:
-            if is_basic_type(arg_type) or is_enum_type(arg_type, all_enum) or arg_type == "nvmlDevice_t" or arg_type == "nvmlComputeInstance_t":
-                # Basic type directly compares
-                # Note: nvmlDevice_t and nvmlComputeInstance_t are number in our implementation
-                print_generator_source_info(out_file, 5)
-                print_body_line('if (m_value.%s < other.m_value.%s)'  % (typeTuple[0], typeTuple[0]), out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line('return -1;', out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line('else if (m_value.%s > other.m_value.%s)' % (typeTuple[0], typeTuple[0]), out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line('return 1;', out_file, 5)
-                print_body_line('}', out_file, 4)
-                print_body_line('else', out_file, 4)
-                print_body_line('{', out_file, 4)
-                print_body_line('return 0;', out_file, 5)
-                print_body_line('}', out_file, 4)
-            elif arg_type == "nvmlEventSet_t" or arg_type == "nvmlGpmMetricsGet_t" or arg_type == "nvmlGpmSample_t" or arg_type == "nvmlGpuDynamicPstatesInfo_t" or arg_type == "nvmlGpuInstance_t" or arg_type == "nvmlGpuThermalSettings_t" or arg_type == "nvmlUnit_t":
-                # Listed types are not well-defined or may have inner struct defined, use memcmp for them
-                print_generator_source_info(out_file, 5)
-                print_body_line(f'return memcmp(&m_value.{typeTuple[0]}, &other.m_value.{typeTuple[0]}, sizeof(m_value.{typeTuple[0]}));', out_file, 4)
-            else:
-                # Otherwise use generated compare function to check
-                print_generator_source_info(out_file, 5)
-                compare_func = struct_compare_func_name(remove_ptr_if_any(arg_type))
-                if compare_func.startswith('const '):
-                    compare_func = compare_func[6:]
-                print_body_line(f'return {compare_func}(m_value.%s, other.m_value.%s);' % (typeTuple[0], typeTuple[0]), out_file, 4)
+            # Otherwise use generated compare function to check
+            print_generator_source_info(out_file, 5)
+            compare_func = struct_compare_func_name(remove_ptr_if_any(type_name))
+            if compare_func.startswith('const '):
+                compare_func = compare_func[6:]
+            print_body_line('if (!m_isArray)', out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line(f'return {compare_func}(*m_value.%s, *other.m_value.%s);' % (variable_name_ptr, variable_name_ptr), out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line('for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line(f'if (auto ret = {compare_func}(*m_value.{variable_name_ptr}, *other.m_value.{variable_name_ptr}); ret)', out_file, 5)
+            print_body_line('{', out_file, 5)
+            print_body_line('return ret;', out_file, 6)
+            print_body_line('}', out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line(f'return 0;', out_file, 4)
+        print_body_line('break; // NOT REACHED', out_file, 4)
+        print_body_line('}', out_file, 3)
+
+        # non-pointer case
+        print_body_line('case %s:' % enum_name, out_file, 3)
+        print_body_line('{', out_file, 3)
+        if is_basic_type(type_name) or is_enum_type(type_name, all_enum) or type_name == "nvmlDevice_t" or type_name == "nvmlComputeInstance_t":
+            # Basic type directly compares
+            # Note: nvmlDevice_t and nvmlComputeInstance_t are number in our implementation
+            print_generator_source_info(out_file, 5)
+            print_body_line('if (m_value.%s < other.m_value.%s)'  % (variable_name, variable_name), out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line('return -1;', out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line('else if (m_value.%s > other.m_value.%s)' % (variable_name, variable_name), out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line('return 1;', out_file, 5)
+            print_body_line('}', out_file, 4)
+            print_body_line('else', out_file, 4)
+            print_body_line('{', out_file, 4)
+            print_body_line('return 0;', out_file, 5)
+            print_body_line('}', out_file, 4)
+        elif type_name == "nvmlEventSet_t" or type_name == "nvmlGpmMetricsGet_t" or type_name == "nvmlGpmSample_t" or type_name == "nvmlGpuDynamicPstatesInfo_t" or type_name == "nvmlGpuInstance_t" or type_name == "nvmlGpuThermalSettings_t" or type_name == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t":
+            # Listed types are not well-defined or may have inner struct defined, use memcmp for them
+            print_generator_source_info(out_file, 5)
+            print_body_line(f'return memcmp(&m_value.{variable_name}, &other.m_value.{variable_name}, sizeof(m_value.{variable_name}));', out_file, 4)
+        else:
+            # Otherwise use generated compare function to check
+            print_generator_source_info(out_file, 5)
+            compare_func = struct_compare_func_name(remove_ptr_if_any(type_name))
+            if compare_func.startswith('const '):
+                compare_func = compare_func[6:]
+            print_body_line(f'return {compare_func}(m_value.%s, other.m_value.%s);' % (variable_name, variable_name), out_file, 4)
         print_body_line('break; // NOT REACHED', out_file, 4)
         print_body_line('}', out_file, 3)
     print_body_line('default:', out_file, 3)
@@ -1300,8 +1162,7 @@ def write_injection_argument_compare(out_file, all_argument_types, arg_type_dict
     print_body_line('return 1;', out_file, 0)
     out_file.write('}\n\n')
 
-#######################################################################################
-def write_injection_argument_cpp(enum_name_to_type_dict, output_dir, arg_type_dict, all_argument_types, enum_dict, struct_with_member, all_enum):
+def write_injection_argument_cpp(output_dir, struct_with_member, all_enum):
     injectionCppPath = '%s/%s' % (output_dir, INJECTION_CPP_PATH)
     with open(injectionCppPath, 'w') as injectionCpp:
         write_auto_generate_c_file_header(injectionCpp)
@@ -1309,6 +1170,7 @@ def write_injection_argument_cpp(enum_name_to_type_dict, output_dir, arg_type_di
         injectionCpp.write('#pragma GCC diagnostic ignored "-Wunused-function"\n')
         injectionCpp.write('// clang-format off\n')
         injectionCpp.write('#include <%s>\n' % INJECTION_ARGUMENT_HEADER)
+        injectionCpp.write('#include "NvmlLogging.h"\n')
         injectionCpp.write('#include <limits.h>\n')
         injectionCpp.write('#include <cstring>\n\n\n')
 
@@ -1329,8 +1191,9 @@ def write_injection_argument_cpp(enum_name_to_type_dict, output_dir, arg_type_di
         print_body_line('switch (this->m_type)', injectionCpp, 0)
         print_body_line('{', injectionCpp, 0)
 
-        for enum_name in enum_name_to_type_dict:
-            write_case_entry(enum_name, enum_name_to_type_dict, injectionCpp, arg_type_dict, all_enum)
+        all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
+        for struct_name in all_type_name_arr:
+            write_set_value_from_case_entry(injectionCpp, struct_name, all_enum)
 
         write_string_case_entry(injectionCpp)
 
@@ -1348,18 +1211,20 @@ def write_injection_argument_cpp(enum_name_to_type_dict, output_dir, arg_type_di
         print_body_line('}', injectionCpp, 0)
         injectionCpp.write('}\n\n')
 
-        write_injection_argument_compare(injectionCpp, all_argument_types, arg_type_dict, enum_dict, all_enum)
-        write_injection_free_function(injectionCpp, enum_name_to_type_dict, arg_type_dict)
+        write_injection_argument_compare(injectionCpp, struct_with_member, all_enum)
+        write_injection_free_function(injectionCpp, struct_with_member, all_enum)
 
-    logging.info(f"{INJECTION_CPP_PATH} genereted")
+    logging.info(f"{INJECTION_CPP_PATH} generated")
 
 c_type_mapping = {
     'char': 'c_char',
+    'unsigned char': 'c_char',
     'wchar_t': 'c_wchar',
     'char *': 'c_char_p',
     'wchar_t *': 'c_wchar_p',
     'int': 'c_int',
     'unsigned int': 'c_uint',
+    'unsigned': 'c_uint',
     'long': 'c_long',
     'unsigned long': 'c_ulong',
     'short': 'c_short',
@@ -1381,8 +1246,82 @@ c_type_mapping = {
     'uint64_t': 'c_uint64',
 }
 
-def write_nvml_injection_struct_py(output_dir, all_argument_types, enum_dict, arg_type_dict, all_enum):
-    out_file_path = "%s/%s" % (output_dir, INJECTION_STRUCTS_PY_NAME)
+def is_pynvml_missing_struct(struct_name):
+    struct_name_with_c_prefix = "c_" + struct_name
+    missing = {
+        "c_nvmlPciInfoExt_t",
+        "c_nvmlNvLinkUtilizationControl_t",
+        "c_nvmlCoolerInfo_t",
+        "c_nvmlClkMonFaultInfo_t",
+        "c_nvmlClkMonStatus_t",
+        "c_nvmlFanSpeedInfo_t",
+        "c_nvmlDevicePerfModes_t",
+        "c_nvmlDeviceCurrentClockFreqs_t",
+        "c_nvmlProcessesUtilizationInfo_t",
+        "c_nvmlEccSramErrorStatus_t",
+        "c_nvmlPlatformInfo_t",
+        "c_nvmlVgpuHeterogeneousMode_t",
+        "c_nvmlVgpuPlacementId_t",
+        "c_nvmlVgpuPlacementList_t",
+        "c_nvmlVgpuTypeBar1Info_t",
+        "c_nvmlVgpuInstancesUtilizationInfo_t",
+        "c_nvmlVgpuProcessesUtilizationInfo_t",
+        "c_nvmlEncoderSessionInfo_t",
+        "c_nvmlFBCSessionInfo_t",
+        "c_nvmlSystemConfComputeSettings_t",
+        "c_nvmlConfComputeSetKeyRotationThresholdInfo_v1_t",
+        "c_nvmlConfComputeGetKeyRotationThresholdInfo_v1_t",
+        "c_nvmlSystemDriverBranchInfo_t",
+        "c_nvmlTemperature_t",
+        "c_nvmlGpuInstanceProfileInfo_v3_t",
+        "c_nvmlComputeInstanceProfileInfo_v3_t",
+        "c_nvmlDeviceCapabilities_t",
+        "c_nvmlMask255_t",
+        "c_nvmlWorkloadPowerProfileInfo_t",
+        "c_nvmlWorkloadPowerProfileProfilesInfo_t",
+        "c_nvmlWorkloadPowerProfileCurrentProfiles_t",
+        "c_nvmlWorkloadPowerProfileRequestedProfiles_t",
+    }
+    return struct_name_with_c_prefix in missing
+
+def get_struct_variable_name(struct_name, const=False):
+    no_ptr_struct_name = remove_ptr_if_any(struct_name)
+    if is_basic_type(no_ptr_struct_name):
+        if struct_name == 'char':
+            if const:
+                return 'ConstChar', 'ConstStr'
+            else:
+                return 'Char', 'Str'
+        token = struct_name.split(" ")
+        ret = ''
+        for t in token:
+            if t == "unsigned":
+                ret += "U"
+            else:
+                ret += t.capitalize()
+        return ret, ret+"Ptr"
+    ret = struct_name
+    if ret.startswith('nvml'):
+        ret = struct_name[4:]
+    if ret.endswith('_t'):
+        ret = ret[:-2]
+    if const:
+        return "Const"+ret, "Const"+ret+"Ptr"
+    else:
+        return ret, ret+"Ptr"
+
+def get_handlers():
+    return [NVML_DEVICE, "nvmlGpuInstance_t", "nvmlComputeInstance_t", "nvmlUnit_t"]
+
+def get_const_type():
+    return ["nvmlGpuInstancePlacement_t", "char"]
+
+def get_not_well_defined_type():
+    return ["nvmlGpmSample_t", "nvmlEventSet_t"]
+
+def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
+    out_file_path = f"testing/python3/{INJECTION_STRUCTS_PY_NAME}"
+    handlers = get_handlers()
 
     with open(out_file_path, 'w') as out_file:
         write_auto_generate_py_file_header(out_file)
@@ -1400,47 +1339,90 @@ def write_nvml_injection_struct_py(output_dir, all_argument_types, enum_dict, ar
         print_body_line("(\"usedGpuMemory\", c_ulonglong),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
+        # PyNVML's c_nvmlGpuFabricInfoV_t is wrong. We define correct version here.
+        print_body_line('class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"version\", c_uint),", out_file, 2)
+        print_body_line("(\"clusterUuid\", c_char * 16),", out_file, 2)
+        print_body_line("(\"status\", c_uint),", out_file, 2)
+        print_body_line("(\"cliqueId\", c_uint),", out_file, 2)
+        print_body_line("(\"state\", c_char),", out_file, 2)
+        print_body_line("(\"healthMask\", c_uint),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
         print_body_line('class c_simpleValue_t(Union):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
-        for arg_type in all_argument_types:
-            type_tuple = arg_type_dict[arg_type]
-            is_ptr = type_tuple[1]
-            if is_ptr:
-                # pointer just use c_void_p to represent
-                print_body_line(f"(\"{type_tuple[0]}\", c_void_p),", out_file, 2)
-            elif is_basic_type(arg_type):
-                # replace correct ctype from mapping for basic type
-                print_body_line(f"(\"{type_tuple[0]}\", {c_type_mapping.get(arg_type)}),", out_file, 2)
-            elif is_enum_type(arg_type, all_enum):
-                # use int to represent enum type
-                print_body_line(f"(\"{type_tuple[0]}\", c_int),", out_file, 2)
-            elif arg_type == "nvmlDeviceAttributes_t" or arg_type == "nvmlRowRemapperHistogramValues_t":
+        for struct_name, _ in struct_with_member.items():
+            variable_name, variable_name_ptr = get_struct_variable_name(struct_name)
+            print_body_line(f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
+            if is_pynvml_missing_struct(struct_name):
+                # we don't know the structure declarition now, just use void_p and wait for their updates.
+                print_body_line(f"(\"{variable_name}\", c_void_p),", out_file, 2)
+            elif struct_name == "nvmlDeviceAttributes_t" or struct_name == "nvmlRowRemapperHistogramValues_t":
                 # nvmlDeviceAttributes_t in PyNVML is c_nvmlDeviceAttributes
                 # nvmlRowRemapperHistogramValues_t in PyNVML is nvmlRowRemapperHistogramValues
-                print_body_line(f"(\"{type_tuple[0]}\", c_{arg_type[:-2]}),", out_file, 2)
-            elif arg_type == "nvmlFBCSessionInfo_t":
+                print_body_line(f"(\"{variable_name}\", c_{struct_name[:-2]}),", out_file, 2)
+            elif variable_name == "nvmlFBCSessionInfo_t":
                 # nvmlFBCSessionInfo_t in PyNVML is c_nvmlFBCSession_t
-                print_body_line(f"(\"{type_tuple[0]}\", c_nvmlFBCSession_t),", out_file, 2)
-            elif arg_type == "nvmlEncoderSessionInfo_t":
+                print_body_line(f"(\"{variable_name}\", c_nvmlFBCSession_t),", out_file, 2)
+            elif variable_name == "nvmlEncoderSessionInfo_t":
                 # nvmlEncoderSessionInfo_t in PyNVML is c_nvmlEncoderSession_t
-                print_body_line(f"(\"{type_tuple[0]}\", c_nvmlEncoderSession_t),", out_file, 2)
-            elif arg_type == "nvmlNvLinkUtilizationControl_t" or arg_type == "nvmlPciInfo_t":
+                print_body_line(f"(\"{variable_name}\", c_nvmlEncoderSession_t),", out_file, 2)
+            elif variable_name == "nvmlNvLinkUtilizationControl_t" or struct_name == "nvmlPciInfo_t":
                 # nvmlNvLinkUtilizationControl_t in PyNVML is nvmlNvLinkUtilizationControl_t
                 # nvmlPciInfo_t in PyNVML is nvmlPciInfo_t
-                print_body_line(f"(\"{type_tuple[0]}\", {arg_type}),", out_file, 2)
+                print_body_line(f"(\"{variable_name}\", {struct_name}),", out_file, 2)
+            elif struct_name == "nvmlGpuFabricInfoV_t":
+                # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own definition
+                print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             else:
                 # other nvml structures will add c_ as prefix in PyNVML
                 # e.g. nvmlBAR1Memory_t => c_nvmlBAR1Memory_t
-                print_body_line(f"(\"{type_tuple[0]}\", c_{arg_type}),", out_file, 2)
+                print_body_line(f"(\"{variable_name}\", c_{struct_name}),", out_file, 2)
+        basic_types = [basic_type for basic_type in get_basic_type()]
+        basic_types.sort()
+        for basic in basic_types:
+            variable_name, variable_name_ptr = get_struct_variable_name(basic)
+            print_body_line(f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
+            # replace correct ctype from mapping for basic type
+            print_body_line(f"(\"{variable_name}\", {c_type_mapping.get(basic)}),", out_file, 2)
+        for enum in all_enum:
+            variable_name, variable_name_ptr = get_struct_variable_name(enum)
+            # use int to represent enum type
+            print_body_line(f"(\"{variable_name}\", c_int),", out_file, 2)
+            print_body_line(f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
+
+        for handler in handlers:
+            handler_name, handler_name_ptr = get_struct_variable_name(handler)
+            print_body_line(f"(\"{handler_name}\", c_void_p),", out_file, 2)
+            print_body_line(f"(\"{handler_name_ptr}\", c_void_p),", out_file, 2)
+
+        not_well_defined_types = get_not_well_defined_type()
+        for t in not_well_defined_types:
+            name, name_ptr = get_struct_variable_name(t)
+            print_body_line(f"(\"{name}\", c_void_p),", out_file, 2)
+            print_body_line(f"(\"{name_ptr}\", c_void_p),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        index = 0
         print_body_line('class c_injectionArgType_t(c_int):', out_file, 0)
-        for arg_type in all_argument_types:
-            enum_name = enum_dict[arg_type]
+        index = 0
+        all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
+        for t in all_type_name_arr:
+            enum_name, enum_nam_ptr = get_enum_name(t)
             print_body_line(f"{enum_name} = {index}", out_file, 1)
             index += 1
+            print_body_line(f"{enum_nam_ptr} = {index}", out_file, 1)
+            index += 1
 
+        print_body_line(f"INJECTION_STRING = {index}", out_file, 1)
+        index += 1
+        const_types = get_const_type()
+        for const_type in const_types:
+            handler_enum_name, handler_enum_name_ptr = get_enum_name(const_type, True)
+            print_body_line(f"{handler_enum_name} = {index}", out_file, 1)
+            index += 1
+            print_body_line(f"{handler_enum_name_ptr} = {index}", out_file, 1)
+            index += 1
         out_file.write("\n")
         print_body_line('class c_injectNvmlVal_t(Structure):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
@@ -1459,12 +1441,8 @@ def write_nvml_injection_struct_py(output_dir, all_argument_types, enum_dict, ar
 
     logging.info(f"{INJECTION_STRUCTS_PY_NAME} genereted")
 
-#######################################################################################
-def write_injection_structs_header(all_argument_types, output_dir, all_enum):
+def write_injection_structs_header(struct_with_member, output_dir, all_enum):
     injection_structs_path = "%s/%s" % (output_dir, INJECTION_STRUCTS_PATH)
-    enum_dict = {}
-    enum_name_to_type_dict = {}
-    arg_type_dict = {}
 
     with open(injection_structs_path, 'w') as injectionStructs:
         write_auto_generate_c_file_header(injectionStructs)
@@ -1472,33 +1450,41 @@ def write_injection_structs_header(all_argument_types, output_dir, all_enum):
         injectionStructs.write('#pragma once\n\n')
         injectionStructs.write('#include <nvml.h>\n')
 
+        all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
         # write the union for simple value types
         print_generator_source_info(injectionStructs, 0)
         injectionStructs.write('typedef union\n{\n')
-        for arg_type in all_argument_types:
-            arg_type_name, isPtr = transform_arg_type(arg_type, arg_type_dict)
-            if isPtr:
-                print_body_line('%s%s;' % (arg_type, arg_type_name), injectionStructs, 0)
-            else:
-                print_body_line('%s %s;' % (arg_type, arg_type_name), injectionStructs, 0)
+        for t in all_type_name_arr:
+            variable_name, variable_name_ptr = get_struct_variable_name(t)
+            print_body_line('%s *%s;' % (t, variable_name_ptr), injectionStructs, 0)
+            print_body_line('%s %s;' % (t, variable_name), injectionStructs, 0)
+        const_types = get_const_type()
+        for const_type in const_types:
+            name, name_ptr = get_struct_variable_name(const_type, True)
+            print_body_line('const %s *%s;' % (const_type, name_ptr), injectionStructs, 0)
+
         injectionStructs.write('} simpleValue_t;\n\n')
 
         # write the enum for the types
         injectionStructs.write('typedef enum injectionArg_enum\n{\n')
         index = 0
-        NAME_SPACE_LEN = 0
-        for arg_type in all_argument_types:
-            enum_name = get_enum_name(arg_type)
-            enum_dict[arg_type] = enum_name
-            enum_name_to_type_dict[enum_name] = arg_type
-            if len(enum_name) > NAME_SPACE_LEN:
-                NAME_SPACE_LEN = len(enum_name)
-
-        for arg_type in all_argument_types:
-            enum_name = enum_dict[arg_type]
-            print_body_line("%s = %d," % (enum_name.ljust(NAME_SPACE_LEN), index), injectionStructs, 0)
+        for t in all_type_name_arr:
+            enum_name, enum_nam_ptr = get_enum_name(t)
+            print_body_line("%s = %d," % (enum_name, index), injectionStructs, 0)
             index += 1
-        print_body_line('%s = %d,' % ("INJECTION_STRING".ljust(NAME_SPACE_LEN), index), injectionStructs, 0)
+            print_body_line("%s = %d," % (enum_nam_ptr, index), injectionStructs, 0)
+            index += 1
+
+        print_body_line('%s = %d,' % ("INJECTION_STRING", index), injectionStructs, 0)
+        index += 1
+
+        const_types = get_const_type()
+        for const_type in const_types:
+            handler_enum_name, handler_enum_name_ptr = get_enum_name(const_type, True)
+            print_body_line('%s = %d,' % (handler_enum_name, index), injectionStructs, 0)
+            index += 1
+            print_body_line('%s = %d,' % (handler_enum_name_ptr, index), injectionStructs, 0)
+            index += 1
         print_body_line(INJECTION_ARG_COUNT_STR, injectionStructs, 0)
         injectionStructs.write('} injectionArgType_t;\n\n')
 
@@ -1508,11 +1494,10 @@ def write_injection_structs_header(all_argument_types, output_dir, all_enum):
         injectionStructs.write('} injectNvmlVal_t;\n\n')
 
     logging.info(f"{INJECTION_STRUCTS_PATH} genereted")
-    write_nvml_injection_struct_py(output_dir, all_argument_types, enum_dict, arg_type_dict, all_enum)
 
-    return enum_dict, enum_name_to_type_dict, arg_type_dict
+    return
 
-def write_injection_argument_deep_copy_function(out_file, all_argument_types, arg_type_dict, enum_dict):
+def write_injection_argument_deep_copy_function(out_file, struct_with_member, all_enum):
     print_generator_source_info(out_file, 1)
     print_body_line('// Some type of holding member live in heap. Do deep copy so that our destructor can work well.', out_file, 0)
     print_body_line('void DeepCopy(const InjectionArgument &other)', out_file, 0)
@@ -1529,20 +1514,18 @@ def write_injection_argument_deep_copy_function(out_file, all_argument_types, ar
     print_body_line('}', out_file, 1)
     print_body_line('switch (m_type)', out_file, 1)
     print_body_line('{', out_file, 1)
-    for arg_type in all_argument_types:
-        typeTuple = arg_type_dict[arg_type]
-        is_ptr = typeTuple[1]
-        if not is_ptr:
-        # Only pointer need extra copy, otherwise the underly value copy is enough
-            continue
-        enum_name = enum_dict[arg_type]
-        if enum_name == "INJECTION_CONST_CHAR_PTR" or enum_name == "INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR":
-            continue
-        print_body_line(f'case {enum_name}:', out_file, 2)
+    all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
+    for struct_name in all_type_name_arr:
+        _, variable_name_ptr = get_struct_variable_name(struct_name)
+        _, enum_nam_ptr = get_enum_name(struct_name)
+        print_body_line(f'case {enum_nam_ptr}:', out_file, 2)
         print_body_line('{', out_file, 2)
-        print_body_line('unsigned allocateNum = m_isArray ? m_arrLen : 1;', out_file, 3)
-        print_body_line(f'm_value.{typeTuple[0]} = reinterpret_cast<{arg_type}>(malloc(allocateNum * sizeof(*other.m_value.{typeTuple[0]})));', out_file, 3)
-        print_body_line(f'std::memcpy(m_value.{typeTuple[0]}, other.m_value.{typeTuple[0]}, allocateNum * sizeof(*other.m_value.{typeTuple[0]}));', out_file, 3)
+        print_body_line('unsigned int allocateNum = m_isArray ? m_arrLen : 1;', out_file, 3)
+        print_body_line(f'm_value.{variable_name_ptr} = static_cast<{struct_name} *>(malloc(allocateNum * sizeof(*other.m_value.{variable_name_ptr})));', out_file, 3)
+        print_body_line(f'if (m_value.{variable_name_ptr} != nullptr)', out_file, 3)
+        print_body_line('{', out_file, 3)
+        print_body_line(f'std::memcpy(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, allocateNum * sizeof(*other.m_value.{variable_name_ptr}));', out_file, 4)
+        print_body_line('}', out_file, 3)
         print_body_line('break;', out_file, 3)
         print_body_line('}', out_file, 2)
     print_body_line('default:', out_file, 2)
@@ -1565,12 +1548,8 @@ def write_injection_argument_copy_constructor(out_file):
     print_body_line('}\n', out_file, 0)
 
 
-#######################################################################################
-def write_injection_argument_header(all_argument_types, output_dir, struct_with_member, all_enum):
-    all_argument_types.sort()
+def write_injection_argument_header(output_dir, struct_with_member, all_enum):
     injectionHeaderPath = '%s/%s' % (output_dir, INJECTION_ARGUMENT_PATH)
-
-    enum_dict, enum_name_to_type_dict, arg_type_dict = write_injection_structs_header(all_argument_types, output_dir, all_enum)
 
     with open(injectionHeaderPath, 'w') as injectionHeader:
         write_auto_generate_c_file_header(injectionHeader)
@@ -1591,7 +1570,7 @@ def write_injection_argument_header(all_argument_types, output_dir, struct_with_
         print_body_line('bool m_isArray = false;\n', injectionHeader, 0)
         print_body_line('unsigned m_arrLen = 0;\n', injectionHeader, 0)
         print_body_line('bool m_inHeap = false;\n', injectionHeader, 0)
-        write_injection_argument_deep_copy_function(injectionHeader, all_argument_types, arg_type_dict, enum_dict)
+        write_injection_argument_deep_copy_function(injectionHeader, struct_with_member, all_enum)
         injectionHeader.write('public:\n')
         print_body_line('InjectionArgument()', injectionHeader, 0)
         print_body_line(': m_type(%s)' % INJECTION_ARG_COUNT_STR, injectionHeader, 1)
@@ -1634,42 +1613,84 @@ def write_injection_argument_header(all_argument_types, output_dir, struct_with_
         print_body_line('{', injectionHeader, 0)
         print_body_line('return m_type == %s;' % INJECTION_ARG_COUNT_STR, injectionHeader, 1)
         print_body_line('}\n', injectionHeader, 0)
-        for arg_type in all_argument_types:
+
+        all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
+        for struct_name in all_type_name_arr:
             # Write constructor
-            typeTuple = arg_type_dict[arg_type]
-            print_generator_source_info(injectionHeader, 1)
-            if is_pointer_type(arg_type):
-                print_body_line('InjectionArgument(%s%s, bool inHeap = false)' % (arg_type, typeTuple[0]), injectionHeader, 0)
-                print_body_line(': m_type(%s), m_inHeap(inHeap)' % (enum_dict[arg_type]), injectionHeader, 1)
-            else:
-                print_body_line('InjectionArgument(%s %s)' % (arg_type, typeTuple[0]), injectionHeader, 0)
-                print_body_line(': m_type(%s)' % (enum_dict[arg_type]), injectionHeader, 1)
-            print_body_line('{', injectionHeader, 0)
-            print_body_line('memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
-            print_body_line('m_value.%s = %s;' % (typeTuple[0], typeTuple[0]), injectionHeader, 1)
-            print_body_line('}', injectionHeader, 0)
+            variable_name, variable_name_ptr = get_struct_variable_name(struct_name)
+            enum_name, enum_nam_ptr = get_enum_name(struct_name)
 
-            # Write As* function
-            if typeTuple[1]:
-                print_body_line('%sAs%s() const' % (arg_type, typeTuple[2]), injectionHeader, 0)
-            else:
-                enum_name = enum_dict[arg_type]
-                if enum_name == 'INJECTION_CONST_CHAR' or enum_name == 'INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T':
-                    print_body_line('%s &As%s() const' % (arg_type, typeTuple[2]), injectionHeader, 0)
-                else:
-                    print_body_line('const %s &As%s() const' % (arg_type, typeTuple[2]), injectionHeader, 0)
-            print_body_line('{', injectionHeader, 0)
-            print_body_line('return m_value.%s;' % typeTuple[0], injectionHeader, 1)
-            print_body_line('}\n', injectionHeader, 0)
-
-            # Write array constructor
-            if is_pointer_type(arg_type):
-                print_body_line('InjectionArgument(%s%s, unsigned int arrLen, bool inHeap = false)' % (arg_type, typeTuple[0]), injectionHeader, 0)
-                print_body_line(': m_type(%s), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)' % (enum_dict[arg_type]), injectionHeader, 1)
+            if struct_name not in all_enum or all_enum[struct_name] == ENUM_TYPE_PURE_ENUM:
+                # for case like `typedef unsigned int nvmlFanControlPolicy_t;`
+                # we cannot use the following way to create constructor. Since it will re-define constructors of unsigned int...
+                print_generator_source_info(injectionHeader, 1)
+                print_body_line('InjectionArgument(%s *%s, bool inHeap = false)' % (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line(': m_type(%s), m_inHeap(inHeap)' % (enum_nam_ptr), injectionHeader, 1)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line('memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
-                print_body_line('m_value.%s = %s;' % (typeTuple[0], typeTuple[0]), injectionHeader, 1)
+                print_body_line('m_value.%s = %s;' % (variable_name_ptr, variable_name_ptr), injectionHeader, 1)
+                print_body_line('}', injectionHeader, 0)
+
+                print_body_line('InjectionArgument(%s %s)' % (struct_name, variable_name), injectionHeader, 0)
+                print_body_line(': m_type(%s)' % (enum_name), injectionHeader, 1)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line('memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+                print_body_line('m_value.%s = %s;' % (variable_name, variable_name), injectionHeader, 1)
+                print_body_line('}', injectionHeader, 0)
+
+                # Write array constructor
+                print_body_line('InjectionArgument(%s *%s, unsigned int arrLen, bool inHeap = false)' % (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line(': m_type(%s), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)' % (enum_nam_ptr), injectionHeader, 1)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line('memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+                print_body_line('m_value.%s = %s;' % (variable_name_ptr, variable_name_ptr), injectionHeader, 1)
                 print_body_line('}\n', injectionHeader, 0)
+
+                # Write As* function
+                print_body_line('%s *As%s() const' % (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line('return m_value.%s;' % variable_name_ptr, injectionHeader, 1)
+                print_body_line('}\n', injectionHeader, 0)
+
+                print_body_line('%s const &As%s() const' % (struct_name, variable_name), injectionHeader, 0)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line('return m_value.%s;' % variable_name, injectionHeader, 1)
+                print_body_line('}\n', injectionHeader, 0)
+            else:
+                # for case like `typedef unsigned int nvmlFanControlPolicy_t;`
+                # for case like `typedef unsigned char nvmlPowerScopeType_t;`
+                underly_variable_name, underly_variable_name_ptr = "", ""
+                if all_enum[struct_name] == ENUM_TYPE_UNSIGNED_INT:
+                    underly_variable_name, underly_variable_name_ptr = get_struct_variable_name('unsigned int')
+                else:
+                    underly_variable_name, underly_variable_name_ptr = get_struct_variable_name('unsigned char')
+                # Write As* function for the case like `typedef unsigned int nvmlFanControlPolicy_t;`
+                print_body_line('%s *As%s() const' % (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line(f'return static_cast<{struct_name} *>(m_value.{underly_variable_name_ptr});', injectionHeader, 1)
+                print_body_line('}\n', injectionHeader, 0)
+
+                print_body_line('%s As%s() const' % (struct_name, variable_name), injectionHeader, 0)
+                print_body_line('{', injectionHeader, 0)
+                print_body_line(f'return static_cast<{struct_name}>(m_value.{underly_variable_name});', injectionHeader, 1)
+                print_body_line('}\n', injectionHeader, 0)
+
+        const_types = get_const_type()
+        for const_type in const_types:
+            variable_name, variable_name_ptr = get_struct_variable_name(const_type, True)
+            enum_name, enum_nam_ptr = get_enum_name(const_type, True)
+            print_generator_source_info(injectionHeader, 1)
+            print_body_line('InjectionArgument(const %s *%s, bool inHeap = false)' % (const_type, variable_name_ptr), injectionHeader, 0)
+            print_body_line(': m_type(%s), m_inHeap(inHeap)' % (enum_nam_ptr), injectionHeader, 1)
+            print_body_line('{', injectionHeader, 0)
+            print_body_line('memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+            print_body_line('m_value.%s = %s;' % (variable_name_ptr, variable_name_ptr), injectionHeader, 1)
+            print_body_line('}', injectionHeader, 0)
+
+            print_body_line('const %s *As%s() const' % (const_type, variable_name_ptr), injectionHeader, 0)
+            print_body_line('{', injectionHeader, 0)
+            print_body_line(f'return m_value.{variable_name_ptr};', injectionHeader, 1)
+            print_body_line('}\n', injectionHeader, 0)
 
         write_injection_argument_copy_constructor(injectionHeader)
 
@@ -1693,17 +1714,17 @@ def write_injection_argument_header(all_argument_types, output_dir, struct_with_
         print_body_line('break;', injectionHeader, 3)
         print_body_line('case INJECTION_CHAR_PTR:', injectionHeader, 2)
         print_body_line('{', injectionHeader, 2)
-        print_body_line('if (m_value.str != nullptr)', injectionHeader, 3)
+        print_body_line('if (m_value.Str != nullptr)', injectionHeader, 3)
         print_body_line('{', injectionHeader, 3)
-        print_body_line('return std::string(m_value.str);', injectionHeader, 4)
+        print_body_line('return std::string(m_value.Str);', injectionHeader, 4)
         print_body_line('}', injectionHeader, 3)
         print_body_line('break;', injectionHeader, 3)
         print_body_line('}', injectionHeader, 2)
         print_body_line('case INJECTION_CONST_CHAR_PTR:', injectionHeader, 2)
         print_body_line('{', injectionHeader, 2)
-        print_body_line('if (m_value.const_str != nullptr)', injectionHeader, 3)
+        print_body_line('if (m_value.ConstStr != nullptr)', injectionHeader, 3)
         print_body_line('{', injectionHeader, 3)
-        print_body_line('return std::string(m_value.const_str);', injectionHeader, 4)
+        print_body_line('return std::string(m_value.ConstStr);', injectionHeader, 4)
         print_body_line('}', injectionHeader, 3)
         print_body_line('break;', injectionHeader, 3)
         print_body_line('}', injectionHeader, 2)
@@ -1716,16 +1737,7 @@ def write_injection_argument_header(all_argument_types, output_dir, struct_with_
         injectionHeader.write('};\n')
 
     logging.info(f"{INJECTION_ARGUMENT_PATH} genereted")
-    write_injection_argument_cpp(enum_name_to_type_dict, output_dir, arg_type_dict, all_argument_types, enum_dict, struct_with_member, all_enum)
 
-    return enum_dict
-
-#######################################################################################
-def get_enum_from_arg_type(enum_dict, arg_type):
-    check_type = get_true_arg_type(arg_type)
-    return enum_dict[check_type]
-
-#######################################################################################
 def write_key_file(output_dir):
     key_file_path = "%s/%s" % (output_dir, KEY_LIST_PATH)
     with open(key_file_path, 'w') as key_file:
@@ -1745,13 +1757,9 @@ def write_key_file(output_dir):
 
     logging.info(f"{KEY_LIST_HEADER_PATH} genereted")
 
-
-#######################################################################################
 def write_linux_defs(output_dir, func_dict):
     linux_defs_path = '%s/%s' % (output_dir, LINUX_DEFS_PATH)
     manually_written_functions = [
-        'injectionNvmlInit',
-        'injectionNvmlShutdown',
         'nvmlInit_v2',
         'nvmlErrorString',
         'nvmlShutdown',
@@ -1762,6 +1770,8 @@ def write_linux_defs(output_dir, func_dict):
         'nvmlDeviceInjectFieldValue',
         'nvmlGetFuncCallCount',
         'nvmlResetFuncCallCount',
+        'nvmlRemoveGpu',
+        'nvmlRestoreGpu',
     ]
 
     with open(linux_defs_path, 'w') as linux_defs_file:
@@ -1796,8 +1806,7 @@ def get_entry_points_all_functions(entry_points_contents):
             all_functions.AddFunction(fi)
     return all_functions
 
-#######################################################################################
-def parse_entry_points_contents(contents, output_dir, struct_with_member, all_enum):
+def parse_entry_points_contents(contents, output_dir):
     function_dict = {}
     all_argument_types = []
     all_functions = AllFunctions()
@@ -1839,6 +1848,7 @@ def parse_entry_points_contents(contents, output_dir, struct_with_member, all_en
 
         stub_file.write("#ifdef __cplusplus\n}\n")
         stub_file.write("#endif\n")
+        stub_file.write("\n#pragma GCC diagnostic pop\n\n")
         stub_file.write('// END nvml_generated_stubs')
 
     logging.info(f"{STUB_PATH} genereted")
@@ -1846,17 +1856,11 @@ def parse_entry_points_contents(contents, output_dir, struct_with_member, all_en
     write_key_file(output_dir)
     write_linux_defs(output_dir, all_functions.func_dict)
 
-    enum_dict = write_injection_argument_header(all_argument_types, output_dir, struct_with_member, all_enum)
-    write_declarations_file(all_functypes.GetAllFunctionDeclarations(), output_dir)
-    #write_function_info(enum_dict, function_dict, output_dir)
-
-#######################################################################################
-def parse_entry_points(inputPath, output_dir, struct_with_member, all_enum):
+def parse_entry_points(inputPath, output_dir):
     with open(inputPath, 'r') as entryFile:
         contents = entryFile.read()
-        parse_entry_points_contents(contents, output_dir, struct_with_member, all_enum)
+        parse_entry_points_contents(contents, output_dir)
 
-#######################################################################################
 
 def type_name_to_parser_name(type_name):
     key = type_name[4:-2]
@@ -2443,6 +2447,18 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 # basic type uses build-in yaml-cpp convertion method
                 print_generator_source_info(out_file, 2)
                 print_body_line(f'{variable_name}->{name} = node["{name}"].as<{member_type}>();', out_file, 1)
+            elif is_basic_ptr_type(member_type):
+                # Basic pointer types can involve arrays with a count stored in a separate struct member.
+                type_name = remove_ptr_if_any(member_type)
+                print_generator_source_info(out_file, 2)
+                tmp_varialbe = f"tmp{tmp_cnt}"
+                tmp_cnt += 1
+                print_body_line(f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();', out_file, 1)
+                print_body_line(f'{variable_name}->{name} = reinterpret_cast<{type_name} *>(malloc(sizeof({type_name}) * {tmp_varialbe}.size()));', out_file, 1)
+                print_body_line(f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)', out_file, 1)
+                print_body_line('{', out_file, 1)
+                print_body_line(f'{variable_name}->{name}[ii] = {tmp_varialbe}[ii];', out_file, 2)
+                print_body_line('}', out_file, 1)
             elif is_enum_type(member_type, all_enum):
                 # enum type uses build-in yaml-cpp convertion method to covert to int and cast to enum type
                 print_generator_source_info(out_file, 2)
@@ -2457,24 +2473,50 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 # for each element, we call corresponding deserializer and memcpy the result to our struct
                 type_name = member_type.split("[")[0]
                 print_generator_source_info(out_file, 2)
-                print_body_line('int idx = 0;', out_file, 1)
-                print_body_line(f'int size = std::min(node["{name}"].size(), sizeof({variable_name}->{name}) / sizeof({type_name}));', out_file, 1)
-                print_body_line(f'for (YAML::const_iterator it = node["{name}"].begin(); it != node["{name}"].end(); ++it)', out_file, 1)
-                print_body_line('{', out_file, 1)
+                if is_basic_type(type_name):
+                    tmp_varialbe = f"tmp{tmp_cnt}"
+                    tmp_cnt += 1
+                    print_body_line(f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();', out_file, 1)
+                    print_body_line(f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)', out_file, 1)
+                    print_body_line('{', out_file, 1)
+                    print_body_line(f'{variable_name}->{name}[ii] = {tmp_varialbe}[ii];', out_file, 2)
+                    print_body_line('}', out_file, 1)
+                else:
+                    print_body_line('int idx = 0;', out_file, 1)
+                    print_body_line(f'int size = std::min(node["{name}"].size(), sizeof({variable_name}->{name}) / sizeof({type_name}));', out_file, 1)
+                    print_body_line(f'for (YAML::const_iterator it = node["{name}"].begin(); it != node["{name}"].end(); ++it)', out_file, 1)
+                    print_body_line('{', out_file, 1)
+                    deserialzier_name = struct_name_to_deserializer_name(type_name)
+                    print_body_line(f'auto *tmp = {deserialzier_name}(*it);', out_file, 2)
+                    print_body_line('if (!tmp)', out_file, 2)
+                    print_body_line('{', out_file, 2)
+                    print_body_line(f'free({variable_name});', out_file, 3)
+                    print_body_line('return nullptr;', out_file, 3)
+                    print_body_line('}', out_file, 2)
+                    print_body_line('if (idx >= size)', out_file, 2)
+                    print_body_line('{', out_file, 2)
+                    print_body_line('break;', out_file, 3)
+                    print_body_line('}', out_file, 2)
+                    print_body_line(f'std::memcpy(&{variable_name}->{name}[idx++], tmp, sizeof({type_name}));', out_file, 2)
+                    print_body_line('free(tmp);', out_file, 2)
+                    print_body_line('}', out_file, 1)
+            elif is_pointer_type(member_type):
+                type_name = remove_ptr_if_any(member_type)
                 deserialzier_name = struct_name_to_deserializer_name(type_name)
-                print_body_line(f'auto *tmp = {deserialzier_name}(*it);', out_file, 2)
-                print_body_line('if (!tmp)', out_file, 2)
-                print_body_line('{', out_file, 2)
-                print_body_line(f'free({variable_name});', out_file, 3)
-                print_body_line('return nullptr;', out_file, 3)
-                print_body_line('}', out_file, 2)
-                print_body_line('if (idx >= size)', out_file, 2)
-                print_body_line('{', out_file, 2)
-                print_body_line('break;', out_file, 3)
-                print_body_line('}', out_file, 2)
-                print_body_line(f'std::memcpy(&{variable_name}->{name}[idx++], tmp, sizeof({type_name}));', out_file, 2)
-                print_body_line('free(tmp);', out_file, 2)
-                print_body_line('}', out_file, 1)
+                tmp_varialbe = f"tmp{tmp_cnt}"
+                tmp_cnt += 1
+                print_generator_source_info(out_file, 2)
+                if type_name in cannot_write_deserializer_struct or type_name not in struct_with_member:
+                    print_body_line(f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");', out_file, 1)
+                else:
+                    print_body_line(f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
+                    print_body_line(f'if (!{tmp_varialbe})', out_file, 1)
+                    print_body_line('{', out_file, 1)
+                    print_body_line(f'free({variable_name});', out_file, 2)
+                    print_body_line('return nullptr;', out_file, 2)
+                    print_body_line('}', out_file, 1)
+                    print_body_line(f'std::memcpy({variable_name}->{name}, {tmp_varialbe}, sizeof({type_name}));', out_file, 1)
+                    print_body_line(f'free({tmp_varialbe});', out_file, 1)
             else:
                 # custom type
                 # we call corresponding deserializer and memcpy the result to our struct
@@ -2482,14 +2524,17 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 tmp_varialbe = f"tmp{tmp_cnt}"
                 tmp_cnt += 1
                 print_generator_source_info(out_file, 2)
-                print_body_line(f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
-                print_body_line(f'if (!{tmp_varialbe})', out_file, 1)
-                print_body_line('{', out_file, 1)
-                print_body_line(f'free({variable_name});', out_file, 2)
-                print_body_line('return nullptr;', out_file, 2)
-                print_body_line('}', out_file, 1)
-                print_body_line(f'std::memcpy(&{variable_name}->{name}, {tmp_varialbe}, sizeof({type_name}));', out_file, 1)
-                print_body_line(f'free({tmp_varialbe});', out_file, 1)
+                if member_type in cannot_write_deserializer_struct or member_type not in struct_with_member:
+                    print_body_line(f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");', out_file, 1)
+                else:
+                    print_body_line(f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
+                    print_body_line(f'if (!{tmp_varialbe})', out_file, 1)
+                    print_body_line('{', out_file, 1)
+                    print_body_line(f'free({variable_name});', out_file, 2)
+                    print_body_line('return nullptr;', out_file, 2)
+                    print_body_line('}', out_file, 1)
+                    print_body_line(f'std::memcpy(&{variable_name}->{name}, {tmp_varialbe}, sizeof({member_type}));', out_file, 1)
+                    print_body_line(f'free({tmp_varialbe});', out_file, 1)
             print_body_line('}', out_file, 0)
             # PyNVML will return function not found in nvmlDeviceGetMemoryInfo_v2
             if struct_name == "nvmlMemory_v2_t" and (name == "version" or name == "reserved"):
@@ -3129,7 +3174,10 @@ class Arg:
         self.name = name
         self.type = type
 
-#######################################################################################
+ENUM_TYPE_UNSIGNED_INT = 0
+ENUM_TYPE_UNSIGNED_CHAR = 1
+ENUM_TYPE_PURE_ENUM = 2
+
 def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
     skip_funcs = get_skipped_funcs()
     with open(entryPointsHeaderFile, 'r') as entryFile:
@@ -3140,21 +3188,33 @@ def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
     typedef_name_mapping = {}
     struct_with_member = {}
     functions = {}
+    """
+    The key to this dictionary represents an enumeration type.
+
+    If the value associated with a particular key is `ENUM_TYPE_UNSIGNED_INT`, it indicates
+    that this enumeration was defined as a typedef over a primitive type (unsigned int).
+
+    If the value associated with a particular key is `ENUM_TYPE_UNSIGNED_CHAR`, it indicates
+    that this enumeration was defined as a typedef over a primitive type (unsigned char).
+
+    If the value associated with a particular key is `ENUM_TYPE_PURE_ENUM`, it indicates
+    that this actually an enumeration.
+    """
     all_enum = {}
     for child in tu.cursor.get_children():
         if child.kind != clang.cindex.CursorKind.TYPEDEF_DECL:
             continue
         if child.underlying_typedef_type.spelling.startswith("unsigned int"):
-            all_enum[child.spelling] = True
+            all_enum[child.spelling] = ENUM_TYPE_UNSIGNED_INT
             continue
         if child.underlying_typedef_type.spelling.startswith("unsigned char"):
-            all_enum[child.spelling] = True
+            all_enum[child.spelling] = ENUM_TYPE_UNSIGNED_CHAR
             continue
         if child.underlying_typedef_type.spelling.startswith("struct "):
             typedef_name_mapping[child.underlying_typedef_type.spelling[7:]] = child.spelling
             continue
         if child.underlying_typedef_type.spelling.startswith("enum "):
-            all_enum[child.spelling] = True
+            all_enum[child.spelling] = ENUM_TYPE_PURE_ENUM
             continue
         if child.underlying_typedef_type.spelling.startswith("nvml"):
             typedef_name_mapping[child.underlying_typedef_type.spelling] = child.spelling
@@ -3187,10 +3247,23 @@ def nvml_return_deserializer_writer(outputDir, struct_with_member, all_enum, fun
     nvml_return_deserializer_cpp_writer(outputDir, struct_with_member, all_enum, functions)
     nvml_return_deserializer_header_writer(outputDir)
 
-#######################################################################################
+def injection_argument_writer(output_dir, struct_with_member, all_enum):
+    write_injection_argument_header(output_dir, struct_with_member, all_enum)
+    write_injection_argument_cpp(output_dir, struct_with_member, all_enum)
+
+def injection_structs_writer(output_dir, struct_with_member, all_enum):
+    write_injection_structs_header(struct_with_member, output_dir, all_enum)
+    write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum)
+
+def is_in_dcgm_root():
+    return os.path.exists("./dcgmlib") and os.path.exists("./dcgmi") and os.path.exists("./nvml-injection")
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-file', default='sdk/nvml/entry_points.h', dest='inputPath')
+    description = "Generates source files containing stubs needed for NVML injection.\n" \
+                  "Example:\n" \
+                  "\t# nvml-injection/scripts/generate_nvml_stubs.py -i sdk/nvidia/nvml/entry_points.h -o nvml-injection"
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
+    parser.add_argument('-i', '--input-file', default='sdk/nvidia/nvml/entry_points.h', dest='inputPath')
     parser.add_argument('-n', '--nvml-header', default='sdk/nvidia/nvml/nvml.h', dest='nvmlHeaderPath')
     parser.add_argument('-o', '--output-dir', default='.', dest='outputDir')
     parser.add_argument('--verbose', action="store_true")
@@ -3201,44 +3274,16 @@ def main():
         logging.basicConfig(level=logging.INFO, format="%(message)s")
     if "CLANG_LIBRARY_PATH" in os.environ:
         Config.set_library_path(os.environ["CLANG_LIBRARY_PATH"])
+
+    if not is_in_dcgm_root():
+        logging.error("Please run this script from the top-level DCGM directory.")
+        exit(1)
+
     struct_with_member, all_enum, functions = parse_nvml_define_from_header_file(args.inputPath, args.nvmlHeaderPath)
     nvml_return_deserializer_writer(args.outputDir, struct_with_member, all_enum, functions)
-    parse_entry_points(args.inputPath, args.outputDir, struct_with_member, all_enum)
+    injection_argument_writer(args.outputDir, struct_with_member, all_enum)
+    injection_structs_writer(args.outputDir, struct_with_member, all_enum)
+    parse_entry_points(args.inputPath, args.outputDir)
 
 if __name__ == '__main__':
     main()
-
-
-# TODO: delete this once we're sure we aren't using it
-#######################################################################################
-def write_function_info(enum_dict, function_dict, output_dir):
-    function_info_path = '%s/%s' % (output_dir, FUNCTION_INFO_PATH)
-    function_args_dict = {}
-    with open(function_info_path, 'w') as funcInfoFile:
-        write_auto_generate_c_file_header(funcInfoFile)
-
-        funcInfoFile.write('// clang-format off\n\n')
-        funcInfoFile.write('#include <nvml.h>\n')
-        funcInfoFile.write('#include <%s>\n\n' % INJECTION_ARGUMENT_HEADER)
-
-        funcInfoFile.write('functionInfo_t functionInfos[] = {\n')
-        for functionName in function_dict:
-            argument_types = get_argument_types_from_argument_list(function_dict[functionName])
-            function_args_dict[functionName] = [function_dict[functionName], argument_types]
-            type_list_str = ''
-            argCount = 0
-            for arg_type in argument_types:
-                argCount += 1
-                if type_list_str == '':
-                    type_list_str = '%s' % get_enum_from_arg_type(enum_dict, arg_type)
-                else:
-                    type_list_str += ', %s' % get_enum_from_arg_type(enum_dict, arg_type)
-
-            type_list_str += '    '
-
-            for i in range(0, MAX_NVML_ARGS - argCount):
-                type_list_str += ', %s' % INJECTION_ARG_COUNT_STR
-            print_body_line('{ \"%s\", %d, { %s } },\n' % (functionName, argCount, type_list_str), funcInfoFile, 0)
-
-        funcInfoFile.write('};\n\n')
-

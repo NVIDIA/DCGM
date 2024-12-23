@@ -23,7 +23,6 @@ class DcgmProfTesterApp(app_runner.AppRunner):
     # Including future supported architectures
     paths = {
             "Linux_64bit": "./apps/amd64/dcgmproftester",
-            "Linux_ppc64le": "./apps/ppc64le/dcgmproftester",
             "Linux_aarch64": "./apps/aarch64/dcgmproftester",
             }
     forbidden_strings = [

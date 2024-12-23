@@ -11,21 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(CTEST_USE_LAUNCHERS 1)
 
-find_package(Catch2 REQUIRED)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-include(CTest)
-include(Catch)
+add_executable(dcgm_stub_tests)
+target_sources(dcgm_stub_tests PRIVATE
+    test_maps_tokens.cpp
+    ../GetNthMapsToken.c)
 
-if (BUILD_TESTING)
-    add_executable(dcgm_stub_tests)
-    target_sources(dcgm_stub_tests PRIVATE main.cpp test_maps_tokens.cpp ../GetNthMapsToken.c)
+target_link_libraries(dcgm_stub_tests PRIVATE Catch2::Catch2WithMain)
 
-
-    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-        catch_discover_tests(dcgm_stub_tests EXTRA_ARGS --use-colour yes)
-    endif ()
-
-endif ()
-
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(dcgm_stub_tests EXTRA_ARGS --colour-mode ansi)
+endif()

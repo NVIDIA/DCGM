@@ -12,30 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(CMAKE_CXX_VISIBILITY_PRESET default)
-set(CMAKE_C_VISIBILITY_PRESET default)
-set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
+target_include_directories(nvvs_interface INTERFACE include)
+target_link_libraries(nvvs_interface
+    INTERFACE
+        common_interface
+        dcgm_interface)
 
-add_library(nvvs_interface INTERFACE)
-target_include_directories(nvvs_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(nvvs_interface INTERFACE common_interface dcgm_interface)
+configure_file(diag-skus.yaml.in diag-skus.yaml @ONLY)
 
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/nvvs.conf
-        DESTINATION ${DCGM_NVVS_CONFIG_DIR}
-        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
-        COMPONENT DCGM
-        )
+add_subdirectory(plugin_src)
+add_subdirectory(src)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/diag-skus.yaml.in ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml @ONLY)
+install(FILES nvvs.conf
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}/examples/"
+        COMPONENT Core)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml
-        DESTINATION ${DCGM_NVVS_INSTALL_DIR}
-        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
-        COMPONENT Config
-        )
-
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml
-        DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/
-        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
-        COMPONENT Tests
-        )
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/diag-skus.yaml"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/${CMAKE_INSTALL_DATADIR}/nvvs"
+        COMPONENT Tests)

@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 #include "TestDcgmMutex.h"
+#include <fmt/format.h>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 /*****************************************************************************/
 TestDcgmMutex::TestDcgmMutex()
@@ -39,7 +41,7 @@ int TestDcgmMutex::Cleanup(void)
 }
 
 /*****************************************************************************/
-int TestDcgmMutex::Init(const TestDcgmModuleInitParams &initParams)
+int TestDcgmMutex::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }
@@ -100,8 +102,8 @@ int TestDcgmMutex::TestDoubleLock(void)
     mutexReturn = dcgm_mutex_lock(mutex);
     if (mutexReturn != DCGM_MUTEX_ST_OK)
     {
-        std::cerr << "TestDoubleLock first lock failed. Got " << mutexReturn << " expected DCGM_MUTEX_ST_OK"
-                  << std::endl;
+        std::cerr << "TestDoubleLock first lock failed. Got " << std::to_underlying(mutexReturn)
+                  << " expected DCGM_MUTEX_ST_OK" << std::endl;
         Nfailed++;
     }
 
@@ -109,8 +111,8 @@ int TestDcgmMutex::TestDoubleLock(void)
     mutexReturn = dcgm_mutex_lock(mutex);
     if (mutexReturn != DCGM_MUTEX_ST_LOCKEDBYME)
     {
-        std::cerr << "TestDoubleLock second lock failed. Got " << mutexReturn << " expected DCGM_MUTEX_ST_LOCKEDBYME"
-                  << std::endl;
+        std::cerr << "TestDoubleLock second lock failed. Got " << std::to_underlying(mutexReturn)
+                  << " expected DCGM_MUTEX_ST_LOCKEDBYME " << std::endl;
         Nfailed++;
     }
 
@@ -175,15 +177,16 @@ int TestDcgmMutex::TestDoubleUnlock(void)
     mutexReturn = dcgm_mutex_lock(mutex);
     if (mutexReturn != DCGM_MUTEX_ST_OK)
     {
-        std::cerr << "TestDoubleUnlock first lock failed. Got " << mutexReturn << " expected DCGM_MUTEX_ST_OK"
-                  << std::endl;
+        std::cerr << "TestDoubleUnlock first lock failed. Got " << std::to_underlying(mutexReturn)
+                  << " expected DCGM_MUTEX_ST_OK " << std::endl;
         Nfailed++;
     }
 
     mutexReturn = dcgm_mutex_unlock(mutex);
     if (mutexReturn != DCGM_MUTEX_ST_OK)
     {
-        std::cerr << "TestDoubleLock unlock failed. Got " << mutexReturn << " expected DCGM_MUTEX_ST_OK" << std::endl;
+        std::cerr << "TestDoubleLock unlock failed. Got " << std::to_underlying(mutexReturn)
+                  << " expected DCGM_MUTEX_ST_OK" << std::endl;
         Nfailed++;
     }
 
@@ -191,8 +194,8 @@ int TestDcgmMutex::TestDoubleUnlock(void)
     mutexReturn = dcgm_mutex_unlock(mutex);
     if (mutexReturn != DCGM_MUTEX_ST_NOTLOCKED)
     {
-        std::cerr << "TestDoubleLock unlock failed. Got " << mutexReturn << " expected DCGM_MUTEX_NOT_LOCKED"
-                  << std::endl;
+        std::cerr << "TestDoubleLock unlock failed. Got " << std::to_underlying(mutexReturn)
+                  << " expected DCGM_MUTEX_NOT_LOCKED" << std::endl;
         Nfailed++;
     }
 

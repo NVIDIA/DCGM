@@ -22,7 +22,7 @@
 #include "DcgmDiagResponseWrapper.h"
 #include "DcgmMutex.h"
 #include "DcgmUtilities.h"
-#include "JsonResult.hpp"
+#include "PluginStrings.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
@@ -31,6 +31,17 @@
 #include <unordered_set>
 
 #define NVVS_PLUGIN_DIR "NVVS_PLUGIN_DIR"
+
+namespace
+{
+
+enum class WasExecuted_t : bool
+{
+    WAS_NOT_EXECUTED,
+    WAS_EXECUTED
+};
+
+} //namespace
 
 class DcgmDiagManager
 {
@@ -56,10 +67,10 @@ public:
                                           dcgm_connection_id_t connectionId);
 
     /* perform the specified validation */
-    dcgmReturn_t RunDiag(dcgmRunDiag_v8 *drd, DcgmDiagResponseWrapper &response);
+    dcgmReturn_t RunDiag(dcgmRunDiag_v9 *drd, DcgmDiagResponseWrapper &response);
 
     /* possibly run the DCGM diagnostic and perform an action */
-    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v8 *drd,
+    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v9 *drd,
                                   dcgmPolicyAction_t action,
                                   DcgmDiagResponseWrapper &response,
                                   dcgm_connection_id_t connectionId);
@@ -93,8 +104,10 @@ public:
      */
     dcgmReturn_t PerformNVVSExecute(std::string *stdoutStr,
                                     std::string *stderrStr,
-                                    dcgmRunDiag_v8 *drd,
-                                    std::string const &gpuIds                   = "",
+                                    dcgmRunDiag_v9 *drd,
+                                    DcgmDiagResponseWrapper &response,
+                                    std::string const &fakeGpuIds               = "",
+                                    std::string const &entityIds                = "",
                                     ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
 
     /* Should not be made public... for testing purposes only */
@@ -108,38 +121,24 @@ public:
      *
      * @param cmdArgs: vector in which the args will be stored
      * @param drd: struct containing details for the diag to run
-     * @param gpuids: csv list of gpu ids for the nvvs command
+     * @param diagResponseVersion: expected diag response version to be returned from nvvs.
+     * @param fakeGpuIds: csv list of fake gpu ids for the nvvs command
+     * @param entityIds: entity ids for the nvvs command
      *
      * Returns: DCGM_ST_OK on SUCCESS
      *          DCGM_ST_BADPARAM if the given cmdArgs vector is non-empty
      *
      */
     dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                   dcgmRunDiag_v8 *drd,
-                                   std::string const &gpuIds = "") const;
-
-    /**
-     * @brief Fill the response structure during a validation stage
-     * @param[in] results - deserialized NVVS results
-     * @param[out] response - the response structure we are filling in
-     * @param[in] groupId - the groupId we ran the diagnostic on
-     * @param[in] oldRet - a return from earlier stages of the validation
-     * @return \c DCGM_ST_OK on SUCCESS
-     * @return \a oldRet if there was an error and previous value of the oldRet is not DCGM_ST_OK
-     * @return \c DCGM_ST_NVVS_ERROR if an error is detected in the NVVS output
-     *          and the previous value of the oldRet is DCGM_ST_OK
-     */
-    dcgmReturn_t FillResponseStructure(DcgmNs::Nvvs::Json::DiagnosticResults const &results,
-                                       DcgmDiagResponseWrapper &response,
-                                       int groupId,
-                                       dcgmReturn_t oldRet);
-
-    static void FillTestResult(DcgmNs::Nvvs::Json::Test const &test,
-                               DcgmDiagResponseWrapper &response,
-                               std::unordered_set<unsigned int> &gpuIdSet);
+                                   dcgmRunDiag_v9 *drd,
+                                   unsigned int diagResponseVersion,
+                                   std::string const &fakeGpuIds               = "",
+                                   std::string const &entityIds                = "",
+                                   ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
 
     /* perform external command - switched to public for testing*/
     dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
+                                        DcgmDiagResponseWrapper &response,
                                         std::string *stdoutStr,
                                         std::string *stderrStr,
                                         ExecuteWithServiceAccount useServiceAccount
@@ -159,6 +158,21 @@ private:
 
     bool m_amShuttingDown; /* Is the diag manager in the process of shutting down?. This
                               is guarded by m_mutex and only set by ~DcgmDiagManager() */
+
+    /* Map to hold plugin name - plugin test result mapping */
+    std::unordered_map<std::string, unsigned short> const m_testNameResultFieldId
+        = { { MEMORY_PLUGIN_NAME, DCGM_FI_DEV_DIAG_MEMORY_RESULT },
+            { DIAGNOSTIC_PLUGIN_NAME, DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT },
+            { PCIE_PLUGIN_NAME, DCGM_FI_DEV_DIAG_PCIE_RESULT },
+            { TS_PLUGIN_NAME, DCGM_FI_DEV_DIAG_TARGETED_STRESS_RESULT },
+            { TP_PLUGIN_NAME, DCGM_FI_DEV_DIAG_TARGETED_POWER_RESULT },
+            { MEMBW_PLUGIN_NAME, DCGM_FI_DEV_DIAG_MEMORY_BANDWIDTH_RESULT },
+            { MEMTEST_PLUGIN_NAME, DCGM_FI_DEV_DIAG_MEMTEST_RESULT },
+            { PULSE_TEST_PLUGIN_NAME, DCGM_FI_DEV_DIAG_PULSE_TEST_RESULT },
+            { EUD_PLUGIN_NAME, DCGM_FI_DEV_DIAG_EUD_RESULT },
+            { CPU_EUD_TEST_NAME, DCGM_FI_DEV_DIAG_CPU_EUD_RESULT },
+            { SW_PLUGIN_NAME, DCGM_FI_DEV_DIAG_SOFTWARE_RESULT },
+            { NVBANDWIDTH_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT } };
 
     /* methods */
 
@@ -181,11 +195,12 @@ private:
     /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
      */
-    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v8 *drd) const;
+    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v9 *drd) const;
 
     void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                     dcgmRunDiag_v8 *drd,
-                                     const std::string &gpuIds) const;
+                                     dcgmRunDiag_v9 *drd,
+                                     std::string const &fakeGpuIds,
+                                     std::string const &entityIds) const;
 
     /*
      * Kill an active NVVS process within the specified number of retries.
@@ -201,13 +216,9 @@ private:
     /*
      * Write the config file (if needed) and add that to the command arguments
      */
-    dcgmReturn_t AddConfigFile(dcgmRunDiag_v8 *drd, std::vector<std::string> &cmdArgs) const;
+    dcgmReturn_t AddConfigFile(dcgmRunDiag_v9 *drd, std::vector<std::string> &cmdArgs) const;
     static void AppendDummyArgs(std::vector<std::string> &args);
     dcgmReturn_t CanRunNewNvvsInstance() const;
-    dcgmReturn_t ReadProcessOutput(fmt::memory_buffer &stdoutStream,
-                                   fmt::memory_buffer &stderrStream,
-                                   DcgmNs::Utils::FileHandle stdoutFd,
-                                   DcgmNs::Utils::FileHandle stderrFd) const;
 
     /**
      * Pause or resume the HostEngine.
@@ -217,12 +228,18 @@ private:
      * @see DcgmCoreProxy::SendModuleCommand
      */
     dcgmReturn_t PauseResumeHostEngine(bool pause);
-};
 
-/*
- * Parse the expectedNumEntities string in the format 'gpu:N' for the GPU count, N.
- * @param expectedNumEntities[in] - the string to be parsed
- * @param gpuCount[out] - the parsed GPu count
- * @return the error string, empty if no error
- */
-std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntities, unsigned int &gpuCount);
+    std::tuple<WasExecuted_t, dcgmReturn_t> RerunEudDiagAsRoot(dcgmRunDiag_v9 *drd,
+                                                               std::string const &fakeGpuIds,
+                                                               std::string const &entityIds,
+                                                               std::unordered_set<std::string_view> const &testNames,
+                                                               dcgmReturn_t lastRunRet,
+                                                               DcgmDiagResponseWrapper &response);
+
+    /**
+     * Update the diag status field in the Cache Manager.
+     *
+     * @param data - dcgmDiagStatus_t struct data
+     */
+    void UpdateDiagStatus(std::string_view data) const;
+};

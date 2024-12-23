@@ -346,16 +346,16 @@ std::string Health::GenerateOutputFromResponse(const dcgmHealthResponse_t &respo
 /*****************************************************************************/
 dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, bool json)
 {
-    dcgmReturn_t result = DCGM_ST_OK;
-    dcgmHealthResponse_t response;
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
     dcgmHealthSystems_t systems;
     DcgmiOutputTree outTree(28, 60);
     DcgmiOutputJson outJson;
     DcgmiOutput &out = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
 
-    response.version = dcgmHealthResponse_version;
+    response->version = dcgmHealthResponse_version;
 
-    result = dcgmHealthCheck(mDcgmHandle, groupId, &response);
+    result = dcgmHealthCheck(mDcgmHandle, groupId, response.get());
 
     if (DCGM_ST_OK != result)
     {
@@ -382,7 +382,7 @@ dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << GenerateOutputFromResponse(response, out);
+    std::cout << GenerateOutputFromResponse(*(response), out);
 
     return DCGM_ST_OK;
 }

@@ -29,7 +29,7 @@ class DcgmGroupConfig:
     '''
     Set configuration for this group
 
-    config should be an instance of dcgm_structs.c_dcgmDeviceConfig_v1
+    config should be an instance of dcgm_structs.c_dcgmDeviceConfig_v2
 
     Will throw an exception on error
     '''
@@ -52,7 +52,7 @@ class DcgmGroupConfig:
 
     configType is a DCGM_CONFIG_? constant
 
-    Returns an array of dcgm_structs.c_dcgmDeviceConfig_v1 objects
+    Returns an array of dcgm_structs.c_dcgmDeviceConfig_v2 objects
     Throws an exception on error
     '''
     def Get(self, configType):
@@ -235,11 +235,11 @@ class DcgmGroupHealth:
     provided.  On subsequent calls, any error information will be returned.
 
     @param version    IN: Allows the caller to use an older version of this request. Should be 
-                          dcgm_structs.dcgmHealthResponse_version4
+                          dcgm_structs.dcgmHealthResponse_version5
 
     Returns a dcgm_structs.c_dcgmHealthResponse_* object that contains results for each GPU/entity
     '''
-    def Check(self, version = dcgm_structs.dcgmHealthResponse_version4):
+    def Check(self, version = dcgm_structs.dcgmHealthResponse_version5):
         resp = dcgm_agent.dcgmHealthCheck(self._dcgmHandle.handle, self._groupId, version)
         return resp
 
@@ -288,9 +288,9 @@ class DcgmGroupPolicy:
     
     '''
     Register a function to be called when a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition) 
-    has been violated.  This callback(s) will be called automatically when in DCGM_OPERATION_MODE_AUTO mode and only after 
+    has been violated.  This callback will be called automatically when in DCGM_OPERATION_MODE_AUTO mode and only after
     DcgmPolicy.Trigger when in DCGM_OPERATION_MODE_MANUAL mode.  
-    All callbacks are made within a separate thread.
+    Callback is made within a separate thread.
 
     This API is only supported on Tesla GPUs and will throw DCGMError_NotSupported if called on non-Tesla GPUs.
   
@@ -298,20 +298,19 @@ class DcgmGroupPolicy:
                                              (see dcgm_structs.DCGM_POLICY_COND_*)
                                              for which to register a callback function
             
-    @param beginCallback                 IN: A function that should be called should a violation occur.  This 
+    @param callback                      IN: A function that should be called should a violation occur. This
                                              function will be called prior to any actions specified by the policy are taken.
             
-    @param finishCallback                IN: A reference to a function that should be called should a violation occur.  
-                                             This function will be called after any action specified by the policy are completed.
+    @param userData                      IN: User data to pass to the userData field of callback.
     
-    At least one callback must be provided that is not None.
+    Callback must be provided that is not None.
     
     Returns Nothing. Throws an exception on error.
     '''
-    def Register(self, condition, beginCallback=None, finishCallback=None):
-        if beginCallback is None and finishCallback is None:
-            raise pydcgm.DcgmException("At least 1 callback must be provided to register that is not None")
-        dcgm_agent.dcgmPolicyRegister(self._dcgmHandle.handle, self._groupId, condition, beginCallback, finishCallback)
+    def Register(self, condition, callback=None, userData=None):
+        if callback is None:
+            raise pydcgm.DcgmException("Callback must be provided to register that is not None")
+        dcgm_agent.dcgmPolicyRegister_v2(self._dcgmHandle.handle, self._groupId, condition, callback, userData)
     
     '''
     Unregister a function to be called for a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition) .
@@ -479,11 +478,11 @@ class DcgmGroupAction:
 
     validate is what sort of validation to do. See dcgm_structs.DCGM_POLICY_VALID_* defines.
 
-    Returns a dcgm_structs.c_dcgmDiagResponse_v10 instance
+    Returns a dcgm_structs.c_dcgmDiagResponse_v11 instance
     '''
     def Validate(self, validate):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
         runDiagInfo.validate = validate
         runDiagInfo.groupId = self._groupId
 
@@ -495,7 +494,7 @@ class DcgmGroupAction:
 
     diagLevel is the level of diagnostic desired. See dcgm_structs.DCGM_DIAG_LVL_* constants.
 
-    Returns a dcgm_structs.c_dcgmDiagResponse_v10 instance
+    Returns a dcgm_structs.c_dcgmDiagResponse_v11 instance
     '''
     def RunDiagnostic(self, diagLevel):
         ret = dcgm_agent.dcgmRunDiagnostic(self._dcgmHandle.handle, self._groupId, diagLevel)
@@ -507,8 +506,8 @@ class DcgmGroupAction:
     Returns a dcgm_structs.c_dcgmDiagResponse_v5 instance
     '''
     def RunSpecificTest(self, testName):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
         for i in range(len(testName)):
             runDiagInfo.testNames[0][i] = testName[i]
         runDiagInfo.groupId = self._groupId
@@ -539,7 +538,7 @@ class DcgmGroupProfiling:
          """
         gpuIds = self._dcgmGroup.GetGpuIds()
         if len(gpuIds) < 1:
-            raise dcgm_structs.DCGMError_ProfilingNotSupported
+            raise dcgm_structs.DCGMError_GroupIsEmpty
 
         ret = dcgm_agent.dcgmProfGetSupportedMetricGroups(self._dcgmHandle.handle, gpuIds[0])
         return ret

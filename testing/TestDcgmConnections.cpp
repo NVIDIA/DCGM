@@ -27,6 +27,7 @@
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 
 /*****************************************************************************/
 TestDcgmConnections::TestDcgmConnections()
@@ -49,7 +50,7 @@ int TestDcgmConnections::Cleanup(void)
 }
 
 /*****************************************************************************/
-int TestDcgmConnections::Init(const TestDcgmModuleInitParams &initParams)
+int TestDcgmConnections::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }
@@ -102,7 +103,9 @@ static TestIpcSocketPairConnection_t *TispGetConnection(TestIpcSocketPair_t *soc
     return nullptr;
 }
 
-static void TispProcessMessage(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message, void *userData)
+static void TispProcessMessage(dcgm_connection_id_t connectionId,
+                               std::unique_ptr<DcgmMessage> /* message */,
+                               void *userData)
 {
     TestIpcSocketPair_t *tisp                 = (TestIpcSocketPair_t *)userData;
     TestIpcSocketPairConnection_t *connection = TispGetConnection(tisp, connectionId);
@@ -137,7 +140,7 @@ int TestDcgmConnections::TestIpcSocketPair(void)
     dcgmReturn = dcgmIpc.Init(std::nullopt, std::nullopt, TispProcessMessage, &tisp, TispProcessDisconnect, &tisp);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cerr << "Got " << dcgmReturn << " from dcgmIpc.Init()\n";
+        std::cerr << "Got " << std::to_underlying(dcgmReturn) << " from dcgmIpc.Init()\n";
         return 100;
     }
 
@@ -161,7 +164,7 @@ int TestDcgmConnections::TestIpcSocketPair(void)
         dcgmReturn = dcgmIpc.MonitorSocketFd(connection->fd, connection->connectionId);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from MonitorSocketFd";
+            std::cerr << "Unexpected dcgmReturn " << std::to_underlying(dcgmReturn) << " from MonitorSocketFd";
             return 300;
         }
     }
@@ -188,7 +191,7 @@ int TestDcgmConnections::TestIpcSocketPair(void)
         dcgmReturn = dcgmIpc.SendMessage(connection->connectionId, std::move(message), true);
         if (dcgmReturn != DCGM_ST_OK)
         {
-            std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from SendMessage\n";
+            std::cerr << "Unexpected dcgmReturn " << std::to_underlying(dcgmReturn) << " from SendMessage\n";
             return 500;
         }
 
@@ -209,7 +212,7 @@ int TestDcgmConnections::TestIpcSocketPair(void)
     dcgmReturn = dcgmIpc.CloseConnection(tisp.connections[1].connectionId);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cerr << "Unexpected dcgmReturn " << dcgmReturn << " from CloseConnection\n";
+        std::cerr << "Unexpected dcgmReturn " << std::to_underlying(dcgmReturn) << " from CloseConnection\n";
         return 700;
     }
 
@@ -252,7 +255,8 @@ int TestDcgmConnections::TestDeadlockSingle(void)
         }
         else if (dcgmReturn != DCGM_ST_CONNECTION_NOT_VALID)
         {
-            std::cerr << "Unexpected return " << dcgmReturn << " from dcgmConnect() iteration" << i << std::endl;
+            std::cerr << "Unexpected return " << std::to_underlying(dcgmReturn) << " from dcgmConnect() iteration" << i
+                      << std::endl;
             return 100;
         }
     }
@@ -275,7 +279,7 @@ public:
     ~TestDeadlockMultiThread()
     {}
 
-    void run(void)
+    void run(void) override
     {
         dcgmReturn_t dcgmReturn;
         const int Ntimes = 100;
@@ -295,8 +299,8 @@ public:
             }
             else if (dcgmReturn != DCGM_ST_CONNECTION_NOT_VALID)
             {
-                std::cerr << "TestDeadlockMulti thread " << m_threadIndex << " got unexpected return " << dcgmReturn
-                          << " from dcgmConnect() iteration" << i << std::endl;
+                std::cerr << "TestDeadlockMulti thread " << m_threadIndex << " got unexpected return "
+                          << std::to_underlying(dcgmReturn) << " from dcgmConnect() iteration" << i << std::endl;
                 break;
             }
 
@@ -334,7 +338,7 @@ int TestDcgmConnections::TestDeadlockMulti(void)
     }
     else if (dcgmReturn != DCGM_ST_CONNECTION_NOT_VALID)
     {
-        std::cerr << "Unexpected return " << dcgmReturn << " from dcgmConnect() " << std::endl;
+        std::cerr << "Unexpected return " << std::to_underlying(dcgmReturn) << " from dcgmConnect() " << std::endl;
         return 100;
     }
 
@@ -389,7 +393,7 @@ public:
     ~TestThrashThread()
     {}
 
-    void run(void)
+    void run(void) override
     {
         dcgmReturn_t dcgmReturn;
         int i;
@@ -467,9 +471,9 @@ int TestDcgmConnections::TestThrash(void)
     std::vector<std::unique_ptr<TestThrashThread>> workers;
 
     dcgmHandle_t dcgmHandle;
-    char *hostname = (char *)"127.0.0.1";
-    int startTime  = timelib_secSince1970();
-    int duration   = 10;
+    const char *hostname  = "127.0.0.1";
+    timelib32_t startTime = timelib_secSince1970();
+    timelib32_t duration  = 10;
 
     dcgmReturn = dcgmEngineRun(5555, hostname, 1);
     if (dcgmReturn != DCGM_ST_OK)

@@ -36,12 +36,7 @@ def helper_dcgm_group_create_grp(handle):
     #Force the group to be deleted
     del(groupObj)
 
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_group_create_grp_embedded(handle):
-    helper_dcgm_group_create_grp(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_group_create_grp_standalone(handle):
     helper_dcgm_group_create_grp(handle)
 
@@ -68,14 +63,7 @@ def helper_dcgm_group_update_grp(handle, gpuIds):
     #Force the group to be deleted
     del(groupObj)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_group_update_grp_embedded(handle, gpuIds):
-    helper_dcgm_group_update_grp(handle, gpuIds)
-
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_group_update_grp_standalone(handle, gpuIds):
     helper_dcgm_group_update_grp(handle, gpuIds)
@@ -100,11 +88,6 @@ def helper_dcgm_group_get_grp_info(handle, gpuIds):
     
     gpuIdListAfterAdd = groupObj.GetGpuIds()
     assert gpuIdList == gpuIdListAfterAdd, "Expected all GPUs from %s to be added. Got %s" % (str(gpuIdList), str(gpuIdListAfterAdd))
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_group_get_grp_info_embedded(handle, gpuIds):
-    helper_dcgm_group_get_grp_info(handle, gpuIds)
 
 def helper_dcgm_group_get_grp_info_entities(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -133,19 +116,12 @@ def helper_dcgm_group_get_grp_info_entities(handle, gpuIds):
     entityListAfterRem = groupObj.GetEntities()
     assert len(entityListAfterRem) == 0, str(entityListAfterRem)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_helper_dcgm_group_get_grp_info_entities(handle, gpuIds):
-    helper_dcgm_group_get_grp_info_entities(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_group_get_grp_info_standalone(handle, gpuIds):
     helper_dcgm_group_get_grp_info(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_group_get_all_ids_standalone(handle):
     """
     Get all the group IDS configured on the host engine
@@ -205,16 +181,10 @@ def dcgm_group_test_default_group(handle, gpuIds):
         ret = dcgm_agent.dcgmGroupDestroy(handle, dcgm_structs.DCGM_GROUP_ALL_GPUS)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_group_test_default_group_standalone(handle, gpuIds):
     dcgm_group_test_default_group(handle, gpuIds)
     
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_group_test_default_group_embedded(handle, gpuIds):
-    dcgm_group_test_default_group(handle, gpuIds)
-
 def helper_dcgm_group_delete_grp(handle):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     groupObj = pydcgm.DcgmGroup(handleObj, groupName="test1")
@@ -226,12 +196,7 @@ def helper_dcgm_group_delete_grp(handle):
     ids = dcgm_agent.dcgmGroupGetAllIds(handle)
     assert(groupId not in ids), "groupId %d in %s" % (groupId, str(ids))
 
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_group_delete_grp_embedded(handle):
-    helper_dcgm_group_delete_grp(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_group_delete_grp_standalone(handle):
     helper_dcgm_group_delete_grp(handle)
 

@@ -34,6 +34,8 @@ import utils
 import stats
 import option_parser
 
+from test_globals import BOUNDED_TEST_DURATION
+
 REQ_MATPLOTLIB_VER = '1.5.1'
 def isReqMatplotlibVersion():
     return 'matplotlib' in sys.modules and \
@@ -53,10 +55,6 @@ else:
         matplotlib.use('AGG')
         from matplotlib import pyplot as plt
         plt.style.use('ggplot')                 # pylint: disable=no-member
-
-# duration to gather data for when we limit the record count for DCGM to store  
-# This time needs to be long enough for memory usage to level off.
-BOUNDED_TEST_DURATION = 40
 
 class MetadataTimeseries(object):
     
@@ -232,8 +230,7 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
     return memUsageTS, execTimeTS, execTimeAvgTS, cpuUtilTS
 
 # generating graphs may cause hostengine to timeout so make timeout an extra 20 sec
-@test_utils.run_with_standalone_host_engine(timeout=BOUNDED_TEST_DURATION + 20)
-@test_utils.run_with_initialized_client()
+@test_utils.run_with_standalone_host_engine(timeout = BOUNDED_TEST_DURATION + 20)
 def test_dcgm_standalone_perf_bounded(handle):
     '''
     Test that runs some subtests.  When we bound the number of samples to keep for each field: 

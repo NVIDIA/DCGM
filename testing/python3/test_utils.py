@@ -15,16 +15,13 @@ from functools import wraps
 import inspect
 import os
 import json
-import platform
 import string
 import traceback
 from collections import namedtuple
-import stat
-import time
 import apps
 import re
-import ctypes
 import sys
+import glob
 from shutil import which as find_executable
 
 from progress_printer import *
@@ -37,18 +34,19 @@ import dcgm_structs
 import dcgm_agent_internal
 import dcgm_structs_internal
 import dcgm_fields
-import DcgmDiag
 import dcgmvalue
 import pydcgm
 import version
+import test_compile
 
 from dcgm_structs import DCGM_ST_INIT_ERROR, dcgmExceptionClass
 import nvidia_smi_utils
 import errno
-import shlex
 import xml.etree.ElementTree as ET
 import subprocess
 from subprocess import Popen, check_call, CalledProcessError, PIPE
+
+from importlib import import_module
 
 nvmlNotLoaded = False
 test_directory = 'tests'
@@ -291,12 +289,12 @@ def run_as_root_and_non_root():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            with SubTest("As root", quiet=True):
+            with SubTest("As root", count = False):
                 RunAsRoot.is_supported(skip_if_not_supported=True)
                 with RunAsRoot():
                     fn(*args, **kwds)
 
-            with SubTest("As non-root", quiet=True):
+            with SubTest("As non-root", count = False):
                 RunAsNonRoot.is_supported(skip_if_not_supported=True)
                 with RunAsNonRoot():
                     fn(*args, **kwds)
@@ -347,20 +345,6 @@ def run_only_on_x86():
                 result = fn(*args, **kwds)
             else:
                 skip_test("This test is to run only on x86 platform")
-        return wrapper
-    return decorator
-
-def run_only_on_ppc():
-    """
-    Run only on ppc Platform
-    """
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwds):
-            if utils.platform_identifier in ["Linux_ppc64le"]:
-                result = fn(*args, **kwds)
-            else:
-                skip_test("This test is to run only on ppc64le platform")
         return wrapper
     return decorator
 
@@ -419,13 +403,14 @@ def run_only_with_minimum_cuda_version(major_ver, minor_ver):
             handle = kwds['handle']
             gpuIds = kwds['gpuIds']
 
-            major, minor = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+            major, minor = get_cuda_driver_version(handle, gpuIds[0])
             if major < major_ver:
-                test_utils.skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
+                skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
                         % (major_ver, minor_ver))
             elif major == major_ver and minor < minor_ver:
-                test_utils.skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
+                skip_test("The plugin we're testing is only supported for CUDA %d.%d and higher" \
                         % (major_ver, minor_ver))
+            fn(*args, **kwds)
         return wrapper
     return decorator
 
@@ -602,18 +587,28 @@ def helper_check_for_duplicate_test_names(test_content):
             seenTestNames[testName] = True
 
 
-def get_test_content():
+def get_test_content(run_compiled_flag=False):
     '''
     Searches for all modules with name "test*" and all functions with name "test*" in each module.
 
     Returns list of pairs [(module, test functions in module), ...]
 
     '''
+
+    test_file_name = ""
+    skip_file_name = ""
+    if run_compiled_flag:
+        test_file_name = test_compile.run_compilation()
+    else:
+        skip_file_name = test_compile.get_file_name()
+
     # Get all test names
-    test_module_files = utils.find_files(os.path.join(utils.script_dir, test_directory), mask = "test*.py", recurse=True)
+    test_module_files = utils.find_files(os.path.join(utils.script_dir, test_directory), mask = "test*.py", recurse=True, test_file_name=test_file_name, skip_file_name=skip_file_name)
+
     test_module_names = [os.path.splitext(os.path.relpath(fname, utils.script_dir))[0].replace(os.path.sep, ".") for fname in test_module_files]
 
     test_module_names.sort()
+
     # see help(__import__) for info on __import__ fromlist parameter
     test_modules = [__import__(name,
         fromlist=("non-empty list has a side effect of import loading the module.submodule instead of module"))
@@ -624,13 +619,17 @@ def get_test_content():
         for attr_name in attributes:
             if not attr_name.startswith("test"):
                 continue
+
             attr = getattr(module, attr_name)
             if not inspect.isfunction(attr):
                 continue
-            if option_parser.options.filter_tests:
+
+            # For fast_run we filter in test_compile.py
+            if option_parser.options.filter_tests and not option_parser.options.fast_run:
                 if option_parser.options.filter_tests.search(module.__name__ + "." + attr_name) is None:
                     # Skip tests that don't match provided filter test regex
                     continue
+
             yield attr
     test_content = [(module, list(test_functions_in_module(module))) for module in test_modules]
 
@@ -650,7 +649,7 @@ def get_test_content():
 
     #Check for duplicate test names
     helper_check_for_duplicate_test_names(test_content)
-    
+
     return test_content
 
 class TestSkipped(Exception):
@@ -807,7 +806,7 @@ class SubTest(object):
     SUCCESS,SKIPPED,FAILED,FAILURE_LOGGED,NOT_CONNECTED = ("SUCCESS", "SKIPPED", "FAILED", "FAILURE_LOGGED", "NOT_CONNECTED")
     ResultDetailsRaw = namedtuple("ResultDetailsRaw", "exception_type, exception, trace")
 
-    def __init__(self, name, quiet=False, supress_errors=True, disconnect_is_failure=True):
+    def __init__(self, name, quiet=False, supress_errors=True, disconnect_is_failure=True, count=True, dvssc_log = False):
         """
         Set quiet to True if you want the test to be removed from the logs if it succeeded.
         Useful when test is minor and you don't want to clobber the output with minor tests.
@@ -818,16 +817,16 @@ class SubTest(object):
         self.result_details = None
         self.result_details_raw = None
         self.parent = None
-        self.depth = None
         self.subtests = []
         self.quiet = quiet
         self.stats = dict([(SubTest.SUCCESS, 0), (SubTest.SKIPPED, 0), (SubTest.FAILED, 0), (SubTest.FAILURE_LOGGED, 0), (SubTest.NOT_CONNECTED, 0)])
         self.supress_errors = supress_errors
         self.disconnect_is_failure = disconnect_is_failure
+        self.count = count
+        self.dvssc_log = dvssc_log
 
     def __enter__(self):
         self.parent = SubTest._stack[-1]
-        self.depth = len(SubTest._stack)
         SubTest._stack.append(self)
         SubTest._log.append(self)
         if self.parent:
@@ -841,14 +840,22 @@ class SubTest(object):
 
 
     def __exit__(self, exception_type, exception, trace):
+        subtestPriorityDict = { SubTest.SUCCESS : 0, SubTest.SKIPPED : 1, SubTest.FAILED : 2, SubTest.FAILURE_LOGGED : 3, SubTest.NOT_CONNECTED : 4 }
         SubTest._stack.pop()
+        runningSubresult = SubTest.SUCCESS
+
         for subtest in self.subtests:
+            subresult = subtest.result
+
+            if subtestPriorityDict[subresult] > subtestPriorityDict[runningSubresult]:
+                runningSubresult = subresult
+                
             self.stats[SubTest.SUCCESS] += subtest.stats[SubTest.SUCCESS]
             self.stats[SubTest.SKIPPED] += subtest.stats[SubTest.SKIPPED]
             self.stats[SubTest.FAILED] += subtest.stats[SubTest.FAILED]
             self.stats[SubTest.FAILURE_LOGGED] += subtest.stats[SubTest.FAILURE_LOGGED]
         if exception is None:
-            self.result = SubTest.SUCCESS
+            self.result = runningSubresult
         elif isinstance(exception, TestSkipped):
             self.result = SubTest.SKIPPED
         elif isinstance(exception, KeyboardInterrupt):
@@ -865,7 +872,10 @@ class SubTest(object):
 
         self.result_details = " ".join(traceback.format_exception(exception_type, exception, trace))
         self.result_details_raw = SubTest.ResultDetailsRaw(exception_type, exception, trace)
-        self.stats[self.result] += 1
+
+        if self.count:
+            self.stats[self.result] += 1
+
         if self.quiet and self.result == SubTest.SUCCESS and self.subtests == []:
             SubTest._log.remove(self)
             if self.parent:
@@ -875,11 +885,14 @@ class SubTest(object):
         progress_printer.subtest_finish(self)
 
         # terminate on KeyboardInterrupt exceptions
-        if isinstance(exception, KeyboardInterrupt):
+        import initialDiag
+        if isinstance(exception, (KeyboardInterrupt, initialDiag.DcgmInitialDiagError)):
             return False
 
         if self.result == SubTest.FAILED and option_parser.options.break_at_failure:
             try:
+                # import debugging
+                # debugging.break_after_exception()
                 import pdb
                 breakpoint()
             except ImportError:
@@ -1043,7 +1056,7 @@ def check_spelling(text):
     global knownWordDict
     # split into words, remove special characters
     text = text.translate(None, '0123456789%*$[]()<>\"\'|')
-    tokens = re.split(' |\t|\n|-|_|/|:|\.|=|\?|\!|,', text)
+    tokens = re.split(r' |\t|\n|-|_|/|:|\\.|=|\?|\!|,', text)
     words = [ s.strip().lower() for s in tokens ]
     unknownWords = []
     for word in words:
@@ -1158,13 +1171,16 @@ def run_with_embedded_host_engine(opmode=dcgm_structs.DCGM_OPERATION_MODE_AUTO, 
                 for key in heEnv:
                     os.environ[key] = heEnv[key]
 
-            with RunEmbeddedHostEngine(opmode=opmode, startTcpServer=startTcpServer) as handle:
-                kwds['handle'] = handle
-                fn(*args, **kwds)
-
-            if heEnv:
-                for key in heEnv:
-                    del os.environ[key]
+            try:
+                with RunEmbeddedHostEngine(opmode=opmode, startTcpServer=startTcpServer) as handle:
+                    kwds['handle'] = handle
+                    fn(*args, **kwds)
+            except Exception as e:
+                raise
+            finally:
+                if heEnv:
+                    for key in heEnv:
+                        del os.environ[key]
             
             return
         return wrapper
@@ -1209,7 +1225,47 @@ class RunStandaloneHostEngine:
                 logger.info("Skipping standalone host engine terminate. Host engine was not running")
         set_connect_mode(DCGM_CONNECT_MODE_UNKNOWN)
 
-def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False, heEnv=None):
+class RunClientInitShutdown:
+    """
+    This class is used as part of a "with" clause to initialize and shutdown the client API
+    """
+    def __init__(self, pIpAddr = "127.0.0.1", persistAfterDisconnect=False):
+        self.clientAPIStarted = False
+        self.dcgm_handle = None
+        self.ipAddress = pIpAddr
+        self.persistAfterDisconnect = persistAfterDisconnect
+
+    def __enter__(self):
+        connectParams = dcgm_structs.c_dcgmConnectV2Params_v1()
+        if self.persistAfterDisconnect:
+            connectParams.persistAfterDisconnect = 1
+        else:
+            connectParams.persistAfterDisconnect = 0
+
+        dcgm_agent.dcgmInit()
+        for attempt in range(3):
+            try:
+                self.dcgm_handle = dcgm_agent.dcgmConnect_v2(self.ipAddress, connectParams)
+            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+                pass
+            else:
+                break
+
+        if not self.dcgm_handle:
+            raise Exception('failed connection to dcgm hostengine')
+
+        self.clientAPIStarted = True
+        return self.dcgm_handle
+
+    def __exit__(self, exception_type, exception, trace):
+        if self.clientAPIStarted:
+            try:
+                dcgm_agent.dcgmShutdown()
+            except dcgmExceptionClass(DCGM_ST_INIT_ERROR):
+                logger.info("Client API is already shut down")
+            self.clientAPIStarted = False
+
+def run_with_standalone_host_engine(timeout=15, ipAddress="127.0.0.1", heArgs=None, passAppAsArg=False, heEnv=None, initializedClient=True, *args, **kwargs):
     """
     Run this test with the standalone host engine.  This will start the host engine process before the test
     and stop the host engine process after the test
@@ -1217,11 +1273,27 @@ def run_with_standalone_host_engine(timeout=15, heArgs=None, passAppAsArg=False,
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            with RunStandaloneHostEngine(timeout, heArgs, profile_dir=fn.__name__, heEnv=heEnv) as hostengineApp:
+            local_heArgs = heArgs
+            if 'heArgs' in kwds:
+                if heArgs == None:
+                    local_heArgs = kwds['heArgs']
+                else:
+                    if type(kwds['heArgs']) == list:
+                        for item in kwds['heArgs']:
+                            local_heArgs.append(item)
+                    else:
+                        local_heArgs.append(kwds['heArgs'])
+                del kwds['heArgs']
+            with RunStandaloneHostEngine(timeout, local_heArgs, profile_dir=fn.__name__, heEnv=heEnv) as hostengineApp:
                 # pass the hostengine app to the test function in case they want to interact with it
                 if passAppAsArg:
                     kwds['hostengineApp'] = hostengineApp
-                fn(*args, **kwds)
+                if initializedClient:
+                    with RunClientInitShutdown(ipAddress) as handle:
+                        kwds['handle'] = handle
+                        fn(*args, **kwds)
+                else:
+                    fn(*args, **kwds)
             return
         return wrapper
     return decorator
@@ -1311,6 +1383,23 @@ def run_with_injection_nvml_using_specific_sku(skuFileName: str):
         return wrapper
     return decorator
 
+NVSDM_USE_TEST_STUBS = '__DCGM_LOAD_NVSDM_STUBS'
+def run_with_nvsdm_stub():
+    """
+    Load NVSDM test stubs
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            os.environ[NVSDM_USE_TEST_STUBS] = '1'
+            try:
+                fn(*args, **kwds)
+            finally:
+                del os.environ[NVSDM_USE_TEST_STUBS]
+            return
+        return wrapper
+    return decorator
+
 def run_with_diag_small_fb_mode():
     """
     Have DCGM diag run with smaller FB allocations to speed up tests that don't rely on DCGM Diag running at full scale
@@ -1341,60 +1430,6 @@ def create_injection_nvml_gpus(dcgmHandle, count):
 
     return created_indices
 
-class RunClientInitShutdown:
-    """
-    This class is used as part of a "with" clause to initialize and shutdown the client API
-    """
-    def __init__(self, pIpAddr = "127.0.0.1", persistAfterDisconnect=False):
-        self.clientAPIStarted = False
-        self.dcgm_handle = None
-        self.ipAddress = pIpAddr
-        self.persistAfterDisconnect = persistAfterDisconnect
-
-    def __enter__(self):
-        connectParams = dcgm_structs.c_dcgmConnectV2Params_v1()
-        if self.persistAfterDisconnect:
-            connectParams.persistAfterDisconnect = 1
-        else:
-            connectParams.persistAfterDisconnect = 0
-
-        dcgm_agent.dcgmInit()
-        for attempt in range(3):
-            try:
-                self.dcgm_handle = dcgm_agent.dcgmConnect_v2(self.ipAddress, connectParams)
-            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                pass
-            else:
-                break
-
-        if not self.dcgm_handle:
-            raise Exception('failed connection to dcgm hostengine')
-
-        self.clientAPIStarted = True
-        return self.dcgm_handle
-
-    def __exit__(self, exception_type, exception, trace):
-        if self.clientAPIStarted:
-            try:
-                dcgm_agent.dcgmShutdown()
-            except dcgmExceptionClass(DCGM_ST_INIT_ERROR):
-                logger.info("Client API is already shut down")
-            self.clientAPIStarted = False
-
-def run_with_initialized_client(ipAddress = "127.0.0.1"):
-    """
-    Run test having called client init and then call shutdown on exit
-    """
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwds):
-            with RunClientInitShutdown(ipAddress) as handle:
-                kwds['handle'] = handle
-                fn(*args, **kwds)
-            return
-        return wrapper
-    return decorator
-
 def get_live_gpu_ids(handle):
     """
     Get the gpu ids of live GPUs on the system. This works in embedded or remote mode
@@ -1408,6 +1443,28 @@ def get_live_gpu_ids(handle):
 def get_live_gpu_count(handle):
     return len(get_live_gpu_ids(handle))
 
+def run_with_live_gpus():
+    """
+    Populate gpuIds with live GPUs. This sets gpuUIds, and does not add to it,
+    so it should be the first decorator to adjust gpuUIds in a series of
+    decorators.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                try:
+                    gpuIds = get_live_gpu_ids(kwds['handle'])
+                except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                    skip_test("This test cannot run since NVML is not loaded")
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+            kwds['gpuIds'] = gpuIds
+            fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
 def run_only_with_live_gpus():
     """
     Only run this test if live gpus are present on the system
@@ -1415,7 +1472,6 @@ def run_only_with_live_gpus():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-                
             if 'handle' in kwds:
                 try:
                     gpuIds = get_live_gpu_ids(kwds['handle'])
@@ -1425,7 +1481,7 @@ def run_only_with_live_gpus():
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(gpuIds) < 1:
-                logger.warning("Skipping test that requires live GPUs. None were found")
+                skip_test("Test requires live GPUs. None were found, skiping test.")
             else:
                 kwds['gpuIds'] = gpuIds
                 fn(*args, **kwds)
@@ -1448,7 +1504,7 @@ def run_with_nvml_injected_gpus():
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(gpuIds) < 1:
-                logger.warning("Skipping test that requires injected GPUs. None were found")
+                skip_test("Test requires injected GPUs. None were found, skipping test.")
             else:
                 kwds['gpuIds'] = gpuIds
                 fn(*args, **kwds)
@@ -1458,7 +1514,7 @@ def run_with_nvml_injected_gpus():
 
 def get_live_cpu_ids(handle):
     """
-    Get the gpu ids of live GPUs on the system. This works in embedded or remote mode
+    Get the cpu ids of live CPUs on the system. This works in embedded or remote mode
     """
     cpuIds = []
     try:
@@ -1483,7 +1539,7 @@ def run_only_with_live_cpus():
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(cpuIds) < 1:
-                logger.warning("Skipping test that requires live CPUs. None were found")
+                skip_test("Test requires live CPUs. None were found, skipping test.")
             else:
                 kwds['cpuIds'] = cpuIds
                 fn(*args, **kwds)
@@ -1491,9 +1547,24 @@ def run_only_with_live_cpus():
         return wrapper
     return decorator
 
+def run_clearing_gpus():
+    """
+    This resets gpuIds passed as keywords to downstream decorators and tests.
+    """
+
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'gpuIds' in kwds:
+                del kwds['gpuIds']
+            fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
 def run_with_injection_gpus(gpuCount=1):
     """
-    Run this test with injection-only GPUs x gpuCount
+    Run this test adding injection-only GPUs x gpuCount
     """
     def decorator(fn):
         @wraps(fn)
@@ -1515,18 +1586,24 @@ def run_with_injection_gpus(gpuCount=1):
             for i in range(0, gpuCount):
                 cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU
             updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
-            gpuIds = []
+            if 'gpuIds' not in kwds:
+                gpuIds = []
+            else:
+                gpuIds = kwds['gpuIds']
+                
             for i in range(0, updated.numToCreate):
                 gpuIds.append(updated.entityList[i].entity.entityId)
+
             kwds['gpuIds'] = gpuIds
             fn(*args, **kwds)
             return
         return wrapper
     return decorator
 
-def run_with_injection_gpu_instances(totalInstances=1):
+def run_with_injection_gpu_instances(totalInstances=1, gpuOffset=0):
     """
-    Run this test with injection-only <totalInstances> GPU instances 
+    Run this test adding injection-only <totalInstances> GPU instances.
+    Add the GPU instances to gpuIds[gpuOffset]
 
     This does not inject hierarchy now but should in the future
     """
@@ -1541,27 +1618,36 @@ def run_with_injection_gpu_instances(totalInstances=1):
 
             gpuIds = kwds['gpuIds']
 
+            if len(gpuIds) <= gpuOffset:
+                raise Exception("Injected instance GPU offset greater than GPU count")
+
             numGpus = len(dcgm_agent.dcgmGetAllDevices(kwds['handle']))
             cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
             cfe.numToCreate = totalInstances
+            logger.info("Injecting %u fake GPU Instances" % (totalInstances))            
             for i in range(0, totalInstances):
                 cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU_I
                 # Set the parent to the first GPu in the test
                 cfe.entityList[i].parent.entityGroupId = dcgm_fields.DCGM_FE_GPU
-                cfe.entityList[i].parent.entityId = gpuIds[0]
+                cfe.entityList[i].parent.entityId = gpuIds[gpuOffset]
             updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
-            instanceIds = []
+            if 'instanceIds' not in  kwds:
+                instanceIds = []
+            else:
+                instanceIds = kwds['instanceIds']
+                
             for i in range(0, updated.numToCreate):
                 instanceIds.append(updated.entityList[i].entity.entityId)
+
             kwds['instanceIds'] = instanceIds
             fn(*args, **kwds)
             return
         return wrapper
     return decorator
 
-def run_with_injection_gpu_compute_instances(totalCIs=1):
+def run_with_injection_gpu_compute_instances(totalCIs=1, giOffset=0):
     """
-    Run this test with <totalCIs> fake compute instances
+    Run this test adding <totalCIs> fake compute instances under GI giOffset.
 
     This does not inject hierarchy now but should in the future
     """
@@ -1575,11 +1661,15 @@ def run_with_injection_gpu_compute_instances(totalCIs=1):
                 raise Exception("Injected CIs require instance IDs")
             instanceIds = kwds['instanceIds']
 
+            if len(instanceIds) <= giOffset:
+                raise Exception("Injected CI offset greater than GI count")
+
             numGpus = len(dcgm_agent.dcgmGetAllDevices(kwds['handle']))
             cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
             cfe.numToCreate = totalCIs
-            instanceIndex = 0
+            instanceIndex = giOffset
             numInstances = len(instanceIds)
+            logger.info("Injecting %u fake Compute Instances" % (totalCIs))
             for i in range(0, totalCIs):
                 cfe.entityList[i].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU_CI
                 # Set the parents so that this compute instance has a parent that is part of the test
@@ -1593,9 +1683,15 @@ def run_with_injection_gpu_compute_instances(totalCIs=1):
                     if numInstances < totalCIs and instanceIndex == numInstances:
                         instanceIndex = 0
             updated = dcgm_agent_internal.dcgmCreateFakeEntities(kwds['handle'], cfe)
-            ciIds = []
+
+            if 'ciIds' not in kwds:
+                ciIds = []
+            else:
+                ciIds = kwds['ciIds']
+                
             for i in range(0, updated.numToCreate):
                 ciIds.append(updated.entityList[i].entity.entityId)
+
             kwds['ciIds'] = ciIds
             fn(*args, **kwds)
             return
@@ -1743,7 +1839,7 @@ def run_only_with_live_nvswitches():
                 raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
 
             if len(entityIdList) < 1:
-                logger.warning("Skipping test that requires live NV Switches. None were found")
+                skip_test("Test requires live NV Switches. None were found, skipping test.")
             else:
                 kwds['switchIds'] = entityIdList
                 fn(*args, **kwds)
@@ -1795,11 +1891,11 @@ def skip_unhealthy_mem(handle, gpuIds):
 
     systemObj.UpdateAllFields(1)
 
-    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version4)
+    responseV4 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
     #Check that our response comes back clean
     if responseV4.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
-        test_utils.skip_test("bad response.overallHealth %d. Are these GPUs really healthy?" % responseV4.overallHealth)
+        skip_test("bad response.overallHealth %d. Are these GPUs really healthy?" % responseV4.overallHealth)
 
 def watch_all_fields(handle,
                      gpuIds,
@@ -1878,7 +1974,17 @@ def try_capture_nvml_env(capture_nvml_environment_to):
         logger.error(f"failed to capture NVML environment, err: [{e}]")
         return False
 
-def run_subtest(subtestFn, *args, **kwargs):
+"""
+    run_subtest should only be called in the non-fast test case.
+
+    Arguments:
+       subTestFn: function to call
+       testDataObj: test data object to update
+       *args:       test arguments
+       **kwargs:    test keyword arguments
+"""
+
+def run_subtest(subtestFn, testDataObj=None, *args, **kwargs):
     #List that contains failings test to re-run with logging enabled
     global noLogging
     global reRunning
@@ -1888,18 +1994,44 @@ def run_subtest(subtestFn, *args, **kwargs):
     maxDisconnectedRetries = 3
 
     for retryCount in range(maxDisconnectedRetries+1):
+        #----------------------------------------------
+        # if none, no stats capture
+        if testDataObj != None:
+            # adding name and run stats dictionary to the map for every run
+            testDataObj.addName(subtestFn.__name__)
+        
+            # add test start time
+            testDataObj.addStartTime(retryCount)
+        #----------------------------------------------
+                
         if retryCount > 0:
+            if testDataObj!=None: testDataObj.updateMultiRun()
             logger.info("Retrying test %s time %d/%d due to not being connected to the host engine. War for bug 200417787" %
                         (subtestFn.__name__, retryCount, maxDisconnectedRetries))
 
         disconnect_is_failure = False
         if retryCount == maxDisconnectedRetries:
             disconnect_is_failure = True #Fail if disconnected on the last retry
-        with SubTest("%s" % (subtestFn.__name__), disconnect_is_failure=disconnect_is_failure) as subtest:
+        with SubTest("%s" % (subtestFn.__name__), disconnect_is_failure=disconnect_is_failure, dvssc_log = True) as subtest:
             subtestFn(*args, **kwargs)
+
+        #----------------------------------------------
+        # if none, no stats capture
+        if testDataObj != None:
+            # add test end time
+            testDataObj.addEndTime(retryCount)
+
+            # add subtest result - SUCCESS, FAIL, NOT CONNECTED
+            # failure message is captured in run_tests.py as part of exception
+            testDataObj.addTestStatus(str(subtest.result))
+        #----------------------------------------------
 
         if subtest.result != SubTest.NOT_CONNECTED:
             break #Passed/failed for another reason. Break out of the loop
+
+    if subtest.result != SubTest.SUCCESS:
+        if testDataObj != None:
+            testDataObj.addMessage(subtest.result_details)
 
     if subtest.result == SubTest.FAILED:
         #Running failing tests with logging enabled
@@ -1910,7 +2042,7 @@ def run_subtest(subtestFn, *args, **kwargs):
         try_capture_nvml_env(os.path.join(logger.default_log_dir, f"{subtest.name}.yaml"))
 
         logger.warning("Re-running failing test \"%s\" with logging enabled" % subtest.name)
-        with SubTest("%s" % (subtestFn.__name__)) as subtest:
+        with SubTest("%s" % (subtestFn.__name__), dvssc_log = True) as subtest:
             subtestFn(*args, **kwargs)
 
         restore_logging_state()
@@ -2032,7 +2164,7 @@ def for_all_same_sku_gpus():
         def wrapper(*args, **kwds):
             gpuGroupList = group_gpu_ids_by_sku(kwds['handle'], kwds['gpuIds'])
             for i, gpuIdList in enumerate(gpuGroupList):
-                with SubTest("GPU group %d. gpuIds: %s" % (i, str(gpuIdList))):
+                with SubTest("GPU group %d. gpuIds: %s" % (i, str(gpuIdList)), count = False):
                     kwds2 = kwds
                     kwds2['gpuIds'] = gpuIdList
                     fn(*args, **kwds2)
@@ -2061,7 +2193,7 @@ def set_max_power_limit(handle, gpuIds):
         ##Get the max Power Limit for the GPU
         maxPowerLimit = attributes.powerLimits.maxPowerLimit
 
-        config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+        config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
         config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
         config_values.mPerfState.syncBoost = dcgmvalue.DCGM_INT32_BLANK
         config_values.mPerfState.targetClocks.memClock =  dcgmvalue.DCGM_INT32_BLANK
@@ -2069,6 +2201,8 @@ def set_max_power_limit(handle, gpuIds):
         config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
         config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
         config_values.mPowerLimit.val = maxPowerLimit
+        for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+            config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
         ##Set the max Power Limit for the group
         groupObj.config.Set(config_values)
@@ -2163,7 +2297,7 @@ def run_only_with_all_supported_gpus():
                 skip_test("Unsupported GPU(s) detected, skipping test")
             else:
                 if len(gpu_ids) < 1:
-                    logger.warning("Skipping test that requires live GPUs. None were found")
+                    skip_test("Test requires all supported GPUs. None were found, skipping test.")
                 else:
                     kwds['gpuIds'] = gpu_ids
                     fn(*args, **kwds)
@@ -2179,6 +2313,24 @@ def get_device_names(gpu_ids, handle=None):
         attributes = dcgm_system.discovery.GetGpuAttributes(gpuId)
         yield (str(attributes.identifiers.deviceName).lower(), gpuId)
 
+def get_system_cpu_ids():
+    coreSiblingsSet = set()
+    coreSiblingsPaths = glob.iglob("/sys/devices/system/cpu/cpu*/topology/core_siblings")
+    for coreSiblingsPath in coreSiblingsPaths:
+        try:
+            with open(coreSiblingsPath) as f:
+                coreSiblings = f.read()
+                coreSiblingsSet.add(coreSiblings)
+        except Exception as e:
+            raise RuntimeError(f"failed to read file, err: [{e}]")
+
+    if len(coreSiblingsSet) == 0:
+        raise RuntimeError("No CPU found?")
+
+    cpuIds = []
+    for i in range(len(coreSiblingsSet)):
+        cpuIds.append(i)
+    return cpuIds
 
 def skip_denylisted_gpus(denylist=None):
     """
@@ -2391,19 +2543,23 @@ def get_device_id(handle, gpuId):
     attrs = dcgm_agent.dcgmGetDeviceAttributes(handle, gpuId)
     return attrs.identifiers.pciDeviceId >> 16
 
-def is_throttling_masked_by_nvvs(handle, gpuId, throttle_type):
+def is_clocks_event_masked_by_nvvs(handle, gpuId, clocks_event):
     deviceId = get_device_id(handle, gpuId)
     if deviceId == 0x102d or deviceId == 0x1eb8:
         return True
     elif deviceId == 0x1df6:
-        return throttle_type == dcgm_fields.DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL
+        return clocks_event == dcgm_fields.DCGM_CLOCKS_EVENT_REASON_SW_THERMAL
     elif deviceId == 0x1e30:
-        ignored = [ dcgm_fields.DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN,
-                    dcgm_fields.DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL,
-                    dcgm_fields.DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL ]
-        return throttle_type in ignored
+        ignored = [ dcgm_fields.DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN,
+                    dcgm_fields.DCGM_CLOCKS_EVENT_REASON_HW_THERMAL,
+                    dcgm_fields.DCGM_CLOCKS_EVENT_REASON_SW_THERMAL ]
+        return clocks_event in ignored
 
     return False
+
+# Deprecated: Use is_clocks_event_masked_by_nvvs instead
+def is_throttling_masked_by_nvvs(handle, gpuId, throttle_type):
+    return is_clocks_event_masked_by_nvvs(handle, gpuId, throttle_type)
 
 def mig_mode_helper():
     mig_enabled_gpus = []
@@ -2411,19 +2567,19 @@ def mig_mode_helper():
     non_mig_gpus = []
 
     nvidiaSmi = nvidia_smi_utils.NvidiaSmiJob()
-    nvidiaSmi.QueryNvidiaSmiXml()
 
-    for gpuId in nvidiaSmi.m_data:
-        if dcgm_fields.DCGM_FI_DEV_MIG_MODE in nvidiaSmi.m_data[gpuId]:
-            mig_tags = nvidiaSmi.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_MIG_MODE]
+    if nvidiaSmi.QueryNvidiaSmiXml() != None:
+        for gpuId in nvidiaSmi.m_data:
+            if dcgm_fields.DCGM_FI_DEV_MIG_MODE in nvidiaSmi.m_data[gpuId]:
+                mig_tags = nvidiaSmi.m_data[gpuId][dcgm_fields.DCGM_FI_DEV_MIG_MODE]
 
-            for mig_tag in mig_tags:
-                if mig_tag == "N/A":
-                    non_mig_gpus.append(gpuId)
-                elif mig_tag == "Enabled":
-                    mig_enabled_gpus.append(gpuId)
-                elif mig_tag == "Disabled":
-                    mig_disabled_gpus.append(gpuId)
+                for mig_tag in mig_tags:
+                    if mig_tag == "N/A":
+                        non_mig_gpus.append(gpuId)
+                    elif mig_tag == "Enabled":
+                        mig_enabled_gpus.append(gpuId)
+                    elif mig_tag == "Disabled":
+                        mig_disabled_gpus.append(gpuId)
 
     return mig_enabled_gpus, mig_disabled_gpus, non_mig_gpus
 
@@ -2438,11 +2594,15 @@ def mig_mode_helper():
 # and delete MIG GIs and CIs, but they further interogate the MIG hierarchy
 # to find an appriopriate GPU to do this on.
 #
-# However, 
 def is_mig_mode_enabled():
     mig_enabled_gpus, _, _ = mig_mode_helper()
 
     return len(mig_enabled_gpus) > 0
+
+def is_mig_mode_disabled():
+    mig_enabled_gpus, mig_disabled_gpus, non_mig_gpus = mig_mode_helper()
+
+    return (len(mig_enabled_gpus) == 0) and ((len(mig_disabled_gpus) > 0) or (len(non_mig_gpus) > 0))
 
 def run_only_if_mig_is_disabled():
     '''
@@ -2451,10 +2611,10 @@ def run_only_if_mig_is_disabled():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            if is_mig_mode_enabled():
-                skip_test("This test is not yet supported while MIG mode is enabled.")
-            else:
+            if is_mig_mode_disabled():
                 result = fn(*args, **kwds)
+            else:
+                skip_test("This test is not yet supported while MIG mode is enabled.")
         return wrapper
     return decorator
 
@@ -2465,10 +2625,10 @@ def run_only_if_mig_is_enabled():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            if not is_mig_mode_enabled():
-                skip_test("this test does nothing if MIG mode is not enabled")
-            else:
+            if is_mig_mode_enabled():
                 result = fn(*args, **kwds)
+            else:
+                skip_test("this test does nothing if MIG mode is not enabled")
         return wrapper
     return decorator
 
@@ -2560,6 +2720,7 @@ def run_with_non_mig_cuda_visible_devices():
                 else:
                     os.environ['CUDA_VISIBLE_DEVICES'] = old_cuda_visible_devices
                     logger.info("restored CUDA_VISIBLE_DEVICES")
+
         return wrapper
     return decorator
 
@@ -2590,7 +2751,7 @@ def diag_execute_wrapper(dd, handle):
         else:
             raise e
 
-def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version8):
+def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9):
     try:
         response = dcgm_agent.dcgmActionValidate_v2(handle, runDiagInfo, runDiagVersion)
         return response
@@ -2709,7 +2870,7 @@ def gpu_supports_gpm(handle, gpuId):
     assert fieldValues[0].status == 0
     computeCapability = fieldValues[0].value.i64
 
-    if computeCapability == 0x090000:
+    if computeCapability >= 0x090000:
         return True
     else:
         return False
@@ -2808,5 +2969,137 @@ def run_only_with_gpus_present():
             if get_gpu_count() == 0:
                 skip_test("This test requires there be GPUs present on the system")
             fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def get_domainSocketFilename_and_heArgs():
+    '''
+    Returns a decorator for functions. The decorator sets the
+    domainSocketFilename keywork argument.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            kwargs["domainSocketFilename"] = '/tmp/dcgm_test%s' % (datetime.datetime.now().strftime("%j%f"))
+            kwargs["heArgs"] = [ '-d',  kwargs["domainSocketFilename"] ]
+            fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# unwrap
+#   This unwraps decorators from a function.
+#
+# Arguments:
+#    func: function to unwrap.
+#
+# Returns:
+#    unwrapped function.
+#
+def unwrap(func):
+    if not hasattr(func, '__wrapped__'):
+        return func
+
+    return unwrap(func.__wrapped__)
+
+# with_amortized_decorators
+#
+#   This is called from an amortized decorator callback to run all test
+# functions under that sequence of decorators.
+#
+# Arguments:
+#    test_data_obj: TestData object to track results
+#    ex:            exeption (not used here)
+#    functions:     decorator-wrapped functions
+#    unrwap:        boolean to control target function unwrapping
+#    *args:         positional arguments to pass to test
+#    **kwargs:      keyword arguments to pass to test
+#
+def with_amortized_decorators(test_data_obj, ex, functions, do_unwrap, *args, **kwargs):
+    for function in functions:
+        file = function[0]
+        separator_index = file.index('/')
+        prefix = file[ : separator_index]
+        module_name = file[separator_index + 1 :].replace('/', '.')
+        function_name = function[1]
+
+        test_data_obj.addModuleName(module_name)
+
+        # Make the function call.
+
+        mod = import_module(file.replace("/", "."))
+        called_function = getattr(mod, function_name)
+
+        if do_unwrap:
+            called_function = unwrap(called_function)
+
+        test_utils.run_subtest(called_function, test_data_obj, *args, **kwargs)
+
+
+# with_amortized_exception_decorators
+#
+#    This is called when a decorator in an amortized decorator sequence throws
+# an exception, most likely to skip the test. We must note that ALL the test
+# functions using that decorator sequence suffer the exception.
+#
+# Arguments:
+#    test_data_obj: TestData object to track results.
+#    ex:            exception.
+#    functions:     list of decorator-wrapped functions.
+#    do_unwrap:        unwrap flag (not used here)
+#    *args:         positional arguments (not used here)
+#    *kwargs:       keyword arguments (not used here)
+#
+def with_amortized_exception_decorators(test_data_obj, ex, functions, do_unwrap, *args, **kwargs):
+    for function in functions:
+        file = function[0]
+        separator_index = file.index('/')
+        module_name = file[separator_index + 1 :].replace('/', '.')
+        function_name = function[1]
+
+        with SubTest("%s" % function_name, dvssc_log = True) as subTest:
+            test_data_obj.addModuleName(module_name)
+            test_data_obj.addName(function_name)
+            test_data_obj.addStartTime()
+
+            if ex == None:
+                test_data_obj.addTestStatus('PASSED')
+                test_data_obj.addMessage(str(ex))
+            elif type(ex).__name__ == "AssertionError":
+                test_data_obj.addTestStatus('FAILED')
+                test_data_obj.addMessage(str(ex))
+            elif type(ex).__name__ == "TestSkipped":
+                test_data_obj.addTestStatus('SKIPPED')
+                test_data_obj.addMessage(str(ex))
+            else:
+                test_data_obj.addTestStatus('FAILED')
+                test_data_obj.addMessage(str(ex))
+
+            test_data_obj.addEndTime()
+            test_data_obj.saveMapToJson()
+
+            if ex != None:
+                raise ex
+
+
+def run_only_with_nvsdm_live():
+    """
+    Only run this test if the NVSDM library is the active backend for switch telemetry
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                try:
+                    backend = dcgm_agent_internal.dcgmNvswitchGetBackend(kwds['handle'])
+                except:
+                    skip_test("Could not query NVSDM state")
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if backend != "NVSDM":
+                skip_test("NVSDM is not the active backend")
+            else:
+                fn(*args, **kwds)
+            return
         return wrapper
     return decorator
