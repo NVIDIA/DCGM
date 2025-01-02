@@ -22,6 +22,8 @@
 #include <iostream>
 #include <stdexcept>
 
+#pragma GCC diagnostic ignored "-Wsign-promo"
+
 // Module names
 #define MODULE_CORE_NAME       "Core"
 #define MODULE_NVSWITCH_NAME   "NvSwitch"

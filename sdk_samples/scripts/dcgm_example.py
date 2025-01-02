@@ -14,6 +14,7 @@
 import os
 import sys
 import argparse
+import textwrap
 
 try:
     from dcgm_structs import dcgmExceptionClass
@@ -25,7 +26,7 @@ try:
 except:
     pass
     print("Unable to find python bindings, please refer to the exmaple below: ")
-    print("PYTHONPATH=/usr/local/dcgm/bindings python dcgm_example.py")
+    print("PYTHONPATH=/usr/share/datacenter-gpu-manager-4/bindings/python3 python3 dcgm_example.py")
     sys.exit(1)
 
 ## Look at __name__ == "__main__" for entry point to the script
@@ -113,10 +114,10 @@ def convert_overall_health_to_string(health):
         return "N/A"
 
 def nvvs_installed():
-    return os.path.isfile('/usr/share/nvidia-validation-suite/nvvs')
+    return os.path.isfile('/usr/libexec/datacenter-gpu-manager-4/nvvs')
 
 def dcgm_diag_test_didnt_pass(rc):
-    if rc == dcgm_structs.DCGM_HEALTH_RESULT_FAIL or rc == dcgm_structs.DCGM_HEALTH_RESULT_WARN:
+    if rc == dcgm_structs.DCGM_DIAG_RESULT_FAIL or rc == dcgm_structs.DCGM_DIAG_RESULT_WARN:
         return True
     else:
         return False
@@ -142,6 +143,8 @@ def dcgm_diag_test_index_to_name(index):
         return "graphicsProcesses"
     elif index == dcgm_structs.DCGM_SWTEST_INFOROM:
         return "inforom"
+    elif index == dcgm_structs.DCGM_SWTEST_FABRIC_MANAGER:
+        return "fabricManager"
     else:
         raise dcgm_structs.DCGMError(dcgm_structs.DCGM_ST_BADPARAM)
 
@@ -269,14 +272,33 @@ def main(manualOpMode=False, embeddedHostengine=True):
                 print(str(e))
         else:
             isHealthy = True
-            
-            for i in range(0, response.levelOneTestCount):
-                if dcgm_diag_test_didnt_pass(response.levelOneResults[i].result):
-                    print("group failed validation check for %s" % dcgm_diag_test_index_to_name(i))
+
+            tests = response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]
+            errors = response.errors[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]
+
+            swTest = next(filter(lambda curTest: curTest.name == "software", tests), None)
+            if swTest:
+                if dcgm_diag_test_didnt_pass(swTest.result):
                     isHealthy = False
-                
+                    # Print any errors tied to a GPU and any global errors not tied to any entity
+                    testErrors = map(lambda errIdx: errors[errIdx], swTest.errorIndices[:min(swTest.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)])
+                    delim = ""
+                    for err in testErrors:
+                        if err.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU:
+                            print(delim, end="")
+                            delim = "\n"
+                            print(textwrap.fill("Gpu %d failed with error: %s" % (err.entity.entityId, err.msg)))
+                        elif err.entity.entityGroupId == dcgm_fields.DCGM_FE_NONE and err.entity.entityId == 0:
+                            print(delim, end="")
+                            delim = "\n"
+                            print(textwrap.fill("Error: %s" % (err.msg)))
+            else:
+                print("Expected test results were not included in the response.")
+                isHealthy = False
+
             if not isHealthy:
-                print("System is not healthy")
+                print("\nSystem is not healthy")
+
     else:
         print("not running short group validation because NVIDIA Validation Suite is not installed")
     print("")

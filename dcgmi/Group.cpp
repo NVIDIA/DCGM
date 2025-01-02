@@ -19,6 +19,7 @@
  */
 
 #include "Group.h"
+#include "EntityListHelpers.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgmi_common.h"
@@ -167,12 +168,12 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, bool outputJson)
 
 dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outGroup)
 {
-    dcgmReturn_t result = DCGM_ST_OK;
-    dcgmGroupInfo_t stDcgmGroupInfo;
+    dcgmReturn_t result                              = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> stDcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
     std::stringstream ss;
 
-    stDcgmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(dcgmHandle, groupId, &stDcgmGroupInfo);
+    stDcgmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(dcgmHandle, groupId, stDcgmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -184,16 +185,16 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outG
 
     outGroup[GROUP_ID_TAG] = (unsigned int)(uintptr_t)groupId;
 
-    outGroup[GROUP_NAME_TAG] = std::string(stDcgmGroupInfo.groupName);
+    outGroup[GROUP_NAME_TAG] = std::string(stDcgmGroupInfo->groupName);
 
     // Create GPU List string to display
-    if (stDcgmGroupInfo.count == 0)
+    if (stDcgmGroupInfo->count == 0)
         ss << "None";
-    for (unsigned int i = 0; i < stDcgmGroupInfo.count; i++)
+    for (unsigned int i = 0; i < stDcgmGroupInfo->count; i++)
     {
-        ss << DcgmFieldsGetEntityGroupString(stDcgmGroupInfo.entityList[i].entityGroupId) << " ";
-        ss << stDcgmGroupInfo.entityList[i].entityId;
-        if (i < stDcgmGroupInfo.count - 1)
+        ss << DcgmFieldsGetEntityGroupString(stDcgmGroupInfo->entityList[i].entityGroupId) << " ";
+        ss << stDcgmGroupInfo->entityList[i].entityId;
+        if (i < stDcgmGroupInfo->count - 1)
             ss << ", ";
     }
 #if 0
@@ -241,22 +242,14 @@ dcgmReturn_t Group::RunGroupInfo(dcgmHandle_t dcgmHandle, DcgmiOutputBoxer &outG
 /*******************************************************************************/
 dcgmReturn_t Group::RunGroupManageDevice(dcgmHandle_t dcgmHandle, bool add)
 {
-    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(dcgmHandle, groupInfo);
-
-    // Fallback to old method
-
-    std::vector<dcgmGroupEntityPair_t> oldEntityList;
     dcgmReturn_t result = DCGM_ST_OK;
-
-    // Assume that GroupStringParse will print error to user, no output needed here.
-    result = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
-    if (DCGM_ST_OK != result)
+    std::vector<dcgmGroupEntityPair_t> entityList;
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, groupInfo, entityList);
+    if (!err.empty())
     {
-        log_error("Error: parsing for GPUs failed. Return: {}", result);
-        return result;
+        SHOW_AND_LOG_ERROR << "Error: parsing for GPUs failed. Error: " << err;
+        return DCGM_ST_BADPARAM;
     }
-
-    std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
 
     for (unsigned int i = 0; i < entityList.size(); i++)
     {

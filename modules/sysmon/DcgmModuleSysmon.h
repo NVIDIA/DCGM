@@ -94,7 +94,7 @@ public:
      *          be how long we block on QueueTask() being called again.
      *          Returning 0 = Don't care when we get called back.
      */
-    std::chrono::milliseconds RunOnce();
+    std::chrono::milliseconds ProcessRunOnce();
 
     /*
      * Populates the specified CPU according to the range string specified
@@ -132,6 +132,7 @@ private:
     std::string m_coreSpeedBaseDir;
     std::atomic_bool m_paused;
     DcgmNs::Timelib::TimePoint m_maxSampleAge;
+    std::thread::id m_sysmonThreadId;
 
     bool m_enabledMonitoring[SYSMON_MONITORING_SWITCH_COUNT];
     std::vector<double> m_cpuUtilization;
@@ -149,7 +150,7 @@ private:
     dcgmReturn_t ProcessPauseResumeMessage(PauseResumeMessage msg);
     dcgmReturn_t ProcessClientDisconnect(dcgm_core_msg_client_disconnect_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
-    std::chrono::system_clock::time_point TryRunOnce(bool forceRun);
+    std::chrono::system_clock::time_point ProcessTryRunOnce(bool forceRun);
     const SysmonUtilizationSample &ReadUtilizationSample(DcgmNs::Timelib::TimePoint now);
     dcgmReturn_t UpdateField(DcgmNs::Timelib::TimePoint now, const dcgm_field_update_info_t &updateInfo);
     void UpdateFields(timelib64_t &nextUpdateTimeUsec);
@@ -175,7 +176,7 @@ private:
     dcgmReturn_t PopulateCpusIfNeeded();
     // Probably going to be replaced by a mechanism that relies on the watch table
     dcgmReturn_t EnableMonitoring(unsigned int monitoringSwitch);
-    void PruneSamples(DcgmNs::Timelib::TimePoint now);
+    void ProcessPruneSamples(DcgmNs::Timelib::TimePoint now);
     dcgmReturn_t ParseProcStatCpuLine(const std::string &line, SysmonUtilizationSample &sample);
 
     /*
@@ -184,6 +185,13 @@ private:
     unsigned int GetSocketIdForEntity(unsigned char entityGroupId, dcgm_field_eid_t entityId);
     dcgmReturn_t Pause();
     dcgmReturn_t Resume();
+
+    dcgmReturn_t ProcessGetSubscribed(dcgmGroupEntityPair_t entityPair, unsigned short fieldId, bool &isSubscribed);
+    dcgmReturn_t GetSubscribed(dcgmGroupEntityPair_t entityPair, unsigned short fieldId, bool &isSubscribed);
+    dcgmReturn_t RunOnce(bool force = false);
+    dcgmReturn_t PruneSamples(DcgmNs::Timelib::TimePoint now);
+    dcgmReturn_t GetUtilizationSampleSize(size_t &numSamples);
+    dcgmReturn_t AddUtilizationSample(SysmonUtilizationSample &item);
 
     void run() override;
 };

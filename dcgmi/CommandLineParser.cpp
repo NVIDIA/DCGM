@@ -225,7 +225,7 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     TCLAP::ValueArg<std::string> getInfo(
         "i",
         "info",
-        "Specify which information to return. [default = atp] \n a - device info\n p - power limits\n t - thermal limits\n c - clocks",
+        "Specify which information to return. [default = atp] \n a - device info\n p - power limits\n t - thermal limits\n c - clocks\n w - workload power profiles",
         false,
         "atp",
         "flags");
@@ -885,6 +885,14 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
                                      false,
                                      0,
                                      "mode");
+
+    TCLAP::ValueArg<int> workloadPowerProfile("o",
+                                              "workloadpowerprofile",
+                                              "Configure Workload Power Profile. Index of device specific profile.",
+                                              false,
+                                              0,
+                                              "index (-1 to clear)");
+
     TCLAP::SwitchArg verbose("v", "verbose", "Display policy information per GPU.", cmd, false);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
 
@@ -897,7 +905,8 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
                                "\n 3.Memory Application Clock - Current and Target Memory application clock values"
                                "\n 4.ECC Mode - Current and Target ECC Mode"
                                "\n 5 Power Limit - Current and Target power limits"
-                               "\n 6.Compute Mode - Current and Target compute mode",
+                               "\n 6.Compute Mode - Current and Target compute mode"
+                               "\n 7.Workload Power Profile - Requested profile index",
                                false); // Different command-line
     // Add more options to get command-line
 
@@ -915,6 +924,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     cmd.add(&appClocks);
     cmd.add(&powerLimit);
     cmd.add(&computeMode);
+    cmd.add(&workloadPowerProfile);
     cmd.add(&hostAddress);
 
     helpOutput.addDescription("config -- Used to configure settings for groups of GPUs.");
@@ -926,6 +936,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     helpOutput.addToGroup("set", &appClocks);
     helpOutput.addToGroup("set", &powerLimit);
     helpOutput.addToGroup("set", &computeMode);
+    helpOutput.addToGroup("set", &workloadPowerProfile);
 
     helpOutput.addToGroup("get", &hostAddress);
     helpOutput.addToGroup("get", &groupId);
@@ -946,7 +957,8 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     CHECK_TCLAP_ARG_NEGATIVE_VALUE(computeMode, "compmode");
 
     if (setConfig.isSet()
-        && !(eccMode.isSet() || syncBoost.isSet() || appClocks.isSet() || powerLimit.isSet() || computeMode.isSet()))
+        && !(eccMode.isSet() || syncBoost.isSet() || appClocks.isSet() || powerLimit.isSet() || computeMode.isSet()
+             || workloadPowerProfile.isSet()))
     {
         throw TCLAP::CmdLineParseException("No configuration options given", "set");
     }
@@ -954,7 +966,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     // Process Set Command
     if (setConfig.isSet())
     {
-        dcgmConfig_t mDeviceConfig {};
+        dcgmConfig_v2 mDeviceConfig {};
 
         /* Set all the Params as unknown */
         mDeviceConfig.eccMode                         = DCGM_INT32_BLANK;
@@ -964,6 +976,10 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         mDeviceConfig.powerLimit.val                  = DCGM_INT32_BLANK;
         mDeviceConfig.computeMode                     = DCGM_INT32_BLANK;
         mDeviceConfig.gpuId                           = DCGM_INT32_BLANK;
+        for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+        {
+            mDeviceConfig.workloadPowerProfiles[i] = DCGM_INT32_BLANK;
+        }
 
         if (eccMode.isSet())
         {
@@ -1000,6 +1016,17 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         {
             unsigned int val          = computeMode.getValue();
             mDeviceConfig.computeMode = val;
+        }
+
+        if (workloadPowerProfile.isSet())
+        {
+            memset(mDeviceConfig.workloadPowerProfiles, 0, sizeof(mDeviceConfig.workloadPowerProfiles));
+            int val = workloadPowerProfile.getValue(); // -1 to clear
+            if (val >= 0)
+            {
+                unsigned int pIndex                         = val / DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM;
+                mDeviceConfig.workloadPowerProfiles[pIndex] = (1 << (val % DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM));
+            }
         }
 
         configObj.SetArgs(groupId.getValue(), &mDeviceConfig);
@@ -1224,6 +1251,9 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     bitwiseWatches |= DCGM_HEALTH_WATCH_THERMAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_POWER;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVLINK;
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL;
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_FATAL;
+
                     if (setWatches.getValue().length() > 1)
                     {
                         throw TCLAP::CmdLineParseException("Invalid flags detected", "set");
@@ -1253,23 +1283,23 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
     return result;
 }
 
-void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
+void CommandLineParser::ValidateClocksEventMask(const std::string &clocksEventMask)
 {
     std::stringstream buf;
 
-    if (throttleMask.size() > DCGM_THROTTLE_MASK_LEN - 1)
+    if (clocksEventMask.size() > DCGM_CLOCKS_EVENT_MASK_LEN - 1)
     {
-        throw TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters");
+        throw TCLAP::CmdLineParseException("clocksevent-mask has to be under 50 characters");
     }
 
-    int isdigitRet = std::isdigit(throttleMask[0]);
+    int isdigitRet = std::isdigit(clocksEventMask[0]);
 
-    for (size_t i = 1; i < throttleMask.size(); i++)
+    for (size_t i = 1; i < clocksEventMask.size(); i++)
     {
-        if (std::isdigit(throttleMask[i]) != isdigitRet)
+        if (std::isdigit(clocksEventMask[i]) != isdigitRet)
         {
-            buf << "throttle-mask cannot mix numbers and letters, but we detected a mix of letters and numbers '"
-                << throttleMask << "'.";
+            buf << "clocksevent-mask cannot mix numbers and letters, but we detected a mix of letters and numbers '"
+                << clocksEventMask << "'.";
             throw TCLAP::CmdLineParseException(buf.str());
         }
     }
@@ -1277,17 +1307,17 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
     if (isdigitRet)
     {
         // Check for valid numeric input
-        uint64_t mask = std::strtoull(throttleMask.c_str(), NULL, 10);
+        uint64_t mask = std::strtoull(clocksEventMask.c_str(), NULL, 10);
 
         // Make sure the mask sets only valid bits
-        mask &= ~DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN;
-        mask &= ~DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL;
-        mask &= ~DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL;
-        mask &= ~DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE;
+        mask &= ~DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN;
+        mask &= ~DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
+        mask &= ~DCGM_CLOCKS_EVENT_REASON_HW_THERMAL;
+        mask &= ~DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE;
 
         if (mask != 0)
         {
-            buf << "Detected invalid bits set in the throttle-mask. Valid values for throttle-mask are 0, 8, 32, "
+            buf << "Detected invalid bits set in the clocksevent-mask. Valid values for clocksevent-mask are 0, 8, 32, "
                 << "64 and 128, and their additive permutations.";
             throw TCLAP::CmdLineParseException(buf.str());
         }
@@ -1296,14 +1326,14 @@ void CommandLineParser::ValidateThrottleMask(const std::string &throttleMask)
     {
         // Check for valid string input
         std::vector<std::string> reasons;
-        dcgmTokenizeString(throttleMask, ",", reasons);
+        dcgmTokenizeString(clocksEventMask, ",", reasons);
         for (size_t i = 0; i < reasons.size(); i++)
         {
             std::string tmp(reasons[i]);
             std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
             if ((tmp != HW_SLOWDOWN) && (tmp != SW_THERMAL) && (tmp != HW_THERMAL) && (tmp != HW_POWER_BRAKE))
             {
-                buf << "Found '" << reasons[i] << "' in throttle-mask. Valid throttle reasons are limited to "
+                buf << "Found '" << reasons[i] << "' in clocksevent-mask. Valid clocks event reasons are limited to "
                     << HW_SLOWDOWN << ", " << SW_THERMAL << ", " << HW_THERMAL << ", and " << HW_POWER_BRAKE << ".";
                 throw TCLAP::CmdLineParseException(buf.str());
             }
@@ -1455,7 +1485,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                            "1",
                                            "diag",
                                            cmd);
-    TCLAP::ValueArg<int> groupId("g", "group", "The group ID to query.", false, DCGM_GROUP_ALL_GPUS, "groupId", cmd);
+    TCLAP::ValueArg<unsigned int> groupId(
+        "g", "group", "The group ID to query.", false, DCGM_GROUP_NULL, "groupId", cmd);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
     TCLAP::MultiArg<std::string> parms("p",
                                        "parameters",
@@ -1474,9 +1505,9 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "fakeGpuList",
         cmd);
     TCLAP::ValueArg<std::string> gpuList(
-        "i",
+        "",
         "gpuList",
-        "A comma-separated list of the gpus on which the diagnostic should run. Cannot be used with -g.",
+        "A comma-separated list of the gpus on which the diagnostic should run. Cannot be used with -g. Deprecated: Please use entity-id instead.",
         false,
         "",
         "gpuList",
@@ -1485,11 +1516,12 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "n",
         "expectedNumEntities",
         "Expected number of active GPUs to run diagnostic. The diag will fail if the number of active GPUs does not match this value.\
-            Format: gpu:N, where N is the number of expected GPUs (not GPU id). Cannot be used with -f/--gpuList.",
+            Format: gpu:N, where N is the number of expected GPUs (not GPU id). Cannot be used with -f/-i/--gpuList.",
         false,
         "",
         "expectedNumEntities",
         cmd);
+
     TCLAP::SwitchArg verbose("v", "verbose", "Show information and warnings for each test.", cmd, false);
     TCLAP::SwitchArg statsOnFail(
         "", "statsonfail", "Only output the statistics files if there was a failure", cmd, false);
@@ -1527,14 +1559,17 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         false);
 
     TCLAP::ValueArg<std::string> throttleMask(
+        "", "throttle-mask", "Deprecated: please use clocksevent-mask instead.", false, "", "", cmd);
+
+    TCLAP::ValueArg<std::string> clocksEventMask(
         "",
-        "throttle-mask",
-        "Specify which throttling reasons should be ignored. You can provide a comma separated list of reasons. "
-        "For example, specifying 'HW_SLOWDOWN,SW_THERMAL' would ignore the HW_SLOWDOWN and SW_THERMAL throttling "
+        "clocksevent-mask",
+        "Specify which clocks event reasons should be ignored. You can provide a comma separated list of reasons. "
+        "For example, specifying 'HW_SLOWDOWN,SW_THERMAL' would ignore the HW_SLOWDOWN and SW_THERMAL event "
         "reasons. Alternatively, you can specify the integer value of the ignore bitmask. For the bitmask, "
         "multiple reasons may be specified by the sum of their bit masks. For "
-        "example, specifying '40' would ignore the HW_SLOWDOWN and SW_THERMAL throttling reasons.\n"
-        "\nValid throttling reasons and their corresponding bitmasks (given in parentheses) are:\n"
+        "example, specifying '40' would ignore the HW_SLOWDOWN and SW_THERMAL event reasons.\n"
+        "\nValid clocks event reasons and their corresponding bitmasks (given in parentheses) are:\n"
         "HW_SLOWDOWN (8)\nSW_THERMAL (32)\nHW_THERMAL (64)\nHW_POWER_BRAKE (128)",
         false,
         "",
@@ -1570,6 +1605,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                              1,
                                              "iterations",
                                              cmd);
+    TCLAP::ValueArg<std::string> entityIds(
+        "i", "entity-id", " Comma-separated list of entities to run the diag on.", false, "*,cpu:*", "entityId", cmd);
 
     TCLAP::ValueArg<unsigned int> timeout(
         "t",
@@ -1579,6 +1616,15 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         0,
         "timeout",
         cmd);
+
+    TCLAP::ValueArg<unsigned int> watchFrequency("",
+                                                 "watch-frequency",
+                                                 "Specify the watch frequency of fieldIDs being watched.",
+                                                 false,
+                                                 5000000,
+                                                 "watch frquency",
+                                                 cmd);
+
 
     // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
@@ -1600,10 +1646,12 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &json);
     helpOutput.addToGroup("1", &training);
     helpOutput.addToGroup("1", &throttleMask);
+    helpOutput.addToGroup("1", &clocksEventMask);
     helpOutput.addToGroup("1", &failEarly);
     helpOutput.addToGroup("1", &failCheckInterval);
     helpOutput.addToGroup("1", &iterations);
     helpOutput.addToGroup("1", &timeout);
+    helpOutput.addToGroup("1", &watchFrequency);
 
     cmd.parse(argc, argv);
 
@@ -1613,8 +1661,6 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
             "Specifying training is no longer supported and this code has been removed.");
     }
 
-    // Check for negative (invalid) inputs
-    CHECK_TCLAP_ARG_NEGATIVE_VALUE(groupId, "group");
     // Checking string value so macro CHECK_TCLAP_ARG_NEGATIVE_VALUE is not used
     if (strtol(startDiag.getValue().c_str(), NULL, 10) < 0)
     {
@@ -1633,6 +1679,16 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     if (gpuList.isSet() && groupId.isSet())
     {
         throw TCLAP::CmdLineParseException("Specifying a group id and a gpu list are mutually exclusive");
+    }
+
+    if (gpuList.isSet() && entityIds.isSet())
+    {
+        throw TCLAP::CmdLineParseException("Specifying a entity id and a gpu list are mutually exclusive");
+    }
+
+    if (entityIds.isSet() && groupId.isSet())
+    {
+        throw TCLAP::CmdLineParseException("Specifying a group id and a entity id are mutually exclusive");
     }
 
     if (expectedNumEntities.isSet())
@@ -1662,18 +1718,34 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("debugLevel must be one of " DCGM_LOGGING_SEVERITY_OPTIONS);
     }
 
-    if (throttleMask.getValue().size() > DCGM_THROTTLE_MASK_LEN - 1)
-    {
-        throw TCLAP::CmdLineParseException("throttle-mask has to be under 50 characters");
-    }
-
     if (iterations.getValue() == 0)
     {
         throw TCLAP::CmdLineParseException("The value for iterations cannot be 0.");
     }
 
+    std::string clocksEventMaskStr;
+
+    if (clocksEventMask.getValue().size() > 0 && throttleMask.getValue().size() > 0)
+    {
+        throw TCLAP::CmdLineParseException("Must specify no more than one of: clocksevent-mask, throttle-mask");
+    }
+
+    if (clocksEventMask.getValue().size() > 0)
+    {
+        clocksEventMaskStr = clocksEventMask.getValue();
+    }
+    if (throttleMask.getValue().size() > 0)
+    {
+        clocksEventMaskStr = throttleMask.getValue();
+    }
+
+    if (clocksEventMaskStr.size() > DCGM_CLOCKS_EVENT_MASK_LEN - 1)
+    {
+        throw TCLAP::CmdLineParseException("clocksevent-mask has to be under 50 characters");
+    }
+
     // This will throw an exception if an error occurs
-    ValidateThrottleMask(throttleMask.getValue());
+    ValidateClocksEventMask(clocksEventMaskStr);
 
     if (failCheckInterval.isSet() && !failEarly.isSet())
     {
@@ -1705,8 +1777,9 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     }
     ValidateParameters(concatenatedParams);
 
-    dcgmRunDiag_v8 drd = {};
-    drd.version        = dcgmRunDiag_version8;
+    dcgmRunDiag_v9 drd = {};
+
+    drd.version = dcgmRunDiag_version9;
     std::string error;
 
     // We set it to BLANK by default so the processes underneath can use the ENV
@@ -1730,12 +1803,14 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 debugLogFile.getValue(),
                                                 statsPath.getValue(),
                                                 severityInt,
-                                                throttleMask.getValue(),
+                                                clocksEventMaskStr,
                                                 groupId.getValue(),
                                                 failEarly.getValue(),
                                                 failCheckInterval.getValue(),
                                                 timeout.getValue(),
+                                                entityIds.getValue(),
                                                 expectedNumEntities.getValue(),
+                                                watchFrequency.getValue(),
                                                 error);
 
     if (result == DCGM_ST_BADPARAM)
@@ -2093,7 +2168,6 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 {
     static const std::string myName = "dmon";
     DCGMOutput helpOutput;
-    std::string gpuIdStr;
 
     DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
@@ -2109,9 +2183,6 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
                                            "-1",
                                            "entityId",
                                            cmd);
-
-    // Alias
-    TCLAP::ValueArg<std::string> gpuIds("", "gpu-id", " DEPRECATED Alias for --entity-id. ", false, "-1", "gpuId", cmd);
 
     TCLAP::ValueArg<std::string> groupId(
         "g", "group-id", " The group to query on the specified host.", false, "-1", "groupId", cmd);
@@ -2156,24 +2227,9 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     std::string entityIdsStr;
 
-    if (gpuIds.isSet())
-    {
-        std::string deprecationMsg = "--gpu-id is a deprecated alias for --entity-id. Please use --entity-id";
-        if (entityIds.isSet())
-        {
-            throw TCLAP::CmdLineParseException(deprecationMsg);
-        }
+    entityIdsStr = entityIds.getValue();
 
-        std::cerr << deprecationMsg << std::endl; // We want to flush immediately
-        entityIdsStr = gpuIds.getValue();
-    }
-    else
-    {
-        entityIdsStr = entityIds.getValue();
-    }
-
-
-    if (groupId.isSet() && (entityIds.isSet() || gpuIds.isSet()))
+    if (groupId.isSet() && entityIds.isSet())
     {
         throw TCLAP::CmdLineParseException("Only one of --entity-id and --group-id can be provided");
     }
@@ -2266,8 +2322,6 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
                                            "entityIds",
                                            cmd);
 
-    // Alias
-    TCLAP::ValueArg<std::string> gpuIds("", "gpu-id", " DEPRECATED Alias for --entity-id. ", false, "-1", "gpuId", cmd);
     TCLAP::ValueArg<std::string> groupId(
         "g", "group-id", " The group of GPUs to query on the specified host.", false, "-1", "groupId", cmd);
 
@@ -2275,23 +2329,9 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
 
     std::string entityIdsStr;
 
-    if (gpuIds.isSet())
-    {
-        std::string deprecationMsg = "--gpu-id is a deprecated alias for --entity-id. Please use --entity-id";
-        if (entityIds.isSet())
-        {
-            throw TCLAP::CmdLineParseException(deprecationMsg);
-        }
+    entityIdsStr = entityIds.getValue();
 
-        std::cerr << deprecationMsg << std::endl; // We want to flush immediately
-        entityIdsStr = gpuIds.getValue();
-    }
-    else
-    {
-        entityIdsStr = entityIds.getValue();
-    }
-
-    if (groupId.isSet() && (entityIds.isSet() || gpuIds.isSet()))
+    if (groupId.isSet() && entityIds.isSet())
     {
         throw TCLAP::CmdLineParseException("Both entity and group IDs specified. Please use only one at a time");
     }

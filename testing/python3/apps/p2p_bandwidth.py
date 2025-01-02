@@ -23,7 +23,6 @@ class RunP2Pbandwidth(app_runner.AppRunner):
 
     paths = {
             "Linux_64bit": "./apps/p2p_bandwidth/p2p_bandwidth",
-            "Linux_ppc64le": "./apps/p2p_bandwidth/p2p_bandwidth",
             "Linux_aarch64": "./apps/p2p_bandwidth/p2p_bandwidth",
             }
 

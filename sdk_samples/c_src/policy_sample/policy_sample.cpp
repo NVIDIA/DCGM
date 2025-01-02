@@ -19,15 +19,17 @@
 #include "string.h"
 #include <iostream>
 
+#pragma GCC diagnostic ignored "-Wsign-promo"
+
 // Definitions at bottom of file
 void displayError(dcgmStatus_t &statusHandle);
-int violationRegistration(void *data);
+int violationRegistration(dcgmPolicyCallbackResponse_t *response, uint64_t userData);
 
 ////////////////////////////////////////////////////////////////////////////////
 // This sample demonstrates the process of creating a group and getting/setting
 // the policies of the GPUs in that group. Policy registration is also shown.
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv)
+int main(int /* argc */, char ** /* argv */)
 {
     // DCGM calls return a dcgmReturn_t which can be useful for error handling and control flow.
     // Whenever we call DCGM we will store the return in result and check it for errors.
@@ -45,6 +47,7 @@ int main(int argc, char **argv)
     dcgmPolicy_t devicePolicyList[2];
     int conditionBuffer = 0;
     dcgmPolicy_t myGroupPolicy;
+    int intUserData = 10;
 
     // In our case we do not know whether to run in standalone or embedded so we will get the user
     // to set the mode. This will also allow us to see the differences and similarities between
@@ -331,13 +334,14 @@ int main(int argc, char **argv)
     // violations occurs we can register for policy updates. This allows us to handle violations
     // in our own way. We could hand in a new set of conditions, but let's use the conditions for the
     // policy we just set on the group. In this example we will simply print some of the information
-    // to the screen when a violation occurs.
+    // to the screen when a violation occurs. We can pass user data to policy violation callback via
+    // userData arg which can take pointer to data.
 
     // Note: if we wanted a condition of double bit and PCIe errors we would use
     // dcgmPolicyCondition_t condition = (DCGM_POLICY_COND_DBE |  DCGM_POLICY_COND_PCI);
 
-    result = dcgmPolicyRegister(
-        dcgmHandle, myGroupId, myGroupPolicy.condition, violationRegistration, violationRegistration);
+    result = dcgmPolicyRegister_v2(
+        dcgmHandle, myGroupId, myGroupPolicy.condition, violationRegistration, (uint64_t)&intUserData);
 
     // Check the result to see if our DCGM operation was successful.
     if (result != DCGM_ST_OK)
@@ -351,8 +355,7 @@ int main(int argc, char **argv)
     }
 
     // We could now run a process and any errors / events in our conditions would be caught and
-    // would trigger our policy action, our policy validation as well as our callback. We used the same
-    // callback function twice above, so our message will be printed twice.
+    // would trigger our policy action, our policy validation as well as our callback with user data.
 
     result = dcgmPolicyUnregister(dcgmHandle, myGroupId, myGroupPolicy.condition);
 
@@ -409,10 +412,12 @@ void displayError(dcgmStatus_t &statusHandle)
 
 // In this function we simply print what kind of condition is in the response. The callback response
 // struct has a lot more useful information here that we could use but let's keep it simple.
-int violationRegistration(void *data)
+// User data argument is of type uint64_t which in this case a pointer to int user data.
+int violationRegistration(dcgmPolicyCallbackResponse_t *response, uint64_t userData)
 {
-    std::string errorMessage               = "Unknown policy condition.";
-    dcgmPolicyCallbackResponse_t *response = (dcgmPolicyCallbackResponse_t *)data;
+    std::string errorMessage = "Unknown policy condition.";
+    int intUserData          = *((int *)userData);
+
     switch (response->condition)
     {
         case DCGM_POLICY_COND_DBE:
@@ -440,7 +445,7 @@ int violationRegistration(void *data)
              * added */
     }
 
-    std::cout << "Detected callback: " << errorMessage << std::endl;
+    std::cout << "Detected callback: [" << errorMessage << "] with user data [" << intUserData << "]" << std::endl;
 
     return 0;
 }

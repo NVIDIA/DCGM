@@ -20,6 +20,8 @@
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
+
+#include <UniquePtrUtil.h>
 #include <dcgm_nvml.h>
 #include <iostream>
 #include <map>
@@ -117,6 +119,24 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16:
         case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17:
             return "Recovery Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS:
+            return "Malformed Packet Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS:
+            return "Buffer Overrun Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS:
+            return "Rx Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS:
+            return "Rx Remote Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS:
+            return "Rx General Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS:
+            return "Link Integrity Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
+            return "Rx Symbol Error";
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
+            return "Symbol BER";
+        case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
+            return "Tx Discards";
         default:
             return "Unknown";
     }
@@ -128,10 +148,12 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     dcgmReturn_t returnResult = DCGM_ST_OK;
     DcgmiOutputTree outTree(30, 50);
     DcgmiOutputJson outJson;
-    DcgmiOutput &out = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
-    unsigned short fieldIds[DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU] = { 0 };
-    dcgmFieldValue_v1 values[DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU];
-    int numFieldIds = DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS * DCGM_NVLINK_MAX_LINKS_PER_GPU;
+    DcgmiOutput &out                                = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
+    constexpr int numNvLinkFieldsOnBlackwellOrNewer = 9;
+    constexpr int numNvLinkFieldsOnHopperOrOlder    = DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU;
+    constexpr int numFieldIds                   = numNvLinkFieldsOnHopperOrOlder + numNvLinkFieldsOnBlackwellOrNewer;
+    unsigned short fieldIds[numFieldIds]        = { 0 };
+    std::unique_ptr<dcgmFieldValue_v1[]> values = MakeUniqueZero<dcgmFieldValue_v1>(numFieldIds);
     std::stringstream ss;
     dcgmFieldGrp_t fieldGroupId;
 
@@ -140,8 +162,6 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     // Variable to track the count of the nvlink error types for each link
     unsigned int fieldIdCount = 0;
     unsigned int fieldId      = 0;
-
-    memset(&values[0], 0, sizeof(values));
 
     /* Various NVLink error counters to be displayed */
     fieldIds[0] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0;
@@ -234,6 +254,16 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     fieldIds[70] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17;
     fieldIds[71] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17;
 
+    fieldIds[72] = DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS;
+    fieldIds[73] = DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS;
+    fieldIds[74] = DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS;
+    fieldIds[75] = DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS;
+    fieldIds[76] = DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS;
+    fieldIds[77] = DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS;
+    fieldIds[78] = DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS;
+    fieldIds[79] = DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS;
+    fieldIds[80] = DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER;
+
     /* Make sure to update the 2nd parameter to dcgmFieldGroupCreate below if you make this
      * list bigger
      */
@@ -274,7 +304,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     out.addHeader(ss.str());
 
     // Get the latest values of the fields for the requested gpu Id
-    result = dcgmGetLatestValuesForFields(mNvcmHandle, gpuId, fieldIds, numFieldIds, values);
+    result = dcgmGetLatestValuesForFields(mNvcmHandle, gpuId, fieldIds, numFieldIds, values.get());
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to retreive latest value for nvlink error counts. Return: " << errorString(result)
@@ -288,8 +318,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     for (unsigned int nvlink = 0; nvlink < DCGM_NVLINK_MAX_LINKS_PER_GPU; nvlink++)
     {
         for (fieldId = fieldIdStart, fieldIdCount = 0;
-             fieldIdCount < DCGM_NVLINK_ERROR_COUNT
-             && fieldId < (DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU);
+             fieldIdCount < DCGM_NVLINK_ERROR_COUNT && fieldId < numNvLinkFieldsOnHopperOrOlder;
              fieldIdCount++, fieldId++)
         {
             if (values[fieldId].status == DCGM_ST_NOT_SUPPORTED)
@@ -321,6 +350,23 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
         }
 
         fieldIdStart = fieldIdStart + DCGM_NVLINK_ERROR_COUNT;
+    }
+
+    for (fieldId = numNvLinkFieldsOnHopperOrOlder; fieldId < numFieldIds; ++fieldId)
+    {
+        auto val = static_cast<long long>(values[fieldId].value.i64);
+
+        if (DCGM_INT64_IS_BLANK(val))
+        {
+            /* Skip unsupported nvlinks */
+            log_debug("Unable to retrieve nvlink {} count for gpuId {}",
+                      HelperGetNvlinkErrorCountType(values[fieldId].fieldId).c_str(),
+                      gpuId);
+            continue;
+        }
+
+        DcgmiOutputBoxer &outLink                                       = out["Error Detail"];
+        outLink[HelperGetNvlinkErrorCountType(values[fieldId].fieldId)] = (long long)values[fieldId].value.i64;
     }
 
     std::cout << out.str();
@@ -375,11 +421,11 @@ static std::string getIndentation(int numIndents)
 dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle)
 {
     dcgmReturn_t result;
-    dcgmNvLinkStatus_v3 linkStatus;
+    dcgmNvLinkStatus_v4 linkStatus;
     unsigned int i, j;
 
     memset(&linkStatus, 0, sizeof(linkStatus));
-    linkStatus.version = dcgmNvLinkStatus_version3;
+    linkStatus.version = dcgmNvLinkStatus_version4;
 
     result = dcgmGetNvLinkLinkStatus(dcgmHandle, &linkStatus);
 

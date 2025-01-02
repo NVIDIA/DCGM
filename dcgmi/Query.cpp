@@ -21,6 +21,7 @@
 #include "Query.h"
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
+#include "EntityListHelpers.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgmi_common.h"
@@ -93,7 +94,7 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
 {
     std::vector<dcgm_field_eid_t> entityIds;
     dcgmCpuHierarchy_t stCpuHierarchy {};
-    stCpuHierarchy.version = dcgmCpuHierarchy_version1;
+    stCpuHierarchy.version = dcgmCpuHierarchy_version2;
     DcgmiOutputColumns outColumns;
     DcgmiOutput &out = outColumns;
 
@@ -122,7 +123,7 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
     }
     else
     {
-        result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
+        result = dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
         if (result != DCGM_ST_OK)
         {
             SHOW_AND_LOG_ERROR << fmt::format(
@@ -147,6 +148,7 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
         auto coreMap = HelperBuildCpuListFromRanges(
             HelperGetCpuRangesFromBitmask(stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
         out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace TH500");
+        out[idStr][c_info].setOrAppend(std::string("Serial number : ") + stCpuHierarchy.cpus[entityId].serial);
         out[idStr][c_info].setOrAppend(coreMap);
     }
     std::cout << out.str();
@@ -310,6 +312,12 @@ dcgmReturn_t Query::DisplayDeviceInfo(dcgmHandle_t dcgmHandle,
                     std::cout << QUERY_ATTRIBUTE_FOOTER;
 
                     break;
+                case 'w':
+
+                    HelperDisplayWorkloadPowerProfiles(dcgmHandle, requestedGpuId);
+                    std::cout << QUERY_ATTRIBUTE_FOOTER;
+
+                    break;
                 default:
                     // Should never run
                     DCGM_LOG_ERROR << "Unexpected error in querying GPU " << requestedGpuId << ".";
@@ -325,13 +333,13 @@ dcgmReturn_t Query::DisplayDeviceInfo(dcgmHandle_t dcgmHandle,
 dcgmReturn_t Query::DisplayCpuInfo(dcgmHandle_t dcgmHandle, unsigned int requestedCpuId, std::string const &attributes)
 {
     dcgmCpuHierarchy_t stCpuHierarchy {};
-    stCpuHierarchy.version          = dcgmCpuHierarchy_version1;
+    stCpuHierarchy.version          = dcgmCpuHierarchy_version2;
     CommandOutputController cmdView = CommandOutputController();
 
     // Check if input attribute flags are valid
     dcgmReturn_t result = DCGM_ST_OK;
 
-    result = dcgmGetCpuHierarchy(dcgmHandle, &stCpuHierarchy);
+    result = dcgmGetCpuHierarchy_v2(dcgmHandle, &stCpuHierarchy);
     if (result != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format("Unable to get CPU hierarchy. Error: {}: {}", result, errorString(result));
@@ -359,6 +367,9 @@ dcgmReturn_t Query::DisplayCpuInfo(dcgmHandle_t dcgmHandle, unsigned int request
                 cmdView.addDisplayParameter(ATTRIBUTE_TAG, "CPU Ranges");
                 cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, coreMap);
                 cmdView.display();
+                cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Serial number");
+                cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, stCpuHierarchy.cpus[requestedCpuId].serial);
+                cmdView.display();
                 std::cout << QUERY_ATTRIBUTE_FOOTER;
                 break;
             default:
@@ -377,11 +388,11 @@ dcgmReturn_t Query::DisplayGroupInfo(dcgmHandle_t mNvcmHandle,
                                      std::string const &attributes,
                                      bool verbose)
 {
-    dcgmReturn_t result = DCGM_ST_OK;
-    dcgmGroupInfo_t stNvcmGroupInfo;
+    dcgmReturn_t result                              = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result = dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)requestedGroupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result = dcgmGroupGetInfo(mNvcmHandle, (dcgmGpuGrp_t)(long long)requestedGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -390,27 +401,27 @@ dcgmReturn_t Query::DisplayGroupInfo(dcgmHandle_t mNvcmHandle,
         return result;
     }
 
-    if (stNvcmGroupInfo.count == 0)
+    if (stNvcmGroupInfo->count == 0)
     {
         std::cout << "No devices in group.\n";
     }
     else if (!verbose)
     {
-        result = HelperDisplayNonVerboseGroup(mNvcmHandle, stNvcmGroupInfo, attributes);
+        result = HelperDisplayNonVerboseGroup(mNvcmHandle, *(stNvcmGroupInfo), attributes);
     }
     else
     {
         std::cout << "Device info: " << std::endl;
-        for (unsigned int i = 0; i < stNvcmGroupInfo.count; i++)
+        for (unsigned int i = 0; i < stNvcmGroupInfo->count; i++)
         {
-            if (stNvcmGroupInfo.entityList[i].entityGroupId != DCGM_FE_GPU)
+            if (stNvcmGroupInfo->entityList[i].entityGroupId != DCGM_FE_GPU)
             {
-                std::cout << DcgmFieldsGetEntityGroupString(stNvcmGroupInfo.entityList[i].entityGroupId)
-                          << " id: " << stNvcmGroupInfo.entityList[i].entityId << std::endl;
+                std::cout << DcgmFieldsGetEntityGroupString(stNvcmGroupInfo->entityList[i].entityGroupId)
+                          << " id: " << stNvcmGroupInfo->entityList[i].entityId << std::endl;
                 continue;
             }
 
-            result = DisplayDeviceInfo(mNvcmHandle, stNvcmGroupInfo.entityList[i].entityId, attributes);
+            result = DisplayDeviceInfo(mNvcmHandle, stNvcmGroupInfo->entityList[i].entityId, attributes);
 
             if (result != DCGM_ST_OK)
             {
@@ -656,6 +667,29 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
 
                 break;
 
+            case 'w':
+
+                for (unsigned int i = 0; i < stNvcmGroupInfo.count; i++)
+                {
+                    std::stringstream ssD;
+                    cmdView.setDisplayStencil(QUERY_DEVICE_HEADER);
+                    ssD << "GPU ID: " << stNvcmGroupInfo.entityList[i].entityId;
+                    cmdView.addDisplayParameter(HEADER_TAG, ssD.str());
+                    cmdView.display();
+
+                    if (stNvcmGroupInfo.entityList[i].entityGroupId != DCGM_FE_GPU)
+                    {
+                        std::cout << DcgmFieldsGetEntityGroupString(stNvcmGroupInfo.entityList[i].entityGroupId)
+                                  << " id: " << stNvcmGroupInfo.entityList[i].entityId << std::endl;
+                        continue;
+                    }
+
+                    HelperDisplayWorkloadPowerProfiles(mNvcmHandle, stNvcmGroupInfo.entityList[i].entityId);
+                    std::cout << QUERY_ATTRIBUTE_FOOTER;
+                }
+
+                break;
+
             default:
                 // Should never run
                 log_error("Unexpected Error.");
@@ -668,6 +702,45 @@ dcgmReturn_t Query::HelperDisplayNonVerboseGroup(dcgmHandle_t mNvcmHandle,
     return DCGM_ST_OK;
 }
 
+void Query::HelperDisplayWorkloadPowerProfiles(dcgmHandle_t dcgmHandle, unsigned int gpuId)
+{
+    dcgmReturn_t result;
+
+    dcgmWorkloadPowerProfileProfilesInfo_v1 profilesInfo   = {};
+    dcgmDeviceWorkloadPowerProfilesStatus_v1 profileStatus = {};
+
+    profilesInfo.version  = dcgmWorkloadPowerProfileProfilesInfo_version1;
+    profileStatus.version = dcgmDeviceWorkloadPowerProfilesStatus_version1;
+
+    result = dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle, gpuId, &profilesInfo, &profileStatus);
+
+    if (result != DCGM_ST_OK)
+    {
+        std::cout << "Error: Unable to get GPU info. Return: " << errorString(result) << std::endl;
+        log_error("Error getting workload power profiles for GPU ID: {}. Return: {}", gpuId, result);
+        return;
+    }
+
+    std::string profileMask;
+
+    CommandOutputController cmdView = CommandOutputController();
+    cmdView.setDisplayStencil(QUERY_ATTRIBUTE_DATA);
+
+    cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Supported Profiles");
+    profileMask = DcgmNs::Utils::HelperDisplayPowerBitmask(profileStatus.profileMask);
+    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, profileMask);
+    cmdView.display();
+
+    cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Requested Profiles");
+    profileMask = DcgmNs::Utils::HelperDisplayPowerBitmask(profileStatus.requestedProfileMask);
+    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, profileMask);
+    cmdView.display();
+
+    cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Enforced Profiles");
+    profileMask = DcgmNs::Utils::HelperDisplayPowerBitmask(profileStatus.enforcedProfileMask);
+    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, profileMask);
+    cmdView.display();
+}
 
 void Query::HelperDisplayClocks(dcgmDeviceSupportedClockSets_t &clocks)
 {
@@ -909,7 +982,7 @@ std::string Query::HelperFormatClock(dcgmClockSet_t clock)
     std::stringstream ss;
 
     ss << clock.memClock;
-    ss << ", ";
+    ss << ",";
     ss << clock.smClock;
 
     return ss.str();
@@ -918,7 +991,7 @@ std::string Query::HelperFormatClock(dcgmClockSet_t clock)
 /********************************************************************************/
 dcgmReturn_t Query::HelperValidInput(std::string const &attributes)
 {
-    char matches[] = "aptc";
+    char matches[] = "aptcw";
 
     // Check for valid input
     if (attributes.length() > strlen(matches))
@@ -997,25 +1070,25 @@ std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_
     int currRangeLast  = SENTINEL;
     bool currentBit    = false;
     std::vector<std::pair<uint32_t, uint32_t>> ranges {};
-    for (int bitIndex = 0; bitIndex < numBits; bitIndex++)
+    for (uint32_t bitIndex = 0; bitIndex < numBits; ++bitIndex)
     {
         currentBit = getBit((uint8_t *)bitmask, bitIndex);
 
         if (currRangeFirst == SENTINEL && currentBit == true)
         {
             // found the beginning of a range
-            currRangeFirst = bitIndex;
+            currRangeFirst = static_cast<int>(bitIndex);
         }
         else if (currRangeFirst != SENTINEL && currentBit == false)
         {
             // found the end of a range
-            currRangeLast = bitIndex - 1;
+            currRangeLast = static_cast<int>(bitIndex - 1);
         }
 
         if (currRangeFirst != SENTINEL && bitIndex == numBits - 1)
         {
             // edge case, we aren't going to find an end
-            currRangeLast = bitIndex;
+            currRangeLast = static_cast<int>(bitIndex);
         }
         // we don't need to track first==sentinel, currentBit==false because
         // that means the range hasn't started yet
@@ -1131,37 +1204,6 @@ dcgmReturn_t QueryHierarchyInfo::DoExecuteConnected()
     return m_queryObj.DisplayHierarchyInfo(m_dcgmHandle);
 }
 
-void TopologicalSort(dcgmMigHierarchy_v2 &hierarchy)
-{
-    /*
-     * In the dcgmMigHierarchy_v2 we store only GPU_I and GPU_CI. There are no GPUs.
-     * To sort them properly, we need the following order:
-     *      GPU 0
-     *          GPU_I 0
-     *              GPU_CI 0
-     *              GPU_CI 1
-     *          GPU_I 1
-     *              GPU_CI 0
-     *              GPU_CI 1
-     *      GPU 1
-     *          ...
-     * Where indices after GPU_CI and GPU_I are NVML indices, not entityIds.
-     */
-
-    std::sort(&hierarchy.entityList[0],
-              &hierarchy.entityList[hierarchy.count],
-              [&](dcgmMigHierarchyInfo_v2 const &left, dcgmMigHierarchyInfo_v2 const &right) {
-                  return std::tie(left.info.nvmlGpuIndex,
-                                  left.info.nvmlInstanceId,
-                                  left.entity.entityGroupId,
-                                  left.info.nvmlComputeInstanceId)
-                         < std::tie(right.info.nvmlGpuIndex,
-                                    right.info.nvmlInstanceId,
-                                    right.entity.entityGroupId,
-                                    right.info.nvmlComputeInstanceId);
-              });
-}
-
 std::string FormatMigHierarchy(dcgmMigHierarchy_v2 &hierarchy)
 {
     DcgmiOutputTree outTree(20, 70);
@@ -1169,7 +1211,7 @@ std::string FormatMigHierarchy(dcgmMigHierarchy_v2 &hierarchy)
 
     out.setOption(DCGMI_OUTPUT_OPTIONS_SEPARATE_SECTIONS, true);
 
-    TopologicalSort(hierarchy);
+    DcgmNs::TopologicalSort(hierarchy);
 
     out.addHeader("Instance Hierarchy");
 

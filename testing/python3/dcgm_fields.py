@@ -34,18 +34,18 @@ DCGM_FS_GLOBAL      = 0              # Field is global (ex: driver version)
 DCGM_FS_ENTITY      = 1              # Field is associated with an entity (GPU, VGPU, ..etc)
 DCGM_FS_DEVICE      = DCGM_FS_ENTITY # Field is associated with a device. Deprecated. Use DCGM_FS_ENTITY
 
-# DCGM_FI_DEV_CLOCK_THROTTLE_REASONS is a bitmap of why the clock is throttled.
-# These macros are masks for relevant throttling, and are a 1:1 map to the NVML
+# DCGM_FI_DEV_CLOCKS_EVENT_REASONS is a bitmap of clock events
+# These macros are masks for relevant clock events, and are a 1:1 map to the NVML
 # reasons documented in nvml.h. The notes for the header are copied blow:
 
 # Nothing is running on the GPU and the clocks are dropping to Idle state
-DCGM_CLOCKS_THROTTLE_REASON_GPU_IDLE = 0x0000000000000001
+DCGM_CLOCKS_EVENT_REASON_GPU_IDLE = 0x0000000000000001
 
 # GPU clocks are limited by current setting of applications clocks
-DCGM_CLOCKS_THROTTLE_REASON_CLOCKS_SETTING = 0x0000000000000002
+DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING = 0x0000000000000002
 
 # SW Power Scaling algorithm is reducing the clocks below requested clocks
-DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP = 0x0000000000000004
+DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP = 0x0000000000000004
 
 # HW Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
 #
@@ -56,7 +56,7 @@ DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP = 0x0000000000000004
 #  - May be also reported during PState or clock change
 #  - This behavior may be removed in a later release.
 
-DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN = 0x0000000000000008
+DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN = 0x0000000000000008
 
 # Sync Boost
 #
@@ -65,29 +65,56 @@ DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN = 0x0000000000000008
 # will boost to the minimum possible clocks across the entire group. Look at
 # the throttle reasons for other GPUs in the system to see why those GPUs are
 # holding this one at lower clocks.
-DCGM_CLOCKS_THROTTLE_REASON_SYNC_BOOST = 0x0000000000000010
+DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST = 0x0000000000000010
 
 # SW Thermal Slowdown
 #
 # This is an indicator of one or more of the following:
 #  - Current GPU temperature above the GPU Max Operating Temperature
 #  - Current memory temperature above the Memory Max Operating Temperature
-DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL = 0x0000000000000020
+DCGM_CLOCKS_EVENT_REASON_SW_THERMAL = 0x0000000000000020
 
 # HW Thermal Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
 #
 # This is an indicator of:
 #  - temperature being too high
-DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL = 0x0000000000000040
+DCGM_CLOCKS_EVENT_REASON_HW_THERMAL = 0x0000000000000040
 
 # HW Power Brake Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
 #
 # This is an indicator of:
 #  - External Power Brake Assertion being triggered (e.g. by the system power supply)
-DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE = 0x0000000000000080
+DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE = 0x0000000000000080
 
 # GPU clocks are limited by current setting of Display clocks
-DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS = 0x0000000000000100
+DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS = 0x0000000000000100
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_GPU_IDLE instead
+DCGM_CLOCKS_THROTTLE_REASON_GPU_IDLE = DCGM_CLOCKS_EVENT_REASON_GPU_IDLE
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING instead
+DCGM_CLOCKS_THROTTLE_REASON_CLOCKS_SETTING = DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP instead
+DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP = DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN instead
+DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST instead
+DCGM_CLOCKS_THROTTLE_REASON_SYNC_BOOST = DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SW_THERMAL instead
+DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL = DCGM_CLOCKS_EVENT_REASON_SW_THERMAL
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_THERMAL instead
+DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL = DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE instead
+DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE = DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE
+
+# Deprecated: Use DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS instead
+DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS = DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS
 
 #Field entity groups. Which type of entity is this field or field value associated with
 DCGM_FE_NONE     = 0 # Field is not associated with an entity. Field scope should be DCGM_FS_GLOBAL
@@ -103,12 +130,12 @@ DCGM_FE_CPU_CORE = 8 # Field is associated with a CPU core
 c_dcgm_field_eid_t = c_uint32 #Represents an identifier for an entity within a field entity. For instance, this is the gpuId for DCGM_FE_GPU.
 
 #System attributes
-DCGM_FI_UNKNOWN                 = 0
-DCGM_FI_DRIVER_VERSION          = 1   #Driver Version
-DCGM_FI_NVML_VERSION            = 2   #Underlying NVML version
-DCGM_FI_PROCESS_NAME            = 3   #Process Name. Will be nv-hostengine or your process's name in embedded mode
-DCGM_FI_DEV_COUNT               = 4   #Number of Devices on the node
-DCGM_FI_CUDA_DRIVER_VERSION     = 5   #Cuda Driver Version as an integer. CUDA 11.1 = 11100
+DCGM_FI_UNKNOWN                         = 0
+DCGM_FI_DRIVER_VERSION                  = 1   #Driver Version
+DCGM_FI_NVML_VERSION                    = 2   #Underlying NVML version
+DCGM_FI_PROCESS_NAME                    = 3   #Process Name. Will be nv-hostengine or your process's name in embedded mode
+DCGM_FI_DEV_COUNT                       = 4   #Number of Devices on the node
+DCGM_FI_CUDA_DRIVER_VERSION             = 5   #Cuda Driver Version as an integer. CUDA 11.1 = 11100
 #Device attributes
 DCGM_FI_DEV_NAME                = 50  #Name of the GPU device
 DCGM_FI_DEV_BRAND               = 51  #Device Brand
@@ -151,13 +178,15 @@ DCGM_FI_DEV_BAR1_TOTAL          = 90  #Total BAR1 of the GPU
 DCGM_FI_SYNC_BOOST              = 91  #Deprecated - Sync boost settings on the node
 DCGM_FI_DEV_BAR1_USED           = 92  #Used BAR1 of the GPU in MB
 DCGM_FI_DEV_BAR1_FREE           = 93  #Free BAR1 of the GPU in MB
+DCGM_FI_DEV_GPM_SUPPORT         = 94  #GPM support for the device
 #Clocks and power
 DCGM_FI_DEV_SM_CLOCK            = 100 #SM clock for the device
 DCGM_FI_DEV_MEM_CLOCK           = 101 #Memory clock for the device
 DCGM_FI_DEV_VIDEO_CLOCK         = 102 #Video encoder/decoder clock for the device
 DCGM_FI_DEV_APP_SM_CLOCK        = 110 #SM Application clocks
 DCGM_FI_DEV_APP_MEM_CLOCK       = 111 #Memory Application clocks
-DCGM_FI_DEV_CLOCK_THROTTLE_REASONS = 112 #Current clock throttle reasons (bitmask of DCGM_CLOCKS_THROTTLE_REASON_*)
+DCGM_FI_DEV_CLOCKS_EVENT_REASONS = 112 #Current clocks event reasons (bitmask of DCGM_CLOCKS_EVENT_REASON_*)
+DCGM_FI_DEV_CLOCK_THROTTLE_REASONS = DCGM_FI_DEV_CLOCKS_EVENT_REASONS #Deprecated: Use DCGM_FI_DEV_CLOCKS_EVENT_REASONS instead
 DCGM_FI_DEV_MAX_SM_CLOCK        = 113 #Maximum supported SM clock for the device
 DCGM_FI_DEV_MAX_MEM_CLOCK       = 114 #Maximum supported Memory clock for the device
 DCGM_FI_DEV_MAX_VIDEO_CLOCK     = 115 #Maximum supported Video encoder/decoder clock for the device
@@ -177,6 +206,10 @@ DCGM_FI_DEV_POWER_MGMT_LIMIT_MIN = 161 #Minimum power management limit for the d
 DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX = 162 #Maximum power management limit for the device
 DCGM_FI_DEV_POWER_MGMT_LIMIT_DEF = 163 #Default power management limit for the device
 DCGM_FI_DEV_ENFORCED_POWER_LIMIT = 164 #Effective power limit that the driver enforces after taking into account all limiters
+DCGM_FI_DEV_FABRIC_MANAGER_STATUS     = 170 # The status of the fabric manager - a value from dcgmFabricManagerStatus_t
+DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE = 171 # The failure that happened while starting the Fabric Manager, if any
+DCGM_FI_DEV_FABRIC_CLUSTER_UUID       = 172 # The uuid of the cluster to which this GPU belongs
+DCGM_FI_DEV_FABRIC_CLIQUE_ID          = 173 # The ID of the fabric clique to which this GPU belongs
 DCGM_FI_DEV_PSTATE               = 190 #Performance state (P-State) 0-15. 0=highest
 DCGM_FI_DEV_FAN_SPEED            = 191 #Fan speed for the device in percent 0-100
 #Device utilization and telemetry
@@ -239,6 +272,21 @@ DCGM_FI_DEV_ECC_SBE_AGG_REG     = 330 #Register File single bit aggregate (persi
 DCGM_FI_DEV_ECC_DBE_AGG_REG     = 331 #Register File double bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_SBE_AGG_TEX     = 332 #Texture memory single bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_DBE_AGG_TEX     = 333 #Texture memory double bit aggregate (persistent) ecc errors
+
+DCGM_FI_DEV_DIAG_MEMORY_RESULT           = 350 #Result of the GPU Memory test
+DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT       = 351 #Result of the Diagnostics test
+DCGM_FI_DEV_DIAG_PCIE_RESULT             = 352 #Result of the PCIe + NVLink test
+DCGM_FI_DEV_DIAG_TARGETED_STRESS_RESULT  = 353 #Result of the Targeted Stress test
+DCGM_FI_DEV_DIAG_TARGETED_POWER_RESULT   = 354 #Result of the Targeted Power test
+DCGM_FI_DEV_DIAG_MEMORY_BANDWIDTH_RESULT = 355 #Result of the Memory Bandwidth test
+DCGM_FI_DEV_DIAG_MEMTEST_RESULT          = 356 #Result of the Memory Stress test
+DCGM_FI_DEV_DIAG_PULSE_TEST_RESULT       = 357 #Result of the Input Energy Delayed Product power (EDPp) test (a.k.a. the pulse test)
+DCGM_FI_DEV_DIAG_EUD_RESULT              = 358 #Result of the Extended Utility Diagnostics (EUD) test
+DCGM_FI_DEV_DIAG_CPU_EUD_RESULT          = 359 #Result of the CPU Extended Utility Diagnostics (EUD) test
+DCGM_FI_DEV_DIAG_SOFTWARE_RESULT         = 360 #Result of the Software test
+DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT      = 361 #Result of the NVBandwidth test
+DCGM_FI_DEV_DIAG_STATUS                  = 362 #Status of the current diag run
+
 # Remap availability histogram for each memory bank on the GPU.
 DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX     = 385
 DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH    = 386
@@ -352,6 +400,9 @@ DCGM_FI_DEV_NVLINK_BANDWIDTH_L14 = 448
 DCGM_FI_DEV_NVLINK_BANDWIDTH_L15 = 494
 DCGM_FI_DEV_NVLINK_BANDWIDTH_L16 = 495
 DCGM_FI_DEV_NVLINK_BANDWIDTH_L17 = 496
+DCGM_FI_DEV_NVLINK_ERROR_DL_CRC = 497
+DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY = 498
+DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY = 499
 
 #Device Attributes associated with virtualization
 DCGM_FI_DEV_VIRTUAL_MODE                   = 500  #Operating mode of the GPU
@@ -431,6 +482,14 @@ DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0       = 813
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1       = 814
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2       = 815
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3       = 816
+DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE4       = 817
+DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE5       = 818
+DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE6       = 819
+DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE7       = 820
+DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE4       = 821
+DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE5       = 822
+DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE6       = 823
+DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE7       = 824
 DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS                = 856
 DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS            = 857
 DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT         = 858
@@ -438,6 +497,8 @@ DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN  = 859
 DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN  = 860
 DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX               = 861
 DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX               = 862
+
+DCGM_FI_DEV_NVSWITCH_DEVICE_UUID                 = 878
 
 DCGM_FI_LAST_NVSWITCH_FIELD_ID                   = 899 #Last field ID of the NVSwitch instance
 
@@ -493,6 +554,7 @@ DCGM_FI_PROF_NVJPG7_ACTIVE = 1032
 
 #Ratio of cycles each of the NVOFA engines are active.
 DCGM_FI_PROF_NVOFA0_ACTIVE = 1033
+DCGM_FI_PROF_NVOFA1_ACTIVE = 1034
 
 '''
 The per-link number of bytes of active NvLink TX (transmit) or RX (transmit) data including both header and payload.
@@ -540,24 +602,72 @@ DCGM_FI_PROF_NVLINK_L17_RX_BYTES = 1075
 DCGM_FI_PROF_NVLINK_THROUGHPUT_FIRST = DCGM_FI_PROF_NVLINK_L0_TX_BYTES
 DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST  = DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
-DCGM_FI_DEV_CPU_UTIL_TOTAL         = 1100 # CPU Utilization, total
-DCGM_FI_DEV_CPU_UTIL_USER          = 1101 # CPU Utilization, user
-DCGM_FI_DEV_CPU_UTIL_NICE          = 1102 # CPU Utilization, nice
-DCGM_FI_DEV_CPU_UTIL_SYS           = 1103 # CPU Utilization, system time
-DCGM_FI_DEV_CPU_UTIL_IRQ           = 1104 # CPU Utilization, interrupt servicing
-DCGM_FI_DEV_CPU_TEMP_CURRENT       = 1110 # CPU temperature
-DCGM_FI_DEV_CPU_TEMP_WARNING       = 1111 # CPU warning temparature
-DCGM_FI_DEV_CPU_TEMP_CRITICAL      = 1112 # CPU critical temparature
-DCGM_FI_DEV_CPU_CLOCK_CURRENT      = 1120 # CPU instantaneous clock speed
-DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT = 1130 # CPU power utilization
-DCGM_FI_DEV_CPU_POWER_LIMIT        = 1131 # CPU power limit
+DCGM_FI_DEV_CPU_UTIL_TOTAL            = 1100 # CPU Utilization, total
+DCGM_FI_DEV_CPU_UTIL_USER             = 1101 # CPU Utilization, user
+DCGM_FI_DEV_CPU_UTIL_NICE             = 1102 # CPU Utilization, nice
+DCGM_FI_DEV_CPU_UTIL_SYS              = 1103 # CPU Utilization, system time
+DCGM_FI_DEV_CPU_UTIL_IRQ              = 1104 # CPU Utilization, interrupt servicing
+DCGM_FI_DEV_CPU_TEMP_CURRENT          = 1110 # CPU temperature
+DCGM_FI_DEV_CPU_TEMP_WARNING          = 1111 # CPU warning temparature
+DCGM_FI_DEV_CPU_TEMP_CRITICAL         = 1112 # CPU critical temparature
+DCGM_FI_DEV_CPU_CLOCK_CURRENT         = 1120 # CPU instantaneous clock speed
+DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT    = 1130 # CPU power utilization
+DCGM_FI_DEV_CPU_POWER_LIMIT           = 1131 # CPU power limit
 DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT  = 1132 # SysIO power limit
 DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT = 1133 # Module power limit
-DCGM_FI_DEV_CPU_VENDOR             = 1140 # CPU vendor name
-DCGM_FI_DEV_CPU_MODEL              = 1141 # CPU model name
+DCGM_FI_DEV_CPU_VENDOR                = 1140 # CPU vendor name
+DCGM_FI_DEV_CPU_MODEL                 = 1141 # CPU model name
+
+# Total Tx packets on the link in NVLink5
+DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS = 1200
+
+# Total Tx bytes on the link in NVLink5
+DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES = 1201
+
+# Total Rx packets on the link in NVLink5
+DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS = 1202
+
+# Total Rx bytes on the link in NVLink5
+DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES = 1203
+
+# Number of packets Rx on a link where packets are malformed
+DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS = 1204
+
+# Number of packets that were discarded on Rx due to buffer overrun
+DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS = 1205
+
+# Total number of packets with errors Rx on a link
+DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS = 1206
+
+# Total number of packets Rx - stomp/EBP marker
+DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS = 1207
+
+# Total number of packets Rx with header mismatch
+DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS = 1208
+
+# Total number of times that the count of local errors exceeded a threshold
+DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS = 1209
+
+# Total number of tx error packets that were discarded
+DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS = 1210
+
+# Number of times link went from Up to recovery, succeeded and link came back up
+DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS = 1211
+
+# Number of times link went from Up to recovery, failed and link was declared down
+DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS = 1212
+
+# Number of times link went from Up to recovery, irrespective of the result
+DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS = 1213
+
+# Number of errors in rx symbols
+DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS = 1214
+
+# BER for symbol errors
+DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER = 1215
 
 #greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS         = 1142
+DCGM_FI_MAX_FIELDS         = 1216
 
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):
@@ -616,6 +726,7 @@ class c_dcgm_field_output_format_t(_PrintableStructure):
     ]
 
 dcgm_field_output_format_t = POINTER(c_dcgm_field_output_format_t)
+
 TAG_LENGTH = 48
 
 # Structure to represent device information
@@ -627,7 +738,9 @@ class c_dcgm_field_meta_t(_PrintableStructure):
         ('size', c_ubyte),
         ('tag', c_char * TAG_LENGTH),
         ('scope', c_int),
-        ('valueFormat', c_dcgm_field_output_format_t)
+        ('nvmlFieldId', c_int),
+        ('entityLevel', c_uint),
+        ('valueFormat', dcgm_field_output_format_t)
     ]
 
 

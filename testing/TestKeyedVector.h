@@ -29,9 +29,9 @@ public:
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
     int Init(const TestDcgmModuleInitParams &initParams) override;
-    int Run();
-    int Cleanup();
-    std::string GetTag();
+    int Run() override;
+    int Cleanup() override;
+    std::string GetTag() override;
 
     /*************************************************************************/
 private:
@@ -83,7 +83,7 @@ private:
 
     /*************************************************************************/
     /* Virtual method inherited from TestDcgmModule */
-    bool IncludeInDefaultList(void)
+    bool IncludeInDefaultList(void) override
     {
         return false;
     }

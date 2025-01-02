@@ -45,7 +45,7 @@ def helper_verify_config_values_standalone(handle, groupId, expected_power, expe
     Helper Method to verify all the values for the current configuration are as expected
     """
 
-    groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version2)
+    groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version3)
     status_handle = dcgm_agent.dcgmStatusCreate()
     
     config_values = dcgm_agent.dcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
@@ -147,7 +147,7 @@ mem_clk_set = attributesForDevices[0].vpStates.vpState[total_clocks/2].memClk
 
 ## Always Switch the ecc mode
 ecc_set = 1
-groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version2)
+groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId, dcgm_structs.c_dcgmGroupInfo_version3)
 config_values = dcgm_agent.dcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, 0)
 assert len(config_values) > 0, "Failed to work with NULL status handle"
 eccmodeOnGroupExisting = config_values[0].mEccMode
@@ -160,7 +160,7 @@ else:
 syncboost_set = 1
 compute_set = dcgm_structs.DCGM_CONFIG_COMPUTEMODE_DEFAULT
 
-config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 config_values.mEccMode = ecc_set
 config_values.mPerfState.syncBoost =  syncboost_set
 config_values.mPerfState.autoBoost =  autoBoost_set
@@ -171,6 +171,8 @@ config_values.mPerfState.maxVPState.procClk = proc_clk_set
 config_values.mComputeMode = compute_set
 config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
 config_values.mPowerLimit.val = powerLimit_set
+for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
 ## Set Config and verify the value
 status_handle = dcgm_agent.dcgmStatusCreate()

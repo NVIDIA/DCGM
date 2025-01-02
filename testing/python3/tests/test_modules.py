@@ -156,16 +156,13 @@ def test_dcgm_modules_paused(handle):
 @test_utils.run_only_if_checking_libraries()
 def test_dcgm_library_existence():
     libraries = [
-        'libdcgmmoduleconfig.so',
-        'libdcgmmodulehealth.so',
-        'libdcgmmodulenvswitch.so',
-        'libdcgmmoduleprofiling.so',
-        'libdcgm_cublas_proxy11.so',
-        'libdcgmmodulediag.so',
-        'libdcgmmoduleintrospect.so',
-        'libdcgmmodulepolicy.so',
-        'libdcgmmodulevgpu.so',
-        'libnvperf_dcgm_host.so',
+        'libdcgmmoduleconfig.so.4',
+        'libdcgmmodulehealth.so.4',
+        'libdcgmmodulenvswitch.so.4',
+        'libdcgm_cublas_proxy11.so.4',
+        'libdcgmmodulediag.so.4',
+        'libdcgmmoduleintrospect.so.4',
+        'libdcgmmodulepolicy.so.4',
     ]
 
     name_to_found = {}
@@ -174,10 +171,6 @@ def test_dcgm_library_existence():
         name_to_found[library] = False
 
     lib_path = utils.get_testing_framework_library_path()
-
-    # Only check for the older proxy libraries if we aren't on aarch64
-    if lib_path[-8:] != 'aarch64/':
-        name_to_found['libdcgm_cublas_proxy10.so'] = False
 
     file_list = os.listdir(lib_path)
     for filename in file_list:

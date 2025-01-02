@@ -21,25 +21,31 @@
  */
 
 #include "Diag.h"
+#include "dcgm_fields.h"
+#include <charconv>
 #include <chrono>
 #include <ctype.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <list>
+#include <ranges>
 #include <signal.h>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 #define DCGM_INIT_UUID
 #include "DcgmDiagCommon.h"
 #include "DcgmStringHelpers.h"
 #include "DcgmUtilities.h"
+#include "EntityListHelpers.h"
 #include "NvcmTCLAP.h"
 #include "NvvsJsonStrings.h"
 #include "PluginStrings.h"
@@ -68,44 +74,6 @@ char DIAG_HARDWARE[] = "+-----  Hardware  ----------+---------------------------
 char DIAG_INTEGRATION[] = "+-----  Integration  -------+------------------------------------------------+\n";
 
 char DIAG_STRESS[] = "+-----  Stress  ------------+------------------------------------------------+\n";
-
-// Header Names
-const std::string DISPLAY_DEPLOYMENT("Deployment");
-const std::string DISPLAY_HARDWARE("Hardware");
-const std::string DISPLAY_INTEGRATION("Integration");
-const std::string DISPLAY_STRESS("Stress");
-
-// Test Names
-const std::string DISPLAY_DENYLIST("Denylist");
-const std::string DISPLAY_NVML_LIB("NVML Library");
-const std::string DISPLAY_CUDA_MAIN_LIB("CUDA Main Library");
-const std::string DISPLAY_CUDA_TOOLKIT("CUDA Toolkit Library");
-const std::string DISPLAY_PERMISSIONS("Permissions and OS Blocks");
-const std::string DISPLAY_PERSISTENCE("Persistence Mode");
-const std::string DISPLAY_ENVIRONMENT("Environment Variables");
-const std::string DISPLAY_PAGE_RETIREMENT("Page Retirement/Row Remap");
-const std::string DISPLAY_GRAPHICS("Graphics Processes");
-const std::string DISPLAY_INFOROM("Inforom");
-
-// Must follow the same order as dcgmSoftwareTest_enum in dcgm_structs.h
-const std::string levelOneTests[] = {
-    DISPLAY_DENYLIST,    DISPLAY_NVML_LIB,    DISPLAY_CUDA_MAIN_LIB,   DISPLAY_CUDA_TOOLKIT, DISPLAY_PERMISSIONS,
-    DISPLAY_PERSISTENCE, DISPLAY_ENVIRONMENT, DISPLAY_PAGE_RETIREMENT, DISPLAY_GRAPHICS,     DISPLAY_INFOROM,
-};
-
-
-const std::string DISPLAY_MEMORY("GPU Memory");
-const std::string DISPLAY_CTXCREATE("Context Create");
-const std::string DISPLAY_SM_STRESS("SM Stress");
-const std::string DISPLAY_TP("Targeted Power");
-const std::string DISPLAY_TS("Targeted Stress");
-const std::string DISPLAY_DIAGNOSTIC("Diagnostic");
-const std::string DISPLAY_PCIE("PCIe");
-const std::string DISPLAY_MEMBW("Memory Bandwidth");
-const std::string DISPLAY_MEMTEST("Memtest");
-const std::string DISPLAY_PULSE_TEST("Pulse Test");
-const std::string DISPLAY_EUD_TEST("EUD Test");
-const std::string DISPLAY_CPU_EUD_TEST("CPU EUD Test");
 
 #define DATA_NAME_TAG "<DATA_NAME"
 #define DATA_INFO_TAG "<DATA_INFO"
@@ -160,7 +128,7 @@ static struct sigaction diag_actHup, diag_actInt, diag_actQuit, diag_actTerm,
     CONCAT(diag_old, name, Handler) = diag_actOld.sa_handler
 
 /* Sig handler methods */
-void handle_signal_during_diag(int signum)
+void handle_signal_during_diag(int /* signum */)
 {
     if (diag_stopDiagOnSignal)
     {
@@ -182,9 +150,25 @@ void InstallSigHandlers()
     SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGTERM, Term, handle_signal_during_diag);
 }
 
-std::optional<std::string> GetEudVersion(unsigned const testIdx, dcgmDiagTestAuxData_v1 const *auxDataPerTest)
+std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v11 const &diagResponse)
 {
-    if (auxDataPerTest[testIdx].version != dcgmDiagTestAuxData_version || auxDataPerTest[testIdx].data[0] == '\0')
+    dcgmDiagTestAuxData_v1 const *auxData = nullptr;
+
+    for (unsigned int idx = 0; idx < diagResponse.numTests; ++idx)
+    {
+        if (std::string_view(diagResponse.tests[idx].name) == testName)
+        {
+            auxData = &diagResponse.tests[idx].auxData;
+            break;
+        }
+    }
+
+    if (auxData == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    if (auxData->version != dcgmDiagTestAuxData_version || auxData->data[0] == '\0')
     {
         return std::nullopt;
     }
@@ -192,7 +176,7 @@ std::optional<std::string> GetEudVersion(unsigned const testIdx, dcgmDiagTestAux
     Json::Value json;
     Json::Reader reader;
 
-    bool parsingSuccessful = reader.parse(auxDataPerTest[testIdx].data, json);
+    bool parsingSuccessful = reader.parse(auxData->data, json);
     if (!parsingSuccessful)
     {
         return std::nullopt;
@@ -204,83 +188,12 @@ std::optional<std::string> GetEudVersion(unsigned const testIdx, dcgmDiagTestAux
     return json["version"].asString();
 }
 
-void AddCpuEudResultIfAny(Json::Value &category, int &pluginCount, dcgmDiagTestAuxData_v1 const &auxDataFromCpuEud)
+/* Equality test for two entity pairs. DCGM-4223: This is cloned from
+ * EntityListHelpers.cpp. Another clone exists in PluginTest.h.  These clones
+ * should be consolidated in a single, common location. */
+static inline bool operator==(dcgmGroupEntityPair_t const &a, dcgmGroupEntityPair_t const &b)
 {
-    if (auxDataFromCpuEud.version != dcgmDiagTestAuxData_version)
-    {
-        log_error("Unexpected aux data version: {}", auxDataFromCpuEud.version);
-        return;
-    }
-    if (auxDataFromCpuEud.data[0] == '\0')
-    {
-        log_debug("Empty aux data field.");
-        return;
-    }
-
-    Json::Value json;
-    Json::Reader reader;
-
-    bool parsingSuccessful = reader.parse(auxDataFromCpuEud.data, json);
-    if (!parsingSuccessful)
-    {
-        log_error("failed to parse aux data: [{}]", auxDataFromCpuEud.data);
-        return;
-    }
-    if (!json.isMember("results") || !json["results"].isObject())
-    {
-        log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-        return;
-    }
-
-    Json::Value results = Json::arrayValue;
-    for (Json::Value::const_iterator itr = json["results"].begin(); itr != json["results"].end(); ++itr)
-    {
-        Json::Value result;
-        if (!itr.key().isString())
-        {
-            log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-            return;
-        }
-        auto cpuId      = itr.key().asString();
-        auto const &val = *itr;
-        if (!val.isMember("status") || !val["status"].isString())
-        {
-            log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-            return;
-        }
-        result["cpu_id"]    = cpuId;
-        result[NVVS_STATUS] = val["status"].asString();
-        if (!val.isMember("errors") || !val["errors"].isArray())
-        {
-            results.append(result);
-            continue;
-        }
-        result[NVVS_WARNINGS] = Json::arrayValue;
-        for (auto const &errObj : val["errors"])
-        {
-            Json::Value errEntry;
-
-            if (!errObj.isMember("error_id") || !errObj.isMember("test_details") || !errObj.isMember("category")
-                || !errObj.isMember("severity"))
-            {
-                log_error("Unexpected error object schema, this error is skipped [{}].", errObj.toStyledString());
-                continue;
-            }
-            errEntry[NVVS_WARNING]        = errObj["test_details"].asString();
-            errEntry[NVVS_ERROR_ID]       = errObj["error_id"].asInt();
-            errEntry[NVVS_ERROR_CATEGORY] = errObj["category"].asInt();
-            errEntry[NVVS_ERROR_SEVERITY] = errObj["severity"].asInt();
-            result[NVVS_WARNINGS].append(errEntry);
-        }
-        results.append(result);
-    }
-
-    Json::Value testEntry;
-    testEntry[NVVS_TEST_NAME] = DISPLAY_CPU_EUD_TEST;
-    testEntry[NVVS_RESULTS]   = results;
-
-    category[NVVS_TESTS][pluginCount] = testEntry;
-    pluginCount += 1;
+    return std::tie(a.entityGroupId, a.entityId) == std::tie(b.entityGroupId, b.entityId);
 }
 
 /*****************************************************************************
@@ -288,18 +201,19 @@ void AddCpuEudResultIfAny(Json::Value &category, int &pluginCount, dcgmDiagTestA
  * RemoteDiagExecutor
  *****************************************************************************
  *****************************************************************************/
-RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v8 &drd)
+RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v9 &drd)
     : m_handle(handle)
+    , m_response(std::make_unique<dcgmDiagResponse_v11>())
     , m_result(DCGM_ST_OK)
 {
     memcpy(&m_drd, &drd, sizeof(m_drd));
-    memset(&m_diagResult, 0, sizeof(m_diagResult));
-    m_diagResult.version = dcgmDiagResponse_version10;
+    memset(m_response.get(), 0, sizeof(*m_response));
+    m_response->version = dcgmDiagResponse_version11;
 }
 
 void RemoteDiagExecutor::run()
 {
-    m_result = dcgmActionValidate_v2(m_handle, &m_drd, &m_diagResult);
+    m_result = dcgmActionValidate_v2(m_handle, &m_drd, m_response.get());
 }
 
 dcgmReturn_t RemoteDiagExecutor::GetResult() const
@@ -307,9 +221,9 @@ dcgmReturn_t RemoteDiagExecutor::GetResult() const
     return m_result;
 }
 
-dcgmDiagResponse_v10 RemoteDiagExecutor::GetResponse() const
+dcgmDiagResponse_v11 const &RemoteDiagExecutor::GetResponse() const
 {
-    return m_diagResult;
+    return *(m_response);
 }
 
 
@@ -332,7 +246,7 @@ Diag::~Diag()
 {}
 
 /*******************************************************************************/
-void Diag::setDcgmRunDiag(dcgmRunDiag_v8 *drd)
+void Diag::setDcgmRunDiag(dcgmRunDiag_v9 *drd)
 {
     memcpy(&this->m_drd, drd, sizeof(this->m_drd));
 }
@@ -343,227 +257,167 @@ void Diag::setJsonOutput(bool jsonOutput)
     this->m_jsonOutput = jsonOutput;
 }
 
-/*******************************************************************************/
-dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v10 &diagResult)
+/* Retrieve failure results from all software tests and tests targeting GPUs, tests giving precedence to ISOLATE errors.
+ * Current and past implementations do not inspect system errors. */
+dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v11 &response)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
-    for (unsigned int i = 0; i < diagResult.levelOneTestCount; i++)
+
+    unsigned int swTestCatIdx = DCGM_DIAG_RESPONSE_CATEGORIES_MAX;
+    for (unsigned int catIdx = 0; catIdx < std::min(static_cast<unsigned int>(response.numCategories),
+                                                    static_cast<unsigned int>(std::size(response.categories)));
+         catIdx++)
     {
-        if (diagResult.levelOneResults[i].status == DCGM_DIAG_RESULT_FAIL)
+        if (std::string_view(response.categories[catIdx]) == std::string_view(SW_PLUGIN_CATEGORY))
         {
-            for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
+            swTestCatIdx = catIdx;
+            break;
+        }
+    }
+
+    for (auto const &test : std::span(response.tests,
+                                      std::min(static_cast<unsigned int>(response.numTests),
+                                               static_cast<unsigned int>(std::size(response.tests)))))
+    {
+        auto const errors = std::span(test.errorIndices,
+                                      std::min(static_cast<unsigned int>(test.numErrors),
+                                               static_cast<unsigned int>(std::size(test.errorIndices))))
+                            | std::views::transform([&](unsigned int const errIdx) -> dcgmDiagError_v1 const & {
+                                  return response.errors[errIdx];
+                              });
+
+        for (auto const &error : errors)
+        {
+            if ((swTestCatIdx != DCGM_DIAG_RESPONSE_CATEGORIES_MAX && test.categoryIndex == swTestCatIdx)
+                || error.entity.entityGroupId == DCGM_FE_GPU)
             {
-                if (dcgmErrorGetPriorityByCode(diagResult.levelOneResults[i].error[j].code) == DCGM_ERROR_ISOLATE)
+                if (dcgmErrorGetPriorityByCode(error.code) == DCGM_ERROR_ISOLATE)
                 {
+                    // Stop here as a serious error was reported.
                     return DCGM_ST_NVVS_ISOLATE_ERROR;
                 }
                 else
                 {
                     ret = DCGM_ST_NVVS_ERROR;
+                    // Additional errors are examined to find if any are ISOLATE errors
                 }
             }
         }
     }
 
-    /* need to search through all devices because results are written to gpu indexes */
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
+    // Sanity check this determination based on available data.
+    if (response.numTests == 0)
     {
-        for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
+        char const *msg = "No tests were present in the response.";
+        if (ret == DCGM_ST_OK)
         {
-            if (diagResult.perGpuResponses[i].results[j].status == DCGM_DIAG_RESULT_FAIL)
-            {
-                for (unsigned int k = 0; k < DCGM_MAX_ERRORS; k++)
-                {
-                    if (dcgmErrorGetPriorityByCode(diagResult.perGpuResponses[i].results[j].error[k].code)
-                        == DCGM_ERROR_ISOLATE)
-                    {
-                        return DCGM_ST_NVVS_ISOLATE_ERROR;
-                    }
-                    else
-                    {
-                        ret = DCGM_ST_NVVS_ERROR;
-                    }
-                }
-            }
+            log_error(msg);
+            ret = DCGM_ST_NO_DATA;
         }
+        else
+        {
+            log_warning(msg);
+        }
+    }
+
+    if (response.numResults == 0)
+    {
+        char const *msg = "No results were present in the response.";
+        if (ret == DCGM_ST_OK)
+        {
+            log_error(msg);
+            ret = DCGM_ST_NO_DATA;
+        }
+        else
+        {
+            log_warning(msg);
+        }
+    }
+
+    if (response.numErrors == 0)
+    {
+        log_debug("No errors were included in the results.");
     }
 
     return ret;
 }
 
-void Diag::PopulateGpuList(const dcgmDiagResponse_v10 &diagResult, std::vector<unsigned int> &gpuVec)
+void Diag::InitializeDiagResponse(dcgmDiagResponse_v11 &response)
 {
-    // No specified list; find the gpuIds that have been set with tests that have run
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES && gpuVec.size() < diagResult.gpuCount; i++)
-    {
-        if (diagResult.perGpuResponses[i].gpuId != DCGM_MAX_NUM_DEVICES)
-        {
-            bool someTestRan = false;
-            for (unsigned int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
-            {
-                if (diagResult.perGpuResponses[i].results[j].status != DCGM_DIAG_RESULT_NOT_RUN)
-                {
-                    someTestRan = true;
-                    break;
-                }
-            }
-
-            if (someTestRan == true)
-                gpuVec.push_back(i);
-        }
-    }
+    memset(&response, 0, sizeof(response));
+    response.version = dcgmDiagResponse_version11;
 }
 
-void Diag::InitializeDiagResponse(dcgmDiagResponse_v10 &diagResult)
+static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v11 const &response)
 {
-    memset(&diagResult, 0, sizeof(diagResult));
-    diagResult.version = dcgmDiagResponse_version10;
-
-    // Initialize the gpu id to one we know won't exist so we can figure out which
-    // GPUs ran if there was no specified list
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
-        diagResult.perGpuResponses[i].gpuId = DCGM_MAX_NUM_DEVICES;
-}
-
-void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t result)
-{
-    if (m_jsonOutput)
+    std::stringstream errMsg;
+    char const *delim = "";
+    for (auto &err : std::span(response.errors,
+                               std::min(static_cast<unsigned int>(response.numErrors),
+                                        static_cast<unsigned int>(std::size(response.errors))))
+                         | std::ranges::views::filter([](dcgmDiagError_v1 const &cur) {
+                               return (cur.testId == DCGM_DIAG_RESPONSE_SYSTEM_ERROR);
+                           }))
     {
-        Json::Value output;
-        output[NVVS_NAME][NVVS_VERSION_STR]   = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
-        output[NVVS_NAME][NVVS_RUNTIME_ERROR] = errMsg;
-        std::cout << output.toStyledString() << std::endl;
-    }
-    else
-    {
-        std::cout << errMsg << std::endl;
+        errMsg << delim << err.msg;
+        delim = "\n";
     }
 
-    if (result != DCGM_ST_OK)
+    std::string const &result = errMsg.str();
+    if (result.size() != 0)
     {
-        log_error("Error in diagnostic for group with ID: {}. Return: {} '{}'",
-                  (unsigned int)(uintptr_t)m_drd.groupId,
-                  result,
-                  errMsg);
-    }
-}
-
-std::optional<std::function<void(void)>> Diag::GetDisplayCpuEudHelper(dcgmDiagTestAuxData_v1 const *auxDataPerTest)
-{
-    if (!auxDataPerTest)
-    {
-        return std::nullopt;
+        return std::move(result);
     }
 
-    std::string displayName = HelperGetTestName(DCGM_CPU_EUD_TEST_INDEX);
-    std::string errorMsg;
-    dcgmDiagTestAuxData_v1 const &auxDataFromCpuEud = auxDataPerTest[DCGM_CPU_EUD_TEST_INDEX];
-    if (auxDataFromCpuEud.version != dcgmDiagTestAuxData_version)
-    {
-        log_error("Unexpected aux data version: {}", auxDataFromCpuEud.version);
-        return std::nullopt;
-    }
-    if (auxDataFromCpuEud.data[0] == '\0')
-    {
-        log_debug("Empty aux data field.");
-        return std::nullopt;
-    }
-
-    Json::Value json;
-    Json::Reader reader;
-
-    bool parsingSuccessful = reader.parse(auxDataFromCpuEud.data, json);
-    if (!parsingSuccessful)
-    {
-        log_error("failed to parse aux data: [{}]", auxDataFromCpuEud.data);
-        return std::nullopt;
-    }
-    if (!json.isMember("results") || !json["results"].isObject())
-    {
-        log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-        return std::nullopt;
-    }
-
-    bool skip = false;
-    for (Json::Value::const_iterator itr = json["results"].begin(); itr != json["results"].end(); ++itr)
-    {
-        if (!itr.key().isString())
-        {
-            log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-            return std::nullopt;
-        }
-        auto cpuId      = itr.key().asString();
-        auto const &val = *itr;
-        if (!val.isMember("status") || !val["status"].isString())
-        {
-            log_error("Unexpected aux data schema: [{}]", json.toStyledString());
-            return std::nullopt;
-        }
-        if (val["status"].asString() == "Skip - All")
-        {
-            skip = true;
-            break;
-        }
-        if (!val.isMember("errors") || !val["errors"].isArray())
-        {
-            continue;
-        }
-        for (auto const &errObj : val["errors"])
-        {
-            if (!errObj.isMember("test_details"))
-            {
-                log_error("Unexpected error object schema, this error is skipped: [{}]", errObj.toStyledString());
-                continue;
-            }
-            errorMsg += errObj["test_details"].asString() + ", ";
-        }
-    }
-
-    if (errorMsg.size() >= 2)
-    {
-        // for trailing ", "
-        errorMsg.erase(errorMsg.end() - 2);
-    }
-
-    std::function<void(void)> helper = [this, displayName, errorMsg, skip]() {
-        CommandOutputController cmdView = CommandOutputController();
-        cmdView.setDisplayStencil(DIAG_DATA);
-        if (skip)
-        {
-            cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-            cmdView.addDisplayParameter(DATA_INFO_TAG, "Skip - All");
-        }
-        else if (errorMsg.empty())
-        {
-            cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-            cmdView.addDisplayParameter(DATA_INFO_TAG, "Pass - All");
-        }
-        else
-        {
-            cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-            cmdView.addDisplayParameter(DATA_INFO_TAG, "Fail");
-        }
-        cmdView.display();
-        DisplayVerboseInfo(cmdView, "Warning", Sanitize(errorMsg));
-    };
-    return helper;
+    return std::nullopt;
 }
 
 /*******************************************************************************/
 dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 {
-    std::unique_ptr<dcgmDiagResponse_v10> diagResultUPtr = std::make_unique<dcgmDiagResponse_v10>();
-    dcgmDiagResponse_v10 &diagResult                     = *(diagResultUPtr);
-    dcgmReturn_t result                                  = DCGM_ST_OK;
-    std::vector<unsigned int> gpuVec;
+    std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
+    dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+    dcgmReturn_t result                                = DCGM_ST_OK;
     std::vector<std::string> gpuStrList;
 
-    InitializeDiagResponse(diagResult);
+    if (m_drd.groupId != DCGM_GROUP_NULL)
+    {
+        auto pDcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+
+        if (auto ret = dcgmGroupGetInfo(handle, m_drd.groupId, pDcgmGroupInfo.get()); ret != DCGM_ST_OK)
+        {
+            log_error("Failed to get the entities in this group [{}].", m_drd.groupId);
+        }
+    }
+    else
+    {
+        // entity-id cases
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        auto err = DcgmNs::EntityListWithMigAndUuidParser(handle, m_drd.entityIds, entityGroups);
+        if (!err.empty())
+        {
+            std::stringstream errMsg;
+            errMsg << "Error: " << err << std::endl;
+            HelperDisplayFailureMessage(errMsg.str(), result);
+            return DCGM_ST_BADPARAM;
+        }
+
+        for (size_t i = 0; i < entityGroups.size(); i++)
+        {
+            if (entityGroups[i].entityGroupId != DCGM_FE_GPU && entityGroups[i].entityGroupId != DCGM_FE_CPU)
+            {
+                HelperDisplayFailureMessage("Error: Unsupported entities are indicated.", result);
+                return DCGM_ST_BADPARAM;
+            }
+        }
+    }
+
+    InitializeDiagResponse(response);
 
     // Setup signal handlers
     InstallSigHandlers();
 
-    result = ExecuteDiagOnServer(handle, diagResult);
+    result = ExecuteDiagOnServer(handle, response);
 
     if (result == DCGM_ST_GROUP_INCOMPATIBLE)
     {
@@ -584,21 +438,22 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     else if (result != DCGM_ST_OK)
     {
         std::stringstream errMsg;
-        if (diagResult.systemError.msg[0] != '\0')
+        if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
         {
-            errMsg << diagResult.systemError.msg;
+            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
+                   << ". Return: (" << std::to_underlying(result) << ") " << std::endl
+                   << *systemErrors;
         }
         else
         {
             errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
-                   << ". Return: (" << result << ") " << errorString(result) << ".";
+                   << ". Return: (" << std::to_underlying(result) << ") " << errorString(result) << ".";
         }
 
         if (result == DCGM_ST_TIMEOUT)
         {
             // If there was a timeout, we attempt to stop the launched diagnostic before returning.
-            dcgmReturn_t ret = dcgmStopDiagnostic(handle);
-            if (ret != DCGM_ST_OK)
+            if (dcgmReturn_t ret = dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
             {
                 errMsg << "\nError: Could not stop the launched diagnostic.";
                 log_error("There was an error stopping the launched diagnostic. Return: {}", ret);
@@ -608,61 +463,50 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
         HelperDisplayFailureMessage(errMsg.str(), result);
         return result;
     }
-    else if (m_jsonOutput == false && diagResult.systemError.msg[0] != '\0')
-    {
-        std::stringstream errMsg;
-        errMsg << "Error: " << diagResult.systemError.msg << std::endl;
-        HelperDisplayFailureMessage(errMsg.str(), result);
-        return DCGM_ST_NVVS_ERROR;
-    }
-
-    if (strlen(m_drd.gpuList) > 0)
-    {
-        dcgmTokenizeString(m_drd.gpuList, ",", gpuStrList);
-        for (size_t i = 0; i < gpuStrList.size(); i++)
-        {
-            gpuVec.push_back(strtol(gpuStrList[i].c_str(), NULL, 10));
-        }
-    }
     else
     {
-        PopulateGpuList(diagResult, gpuVec);
+        if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
+        {
+            HelperDisplayFailureMessage(fmt::format("Error: {}", *systemErrors), result);
+            return DCGM_ST_NVVS_ERROR;
+        }
     }
 
     if (m_jsonOutput)
     {
-        result = HelperDisplayAsJson(diagResult, gpuVec);
+        if (response.version == dcgmDiagResponse_version11)
+        {
+            result = HelperDisplayAsJson(response);
+        }
+        else
+        {
+            log_error("Version mismatch. Version {} not handled.", response.version);
+            return DCGM_ST_VER_MISMATCH;
+        }
     }
     else
     {
-        std::cout << "Successfully ran diagnostic for group." << std::endl;
-
-        std::cout << DIAG_HEADER;
-
-        HelperDisplayVersionAndDevIds(diagResult);
-
-        HelperDisplayDeployment(diagResult);
-
-        if (gpuVec.size() > 0)
+        if (response.version == dcgmDiagResponse_version11)
         {
-            HelperDisplayIntegration(diagResult.perGpuResponses, diagResult.auxDataPerTest, gpuVec);
-            HelperDisplayHardware(diagResult.perGpuResponses, diagResult.auxDataPerTest, gpuVec);
+            result = HelperDisplayAsCli(response);
         }
-        HelperDisplayPerformance(diagResult.perGpuResponses, diagResult.auxDataPerTest, gpuVec);
-
-        std::cout << DIAG_FOOTER;
+        else
+        {
+            log_error("Version mismatch. Version {} not handled.", response.version);
+            return DCGM_ST_VER_MISMATCH;
+        }
     }
 
     if (result == DCGM_ST_OK)
     {
-        result = GetFailureResult(diagResult);
+        result = GetFailureResult(response);
     }
 
     return result;
 }
 
 /*******************************************************************************/
-dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v10 &diagResult)
+dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v11 &response)
 {
     std::unique_ptr<RemoteDiagExecutor> rde = std::make_unique<RemoteDiagExecutor>(handle, m_drd);
     dcgmReturn_t result                     = DCGM_ST_OK;
@@ -683,8 +527,8 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v10
         }
         else if (rde->HasExited())
         {
-            result     = rde->GetResult();
-            diagResult = rde->GetResponse();
+            result   = rde->GetResult();
+            response = rde->GetResponse();
             break;
         }
 
@@ -700,7 +544,6 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v10
 
 /*******************************************************************************/
 dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
-
 {
     if (m_iterations <= 1)
     {
@@ -758,186 +601,229 @@ dcgmReturn_t Diag::RunStartDiag(dcgmHandle_t handle)
     return overallRet;
 }
 
-dcgmReturn_t Diag::RunViewDiag()
+void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t result)
 {
+    if (m_jsonOutput)
+    {
+        Json::Value output;
+        output[NVVS_NAME][NVVS_VERSION_STR]   = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
+        output[NVVS_NAME][NVVS_RUNTIME_ERROR] = errMsg;
+        std::cout << output.toStyledString() << std::endl;
+    }
+    else
+    {
+        std::cout << errMsg << std::endl;
+    }
+
+    if (result != DCGM_ST_OK)
+    {
+        log_error("Error in diagnostic for group with ID: {}. Return: {} '{}'",
+                  (unsigned int)(uintptr_t)m_drd.groupId,
+                  result,
+                  errMsg);
+    }
+}
+
+/**
+ * Main method driving CLI output rendering.
+ */
+dcgmReturn_t Diag::HelperDisplayAsCli(dcgmDiagResponse_v11 const &response)
+{
+    std::cout << "Successfully ran diagnostic for group." << std::endl;
+    std::cout << DIAG_HEADER;
+
+    HelperDisplayMetadata(response);
+
+    std::vector<std::pair<std::string_view, std::string_view>> const categories
+        = { std::make_pair(PLUGIN_CATEGORY_DEPLOYMENT, DIAG_DEPLOYMENT),
+            std::make_pair(PLUGIN_CATEGORY_HW, DIAG_HARDWARE),
+            std::make_pair(PLUGIN_CATEGORY_INTEGRATION, DIAG_INTEGRATION),
+            std::make_pair(PLUGIN_CATEGORY_STRESS, DIAG_STRESS) };
+
+    for (auto const &[category, displayText] : categories)
+    {
+        HelperDisplayCategory(category, displayText, response);
+    }
+
+    std::cout << DIAG_FOOTER;
     return DCGM_ST_OK;
 }
 
-void Diag::HelperDisplayDeploymentResult(CommandOutputController &cmdView,
-                                         const std::string &nameTag,
-                                         dcgmDiagTestResult_v3 &result)
+void Diag::HelperDisplayMetadata(dcgmDiagResponse_v11 const &response) const
 {
-    if (result.status != DCGM_DIAG_RESULT_NOT_RUN)
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, nameTag);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, HelperDisplayDiagResult(result.status));
-        cmdView.display();
-        for (unsigned int i = 0; i < DCGM_MAX_ERRORS; i++)
-        {
-            if (result.error[i].msg[0] != '\0')
-                DisplayVerboseInfo(cmdView, "Error", result.error[i].msg);
-        }
-
-        if (result.info[0] != '\0')
-            DisplayVerboseInfo(cmdView, "Info", result.info);
-    }
+    std::cout << DIAG_INFO;
+    HelperDisplayVersionAndDevIds(response);
+    HelperDisplayCpuInfo(response);
+    HelperDisplayEudTestsVersion(response);
 }
 
-void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v10 &diagResult)
+/**
+ * Render CLI output for DCGM and driver versions, as well as produce the list of entities.
+ */
+
+void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v11 const &response) const
 {
     CommandOutputController cmdView = CommandOutputController();
-
-    std::cout << DIAG_INFO;
 
     cmdView.setDisplayStencil(DIAG_DATA);
     cmdView.addDisplayParameter(DATA_NAME_TAG, "DCGM Version");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, diagResult.dcgmVersion);
+    cmdView.addDisplayParameter(DATA_INFO_TAG, response.dcgmVersion);
     cmdView.display();
 
-    cmdView.addDisplayParameter(DATA_NAME_TAG, "Driver Version Detected");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, diagResult.driverVersion);
-    cmdView.display();
-
-    std::stringstream ss;
-
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES && diagResult.devIds[i][0] != '\0'; i++)
+    if (response.driverVersion[0] != '\0')
     {
-        if (i == 0)
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "Driver Version Detected");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, response.driverVersion);
+        cmdView.display();
+    }
+
+    unsigned int const maxEntities = std::min(static_cast<unsigned int>(response.numEntities),
+                                              static_cast<unsigned int>(std::size(response.entities)));
+    for (unsigned int gId = DCGM_FE_GPU; gId < DCGM_FE_COUNT; gId++)
+    {
+        std::stringstream ss;
+        char const *delim = "";
+        for (unsigned int i = 0; i < maxEntities; i++)
         {
-            ss << diagResult.devIds[i];
+            if (response.entities[i].entity.entityGroupId == gId && response.entities[i].skuDeviceId[0] != '\0')
+            {
+                ss << delim << response.entities[i].skuDeviceId;
+                delim = ", ";
+            }
+        }
+
+        std::string const &str { ss.str() };
+        if (!str.empty())
+        {
+            cmdView.addDisplayParameter(
+                DATA_NAME_TAG,
+                fmt::format("{} Device IDs Detected",
+                            DcgmFieldsGetEntityGroupString(static_cast<dcgm_field_entity_group_t>(gId))));
+            cmdView.addDisplayParameter(DATA_INFO_TAG, str);
+            cmdView.display();
         }
         else
         {
-            ss << "," << diagResult.devIds[i];
+            /* Could explicitly report that no devices were detected. This might be a suitable behavior for verbose
+             * mode. */
         }
     }
-
-    cmdView.addDisplayParameter(DATA_NAME_TAG, "GPU Device IDs Detected");
-    cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
-    cmdView.display();
-
-    auto gpuEudVersionOpt = GetEudVersion(DCGM_EUD_TEST_INDEX, diagResult.auxDataPerTest);
-    if (gpuEudVersionOpt.has_value())
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, "EUD Test Version");
-        cmdView.addDisplayParameter(DATA_INFO_TAG, *gpuEudVersionOpt);
-        cmdView.display();
-    }
-
-    auto cpuEudVersionOpt = GetEudVersion(DCGM_CPU_EUD_TEST_INDEX, diagResult.auxDataPerTest);
-    if (cpuEudVersionOpt.has_value())
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Test Version");
-        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersionOpt);
-        cmdView.display();
-    }
 }
 
-void Diag::HelperDisplayDeployment(dcgmDiagResponse_v10 &diagResult)
+void Diag::HelperDisplayCpuInfo(dcgmDiagResponse_v11 const &response) const
 {
-    CommandOutputController cmdView = CommandOutputController();
-
-    std::cout << DIAG_DEPLOYMENT;
-
-    cmdView.setDisplayStencil(DIAG_DATA);
-
-    for (unsigned int i = 0; i < diagResult.levelOneTestCount; i++)
+    unsigned int const maxEntities = std::min(static_cast<unsigned int>(response.numEntities),
+                                              static_cast<unsigned int>(std::size(response.entities)));
+    unsigned int numCpus           = 0;
+    for (unsigned int i = 0; i < maxEntities; ++i)
     {
-        HelperDisplayDeploymentResult(cmdView, levelOneTests[i], diagResult.levelOneResults[i]);
-    }
-}
-
-void Diag::HelperDisplayHardware(dcgmDiagResponsePerGpu_v5 *diagResults,
-                                 dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                 const std::vector<unsigned int> &gpuIndices)
-{
-    CommandOutputController cmdView = CommandOutputController();
-
-    std::cout << DIAG_HARDWARE;
-
-    if (!strcasecmp(m_drd.testNames[0], CTXCREATE_PLUGIN_NAME))
-        HelperDisplayGpuResults(DISPLAY_CTXCREATE, DCGM_CONTEXT_CREATE_INDEX, diagResults, auxDataPerTest, gpuIndices);
-    else
-        HelperDisplayGpuResults(DISPLAY_MEMORY, DCGM_MEMORY_INDEX, diagResults, auxDataPerTest, gpuIndices);
-
-    /* Don't show the hardware diagnostic if it skipped */
-    bool skipped = true;
-
-    for (size_t i = 0; i < gpuIndices.size(); i++)
-    {
-        if (diagResults[gpuIndices[i]].results[DCGM_DIAGNOSTIC_INDEX].status != DCGM_DIAG_RESULT_SKIP)
+        if (response.entities[i].entity.entityGroupId == DCGM_FE_CPU)
         {
-            skipped = false;
-            break;
+            numCpus += 1;
         }
     }
 
-    if (skipped == false)
-        HelperDisplayGpuResults(DIAGNOSTIC_PLUGIN_NAME, DCGM_DIAGNOSTIC_INDEX, diagResults, auxDataPerTest, gpuIndices);
-
-    HelperDisplayGpuResults(PULSE_TEST_PLUGIN_NAME, DCGM_PULSE_TEST_INDEX, diagResults, auxDataPerTest, gpuIndices);
-}
-
-/*****************************************************************************/
-void Diag::HelperDisplayIntegration(dcgmDiagResponsePerGpu_v5 *diagResults,
-                                    dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                    const std::vector<unsigned int> &gpuIndices)
-{
-    CommandOutputController cmdView = CommandOutputController();
-
-    std::cout << DIAG_INTEGRATION;
-
-    HelperDisplayGpuResults(PCIE_PLUGIN_NAME, DCGM_PCI_INDEX, diagResults, auxDataPerTest, gpuIndices);
-}
-
-/*****************************************************************************/
-void Diag::HelperDisplayPerformance(dcgmDiagResponsePerGpu_v5 *diagResults,
-                                    dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                    const std::vector<unsigned int> &gpuIndices)
-{
-    CommandOutputController cmdView = CommandOutputController();
-    auto cpuEudDisplayHelper        = GetDisplayCpuEudHelper(auxDataPerTest);
-
-    if (!cpuEudDisplayHelper.has_value() && gpuIndices.empty())
+    if (numCpus == 0)
     {
         return;
     }
 
-    std::cout << DIAG_STRESS;
+    CommandOutputController cmdView = CommandOutputController();
 
-    if (!gpuIndices.empty())
-    {
-        HelperDisplayGpuResults(SMSTRESS_PLUGIN_NAME, DCGM_SM_STRESS_INDEX, diagResults, auxDataPerTest, gpuIndices);
-        HelperDisplayGpuResults(TS_PLUGIN_NAME, DCGM_TARGETED_STRESS_INDEX, diagResults, auxDataPerTest, gpuIndices);
-        HelperDisplayGpuResults(TP_PLUGIN_NAME, DCGM_TARGETED_POWER_INDEX, diagResults, auxDataPerTest, gpuIndices);
-        HelperDisplayGpuResults(
-            MEMBW_PLUGIN_NAME, DCGM_MEMORY_BANDWIDTH_INDEX, diagResults, auxDataPerTest, gpuIndices);
-        HelperDisplayGpuResults(MEMTEST_PLUGIN_NAME, DCGM_MEMTEST_INDEX, diagResults, auxDataPerTest, gpuIndices);
-        HelperDisplayGpuResults(EUD_PLUGIN_NAME, DCGM_EUD_TEST_INDEX, diagResults, auxDataPerTest, gpuIndices);
-    }
-    if (cpuEudDisplayHelper.has_value())
-    {
-        (*cpuEudDisplayHelper)();
-    }
+    cmdView.setDisplayStencil(DIAG_DATA);
+    cmdView.addDisplayParameter(DATA_NAME_TAG, "Number of CPUs Detected");
+    cmdView.addDisplayParameter(DATA_INFO_TAG, numCpus);
+    cmdView.display();
 }
 
-/*****************************************************************************/
-std::string Diag::HelperDisplayDiagResult(dcgmDiagResult_t val)
+void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v11 const &response) const
 {
-    if (val == DCGM_DIAG_RESULT_PASS)
+    CommandOutputController cmdView = CommandOutputController();
+
+    cmdView.setDisplayStencil(DIAG_DATA);
+
+    auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
+    if (gpuEudVersion.has_value())
     {
-        return "Pass";
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "EUD Test Version");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *gpuEudVersion);
+        cmdView.display();
     }
 
-    if (val == DCGM_DIAG_RESULT_SKIP)
+    auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
+    if (cpuEudVersion.has_value())
     {
-        return "Skip";
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Test Version");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersion);
+        cmdView.display();
     }
-    return "Fail";
+}
+
+/**
+ * Display a summary, and details, about all test results for the specified `category`
+ */
+void Diag::HelperDisplayCategory(std::string_view categoryName,
+                                 std::string_view categoryText,
+                                 dcgmDiagResponse_v11 const &response)
+
+{
+    auto const allTests = std::span(
+        response.tests,
+        std::min(static_cast<unsigned int>(response.numTests), static_cast<unsigned int>(std::size(response.tests))));
+
+    for (unsigned int catIdx = 0; catIdx < std::min(static_cast<unsigned int>(response.numCategories),
+                                                    static_cast<unsigned int>(std::size(response.categories)));
+         catIdx++)
+    {
+        if (std::string_view(response.categories[catIdx]) != categoryName)
+        {
+            continue;
+        }
+
+        if (!categoryText.empty())
+        {
+            std::cout << categoryText;
+            categoryText = std::string_view("");
+        }
+
+        for (auto const &test :
+             allTests | std::views::filter([catIdx](auto const &test) { return test.categoryIndex == catIdx; }))
+        {
+            CommandOutputController view = CommandOutputController();
+            HelperDisplayGlobalResult(view, response, test, (m_drd.flags & DCGM_RUN_FLAGS_VERBOSE));
+            HelperDisplayEntityResults(view, response, test, (m_drd.flags & DCGM_RUN_FLAGS_VERBOSE));
+        }
+    }
+}
+
+/**
+ * Return a string for the result specified by `val`
+ */
+std::string const Diag::HelperDisplayDiagResult(dcgmDiagResult_t val, displayDiagResultWarn_enum showWarn) const
+{
+    switch (val)
+    {
+        case DCGM_DIAG_RESULT_PASS:
+            return "Pass";
+        case DCGM_DIAG_RESULT_SKIP:
+            return "Skip";
+        case DCGM_DIAG_RESULT_WARN:
+            if (showWarn == DDR_DISPLAY_WARN)
+            {
+                return "Warn";
+            }
+            [[fallthrough]];
+        case DCGM_DIAG_RESULT_FAIL:
+            return "Fail";
+        case DCGM_DIAG_RESULT_NOT_RUN:
+            [[fallthrough]];
+        default:
+            return "";
+    }
 }
 
 /*****************************************************************************/
-bool Diag::isWhitespace(char c)
+bool Diag::isWhitespace(char c) const
 {
     bool whitespace = false;
 
@@ -957,41 +843,39 @@ bool Diag::isWhitespace(char c)
 }
 
 /*****************************************************************************/
-std::string Diag::Sanitize(const std::string &toOutput)
+std::string Diag::Sanitize(std::string sanitized)
 {
-    std::string sanitized;
-    size_t pos;
-
     // Remove '***' and everything before it, if present
-    if ((pos = toOutput.find("***")) != std::string::npos)
+    if (size_t pos = sanitized.find("***"); pos != std::string::npos)
     {
-        sanitized = toOutput.substr(pos + 3); // skip the "***"
-    }
-    else
-    {
-        sanitized = toOutput;
+        sanitized.erase(0, (pos + std::size("***")) - 1);
     }
 
-    // Remove trailing whitespace
-    while ((sanitized.size() > 0) && (isWhitespace(sanitized.at(sanitized.size() - 1))))
-    {
-        sanitized.erase(sanitized.size() - 1);
-    }
+    // Trim leading and trailing whitespace
+    auto const isspace = [](unsigned char const c) -> bool {
+        return std::isspace(c);
+    };
 
-    pos = 0;
-    while ((sanitized.size() > 0) && (isWhitespace(sanitized.at(pos))))
-    {
-        pos++;
-    }
+    auto const first  = sanitized.begin();
+    auto const middle = std::find_if_not(first, sanitized.end(), isspace);
+    auto const last   = std::find_if_not(sanitized.rbegin(), std::make_reverse_iterator(middle), isspace).base();
 
-    return (sanitized.substr(pos));
+    sanitized.erase(std::rotate(first, middle, last), sanitized.end());
+    return sanitized;
 }
 
 /*****************************************************************************/
-void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, const std::string &info)
+/**
+ * Display column-wrapped output. Use heading `name` and the content of the
+ * specified `errorOrInfo`.
+ */
+template <typename T>
+void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, T const &errorOrInfo)
+    requires std::is_same_v<T, dcgmDiagError_v1> || std::is_same_v<T, dcgmDiagInfo_v1>
 {
+    std::string msg { Sanitize(errorOrInfo.msg) };
     // It can only display 45 characters at a time, so split larger messages onto different lines
-    for (size_t pos = 0; pos < info.size(); pos += DATA_INFO_TAG_LEN)
+    for (size_t pos = 0; pos < msg.size(); pos += DATA_INFO_TAG_LEN)
     {
         // Only write the name for the first line
         if (pos == 0)
@@ -1002,518 +886,383 @@ void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::strin
         {
             cmdView.addDisplayParameter(DATA_NAME_TAG, "");
         }
-        cmdView.addDisplayParameter(DATA_INFO_TAG, info.substr(pos, DATA_INFO_TAG_LEN));
+        cmdView.addDisplayParameter(DATA_INFO_TAG, msg.substr(pos, DATA_INFO_TAG_LEN));
         cmdView.display();
     }
 }
 
-void Diag::HelperDisplayDetails(bool forceVerbose,
-                                const std::vector<unsigned int> &gpuIndices,
-                                unsigned int testIndex,
-                                CommandOutputController &cmdView,
-                                dcgmDiagResponsePerGpu_v5 *diagResults)
+/** Display overall result and any global errors that are present. */
+void Diag::HelperDisplayGlobalResult(CommandOutputController &view,
+                                     dcgmDiagResponse_v11 const &response,
+                                     dcgmDiagTestRun_v1 const &test,
+                                     bool verbose)
 {
-    bool displayInfo     = forceVerbose;
-    bool displayWarnings = forceVerbose;
+    constexpr auto isGlobalEntity = [](dcgmGroupEntityPair_t const &entity) -> bool {
+        return entity == dcgmGroupEntityPair_t({ DCGM_FE_NONE, 0 });
+    };
 
-    if (m_drd.flags & DCGM_RUN_FLAGS_VERBOSE)
+    view.setDisplayStencil(DIAG_DATA);
+    view.addDisplayParameter(DATA_NAME_TAG, std::string(test.name));
+    view.addDisplayParameter(DATA_INFO_TAG, HelperDisplayDiagResult(test.result, DDR_DISPLAY_WARN));
+    view.display();
+
+    /* Display errors not associated with any specific entity. */
+    auto errors = std::span(test.errorIndices,
+                            std::min(static_cast<unsigned int>(test.numErrors),
+                                     static_cast<unsigned int>(std::size(test.errorIndices))))
+                  | std::views::filter([&](unsigned int const idx) {
+                        return (idx < std::min(static_cast<unsigned int>(response.numErrors),
+                                               static_cast<unsigned int>(std::size(response.errors))))
+                               && isGlobalEntity(response.errors[idx].entity);
+                    })
+                  | std::views::transform(
+                      [&](unsigned int const idx) -> dcgmDiagError_v1 const & { return response.errors[idx]; });
+
+    for (auto const &error : errors)
     {
-        displayInfo     = true;
-        displayWarnings = true;
+        DisplayVerboseInfo(view, "Warning", error);
     }
 
-    if (displayWarnings)
+    if (verbose)
     {
-        for (unsigned int i = 0; i < gpuIndices.size(); i++)
-        {
-            unsigned int gpuIndex = gpuIndices[i];
-            for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
-            {
-                if (diagResults[gpuIndex].results[testIndex].error[j].msg[0] != '\0')
-                {
-                    DisplayVerboseInfo(
-                        cmdView, "Warning", Sanitize(diagResults[gpuIndex].results[testIndex].error[j].msg));
-                }
-            }
-        }
-    }
+        /* Display info not associated with any specific entity. */
+        auto infos = std::span(test.infoIndices,
+                               std::min(static_cast<unsigned int>(test.numInfo),
+                                        static_cast<unsigned int>(std::size(test.infoIndices))))
+                     | std::views::filter([&](unsigned int const idx) {
+                           return (idx < std::min(static_cast<unsigned int>(response.numInfo),
+                                                  static_cast<unsigned int>(std::size(response.info))))
+                                  && isGlobalEntity(response.info[idx].entity);
+                       })
+                     | std::views::transform(
+                         [&](unsigned int const idx) -> dcgmDiagInfo_v1 const & { return response.info[idx]; });
 
-    if (displayInfo)
-    {
-        for (unsigned int i = 0; i < gpuIndices.size(); i++)
+        for (auto const &info : infos)
         {
-            unsigned int gpuIndex = gpuIndices[i];
-            if (diagResults[gpuIndex].results[testIndex].info[0] != '\0')
-            {
-                DisplayVerboseInfo(cmdView, "Info", Sanitize(diagResults[gpuIndex].results[testIndex].info));
-            }
+            DisplayVerboseInfo(view, "Info", info);
         }
     }
 }
 
-
-/*****************************************************************************/
-void Diag::HelperDisplayGpuResults(std::string dataName,
-                                   unsigned int testIndex,
-                                   dcgmDiagResponsePerGpu_v5 *diagResults,
-                                   dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                   const std::vector<unsigned int> &gpuIndices)
+/**
+ * Display each result for each kind of entity that is present.
+ */
+void Diag::HelperDisplayEntityResults(CommandOutputController &view,
+                                      dcgmDiagResponse_v11 const &response,
+                                      dcgmDiagTestRun_v1 const &test,
+                                      bool verbose)
 {
-    CommandOutputController cmdView = CommandOutputController();
-    std::stringstream ss;
-    std::list<unsigned int> passed;
-    std::list<unsigned int> failed;
-    std::list<unsigned int> skipped;
-    std::list<unsigned int> warned;
+    // Iterate the results for this test only ...
+    auto results = std::span(test.resultIndices,
+                             std::min(static_cast<unsigned int>(test.numResults),
+                                      static_cast<unsigned int>(std::size(test.resultIndices))))
+                   | std::views::filter([&response](unsigned int const idx) {
+                         return idx < std::min(static_cast<unsigned int>(response.numResults),
+                                               static_cast<unsigned int>(std::size(response.results)));
+                     })
+                   | std::views::transform([&response](unsigned int const idx) { return response.results[idx]; });
 
-    bool isDisplayedFirst   = true;
-    bool showWarnings       = false;
-    size_t numGpus          = gpuIndices.size();
-    std::string displayName = HelperGetTestName(testIndex);
-    cmdView.setDisplayStencil(DIAG_DATA);
-
-    if (testIndex == DCGM_CONTEXT_CREATE_INDEX)
+    for (auto const &result : results)
     {
-        testIndex = 0; // Context create is only ever run by itself, and it's stored in index 0
-    }
+        view.setDisplayStencil(DIAG_DATA);
+        view.addDisplayParameter(DATA_NAME_TAG, "");
+        view.addDisplayParameter(DATA_INFO_TAG,
+                                 fmt::format("{}{}: {}",
+                                             DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
+                                             result.entity.entityId,
+                                             HelperDisplayDiagResult(result.result)));
+        view.display();
 
-    for (unsigned int i = 0; i < numGpus; i++)
-    {
-        unsigned int gpuIndex = gpuIndices[i];
+        // Emit the errors and info for this entity only.
+        auto errors = std::span(test.errorIndices,
+                                std::min(static_cast<unsigned int>(test.numErrors),
+                                         static_cast<unsigned int>(std::size(test.errorIndices))))
+                      | std::views::filter([&response, &result](unsigned int const idx) {
+                            return (idx < std::min(static_cast<unsigned int>(response.numErrors),
+                                                   static_cast<unsigned int>(std::size(response.errors))))
+                                   && response.errors[idx].entity == result.entity;
+                        })
+                      | std::views::transform([&response](unsigned int const idx) -> dcgmDiagError_v1 const & {
+                            return response.errors[idx];
+                        });
 
-        if (diagResults[gpuIndex].results[testIndex].status == DCGM_DIAG_RESULT_PASS)
+        for (auto const &error : errors)
         {
-            passed.push_back(diagResults[gpuIndex].gpuId);
+            DisplayVerboseInfo(view,
+                               fmt::format("{}: {}{}",
+                                           "Warning",
+                                           DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
+                                           result.entity.entityId),
+                               error);
         }
-        else if (diagResults[gpuIndex].results[testIndex].status == DCGM_DIAG_RESULT_SKIP)
+
+        if (verbose)
         {
-            skipped.push_back(diagResults[gpuIndex].gpuId);
+            auto infos = std::span(test.infoIndices,
+                                   std::min(static_cast<unsigned int>(test.numInfo),
+                                            static_cast<unsigned int>(std::size(test.infoIndices))))
+                         | std::views::filter([&response, &result](unsigned int const idx) {
+                               return (idx < std::min(static_cast<unsigned int>(response.numInfo),
+                                                      static_cast<unsigned int>(std::size(response.info))))
+                                      && response.info[idx].entity == result.entity;
+                           })
+                         | std::views::transform([&response](unsigned int const idx) -> dcgmDiagInfo_v1 const & {
+                               return response.info[idx];
+                           });
+
+            for (auto const &info : infos)
+            {
+                DisplayVerboseInfo(view,
+                                   fmt::format("{}: {}{}",
+                                               "Info",
+                                               DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
+                                               result.entity.entityId),
+                                   info);
+            }
         }
-        else if (diagResults[gpuIndex].results[testIndex].status == DCGM_DIAG_RESULT_WARN)
-        {
-            warned.push_back(diagResults[gpuIndex].gpuId);
-        }
-        else if (diagResults[gpuIndex].results[testIndex].status == DCGM_DIAG_RESULT_FAIL)
-        {
-            failed.push_back(diagResults[gpuIndex].gpuId);
-        }
     }
-
-    if (passed.size() == numGpus)
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, "Pass - All");
-        cmdView.display();
-        HelperDisplayDetails(false, gpuIndices, testIndex, cmdView, diagResults);
-        return;
-    }
-
-    if (skipped.size() == numGpus)
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, "Skip - All");
-        cmdView.display();
-        HelperDisplayDetails(true, gpuIndices, testIndex, cmdView, diagResults);
-        return;
-    }
-
-    if (failed.size() == numGpus)
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, "Fail - All");
-        cmdView.display();
-        HelperDisplayDetails(true, gpuIndices, testIndex, cmdView, diagResults);
-        return;
-    }
-
-    if (warned.size() == numGpus)
-    {
-        cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, "Warn - All");
-        cmdView.display();
-        HelperDisplayDetails(true, gpuIndices, testIndex, cmdView, diagResults);
-        // special case for the diagnostic case to show the return code
-        if (dataName == "Diagnostic")
-        {
-            std::stringstream eudReturnCode;
-            eudReturnCode << "  Code: (" << std::setfill('0') << std::setw(12) << diagResults[0].hwDiagnosticReturn
-                          << ")";
-            cmdView.addDisplayParameter(DATA_NAME_TAG, "");
-            cmdView.addDisplayParameter(DATA_INFO_TAG, eudReturnCode.str());
-            cmdView.display();
-        }
-        return;
-    }
-
-    if (passed.size() > 0)
-    {
-        ss << "Pass - GPU" << ((passed.size() == 1) ? ": " : "s: ");
-        for (std::list<unsigned int>::iterator it = passed.begin(); it != passed.end(); it++)
-        {
-            ss << *it << ((it == --passed.end()) ? "   " : ", ");
-        }
-        cmdView.addDisplayParameter(DATA_NAME_TAG, displayName);
-        cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
-        cmdView.display();
-        isDisplayedFirst = false;
-    }
-
-    if (failed.size() > 0)
-    {
-        ss.str("");
-        ss << "Fail - GPU" << ((failed.size() == 1) ? ": " : "s: ");
-        for (std::list<unsigned int>::iterator it = failed.begin(); it != failed.end(); it++)
-        {
-            ss << *it << ((it == --failed.end()) ? "   " : ", ");
-        }
-        cmdView.addDisplayParameter(DATA_NAME_TAG, (isDisplayedFirst ? displayName : ""));
-        cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
-        cmdView.display();
-        isDisplayedFirst = false;
-        showWarnings     = true;
-    }
-
-    if (warned.size() > 0)
-    {
-        ss.str("");
-        ss << "Warn - GPU" << ((warned.size() == 1) ? ": " : "s: ");
-        for (std::list<unsigned int>::iterator it = warned.begin(); it != warned.end(); it++)
-        {
-            ss << *it << ((it == --warned.end()) ? "   " : ", ");
-        }
-        cmdView.addDisplayParameter(DATA_NAME_TAG, (isDisplayedFirst ? displayName : ""));
-        cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
-        cmdView.display();
-        isDisplayedFirst = false;
-        showWarnings     = true;
-    }
-
-
-    if (skipped.size() > 0)
-    {
-        ss.str("");
-        ss << "Skip - GPU" << ((skipped.size() == 1) ? ": " : "s: ");
-        for (std::list<unsigned int>::iterator it = skipped.begin(); it != skipped.end(); it++)
-        {
-            ss << *it << ((it == --skipped.end()) ? "   " : ", ");
-        }
-        cmdView.addDisplayParameter(DATA_NAME_TAG, (isDisplayedFirst ? displayName : ""));
-        cmdView.addDisplayParameter(DATA_INFO_TAG, ss.str());
-        cmdView.display();
-        showWarnings = true;
-    }
-
-    HelperDisplayDetails(showWarnings, gpuIndices, testIndex, cmdView, diagResults);
 
     return;
 }
 
-/*****************************************************************************/
-void Diag::HelperJsonAddBasicTests(Json::Value &output, int &categoryIndex, dcgmDiagResponse_v10 &diagResult)
-{
-    bool allNotRun = true;
-
-    for (unsigned int testIndex = 0; testIndex < diagResult.levelOneTestCount; testIndex++)
-    {
-        if (diagResult.levelOneResults[testIndex].status != DCGM_DIAG_RESULT_NOT_RUN)
-        {
-            allNotRun = false;
-            break;
-        }
-    }
-
-    if (allNotRun)
-    {
-        return;
-    }
-
-    Json::Value category;
-    category[NVVS_HEADER] = DISPLAY_DEPLOYMENT;
-    // Since the CUDA_RUNTIME_LIBRARY check is no longer valid, we don't want to increment the JSON array
-    // for that test. All JSON array indexes after that test will be offset by -1 to avoid having a NULL
-    // entry in the JSON array.
-    int adjustment = 0;
-
-    // Make the categories array and add each entry
-    for (unsigned int testIndex = 0; testIndex < diagResult.levelOneTestCount; testIndex++)
-    {
-        Json::Value resultEntry;
-
-        // Skip the Cuda Runtime library test when it is not run, which is always for now.
-        if (testIndex == DCGM_SWTEST_CUDA_RUNTIME_LIBRARY
-            && diagResult.levelOneResults[testIndex].status == DCGM_DIAG_RESULT_NOT_RUN)
-        {
-            adjustment = -1;
-            continue;
-        }
-
-        category[NVVS_TESTS][testIndex + adjustment][NVVS_TEST_NAME] = levelOneTests[testIndex];
-        resultEntry[NVVS_STATUS] = HelperDisplayDiagResult(diagResult.levelOneResults[testIndex].status);
-
-        for (unsigned int i = 0; i < DCGM_MAX_ERRORS; i++)
-        {
-            Json::Value warningEntry;
-
-            if (diagResult.levelOneResults[testIndex].error[i].msg[0] != '\0')
-            {
-                resultEntry[NVVS_GPU_ID]          = diagResult.levelOneResults[testIndex].error[i].gpuId;
-                warningEntry[NVVS_WARNINGS]       = diagResult.levelOneResults[testIndex].error[i].msg;
-                warningEntry[NVVS_ERROR_ID]       = diagResult.levelOneResults[testIndex].error[i].code;
-                warningEntry[NVVS_ERROR_CATEGORY] = diagResult.levelOneResults[testIndex].error[i].category;
-                warningEntry[NVVS_ERROR_SEVERITY] = diagResult.levelOneResults[testIndex].error[i].severity;
-
-                resultEntry[NVVS_WARNINGS][i] = warningEntry;
-            }
-        }
-
-        category[NVVS_TESTS][testIndex + adjustment][NVVS_RESULTS][0] = resultEntry;
-    }
-
-    // Add the categories array to the root json node
-    output[NVVS_NAME][NVVS_HEADERS][categoryIndex] = category;
-    categoryIndex++;
-}
-
-/*****************************************************************************/
-/*
- * Returns the plugin name associated with the given index, or "" if not found
+/******************************************************************************/
+/**
+ * Adds `result` to `testEntry` and returns true, or returns false if this gpu didn't run the test.
  */
-std::string Diag::HelperGetTestName(unsigned int index)
+bool Diag::HelperJsonAddResult(dcgmDiagResponse_v11 const &response,
+                               dcgmDiagTestRun_v1 const &test,
+                               dcgmDiagEntityResult_v1 const &result,
+                               Json::Value &resultEntry)
 {
-    switch (index)
-    {
-        case DCGM_MEMORY_INDEX:
-        {
-            if (!strcasecmp(m_drd.testNames[0], CTXCREATE_PLUGIN_NAME))
-                return DISPLAY_CTXCREATE;
-            else
-                return DISPLAY_MEMORY;
-        }
-
-        case DCGM_DIAGNOSTIC_INDEX:
-            return DISPLAY_DIAGNOSTIC;
-
-        case DCGM_PCI_INDEX:
-            return DISPLAY_PCIE;
-
-        case DCGM_SM_STRESS_INDEX:
-            return DISPLAY_SM_STRESS;
-
-        case DCGM_TARGETED_STRESS_INDEX:
-            return DISPLAY_TS;
-
-        case DCGM_TARGETED_POWER_INDEX:
-            return DISPLAY_TP;
-
-        case DCGM_MEMORY_BANDWIDTH_INDEX:
-            return DISPLAY_MEMBW;
-
-        case DCGM_MEMTEST_INDEX:
-            return DISPLAY_MEMTEST;
-
-        case DCGM_PULSE_TEST_INDEX:
-            return DISPLAY_PULSE_TEST;
-
-        case DCGM_EUD_TEST_INDEX:
-            return DISPLAY_EUD_TEST;
-
-        case DCGM_CPU_EUD_TEST_INDEX:
-            return DISPLAY_CPU_EUD_TEST;
-
-        case DCGM_CONTEXT_CREATE_INDEX:
-            return DISPLAY_CTXCREATE;
-    }
-
-    return "";
-}
-
-/*****************************************************************************/
-/*
- * Adds the result to this test entry and returns true, or returns false if this gpu didn't run the test.
- */
-bool Diag::HelperJsonAddResult(dcgmDiagResponsePerGpu_v5 &gpuResult,
-                               Json::Value &testEntry,
-                               unsigned int gpuIndex,
-                               unsigned int testIndex,
-                               size_t i)
-{
-    Json::Value resultEntry;
-    char buf[10];
-
     // Don't record an entry for tests that weren't run
-    if (gpuResult.results[testIndex].status == DCGM_DIAG_RESULT_NOT_RUN)
+    if (result.result == DCGM_DIAG_RESULT_NOT_RUN)
     {
         return false;
     }
 
-    snprintf(buf, sizeof(buf), "%u", gpuIndex);
-
-    resultEntry[NVVS_GPU_ID] = buf;
-    resultEntry[NVVS_STATUS] = HelperDisplayDiagResult(gpuResult.results[testIndex].status);
-
-    for (unsigned int j = 0; j < DCGM_MAX_ERRORS; j++)
+    // For re-use with AddTestSummary(), don't display entity info when it is FE_NONE
+    if (result.entity != dcgmGroupEntityPair_t({ DCGM_FE_NONE, 0 }))
     {
-        Json::Value warningEntry;
+        resultEntry[NVVS_ENTITY_GRP_ID] = static_cast<unsigned int>(result.entity.entityGroupId);
+        resultEntry[NVVS_ENTITY_GRP]    = DcgmFieldsGetEntityGroupString(result.entity.entityGroupId);
+        resultEntry[NVVS_ENTITY_ID]     = result.entity.entityId;
+    }
 
-        if (gpuResult.results[testIndex].error[j].msg[0] != '\0')
+    resultEntry[NVVS_STATUS] = HelperDisplayDiagResult(result.result);
+
+    // Report errors associated with this result
+    {
+        unsigned int resErrIdx = 0;
+        for (unsigned int errIdx : std::span(test.errorIndices,
+                                             std::min(static_cast<unsigned int>(test.numErrors),
+                                                      static_cast<unsigned int>(std::size(test.errorIndices))))
+                                       | std::views::filter([&response, &result](unsigned int const errIdx) {
+                                             return errIdx < response.numErrors
+                                                    && errIdx < static_cast<unsigned int>(std::size(response.errors))
+                                                    && response.errors[errIdx].entity == result.entity;
+                                         }))
         {
-            warningEntry[NVVS_WARNING]        = gpuResult.results[testIndex].error[j].msg;
-            warningEntry[NVVS_ERROR_ID]       = gpuResult.results[testIndex].error[j].code;
-            warningEntry[NVVS_ERROR_CATEGORY] = gpuResult.results[testIndex].error[j].category;
-            warningEntry[NVVS_ERROR_SEVERITY] = gpuResult.results[testIndex].error[j].severity;
-
-            resultEntry[NVVS_WARNINGS][j] = warningEntry;
+            dcgmDiagError_v1 const &error = response.errors[errIdx];
+            Json::Value errorEntry;
+            errorEntry[NVVS_WARNING]              = error.msg;
+            errorEntry[NVVS_ERROR_ID]             = error.code;
+            errorEntry[NVVS_ERROR_CATEGORY]       = error.category;
+            errorEntry[NVVS_ERROR_SEVERITY]       = error.severity;
+            resultEntry[NVVS_WARNINGS][resErrIdx] = std::move(errorEntry);
+            resErrIdx++;
         }
     }
 
-    if (gpuResult.results[testIndex].info[0] != '\0')
-        resultEntry[NVVS_INFO] = gpuResult.results[testIndex].info;
-
-    testEntry[NVVS_RESULTS][static_cast<int>(i)] = resultEntry;
+    // Report info associated with this result
+    {
+        unsigned int resInfoIdx = 0;
+        for (unsigned int infoIdx : std::span(test.infoIndices,
+                                              std::min(static_cast<unsigned int>(test.numInfo),
+                                                       static_cast<unsigned int>(std::size(test.infoIndices))))
+                                        | std::views::filter([&response, &result](unsigned int const infoIdx) {
+                                              return infoIdx < response.numInfo
+                                                     && infoIdx < static_cast<unsigned int>(std::size(response.info))
+                                                     && response.info[infoIdx].entity == result.entity;
+                                          }))
+        {
+            dcgmDiagInfo_v1 const &info        = response.info[infoIdx];
+            resultEntry[NVVS_INFO][resInfoIdx] = info.msg;
+            resInfoIdx++;
+        }
+    }
 
     return true;
 }
 
 /*****************************************************************************/
-/*
- * Adds the plugin output (represented by testEntry) to the category
+/**
+ * Adds the plugin output (represented by `testEntry`) to the specified `category` node
  */
-void Diag::HelperJsonAddPlugin(Json::Value &category, int &pluginCount, Json::Value &testEntry)
+void Diag::HelperJsonAddTest(Json::Value &category, unsigned int testIndex, Json::Value &testEntry)
 {
-    category[NVVS_TESTS][pluginCount] = testEntry;
-    pluginCount++;
+    category[NVVS_TESTS][testIndex] = testEntry;
 }
 
 /*****************************************************************************/
-/*
- * Adds the category output to the category array
+/**
+ * Adds `category` to the test_categories array at position `categoryIndex` in `output` node.
+ * The caller is responsible for incrementing the categoryIndex after this is added.
  */
-void Diag::HelperJsonAddCategory(Json::Value &output, int &categoryIndex, Json::Value &category, int categoryCount)
+void Diag::HelperJsonAddCategory(Json::Value &output, Json::Value &category)
 {
-    if (categoryCount > 0)
+    if (!category.empty())
     {
-        output[NVVS_NAME][NVVS_HEADERS][categoryIndex] = category;
-        categoryIndex++;
+        output[NVVS_NAME][NVVS_HEADERS].append(std::move(category));
     }
 }
 
-/*****************************************************************************/
-/*
- * Builds the json based on the contents of diagResult
+/**
+ * Produce a JSON object at root `output` documenting all entities within all
+ * entity groups found in `response`.
  */
-void Diag::HelperJsonBuildOutput(Json::Value &output,
-                                 dcgmDiagResponse_v10 &diagResult,
-                                 const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v11 const &response)
 {
-    int categoryIndex = 0;
-
-    Json::Value hardware;
-    Json::Value integration;
-    Json::Value stress;
-    int hardwarePluginCount    = 0;
-    int integrationPluginCount = 0;
-    int stressPluginCount      = 0;
-    hardware[NVVS_HEADER]      = DISPLAY_HARDWARE;
-    integration[NVVS_HEADER]   = DISPLAY_INTEGRATION;
-    stress[NVVS_HEADER]        = DISPLAY_STRESS;
-
-    std::string gpuList = m_drd.gpuList;
-
-    // Make sure we have an accurate gpu list
-    if (gpuList.size() == 0)
+    for (unsigned int entityGroup = DCGM_FE_GPU; entityGroup < DCGM_FE_COUNT; entityGroup++)
     {
-        std::stringstream buf;
-        for (size_t i = 0; i < gpuIndices.size(); i++)
+        Json::Value entityGroupEntry;
+
+        for (auto const &entity :
+             std::span(response.entities,
+                       std::min(static_cast<unsigned int>(response.numEntities),
+                                static_cast<unsigned int>(std::size(response.entities))))
+                 | std::views::filter([=](auto const &curEnt) { return curEnt.entity.entityGroupId == entityGroup; }))
         {
-            if (i > 0)
-                buf << "," << i;
-            else
-                buf << i;
-        }
-    }
+            Json::Value entityEntry;
 
-    output[NVVS_VERSION_STR]    = diagResult.dcgmVersion;
-    output[NVVS_DRIVER_VERSION] = diagResult.driverVersion;
-
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
-    {
-        if (strcmp(diagResult.devSerials[i], DCGM_STR_BLANK))
-        {
-            output[NVVS_GPU_SERIALS][std::to_string(i)] = diagResult.devSerials[i];
-        }
-    }
-
-    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES && diagResult.devIds[i][0] != '\0'; i++)
-    {
-        output[NVVS_GPU_DEV_IDS][i] = diagResult.devIds[i];
-    }
-
-    HelperJsonAddBasicTests(output, categoryIndex, diagResult);
-
-    // Now get each of the other test's results
-    for (unsigned int testIndex = 0; testIndex < DCGM_PER_GPU_TEST_COUNT_V8; testIndex++)
-    {
-        Json::Value testEntry;
-        std::string testName      = HelperGetTestName(testIndex);
-        testEntry[NVVS_TEST_NAME] = testName;
-        bool pluginRan            = false;
-
-        for (size_t i = 0; i < gpuIndices.size(); i++)
-        {
-            unsigned int gpuIndex = gpuIndices[i];
-            if (HelperJsonAddResult(diagResult.perGpuResponses[gpuIndex], testEntry, gpuIndex, testIndex, i) == true)
-                pluginRan = true;
-        }
-
-        if (testIndex == DCGM_CPU_EUD_TEST_INDEX)
-        {
-            AddCpuEudResultIfAny(hardware, hardwarePluginCount, diagResult.auxDataPerTest[DCGM_CPU_EUD_TEST_INDEX]);
-        }
-
-        if (pluginRan)
-        {
-            switch (testIndex)
+            entityEntry[NVVS_ENTITY_ID] = entity.entity.entityId;
+            if (std::string_view(entity.serialNum) != std::string_view(DCGM_STR_BLANK))
             {
-                case DCGM_MEMORY_INDEX:
-                case DCGM_DIAGNOSTIC_INDEX:
-                case DCGM_PULSE_TEST_INDEX:
-                case DCGM_EUD_TEST_INDEX:
-
-                    HelperJsonAddPlugin(hardware, hardwarePluginCount, testEntry);
-                    break;
-
-                case DCGM_PCI_INDEX:
-
-                    HelperJsonAddPlugin(integration, integrationPluginCount, testEntry);
-                    break;
-
-                case DCGM_SM_STRESS_INDEX:
-                case DCGM_TARGETED_STRESS_INDEX:
-                case DCGM_TARGETED_POWER_INDEX:
-                case DCGM_MEMORY_BANDWIDTH_INDEX:
-                case DCGM_MEMTEST_INDEX:
-
-                    HelperJsonAddPlugin(stress, stressPluginCount, testEntry);
-                    break;
+                entityEntry[NVVS_ENTITY_SERIAL] = entity.serialNum;
             }
+            entityEntry[NVVS_ENTITY_DEVICE_ID] = entity.skuDeviceId;
+            entityGroupEntry[NVVS_ENTITIES].append(std::move(entityEntry));
+        }
+
+        if (entityGroupEntry.isMember(NVVS_ENTITIES) && !entityGroupEntry[NVVS_ENTITIES].empty())
+        {
+            /* Only display the entity group if it was populated with entities. */
+            entityGroupEntry[NVVS_ENTITY_GRP_ID] = entityGroup;
+            entityGroupEntry[NVVS_ENTITY_GRP]
+                = DcgmFieldsGetEntityGroupString(static_cast<dcgm_field_entity_group_t>(entityGroup));
+            output[NVVS_ENTITY_GROUPS].append(std::move(entityGroupEntry));
         }
     }
-
-    HelperJsonAddCategory(output, categoryIndex, integration, integrationPluginCount);
-    HelperJsonAddCategory(output, categoryIndex, hardware, hardwarePluginCount);
-    HelperJsonAddCategory(output, categoryIndex, stress, stressPluginCount);
 }
 
-/*****************************************************************************/
-/*
- * Displays diagResult as json instead of the normal output
+void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v11 const &response)
+{
+    auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
+    if (gpuEudVersion.has_value())
+    {
+        output[NVVS_METADATA]["EUD Test Version"] = *gpuEudVersion;
+    }
+
+    auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
+    if (cpuEudVersion.has_value())
+    {
+        output[NVVS_METADATA]["CPU EUD Test Version"] = *cpuEudVersion;
+    }
+
+    if (response.dcgmVersion[0] != '\0')
+    {
+        output[NVVS_METADATA][NVVS_VERSION_STR] = response.dcgmVersion;
+    }
+
+    if (response.driverVersion[0] != '\0')
+    {
+        output[NVVS_METADATA][NVVS_DRIVER_VERSION] = response.driverVersion;
+    }
+}
+
+/**
+ * Produce a JSON object at root `output` documenting the overall test result and any
+ * errors or info not associated with an entity.
  */
-dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_v10 &diagResult, const std::vector<unsigned int> &gpuIndices)
+void Diag::HelperJsonAddTestSummary(Json::Value &category,
+                                    unsigned int const testIndex,
+                                    dcgmDiagTestRun_v1 const &test,
+                                    dcgmDiagResponse_v11 const &response)
+{
+    /* Use a constructed result to capture overall results. */
+    dcgmDiagEntityResult_v1 overallResult = { .entity = { DCGM_FE_NONE, 0 }, .result = test.result, .testId = 0 };
+    Json::Value testSummary;
+
+    if (HelperJsonAddResult(response, test, overallResult, testSummary))
+    {
+        category[NVVS_TESTS][testIndex][NVVS_TEST_SUMMARY] = std::move(testSummary);
+    }
+}
+
+/**
+ * Produce a JSON object at root `output` from the specified `response`.
+ */
+void Diag::HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v11 const &response)
+{
+    HelperJsonAddEntities(output, response);
+    HelperJsonAddMetadata(output, response);
+
+    // Process tests by category for output purposes
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(response.numCategories),
+                                          static_cast<unsigned int>(std::size(response.categories)));
+         i++)
+    {
+        auto const &category = response.categories[i];
+        Json::Value categoryEntry;
+        categoryEntry[NVVS_HEADER] = category;
+        unsigned int jsonTestIdx   = 0;
+
+        for (auto const &test : std::span(response.tests,
+                                          std::min(static_cast<unsigned int>(response.numTests),
+                                                   static_cast<unsigned int>(std::size(response.tests))))
+                                    | std::views::filter([i](auto const &test) { return test.categoryIndex == i; }))
+        {
+            Json::Value testEntry;
+            testEntry[NVVS_TEST_NAME] = test.name;
+
+            for (unsigned int resIdx : std::span(test.resultIndices,
+                                                 std::min(static_cast<unsigned int>(test.numResults),
+                                                          static_cast<unsigned int>(std::size(test.resultIndices))))
+                                           | std::views::filter([&](unsigned int const resIdx) {
+                                                 return resIdx < response.numResults
+                                                        && resIdx
+                                                               < static_cast<unsigned int>(std::size(response.results));
+                                             }))
+            {
+                dcgmDiagEntityResult_v1 const &result = response.results[resIdx];
+                Json::Value resultEntry;
+                if (HelperJsonAddResult(response, test, result, resultEntry))
+                {
+                    testEntry[NVVS_RESULTS].append(std::move(resultEntry));
+                }
+            }
+
+            if (!testEntry.empty())
+            {
+                HelperJsonAddTest(categoryEntry, jsonTestIdx, testEntry);
+            }
+            HelperJsonAddTestSummary(categoryEntry, jsonTestIdx, test, response);
+            jsonTestIdx++;
+        }
+
+        HelperJsonAddCategory(output, categoryEntry);
+    }
+}
+
+/**
+ * Displays `response` as JSON instead of CLI-formatted output.
+ * Accrues output in `m_jsonTmpValue` across multiple iterations when specified.
+ */
+dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_v11 const &response)
 {
     Json::Value output;
     dcgmReturn_t result = DCGM_ST_OK;
 
-    HelperJsonBuildOutput(output, diagResult, gpuIndices);
+    HelperJsonBuildOutput(output, response);
 
     if (m_iterations <= 1)
     {
@@ -1521,7 +1270,7 @@ dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_v10 &diagResult, const s
     }
     else
     {
-        m_jsonTmpValue = output;
+        m_jsonTmpValue = std::move(output);
     }
 
     return result;
@@ -1539,14 +1288,14 @@ StartDiag::StartDiag(const std::string &hostname,
                      const std::string &parms,
                      const std::string &configPath,
                      bool jsonOutput,
-                     dcgmRunDiag_v8 &drd,
+                     dcgmRunDiag_v9 &drd,
                      unsigned int iterations,
                      const std::string &pathToDcgmExecutable)
     : m_diagObj(iterations, hostname)
 
 {
     std::string configFileContents;
-    drd.version = dcgmRunDiag_version8;
+    drd.version = dcgmRunDiag_version9;
     m_hostName  = hostname;
 
     /* If the host address was overridden, complain if we can't connect.
@@ -1598,40 +1347,12 @@ StartDiag::StartDiag(const std::string &hostname,
         ss << configFile.rdbuf();
         dcgm_diag_common_set_config_file_contents(ss.str(), drd);
     }
-    // Check for valid gpu list format
-    std::string gpuList(drd.gpuList);
-    if (validGpuListFormat(gpuList) == false)
-    {
-        std::string err_text("Gpu list '");
-        err_text += gpuList + "' must be a comma-separated list of numbers";
-        throw TCLAP::CmdLineParseException(err_text);
-    }
 
     this->m_diagObj.setDcgmRunDiag(&drd);
     this->m_diagObj.setJsonOutput(jsonOutput);
 
     // Set path to dcgm executable. This is used by the signal handler to stop the launched diagnostic if needed.
     diag_pathToExecutable = pathToDcgmExecutable;
-}
-
-/*****************************************************************************/
-bool StartDiag::validGpuListFormat(const std::string &gpuList)
-{
-    bool valid = true;
-
-    std::vector<std::string> gpuIndices;
-    dcgmTokenizeString(gpuList, ",", gpuIndices);
-
-    for (size_t i = 0; i < gpuIndices.size(); i++)
-    {
-        if (isdigit(gpuIndices[i].c_str()[0]) == false)
-        {
-            valid = false;
-            break;
-        }
-    }
-
-    return (valid);
 }
 
 /*****************************************************************************/

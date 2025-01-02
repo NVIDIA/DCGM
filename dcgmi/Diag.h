@@ -23,8 +23,6 @@
 #ifndef DIAG_H_
 #define DIAG_H_
 
-#include <optional>
-
 #include "Command.h"
 #include "CommandOutputController.h"
 #include "yaml-cpp/yaml.h"
@@ -32,6 +30,7 @@
 #include <dcgm_structs_internal.h>
 
 #include <DcgmThread.h>
+#include <type_traits>
 
 #define STOP_DIAG_ENV_VARIABLE_NAME "DCGMI_STOP_DIAG_HOSTNAME"
 
@@ -41,62 +40,60 @@ public:
     Diag(unsigned int iterations, const std::string &hostname);
     virtual ~Diag();
     dcgmReturn_t RunStartDiag(dcgmHandle_t mNvcmHandle);
-    dcgmReturn_t RunViewDiag();
 
-    void setDcgmRunDiag(dcgmRunDiag_v8 *drd);
+    void setDcgmRunDiag(dcgmRunDiag_v9 *drd);
     void setJsonOutput(bool jsonOutput);
-    std::string Sanitize(const std::string &toOutput);
-    void DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, const std::string &info);
+    std::string Sanitize(std::string sanitize);
 
-    // Made public for unit tests
-    std::string HelperGetTestName(unsigned int index);
-    void HelperJsonBuildOutput(Json::Value &output,
-                               dcgmDiagResponse_v10 &diagResult,
-                               const std::vector<unsigned int> &gpuIndices);
-    bool HelperJsonAddResult(dcgmDiagResponsePerGpu_v5 &gpuResult,
-                             Json::Value &testEntry,
-                             unsigned int gpuIndex,
-                             unsigned int testIndex,
-                             size_t i);
-    void HelperJsonAddBasicTests(Json::Value &output, int &headerIndex, dcgmDiagResponse_v10 &diagResult);
-    dcgmReturn_t GetFailureResult(dcgmDiagResponse_v10 &diagResult);
-    void PopulateGpuList(const dcgmDiagResponse_v10 &diagResult, std::vector<unsigned int> &gpuVec);
-    void InitializeDiagResponse(dcgmDiagResponse_v10 &diagResult);
+    template <typename T>
+    void DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, T const &errorOrInfo)
+        requires std::is_same_v<T, dcgmDiagError_v1> || std::is_same_v<T, dcgmDiagInfo_v1>;
 
+    dcgmReturn_t GetFailureResult(dcgmDiagResponse_v11 &response);
+    void HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v11 const &response);
+    bool HelperJsonAddResult(dcgmDiagResponse_v11 const &response,
+                             dcgmDiagTestRun_v1 const &test,
+                             dcgmDiagEntityResult_v1 const &result,
+                             Json::Value &resultEntry);
+    void HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v11 const &response);
+    void InitializeDiagResponse(dcgmDiagResponse_v11 &response);
+
+#ifndef DCGMI_TESTS
 private:
-    void HelperDisplayDeployment(dcgmDiagResponse_v10 &diagResult);
-    void HelperDisplayHardware(dcgmDiagResponsePerGpu_v5 *diagResults,
-                               dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                               const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayIntegration(dcgmDiagResponsePerGpu_v5 *diagResults,
-                                  dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                  const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayPerformance(dcgmDiagResponsePerGpu_v5 *diagResults,
-                                  dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                  const std::vector<unsigned int> &gpuIndices);
-    void HelperDisplayDeploymentResult(CommandOutputController &cmdView,
-                                       const std::string &nameTag,
-                                       dcgmDiagTestResult_v3 &result);
-    std::string HelperDisplayDiagResult(dcgmDiagResult_t val);
+#endif
+    enum displayDiagResultWarn_enum
+    {
+        DDR_NO_DISPLAY_WARN,
+        DDR_DISPLAY_WARN
+    };
+    std::string const HelperDisplayDiagResult(dcgmDiagResult_t val,
+                                              displayDiagResultWarn_enum showWarn = DDR_NO_DISPLAY_WARN) const;
+    void HelperDisplayEntityResults(CommandOutputController &view,
+                                    dcgmDiagResponse_v11 const &response,
+                                    dcgmDiagTestRun_v1 const &test,
+                                    bool verbose);
+    void HelperDisplayGlobalResult(CommandOutputController &view,
+                                   dcgmDiagResponse_v11 const &response,
+                                   dcgmDiagTestRun_v1 const &test,
+                                   bool verbose);
+    void HelperDisplayCategory(std::string_view categoryName,
+                               std::string_view categoryText,
+                               dcgmDiagResponse_v11 const &response);
+    dcgmReturn_t HelperDisplayAsCli(dcgmDiagResponse_v11 const &response);
+    dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_v11 const &response);
+    void HelperDisplayMetadata(dcgmDiagResponse_v11 const &response) const;
+    void HelperDisplayVersionAndDevIds(dcgmDiagResponse_v11 const &response) const;
+    void HelperDisplayCpuInfo(dcgmDiagResponse_v11 const &response) const;
+    void HelperDisplayEudTestsVersion(dcgmDiagResponse_v11 const &response) const;
 
-    void HelperDisplayGpuResults(std::string dataName,
-                                 unsigned int testIndex,
-                                 dcgmDiagResponsePerGpu_v5 *diagResults,
-                                 dcgmDiagTestAuxData_v1 *auxDataPerTest,
-                                 const std::vector<unsigned int> &gpuIndices);
-
-    std::optional<std::function<void(void)>> GetDisplayCpuEudHelper(dcgmDiagTestAuxData_v1 const *auxDataPerTest);
-
-    dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_v10 &diagResult, const std::vector<unsigned int> &gpuIndices);
-    void HelperJsonAddPlugin(Json::Value &category, int &pluginCount, Json::Value &testEntry);
-    void HelperJsonAddCategory(Json::Value &output, int &categoryIndex, Json::Value &category, int categoryCount);
-    void HelperDisplayDetails(bool forceVerbose,
-                              const std::vector<unsigned int> &gpuIndices,
-                              unsigned int testIndex,
-                              CommandOutputController &cmdView,
-                              dcgmDiagResponsePerGpu_v5 *diagResults);
-
-    void HelperDisplayVersionAndDevIds(dcgmDiagResponse_v10 &diagResult);
+    std::string const HelperJsonGetEntityGroupTag(dcgm_field_entity_group_t const) const;
+    void HelperJsonAddCategory(Json::Value &output, Json::Value &category);
+    void HelperJsonAddTest(Json::Value &category, unsigned int testIndex, Json::Value &testEntry);
+    void HelperJsonAddTestSummary(Json::Value &category,
+                                  unsigned int const testIndex,
+                                  dcgmDiagTestRun_v1 const &test,
+                                  dcgmDiagResponse_v11 const &response);
+    void HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v11 const &response);
 
     /*****************************************************************************/
     /*
@@ -108,7 +105,7 @@ private:
     dcgmReturn_t RunDiagOnce(dcgmHandle_t handle);
 
     /*****************************************************************************/
-    dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v10 &diagResult);
+    dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v11 &response);
 
     /*
      * Displays a complete failure message for the diag accounting for JSON or normal output
@@ -116,9 +113,9 @@ private:
      */
     void HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t ret);
 
-    bool isWhitespace(char c);
+    bool isWhitespace(char c) const;
 
-    dcgmRunDiag_v8 m_drd;
+    dcgmRunDiag_v9 m_drd;
     bool m_jsonOutput;
     unsigned int m_iterations;
     std::string m_hostname;
@@ -134,21 +131,21 @@ class RemoteDiagExecutor : public DcgmThread
 {
 public:
     /*****************************************************************************/
-    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v8 &drd);
+    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v9 &drd);
 
     /*****************************************************************************/
-    void run(void);
+    void run(void) override;
 
     /*****************************************************************************/
     dcgmReturn_t GetResult() const;
 
     /*****************************************************************************/
-    dcgmDiagResponse_v10 GetResponse() const;
+    dcgmDiagResponse_v11 const &GetResponse() const;
 
 private:
     dcgmHandle_t m_handle;
-    dcgmRunDiag_v8 m_drd;
-    dcgmDiagResponse_v10 m_diagResult;
+    dcgmRunDiag_v9 m_drd;
+    std::unique_ptr<dcgmDiagResponse_v11> m_response;
     dcgmReturn_t m_result;
 };
 
@@ -163,7 +160,7 @@ public:
               const std::string &parms,
               const std::string &configPath,
               bool jsonOutput,
-              dcgmRunDiag_v8 &drd,
+              dcgmRunDiag_v9 &drd,
               unsigned int iterations,
               const std::string &pathToDcgmExecutable);
 

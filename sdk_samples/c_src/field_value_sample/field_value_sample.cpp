@@ -47,7 +47,7 @@ bool should_run_in_fast_mode(int argc, char **argv)
 int main(int argc, char **argv)
 {
     // DCGM calls return a dcgmReturn_t which can be useful for error handling
-    // and control flow.Whenever we call DCGM we will store the return in result
+    // and control flow. Whenever we call DCGM we will store the return in result
     // and check it for errors.
     dcgmReturn_t result;
 
@@ -88,9 +88,7 @@ int main(int argc, char **argv)
     }
     std::cout << std::endl;
 
-    std::cout << (standalone ? "Standalone mode selected.\n"
-                             : "Embedded mode "
-                               "selected.\n");
+    std::cout << (standalone ? "Standalone mode selected.\n" : "Embedded mode selected.\n");
 
     // Now we need an IP address if we are running in standalone mode. Let's
     // take in whatever string of length 15 and let DCGM handle the error if the
@@ -316,6 +314,9 @@ int main(int argc, char **argv)
                                     &list_field_values_since,
                                     &field_val_vec_map);
 
+        // Update since time after reading values
+        since_timestamp = next_since_timestamp;
+
         // Check the result to see if our DCGM operation was successful.
         if (result != DCGM_ST_OK)
         {
@@ -360,7 +361,7 @@ cleanup:
  * @param userdata
  * @return int
  */
-int list_field_values_since(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userdata)
+int list_field_values_since(unsigned int /* gpuId */, dcgmFieldValue_v1 *values, int numValues, void *userdata)
 {
     int i = 0;
     std::vector<dcgmFieldValue_v1> dcgm_field_vals_vec;
@@ -404,7 +405,7 @@ int list_field_values_since(unsigned int gpuId, dcgmFieldValue_v1 *values, int n
  * @param userdata
  * @return
  */
-int list_field_values(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userdata)
+int list_field_values(unsigned int /* gpuId */, dcgmFieldValue_v1 *values, int numValues, void *userdata)
 {
     // The void pointer at the end allows a pointer to be passed to this
     // function. Here we know that we are passing in a null terminated C
@@ -424,8 +425,7 @@ int list_field_values(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValu
 
 
     // Output the information to screen.
-    for (std::map<unsigned int, dcgmFieldValue_v1>::iterator it = field_val_map.begin(); it != field_val_map.end();
-         ++it)
+    for (auto it = field_val_map.begin(); it != field_val_map.end(); ++it)
     {
         std::cout << "Field ID => " << it->first << std::endl;
         std::cout << "Value => ";

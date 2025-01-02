@@ -117,6 +117,10 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn
                     = ProcessEntitiesGetLatestValuesV2(*(dcgm_core_msg_entities_get_latest_values_v2 *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3:
+                dcgmReturn
+                    = ProcessEntitiesGetLatestValuesV3(*(dcgm_core_msg_entities_get_latest_values_v3 *)moduleCommand);
+                break;
             case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
                 dcgmReturn = ProcessGetMultipleValuesForFieldV1(
                     *(dcgm_core_msg_get_multiple_values_for_field_v1 *)moduleCommand);
@@ -220,6 +224,11 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn = ProcessPauseResume(*(dcgm_core_msg_pause_resume_v1 *)moduleCommand);
                 break;
 
+            case DCGM_CORE_SR_GET_WORKLOAD_POWER_PROFILES_STATUS:
+                dcgmReturn = ProcessGetDeviceWorkloadPowerProfilesInfo(
+                    *(dcgm_core_msg_get_workload_power_profiles_status_v1 *)moduleCommand);
+                break;
+
 #ifdef INJECTION_LIBRARY_AVAILABLE
             case DCGM_CORE_SR_NVML_INJECT_DEVICE:
                 dcgmReturn = ProcessNvmlInjectDevice(*(dcgm_core_msg_nvml_inject_device_t *)moduleCommand);
@@ -239,6 +248,18 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_RESET_NVML_FUNC_CALL_COUNT:
                 dcgmReturn = ProcessResetNvmlInjectFuncCallCount(
                     *(dcgm_core_msg_reset_nvml_inject_func_call_count_t *)moduleCommand);
+                break;
+            case DCGM_CORE_SR_REMOVE_NVML_INJECTED_GPU:
+                dcgmReturn = ProcessRemoveNvmlInjectedGpu(
+                    *(reinterpret_cast<dcgm_core_msg_remove_restore_nvml_injected_gpu_t *>(moduleCommand)));
+                break;
+            case DCGM_CORE_SR_RESTORE_NVML_INJECTED_GPU:
+                dcgmReturn = ProcessRestoreNvmlInjectedGpu(
+                    *(reinterpret_cast<dcgm_core_msg_remove_restore_nvml_injected_gpu_t *>(moduleCommand)));
+                break;
+            case DCGM_CORE_SR_NVSWITCH_GET_BACKEND:
+                dcgmReturn = ProcessNvswitchGetBackend(
+                    *(reinterpret_cast<dcgm_core_msg_nvswitch_get_backend_v1 *>(moduleCommand)));
                 break;
 #endif
 
@@ -361,12 +382,6 @@ dcgmReturn_t DcgmModuleCore::ProcessGroupDestroy(dcgm_core_msg_group_destroy_t &
         return ret;
     }
 
-    dcgm_connection_id_t connectionId = msg.header.connectionId;
-    if (DcgmHostEngineHandler::Instance()->GetPersistAfterDisconnect(msg.header.connectionId))
-    {
-        connectionId = DCGM_CONNECTION_ID_NONE;
-    }
-
     unsigned int groupId = msg.gd.groupId;
     ret                  = m_groupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != ret)
@@ -383,7 +398,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGroupDestroy(dcgm_core_msg_group_destroy_t &
         return DCGM_ST_OK;
     }
 
-    ret = m_groupManager->RemoveGroup(connectionId, groupId);
+    ret = m_groupManager->RemoveGroup(groupId);
 
     if (DCGM_ST_OK != ret)
     {
@@ -418,7 +433,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetEntityGroupEntities(dcgm_core_msg_get_ent
         return DCGM_ST_OK;
     }
 
-    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
     {
         msg.entities.cmdRet = DCGM_ST_INSUFFICIENT_SIZE;
         return DCGM_ST_OK;
@@ -515,10 +530,11 @@ dcgmReturn_t DcgmModuleCore::ProcessGroupGetInfo(dcgm_core_msg_group_get_info_t 
         return DCGM_ST_OK;
     }
 
-    if (entities.size() > DCGM_GROUP_MAX_ENTITIES)
+    if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
     {
-        DCGM_LOG_ERROR << fmt::format(
-            "Number of entities in the group {} exceeds DCGM_GROUP_MAX_ENTITIES={}.", groupId, DCGM_GROUP_MAX_ENTITIES);
+        DCGM_LOG_ERROR << fmt::format("Number of entities in the group {} exceeds DCGM_GROUP_MAX_ENTITIES_V2={}.",
+                                      groupId,
+                                      DCGM_GROUP_MAX_ENTITIES_V2);
         msg.gi.cmdRet = DCGM_ST_MAX_LIMIT;
         return DCGM_ST_OK;
     }
@@ -680,9 +696,9 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_enti
             return DCGM_ST_OK;
         }
     }
-    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES)
+    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES_V1)
     {
-        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES;
+        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES_V1;
         msg.ev.cmdRet = DCGM_ST_BADPARAM;
         return DCGM_ST_OK;
     }
@@ -807,9 +823,9 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_enti
             return DCGM_ST_OK;
         }
     }
-    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES)
+    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES_V1)
     {
-        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES;
+        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES_V1;
         msg.ev.cmdRet = DCGM_ST_BADPARAM;
         return DCGM_ST_OK;
     }
@@ -817,6 +833,12 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_enti
     {
         /* Use the list from the message */
         entities.insert(entities.end(), &msg.ev.entities[0], &msg.ev.entities[msg.ev.entitiesCount]);
+    }
+
+    if (entities.empty())
+    {
+        msg.ev.cmdRet = DCGM_ST_GROUP_IS_EMPTY;
+        return DCGM_ST_OK;
     }
 
     /* Convert the fieldGroupId to a list of field IDs */
@@ -892,6 +914,139 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_enti
     /* calculate actual message size to avoid transferring extra data */
     msg.header.length
         = sizeof(dcgm_core_msg_entities_get_latest_values_v2) - SAMPLES_BUFFER_SIZE_V2 + msg.ev.bufferSize;
+    msg.ev.cmdRet = DCGM_ST_OK;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV3(dcgm_core_msg_entities_get_latest_values_v3 &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_entities_get_latest_values_version3);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    /* initialize length of response to handle failure cases */
+    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_v3) - SAMPLES_BUFFER_SIZE_V2;
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    std::vector<unsigned short> fieldIds;
+
+    /* Convert the entity group to a list of entities */
+    if (msg.ev.entitiesCount == 0)
+    {
+        unsigned int groupId = msg.ev.groupId;
+
+        /* If this is a special group ID, convert it to a real one */
+        ret = m_groupManager->verifyAndUpdateGroupId(&groupId);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from verifyAndUpdateGroupId. groupId " << msg.ev.groupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+
+        ret = m_groupManager->GetGroupEntities(groupId, entities);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES_V2)
+    {
+        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES_V2;
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        /* Use the list from the message */
+        entities.insert(entities.end(), &msg.ev.entities[0], &msg.ev.entities[msg.ev.entitiesCount]);
+    }
+
+    if (entities.empty())
+    {
+        msg.ev.cmdRet = DCGM_ST_GROUP_IS_EMPTY;
+        return DCGM_ST_OK;
+    }
+
+    /* Convert the fieldGroupId to a list of field IDs */
+    if (msg.ev.fieldIdCount == 0)
+    {
+        DcgmFieldGroupManager *mpFieldGroupManager = DcgmHostEngineHandler::Instance()->GetFieldGroupManager();
+
+        ret = mpFieldGroupManager->GetFieldGroupFields(msg.ev.fieldGroupId, fieldIds);
+        if (ret != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got ret " << ret << " from GetFieldGroupFields. fieldGroupId " << msg.ev.fieldGroupId;
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        DCGM_LOG_ERROR << "Invalid fieldId count: " << msg.ev.fieldIdCount
+                       << " > MAX:" << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        /* Use the list from the message */
+        fieldIds.insert(fieldIds.end(), &msg.ev.fieldIdList[0], &msg.ev.fieldIdList[msg.ev.fieldIdCount]);
+    }
+
+    /* Create the fvBuffer after we know how many field IDs we'll be retrieving */
+    size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
+    DcgmFvBuffer fvBuffer(initialCapacity);
+
+    /* Make a batch request to the cache manager to fill a fvBuffer with all of the values */
+    if ((msg.ev.flags & DCGM_FV_FLAG_LIVE_DATA) != 0)
+    {
+        ret = m_cacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
+    }
+    else
+    {
+        ret = m_cacheManager->GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
+    }
+    if (ret != DCGM_ST_OK)
+    {
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    const char *fvBufferBytes = fvBuffer.GetBuffer();
+    size_t elementCount       = 0;
+
+    fvBuffer.GetSize((size_t *)&msg.ev.bufferSize, &elementCount);
+
+    if ((fvBufferBytes == nullptr) || (msg.ev.bufferSize == 0))
+    {
+        DCGM_LOG_ERROR << "Unexpected fvBuffer " << (void *)fvBufferBytes << ", fvBufferBytes " << msg.ev.bufferSize;
+        ret           = DCGM_ST_GENERIC_ERROR;
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.ev.bufferSize > sizeof(msg.ev.buffer))
+    {
+        DCGM_LOG_ERROR << "Buffer size too small, consider smaller request: " << msg.ev.bufferSize << ">"
+                       << sizeof(msg.ev.buffer);
+        msg.ev.bufferSize = sizeof(msg.ev.buffer);
+        msg.ev.cmdRet     = DCGM_ST_INSUFFICIENT_SIZE;
+        return DCGM_ST_OK;
+    }
+
+    /* Set pCmd->blob with the contents of the FV buffer */
+    memcpy(&msg.ev.buffer, fvBufferBytes, (size_t)msg.ev.bufferSize);
+
+    /* calculate actual message size to avoid transferring extra data */
+    msg.header.length
+        = sizeof(dcgm_core_msg_entities_get_latest_values_v3) - SAMPLES_BUFFER_SIZE_V2 + msg.ev.bufferSize;
     msg.ev.cmdRet = DCGM_ST_OK;
 
     return DCGM_ST_OK;
@@ -1549,6 +1704,23 @@ dcgmReturn_t DcgmModuleCore::ProcessSetEntityNvLinkState(dcgm_core_msg_set_entit
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmModuleCore::ProcessGetDeviceWorkloadPowerProfilesInfo(
+    dcgm_core_msg_get_workload_power_profiles_status_v1 &msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg.header, dcgm_core_msg_get_workload_power_profiles_status_version);
+
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return dcgmReturn;
+    }
+
+    msg.cmdRet
+        = m_cacheManager->GetWorkloadPowerProfilesInfo(msg.pp.gpuId, &msg.pp.profilesInfo, &msg.pp.profilesStatus);
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_t &msg)
 {
     dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_nvlink_status_version);
@@ -1559,7 +1731,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
         return ret;
     }
 
-    if (msg.info.ls.version != dcgmNvLinkStatus_version3)
+    if (msg.info.ls.version != dcgmNvLinkStatus_version4)
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
@@ -1573,14 +1745,15 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
     nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
     nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES;
     nvsMsg.header.version    = dcgm_nvswitch_msg_get_all_link_states_version;
-    msg.info.cmdRet          = DcgmHostEngineHandler::Instance()->ProcessModuleCommand(&nvsMsg.header);
-    if (msg.info.cmdRet == DCGM_ST_MODULE_NOT_LOADED)
+    dcgmReturn_t cmdRet      = DcgmHostEngineHandler::Instance()->ProcessModuleCommand(&nvsMsg.header);
+    msg.info.cmdRet          = cmdRet;
+    if (cmdRet == DCGM_ST_MODULE_NOT_LOADED)
     {
         DCGM_LOG_WARNING << "Not populating NvSwitches since the module couldn't be loaded.";
     }
-    else if (msg.info.cmdRet != DCGM_ST_OK)
+    else if (cmdRet != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "Got status " << msg.info.cmdRet << " from DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES";
+        DCGM_LOG_ERROR << "Got status " << cmdRet << " from DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES";
     }
     else
     {
@@ -1848,16 +2021,15 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
         return dcgmReturn; /* Logging handled by caller (DcgmModuleCore::ProcessMessage) */
     }
 
-    dcgm_entity_key_t entityKey;
-    entityKey.entityId      = msg.metricGroups.gpuId;
-    entityKey.entityGroupId = DCGM_FE_GPU;
-    entityKey.fieldId       = DCGM_FI_PROF_GR_ENGINE_ACTIVE; /* Any profiling field will do */
+    dcgmGroupEntityPair_t entityPair;
+    entityPair.entityId      = msg.metricGroups.gpuId;
+    entityPair.entityGroupId = DCGM_FE_GPU;
 
-    bool isGpmGpu = m_cacheManager->EntitySupportsGpm(entityKey);
+    bool const isGpmGpu = m_cacheManager->EntityPairSupportsGpm(entityPair);
     if (!isGpmGpu)
     {
         /* Route this request to the profiling module */
-        DCGM_LOG_DEBUG << "gpuId " << entityKey.entityId << " was not a GPM GPU";
+        DCGM_LOG_DEBUG << "gpuId " << entityPair.entityId << " was not a GPM GPU";
 
         dcgm_profiling_msg_get_mgs_t profMsg;
 
@@ -1886,7 +2058,7 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     mg->minorId                    = 0;
     mg->numFieldIds                = 0;
 
-    for (unsigned int fieldId = DCGM_FI_PROF_FIRST_ID; fieldId <= DCGM_FI_PROF_NVOFA0_ACTIVE; fieldId++)
+    for (unsigned int fieldId = DCGM_FI_PROF_FIRST_ID; fieldId <= DCGM_FI_PROF_NVOFA1_ACTIVE; fieldId++)
     {
         mg->fieldIds[mg->numFieldIds] = fieldId;
         mg->numFieldIds++;
@@ -2023,9 +2195,9 @@ dcgmReturn_t DcgmModuleCore::ProcessNvmlInjectDevice(dcgm_core_msg_nvml_inject_d
         {
             DCGM_LOG_ERROR << "Specified " << msg.info.extraKeyCount << " extra keys, but extra key " << i
                            << " has an invalid type[" << msg.info.extraKeys[i].type << "].";
-        msg.info.cmdRet = DCGM_ST_BADPARAM;
-        return DCGM_ST_OK;
-    }
+            msg.info.cmdRet = DCGM_ST_BADPARAM;
+            return DCGM_ST_OK;
+        }
     }
 
     msg.info.cmdRet = m_cacheManager->InjectNvmlGpu(
@@ -2174,6 +2346,50 @@ dcgmReturn_t DcgmModuleCore::ProcessResetNvmlInjectFuncCallCount(dcgm_core_msg_r
     m_cacheManager->ResetNvmlInjectFuncCallCount();
     return DCGM_ST_OK;
 }
+
+dcgmReturn_t DcgmModuleCore::ProcessRemoveNvmlInjectedGpu(dcgm_core_msg_remove_restore_nvml_injected_gpu_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_remove_restore_nvml_injected_gpu_version);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    DcgmHostEngineHandler *hostEngineHandler = DcgmHostEngineHandler::Instance();
+
+    if (!hostEngineHandler->UsingInjectionNvml())
+    {
+        DCGM_LOG_ERROR << "Cannot use injection API because we are using live NVML. Set the environment variable "
+                       << INJECTION_MODE_ENV_VAR << " before starting the hostengine in order to use injection NVML.";
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    msg.info.cmdRet = m_cacheManager->RemoveNvmlInjectedGpu(msg.info.uuid);
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessRestoreNvmlInjectedGpu(dcgm_core_msg_remove_restore_nvml_injected_gpu_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_remove_restore_nvml_injected_gpu_version);
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    DcgmHostEngineHandler *hostEngineHandler = DcgmHostEngineHandler::Instance();
+
+    if (!hostEngineHandler->UsingInjectionNvml())
+    {
+        DCGM_LOG_ERROR << "Cannot use injection API because we are using live NVML. Set the environment variable "
+                       << INJECTION_MODE_ENV_VAR << " before starting the hostengine in order to use injection NVML.";
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    msg.info.cmdRet = m_cacheManager->RestoreNvmlInjectedGpu(msg.info.uuid);
+    return DCGM_ST_OK;
+}
 #endif
 
 dcgmReturn_t DcgmModuleCore::ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg)
@@ -2286,6 +2502,7 @@ dcgmModuleProcessMessage_f DcgmModuleCore::GetMessageProcessingCallback() const
 {
     return m_processMsgCB;
 }
+
 dcgmReturn_t DcgmModuleCore::ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &msg)
 {
     if (m_cacheManager == nullptr)
@@ -2299,4 +2516,25 @@ dcgmReturn_t DcgmModuleCore::ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &m
         return ret;
     }
     return msg.pause ? m_cacheManager->Pause() : m_cacheManager->Resume();
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_get_backend_v1 &msg)
+{
+    if (auto const ret = CheckVersion(&msg.header, dcgm_core_msg_nvswitch_get_backend_version1); ret != DCGM_ST_OK)
+    {
+        log_error("Version mismatch");
+        return ret;
+    }
+
+    dcgm_nvswitch_msg_get_backend_t nvsMsg = {};
+    nvsMsg.header.length                   = sizeof(msg);
+    nvsMsg.header.moduleId                 = DcgmModuleIdNvSwitch;
+    nvsMsg.header.subCommand               = DCGM_NVSWITCH_SR_GET_BACKEND;
+    nvsMsg.header.version                  = dcgm_nvswitch_msg_get_backend_version;
+    dcgmReturn_t ret                       = DcgmHostEngineHandler::Instance()->ProcessModuleCommand(&nvsMsg.header);
+
+    msg.active = nvsMsg.active;
+    SafeCopyTo<sizeof(msg.backendName), sizeof(nvsMsg.backendName)>(msg.backendName, nvsMsg.backendName);
+
+    return ret;
 }

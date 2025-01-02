@@ -14,182 +14,432 @@
  * limitations under the License.
  */
 
-#include "json/json.h"
-#include <PluginTest.h>
-#include <cstddef>
+#include "PluginTest.h"
 
-PluginTest::PluginTest(std::string const &name,
-                       std::string const &group,
-                       std::string const &description,
-                       std::vector<dcgmDiagPluginParameterInfo_t> const &parameterInfo)
-    : m_testName(name)
-    , m_testGroup(group)
-    , m_description(description)
-    , m_parameterInfo(parameterInfo)
+#include <DcgmStringHelpers.h>
+
+namespace
+{
+
+/**
+ * Caller is responsible for setting testId, defaults to BLANK.
+ * Blank is chosen because other values would appear to be valid.
+ */
+dcgmDiagError_v1 DcgmErrorToDiagError(DcgmError const &error,
+                                      std::optional<dcgmGroupEntityPair_t const> entity = std::nullopt,
+                                      unsigned int const testId                         = DCGM_INT32_BLANK)
+{
+    dcgmDiagError_v1 de {};
+    int gpuId = error.GetGpuId();
+
+    if (entity.has_value())
+    {
+        de.entity = *entity;
+    }
+    else
+    {
+        if (gpuId != -1)
+        {
+            de.entity.entityGroupId = DCGM_FE_GPU;
+            de.entity.entityId      = gpuId;
+        }
+        else
+        {
+            de.entity.entityGroupId = DCGM_FE_NONE;
+            de.entity.entityId      = 0;
+        }
+    }
+
+    // Populate remaining fields from error.
+    de.category = error.GetCategory();
+    de.severity = error.GetSeverity();
+    de.code     = error.GetCode();
+    SafeCopyTo(de.msg, error.GetMessage().c_str());
+
+    de.testId = testId;
+    return de;
+}
+
+} //namespace
+
+PluginTest::PluginTest(std::string const &testName)
+    : m_testName(testName)
 {}
 
-std::string PluginTest::GetName() const
-{
-    return m_testName;
-}
-
-const std::string &PluginTest::GetTestGroup() const
-{
-    return m_testGroup;
-}
-
-const std::string &PluginTest::GetDescription() const
-{
-    return m_description;
-}
-
-const std::vector<dcgmDiagPluginParameterInfo_t> &PluginTest::GetParameterInfo() const
-{
-    return m_parameterInfo;
-}
-
-const std::vector<dcgmDiagCustomStats_t> &PluginTest::GetCustomStats() const
-{
-    return m_customStats;
-}
-
-const std::vector<dcgmDiagErrorDetail_v2> &PluginTest::GetErrors() const
+std::vector<DcgmError> const &PluginTest::GetErrors() const
 {
     return m_errors;
 }
 
-const std::vector<dcgmDiagErrorDetail_v2> &PluginTest::GetInfo() const
+std::vector<DcgmError> const &PluginTest::GetOptionalErrors() const
 {
-    return m_info;
+    return m_optionalErrors;
 }
 
-const std::vector<dcgmDiagSimpleResult_t> &PluginTest::GetResults() const
+std::vector<std::string> const &PluginTest::GetWarnings() const
 {
-    return m_results;
+    return m_warnings;
 }
 
-nvvsPluginResult_t PluginTest::GetResult() const
+std::vector<std::string> const &PluginTest::GetVerboseInfo() const
 {
-    nvvsPluginResult_t result = NVVS_RESULT_PASS;
-    unsigned int skipCount    = 0;
+    return m_verboseInfo;
+}
 
-    for (unsigned int i = 0; i < m_results.size(); i++)
+nvvsPluginGpuResults_t const &PluginTest::GetGpuResults() const
+{
+    return m_resultsPerGPU;
+}
+
+nvvsPluginEntityResults_t const &PluginTest::GetEntityResults() const
+{
+    return m_resultsPerEntity;
+}
+
+nvvsPluginGpuErrors_t const &PluginTest::GetGpuErrors() const
+{
+    return m_errorsPerGPU;
+}
+
+nvvsPluginGpuMessages_t const &PluginTest::GetGpuWarnings() const
+{
+    return m_warningsPerGPU;
+}
+
+nvvsPluginGpuMessages_t const &PluginTest::GetGpuVerboseInfo() const
+{
+    return m_verboseInfoPerGPU;
+}
+
+nvvsPluginEntityErrors_t const &PluginTest::GetEntityErrors() const
+{
+    return m_errorsPerEntity;
+}
+
+nvvsPluginEntityMsgs_t const &PluginTest::GetEntityVerboseInfo() const
+{
+    return m_verboseInfoPerEntity;
+}
+
+void PluginTest::SetResult(nvvsPluginResult_t res)
+{
+    // For backward compatible
+    for (auto it = m_resultsPerGPU.begin(); it != m_resultsPerGPU.end(); ++it)
     {
-        switch (m_results[i].result)
+        it->second = res;
+    }
+
+    for (auto it = m_resultsPerEntity.begin(); it != m_resultsPerEntity.end(); ++it)
+    {
+        it->second = res;
+    }
+}
+
+void PluginTest::PluginTest::SetResultForGpu(unsigned int gpuId, nvvsPluginResult_t res)
+{
+    m_resultsPerGPU[gpuId] = res;
+    dcgmGroupEntityPair_t entity {
+        .entityGroupId = DCGM_FE_GPU,
+        .entityId      = gpuId,
+    };
+    m_resultsPerEntity[entity] = res;
+}
+
+void PluginTest::SetResultForEntity(dcgmGroupEntityPair_t const &entity, nvvsPluginResult_t res)
+{
+    m_resultsPerEntity[entity] = res;
+}
+
+void PluginTest::SetNonGpuResult(nvvsPluginResult_t res)
+{
+    m_nonGpuResults.emplace_back(res);
+}
+
+void PluginTest::AddWarning(std::string const &error)
+{
+    log_warning("Test {}: {}", GetTestName(), error);
+    m_warnings.push_back(error);
+}
+
+void PluginTest::AddError(dcgmDiagError_v1 const &error)
+{
+    for (auto const &existingError : m_errorsPerEntity[error.entity])
+    {
+        if (existingError == error)
         {
-            case NVVS_RESULT_FAIL:
-            {
-                result = NVVS_RESULT_FAIL;
-                return result;
-            }
-
-            case NVVS_RESULT_SKIP:
-            {
-                skipCount++;
-                break;
-            }
-
-            default:
-                break; // Ignore other results
+            log_debug("Skipping adding a duplicate error '{}' for entity {}:{} in test {}",
+                      error.msg,
+                      error.entity.entityGroupId,
+                      error.entity.entityId,
+                      GetTestName());
+            return;
         }
     }
 
-    if (skipCount == m_results.size())
+    log_warning("Test {}: {} (grpId:{}, entityId:{})",
+                GetTestName(),
+                error.msg,
+                error.entity.entityGroupId,
+                error.entity.entityId);
+
+    m_errorsPerEntity[error.entity].push_back(error);
+    return;
+}
+
+/* Caller is responsible for setting testId. */
+void PluginTest::AddError(std::optional<const dcgmGroupEntityPair_t> entity, DcgmError const &error)
+{
+    AddError(DcgmErrorToDiagError(error, entity));
+}
+
+/* Caller is responsible for setting testId. */
+void PluginTest::AddError(DcgmError const &error)
+{
+    for (const auto &existingError : m_errors)
     {
-        result = NVVS_RESULT_SKIP;
+        if (existingError == error)
+        {
+            log_debug("Skipping adding a duplicate error '{}' for plugin {}", error.GetMessage(), GetTestName());
+            return;
+        }
     }
 
-    if (m_errors.size())
-    {
-        // We shouldn't return a result of passed if there were errors
-        result = NVVS_RESULT_FAIL;
-    }
+    AddError(DcgmErrorToDiagError(error));
 
-    return result;
-}
-
-const std::optional<std::any> &PluginTest::GetAuxData() const
-{
-    return m_auxData;
-}
-
-void PluginTest::AddCustomStats(dcgmDiagCustomStats_t const &customStats)
-{
-    m_customStats.push_back(customStats);
-}
-
-void PluginTest::AddError(dcgmDiagErrorDetail_v2 const &error)
-{
+    // DCGM-3749: Deprecated. Remove Per-GPU code and structures in favor of entity-centric.
     m_errors.push_back(error);
 }
 
-void PluginTest::SetResults(dcgmDiagResults_t const &results)
+void PluginTest::AddOptionalError(DcgmError const &error)
 {
-    for (unsigned int i = 0; i < results.numErrors; i++)
+    log_warning("Test {}: {}", GetTestName(), error.GetMessage());
+    m_optionalErrors.push_back(error);
+}
+
+void PluginTest::AddInfo(std::string const &info)
+{
+    log_info("Test {}: {}", GetTestName(), info);
+}
+
+void PluginTest::AddInfoVerbose(std::string const &info)
+{
+    dcgmGroupEntityPair_t entity = { DCGM_FE_NONE, 0 };
+    m_verboseInfo.push_back(info);
+    AddInfoVerboseForEntity(entity, info);
+}
+
+void PluginTest::AddInfoVerboseForEntity(dcgmGroupEntityPair_t entity, std::string const &info)
+{
+    m_verboseInfoPerEntity[entity].push_back(info);
+}
+
+void PluginTest::AddInfoVerboseForGpu(unsigned int gpuId, std::string const &info)
+{
+    dcgmGroupEntityPair_t entity = { DCGM_FE_GPU, gpuId };
+    m_verboseInfoPerGPU[gpuId].push_back(info);
+    AddInfoVerboseForEntity(entity, info);
+}
+
+/* Caller is responsible for setting testId on errors. */
+dcgmReturn_t PluginTest::GetResults(dcgmDiagEntityResults_v1 *entityResults)
+{
+    if (entityResults == nullptr)
     {
-        m_errors.push_back(results.errors[i]);
+        return DCGM_ST_BADPARAM;
     }
 
-    for (unsigned int i = 0; i < results.numInfo; i++)
+    entityResults->numErrors = 0;
+    for (auto const &[_, errors] : m_errorsPerEntity)
     {
-        m_info.push_back(results.info[i]);
-    }
-
-    for (unsigned int i = 0; i < results.numResults; i++)
-    {
-        m_results.push_back(results.perGpuResults[i]);
-    }
-
-    if (results.auxData.version == dcgmDiagAuxData_version1)
-    {
-        if (results.auxData.type != JSON_VALUE_AUX_DATA_TYPE)
+        for (auto const &error : errors)
         {
-            log_warning("Plugin returned unknown type of aux data. Expected JSON_VALUE_AUX_DATA_TYPE ({}), got {}",
-                        JSON_VALUE_AUX_DATA_TYPE,
-                        results.auxData.type);
-        }
-        else if (results.auxData.size == 0 || results.auxData.data == nullptr)
-        {
-            log_warning("Plugin returned empty aux data.");
-        }
-        else
-        {
-            std::string_view auxData(static_cast<char *>(results.auxData.data), results.auxData.size);
-
-            ::Json::CharReaderBuilder builder;
-            ::Json::String errors;
-
-            builder["collectComments"]     = false;
-            builder["allowComments"]       = true;
-            builder["allowTrailingCommas"] = true;
-            builder["allowSingleQuotes"]   = true;
-            builder["failIfExtra"]         = true;
-            builder["rejectDupKeys"]       = true;
-            builder["allowSpecialFloats"]  = true;
-            builder["skipBom"]             = false;
-            ::Json::Value auxObj;
-            if (builder.newCharReader()->parse(auxData.data(), auxData.data() + auxData.size(), &auxObj, &errors))
+            if (entityResults->numErrors >= DCGM_DIAG_RESPONSE_ERRORS_MAX)
             {
-                log_debug("Plugin returned aux data: {}", auxObj.toStyledString());
-                m_auxData = auxObj;
+                log_error("Too many errors, skip setting the followings.");
+                break;
             }
-            else
-            {
-                log_error("Plugin returned invalid aux data: {}", errors);
-            }
+            entityResults->errors[entityResults->numErrors] = error;
+            entityResults->numErrors += 1;
         }
     }
-    else
+
+    if (entityResults->numErrors == 0)
     {
-        log_warning("Plugin returned unknown version of aux data. Expected {}, got {}",
-                    dcgmDiagAuxData_version1,
-                    results.auxData.version);
+        for (auto &&error : m_optionalErrors)
+        {
+            if (entityResults->numErrors == DCGM_DIAG_MAX_ERRORS)
+            {
+                log_error("Too many errors, skip setting the followings.");
+                break;
+            }
+
+            entityResults->errors[entityResults->numErrors] = DcgmErrorToDiagError(error);
+            entityResults->numErrors += 1;
+        }
+    }
+
+    entityResults->numInfo = 0;
+    for (auto const &[entity, infos] : m_verboseInfoPerEntity)
+    {
+        for (auto const &info : infos)
+        {
+            if (entityResults->numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+            {
+                log_error("Too many info, skip setting the followings.");
+                break;
+            }
+            entityResults->info[entityResults->numInfo].entity = entity;
+            SafeCopyTo(entityResults->info[entityResults->numInfo].msg, info.c_str());
+            entityResults->numInfo += 1;
+        }
+    }
+
+    entityResults->numResults = 0;
+    for (auto const &[entity, result] : m_resultsPerEntity)
+    {
+        if (entityResults->numResults >= DCGM_DIAG_TEST_RUN_RESULTS_MAX)
+        {
+            log_error("Too manay entity results, skip setting followings.");
+            break;
+        }
+        entityResults->results[entityResults->numResults].entity = entity;
+        entityResults->results[entityResults->numResults].result = NvvsPluginResultToDiagResult(result);
+        entityResults->numResults += 1;
+    }
+
+    entityResults->auxData = dcgmDiagAuxData_t {
+        .version = dcgmDiagAuxData_version1, .type = UNINITIALIZED_AUX_DATA_TYPE, .size = 0, .data = nullptr
+    };
+
+    return DCGM_ST_OK;
+}
+
+void PluginTest::SetGpuStat(unsigned int gpuId, std::string const &name, double value)
+{
+    m_customStatHolder.SetGpuStat(gpuId, name, value);
+}
+
+void PluginTest::SetGpuStat(unsigned int gpuId, std::string const &name, long long value)
+{
+    m_customStatHolder.SetGpuStat(gpuId, name, value);
+}
+
+void PluginTest::SetSingleGroupStat(std::string const &gpuId, std::string const &name, std::string const &value)
+{
+    m_customStatHolder.SetSingleGroupStat(gpuId, name, value);
+}
+
+void PluginTest::SetGroupedStat(std::string const &groupName, std::string const &name, double value)
+{
+    m_customStatHolder.SetGroupedStat(groupName, name, value);
+}
+
+void PluginTest::SetGroupedStat(std::string const &groupName, std::string const &name, long long value)
+{
+    m_customStatHolder.SetGroupedStat(groupName, name, value);
+}
+
+std::vector<dcgmTimeseriesInfo_t> PluginTest::GetCustomGpuStat(unsigned int gpuId, std::string const &name)
+{
+    return m_customStatHolder.GetCustomGpuStat(gpuId, name);
+}
+
+void PluginTest::PopulateCustomStats(dcgmDiagCustomStats_t &customStats)
+{
+    m_customStatHolder.PopulateCustomStats(customStats);
+}
+
+void PluginTest::RecordObservedMetric(unsigned int gpuId, std::string const &valueName, double value)
+{
+    m_values[valueName][gpuId] = value;
+}
+
+observedMetrics_t PluginTest::GetObservedMetrics() const
+{
+    return m_values;
+}
+
+bool PluginTest::UsingFakeGpus() const
+{
+    return m_fakeGpus;
+}
+
+std::string const &PluginTest::GetTestName() const
+{
+    return m_testName;
+}
+
+void PluginTest::InitializeForEntityList(dcgmDiagPluginEntityList_v1 const &entityInfo)
+{
+    ResetResultsAndMessages();
+
+    // For backward compatible
+    InitializeForGpuList(entityInfo);
+
+    m_errorsPerEntity.clear();
+    m_verboseInfoPerEntity.clear();
+    m_resultsPerEntity.clear();
+    for (unsigned int i = 0; i < entityInfo.numEntities; i++)
+    {
+        if (!m_errorsPerEntity.contains(entityInfo.entities[i].entity))
+        {
+            m_errorsPerEntity[entityInfo.entities[i].entity] = {};
+        }
+        if (!m_verboseInfoPerEntity.contains(entityInfo.entities[i].entity))
+        {
+            m_verboseInfoPerEntity[entityInfo.entities[i].entity] = {};
+        }
+        if (!m_resultsPerEntity.contains(entityInfo.entities[i].entity))
+        {
+            // initialize it as NVVS_RESULT_SKIP to separate SKIP and PASS.
+            m_resultsPerEntity[entityInfo.entities[i].entity] = NVVS_RESULT_SKIP;
+        }
     }
 }
 
-void PluginTest::Clear()
+void PluginTest::ResetResultsAndMessages()
 {
+    m_nonGpuResults.clear();
     m_errors.clear();
-    m_info.clear();
-    m_results.clear();
+    m_optionalErrors.clear();
+    m_warnings.clear();
+    m_verboseInfo.clear();
+    m_resultsPerGPU.clear();
+    m_errorsPerGPU.clear();
+    m_warningsPerGPU.clear();
+    m_verboseInfoPerGPU.clear();
+    m_errorsPerEntity.clear();
+    m_verboseInfoPerEntity.clear();
+    m_resultsPerEntity.clear();
+}
+
+void PluginTest::InitializeForGpuList(dcgmDiagPluginEntityList_v1 const &entityInfo)
+{
+    m_gpuList.clear();
+
+    for (unsigned int i = 0; i < entityInfo.numEntities; i++)
+    {
+        if (entityInfo.entities[i].entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        auto gpuId = entityInfo.entities[i].entity.entityId;
+        // Accessing the value at non-existent key default constructs a value for the key
+        m_warningsPerGPU[gpuId];
+        m_errorsPerGPU[gpuId];
+        m_verboseInfoPerGPU[gpuId];
+        m_resultsPerGPU[gpuId] = NVVS_RESULT_PASS; // default result should be pass
+        m_gpuList.push_back(gpuId);
+        if (entityInfo.entities[i].auxField.gpu.status == DcgmEntityStatusFake
+            || entityInfo.entities[i].auxField.gpu.attributes.identifiers.pciDeviceId == 0)
+        {
+            /* set to true if ANY gpu is fake */
+            m_fakeGpus = true;
+        }
+    }
+}
+
+std::vector<unsigned int> const &PluginTest::GetGpuList() const
+{
+    return m_gpuList;
 }

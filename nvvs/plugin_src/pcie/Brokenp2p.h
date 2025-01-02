@@ -32,6 +32,29 @@ struct TestTuple
     bool success;
 };
 
+enum class P2pLink : std::uint8_t
+{
+    NvLink,
+    Pcie,
+    NoInfo
+};
+
+/*
+ * Gets the P2P dcgmError_t codes based on the NVLINK_TX_BYTES field summary max value.
+ * A zero or blank field summary value indicates that NVLink was not used during the test.
+ *
+ * @param bg - the plugin this subtest is a part of
+ * @param startTime - the start time for the field summary request
+ * @param gpuId - the GPU corresponding to the field summary request
+ * @param memoryError - memory error code to be filled based on the field summary value
+ * @param writerError - writer error code to be filled based on the field summary value
+ */
+void GetP2PError(BusGrind *bg,
+                 timelib64_t const &startTime,
+                 unsigned int const &gpuId,
+                 dcgmError_t &memoryError,
+                 dcgmError_t &writerError);
+
 class Brokenp2p
 {
 public:

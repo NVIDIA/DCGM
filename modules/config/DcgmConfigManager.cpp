@@ -18,11 +18,13 @@
  */
 
 #include "DcgmConfigManager.h"
-#include "nvcmvalue.h"
-#include <sstream>
 
-#include "DcgmLogging.h"
+#include <DcgmLogging.h>
+
 #include <dcgm_nvml.h>
+#include <nvcmvalue.h>
+
+#include <sstream>
 
 DcgmConfigManager::DcgmConfigManager(dcgmCoreCallbacks_t &dcc)
     : mpCoreProxy(dcc)
@@ -242,6 +244,41 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfiles(unsigned int gpuId,
+                                                               dcgmConfig_t *config,
+                                                               dcgmConfig_t const *currentConfig)
+{
+    bool match = true;
+    dcgmReturn_t dcgmRet;
+
+    dcgmcm_sample_t value;
+    memset(&value, 0, sizeof(value));
+
+    value.val.blob = config->workloadPowerProfiles;
+
+    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        if (currentConfig->workloadPowerProfiles[i] != config->workloadPowerProfiles[i])
+            match = false;
+    }
+
+    if (match == true)
+    {
+        /* NO-OP if configs already match */
+        return DCGM_ST_OK;
+    }
+
+    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &value);
+    if (DCGM_ST_OK != dcgmRet)
+    {
+        log_error("Failed to set requested workload power profile for GPU ID: {} Error: {}", gpuId, dcgmRet);
+        return dcgmRet;
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
 static void dcmBlankConfig(dcgmConfig_t *config, unsigned int gpuId)
 {
     /* Make a blank record */
@@ -256,6 +293,10 @@ static void dcmBlankConfig(dcgmConfig_t *config, unsigned int gpuId)
     config->perfState.targetClocks.smClock  = DCGM_INT32_BLANK;
     config->powerLimit.type                 = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
     config->powerLimit.val                  = DCGM_INT32_BLANK;
+    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        config->workloadPowerProfiles[i] = DCGM_INT32_BLANK;
+    }
 }
 
 /*****************************************************************************/
@@ -332,6 +373,50 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
         {
             if (!DCGM_INT32_IS_BLANK(setConfig->perfState.syncBoost))
                 targetConfig->perfState.syncBoost = setConfig->perfState.syncBoost;
+            break;
+        }
+
+        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+        {
+            bool isEmpty = true; // User specified profiles should be blank
+            bool isBlank = true; // User didn't specify anything, NO-OP
+
+            for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+            {
+                if (!DCGM_INT32_IS_BLANK(setConfig->workloadPowerProfiles[i]))
+                {
+                    isBlank = false;
+                }
+
+                if (setConfig->workloadPowerProfiles[i] != 0)
+                {
+                    isEmpty = false;
+                }
+            }
+
+            if (isBlank == true)
+            {
+                /* nothing specified, nothing to merge */
+            }
+            else if (isEmpty)
+            {
+                /* user specified blank, new target is blank */
+                memset(targetConfig->workloadPowerProfiles, 0, sizeof(targetConfig->workloadPowerProfiles));
+            }
+            else
+            {
+                /* merge set and target */
+                for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+                {
+                    if (DCGM_INT32_IS_BLANK(targetConfig->workloadPowerProfiles[i]))
+                    {
+                        /* erase BLANK target before merging */
+                        targetConfig->workloadPowerProfiles[i] = 0;
+                    }
+                    targetConfig->workloadPowerProfiles[i] |= setConfig->workloadPowerProfiles[i];
+                }
+            }
+
             break;
         }
 
@@ -450,6 +535,21 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
     }
 
+    /* Set Workload Power Profiles */
+    dcgmRet = HelperSetWorkloadPowerProfiles(gpuId, setConfig, &currentConfig);
+    if (DCGM_ST_OK != dcgmRet)
+    {
+        multiPropertyRetCode++;
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmRet);
+
+        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, setConfig);
+    }
+    else
+    {
+        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, setConfig);
+    }
+
     /* If any of the operation failed. Return it as an generic error */
     if (0 != multiPropertyRetCode)
         return DCGM_ST_GENERIC_ERROR;
@@ -478,6 +578,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
     fieldIds.push_back(DCGM_FI_DEV_APP_SM_CLOCK);
     fieldIds.push_back(DCGM_FI_DEV_POWER_MGMT_LIMIT);
     fieldIds.push_back(DCGM_FI_DEV_COMPUTE_MODE);
+    fieldIds.push_back(DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK);
 
     dcgmReturn = mpCoreProxy.GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
     if (dcgmReturn != DCGM_ST_OK)
@@ -521,6 +622,10 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
                 config->computeMode = nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
+            case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+                memcpy(config->workloadPowerProfiles, fv->value.blob, sizeof(config->workloadPowerProfiles));
+                break;
+
             default:
                 log_error("Unexpected fieldId {}", fv->fieldId);
                 break;
@@ -536,7 +641,6 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
                                                  dcgmConfig_t *configs,
                                                  DcgmConfigManagerStatusList *statusList)
 {
-    int i;
     dcgmReturn_t dcgmReturn;
     unsigned int multiRetCode = 0;
     std::vector<unsigned int> gpuIds;
@@ -573,7 +677,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
         return DCGM_ST_BADPARAM;
     }
 
-    for (i = 0; i < (int)gpuIds.size(); i++)
+    for (size_t i = 0; i < gpuIds.size(); ++i)
     {
         unsigned int gpuId;
 
@@ -587,7 +691,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     }
 
     /* Sync boost is no longer supported. Set it to BLANK */
-    for (i = 0; i < (*numConfigs); i++)
+    for (unsigned int i = 0; i < (*numConfigs); i++)
     {
         configs[i].perfState.syncBoost = DCGM_INT32_NOT_SUPPORTED;
     }
@@ -728,6 +832,14 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
         statusList->AddStatus(gpuId, DCGM_FI_DEV_COMPUTE_MODE, dcgmReturn);
     }
 
+    /* Set Workload Power Profiles */
+    dcgmReturn = HelperSetWorkloadPowerProfiles(gpuId, activeConfig, &currentConfig);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        multiPropertyRetCode++;
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmReturn);
+    }
+
     /* If any of the operation failed. Return it as an generic error */
     if (0 != multiPropertyRetCode)
     {
@@ -770,7 +882,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmConfigManager::SetSyncBoost(unsigned int gpuIdList[],
+dcgmReturn_t DcgmConfigManager::SetSyncBoost(unsigned int /* gpuIdList */[],
                                              unsigned int count,
                                              dcgmConfig_t *setConfig,
                                              DcgmConfigManagerStatusList *statusList)

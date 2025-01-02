@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Base value for integer blank. can be used as an unspecified blank
+DCGM_INT8_BLANK  = 0x70
 DCGM_INT32_BLANK = 0x7ffffff0
 DCGM_INT64_BLANK = 0x7ffffffffffffff0
 
@@ -42,6 +43,10 @@ DCGM_STR_NOT_PERMISSIONED = "<<<NOT_PERM>>>"
 
 ###############################################################################
 # Functions to check if a value is blank or not
+
+def DCGM_INT8_IS_BLANK(val):
+    return val >= DCGM_INT8_BLANK
+
 def DCGM_INT32_IS_BLANK(val): 
     if val >= DCGM_INT32_BLANK:
         return True
@@ -145,5 +150,3 @@ if __name__ == "__main__":
     self_test()
 
 ###############################################################################
-
-

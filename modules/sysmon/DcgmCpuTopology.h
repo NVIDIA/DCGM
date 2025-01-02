@@ -116,12 +116,9 @@ private:
      * Parses the output from lscpu and stores the relevant values from it.
      *
      * @param output - the output from the lscpu command
-     * @param errmsg - a string recording any errors while forking and running lscpu. These errors
-     *                 aren't necessarily important, so we ignore them if we're successful in
-     *                 parsing the output.
      * @return DCGM_ST_OK on success, DCGM_ST_* for failure cases
      */
-    dcgmReturn_t ParseLscpuOutputAndReadValues(const std::string &output, const std::string &errmsg);
+    dcgmReturn_t ParseLscpuOutputAndReadValues(const std::string &output);
 
     /*
      * Retrieves the relevant values from lscpu's already parsed json output

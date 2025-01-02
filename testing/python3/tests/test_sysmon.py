@@ -24,22 +24,16 @@ import sys
 import time
 import os
 import pprint
+import re
 import DcgmGroup
 import DcgmReader
 
 import dcgm_field_injection_helpers
 
 # The value for this environment variable doesn't matter
-__DCGM_SYSMON_SKIP_HARDWARE_CHECK__ = "DCGM_SKIP_SYSMON_HARDWARE_CHECK"
+from test_globals import DCGM_SKIP_SYSMON_HARDWARE_CHECK
 
-@test_utils.run_only_on_numa_systems()
-@test_utils.run_with_standalone_host_engine(5, heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "Nomad"})
-@test_utils.run_with_initialized_client()
-def test_dcgm_sysmon_cpu_hierarchy(handle):
-    """
-    Verifies that we can read the CPU hierarchy
-    """
-    hierarchy = dcgm_agent.dcgmGetCpuHierarchy(handle)
+def helper_dcgm_sysmon_cpu_hierarchy(hierarchy):
     numa_hierarchy = test_utils.helper_read_numa_hierarchy()
 
     assert len(numa_hierarchy) == hierarchy.numCpus
@@ -64,7 +58,36 @@ def test_dcgm_sysmon_cpu_hierarchy(handle):
             cpu_owns_core = bool(pydcgm.dcgm_agent.dcgmCpuHierarchyCpuOwnsCore(cpu_index, hierarchy.cpus[node_id].ownedCores))
             assert cpu_owns_core == expected_bool, f'''node {node_id} cpu {cpu_index} cpu_owns_core {cpu_owns_core} expected {expected_bool}'''
 
-@test_utils.run_with_embedded_host_engine(heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "Sigzil"})
+@test_utils.run_only_on_numa_systems()
+@test_utils.run_with_standalone_host_engine(5, heEnv={ DCGM_SKIP_SYSMON_HARDWARE_CHECK : "Nomad"})
+def test_dcgm_sysmon_cpu_hierarchy(handle):
+    """
+    Verifies that we can read the CPU hierarchy
+    """
+    hierarchy = dcgm_agent.dcgmGetCpuHierarchy(handle)
+    helper_dcgm_sysmon_cpu_hierarchy(hierarchy)
+
+@test_utils.run_only_on_numa_systems()
+@test_utils.run_with_standalone_host_engine(5, heEnv={ DCGM_SKIP_SYSMON_HARDWARE_CHECK : "Nomad"})
+def test_dcgm_sysmon_cpu_hierarchy_v2(handle):
+    """
+    Verifies that we can read the CPU hierarchy with the v2 API
+    """
+    hierarchy = dcgm_agent.dcgmGetCpuHierarchy_v2(handle)
+    helper_dcgm_sysmon_cpu_hierarchy(hierarchy)
+
+@test_utils.run_with_standalone_host_engine(5)
+@test_utils.run_only_with_live_cpus()
+def test_dcgm_sysmon_cpu_hierarchy_serial_number(handle, cpuIds):
+    """
+    Verifies that we can read the serial number of NVIDIA CPUs with the CPU hierarchy 
+    """
+    hierarchy = dcgm_agent.dcgmGetCpuHierarchy_v2(handle)
+    for i in range(hierarchy.numCpus):
+        serial_number = hierarchy.cpus[i].serial
+        assert serial_number, "Read empty serial number"
+
+@test_utils.run_with_embedded_host_engine(heEnv={ DCGM_SKIP_SYSMON_HARDWARE_CHECK : "Sigzil"})
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
 def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
@@ -111,8 +134,7 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
             assert value.value.dbl == injection_info[index][1], "Expected %f but read %f" % (injection_info[index][1], value.value.dbl)
 
 @test_utils.run_only_on_numa_systems()
-@test_utils.run_with_standalone_host_engine(5, heEnv={ __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ : "The Sunlit Man"})
-@test_utils.run_with_initialized_client()
+@test_utils.run_with_standalone_host_engine(5, heEnv={ DCGM_SKIP_SYSMON_HARDWARE_CHECK : "The Sunlit Man"})
 def test_dcgm_sysmon_fields_with_dcgmreader(handle):
     """
     Read Sysmon data through dcgmreader

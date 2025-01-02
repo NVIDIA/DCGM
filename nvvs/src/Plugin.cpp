@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 #include "Plugin.h"
-
-#include <DcgmStringHelpers.h>
+#include "DcgmStringHelpers.h"
+#include "dcgm_fields.h"
+#include "dcgm_structs.h"
 
 const double DUMMY_TEMPERATURE_VALUE = 30.0;
 
 /*************************************************************************/
 Plugin::Plugin()
-    : progressOut(nullptr)
-    , m_results()
-    , m_values()
-    , m_fakeGpus(false)
+    : m_pluginAttr {}
     , m_infoStruct {}
     , m_dataMutex(0)
     , m_mutex(0)
@@ -34,112 +32,84 @@ Plugin::Plugin()
 Plugin::~Plugin()
 {}
 
-/*************************************************************************/
-void Plugin::ResetResultsAndMessages(std::string const &testName)
+void Plugin::InitializeForEntityList(std::string const &testName, dcgmDiagPluginEntityList_v1 const &entityInfo)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    m_results.erase(testName);
-}
-
-/*************************************************************************/
-void Plugin::InitializeForGpuList(std::string const &testName, const dcgmDiagPluginGpuList_t &gpuInfo)
-{
-    ResetResultsAndMessages(testName);
-    DcgmLockGuard lock(&m_dataMutex);
-    m_gpuList.clear();
-
-    m_results[testName] = PluginResult();
-    for (unsigned int i = 0; i < gpuInfo.numGpus; i++)
-    {
-        // Accessing the value at non-existent key default constructs a value for the key
-        m_results[testName].m_warningsPerGPU[gpuInfo.gpus[i].gpuId];
-        m_results[testName].m_errorsPerGPU[gpuInfo.gpus[i].gpuId];
-        m_results[testName].m_verboseInfoPerGPU[gpuInfo.gpus[i].gpuId];
-        m_results[testName].m_resultsPerGPU[gpuInfo.gpus[i].gpuId] = NVVS_RESULT_PASS; // default result should be pass
-        m_gpuList.push_back(gpuInfo.gpus[i].gpuId);
-        if (gpuInfo.gpus[i].status == DcgmEntityStatusFake || gpuInfo.gpus[i].attributes.identifiers.pciDeviceId == 0)
-        {
-            /* set to true if ANY gpu is fake */
-            m_fakeGpus = true;
-        }
-    }
+    m_tests.erase(testName);
+    m_tests.emplace(std::piecewise_construct, std::make_tuple(testName), std::make_tuple(testName));
+    m_tests.at(testName).InitializeForEntityList(entityInfo);
 }
 
 /* Logging */
 /*************************************************************************/
-void Plugin::AddWarning(std::string const &testName, const std::string &error)
+/** Deprecated. Use AddInfo() or AddError() instead. */
+void Plugin::AddWarning(std::string const &testName, std::string const &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error;
-    m_results[testName].m_warnings.push_back(error);
+    m_tests.at(testName).AddWarning(error);
+}
+
+void Plugin::AddError(std::string const &testName, DcgmError const &error)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    m_tests.at(testName).AddError(error);
 }
 
 /*************************************************************************/
-void Plugin::AddError(std::string const &testName, const DcgmError &error)
+void Plugin::AddOptionalError(std::string const &testName, DcgmError const &error)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    auto &errors = m_results[testName].m_errors;
-    for (const auto &existingError : errors)
-    {
-        if (existingError == error)
-        {
-            log_debug("Skipping adding a duplicate error '{}' for plugin {}", error.GetMessage(), GetDisplayName());
-            return;
-        }
-    }
-    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
-    errors.push_back(error);
+    m_tests.at(testName).AddOptionalError(error);
 }
 
 /*************************************************************************/
-void Plugin::AddOptionalError(std::string const &testName, const DcgmError &error)
+void Plugin::AddInfo(std::string const &testName, std::string const &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage();
-    m_results[testName].m_optionalErrors.push_back(error);
+    m_tests.at(testName).AddInfo(info);
+}
+
+void Plugin::AddInfoVerbose(std::string const &testName, std::string const &info)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    m_tests.at(testName).AddInfoVerbose(info);
+}
+
+DcgmLockGuard Plugin::AddError(DcgmLockGuard &&lock, std::string const &testName, dcgmDiagError_v1 const &diagErr)
+{
+    m_tests.at(testName).AddError(diagErr);
+    return std::move(lock);
+}
+
+void Plugin::AddError(std::string const &testName, dcgmDiagError_v1 const &diagErr)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    [[maybe_unused]] auto _ = AddError(std::move(lock), testName, diagErr);
 }
 
 /*************************************************************************/
-void Plugin::AddInfo(std::string const &testName, const std::string &info)
+DcgmLockGuard Plugin::AddInfoVerboseForEntity(DcgmLockGuard &&lock,
+                                              std::string const &testName,
+                                              dcgmGroupEntityPair_t entity,
+                                              std::string const &info)
 {
-    DcgmLockGuard lock(&m_dataMutex);
-    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info;
+    log_info("plugin {}: {} (entity grp:{} id:{})", GetDisplayName(), info, entity.entityGroupId, entity.entityId);
+    m_tests.at(testName).AddInfoVerboseForEntity(entity, info);
+    return std::move(lock);
 }
 
 /*************************************************************************/
-void Plugin::AddInfoVerbose(std::string const &testName, const std::string &info)
+void Plugin::AddInfoVerboseForEntity(std::string const &testName, dcgmGroupEntityPair_t entity, std::string const &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    m_results[testName].m_verboseInfo.push_back(info);
-    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info;
+    [[maybe_unused]] auto _ = AddInfoVerboseForEntity(std::move(lock), testName, entity, info);
 }
 
 /*************************************************************************/
-void Plugin::AddErrorForGpu(std::string const &testName, unsigned int gpuId, const DcgmError &error)
+void Plugin::AddInfoVerboseForGpu(std::string const &testName, unsigned int gpuId, std::string const &info)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    auto &errorsPerGPU = m_results[testName].m_errorsPerGPU;
-    for (const auto &existingError : errorsPerGPU[gpuId])
-    {
-        if (existingError == error)
-        {
-            log_debug("Skipping adding a duplicate error '{}' for GPU {} in plugin {}",
-                      error.GetMessage(),
-                      gpuId,
-                      GetDisplayName());
-            return;
-        }
-    }
-    DCGM_LOG_WARNING << "plugin " << GetDisplayName() << ": " << error.GetMessage() << " (GPU " << gpuId << ")";
-    errorsPerGPU[gpuId].push_back(error);
-}
-
-/*************************************************************************/
-void Plugin::AddInfoVerboseForGpu(std::string const &testName, unsigned int gpuId, const std::string &info)
-{
-    DcgmLockGuard lock(&m_dataMutex);
-    DCGM_LOG_INFO << "plugin " << GetDisplayName() << ": " << info << " (GPU " << gpuId << ")";
-    m_results[testName].m_verboseInfoPerGPU[gpuId].push_back(info);
+    m_tests.at(testName).AddInfoVerboseForGpu(gpuId, info);
 }
 
 /* Manage results */
@@ -185,191 +155,38 @@ nvvsPluginResult_t Plugin::GetOverallResult(const nvvsPluginGpuResults_t &result
 }
 
 /*************************************************************************/
-nvvsPluginResult_t Plugin::GetResult(std::string const &testName)
+nvvsPluginResult_t Plugin::GetResult(std::string const &testName) const
 {
     DcgmLockGuard lock(&m_dataMutex);
-    return GetOverallResult(m_results[testName].m_resultsPerGPU);
+    return GetOverallResult(m_tests.at(testName).GetGpuResults());
 }
 
 /*************************************************************************/
 void Plugin::SetResult(std::string const &testName, nvvsPluginResult_t res)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    nvvsPluginGpuResults_t::iterator it;
-    auto &resultsPerGPU = m_results[testName].m_resultsPerGPU;
-    for (it = resultsPerGPU.begin(); it != resultsPerGPU.end(); ++it)
-    {
-        it->second = res;
-    }
+    m_tests.at(testName).SetResult(res);
 }
 
 /*************************************************************************/
 void Plugin::SetResultForGpu(std::string const &testName, unsigned int gpuId, nvvsPluginResult_t res)
 {
     DcgmLockGuard lock(&m_dataMutex);
-    m_results[testName].m_resultsPerGPU[gpuId] = res;
+    m_tests.at(testName).SetResultForGpu(gpuId, res);
+}
+
+void Plugin::SetResultForEntity(std::string const &testName,
+                                dcgmGroupEntityPair_t const &entity,
+                                nvvsPluginResult_t res)
+{
+    DcgmLockGuard lock(&m_dataMutex);
+    m_tests.at(testName).SetResultForEntity(entity, res);
 }
 
 /*************************************************************************/
-void Plugin::AddErrorToResults(dcgmDiagResults_t &results, const DcgmError &error, int gpuId)
+dcgmReturn_t Plugin::GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults)
 {
-    results.errors[results.numErrors].code     = error.GetCode();
-    results.errors[results.numErrors].category = error.GetCategory();
-    results.errors[results.numErrors].severity = error.GetSeverity();
-    results.errors[results.numErrors].gpuId    = gpuId;
-    SafeCopyTo(results.errors[results.numErrors].msg, error.GetMessage().c_str());
-    results.numErrors++;
-}
-
-/*************************************************************************/
-dcgmReturn_t Plugin::GetResults(std::string const &testName, dcgmDiagResults_t *results)
-{
-    if (results == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    results->numErrors = 0;
-    results->numInfo   = 0;
-
-    bool errorsFull = false;
-
-    for (auto const &nonGpuResult : m_results[testName].m_nonGpuResults)
-    {
-        auto &result  = results->perGpuResults[results->numResults++];
-        result.gpuId  = -1;
-        result.result = nonGpuResult;
-    }
-
-    for (auto &&error : m_results[testName].m_errors)
-    {
-        AddErrorToResults(*results, error, -1);
-        if (results->numErrors == DCGM_DIAG_MAX_ERRORS)
-        {
-            errorsFull = true;
-            break;
-        }
-    }
-
-    for (auto &[gpuId, errors] : m_results[testName].m_errorsPerGPU)
-    {
-        if (errorsFull)
-        {
-            break;
-        }
-
-        for (auto &&error : errors)
-        {
-            if (results->numErrors == DCGM_DIAG_MAX_ERRORS)
-            {
-                errorsFull = true;
-                break;
-            }
-
-            AddErrorToResults(*results, error, gpuId);
-        }
-    }
-
-    if (results->numErrors == 0)
-    {
-        for (auto &&error : m_results[testName].m_optionalErrors)
-        {
-            AddErrorToResults(*results, error, -1);
-
-            if (results->numErrors == DCGM_DIAG_MAX_ERRORS)
-            {
-                errorsFull = true;
-                break;
-            }
-        }
-    }
-
-    bool infoFull = false;
-    for (auto &&info : m_results[testName].m_verboseInfo)
-    {
-        results->info[results->numInfo].gpuId = -1;
-        snprintf(results->info[results->numInfo].msg, sizeof(results->info[results->numInfo].msg), "%s", info.c_str());
-        results->numInfo++;
-        if (results->numInfo == DCGM_DIAG_MAX_INFO)
-        {
-            infoFull = true;
-            break;
-        }
-    }
-
-    for (auto &[gpuId, infoList] : m_results[testName].m_verboseInfoPerGPU)
-    {
-        if (infoFull)
-        {
-            break;
-        }
-
-        for (auto &&info : infoList)
-        {
-            if (results->numInfo == DCGM_DIAG_MAX_INFO)
-            {
-                infoFull = true;
-                break;
-            }
-
-            results->info[results->numInfo].gpuId = gpuId;
-            snprintf(
-                results->info[results->numInfo].msg, sizeof(results->info[results->numInfo].msg), "%s", info.c_str());
-            results->numInfo++;
-        }
-    }
-
-    for (auto &&warning : m_results[testName].m_warnings)
-    {
-        if (results->numInfo == DCGM_DIAG_MAX_INFO)
-        {
-            infoFull = true;
-            break;
-        }
-
-        results->info[results->numInfo].gpuId = -1;
-        snprintf(
-            results->info[results->numInfo].msg, sizeof(results->info[results->numInfo].msg), "%s", warning.c_str());
-        results->numInfo++;
-    }
-
-    for (auto &[gpuId, warnings] : m_results[testName].m_warningsPerGPU)
-    {
-        if (results->numInfo == DCGM_DIAG_MAX_INFO)
-        {
-            infoFull = true;
-            break;
-        }
-
-        for (auto &&warning : warnings)
-        {
-            if (results->numInfo == DCGM_DIAG_MAX_INFO)
-            {
-                infoFull = true;
-                break;
-            }
-
-            results->info[results->numInfo].gpuId = gpuId;
-            snprintf(results->info[results->numInfo].msg,
-                     sizeof(results->info[results->numInfo].msg),
-                     "%s",
-                     warning.c_str());
-            results->numInfo++;
-        }
-    }
-
-    for (auto &[gpuId, result] : m_results[testName].m_resultsPerGPU)
-    {
-        results->perGpuResults[results->numResults].gpuId  = gpuId;
-        results->perGpuResults[results->numResults].result = result;
-        results->numResults++;
-    }
-
-    results->auxData = dcgmDiagAuxData_t {
-        .version = dcgmDiagAuxData_version1, .type = UNINITIALIZED_AUX_DATA_TYPE, .size = 0, .data = nullptr
-    };
-
-    return DCGM_ST_OK;
+    return m_tests.at(testName).GetResults(entityResults);
 }
 
 long long Plugin::DetermineMaxTemp(unsigned int gpuId,
@@ -398,39 +215,50 @@ long long Plugin::DetermineMaxTemp(unsigned int gpuId,
     return static_cast<long long>(parameterValue);
 }
 
-void Plugin::SetGpuStat(unsigned int gpuId, const std::string &name, double value)
+void Plugin::SetGpuStat(std::string const &testName, unsigned int gpuId, std::string const &name, double value)
 {
-    m_customStatHolder.SetGpuStat(gpuId, name, value);
+    m_tests.at(testName).SetGpuStat(gpuId, name, value);
 }
 
-void Plugin::SetGpuStat(unsigned int gpuId, const std::string &name, long long value)
+void Plugin::SetGpuStat(std::string const &testName, unsigned int gpuId, std::string const &name, long long value)
 {
-    m_customStatHolder.SetGpuStat(gpuId, name, value);
+    m_tests.at(testName).SetGpuStat(gpuId, name, value);
 }
 
-void Plugin::SetSingleGroupStat(const std::string &gpuId, const std::string &name, const std::string &value)
+void Plugin::SetSingleGroupStat(std::string const &testName,
+                                std::string const &gpuId,
+                                std::string const &name,
+                                std::string const &value)
 {
-    m_customStatHolder.SetSingleGroupStat(gpuId, name, value);
+    m_tests.at(testName).SetSingleGroupStat(gpuId, name, value);
 }
 
-void Plugin::SetGroupedStat(const std::string &groupName, const std::string &name, double value)
+void Plugin::SetGroupedStat(std::string const &testName,
+                            std::string const &groupName,
+                            std::string const &name,
+                            double value)
 {
-    m_customStatHolder.SetGroupedStat(groupName, name, value);
+    m_tests.at(testName).SetGroupedStat(groupName, name, value);
 }
 
-void Plugin::SetGroupedStat(const std::string &groupName, const std::string &name, long long value)
+void Plugin::SetGroupedStat(std::string const &testName,
+                            std::string const &groupName,
+                            std::string const &name,
+                            long long value)
 {
-    m_customStatHolder.SetGroupedStat(groupName, name, value);
+    m_tests.at(testName).SetGroupedStat(groupName, name, value);
 }
 
-std::vector<dcgmTimeseriesInfo_t> Plugin::GetCustomGpuStat(unsigned int gpuId, const std::string &name)
+std::vector<dcgmTimeseriesInfo_t> Plugin::GetCustomGpuStat(std::string const &testName,
+                                                           unsigned int gpuId,
+                                                           std::string const &name)
 {
-    return m_customStatHolder.GetCustomGpuStat(gpuId, name);
+    return m_tests.at(testName).GetCustomGpuStat(gpuId, name);
 }
 
-void Plugin::PopulateCustomStats(dcgmDiagCustomStats_t &customStats)
+void Plugin::PopulateCustomStats(std::string const &testName, dcgmDiagCustomStats_t &customStats)
 {
-    m_customStatHolder.PopulateCustomStats(customStats);
+    m_tests.at(testName).PopulateCustomStats(customStats);
 }
 
 std::string Plugin::GetDisplayName()
@@ -440,7 +268,7 @@ std::string Plugin::GetDisplayName()
 
 void Plugin::SetNonGpuResult(std::string const &testName, nvvsPluginResult_t res)
 {
-    m_results[testName].m_nonGpuResults.emplace_back(res);
+    m_tests.at(testName).SetNonGpuResult(res);
 }
 
 void Plugin::InitializeLogging(DcgmLoggingSeverity_t severity, hostEngineAppenderCallbackFp_t loggingCallback)
@@ -448,4 +276,19 @@ void Plugin::InitializeLogging(DcgmLoggingSeverity_t severity, hostEngineAppende
     InitLogToHostengine(severity);
     LoggingSetHostEngineCallback(loggingCallback);
     LoggingSetHostEngineComponentName(GetDisplayName());
+}
+
+void Plugin::SetPluginAttr(dcgmDiagPluginAttr_v1 const *pluginAttr)
+{
+    if (pluginAttr == nullptr)
+    {
+        log_warning("Try to set nullptr to m_pluginAttr");
+        return;
+    }
+    m_pluginAttr = *pluginAttr;
+}
+
+int Plugin::GetPluginId() const
+{
+    return m_pluginAttr.pluginId;
 }

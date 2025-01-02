@@ -19,14 +19,15 @@
 
 REGISTRY ?= nvidia
 
-DCGM_VERSION   := 3.2.5
+# Sync with latest DCGM version available in the public cuda repo
+DCGM_VERSION   := 3.3.7
 FULL_VERSION   := $(DCGM_VERSION)-1
 OUTPUT         := type=image
 PLATFORMS      := linux/amd64,linux/arm64
 DOCKERCMD      := docker buildx build
 
 .PHONY: all local
-all: ubuntu20.04 ubi8
+all: ubuntu22.04 ubi9
 
 local:
 ifeq ($(shell uname -p),aarch64)
@@ -36,23 +37,23 @@ else
 endif
 
 push:
-	$(MAKE) ubuntu20.04 OUTPUT=type=registry
-	$(MAKE) ubi8 OUTPUT=type=registry
+	$(MAKE) ubuntu22.04 OUTPUT=type=registry
+	$(MAKE) ubi9 OUTPUT=type=registry
 
-ubuntu20.04:
+ubuntu22.04:
 	$(DOCKERCMD) --pull \
 		--output $(OUTPUT) \
 		--platform $(PLATFORMS) \
 		--build-arg "DCGM_VERSION=$(DCGM_VERSION)" \
 		--build-arg "VERSION=$(FULL_VERSION)" \
-		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubuntu20.04" \
-		--file Dockerfile.ubuntu20.04 .
+		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubuntu22.04" \
+		--file Dockerfile.ubuntu22.04 .
 
-ubi8:
+ubi9:
 	$(DOCKERCMD) --pull \
 		--output $(OUTPUT) \
 		--platform $(PLATFORMS) \
 		--build-arg "DCGM_VERSION=$(DCGM_VERSION)" \
 		--build-arg "VERSION=$(FULL_VERSION)" \
-		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubi8" \
-		--file Dockerfile.ubi8 .
+		--tag "$(REGISTRY)/dcgm:$(FULL_VERSION)-ubi9" \
+		--file Dockerfile.ubi9 .

@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 #include "DcgmHealthWatch.h"
-#include "DcgmLogging.h"
-#include "dcgm_errors.h"
-#include "dcgm_test_apis.h"
-#include "timelib.h"
+
+#include <DcgmLogging.h>
+#include <dcgm_errors.h>
+#include <dcgm_test_apis.h>
+
+#include <timelib.h>
+
 #include <sstream>
 #include <stdexcept>
 
@@ -260,7 +263,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                     if (DCGM_ST_OK != tmpRet)
                     {
                         log_error("Error {} from bit {}, entity group {} entityId {}",
-                                  (int)tmpRet,
+                                  tmpRet,
                                   bit,
                                   entities[i].entityGroupId,
                                   entities[i].entityId);
@@ -309,7 +312,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                     if (DCGM_ST_OK != tmpRet)
                     {
                         log_error("Error {} from bit {}, entity group {} entityId {}",
-                                  (int)tmpRet,
+                                  tmpRet,
                                   bit,
                                   entities[i].entityGroupId,
                                   entities[i].entityId);
@@ -918,7 +921,7 @@ dcgmReturn_t DcgmHealthWatch::SetPower(dcgm_field_entity_group_t entityGroupId,
     if (DCGM_ST_OK != ret)
     {
         log_error("Failed to set watch for field {} on {} {}",
-                  DCGM_FI_DEV_POWER_VIOLATION,
+                  DCGM_FI_DEV_POWER_USAGE,
                   EntityToString(entityGroupId),
                   entityId);
         return ret;
@@ -1420,8 +1423,8 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemRowRemapFailures(dcgm_field_entity_group
 /*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorUncontainedErrors(dcgm_field_entity_group_t entityGroupId,
                                                        dcgm_field_eid_t entityId,
-                                                       long long startTime,
-                                                       long long endTime,
+                                                       long long /* startTime */,
+                                                       long long /* endTime */,
                                                        DcgmHealthResponse &response)
 {
     if (entityGroupId != DCGM_FE_GPU)
@@ -1500,7 +1503,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMem(dcgm_field_entity_group_t entityGroupId
 dcgmReturn_t DcgmHealthWatch::MonitorInforom(dcgm_field_entity_group_t entityGroupId,
                                              dcgm_field_eid_t entityId,
                                              long long startTime,
-                                             long long endTime,
+                                             long long /* endTime */,
                                              DcgmHealthResponse &response)
 {
     dcgmReturn_t ret       = DCGM_ST_OK;
@@ -1601,7 +1604,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorThermal(dcgm_field_entity_group_t entityGro
     if (violationTime)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCK_THROTTLE_THERMAL, d, entityId);
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCKS_EVENT_THERMAL, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, d, response);
     }
 
@@ -1679,7 +1682,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
     if (violationTime)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCK_THROTTLE_POWER, d, entityId);
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCKS_EVENT_POWER, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, d, response);
     }
 
@@ -1761,8 +1764,8 @@ dcgmReturn_t DcgmHealthWatch::MonitorCpuThermal(dcgm_field_entity_group_t entity
 /*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorCpuPower(dcgm_field_entity_group_t entityGroupId,
                                               dcgm_field_eid_t entityId,
-                                              long long startTime,
-                                              long long endTime,
+                                              long long /* startTime */,
+                                              long long /* endTime */,
                                               DcgmHealthResponse &response)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
@@ -1998,7 +2001,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
         if (dcgmReturn != DCGM_ST_OK)
         {
             log_debug("return {} for GetSamples eg {}, eid {}, fieldId {}, start {}, end {}",
-                      (int)dcgmReturn,
+                      dcgmReturn,
                       entityGroupId,
                       entityId,
                       *fieldIdIter,

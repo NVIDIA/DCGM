@@ -21,6 +21,8 @@
 #include "Plugin.h"
 #include "PluginStrings.h"
 #include "TestParameters.h"
+#include <NvvsExitCode.h>
+
 #include <iostream>
 #include <vector>
 
@@ -32,16 +34,20 @@ const std::vector<DcgmError> Test::m_emptyErrors;
 const nvvsPluginGpuErrors_t Test::m_emptyPerGpuErrors;
 
 /*****************************************************************************/
-Test::Test(dcgmPerGpuTestIndices_t index,
-           const std::string &description,
-           const std::string &testGroup,
-           const std::string &pluginName)
-    : m_index(index)
+Test::Test(unsigned pluginIndex,
+           std::string const &pluginName,
+           std::string const &testName,
+           std::string const &description,
+           dcgm_field_entity_group_t targetEntityGroup,
+           std::string category)
+    : m_pluginIdx(pluginIndex)
+    , m_pluginName(pluginName)
+    , m_name(testName)
+    , m_category(std::move(category))
     , m_argMap()
     , m_skipTest(false)
     , m_description(description)
-    , m_testGroup(testGroup)
-    , m_pluginName(pluginName)
+    , m_targetEntityGroup(targetEntityGroup)
 {}
 
 /*****************************************************************************/
@@ -111,7 +117,7 @@ nvvsDeviceList = 0;
 void Test::getOut(std::string error)
 {
     // Create error message for the exception
-    std::string errMsg        = "\"" + GetTestDisplayName(m_index) + "\" test: " + error;
+    std::string errMsg        = "\"" + m_name + "\" test: " + error;
     nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Return error code to console */
     throw std::runtime_error(errMsg);
 }

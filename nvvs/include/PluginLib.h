@@ -16,14 +16,29 @@
 #pragma once
 #include "PluginCoreFunctionality.h"
 #include "PluginInterface.h"
-#include "PluginTest.h"
+#include "PluginLibTest.h"
 #include "TestParameters.h"
+#include "dcgm_fields.h"
 
 #include <any>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+/**
+ * For testing.
+ */
+typedef struct
+{
+    dcgmDiagGetPluginInterfaceVersion_f getPluginInterfaceVersionCB;
+    dcgmDiagGetPluginInfo_f getPluginInfoCB;
+    dcgmDiagInitializePlugin_f initializeCB;
+    dcgmDiagRunTest_f runTestCB;
+    dcgmDiagRetrieveCustomStats_f retrieveStatsCB;
+    dcgmDiagRetrieveResults_f retrieveResultsCB;
+    dcgmDiagShutdownPlugin_f shutdownPluginCB;
+} PluginCallbacks_v1;
 
 class PluginLib
 {
@@ -50,40 +65,44 @@ public:
     dcgmReturn_t LoadPlugin(const std::string &path, const std::string &name);
 
     /*****************************************************************************/
+    /** For testing. Register the specified callbacks without loading plugin library.*/
+    void RegisterCallbacks(PluginCallbacks_v1 const &cb);
+
+    /*****************************************************************************/
     dcgmReturn_t GetPluginInfo();
 
     /*****************************************************************************/
     std::string GetName() const;
 
     /*****************************************************************************/
-    std::vector<dcgmDiagPluginParameterInfo_t> GetParameterInfo(std::string const &testName);
+    std::vector<dcgmDiagPluginParameterInfo_t> GetParameterInfo(std::string const &testName) const;
 
     /*****************************************************************************/
-    dcgmReturn_t InitializePlugin(dcgmHandle_t handle, std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo);
+    dcgmReturn_t InitializePlugin(dcgmHandle_t handle, int pluginId);
 
     /*****************************************************************************/
     std::vector<unsigned short> GetStatFieldIds() const;
 
     /*****************************************************************************/
-    void RunTest(std::string const &testName, unsigned int timeout, TestParameters *tp);
+    void RunTest(std::string const &testName,
+                 std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos,
+                 unsigned int timeout,
+                 TestParameters *tp);
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagCustomStats_t> &GetCustomStats(std::string const &testName);
+    const std::vector<dcgmDiagCustomStats_t> &GetCustomStats(std::string const &testName) const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagErrorDetail_v2> &GetErrors(std::string const &testName);
+    const std::vector<dcgmDiagErrorDetail_v2> &GetErrors(std::string const &testName) const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagErrorDetail_v2> &GetInfo(std::string const &testName);
+    const std::vector<dcgmDiagErrorDetail_v2> &GetInfo(std::string const &testName) const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagSimpleResult_t> &GetResults(std::string const &testName);
+    const std::vector<dcgmDiagSimpleResult_t> &GetResults(std::string const &testName) const;
 
     /*****************************************************************************/
-    nvvsPluginResult_t GetResult(std::string const &testName);
-
-    /*****************************************************************************/
-    const std::string &GetTestGroup(std::string const &testName);
+    nvvsPluginResult_t GetResult(std::string const &testName) const;
 
     /*****************************************************************************/
     const std::string &GetDescription() const;
@@ -91,9 +110,15 @@ public:
     /*****************************************************************************/
     bool VerifyTerminated(const char *str, unsigned int bufSize);
 
-    const std::optional<std::any> &GetAuxData(std::string const &testName);
+    const std::optional<std::any> &GetAuxData(std::string const &testName) const;
 
-    const std::unordered_map<std::string, PluginTest> &GetPluginTests() const;
+    dcgm_field_entity_group_t GetTargetEntityGroup(std::string const &testName) const;
+
+    const dcgmDiagEntityResults_v1 &GetEntityResults(std::string const &testName) const;
+
+    std::unordered_map<std::string, PluginLibTest> const &GetSupportedTests() const;
+
+    void SetTestRunningState(std::string const &testName, TestRuningState state);
 
 private:
     void *m_pluginPtr;
@@ -107,15 +132,12 @@ private:
     dcgmDiagShutdownPlugin_f m_shutdownPluginCB;
     void *m_userData;
     std::string m_pluginName;
-    // test name => PluginTest
-    std::unordered_map<std::string, PluginTest> m_pluginTests;
-
-    std::vector<unsigned short> m_statFieldIds;
     std::string m_description;
-    TestParameters m_testParameters;
-    std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfo;
-    PluginCoreFunctionality m_coreFunctionality;
+    std::vector<unsigned short> m_statFieldIds;
 
+    std::unordered_map<std::string, PluginLibTest> m_tests;
+
+    PluginCoreFunctionality m_coreFunctionality;
     void *LoadFunction(const char *funcname);
 
     std::string GetFullLogFileName() const;

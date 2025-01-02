@@ -29,6 +29,8 @@
 #define DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES 6
 #define DCGM_NVSWITCH_SR_SET_LINK_STATE      7
 #define DCGM_NVSWITCH_SR_GET_ENTITY_STATUS   8
+#define DCGM_NVSWITCH_SR_GET_LINK_IDS        9
+#define DCGM_NVSWITCH_SR_GET_BACKEND         10
 
 /*****************************************************************************/
 /**
@@ -126,7 +128,7 @@ typedef struct
 {
     dcgm_module_command_header_t header; //!< Command header
     dcgm_field_eid_t entityId;           //!< Entity of the NvSwitch to fetch link status for
-    dcgmNvLinkStatus_v3 linkStatus;      //!< OUT: State of all of the links
+    dcgmNvLinkStatus_v4 linkStatus;      //!< OUT: State of all of the links
 } dcgm_nvswitch_msg_get_all_link_states_v2, dcgm_nvswitch_msg_get_all_link_states_t;
 
 #define dcgm_nvswitch_msg_get_all_link_states_version2 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_all_link_states_v2, 2)
@@ -166,3 +168,32 @@ typedef struct
 #define dcgm_nvswitch_msg_get_entity_status_version2 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_entity_status_v2, 2)
 
 #define dcgm_nvswitch_msg_get_entity_status_version dcgm_nvswitch_msg_get_entity_status_version2
+
+/*****************************************************************************/
+/**
+ * Subrequest to get information on all valid links
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header; // Command header
+    unsigned int linkCount;
+    unsigned int linkIds[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH];
+    int64_t flags;
+} dcgm_nvswitch_msg_get_links_v1, dcgm_nvswitch_msg_get_links_t;
+
+#define dcgm_nvswitch_msg_get_links_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_links_v1, 1)
+#define dcgm_nvswitch_msg_get_links_version  dcgm_nvswitch_msg_get_links_version1
+
+/*****************************************************************************/
+/**
+ * Subrequest to get the active backend (NSCQ/NVSDM)
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header; // Command header
+    bool active;
+    char backendName[10];
+} dcgm_nvswitch_msg_get_backend_v1, dcgm_nvswitch_msg_get_backend_t;
+
+#define dcgm_nvswitch_msg_get_backend_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_backend_v1, 1)
+#define dcgm_nvswitch_msg_get_backend_version  dcgm_nvswitch_msg_get_backend_version1

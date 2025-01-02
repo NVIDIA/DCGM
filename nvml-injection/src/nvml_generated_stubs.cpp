@@ -20,11 +20,12 @@
  */
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 // clang-format off
 #include "InjectedNvml.h"
 #include "nvml.h"
-#include "nvml_generated_declarations.h"
-
 #include "PassThruNvml.h"
 
 #ifdef __cplusplus
@@ -501,7 +502,11 @@ nvmlReturn_t nvmlDeviceGetInforomVersion(nvmlDevice_t device,
         injectedNvml->AddFuncCallCount("nvmlDeviceGetInforomVersion");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "InforomVersion", InjectionArgument(object));
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "InforomVersion", InjectionArgument(object));
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(version, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -531,7 +536,11 @@ nvmlReturn_t nvmlDeviceGetInforomImageVersion(nvmlDevice_t device, char *version
         injectedNvml->AddFuncCallCount("nvmlDeviceGetInforomImageVersion");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "InforomImageVersion");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "InforomImageVersion");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(version, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -912,7 +921,11 @@ nvmlReturn_t nvmlDeviceGetName(nvmlDevice_t device, char *name, unsigned int len
         injectedNvml->AddFuncCallCount("nvmlDeviceGetName");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "Name");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "Name");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(name, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -981,7 +994,11 @@ nvmlReturn_t nvmlDeviceGetSerial(nvmlDevice_t device, char *serial, unsigned int
         injectedNvml->AddFuncCallCount("nvmlDeviceGetSerial");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "Serial");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "Serial");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(serial, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -1011,7 +1028,11 @@ nvmlReturn_t nvmlDeviceGetBoardPartNumber(nvmlDevice_t device, char *partNumber,
         injectedNvml->AddFuncCallCount("nvmlDeviceGetBoardPartNumber");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "BoardPartNumber");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "BoardPartNumber");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(partNumber, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -1242,7 +1263,11 @@ nvmlReturn_t nvmlDeviceGetUUID(nvmlDevice_t device, char *uuid, unsigned int len
         injectedNvml->AddFuncCallCount("nvmlDeviceGetUUID");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "UUID");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "UUID");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(uuid, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -2964,7 +2989,11 @@ nvmlReturn_t nvmlDeviceGetVbiosVersion(nvmlDevice_t device, char *version, unsig
         injectedNvml->AddFuncCallCount("nvmlDeviceGetVbiosVersion");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "VbiosVersion");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "VbiosVersion");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(version, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -3685,7 +3714,11 @@ nvmlReturn_t nvmlSystemGetProcessName(unsigned int pid, char *name, unsigned int
         injectedNvml->AddFuncCallCount("nvmlSystemGetProcessName");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(pid);
-        std::string buf = injectedNvml->GetString(arg, "ProcessName");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "ProcessName");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(name, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6356,7 +6389,11 @@ nvmlReturn_t nvmlVgpuTypeGetClass(nvmlVgpuTypeId_t vgpuTypeId, char *vgpuTypeCla
         injectedNvml->AddFuncCallCount("nvmlVgpuTypeGetClass");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuTypeId);
-        std::string buf = injectedNvml->GetString(arg, "Class");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "Class");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(vgpuTypeClass, *size, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6386,7 +6423,11 @@ nvmlReturn_t nvmlVgpuTypeGetName(nvmlVgpuTypeId_t vgpuTypeId, char *vgpuTypeName
         injectedNvml->AddFuncCallCount("nvmlVgpuTypeGetName");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuTypeId);
-        std::string buf = injectedNvml->GetString(arg, "Name");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "Name");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(vgpuTypeName, *size, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6619,7 +6660,11 @@ nvmlReturn_t nvmlVgpuTypeGetLicense(nvmlVgpuTypeId_t vgpuTypeId, char *vgpuTypeL
         injectedNvml->AddFuncCallCount("nvmlVgpuTypeGetLicense");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuTypeId);
-        std::string buf = injectedNvml->GetString(arg, "License");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "License");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(vgpuTypeLicenseString, size, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6853,7 +6898,11 @@ nvmlReturn_t nvmlVgpuInstanceGetUUID(nvmlVgpuInstance_t vgpuInstance, char *uuid
         injectedNvml->AddFuncCallCount("nvmlVgpuInstanceGetUUID");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuInstance);
-        std::string buf = injectedNvml->GetString(arg, "UUID");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "UUID");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(uuid, size, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6883,7 +6932,11 @@ nvmlReturn_t nvmlVgpuInstanceGetMdevUUID(nvmlVgpuInstance_t vgpuInstance, char *
         injectedNvml->AddFuncCallCount("nvmlVgpuInstanceGetMdevUUID");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuInstance);
-        std::string buf = injectedNvml->GetString(arg, "MdevUUID");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "MdevUUID");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(mdevUuid, size, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -6913,7 +6966,11 @@ nvmlReturn_t nvmlVgpuInstanceGetVmDriverVersion(nvmlVgpuInstance_t vgpuInstance,
         injectedNvml->AddFuncCallCount("nvmlVgpuInstanceGetVmDriverVersion");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuInstance);
-        std::string buf = injectedNvml->GetString(arg, "VmDriverVersion");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "VmDriverVersion");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(version, length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -7382,7 +7439,11 @@ nvmlReturn_t nvmlVgpuInstanceGetGpuPciId(nvmlVgpuInstance_t vgpuInstance, char *
         injectedNvml->AddFuncCallCount("nvmlVgpuInstanceGetGpuPciId");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(vgpuInstance);
-        std::string buf = injectedNvml->GetString(arg, "GpuPciId");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "GpuPciId");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(vgpuPciId, *length, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -7656,7 +7717,11 @@ nvmlReturn_t nvmlDeviceGetPgpuMetadataString(nvmlDevice_t device, char *pgpuMeta
         injectedNvml->AddFuncCallCount("nvmlDeviceGetPgpuMetadataString");
         // The following snippet is generated from check_and_write_get_string_body
         InjectionArgument arg(device);
-        std::string buf = injectedNvml->GetString(arg, "PgpuMetadataString");
+        auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, "PgpuMetadataString");
+        if (tmpNvmlRet != NVML_SUCCESS)
+        {
+            return tmpNvmlRet;
+        }
         snprintf(pgpuMetadata, *bufferSize, "%s", buf.c_str());
         return NVML_SUCCESS;
     }
@@ -11200,6 +11265,84 @@ nvmlReturn_t nvmlGpmQueryDeviceSupport(nvmlDevice_t device, nvmlGpmSupport_t *gp
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceGetGpuFabricInfo(nvmlDevice_t device, nvmlGpuFabricInfo_t *gpuFabricInfo)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceGetGpuFabricInfo");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(gpuFabricInfo));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "GpuFabricInfo", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "GpuFabricInfo", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceGetGpuFabricInfoV(nvmlDevice_t device, nvmlGpuFabricInfoV_t *gpuFabricInfo)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceGetGpuFabricInfoV");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(gpuFabricInfo));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "GpuFabricInfoV", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "GpuFabricInfoV", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlDeviceGetCount_v2(unsigned int *deviceCount)
 {
     // The following snippet is generated from write_function
@@ -11297,7 +11440,159 @@ nvmlReturn_t nvmlDeviceGetArchitecture(nvmlDevice_t device, nvmlDeviceArchitectu
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceWorkloadPowerProfileGetProfilesInfo(nvmlDevice_t device,
+                                                           nvmlWorkloadPowerProfileProfilesInfo_t *profilesInfo)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileGetProfilesInfo");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(profilesInfo));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileGetProfilesInfo", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileGetProfilesInfo", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice_t device,
+                                                              nvmlWorkloadPowerProfileCurrentProfiles_t *currentProfiles)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileGetCurrentProfiles");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(currentProfiles));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileGetCurrentProfiles", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileGetCurrentProfiles", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t device,
+                                                                nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileSetRequestedProfiles");
+        // The following snippet is generated from generate_setter_functions
+        InjectionArgument value(requestedProfiles);
+        return injectedNvml->DeviceSet(device, "WorkloadPowerProfileSetRequestedProfiles", {}, NvmlFuncReturn(NVML_SUCCESS, value));
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t device,
+                                                                  nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileClearRequestedProfiles");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(requestedProfiles));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileClearRequestedProfiles", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileClearRequestedProfiles", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 #ifdef __cplusplus
 }
 #endif
+
+#pragma GCC diagnostic pop
+
 // END nvml_generated_stubs

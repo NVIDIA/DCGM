@@ -102,6 +102,16 @@ dcgmReturn_t Gpu::Init()
     return DCGM_ST_OK;
 }
 
+void Gpu::SetAttributes(dcgmDeviceAttributes_v3 const &attr)
+{
+    m_attributes = attr;
+    m_serial     = m_attributes.identifiers.serial;
+    std::stringstream ss;
+    unsigned int deviceId = m_attributes.identifiers.pciDeviceId >> 16;
+    ss << std::hex << std::setw(4) << std::setfill('0') << deviceId;
+    m_pciDeviceId = ss.str();
+}
+
 /*****************************************************************************/
 Gpu::~Gpu()
 {}

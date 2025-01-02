@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
 
-add_library(config_interface INTERFACE)
 target_include_directories(config_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(config_interface INTERFACE common_interface dcgm_interface modules_interface module_common_interface)
 
-add_library(dcgmmoduleconfig SHARED)
 define_dcgm_module(dcgmmoduleconfig)
 target_link_libraries(
     dcgmmoduleconfig
@@ -36,4 +33,3 @@ target_sources(
     DcgmModuleConfig.h
     DcgmConfigManager.cpp
 )
-update_lib_ver(dcgmmoduleconfig)

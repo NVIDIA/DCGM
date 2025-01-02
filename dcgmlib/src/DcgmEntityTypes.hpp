@@ -55,9 +55,9 @@ struct BaseId : BaseHasher<BaseId<TIdType>>
 protected:
     friend struct BaseHasher<BaseType>;
 
-    bool operator==(BaseId const &right) const
+    friend bool operator==(BaseId const &left, BaseId const &right)
     {
-        return (*this).id == right.id;
+        return left.id == right.id;
     }
 
     [[nodiscard]] std::size_t do_hash() const
@@ -75,7 +75,6 @@ using DcgmNs::EntityTypes::BaseId;
 struct CpuId : BaseId<std::uint64_t>
 {
     using BaseType::BaseType;
-    using BaseType::operator==;
 };
 
 std::ostream &operator<<(std::ostream &os, CpuId const &val);
@@ -83,7 +82,6 @@ std::ostream &operator<<(std::ostream &os, CpuId const &val);
 struct CoreId : BaseId<std::uint64_t>
 {
     using BaseType::BaseType;
-    using BaseType::operator==;
 };
 
 std::ostream &operator<<(std::ostream &os, CoreId const &val);
@@ -106,7 +104,6 @@ namespace Nvml
     struct ComputeInstanceId : BaseId<std::uint32_t>
     {
         using BaseType::BaseType;
-        using BaseType::operator==;
     };
 
     std::ostream &operator<<(std::ostream &os, ComputeInstanceId const &val);
@@ -114,7 +111,6 @@ namespace Nvml
     struct GpuInstanceId : BaseId<std::uint32_t>
     {
         using BaseType::BaseType;
-        using BaseType::operator==;
     };
 
     std::ostream &operator<<(std::ostream &os, GpuInstanceId const &val);
@@ -124,7 +120,6 @@ namespace Nvml
 struct ComputeInstanceId : BaseId<std::uint32_t>
 {
     using BaseType::BaseType;
-    using BaseType::operator==;
 };
 
 std::ostream &operator<<(std::ostream &os, ComputeInstanceId const &val);
@@ -132,13 +127,11 @@ std::ostream &operator<<(std::ostream &os, ComputeInstanceId const &val);
 struct GpuInstanceProfileId : BaseId<std::uint32_t>
 {
     using BaseType::BaseType;
-    using BaseType::operator==;
 };
 
 struct GpuInstanceId : BaseId<std::uint64_t>
 {
     using BaseType::BaseType;
-    using BaseType::operator==;
 };
 
 std::ostream &operator<<(std::ostream &os, GpuInstanceId const &val);

@@ -1,0 +1,9 @@
+/usr/lib/debug
+/usr/lib/debug/usr
+/usr/lib/debug/usr/lib64
+/usr/lib/debug/usr/lib64/libdcgmmoduleprofiling.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.aarch64.debug
+/usr/lib/debug/usr/libexec
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless
+/usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libEud.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.aarch64.debug

@@ -65,7 +65,7 @@ typedef size_t dcgmBufferedFvCursor_t;
 
 /* Macro to estimate the initial capacity needed */
 #define FVBUFFER_GUESS_INITIAL_CAPACITY(numEntities, numFieldIds) \
-    ((size_t)((numEntities) * (numFieldIds)*DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE))
+    ((size_t)((numEntities) * (numFieldIds) * DCGM_BUFFERED_FV1_MIN_ENTRY_SIZE))
 
 /*
  * DcgmFvBuffer is a class for buffering field values between subsystems and processes

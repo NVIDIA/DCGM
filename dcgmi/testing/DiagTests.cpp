@@ -13,27 +13,300 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
+#define DCGMI_TESTS
+#include <DcgmStringHelpers.h>
 #include <Diag.h>
+#include <NvvsJsonStrings.h>
+#include <PluginStrings.h>
+#include <UniquePtrUtil.h>
 #include <dcgm_errors.h>
 #include <dcgm_structs.h>
 
 SCENARIO("Diag::GetFailureResult")
 {
     Diag d(1, "localhost");
-    dcgmDiagResponse_v10 result {};
 
-    // Initialized to all zeros should pass
-    CHECK(d.GetFailureResult(result) == DCGM_ST_OK);
+    SECTION("Diag::GetFailureResult w/dcgmDiagResponse v11")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        // Initialized to all zeros won't pass as no test references Software
 
-    result.levelOneTestCount                = 5;
-    result.levelOneResults[4].status        = DCGM_DIAG_RESULT_FAIL;
-    result.levelOneResults[4].error[0].code = DCGM_FR_VOLATILE_SBE_DETECTED;
-    CHECK(d.GetFailureResult(result) == DCGM_ST_NVVS_ERROR);
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NO_DATA);
 
-    // Make sure that a subsequent error will return the worse failure
-    result.perGpuResponses[0].results[0].status        = DCGM_DIAG_RESULT_FAIL;
-    result.perGpuResponses[0].results[0].error[0].code = DCGM_FR_VOLATILE_DBE_DETECTED;
-    CHECK(d.GetFailureResult(result) == DCGM_ST_NVVS_ISOLATE_ERROR);
+        // Now the test is specified with 0 errors and will pass
+        SafeCopyTo(response.tests[0].name, static_cast<char const *>(SW_PLUGIN_NAME));
+        response.numTests += 1;
+        response.numResults += 1;
+        response.results[0] = { { DCGM_FE_GPU, 0 }, DCGM_DIAG_RESULT_PASS, 0 };
+        CHECK(d.GetFailureResult(response) == DCGM_ST_OK);
+
+        // Populate w/some non-ISOLATE errors
+        response.numErrors = 5;
+        for (unsigned int i = 0; i < response.numErrors; i++)
+        {
+            response.errors[i].code           = DCGM_FR_VOLATILE_SBE_DETECTED;
+            response.errors[i].entity         = { DCGM_FE_GPU, 0 };
+            response.tests[0].errorIndices[i] = i;
+            response.tests[0].numErrors += 1;
+        }
+
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ERROR);
+
+        // Ensure subsequent errors will return the worst failure
+        SafeCopyTo(response.tests[1].name, static_cast<char const *>(SW_PLUGIN_NAME));
+        response.numTests += 1;
+
+        response.errors[response.numErrors].code       = DCGM_FR_VOLATILE_SBE_DETECTED;
+        response.errors[response.numErrors].entity     = { DCGM_FE_GPU, 0 };
+        response.errors[response.numErrors + 1].code   = DCGM_FR_VOLATILE_DBE_DETECTED;
+        response.errors[response.numErrors + 1].entity = { DCGM_FE_GPU, 0 };
+        response.tests[1].errorIndices[0]              = response.numErrors;
+        response.tests[1].errorIndices[1]              = response.numErrors + 1;
+        response.numErrors += 2;
+        response.tests[1].numErrors += 2;
+
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ISOLATE_ERROR);
+
+        // Ensure invalid responses are not referenced (the ISOLATE error will be skipped)
+        response.tests[1].errorIndices[1] = DCGM_DIAG_RESPONSE_ERRORS_MAX;
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ERROR);
+
+        // Ensure invalid responses are not referenced (the ISOLATE error will be skipped)
+        response.tests[1].errorIndices[1] = response.tests[1].numErrors;
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ERROR);
+    }
+
+    SECTION("Sanitize")
+    {
+        CHECK(d.Sanitize("") == "");
+        CHECK(d.Sanitize(" ") == "");
+        CHECK(d.Sanitize("  ") == "");
+        CHECK(d.Sanitize(" \n\t\r\v\f ") == "");
+
+        CHECK(d.Sanitize("***") == "");
+        CHECK(d.Sanitize(" *** ") == "");
+        CHECK(d.Sanitize("   ***   ") == "");
+        CHECK(d.Sanitize("*** ") == "");
+        CHECK(d.Sanitize("***  ") == "");
+
+        CHECK(d.Sanitize("*****") == "**");
+        CHECK(d.Sanitize("****") == "*");
+        CHECK(d.Sanitize("**") == "**");
+
+        CHECK(d.Sanitize("A") == "A");
+        CHECK(d.Sanitize(" A") == "A");
+        CHECK(d.Sanitize("  A") == "A");
+        CHECK(d.Sanitize("A ") == "A");
+        CHECK(d.Sanitize("A  ") == "A");
+
+        CHECK(d.Sanitize("Some      garbage     ") == "Some      garbage");
+        CHECK(d.Sanitize("Houdini***") == "");
+        CHECK(d.Sanitize("Remove***     Before flight     ") == "Before flight");
+    }
+}
+
+TEST_CASE("Diag::HelperJsonBuildOutput")
+{
+    SECTION("Default Output")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        REQUIRE(!output.isMember(NVVS_NAME));
+        REQUIRE(!output.isMember(NVVS_METADATA));
+    }
+
+    SECTION("Has EUD and CPU EUD version")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        SafeCopyTo(response.tests[0].name, "cpu_eud");
+        response.tests[0].auxData.version = dcgmDiagTestAuxData_version;
+        SafeCopyTo(response.tests[0].auxData.data, "{\"version\": \"cpu_eud_version\"}");
+        response.numTests += 1;
+
+        SafeCopyTo(response.tests[1].name, "eud");
+        response.tests[1].auxData.version = dcgmDiagTestAuxData_version;
+        SafeCopyTo(response.tests[1].auxData.data, "{\"version\": \"eud_version\"}");
+        response.numTests += 1;
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+
+        REQUIRE(output.isMember(NVVS_METADATA));
+        REQUIRE(output[NVVS_METADATA].isMember("EUD Test Version"));
+        REQUIRE(output[NVVS_METADATA]["EUD Test Version"].asString() == "eud_version");
+        REQUIRE(output[NVVS_METADATA].isMember("CPU EUD Test Version"));
+        REQUIRE(output[NVVS_METADATA]["CPU EUD Test Version"].asString() == "cpu_eud_version");
+    }
+
+    SECTION("No EUD versions")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        SafeCopyTo(response.tests[0].name, "cpu_eud");
+        response.numTests += 1;
+        SafeCopyTo(response.tests[1].name, "eud");
+        response.numTests += 1;
+
+        SafeCopyTo(response.dcgmVersion, "4.0.0");
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        REQUIRE(output.isMember(NVVS_METADATA));
+        REQUIRE(!output[NVVS_METADATA].isMember("EUD Test Version"));
+        REQUIRE(!output[NVVS_METADATA].isMember("CPU EUD Test Version"));
+    }
+
+    SECTION("Has DCGM version")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        SafeCopyTo(response.dcgmVersion, "4.0.0");
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        REQUIRE(output.isMember(NVVS_METADATA));
+        REQUIRE(output[NVVS_METADATA].isMember(NVVS_VERSION_STR));
+        REQUIRE(output[NVVS_METADATA][NVVS_VERSION_STR] == "4.0.0");
+        REQUIRE(!output[NVVS_METADATA].isMember(NVVS_DRIVER_VERSION));
+    }
+
+    SECTION("Has driver version")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        SafeCopyTo(response.driverVersion, "545.29.06");
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        REQUIRE(output.isMember(NVVS_METADATA));
+        REQUIRE(output[NVVS_METADATA].isMember(NVVS_DRIVER_VERSION));
+        REQUIRE(output[NVVS_METADATA][NVVS_DRIVER_VERSION] == "545.29.06");
+        REQUIRE(!output[NVVS_METADATA].isMember(NVVS_VERSION_STR));
+    }
+
+    SECTION("No driver version")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        SafeCopyTo(response.dcgmVersion, "4.0.0");
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        REQUIRE(output.isMember(NVVS_METADATA));
+        REQUIRE(!output[NVVS_METADATA].isMember(NVVS_DRIVER_VERSION));
+    }
+
+    // DCGM-4396: JSON output: multiple 'null' entity groups in output
+    SECTION("Non-first Entity Group")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+        response.entities[1] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 1 }, .serialNum = "", .skuDeviceId = "" });
+        response.numEntities = 2;
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        CHECK(output.isMember(NVVS_ENTITY_GROUPS));
+
+        CHECK(output[NVVS_ENTITY_GROUPS].size() == 1);
+        CHECK(output[NVVS_ENTITY_GROUPS][0].isMember(NVVS_ENTITY_GRP_ID));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITY_GRP_ID] == static_cast<Json::Value::UInt>(DCGM_FE_CPU));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITIES].size() == 2);
+    }
+
+    // DCGM-4396: JSON output: multiple 'null' entity groups in output
+    SECTION("Non-adjacent entity groups")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+        response.entities[1]
+            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_SWITCH, 0 }, .serialNum = "", .skuDeviceId = "" });
+        response.numEntities = 2;
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        CHECK(output.isMember(NVVS_ENTITY_GROUPS));
+
+        CHECK(output[NVVS_ENTITY_GROUPS].size() == 2);
+
+        CHECK(output[NVVS_ENTITY_GROUPS][0].isMember(NVVS_ENTITY_GRP_ID));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITY_GRP_ID] == static_cast<Json::Value::UInt>(DCGM_FE_GPU));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITIES].size() == 1);
+
+        CHECK(output[NVVS_ENTITY_GROUPS][1].isMember(NVVS_ENTITY_GRP_ID));
+        CHECK(output[NVVS_ENTITY_GROUPS][1][NVVS_ENTITY_GRP_ID] == static_cast<Json::Value::UInt>(DCGM_FE_SWITCH));
+        CHECK(output[NVVS_ENTITY_GROUPS][1][NVVS_ENTITIES].size() == 1);
+    }
+
+    // DCGM-4396: JSON output: multiple 'null' entity groups in output
+    SECTION("No entity groups in output when all entities are in group NONE")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        response.entities[0]
+            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
+        response.numEntities = 1;
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        CHECK(!output.isMember(NVVS_ENTITY_GROUPS));
+
+        CHECK(output[NVVS_ENTITY_GROUPS].size() == 0);
+    }
+
+    // DCGM-4396: JSON output: multiple 'null' entity groups in output
+    SECTION("Entities in group NONE excluded from output")
+    {
+        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+
+        response.entities[0]
+            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
+        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+        response.numEntities = 2;
+
+        Diag d(1, "localhost");
+        Json::Value output;
+
+        d.HelperJsonBuildOutput(output, response);
+        CHECK(output.isMember(NVVS_ENTITY_GROUPS));
+
+        CHECK(output[NVVS_ENTITY_GROUPS].size() == 1);
+        CHECK(output[NVVS_ENTITY_GROUPS][0].isMember(NVVS_ENTITY_GRP_ID));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITY_GRP_ID] == static_cast<Json::Value::UInt>(DCGM_FE_GPU));
+        CHECK(output[NVVS_ENTITY_GROUPS][0][NVVS_ENTITIES].size() == 1);
+    }
 }

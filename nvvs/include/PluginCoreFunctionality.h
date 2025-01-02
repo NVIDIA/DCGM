@@ -46,7 +46,7 @@ public:
      * Prepares everything needed before we start the plugin
      */
     dcgmReturn_t PluginPreStart(const std::vector<unsigned short> &additionalFields,
-                                const std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo,
+                                const std::vector<dcgmDiagPluginEntityInfo_v1> &entityInfo,
                                 const std::string &pluginName);
 
     /********************************************************************/
@@ -66,11 +66,11 @@ public:
 
 private:
     DcgmRecorder m_dcgmRecorder;
-    std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfos;
+    std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfos;
     bool m_initialized;
     std::vector<DcgmError> m_errors;
     timelib64_t m_startTime;
-    dcgmPerGpuTestIndices_t m_pluginIndex;
+    std::string m_pluginName;
 
     /********************************************************************/
     /*
@@ -88,5 +88,5 @@ private:
     /*
      * Determine the maximum temperature allowed for this gpu
      */
-    long long DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp);
+    long long DetermineMaxTemp(const dcgmDiagPluginEntityInfo_v1 &entityInfo, TestParameters &tp);
 };

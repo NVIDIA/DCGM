@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
 
-add_library(policy_interface INTERFACE)
 target_include_directories(policy_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(policy_interface INTERFACE dcgm_interface modules_interface)
 
-add_library(dcgmmodulepolicy SHARED)
 define_dcgm_module(dcgmmodulepolicy)
 target_link_libraries(dcgmmodulepolicy
     PRIVATE
@@ -32,4 +29,3 @@ target_sources(dcgmmodulepolicy
         DcgmPolicyManager.h
         DcgmModulePolicy.cpp
 )
-update_lib_ver(dcgmmodulepolicy)

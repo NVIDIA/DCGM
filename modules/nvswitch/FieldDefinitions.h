@@ -20,7 +20,7 @@
 
 #include <dcgm_fields.h>
 
-#include "DcgmNvSwitchManager.h"
+#include "DcgmNscqManager.h"
 #include "NvSwitchData.h"
 #include "UpdateFunctions.h"
 
@@ -2199,9 +2199,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_UUID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_DEVICE_UUID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_UUID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_DEVICE_UUID;
 
 public:
     using dcgmFieldType = NvSwitch::Data::UuidData;

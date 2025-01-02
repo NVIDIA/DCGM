@@ -15,6 +15,7 @@
 #pragma once
 
 #include "NvvsCommon.h"
+#include "NvvsExitCode.h"
 
 #include <exception>
 #include <stdexcept>

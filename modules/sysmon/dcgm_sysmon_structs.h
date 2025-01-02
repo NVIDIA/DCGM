@@ -34,6 +34,7 @@ typedef struct dcgm_sysmon_cpu_st
     unsigned int cpuId;
     unsigned int coreCount;
     dcgmCpuHierarchyOwnedCores_t ownedCores; // From dcgm_structs.h
+    char serial[DCGM_MAX_STR_LENGTH];
 } dcgm_sysmon_cpu_t;
 
 typedef struct

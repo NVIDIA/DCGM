@@ -13,53 +13,59 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include "dcgm_fields.h"
+#include <catch2/catch_all.hpp>
 
 #define MEMORY_UNIT_TESTS
 #include <Memory_wrapper.h>
 #include <PluginInterface.h>
+#include <UniquePtrUtil.h>
 #include <memory_plugin.h>
 
 #include <cu_stubs_control.h>
 
 TEST_CASE("Memory Go With Multiple Gpus")
 {
-    dcgmDiagPluginGpuList_t gpuList = {};
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
-    gpuList.numGpus = 4;
-    for (unsigned int i = 0; i < gpuList.numGpus; i++)
+    entityList->numEntities = 4;
+    for (unsigned int i = 0; i < entityList->numEntities; i++)
     {
-        gpuList.gpus[i].gpuId  = i;
-        gpuList.gpus[i].status = DcgmEntityStatusOk;
+        entityList->entities[i].entity.entityId      = i;
+        entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
+        entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
-    Memory mem((dcgmHandle_t)0, &gpuList);
+    Memory mem((dcgmHandle_t)0);
     cuInitResult = CUDA_ERROR_INVALID_DEVICE;
 
     dcgmDiagPluginTestParameter_t params[2];
     snprintf(params[0].parameterName, sizeof(params[0].parameterName), "%s", MEMORY_STR_IS_ALLOWED);
     snprintf(params[0].parameterValue, sizeof(params[0].parameterValue), "True");
     params[0].type = DcgmPluginParamBool;
-    mem.Go(MEMORY_PLUGIN_NAME, 1, params);
+    mem.Go(mem.GetMemoryTestName(), entityList.get(), 1, params);
 
     // We should be considering these as fake GPUs because there's no PCI device id, so nothing ran
-    dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = mem.GetResults(MEMORY_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 0);
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
+    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+
+    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    CHECK(entityResults.numErrors == 0);
 
     // Add fake PCI device IDs to make things run.
-    for (unsigned int i = 0; i < gpuList.numGpus; i++)
+    for (unsigned int i = 0; i < entityList->numEntities; i++)
     {
-        gpuList.gpus[i].attributes.identifiers.pciDeviceId = 1;
+        entityList->entities[i].auxField.gpu.attributes.identifiers.pciDeviceId = 1;
     }
-    Memory m2((dcgmHandle_t)0, &gpuList);
-    m2.Go(MEMORY_PLUGIN_NAME, 1, params);
+    Memory m2((dcgmHandle_t)0);
+    m2.Go(m2.GetMemoryTestName(), entityList.get(), 1, params);
 
-    memset(&results, 0, sizeof(results));
-    ret = m2.GetResults(MEMORY_PLUGIN_NAME, &results);
+    memset(&entityResults, 0, sizeof(entityResults));
+    ret = m2.GetResults(m2.GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
-    REQUIRE(results.numErrors == 4);
-    for (unsigned int i = 0; i < results.numErrors; i++)
+    REQUIRE(entityResults.numErrors == 4);
+    for (unsigned int i = 0; i < entityResults.numErrors; i++)
     {
-        CHECK(results.perGpuResults[i].gpuId == i);
+        CHECK(entityResults.errors[i].entity.entityId == i);
+        CHECK(entityResults.errors[i].entity.entityGroupId == DCGM_FE_GPU);
     }
 }

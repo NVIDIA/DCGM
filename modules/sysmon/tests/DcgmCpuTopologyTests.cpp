@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <fmt/format.h>
 
 #define DCGM_SYSMON_TEST
@@ -289,14 +289,29 @@ std::string lscpuSkinnyJoeFullJson = R""(
 }
 )"";
 
+std::string lscpuShortValidJsonWithInvalidFieldType = R""(
+{
+    "lscpu" : [
+      {
+         "field": "CPU(s):",
+         "data": "12"
+      },{
+         "field": 2,
+         "data": "3"
+      }
+   ]
+}
+)"";
 
 TEST_CASE("DcgmCpuTopology::ParseLscpuOutputAndReadValues")
 {
     DcgmCpuTopology dct;
-    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuBadSyntaxJson, "") != DCGM_ST_OK);
-    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortInvalidJson, "") != DCGM_ST_OK);
+    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuBadSyntaxJson) != DCGM_ST_OK);
+    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortInvalidJson) != DCGM_ST_OK);
 
-    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortValidJson, "") == DCGM_ST_OK);
+    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortValidJsonWithInvalidFieldType) != DCGM_ST_OK);
+
+    CHECK(dct.ParseLscpuOutputAndReadValues(lscpuShortValidJson) == DCGM_ST_OK);
     CHECK(dct.m_initialized == false);
 
     CHECK(dct.m_socketCount == 3);
@@ -310,7 +325,7 @@ TEST_CASE("DcgmCpuTopology::ParseLscpuOutputAndReadValues")
     }
 
     DcgmCpuTopology dct2;
-    CHECK(dct2.ParseLscpuOutputAndReadValues(lscpuSkinnyJoeFullJson, "") == DCGM_ST_OK);
+    CHECK(dct2.ParseLscpuOutputAndReadValues(lscpuSkinnyJoeFullJson) == DCGM_ST_OK);
     CHECK(dct2.m_socketCount == 4);
     CHECK(dct2.m_coresPerSocket == 72);
     CHECK(dct2.m_coreCount == 288);

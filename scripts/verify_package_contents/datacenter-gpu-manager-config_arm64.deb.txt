@@ -1,0 +1,8 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/diag-skus.yaml
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-config/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-config/copyright

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <fmt/format.h>
 #include <fstream>
@@ -166,39 +166,4 @@ TEST_CASE("DcgmSystemMonitor::PopulateSocketPowerMap")
     CHECK(sysmon.m_cpuSocketToPowerUsagePath[0] == "hwmon/hwmon1/device/power1_average");
     CHECK(sysmon.m_socketToPowerCapPath[1] == "hwmon/hwmon2/device/power1_cap");
     CHECK(sysmon.m_cpuSocketToPowerUsagePath[1] == "hwmon/hwmon3/device/power1_average");
-}
-
-
-TEST_CASE("DcgmSystemMonitor::ReadCpuVendorAndModel")
-{
-    std::string path("soc_id");
-    DcgmSystemMonitor sysmon;
-
-    WRITE_VALUE_TO_FILE_CHECKED(path, "jep106:036b:0241");
-    sysmon.ReadCpuVendorAndModel(path);
-    CHECK(sysmon.GetCpuVendor() == "Nvidia");
-    CHECK(sysmon.GetCpuModel() == "Grace");
-    CHECK(sysmon.AreNvidiaCpusPresent() == true);
-    REMOVE_CHECKED(path.c_str());
-
-    WRITE_VALUE_TO_FILE_CHECKED(path, "jep106:046b:0211");
-    sysmon.ReadCpuVendorAndModel(path);
-    CHECK(sysmon.GetCpuVendor() != "Nvidia");
-    CHECK(sysmon.GetCpuModel() != "Grace");
-    CHECK(sysmon.AreNvidiaCpusPresent() == false);
-    REMOVE_CHECKED(path.c_str());
-
-    WRITE_VALUE_TO_FILE_CHECKED(path, "bad value bruh");
-    sysmon.ReadCpuVendorAndModel(path);
-    CHECK(sysmon.GetCpuVendor() != "Nvidia");
-    CHECK(sysmon.GetCpuModel() != "Grace");
-    CHECK(sysmon.AreNvidiaCpusPresent() == false);
-    REMOVE_CHECKED(path.c_str());
-
-    WRITE_VALUE_TO_FILE_CHECKED(path, "036b:0241"); // not enough tokens
-    sysmon.ReadCpuVendorAndModel(path);
-    CHECK(sysmon.GetCpuVendor() != "Nvidia");
-    CHECK(sysmon.GetCpuModel() != "Grace");
-    CHECK(sysmon.AreNvidiaCpusPresent() == false);
-    REMOVE_CHECKED(path.c_str());
 }

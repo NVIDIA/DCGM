@@ -24,9 +24,9 @@
 #include <DcgmStringHelpers.h>
 
 
-unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)
+unsigned long long GetClocksEventIgnoreReasonMaskFromString(std::string reasonStr)
 {
-    // Parse given reasonStr to determine throttle reasons ignore mask
+    // Parse given reasonStr to determine clocks event reasons ignore mask
 
     // Early exit check
     if (reasonStr.size() == 0)
@@ -44,7 +44,7 @@ unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)
         uint64_t mask = strtoull(s, &end, 10);
 
         // mask converted successfully and is valid
-        if (end != s && errno != ERANGE && mask != 0 && mask <= MAX_THROTTLE_IGNORE_MASK_VALUE)
+        if (end != s && errno != ERANGE && mask != 0 && mask <= MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE)
         {
             return mask;
         }
@@ -61,19 +61,19 @@ unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)
     {
         if (reasons[i] == "hw_slowdown")
         {
-            mask |= DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN;
+            mask |= DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN;
         }
         else if (reasons[i] == "sw_thermal")
         {
-            mask |= DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL;
+            mask |= DCGM_CLOCKS_EVENT_REASON_SW_THERMAL;
         }
         else if (reasons[i] == "hw_thermal")
         {
-            mask |= DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL;
+            mask |= DCGM_CLOCKS_EVENT_REASON_HW_THERMAL;
         }
         else if (reasons[i] == "hw_power_brake")
         {
-            mask |= DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE;
+            mask |= DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE;
         }
     }
 
@@ -83,4 +83,9 @@ unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)
         return DCGM_INT64_BLANK;
     }
     return mask;
+}
+
+unsigned long long GetThrottleIgnoreReasonMaskFromString(std::string reasonStr)
+{
+    return GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
 }

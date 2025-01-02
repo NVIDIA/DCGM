@@ -18,6 +18,7 @@
 
 #include "DcgmGdFieldGroup.h"
 #include "dcgm_structs.h"
+#include <memory>
 
 class DcgmGroup
 {
@@ -116,7 +117,7 @@ private:
 
     dcgmGpuGrp_t m_groupId; // Owned here
     dcgmHandle_t m_handle;  // Not owned here
-    dcgmGroupInfo_t m_info;
+    std::unique_ptr<dcgmGroupInfo_t> m_info;
     DcgmGdFieldGroup *m_fieldGroup;
 };
 

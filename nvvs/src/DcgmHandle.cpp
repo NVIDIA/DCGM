@@ -70,19 +70,13 @@ void DcgmHandle::Cleanup()
 
 std::string DcgmHandle::RetToString(dcgmReturn_t ret)
 {
-    std::stringstream err;
-
     if (ret != DCGM_ST_OK)
     {
         const char *tmp = errorString(ret);
-
-        if (tmp == NULL)
-            err << "Unknown error from DCGM: " << ret;
-        else
-            err << tmp;
+        return (tmp == nullptr) ? fmt::format("Unknown error from DCGM: {}", ret) : tmp;
     }
 
-    return err.str();
+    return {};
 }
 
 std::string DcgmHandle::GetLastError()

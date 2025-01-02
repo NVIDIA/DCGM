@@ -49,7 +49,8 @@ g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE,
     dcgm_fields.DCGM_FI_PROF_PIPE_INT_ACTIVE,
     dcgm_fields.DCGM_FI_PROF_NVOFA0_ACTIVE,
-]
+    dcgm_fields.DCGM_FI_PROF_NVOFA1_ACTIVE ]
+
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVDEC0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVDEC7_ACTIVE + 1):
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVJPG0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVJPG7_ACTIVE + 1):
@@ -164,7 +165,6 @@ def test_dcgm_values_since_agent(handle, gpuIds):
     helper_dcgm_values_since(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_values_since_remote(handle, gpuIds):
     helper_dcgm_values_since(handle, gpuIds)
@@ -207,7 +207,6 @@ def test_dcgm_values_since_entities_agent(handle, gpuIds):
     helper_dcgm_values_since_entities(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_values_since_entities_remote(handle, gpuIds):
     helper_dcgm_values_since_entities(handle, gpuIds)
@@ -545,7 +544,6 @@ def test_dcgm_values_pid_stats_embedded(handle, gpuIds):
 
 #Skip this test when running in injection-only mode
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled() # This test relies on accounting data, which doesn't work with MIG mode
 def test_dcgm_live_pid_stats_remote(handle, gpuIds):
@@ -568,7 +566,6 @@ def test_dcgm_values_pid_stats_realtime_embedded(handle, gpuIds):
 
 #Skip this test when running in injection-only mode
 @test_utils.run_with_standalone_host_engine(30)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled() # This test relies on accounting data, which doesn't work with MIG mode
 def test_dcgm_values_pid_stats_realtime_remote(handle, gpuIds):
@@ -824,6 +821,19 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_GPU_NVLINK_ERRORS,
         dcgm_fields_internal.DCGM_FI_DEV_GPU_UTIL_SAMPLES,
         dcgm_fields_internal.DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES,
+        dcgm_fields.DCGM_FI_DEV_DIAG_MEMORY_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_PCIE_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_TARGETED_STRESS_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_TARGETED_POWER_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_MEMORY_BANDWIDTH_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_MEMTEST_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_PULSE_TEST_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_EUD_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_CPU_EUD_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_SOFTWARE_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_STATUS,
     ]
     exceptionFieldIds.extend(g_profilingFieldIds)
 
@@ -1107,14 +1117,7 @@ def helper_nvswitch_monitoring(handle, switchIds):
             # when the NSCQ library exists
             assert (value.isBlank == True), "Unexpected error reading field %d on Switch %d" % (fieldId, switchId)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_nvswitches(switchCount=2)
-@test_utils.run_only_with_live_gpus()
-def test_nvswitch_monitoring_embedded(handle, switchIds, gpuIds):
-    helper_nvswitch_monitoring(handle, switchIds)
-
 @test_utils.run_with_standalone_host_engine(30)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_nvswitches(switchCount=2)
 def test_nvswitch_monitoring_standalone(handle, switchIds):
     helper_nvswitch_monitoring(handle, switchIds)

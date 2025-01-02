@@ -12,18 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-set(CMAKE_CXX_VISIBILITY_PRESET default)
-set(CMAKE_C_VISIBILITY_PRESET default)
-set(CMAKE_VISIBILITY_INLINES_HIDDEN 0)
-
-find_package(Yaml REQUIRED)
-find_package(fmt REQUIRED)
+set_property(
+    TARGET nvml_injection nvmli_public
+    APPEND PROPERTY COMPILE_DEFINITIONS NVML_NO_UNVERSIONED_FUNC_DEFS)
 
 add_compile_definitions(NVML_NO_UNVERSIONED_FUNC_DEFS)
 
-add_library(nvmli_public OBJECT)
 target_link_libraries(
     nvmli_public
     PRIVATE
@@ -39,7 +34,6 @@ target_sources(nvmli_public
         nvml_stubs.cpp
 )
 
-add_library(nvml_injection SHARED)
 set_target_properties(nvml_injection PROPERTIES LINKER_LANGUAGE CXX)
 
 target_sources(
@@ -59,28 +53,5 @@ target_link_libraries(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURREN
 target_link_libraries(nvml_injection PRIVATE fmt::fmt)
 target_include_directories(nvml_injection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(nvml_injection PRIVATE ${YAML_INCLUDE_DIR})
-
-set(NVMLI_VERSION 1.0)
-set(NVMLI_MAJOR_VERSION 1)
-set_target_properties(
-    nvml_injection
-    PROPERTIES
-        VERSION
-        ${NVMLI_VERSION}
-        SOVERSION
-        ${NVMLI_MAJOR_VERSION}
-)
-
-install(
-    TARGETS
-        nvml_injection
-    ARCHIVE DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests
-    LIBRARY DESTINATION ${DCGM_TESTS_APP_DIR}
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT Tests
-    RUNTIME DESTINATION ${DCGM_TESTS_APP_DIR}
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT Tests
-)
 
 add_subdirectory(tests)

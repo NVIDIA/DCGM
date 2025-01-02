@@ -19,15 +19,33 @@
 #include "dcgm_structs.h"
 #include "string.h"
 #include <iostream>
+#include <memory>
+#include <ranges>
+#include <span>
 
 // See function description at bottom of file.
 int displayFieldValue(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userData);
 
-bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v10 &response)
+bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v11 const &response, std::string &msg)
 {
-    return (strstr(response.systemError.msg, "MIG configuration is incompatible with the diagnostic")
-            || strstr(response.systemError.msg,
-                      "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode"));
+    // Check for errors not specific to any entity group
+    for (auto const &error :
+         std::span(response.errors,
+                   std::min(static_cast<unsigned int>(response.numErrors),
+                            static_cast<unsigned int>(std::size(response.errors))))
+             | std::views::filter([](auto const &error) {
+                   return error.testId == DCGM_DIAG_RESPONSE_SYSTEM_ERROR
+                          && (std::string_view(error.msg).find("MIG configuration is incompatible with the diagnostic")
+                                  != std::string_view::npos
+                              || std::string_view(error.msg).find(
+                                     "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode")
+                                     != std::string_view::npos);
+               }))
+    {
+        msg = std::string(error.msg);
+        return true;
+    }
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +53,7 @@ bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v10 &response)
 // and checking group health. We will additionally demonstrate running a diagnostic
 // on the group.
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv)
+int main(int /* argc */, char const ** /* argv */)
 {
     // DCGM calls return a dcgmReturn_t which can be useful for error handling and control flow.
     // Whenever we call DCGM we will store the return in result and check it for errors.
@@ -47,10 +65,8 @@ int main(int argc, char **argv)
     dcgmHandle_t dcgmHandle = (dcgmHandle_t)NULL;
     dcgmGpuGrp_t myGroupId  = (dcgmGpuGrp_t)NULL;
     char groupName[]        = "myGroup";
-    dcgmHealthSystems_t healthSystems;
-    dcgmHealthResponse_v4 results;
-    char myTestString[] = "Outputting watches for DCGM_FC_DEV_INFO";
-    dcgmDiagResponse_v10 diagnosticResults;
+    char myTestString[]     = "Outputting watches for DCGM_FC_DEV_INFO";
+    dcgmFieldGrp_t fieldGroupId;
 
     // In our case we do not know whether to run in standalone or embedded so we will get the user
     // to set the mode. This will also allow us to see the differences and similarities between
@@ -144,13 +160,11 @@ int main(int argc, char **argv)
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error creating group. Return: " << errorString(result) << std::endl;
-        ;
         goto cleanup;
     }
     else
     {
         std::cout << "Successfully created group with group ID: " << (unsigned long)myGroupId << std::endl;
-        ;
     }
 
     // We have now set up our group and can set our watches, run diagnostics and more on the GPUs in
@@ -169,212 +183,257 @@ int main(int argc, char **argv)
         dcgmUpdateAllFields(dcgmHandle, 0);
     }
 
-    // First, let's output our group's current health systems for PCIe and memory to the screen.
-    // dcgmHealthSystems_t is a bit vector where each bit refers to a particular health watch.
-
-    result = dcgmHealthGet(dcgmHandle, myGroupId, &healthSystems);
-
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
     {
-        std::cout << "Error getting health systems information. Result: " << errorString(result) << std::endl;
-        ;
-        goto cleanup;
-    }
+        // First, let's output our group's current health systems for PCIe and memory to the screen.
+        // dcgmHealthSystems_t is a bit vector where each bit refers to a particular health watch.
 
-    // Output the watches we care about, which is PCIe and memory. We could have gone through all of these
-    // but there is no need in this example.
-    std::cout << "PCIe Watches : " << ((healthSystems & DCGM_HEALTH_WATCH_PCIE) ? " On" : " Off") << std::endl;
-    std::cout << "Memory Watches : " << ((healthSystems & DCGM_HEALTH_WATCH_MEM) ? " On" : " Off") << std::endl;
+        dcgmHealthSystems_t healthSystems {};
+        result = dcgmHealthGet(dcgmHandle, myGroupId, &healthSystems);
 
-    // Let's enable these watches (assuming they weren't already enabled). Since healthSystems represents
-    // a bit vector we logically OR both the PCIe and the memory health watch together to enable both.
-    healthSystems = (dcgmHealthSystems_t)(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM);
-
-    result = dcgmHealthSet(dcgmHandle, myGroupId, healthSystems);
-
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
-    {
-        std::cout << "Error setting health systems. Result: " << errorString(result) << std::endl;
-        ;
-        goto cleanup;
-    }
-
-    // Both PCIe and memory watches are now enabled and any errors involving them will be recorded.
-    // If we would like to sample and record information on fields rather just just checking the field
-    // for errors we can use WatchFields. We are going to watch the GPU temperature and power usage in
-    // this example. We want to record information at 1 second intervals and hold onto that information
-    // for 5 minutes with no limit on the number of samples.
-
-    dcgmFieldGrp_t fieldGroupId;
-    unsigned short fieldIds[2];
-
-    fieldIds[0] = DCGM_FI_DEV_POWER_USAGE;
-    fieldIds[1] = DCGM_FI_DEV_GPU_TEMP;
-
-    result = dcgmFieldGroupCreate(dcgmHandle, 2, &fieldIds[0], (char *)"interesting_fields", &fieldGroupId);
-    if (result != DCGM_ST_OK)
-    {
-        std::cout << "Error creating field group. Result: " << errorString(result) << std::endl;
-        ;
-        goto cleanup;
-    }
-
-    result = dcgmWatchFields(dcgmHandle, myGroupId, fieldGroupId, 1000000, 300, 0);
-
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
-    {
-        std::cout << "Error setting watches. Result: " << errorString(result) << std::endl;
-        ;
-        goto cleanup;
-    }
-
-    // Let's run another application, while its running any errors in memory and PCIe will be recorded
-    // by our health watches which we can check after our process is complete. Our watched fields will
-    // also record information. If we are in manual mode we have to call dcgmEngineUpdateAllFields
-    // less than or equal to our sampling frequency to ensure we catch all events. If the sample frequency
-    // was set to 1 second but dcgmEngineUpdateAllFields was called every 5 then we would only get a
-    // recorded frequency of 5 seconds.
-
-    if (!standalone)
-    {
-        dcgmUpdateAllFields(dcgmHandle, 0);
-    }
-
-    /***********************************************
-     *    Run process here while updating fields
-     ***********************************************/
-
-    if (!standalone)
-    {
-        dcgmUpdateAllFields(dcgmHandle, 0);
-    }
-
-    // Now that our process is complete let's check our watches and output any errors that were caught
-    // during it's execution. To do this we need our previously allocated dcgmHealthResponse_t results.
-
-    // Before making DCGM calls that fill in struct information then we need to set the version of
-    // our struct. This will tell the Host Engine what type of struct to fill in. If the client has
-    // a greater version number than the Host Engine then an error will be returned since the host engine
-    // will unaware of how to handle that type of request. So we set the version for the health response struct.
-    results.version = dcgmHealthResponse_version4;
-
-    result = dcgmHealthCheck(dcgmHandle, myGroupId, (dcgmHealthResponse_t *)&results);
-
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
-    {
-        std::cout << "Error checking health systems. Result: " << errorString(result) << std::endl;
-        ;
-        goto cleanup;
-    }
-
-    // Let's display any errors caught by the health watches.
-    if (results.overallHealth == DCGM_HEALTH_RESULT_PASS)
-    {
-        std::cout << "Group is healthy.\n";
-    }
-    else
-    {
-        std::cout << "Group has a "
-                  << ((results.overallHealth == DCGM_HEALTH_RESULT_WARN) ? "warning.\n" : "failure.\n");
-        std::cout << "GPU ID : Health \n";
-        for (unsigned int i = 0; i < results.incidentCount; i++)
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
         {
-            if (results.incidents[i].entityInfo.entityGroupId != DCGM_FE_GPU)
-            {
-                continue;
-            }
-
-            std::cout << results.incidents[i].entityInfo.entityId << " : ";
-
-            switch (results.incidents[i].health)
-            {
-                case DCGM_HEALTH_RESULT_PASS:
-                    std::cout << "Pass\n";
-                    break;
-                case DCGM_HEALTH_RESULT_WARN:
-                    std::cout << "Warn\n";
-                    break;
-                default:
-                    std::cout << "Fail\n";
-            }
-
-
-            // A more in depth case check may be required here, but since we are only interested in PCIe and memory
-            // watches This is all we are going to check for here.
-            std::cout << "Error: " << ((results.incidents[i].system == DCGM_HEALTH_WATCH_PCIE) ? "PCIe " : "Memory ");
-            std::cout << "watches detected a "
-                      << ((results.incidents[i].health == DCGM_HEALTH_RESULT_WARN) ? "warning.\n" : "failure.\n");
-
-            std::cout << results.incidents[i].error.msg << "\n";
+            std::cout << "Error getting health systems information. Result: " << errorString(result) << std::endl;
+            goto cleanup;
         }
-        std::cout << std::endl;
+
+        // Output the watches we care about, which is PCIe and memory. We could have gone through all of these
+        // but there is no need in this example.
+        std::cout << "PCIe Watches : " << ((healthSystems & DCGM_HEALTH_WATCH_PCIE) ? " On" : " Off") << std::endl;
+        std::cout << "Memory Watches : " << ((healthSystems & DCGM_HEALTH_WATCH_MEM) ? " On" : " Off") << std::endl;
+
+        // Let's enable these watches (assuming they weren't already enabled). Since healthSystems represents
+        // a bit vector we logically OR both the PCIe and the memory health watch together to enable both.
+        healthSystems = (dcgmHealthSystems_t)(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_MEM);
+
+        result = dcgmHealthSet(dcgmHandle, myGroupId, healthSystems);
+
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
+        {
+            std::cout << "Error setting health systems. Result: " << errorString(result) << std::endl;
+            goto cleanup;
+        }
+
+        // Both PCIe and memory watches are now enabled and any errors involving them will be recorded.
+        // If we would like to sample and record information on fields rather just just checking the field
+        // for errors we can use WatchFields. We are going to watch the GPU temperature and power usage in
+        // this example. We want to record information at 1 second intervals and hold onto that information
+        // for 5 minutes with no limit on the number of samples.
+
+        unsigned short fieldIds[2];
+
+        fieldIds[0] = DCGM_FI_DEV_POWER_USAGE;
+        fieldIds[1] = DCGM_FI_DEV_GPU_TEMP;
+
+        result = dcgmFieldGroupCreate(dcgmHandle, 2, &fieldIds[0], (char *)"interesting_fields", &fieldGroupId);
+        if (result != DCGM_ST_OK)
+        {
+            std::cout << "Error creating field group. Result: " << errorString(result) << std::endl;
+            goto cleanup;
+        }
+
+        result = dcgmWatchFields(dcgmHandle, myGroupId, fieldGroupId, 1000000, 300, 0);
+
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
+        {
+            std::cout << "Error setting watches. Result: " << errorString(result) << std::endl;
+            goto cleanup;
+        }
+
+        // Let's run another application, while its running any errors in memory and PCIe will be recorded
+        // by our health watches which we can check after our process is complete. Our watched fields will
+        // also record information. If we are in manual mode we have to call dcgmEngineUpdateAllFields
+        // less than or equal to our sampling frequency to ensure we catch all events. If the sample frequency
+        // was set to 1 second but dcgmEngineUpdateAllFields was called every 5 then we would only get a
+        // recorded frequency of 5 seconds.
+
+        if (!standalone)
+        {
+            dcgmUpdateAllFields(dcgmHandle, 0);
+        }
+
+        /***********************************************
+         *    Run process here while updating fields
+         ***********************************************/
+
+        if (!standalone)
+        {
+            dcgmUpdateAllFields(dcgmHandle, 0);
+        }
     }
 
-    // And let's also display some of the samples recorded by our watches on the temperature and power usage of the
-    // GPUs. We demonstrate how we can pass through information using the userDate void pointer parameter in this
-    // function by passing our testString through. More information on this can be seen in the function below.
-
-    result = dcgmGetLatestValues(dcgmHandle, myGroupId, fieldGroupId, &displayFieldValue, (void *)myTestString);
-
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
     {
-        std::cout << "Error fetching latest values for watches. Result: " << errorString(result) << std::endl;
-        goto cleanup;
-    }
+        // Now that our process is complete let's check our watches and output any errors that were caught
+        // during it's execution. To do this we need our previously allocated dcgmHealthResponse_t results.
 
-    // Now that we have run our process, let's say we want to perform a short diagnostic on the system to ensure that
-    // the group is still healthy and ready for the next process to be run. We will then print out the results of the
-    // diagnostic. Medium and long NVVS diagnostics can offer per GPU results and it's likely that a more thorough
-    // diagnostic would be preferred, but this is just an example.
-    std::cout << "Running diagnostic.\n";
-    // Update version
-    diagnosticResults.version = dcgmDiagResponse_version10;
-    result                    = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_SHORT, &diagnosticResults);
+        // Before making DCGM calls that fill in struct information then we need to set the version of
+        // our struct. This will tell the Host Engine what type of struct to fill in. If the client has
+        // a greater version number than the Host Engine then an error will be returned since the host engine
+        // will unaware of how to handle that type of request. So we set the version for the health response struct.
+        std::unique_ptr<dcgmHealthResponse_v5> results = std::make_unique<dcgmHealthResponse_v5>();
+        memset(results.get(), 0, sizeof(*results));
 
-    // Check result to see if DCGM operation was successful.
-    if (result != DCGM_ST_OK)
-    {
-        if (result == DCGM_ST_GROUP_INCOMPATIBLE)
-            std::cout << "GPUs in the group are incompatible with each other to run diagnostics" << std::endl;
+        results->version = dcgmHealthResponse_version5;
+
+        result = dcgmHealthCheck(dcgmHandle, myGroupId, results.get());
+
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
+        {
+            std::cout << "Error checking health systems. Result: " << errorString(result) << std::endl;
+            goto cleanup;
+        }
+
+        // Let's display any errors caught by the health watches.
+        if (results->overallHealth == DCGM_HEALTH_RESULT_PASS)
+        {
+            std::cout << "Group is healthy.\n";
+        }
         else
         {
-            // Ignore message for incompatible MIG configuration
-            if (ReceivedIncompatibleMigConfigurationMessage(diagnosticResults))
+            std::cout << "Group has a "
+                      << ((results->overallHealth == DCGM_HEALTH_RESULT_WARN) ? "warning.\n" : "failure.\n");
+            std::cout << "GPU ID : Health \n";
+            for (unsigned int i = 0; i < results->incidentCount; i++)
             {
-                std::cout << "GPU configuation is not MIG compatible: " << diagnosticResults.systemError.msg
-                          << std::endl;
-                result = DCGM_ST_OK;
+                if (results->incidents[i].entityInfo.entityGroupId != DCGM_FE_GPU)
+                {
+                    continue;
+                }
+
+                std::cout << results->incidents[i].entityInfo.entityId << " : ";
+
+                switch (results->incidents[i].health)
+                {
+                    case DCGM_HEALTH_RESULT_PASS:
+                        std::cout << "Pass\n";
+                        break;
+                    case DCGM_HEALTH_RESULT_WARN:
+                        std::cout << "Warn\n";
+                        break;
+                    default:
+                        std::cout << "Fail\n";
+                }
+
+
+                // A more in depth case check may be required here, but since we are only interested in PCIe and memory
+                // watches This is all we are going to check for here.
+                std::cout << "Error: "
+                          << ((results->incidents[i].system == DCGM_HEALTH_WATCH_PCIE) ? "PCIe " : "Memory ");
+                std::cout << "watches detected a "
+                          << ((results->incidents[i].health == DCGM_HEALTH_RESULT_WARN) ? "warning.\n" : "failure.\n");
+
+                std::cout << results->incidents[i].error.msg << "\n";
             }
-            else
-            {
-                std::cout << "Error running diagnostic. Result: " << errorString(result) << " : "
-                          << diagnosticResults.systemError.msg << std::endl;
-            }
+            std::cout << std::endl;
+        }
+
+        // And let's also display some of the samples recorded by our watches on the temperature and power usage of the
+        // GPUs. We demonstrate how we can pass through information using the userDate void pointer parameter in this
+        // function by passing our testString through. More information on this can be seen in the function below.
+
+        result = dcgmGetLatestValues(dcgmHandle, myGroupId, fieldGroupId, &displayFieldValue, (void *)myTestString);
+
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
+        {
+            std::cout << "Error fetching latest values for watches. Result: " << errorString(result) << std::endl;
+            goto cleanup;
         }
     }
-    else
+
     {
-        std::cout << "Diagnostic Results (0 = Pass, 1 = Skip, 2 = Warn, 3 = Fail)\n";
-        std::cout << "Denylist: " << diagnosticResults.levelOneResults[DCGM_SWTEST_DENYLIST].status << std::endl;
-        std::cout << "CUDA Main Library: " << diagnosticResults.levelOneResults[DCGM_SWTEST_CUDA_MAIN_LIBRARY].status
-                  << std::endl;
-        std::cout << "CUDA Runtime Library: "
-                  << diagnosticResults.levelOneResults[DCGM_SWTEST_CUDA_RUNTIME_LIBRARY].status << std::endl;
-        std::cout << "Environment: " << diagnosticResults.levelOneResults[DCGM_SWTEST_ENVIRONMENT].status << std::endl;
-        std::cout << "Graphics Processes: " << diagnosticResults.levelOneResults[DCGM_SWTEST_GRAPHICS_PROCESSES].status
-                  << std::endl;
-        std::cout << "NVML Library: " << diagnosticResults.levelOneResults[DCGM_SWTEST_NVML_LIBRARY].status
-                  << std::endl;
-        std::cout << "Page Retirement: " << diagnosticResults.levelOneResults[DCGM_SWTEST_PAGE_RETIREMENT].status
-                  << std::endl;
-        std::cout << "Permissions: " << diagnosticResults.levelOneResults[DCGM_SWTEST_PERMISSIONS].status << std::endl;
-        std::cout << "Persistence Mode: " << diagnosticResults.levelOneResults[DCGM_SWTEST_PERSISTENCE_MODE].status
-                  << std::endl;
+        // Now that we have run our process, let's say we want to perform a short diagnostic on the system to ensure
+        // that the group is still healthy and ready for the next process to be run. We will then print out the results
+        // of the diagnostic. Medium and long NVVS diagnostics can offer per GPU results and it's likely that a more
+        // thorough diagnostic would be preferred, but this is just an example.
+        std::cout << "Running diagnostic.\n";
+
+        std::unique_ptr<dcgmDiagResponse_v11> diagnosticResponse = std::make_unique<dcgmDiagResponse_v11>();
+        memset(diagnosticResponse.get(), 0, sizeof(*diagnosticResponse));
+
+        // Update version
+        diagnosticResponse->version = dcgmDiagResponse_version11;
+        result = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_SHORT, diagnosticResponse.get());
+
+        // Check result to see if DCGM operation was successful.
+        if (result != DCGM_ST_OK)
+        {
+            if (result == DCGM_ST_GROUP_INCOMPATIBLE)
+                std::cout << "GPUs in the group are incompatible with each other to run diagnostics" << std::endl;
+            else
+            {
+                // Ignore message for incompatible MIG configuration
+                std::string msg;
+                if (ReceivedIncompatibleMigConfigurationMessage(*diagnosticResponse, msg))
+                {
+                    std::cout << "GPU configuation is not MIG compatible: " << msg << std::endl;
+                    result = DCGM_ST_OK;
+                }
+                else
+                {
+                    char const *delim = "";
+                    for (auto const &error :
+                         /* All errors in this response*/
+                         std::span(diagnosticResponse->errors,
+                                   std::min(static_cast<unsigned int>(diagnosticResponse->numErrors),
+                                            static_cast<unsigned int>(std::size(diagnosticResponse->errors))))
+                             /* Only look at system errors */
+                             | std::views::filter(
+                                 [](auto const &error) { return error.testId == DCGM_DIAG_RESPONSE_SYSTEM_ERROR; }))
+                    {
+                        if (error.entity.entityGroupId == DCGM_FE_NONE)
+                        {
+                            msg   = delim + msg;
+                            delim = ", ";
+                        }
+                    }
+                    std::cout << "Error running diagnostic. Result: " << errorString(result);
+                    if (msg != "")
+                    {
+                        std::cout << ": " << msg;
+                    }
+                    std::cout << "\n";
+                }
+            }
+        }
+        else
+        {
+            std::cout << "Diagnostic Results (0 = Pass, 1 = Skip, 2 = Warn, 3 = Fail, 4 = Not Run)\n";
+            /* For each test */
+            for (auto const &curTest :
+                 std::span(diagnosticResponse->tests,
+                           std::min(static_cast<unsigned int>(diagnosticResponse->numTests),
+                                    static_cast<unsigned int>(std::size(diagnosticResponse->tests)))))
+            {
+                std::cout << curTest.name << ": " << static_cast<unsigned int>(curTest.result) << std::endl;
+
+                auto results
+                    /* all resultIndices associated with the current test */
+                    = std::span(curTest.resultIndices,
+                                std::min(static_cast<unsigned int>(curTest.numResults),
+                                         static_cast<unsigned int>(std::size(curTest.resultIndices))))
+                      /* only resultIndices that are within the range of valid results */
+                      | std::views::filter([&](unsigned int resultIdx) {
+                            return resultIdx
+                                   < std::min(static_cast<unsigned int>(diagnosticResponse->numResults),
+                                              static_cast<unsigned int>(std::size(diagnosticResponse->results)));
+                        })
+                      /* the actual result given the valid resultIdx */
+                      | std::views::transform(
+                          [&](unsigned int resultIdx) { return diagnosticResponse->results[resultIdx]; });
+
+                /* For each result associated with this test */
+                for (auto const &curResult : results)
+                {
+                    std::cout << "  " << DcgmFieldsGetEntityGroupString(curResult.entity.entityGroupId)
+                              << curResult.entity.entityId << ": " << static_cast<unsigned int>(curResult.result)
+                              << std::endl;
+                }
+            }
+        }
     }
 
 // Cleanup consists of destroying our group and shutting down DCGM.

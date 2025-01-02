@@ -23,56 +23,56 @@
 
 #include <Plugin.h>
 
-std::string AppendCudaDriverError(const std::string &error, CUresult cuRes)
+std::string AppendCudaDriverError(const std::string & /* error */, CUresult /* cuRes */)
 {
     return "";
 }
 
-std::string AddAPIError(Plugin *p,
-                        std::string const &testName,
-                        const char *callName,
-                        const char *errorText,
-                        unsigned int gpuId,
-                        size_t bytes,
-                        bool isGpuSpecific)
+std::string AddAPIError(Plugin * /* p */,
+                        std::string const & /* testName */,
+                        const char * /* callName */,
+                        const char * /* errorText */,
+                        unsigned int /* gpuId */,
+                        size_t /* bytes */,
+                        bool /* isGpuSpecific */)
 {
     return "";
 }
 
-std::string AddCudaError(Plugin *p,
-                         std::string const &testName,
-                         const char *callName,
-                         cudaError_t cuSt,
-                         unsigned int gpuId,
-                         size_t bytes,
-                         bool isGpuSpecific)
+std::string AddCudaError(Plugin * /* p */,
+                         std::string const & /* testName */,
+                         const char * /* callName */,
+                         cudaError_t /* cuSt */,
+                         unsigned int /* gpuId */,
+                         size_t /* bytes */,
+                         bool /* isGpuSpecific */)
 {
     return "";
 }
 
-std::string AddCudaError(Plugin *p,
-                         std::string const &testName,
-                         const char *callName,
-                         CUresult cuSt,
-                         unsigned int gpuId,
-                         size_t bytes,
-                         bool isGpuSpecific)
+std::string AddCudaError(Plugin * /* p */,
+                         std::string const & /* testName */,
+                         const char * /* callName */,
+                         CUresult /* cuSt */,
+                         unsigned int /* gpuId */,
+                         size_t /* bytes */,
+                         bool /* isGpuSpecific */)
 {
     return "";
 }
 
-std::string AddCublasError(Plugin *p,
-                           std::string const &testName,
-                           const char *callName,
-                           cublasStatus_t cubSt,
-                           unsigned int gpuId,
-                           size_t bytes,
-                           bool isGpuSpecific)
+std::string AddCublasError(Plugin * /* p */,
+                           std::string const & /* testName */,
+                           const char * /* callName */,
+                           cublasStatus_t /* cubSt */,
+                           unsigned int /* gpuId */,
+                           size_t /* bytes */,
+                           bool /* isGpuSpecific */)
 {
     return "";
 }
 
-const char *GetAdditionalCuInitDetail(CUresult cuSt)
+const char *GetAdditionalCuInitDetail(CUresult /* cuSt */)
 {
     return "";
 }

@@ -23,7 +23,6 @@ import test_utils
 from . import test_nvswitch_utils
 
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_nvswitches()
 def test_nvswitch_traffic_p2p(handle, switchIds):
     """

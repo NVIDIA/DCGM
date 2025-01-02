@@ -21,6 +21,7 @@
         dcgmGetAllSupportedDevices;
         dcgmGetCacheManagerFieldInfo;
         dcgmGetDeviceAttributes;
+        dcgmGetDeviceWorkloadPowerProfileInfo;
         dcgmGetDeviceTopology;
         dcgmGetEntityGroupEntities;
         dcgmGetFieldSummary;
@@ -31,6 +32,7 @@
         dcgmGetLatestValuesForFields;
         dcgmGetNvLinkLinkStatus;
         dcgmGetCpuHierarchy;
+        dcgmGetCpuHierarchy_v2;
         dcgmGetPidInfo;
         dcgmGetValuesSince;
         dcgmGetValuesSince_v2;
@@ -52,12 +54,8 @@
         dcgmInit;
         dcgmInjectFieldValue;
         dcgmInjectEntityFieldValue;
-        dcgmIntrospectGetFieldsExecTime;
-        dcgmIntrospectGetFieldsMemoryUsage;
         dcgmIntrospectGetHostengineCpuUtilization;
         dcgmIntrospectGetHostengineMemoryUsage;
-        dcgmIntrospectToggleState;
-        dcgmIntrospectUpdateAll;
         dcgmJobGetStats;
         dcgmJobRemove;
         dcgmJobRemoveAll;
@@ -66,15 +64,13 @@
         dcgmModuleDenylist;
         dcgmModuleGetStatuses;
         dcgmPolicyGet;
-        dcgmPolicyRegister;
+        dcgmPolicyRegister_v2;
         dcgmPolicySet;
         dcgmPolicyTrigger;
         dcgmPolicyUnregister;
         dcgmProfGetSupportedMetricGroups;
         dcgmProfPause;
         dcgmProfResume;
-        dcgmProfUnwatchFields;
-        dcgmProfWatchFields;
         dcgmRunDiagnostic;
         dcgmSelectGpusByTopology;
         dcgmShutdown;
@@ -108,9 +104,6 @@
         dcgmGetFieldValuesSince;
         dcgmWatchFieldValue;
         dcgmUnwatchFieldValue;
-        dcgmIntrospectGetFieldMemoryUsage;
-        dcgmMetadataStateSetRunInterval;
-        dcgmIntrospectGetFieldExecTime;
         dcgmVgpuConfigSet;
         dcgmVgpuConfigGet;
         dcgmVgpuConfigEnforce;
@@ -134,8 +127,11 @@
         dcgmInjectNvmlDeviceForFollowingCalls;
         dcgmGetNvmlInjectFuncCallCount;
         dcgmResetNvmlInjectFuncCallCount;
+        dcgmRemoveNvmlInjectedGpu;
+        dcgmRestoreNvmlInjectedGpu;
         dcgmPauseTelemetryForDiag;
         dcgmResumeTelemetryForDiag;
+        dcgmNvswitchGetBackend;
 
     local:
         *;

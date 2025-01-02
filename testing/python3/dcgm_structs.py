@@ -33,7 +33,7 @@ DCGM_NVLINK_MAX_LINKS_PER_GPU         =   18
 DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY1 =   6
 DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY2 =   12
 DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH_V1 =   36 # Max NvLinks per NvSwitch pre-Hopper
-DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH    =   64
+DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH    =   256
 DCGM_LANE_MAX_LANES_PER_NVSWICH_LINK  =   4
 DCGM_MAX_CLOCKS                       =   256
 DCGM_MAX_NUM_GROUPS                   =   64
@@ -44,9 +44,9 @@ DCGM_GRID_LICENSE_BUFFER_SIZE         =   128
 DCGM_MAX_VGPU_TYPES_PER_PGPU          =   32
 DCGM_DEVICE_UUID_BUFFER_SIZE          =   80
 DCGM_MAX_FBC_SESSIONS                 =   256
-DCGM_MAX_NUM_CPUS                = 8
-DCGM_MAX_NUM_CPU_CORES                     = 1024
-DCGM_CHAR_BIT                         = 8
+DCGM_MAX_NUM_CPUS                     =   8
+DCGM_MAX_NUM_CPU_CORES                =   1024
+DCGM_CHAR_BIT                         =   8
 
 #When more than one value is returned from a query, which order should it be returned in?
 DCGM_ORDER_ASCENDING  = 1
@@ -139,8 +139,9 @@ DCGM_GROUP_ALL_NVSWITCHES = 0x7ffffffe
 DCGM_GROUP_ALL_INSTANCES = 0x7ffffffd
 DCGM_GROUP_ALL_COMPUTE_INSTANCES = 0x7ffffffc
 DCGM_GROUP_ALL_ENTITIES = 0x7ffffffb
+DCGM_GROUP_NULL = 0x7ffffffa
 
-DCGM_GROUP_MAX_ENTITIES = 64 #Maximum number of entities per entity group
+DCGM_GROUP_MAX_ENTITIES_V2 = 1024 #Maximum number of entities per entity group
 
 DCGM_CONFIG_TARGET_STATE  = 0          # The target configuration values to be applied
 DCGM_CONFIG_CURRENT_STATE = 1          # The current configuration state
@@ -183,7 +184,7 @@ DCGM_MEMTEST_INDEX          = 7
 DCGM_PULSE_TEST_INDEX       = 8
 DCGM_EUD_TEST_INDEX         = 9
 DCGM_UNUSED2_TEST_INDEX     = 10
-DCGM_CPU_EUD_TEST_INDEX     = 11
+DCGM_UNUSED3_TEST_INDEX     = 11
 DCGM_UNUSED4_TEST_INDEX     = 12
 DCGM_UNUSED5_TEST_INDEX     = 13
 DCGM_PER_GPU_TEST_COUNT_V7  = 9
@@ -202,6 +203,7 @@ DCGM_SWTEST_ENVIRONMENT          = 6
 DCGM_SWTEST_PAGE_RETIREMENT      = 7
 DCGM_SWTEST_GRAPHICS_PROCESSES   = 8
 DCGM_SWTEST_INFOROM              = 9
+DCGM_SWTEST_FABRIC_MANAGER       = 10
 
 # This test is only run by itself, so it can use the 0 slot
 DCGM_CONTEXT_CREATE_INDEX = 0
@@ -561,7 +563,6 @@ def _dcgmGetFunctionPointer(name):
         # lock is always freed
         libLoadLock.release()
 
-
 # C function wrappers ##
 def _LoadDcgmLibrary(libDcgmPath=None):
     """
@@ -586,13 +587,13 @@ def _LoadDcgmLibrary(libDcgmPath=None):
                 else:
                     libPaths = []
                     if libDcgmPath:
-                        libPaths.append(os.path.join(libDcgmPath, "libdcgm.so.3"))
+                        libPaths.append(os.path.join(libDcgmPath, "libdcgm.so.4"))
                     if 'LD_LIBRARY_PATH' in os.environ:
                         envLibPaths = os.environ['LD_LIBRARY_PATH'].split(':')
                         for envLibPath in envLibPaths:
-                            libPaths.append('{}/libdcgm.so.3'.format(envLibPath))
-                    libPaths.append('/usr/lib/{}-linux-gnu/libdcgm.so.3'.format(platform.machine()))
-                    libPaths.append('/usr/lib64/libdcgm.so.3')
+                            libPaths.append('{}/libdcgm.so.4'.format(envLibPath))
+                    libPaths.append('/usr/lib/{}-linux-gnu/libdcgm.so.4'.format(platform.machine()))
+                    libPaths.append('/usr/lib64/libdcgm.so.4')
 
                     for lib_file in libPaths:
                         if os.path.isfile(lib_file):
@@ -654,7 +655,7 @@ def _dcgmErrorString(result):
 class c_dcgm_link_t(_PrintableStructure):
     _fields = [
         ('type', c_uint8),
-        ('index', c_uint8),
+        ('index', c_uint32),
         ('id', c_uint16)
     ]
 
@@ -707,17 +708,17 @@ class c_dcgmGroupEntityPair_t(_PrintableStructure):
         return (self.entityGroupId == other.entityGroupId) and (self.entityId == other.entityId)
 
 # /**
-#  * Structure to store information for DCGM group (v2)
+#  * Structure to store information for DCGM group (v3)
 #  * Added in DCGM 1.5.0
 #  */
-class c_dcgmGroupInfo_v2(_PrintableStructure):
+class c_dcgmGroupInfo_v3(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),
         ('count', c_uint),
         ('groupName', c_char * DCGM_MAX_STR_LENGTH),
-        ('entityList', c_dcgmGroupEntityPair_t * DCGM_GROUP_MAX_ENTITIES)
+        ('entityList', c_dcgmGroupEntityPair_t * DCGM_GROUP_MAX_ENTITIES_V2)
     ]
-c_dcgmGroupInfo_version2 = make_dcgm_version(c_dcgmGroupInfo_v2, 2)
+c_dcgmGroupInfo_version3 = make_dcgm_version(c_dcgmGroupInfo_v3, 3)
 
 
 DcgmiMigProfileNone                     = 0  # No profile (for GPUs)
@@ -1243,6 +1244,26 @@ class c_dcgmVgpuInstanceAttributes_v1(_PrintableStructure):
 
 dcgmVgpuInstanceAttributes_version1 = make_dcgm_version(c_dcgmVgpuInstanceAttributes_v1, 1)
 
+DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE = 8
+DCGM_WORKLOAD_POWER_PROFILE_MAX_NUM    = 255
+
+DCGM_POWER_PROFILE_MAX_P         = 0
+DCGM_POWER_PROFILE_MAX_Q         = 1
+DCGM_POWER_PROFILE_COMPUTE       = 2
+DCGM_POWER_PROFILE_MEMORY_BOUND  = 3
+DCGM_POWER_PROFILE_NETWORK       = 4
+DCGM_POWER_PROFILE_BALANCED      = 5
+DCGM_POWER_PROFILE_LLM_INFERENCE = 6
+DCGM_POWER_PROFILE_LLM_TRAINING  = 7
+DCGM_POWER_PROFILE_RBM           = 8
+DCGM_POWER_PROFILE_DCPCIE        = 9
+DCGM_POWER_PROFILE_HMMA_SPARSE   = 10
+DCGM_POWER_PROFILE_HMMA_DENSE    = 11
+DCGM_POWER_PROFILE_SYNC_BALANCED = 12
+DCGM_POWER_PROFILE_HPC           = 13
+DCGM_POWER_PROFILE_MIG           = 14
+DCGM_POWER_PROFILE_MAX           = 15
+
 class c_dcgmConfigPowerLimit(_PrintableStructure):
     _fields_ = [
 
@@ -1257,26 +1278,59 @@ class c_dcgmConfigPerfStateSettings_t(_PrintableStructure):
         ('targetClocks', c_dcgmClockSet_v1),
     ]
 
-# Structure to represent default configuration for a device
-class c_dcgmDeviceConfig_v1(_PrintableStructure):
+class c_dcgmWorkloadPowerProfileInfo_v1(_PrintableStructure):
     _fields_ = [
         # version must always be first
         ('version', c_uint),
-	    ('gpuId', c_uint),
+        ('mWorkloadPowerProfileId', c_uint),
+        ('mPriority', c_uint),
+        ('mConflictingMask', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE)
+    ]
+
+dcgmWorkloadPowerProfileInfo_version1 = make_dcgm_version(c_dcgmWorkloadPowerProfileInfo_v1, 1)
+
+class c_dcgmWorkloadPowerProfileProfilesInfo_v1(_PrintableStructure):
+    _fields_ = [
+        # version must always be first
+        ('version', c_uint),
+        ('mWorkloadPowerProfiles', c_dcgmWorkloadPowerProfileInfo_v1 * DCGM_WORKLOAD_POWER_PROFILE_MAX_NUM),
+        ('mProfileCount', c_uint)
+    ]
+
+dcgmWorkloadPowerProfileProfilesInfo_version1 = make_dcgm_version(c_dcgmWorkloadPowerProfileProfilesInfo_v1, 1)
+
+class c_dcgmDeviceWorkloadPowerProfilesStatus_v1(_PrintableStructure):
+    _fields_ = [
+        # version must always be first
+        ('version', c_uint),
+        ('mProfileMask', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE),
+        ('mRequestedProfileMask', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE),
+        ('mEnforcedProfileMask', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE)
+    ]
+
+dcgmDeviceWorkloadPowerProfileStatus_version1 = make_dcgm_version(c_dcgmDeviceWorkloadPowerProfilesStatus_v1, 1)
+
+# Structure to represent default configuration for a device
+class c_dcgmDeviceConfig_v2(_PrintableStructure):
+    _fields_ = [
+        # version must always be first
+        ('version', c_uint),
+        ('gpuId', c_uint),
         ('mEccMode', c_uint),
         ('mComputeMode', c_uint),
         ('mPerfState', c_dcgmConfigPerfStateSettings_t),
-        ('mPowerLimit', c_dcgmConfigPowerLimit)
+        ('mPowerLimit', c_dcgmConfigPowerLimit),
+        ('mWorkloadPowerProfiles', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE)
     ]
 
-dcgmDeviceConfig_version1 = make_dcgm_version(c_dcgmDeviceConfig_v1, 1)
+dcgmDeviceConfig_version2 = make_dcgm_version(c_dcgmDeviceConfig_v2, 2)
 
 # Structure to represent default vGPU configuration for a device
 class c_dcgmDeviceVgpuConfig_v1(_PrintableStructure):
     _fields_ = [
         # version must always be first
         ('version', c_uint),
-	    ('gpuId', c_uint),
+        ('gpuId', c_uint),
         ('mEccMode', c_uint),
         ('mComputeMode', c_uint),
         ('mPerfState', c_dcgmConfigPerfStateSettings_t),
@@ -1463,7 +1517,7 @@ class c_dcgmPolicyConditionXID_t(_PrintableStructure):
         ("timestamp", c_longlong),      # timestamp of the error
         ("errnum", c_uint)              # XID error number
     ]
-class c_dcgmPolicyCallbackResponse_v1(_PrintableStructure):
+class c_dcgmPolicyCallbackResponse_v2(_PrintableStructure):
     class Value(DcgmUnion):
         # implement more of the fields when a test requires them
         _fields_ = [
@@ -1479,7 +1533,8 @@ class c_dcgmPolicyCallbackResponse_v1(_PrintableStructure):
     _fields_ = [
         ("version", c_uint),
         ("condition", c_int),   # an OR'ed list of DCGM_POLICY_COND_*
-        ("val", Value)
+        ("val", Value),
+        ("gpuId", c_uint)
     ]
 
 class c_dcgmFieldValue_v1_value(DcgmUnion):
@@ -1560,7 +1615,16 @@ class c_dcgmDiagErrorDetail_v2(_PrintableStructure):
         ('severity', c_uint)
     ]
 
-DCGM_HEALTH_WATCH_MAX_INCIDENTS = DCGM_GROUP_MAX_ENTITIES
+DCGM_DEVICE_ID_LEN = 5
+
+class c_dcgmDiagEntity_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('serialNum', c_char * DCGM_MAX_STR_LENGTH),
+        ('skuDeviceId', c_char * DCGM_DEVICE_ID_LEN),
+    ]
+
+DCGM_HEALTH_WATCH_MAX_INCIDENTS_V2 = DCGM_GROUP_MAX_ENTITIES_V2
 
 class c_dcgmIncidentInfo_t(_PrintableStructure):
     _fields_ = [
@@ -1570,15 +1634,15 @@ class c_dcgmIncidentInfo_t(_PrintableStructure):
         ('entityInfo', c_dcgmGroupEntityPair_t),
     ]
 
-class c_dcgmHealthResponse_v4(_PrintableStructure):
+class c_dcgmHealthResponse_v5(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
         ('overallHealth', c_uint32),
         ('incidentCount', c_uint32),
-        ('incidents', c_dcgmIncidentInfo_t * DCGM_HEALTH_WATCH_MAX_INCIDENTS),
+        ('incidents', c_dcgmIncidentInfo_t * DCGM_HEALTH_WATCH_MAX_INCIDENTS_V2),
     ]
 
-dcgmHealthResponse_version4 = make_dcgm_version(c_dcgmHealthResponse_v4, 4)
+dcgmHealthResponse_version5 = make_dcgm_version(c_dcgmHealthResponse_v5, 5)
 
 class c_dcgmHealthSetParams_v2(_PrintableStructure):
     _fields_ = [
@@ -1743,6 +1807,23 @@ class c_dcgmDiagResponsePerGpu_v5(_PrintableStructure):
         ('results', c_dcgmDiagTestResult_v3 * DCGM_PER_GPU_TEST_COUNT_V8)
     ]
 
+class c_dcgmDiagInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('msg', c_char * DCGM_ERR_MSG_LEN),
+        ('testId', c_uint),
+    ]
+
+class c_dcgmDiagError_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('code', c_uint),
+        ('category', c_uint),
+        ('severity', c_uint),
+        ('msg', c_char * DCGM_ERR_MSG_LEN),
+        ('testId', c_uint),
+    ]
+
 DCGM_DIAG_AUX_DATA_LEN = 2048
 
 class c_dcgmDiagTestAuxData_v1(_PrintableStructure):
@@ -1755,10 +1836,78 @@ dcgmDiagTestAuxData_version1 = make_dcgm_version(c_dcgmDiagTestAuxData_v1, 1)
 
 dcgmDiagTestAuxData_version = dcgmDiagTestAuxData_version1
 
+DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX = 32
+DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX = 16
+DCGM_DIAG_TEST_RUN_RESULTS_MAX = DCGM_GROUP_MAX_ENTITIES_V2
+DCGM_DIAG_TEST_RUN_NAME_LEN = 32
+
+class c_dcgmDiagEntityResult_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('result', c_int),
+        ('testId', c_uint),
+    ]
+
+class c_dcgmDiagTestRun_v1(_PrintableStructure):
+    _fields_ = [
+        ('name', c_char * DCGM_DIAG_TEST_RUN_NAME_LEN),
+        ('pluginName', c_char * DCGM_DIAG_TEST_RUN_NAME_LEN),
+
+        ('result', c_uint),
+
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('categoryIndex', c_ubyte),
+        ('_unused', c_ubyte),
+
+        ('numResults', c_ushort),
+
+        ('errorIndices', c_ubyte * DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX),
+        ('infoIndices', c_ubyte * DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX),
+        ('resultIndices', c_ushort * DCGM_DIAG_TEST_RUN_RESULTS_MAX),
+        ('auxData', c_dcgmDiagTestAuxData_v1)
+    ]
+
 DCGM_SWTEST_COUNT = 10
 LEVEL_ONE_MAX_RESULTS = 16
-DCGM_DEVICE_ID_LEN = 5
 DCGM_VERSION_LEN = 12
+
+DCGM_DIAG_RESPONSE_TESTS_MAX = 20
+DCGM_DIAG_RESPONSE_SYSTEM_ERROR = dcgmvalue.DCGM_INT8_BLANK
+DCGM_DIAG_RESPONSE_ERRORS_MAX = DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX
+DCGM_DIAG_RESPONSE_INFO_MAX = DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX
+DCGM_DIAG_RESPONSE_ENTITIES_MAX = DCGM_GROUP_MAX_ENTITIES_V2
+DCGM_DIAG_RESPONSE_RESULTS_MAX = DCGM_DIAG_RESPONSE_TESTS_MAX * DCGM_DIAG_RESPONSE_ENTITIES_MAX
+DCGM_DIAG_RESPONSE_CATEGORIES_MAX = 5
+DCGM_DIAG_RESPONSE_CATEGORY_LEN = 20
+DCGM_DIAG_RESPONSE_V11_UNUSED_LEN = 682880
+
+class c_dcgmDiagResponse_v11(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+
+        ('numTests', c_ubyte),
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('numCategories', c_ubyte),
+
+        ('numEntities', c_ushort),
+        ('numResults', c_ushort),
+
+        ('tests', c_dcgmDiagTestRun_v1 * DCGM_DIAG_RESPONSE_TESTS_MAX),
+        ('entities', c_dcgmDiagEntity_v1 * DCGM_DIAG_RESPONSE_ENTITIES_MAX),
+        ('errors', c_dcgmDiagError_v1 * DCGM_DIAG_RESPONSE_ERRORS_MAX),
+        ('info', c_dcgmDiagInfo_v1 * DCGM_DIAG_RESPONSE_INFO_MAX),
+        ('results', c_dcgmDiagEntityResult_v1 * DCGM_DIAG_RESPONSE_RESULTS_MAX),
+        ('categories', (c_char * DCGM_DIAG_RESPONSE_CATEGORY_LEN) * DCGM_DIAG_RESPONSE_CATEGORIES_MAX),
+
+        ('dcgmVersion', c_char * DCGM_VERSION_LEN),
+        ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
+
+        ('_unused', c_char * DCGM_DIAG_RESPONSE_V11_UNUSED_LEN),
+    ]
+
+dcgmDiagResponse_version11 = make_dcgm_version(c_dcgmDiagResponse_v11, 11)
 
 class c_dcgmDiagResponse_v10(_PrintableStructure):
     _fields_ = [
@@ -1768,8 +1917,8 @@ class c_dcgmDiagResponse_v10(_PrintableStructure):
         ('levelOneResults', c_dcgmDiagTestResult_v3 * LEVEL_ONE_MAX_RESULTS),
         ('perGpuResponses', c_dcgmDiagResponsePerGpu_v5 * DCGM_MAX_NUM_DEVICES),
         ('systemError',     c_dcgmDiagErrorDetail_v2),
-        ('devIds', c_char * DCGM_MAX_NUM_DEVICES * DCGM_DEVICE_ID_LEN),
-        ('devSerials', c_char * DCGM_MAX_NUM_DEVICES * DCGM_MAX_STR_LENGTH),
+        ('devIds', (c_char * DCGM_DEVICE_ID_LEN) * DCGM_MAX_NUM_DEVICES),
+        ('devSerials', (c_char * DCGM_MAX_STR_LENGTH) * DCGM_MAX_NUM_DEVICES),
         ('dcgmVersion', c_char * DCGM_VERSION_LEN),
         ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
         ('auxDataPerTest', c_dcgmDiagTestAuxData_v1 * DCGM_PER_GPU_TEST_COUNT_V8),
@@ -1785,8 +1934,8 @@ class c_dcgmDiagResponse_v9(_PrintableStructure):
         ('levelOneResults', c_dcgmDiagTestResult_v3 * LEVEL_ONE_MAX_RESULTS),
         ('perGpuResponses', c_dcgmDiagResponsePerGpu_v5 * DCGM_MAX_NUM_DEVICES),
         ('systemError',     c_dcgmDiagErrorDetail_v2),
-        ('devIds', c_char * DCGM_MAX_NUM_DEVICES * DCGM_DEVICE_ID_LEN),
-        ('devSerials', c_char * DCGM_MAX_NUM_DEVICES * DCGM_MAX_STR_LENGTH),
+        ('devIds', (c_char * DCGM_DEVICE_ID_LEN) * DCGM_MAX_NUM_DEVICES),
+        ('devSerials', (c_char * DCGM_MAX_STR_LENGTH) * DCGM_MAX_NUM_DEVICES),
         ('dcgmVersion', c_char * DCGM_VERSION_LEN),
         ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
         ('_unused',     c_char * 596)
@@ -1837,6 +1986,13 @@ class c_dcgmCpuHierarchyCpu_v1(_PrintableStructure):
         ('ownedCores', c_dcgmCpuHierarchyOwnedCores_v1),
     ]
 
+class c_dcgmCpuHierarchyCpu_v2(_PrintableStructure):
+    _fields_ = [
+        ('cpuId', c_uint32),
+        ('ownedCores', c_dcgmCpuHierarchyOwnedCores_v1),
+        ('serial', c_char * DCGM_MAX_STR_LENGTH)
+    ]
+
 class c_dcgmCpuHierarchy_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
@@ -1845,6 +2001,15 @@ class c_dcgmCpuHierarchy_v1(_PrintableStructure):
     ]
 
 dcgmCpuHierarchy_version1 = make_dcgm_version(c_dcgmCpuHierarchy_v1, 1)
+
+class c_dcgmCpuHierarchy_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('numCpus', c_uint32),
+        ('cpus', c_dcgmCpuHierarchyCpu_v2 * DCGM_MAX_NUM_CPUS),
+    ]
+
+dcgmCpuHierarchy_version2 = make_dcgm_version(c_dcgmCpuHierarchy_v2, 2)
 
 # Maximum number of field groups that can exist
 DCGM_MAX_NUM_FIELD_GROUPS = 64
@@ -1898,10 +2063,12 @@ DCGM_MAX_TEST_PARMS = 100
 DCGM_MAX_TEST_PARMS_LEN = 100
 DCGM_MAX_TEST_PARMS_LEN_V2 = 1050
 DCGM_GPU_LIST_LEN = 50
-DCGM_FILE_LEN = 30
+DCGM_ENTITY_ID_LIST_LEN = 2048
 DCGM_EXPECTED_ENTITIES_LEN = 50
+DCGM_FILE_LEN = 30
 DCGM_PATH_LEN = 128
-DCGM_THROTTLE_MASK_LEN = 50
+DCGM_CLOCKS_EVENT_MASK_LEN = 50
+DCGM_THROTTLE_MASK_LEN = DCGM_CLOCKS_EVENT_MASK_LEN # Deprecated: Use DCGM_CLOCKS_EVENT_MASK_LEN instead
 
 # Flags options for running the GPU diagnostic
 DCGM_RUN_FLAGS_VERBOSE     = 0x0001
@@ -1911,6 +2078,31 @@ DCGM_RUN_FLAGS_TRAIN       = 0x0004
 # UNUSED
 DCGM_RUN_FLAGS_FORCE_TRAIN = 0x0008
 DCGM_RUN_FLAGS_FAIL_EARLY  = 0x0010 # Enable fail early checks for the Targeted Stress, Targeted Power, SM Stress, and Diagnostic tests
+
+class c_dcgmRunDiag_v7(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint), # version of this message
+        ('flags', c_uint), # flags specifying binary options for running it. Currently verbose and stats on fail
+        ('debugLevel', c_uint), # 0-5 for the debug level the GPU diagnostic will use for logging
+        ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with gpuList.
+        ('validate', c_uint), # 0-3 for which tests to run. Optional.
+        ('testNames', (c_char * DCGM_MAX_TEST_NAMES_LEN) * DCGM_MAX_TEST_NAMES), # Specifed list of test names. Optional.
+        ('testParms', (c_char * DCGM_MAX_TEST_PARMS_LEN) * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
+        ('gpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of gpus. Cannot be specified with the groupId.
+        ('debugLogFile', c_char * DCGM_PATH_LEN), # Alternate name for the debug log file that should be used
+        ('statsPath', c_char * DCGM_PATH_LEN), # Path that the plugin's statistics files should be written to
+        ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
+        ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN), # Throttle reasons to ignore as either integer mask or csv list of reasons
+        ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
+        ('currentIteration', c_uint), # The current iteration that will be executed
+        ('totalIterations', c_uint), # The total iterations that will be executed
+        ('timeoutSeconds', c_uint), # The timeout for the diagnostic in seconds
+        ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
+        ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+    ]
+
+dcgmRunDiag_version7 = make_dcgm_version(c_dcgmRunDiag_v7, 7)
 
 class c_dcgmRunDiag_v8(_PrintableStructure):
     _fields_ = [
@@ -1933,41 +2125,43 @@ class c_dcgmRunDiag_v8(_PrintableStructure):
         ('timeoutSeconds', c_uint), # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
         ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
-        ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN) # The expected number of entities the diag will run on.
+        ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN), # The expected number of entities the diag will run on.
     ]
 
 dcgmRunDiag_version8 = make_dcgm_version(c_dcgmRunDiag_v8, 8)
 
-class c_dcgmRunDiag_v7(_PrintableStructure):
+class c_dcgmRunDiag_v9(_PrintableStructure):
     _fields_ = [
         ('version', c_uint), # version of this message
         ('flags', c_uint), # flags specifying binary options for running it. Currently verbose and stats on fail
         ('debugLevel', c_uint), # 0-5 for the debug level the GPU diagnostic will use for logging
-        ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with gpuList.
+        ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with entityIds. When entityIds is specified, this value should be set to DCGM_GROUP_NULL.
         ('validate', c_uint), # 0-3 for which tests to run. Optional.
         ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES), # Specifed list of test names. Optional.
-        ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
-        ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
-        ('gpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of gpus. Cannot be specified with the groupId.
+        ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId, entityIds or gpuList.
         ('debugLogFile', c_char * DCGM_PATH_LEN), # Alternate name for the debug log file that should be used
         ('statsPath', c_char * DCGM_PATH_LEN), # Path that the plugin's statistics files should be written to
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
-        ('throttleMask', c_char * DCGM_THROTTLE_MASK_LEN), # Throttle reasons to ignore as either integer mask or csv list of reasons
+        ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN), # Clocks event reasons to ignore as either integer mask or csv list of reasons
         ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
         ('currentIterations', c_uint), # The current iteration that will be executed
         ('totalIterations', c_uint), # The total iterations that will be executed
         ('timeoutSeconds', c_uint), # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
         ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN), # The expected number of entities the diag will run on.
+        ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN), # Comma-separated list of entity ids. Cannot be specified with the groupId.
+        ('watchFrequency', c_uint), # The watch frequency for fields being watched 
     ]
 
-dcgmRunDiag_version7 = make_dcgm_version(c_dcgmRunDiag_v7, 7)
+dcgmRunDiag_version9 = make_dcgm_version(c_dcgmRunDiag_v9, 9)
 
 # Latest c_dcgmRunDiag class
-c_dcgmRunDiag_t = c_dcgmRunDiag_v8
+c_dcgmRunDiag_t = c_dcgmRunDiag_v9
 
 # Latest version for dcgmRunDiag_t
-dcgmRunDiag_version = dcgmRunDiag_version8
+dcgmRunDiag_version = dcgmRunDiag_version9
 
 #Flags for dcgmGetEntityGroupEntities's flags parameter
 DCGM_GEGE_FLAG_ONLY_SUPPORTED = 0x00000001 #Only return entities that are supported by DCGM.
@@ -2047,7 +2241,7 @@ class c_dcgmNvLinkNvSwitchLinkStatus_v2(_PrintableStructure):
         ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH) #Link state of each link of this NvSwitch
     ]
 
-class c_dcgmNvLinkStatus_v3(_PrintableStructure):
+class c_dcgmNvLinkStatus_v4(_PrintableStructure):
     '''
     NvSwitch link status for all GPUs and NvSwitches in the system
     '''
@@ -2059,7 +2253,7 @@ class c_dcgmNvLinkStatus_v3(_PrintableStructure):
         ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_v2 * DCGM_MAX_NUM_SWITCHES) #Per-NvSwitch NvLink link statuses
     ]
 
-dcgmNvLinkStatus_version3 = make_dcgm_version(c_dcgmNvLinkStatus_v3, 3)
+dcgmNvLinkStatus_version4 = make_dcgm_version(c_dcgmNvLinkStatus_v4, 4)
 
 # Bitmask values for dcgmGetFieldIdSummary
 DCGM_SUMMARY_MIN      = 0x00000001
@@ -2168,3 +2362,23 @@ class c_dcgmVersionInfo_v2(_PrintableStructure):
 dcgmVersionInfo_version2 = make_dcgm_version(c_dcgmVersionInfo_v2, 2)
 dcgmVersionInfo_version = dcgmVersionInfo_version2
 
+# Fabric Manager status
+DcgmFMStatusNotSupported  = 0 # The Fabric Manager isn't supported for this GPU
+DcgmFMStatusNotStarted    = 1 # The Fabric Manager has not started for this GPU yet.
+DcgmFMStatusInProgress    = 2 # The Fabric Manager is still starting up
+DcgmFMStatusSuccess       = 3 # The Fabric Manager has started successfully
+DcgmFMStatusFailure       = 4 # The Fabric Manager finished training, but failed
+DcgmFMStatusUnrecognized  = 5 # NVML returned an unrecognized status for the fabric manager
+DcgmFMStatusNvmlTooOld    = 6 # NVML returned NVML_ERROR_FUNCTION_NOT_FOUND when querying fabric manager status
+DcgmFMStatusCount         = 7 # The count of valid statuses, always 1 more than the last status
+
+class c_dcgmDiagStatus_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('totalTests', c_uint32),
+        ('completedTests', c_uint32),
+        ('testName', c_char * 128),
+        ('errorCode', c_uint32)
+    ]
+dcgmDiagStatus_version1 = make_dcgm_version(c_dcgmDiagStatus_v1, 1)
+dcgmDiagStatus_version = dcgmDiagStatus_version1

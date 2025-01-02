@@ -58,6 +58,7 @@ typedef enum
     DcgmCoreReqIdGetMigUtilization              = 46, // DcgmCacheManager::GetMigUtilization()
     DcgmCoreReqMigIndicesForEntity              = 47, // DcgmCacheManager::GetMigIndicesForEntity()
     DcgmCoreReqGetServiceAccount                = 48, // DcgmHostEngineHandler::GetServiceAccount()
+    DcgmCoreReqPopulateMigHierarchy             = 49, // DcgmCacheManager::PopulateMigHierarchy()
     DcgmCoreReqIdCount                                // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -249,12 +250,17 @@ typedef struct
 
 typedef struct
 {
-    unsigned int entityPairCount;                               // !< The number of entities requested
-    dcgmGroupEntityPair_t entityPairs[DCGM_GROUP_MAX_ENTITIES]; // !< Entity group and id info for each entity
-    unsigned short const *fieldIds;                             // !< List of the field ids we want samples for
-    size_t numFieldIds;                                         // !< The number of field ids specified
-    size_t bufferPosition;                                      // !< The start position for buffer copying
-} dcgmCoreGetMultipleLatestLiveSamplesParams_t;
+    unsigned int entityPairCount;                                  // !< The number of entities requested
+    dcgmGroupEntityPair_t entityPairs[DCGM_GROUP_MAX_ENTITIES_V2]; // !< Entity group and id info for each entity
+    unsigned short const *fieldIds;                                // !< List of the field ids we want samples for
+    size_t numFieldIds;                                            // !< The number of field ids specified
+    size_t bufferPosition;                                         // !< The start position for buffer copying
+} dcgmCoreGetMultipleLatestLiveSamplesParams_v1;
+
+#define dcgmCoreGetMultipleLatestLiveSamplesParams_version1 \
+    MAKE_DCGM_VERSION(dcgmCoreGetMultipleLatestLiveSamplesParams_v1, 1)
+#define dcgmCoreGetMultipleLatestLiveSamplesParams_version dcgmCoreGetMultipleLatestLiveSamplesParams_version1
+typedef dcgmCoreGetMultipleLatestLiveSamplesParams_v1 dcgmCoreGetMultipleLatestLiveSamplesParams_t;
 
 /**
  * This struct holds all of the parameters necessary to call RemoveFieldWatch()
@@ -326,10 +332,14 @@ typedef struct
 
 typedef struct
 {
-    dcgmReturn_t ret;                                           // !< The status of the function call
-    dcgmGroupEntityPair_t entityPairs[DCGM_GROUP_MAX_ENTITIES]; // !< Entity group and id info for each entity
-    unsigned int entityPairsCount;                              // !< Number of entity pairs in the list
-} dcgmCoreEntityInfoResponse_t;
+    dcgmReturn_t ret;                                              // !< The status of the function call
+    dcgmGroupEntityPair_t entityPairs[DCGM_GROUP_MAX_ENTITIES_V2]; // !< Entity group and id info for each entity
+    unsigned int entityPairsCount;                                 // !< Number of entity pairs in the list
+} dcgmCoreEntityInfoResponse_v1;
+
+#define dcgmCoreEntityInfoResponse_version1 MAKE_DCGM_VERSION(dcgmCoreEntityInfoResponse_v1, 1)
+#define dcgmCoreEntityInfoResponse_version  dcgmCoreEntityInfoResponse_version1
+typedef dcgmCoreEntityInfoResponse_v1 dcgmCoreEntityInfoResponse_t;
 
 typedef struct
 {
@@ -581,13 +591,13 @@ typedef dcgmCoreGetSamples_v1 dcgmCoreGetSamples_t;
 typedef struct
 {
     dcgm_module_command_header_t header; // Command header
-    dcgmCoreGetMultipleLatestLiveSamplesParams_t request;
+    dcgmCoreGetMultipleLatestLiveSamplesParams_v1 request;
     dcgmCoreGetMultipleLatestSamplesResponse_v1 response;
-} dcgmCoreGetMultipleLatestLiveSamples_v1;
+} dcgmCoreGetMultipleLatestLiveSamples_v2;
 
-#define dcgmCoreGetMultipleLatestLiveSamples_version1 MAKE_DCGM_VERSION(dcgmCoreGetMultipleLatestLiveSamples_v1, 1)
-#define dcgmCoreGetMultipleLatestLiveSamples_version  dcgmCoreGetMultipleLatestLiveSamples_version1
-typedef dcgmCoreGetMultipleLatestLiveSamples_v1 dcgmCoreGetMultipleLatestLiveSamples_t;
+#define dcgmCoreGetMultipleLatestLiveSamples_version2 MAKE_DCGM_VERSION(dcgmCoreGetMultipleLatestLiveSamples_v2, 2)
+#define dcgmCoreGetMultipleLatestLiveSamples_version  dcgmCoreGetMultipleLatestLiveSamples_version2
+typedef dcgmCoreGetMultipleLatestLiveSamples_v2 dcgmCoreGetMultipleLatestLiveSamples_t;
 
 typedef struct
 {
@@ -627,11 +637,11 @@ typedef struct
     dcgm_module_command_header_t header; // Command header
     dcgmCoreBasicGroupParams_t request;
     dcgmCoreEntityInfoResponse_t response;
-} dcgmCoreGetGroupEntities_v1;
+} dcgmCoreGetGroupEntities_v2;
 
-#define dcgmCoreGetGroupEntities_version1 MAKE_DCGM_VERSION(dcgmCoreGetGroupEntities_v1, 1)
-#define dcgmCoreGetGroupEntities_version  dcgmCoreGetGroupEntities_version1
-typedef dcgmCoreGetGroupEntities_v1 dcgmCoreGetGroupEntities_t;
+#define dcgmCoreGetGroupEntities_version2 MAKE_DCGM_VERSION(dcgmCoreGetGroupEntities_v2, 2)
+#define dcgmCoreGetGroupEntities_version  dcgmCoreGetGroupEntities_version2
+typedef dcgmCoreGetGroupEntities_v2 dcgmCoreGetGroupEntities_t;
 
 typedef struct
 {
@@ -740,3 +750,13 @@ typedef struct
 #define dcgmCoreGetServiceAccount_version1 MAKE_DCGM_VERSION(dcgmCoreGetServiceAccount_v1, 1)
 #define dcgmCoreGetServiceAccount_version  dcgmCoreGetServiceAccount_version1
 typedef dcgmCoreGetServiceAccount_v1 dcgmCoreGetServiceAccount_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmMigHierarchy_v2 response;
+} dcgmCoreGetGpuInstanceHierarchy_v1;
+
+#define dcgmCoreGetGpuInstanceHierarchy_version1 MAKE_DCGM_VERSION(dcgmCoreGetGpuInstanceHierarchy_v1, 1)
+#define dcgmCoreGetGpuInstanceHierarchy_version  dcgmCoreGetGpuInstanceHierarchy_version1
+typedef dcgmCoreGetGpuInstanceHierarchy_v1 dcgmCoreGetGpuInstanceHierarchy_t;

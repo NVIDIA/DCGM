@@ -76,4 +76,6 @@ NVML_INJECTION_ENTRY_POINT(nvmlDeviceInjectFieldValue,
                            nvmlDevice,
                            value)
 
-NVML_INJECTION_ENTRY_POINT(injectionNvmlShutdown, injectionNvmlShutdown, (void), "()")
+NVML_INJECTION_ENTRY_POINT(nvmlRemoveGpu, nvmlRemoveGpu, (const char *uuid), "(%p)", uuid)
+
+NVML_INJECTION_ENTRY_POINT(nvmlRestoreGpu, nvmlRestoreGpu, (const char *uuid), "(%p)", uuid)

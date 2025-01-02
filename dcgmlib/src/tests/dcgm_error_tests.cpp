@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <DcgmError.h>
 #include <dcgm_errors.h>
@@ -91,7 +91,7 @@ TEST_CASE("dcgm_errors: check full message")
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // gpu id
     DCGM_ERROR_FORMAT_MESSAGE(
-        DCGM_FR_CLOCK_THROTTLE_THERMAL, d, 0); // "Detected clock throttling due to thermal violation in GPU %u."
+        DCGM_FR_CLOCKS_EVENT_THERMAL, d, 0); // "Detected clocks event due to thermal violation in GPU %u."
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // gpu id
@@ -100,7 +100,7 @@ TEST_CASE("dcgm_errors: check full message")
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // gpu id
     DCGM_ERROR_FORMAT_MESSAGE(
-        DCGM_FR_CLOCK_THROTTLE_POWER, d, 0); // "Detected clock throttling due to power violation in GPU %u."
+        DCGM_FR_CLOCKS_EVENT_POWER, d, 0); // "Detected clocks event due to power violation in GPU %u."
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // nvlink errors detected, nvlink id, error threshold
@@ -284,15 +284,26 @@ TEST_CASE("dcgm_errors: check full message")
     DCGM_ERROR_FORMAT_MESSAGE(
         DCGM_FR_TEMP_VIOLATION,
         d,
+        "GPU",
         0,
         0,
         0); // "Temperature %lld of GPU %u exceeded user-specified maximum allowed temperature %lld"
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
-    // gpu id, seconds into test, details about throttling
+    // observed HBM temperature, gpu id, max allowed temperature
     DCGM_ERROR_FORMAT_MESSAGE(
-        DCGM_FR_THROTTLING_VIOLATION, d, 0, 1.0, "error"); // "Clocks are being throttled for GPU %u because of
-                                                           // clock throttling starting %.1f seconds into the test. %s"
+        DCGM_FR_TEMP_VIOLATION,
+        d,
+        "HBM Memory on GPU",
+        0,
+        0,
+        0); // "Temperature %lld of HBM Memory on GPU %u exceeded user-specified maximum allowed temperature %lld"
+    WARN(d.GetMessage());
+    CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
+    // gpu id, seconds into test, details about clocks event
+    DCGM_ERROR_FORMAT_MESSAGE(
+        DCGM_FR_CLOCKS_EVENT_VIOLATION, d, 0, 1.0, "error"); // "Clocks event for GPU %u because of "
+                                                             // "event starting %.1f seconds into the test. %s"
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // details about error
@@ -518,14 +529,16 @@ TEST_CASE("dcgm_errors: check full message")
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_MEMORY_DEVICE,
                               d,
                               0,
-                              "test"); // "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
+                              0,
+                              "test"); // "GPU %u was unsuccessfully written to by %u in a peer-to-peer test: %s"
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // gpu id, test name
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BROKEN_P2P_WRITER_DEVICE,
                               d,
                               0,
-                              "test"); // "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
+                              0,
+                              "test"); // "GPU %u unsuccessfully wrote data to %u in a peer-to-peer test: %s"
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVSWITCH_NVLINK_DOWN, d, 0, 0); //         "NVSwitch %u's NvLink %u is down."

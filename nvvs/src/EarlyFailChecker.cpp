@@ -21,14 +21,14 @@
 EarlyFailChecker::EarlyFailChecker(TestParameters *tp,
                                    bool failEarly,
                                    unsigned long failCheckInterval,
-                                   const dcgmDiagPluginGpuList_t &gpuInfos)
+                                   const dcgmDiagPluginEntityList_v1 &entityInfos)
     : m_testParameters(tp)
     , m_failEarly(failEarly)
     , m_failCheckInterval(failCheckInterval)
 {
-    for (unsigned int i = 0; i < gpuInfos.numGpus; i++)
+    for (unsigned int i = 0; i < entityInfos.numEntities; i++)
     {
-        m_gpuInfos.push_back(gpuInfos.gpus[i]);
+        m_entityInfos.push_back(entityInfos.entities[i]);
     }
 }
 
@@ -48,7 +48,7 @@ nvvsPluginResult_t EarlyFailChecker::CheckCommonErrors(unsigned long checkTime,
     if (checkTime - m_lastCheckTime > m_failCheckInterval)
     {
         m_lastCheckTime = checkTime;
-        m_errors        = dcgmRecorder.CheckCommonErrors(*m_testParameters, startTime, result, m_gpuInfos);
+        m_errors        = dcgmRecorder.CheckCommonErrors(*m_testParameters, startTime, result, m_entityInfos);
         if (result == NVVS_RESULT_FAIL)
         {
             std::stringstream buf;

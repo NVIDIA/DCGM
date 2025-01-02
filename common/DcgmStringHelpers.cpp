@@ -16,6 +16,7 @@
 #include "DcgmStringHelpers.h"
 
 #include <cstring>
+#include <set>
 #include <string>
 
 /*****************************************************************************/
@@ -56,12 +57,6 @@ std::vector<std::string> dcgmTokenizeString(const std::string &src, const std::s
     return tokens;
 }
 
-/*****************************************************************************/
-void dcgmStrncpy(char *destination, const char *source, size_t destinationSize)
-{
-    strncpy(destination, source, destinationSize);
-    destination[destinationSize - 1] = '\0';
-}
 
 std::string dcgmStrToLower(std::string s)
 {
@@ -137,6 +132,58 @@ dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned 
     }
 
     return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+std::vector<std::string> TokenizeStringQuoted(std::string_view str, char delimiter, std::string_view quotes)
+{
+    std::vector<std::string> tokens;
+
+    std::set<char> quote { quotes.begin(), quotes.end() };
+
+    bool in = false;
+    std::string_view::const_iterator s;
+    for (auto it = str.begin(); it < str.end(); ++it)
+    {
+        if (in)
+        {
+            // unquoted
+            if (quote.find(*s) == quote.end())
+            {
+                if (*it == delimiter)
+                {
+                    tokens.emplace_back(s, it);
+                    in = false;
+                }
+            }
+            // quoted
+            else
+            {
+                if (*it == *s)
+                {
+                    ++s;
+                    tokens.emplace_back(s, it);
+                    in = false;
+                }
+            }
+        }
+        else
+        {
+            if (*it != delimiter)
+            {
+                s  = it;
+                in = true;
+            }
+        }
+    }
+
+    // remaining entry
+    if (in)
+    {
+        tokens.emplace_back(s, str.end());
+    }
+
+    return tokens;
 }
 
 } // namespace DcgmNs

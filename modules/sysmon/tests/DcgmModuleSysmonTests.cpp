@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <cstring>
 #include <stdlib.h>
 
 #define DCGM_SYSMON_TEST
 #include <DcgmModuleSysmon.h>
+#include <DcgmMutex.h>
 
 #include <DcgmCoreCommunication.h>
 
@@ -28,13 +29,29 @@
 using namespace DcgmNs;
 using namespace DcgmNs::Cpu;
 
+namespace
+{
+DcgmMutex envMutex(0);
+int SetTestEnv()
+{
+    DcgmLockGuard lock(&envMutex);
+    return setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0);
+}
+
+int UnsetTestEnv()
+{
+    DcgmLockGuard lock(&envMutex);
+    return unsetenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__);
+}
+} //namespace
+
 // The implementation depends structures based on these defines and indexes structures
 // assuming the size of the arrays are a power of 2.
 DCGM_CASSERT((DCGM_MAX_NUM_CPUS & (DCGM_MAX_NUM_CPUS - 1)) == 0, 1);
 DCGM_CASSERT((DCGM_MAX_NUM_CPU_CORES & (DCGM_MAX_NUM_CPU_CORES - 1)) == 0, 1);
 
 //noop
-dcgmReturn_t postRequestToCore(dcgm_module_command_header_t *req, void *poster)
+dcgmReturn_t postRequestToCore(dcgm_module_command_header_t * /* req */, void * /* poster */)
 {
     return DCGM_ST_OK;
 }
@@ -57,6 +74,7 @@ TEST_CASE("Sysmon: initialize module")
 
     if (differentHardware)
     {
+        DcgmLockGuard lock(&envMutex);
         if (!setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
         {
             try
@@ -69,6 +87,7 @@ TEST_CASE("Sysmon: initialize module")
                 CHECK(false);
             }
         }
+        REQUIRE_FALSE(unsetenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__));
     }
 }
 
@@ -125,11 +144,7 @@ TEST_CASE("DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString")
 
 TEST_CASE("DcgmModuleSysmon::ParseProcStatCpuLine")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
+    REQUIRE_FALSE(SetTestEnv());
 
     DcgmModuleSysmon sysmon(g_coreCallbacks);
     sysmon.m_cpus.AddFakeCpu(); // Make sure 0 is a valid CPU
@@ -168,16 +183,12 @@ TEST_CASE("DcgmModuleSysmon::ParseProcStatCpuLine")
           == DCGM_ST_OK);
     CHECK(sysmon.ParseProcStatCpuLine("cpu11 8233975 7082 2741281 660626374 273765 0 78044 0 0 0", sample)
           == DCGM_ST_OK);
+    REQUIRE_FALSE(UnsetTestEnv());
 }
 
 TEST_CASE("DcgmModuleSysmon::ParseThermalFileContentsAndStore")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
-
+    REQUIRE_FALSE(SetTestEnv());
     DcgmModuleSysmon dms(g_coreCallbacks);
 
     // Format for matches should be 'Thermal Zone Skt# TJMax'
@@ -189,121 +200,147 @@ TEST_CASE("DcgmModuleSysmon::ParseThermalFileContentsAndStore")
     CHECK(dms.GetSocketFromThermalZoneFileContents("", "Thermal Zone Skt1 TJMax") == 1);
     CHECK(dms.GetSocketFromThermalZoneFileContents("", "Thermal Zone Skt2 TJMax") == 2);
     CHECK(dms.GetSocketFromThermalZoneFileContents("", "Thermal Zone Skt3 TJMax") == 3);
+
+    REQUIRE_FALSE(UnsetTestEnv());
 }
 
 TEST_CASE("DcgmModuleSysmon Watches")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
+    REQUIRE_FALSE(SetTestEnv());
 
     DcgmModuleSysmon sysmon(g_coreCallbacks);
-    dcgm_sysmon_msg_watch_fields_t watchMsg;
-    dcgm_sysmon_msg_unwatch_fields_t unwatchMsg;
     DcgmWatcher watcher(DcgmWatcherTypeClient, 1);
 
     const dcgm_field_entity_group_t entityGroupId = DCGM_FE_CPU;
     const unsigned int entityId                   = 0;
     const unsigned int fieldId                    = DCGM_FI_DEV_CPU_UTIL_USER;
 
-    watchMsg.header.version   = dcgm_sysmon_msg_watch_fields_version;
-    unwatchMsg.header.version = dcgm_sysmon_msg_unwatch_fields_version;
-
-    watchMsg.updateIntervalUsec = 1;
-    watchMsg.maxKeepAge         = 2;
-    watchMsg.maxKeepSamples     = 3;
-    watchMsg.watcher            = watcher;
-
+    dcgm_sysmon_msg_watch_fields_t watchMsg {};
+    watchMsg.header.moduleId              = DcgmModuleIdSysmon;
+    watchMsg.header.subCommand            = DCGM_SYSMON_SR_WATCH_FIELDS;
+    watchMsg.header.version               = dcgm_sysmon_msg_watch_fields_version;
+    watchMsg.updateIntervalUsec           = 1;
+    watchMsg.maxKeepAge                   = 2;
+    watchMsg.maxKeepSamples               = 3;
+    watchMsg.watcher                      = watcher;
     watchMsg.numEntities                  = 1;
     watchMsg.entityPairs[0].entityId      = entityId;
     watchMsg.entityPairs[0].entityGroupId = entityGroupId;
+    watchMsg.numFieldIds                  = 1;
+    watchMsg.fieldIds[0]                  = fieldId;
 
-    watchMsg.numFieldIds = 1;
-    watchMsg.fieldIds[0] = fieldId;
+    dcgm_sysmon_msg_unwatch_fields_t unwatchMsg {};
+    unwatchMsg.header.moduleId   = DcgmModuleIdSysmon;
+    unwatchMsg.header.subCommand = DCGM_SYSMON_SR_UNWATCH_FIELDS;
+    unwatchMsg.header.version    = dcgm_sysmon_msg_unwatch_fields_version;
+    unwatchMsg.watcher           = watcher;
 
-    dcgmReturn_t ret = sysmon.ProcessWatchFields(&watchMsg);
+    dcgmReturn_t ret = sysmon.ProcessMessage(&watchMsg.header);
     CHECK(ret == DCGM_ST_OK);
 
-    bool isSubscribed = sysmon.m_watchTable.GetIsSubscribed(entityGroupId, entityId, fieldId);
-    CHECK(isSubscribed);
+    bool isSubscribed { false };
+    ret = sysmon.GetSubscribed(watchMsg.entityPairs[0], fieldId, isSubscribed);
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(isSubscribed == true);
 
-    unwatchMsg.watcher = watcher;
-    ret                = sysmon.ProcessUnwatchFields(&unwatchMsg);
+    ret = sysmon.ProcessMessage(&unwatchMsg.header);
     CHECK(ret == DCGM_ST_OK);
 
-    isSubscribed = sysmon.m_watchTable.GetIsSubscribed(entityGroupId, entityId, fieldId);
-    CHECK(!isSubscribed);
+    isSubscribed = false;
+    ret          = sysmon.GetSubscribed(watchMsg.entityPairs[0], fieldId, isSubscribed);
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(isSubscribed != true);
 }
+
+// Returns whether the specified fieldId and entityPair are subscribed. Helper for maxSampleAge testcase.
+static bool IsSubscribed(DcgmModuleSysmon &sysmon, dcgmGroupEntityPair_t &pair, unsigned short fieldId)
+{
+    bool isSubscribed { false };
+    dcgmReturn_t ret = sysmon.GetSubscribed(pair, fieldId, isSubscribed);
+    CHECK(ret == DCGM_ST_OK);
+    return isSubscribed;
+}
+
+// Returns current size of the utilization samples map. Helper for maxSampleAge test case.
+static size_t GetUtilizationSampleSize(DcgmModuleSysmon &sysmon)
+{
+    size_t uss       = 0;
+    dcgmReturn_t ret = sysmon.GetUtilizationSampleSize(uss);
+    CHECK(ret == DCGM_ST_OK);
+    return uss;
+}
+
 
 TEST_CASE("DcgmModuleSysmon maxSampleAge")
 {
     using namespace DcgmNs::Timelib;
-
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
-
+    REQUIRE_FALSE(SetTestEnv());
     DcgmModuleSysmon sysmon(g_coreCallbacks);
 
     sysmon.m_cpus.AddFakeCpu(); // Make sure 0 is a valid CPU
-    SysmonUtilizationSample sample = {};
-    sample.m_cores.resize(1);
 
-    dcgm_sysmon_msg_watch_fields_t watchMsg;
-    dcgm_sysmon_msg_unwatch_fields_t unwatchMsg;
     DcgmWatcher watcher(DcgmWatcherTypeClient, 1);
 
     const dcgm_field_entity_group_t entityGroupId = DCGM_FE_CPU;
     const unsigned int entityId                   = 0;
     const unsigned int fieldId                    = DCGM_FI_DEV_CPU_UTIL_USER;
-
-    watchMsg.header.version   = dcgm_sysmon_msg_watch_fields_version;
-    unwatchMsg.header.version = dcgm_sysmon_msg_unwatch_fields_version;
 
     timelib64_t updateIntervalUsec = 200000;
     double maxKeepAgeSec           = 30.0; // seconds
     size_t maxKeepSamples          = 0;    // handled by maxKeepAge
 
-    watchMsg.updateIntervalUsec = updateIntervalUsec;
-    watchMsg.maxKeepAge         = maxKeepAgeSec;
-    watchMsg.maxKeepSamples     = maxKeepSamples;
-    watchMsg.watcher            = watcher;
-
+    dcgm_sysmon_msg_watch_fields_t watchMsg {};
+    watchMsg.header.moduleId              = DcgmModuleIdSysmon; // process in task runner
+    watchMsg.header.subCommand            = DCGM_SYSMON_SR_WATCH_FIELDS;
+    watchMsg.header.version               = dcgm_sysmon_msg_watch_fields_version;
+    watchMsg.updateIntervalUsec           = updateIntervalUsec;
+    watchMsg.maxKeepAge                   = maxKeepAgeSec;
+    watchMsg.maxKeepSamples               = maxKeepSamples;
+    watchMsg.watcher                      = watcher;
     watchMsg.numEntities                  = 1;
     watchMsg.entityPairs[0].entityId      = entityId;
     watchMsg.entityPairs[0].entityGroupId = entityGroupId;
-
-    watchMsg.numFieldIds = 1;
-    watchMsg.fieldIds[0] = fieldId;
+    watchMsg.numFieldIds                  = 1;
+    watchMsg.fieldIds[0]                  = fieldId;
 
     /* Verify that there is no watch prior to processing
        the message */
-    CHECK(true != sysmon.m_watchTable.GetIsSubscribed(entityGroupId, entityId, fieldId));
-    dcgmReturn_t ret = sysmon.ProcessWatchFields(&watchMsg);
+
+    CHECK(!IsSubscribed(sysmon, watchMsg.entityPairs[0], fieldId));
+
+    dcgmReturn_t ret = DCGM_ST_OK;
+    ret              = sysmon.ProcessMessage(&watchMsg.header);
     CHECK(ret == DCGM_ST_OK);
-    CHECK(true == sysmon.m_watchTable.GetIsSubscribed(entityGroupId, entityId, fieldId));
+
+    /* Verify the watch is subscribed after processing the message */
+    CHECK(IsSubscribed(sysmon, watchMsg.entityPairs[0], fieldId));
 
     /* Verify a newly added sample isn't prematurely pruned
        until enough time has passed */
     TimePoint now = Now();
 
-    sysmon.RunOnce();
-    CHECK(sysmon.m_utilizationSamples.size() == 0);
+    ret = sysmon.RunOnce(true);
+    CHECK(ret == DCGM_ST_OK);
 
+    CHECK(GetUtilizationSampleSize(sysmon) == 0);
+
+    SysmonUtilizationSample sample {};
+    sample.m_cores.resize(1);
     sample.m_timestamp       = now;
     sample.m_cores[0].m_user = 0.125;
-    sysmon.m_utilizationSamples.emplace(sample.m_timestamp, sample);
 
-    sysmon.RunOnce();
-    CHECK(sysmon.m_utilizationSamples.size() == 1);
+    ret = sysmon.AddUtilizationSample(sample);
+    CHECK(ret == DCGM_ST_OK);
+
+    ret = sysmon.RunOnce(true);
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(GetUtilizationSampleSize(sysmon) == 1);
 
     // "Advance" the clock and demonstrate that the recorded sample gets pruned
-    sysmon.PruneSamples(TimePoint(now + std::chrono::seconds(30)));
-    CHECK(sysmon.m_utilizationSamples.size() == 0);
+    ret = sysmon.PruneSamples(TimePoint(now + std::chrono::seconds(30)));
+    CHECK(ret == DCGM_ST_OK);
+
+    CHECK(GetUtilizationSampleSize(sysmon) == 0);
 
     /* Ensure many samples are not pruned until enough
        time has passed */
@@ -311,34 +348,39 @@ TEST_CASE("DcgmModuleSysmon maxSampleAge")
 
     // 200_000 us = 200 ms = 0.2s or 5 Hz
     // For 30s, ~150 samples, not accounting slack
-    CHECK(sysmon.m_utilizationSamples.size() == 0);
 
-    for (size_t i = 0; i < 150; i++)
+    static const size_t NUM_SAMPLES = 150;
+    std::array<SysmonUtilizationSample, NUM_SAMPLES> samples {};
+
+    for (size_t i = 0; i < NUM_SAMPLES; i++)
     {
+        auto &sample = samples[i];
+
+        sample.m_cores.resize(1);
         sample.m_timestamp       = (now - std::chrono::seconds(29)) + (i * std::chrono::milliseconds(200));
         sample.m_cores[0].m_user = 1.0 / (1 + i);
-        sysmon.m_utilizationSamples.emplace(sample.m_timestamp, sample);
+
+        ret = sysmon.AddUtilizationSample(sample);
+        CHECK(ret == DCGM_ST_OK);
     }
 
-    CHECK(sysmon.m_utilizationSamples.size() == 150);
-    sysmon.RunOnce();
-    CHECK(sysmon.m_utilizationSamples.size() == 150);
+    CHECK(GetUtilizationSampleSize(sysmon) == 150);
+    ret = sysmon.RunOnce(true);
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(GetUtilizationSampleSize(sysmon) == 150);
 
-    sysmon.PruneSamples(now + std::chrono::seconds(1));
-    CHECK(sysmon.m_utilizationSamples.size() == 149);
+    ret = sysmon.PruneSamples(now + std::chrono::seconds(1));
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(GetUtilizationSampleSize(sysmon) == 149);
 
-    sysmon.PruneSamples(now + std::chrono::seconds(31));
-    CHECK(sysmon.m_utilizationSamples.size() == 0);
+    ret = sysmon.PruneSamples(now + std::chrono::seconds(31));
+    CHECK(ret == DCGM_ST_OK);
+    CHECK(GetUtilizationSampleSize(sysmon) == 0);
 }
 
 TEST_CASE("DcgmModuleSysmon::CalculateCoreUtilization")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
-
+    REQUIRE_FALSE(SetTestEnv());
     DcgmModuleSysmon sysmon(g_coreCallbacks);
 
     unsigned int numCores = 2;
@@ -382,6 +424,8 @@ TEST_CASE("DcgmModuleSysmon::CalculateCoreUtilization")
           == sysmon.CalculateCoreUtilization(core, DCGM_FI_DEV_CPU_UTIL_SYS, baselineSample, currentSample));
     CHECK(irq / totalCycles
           == sysmon.CalculateCoreUtilization(core, DCGM_FI_DEV_CPU_UTIL_IRQ, baselineSample, currentSample));
+
+    REQUIRE_FALSE(UnsetTestEnv());
 }
 
 static int makeCpuFreqEntry(const std::string &baseDir, const int cpuIndex, const int value)
@@ -459,11 +503,7 @@ int setupTzDirs(const std::string &baseDir)
 
 TEST_CASE("DcgmModuleSysmon::PopulateTemperatureFileMap")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
+    REQUIRE_FALSE(SetTestEnv());
 
     // Setup the directories
     std::string baseDir("tz");
@@ -476,7 +516,7 @@ TEST_CASE("DcgmModuleSysmon::PopulateTemperatureFileMap")
     DcgmModuleSysmon sysmon(g_coreCallbacks);
     // PopulateTemperatureFileMap is called implicitly, but we
     // need to set the base directory parameter and call again
-    sysmon.m_tzBaseDir = baseDir;
+    sysmon.m_tzBaseDir = std::move(baseDir);
     sysmon.PopulateTemperatureFileMap();
 
     CHECK(sysmon.m_socketTemperatureFileMap.size() == 4);
@@ -498,15 +538,13 @@ TEST_CASE("DcgmModuleSysmon::PopulateTemperatureFileMap")
     CHECK(sysmon.m_socketTemperatureWarnFileMap[3] == tzPath);
     tzPath = fmt::format("tz/sys/class/thermal/thermal_zone3/temp");
     CHECK(sysmon.m_socketTemperatureFileMap[3] == tzPath);
+
+    REQUIRE_FALSE(UnsetTestEnv());
 }
 
 TEST_CASE("DcgmModuleSysmon::ReadTemperature")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
+    REQUIRE_FALSE(SetTestEnv());
 
     // Setup the directories
     std::string baseDir("tz");
@@ -517,7 +555,7 @@ TEST_CASE("DcgmModuleSysmon::ReadTemperature")
     }
 
     DcgmModuleSysmon sysmon(g_coreCallbacks);
-    sysmon.m_tzBaseDir = baseDir;
+    sysmon.m_tzBaseDir = std::move(baseDir);
     sysmon.PopulateTemperatureFileMap();
 
     for (int i = 0; i < 4; i++)
@@ -531,15 +569,13 @@ TEST_CASE("DcgmModuleSysmon::ReadTemperature")
     CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CURRENT) == 0.0);
     CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_WARNING) == 0.0);
     CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CRITICAL) == 0.0);
+
+    REQUIRE_FALSE(UnsetTestEnv());
 }
 
 TEST_CASE("DcgmModuleSysmon::ReadCoreSpeed")
 {
-    if (setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
-    {
-        // We can't reliably run these tests if we can't skip the hardware checks
-        return;
-    }
+    REQUIRE_FALSE(SetTestEnv());
 
     // Number of skinnyjoe cores
     const int NUM_FAKE_CPUS = 288;
@@ -576,7 +612,7 @@ TEST_CASE("DcgmModuleSysmon::ReadCoreSpeed")
     // make sure we read back the correct values
     for (int i = 0; i < NUM_FAKE_CPUS; i++)
     {
-        CHECK(sysmon.ReadCoreSpeed(DCGM_FE_CPU_CORE, i) == i);
+        CHECK(sysmon.ReadCoreSpeed(DCGM_FE_CPU_CORE, i) == static_cast<uint64_t>(i));
     }
 
     // and make sure we return 0 for non-Core entities
@@ -585,5 +621,89 @@ TEST_CASE("DcgmModuleSysmon::ReadCoreSpeed")
         if (i == DCGM_FE_CPU_CORE)
             continue;
         CHECK(sysmon.ReadCoreSpeed(i, 0) == DCGM_INT64_BLANK);
+    }
+
+    REQUIRE_FALSE(UnsetTestEnv());
+}
+
+struct PauseResumeTestFixture
+{
+    dcgm_core_msg_pause_resume_v1 msg {};
+    PauseResumeTestFixture()
+    {
+        REQUIRE_FALSE(SetTestEnv());
+        msg.header.moduleId   = DcgmModuleIdCore;
+        msg.header.version    = dcgm_core_msg_pause_resume_version1;
+        msg.header.subCommand = DCGM_CORE_SR_PAUSE_RESUME;
+    }
+    ~PauseResumeTestFixture()
+    {
+        REQUIRE_FALSE(UnsetTestEnv());
+    }
+    static DcgmModuleSysmon &getSysmon()
+    {
+        static DcgmModuleSysmon sysmonInst(g_coreCallbacks);
+        return sysmonInst;
+    }
+};
+
+TEST_CASE_METHOD(PauseResumeTestFixture,
+                 "DcgmModuleSysmon::PauseResume Module resumed after initialization",
+                 "[create]")
+{
+    DcgmModuleSysmon &sysmon = getSysmon();
+    CHECK_FALSE(sysmon.m_paused);
+}
+
+TEST_CASE_METHOD(PauseResumeTestFixture, "DcgmModuleSysmon PauseResume Module rejects invalid messages", "[create]")
+{
+    SECTION("Module rejects message to incorrect moduleId")
+    {
+        DcgmModuleSysmon &sysmon = getSysmon();
+        msg.header.moduleId      = DcgmModuleIdNvSwitch;
+        msg.pause                = true;
+        dcgmReturn_t ret         = sysmon.ProcessMessage(&msg.header);
+        CHECK(ret == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Module rejects message where subCommand and moduleId mismatch")
+    {
+        DcgmModuleSysmon &sysmon = getSysmon();
+        msg.header.moduleId      = DcgmModuleIdSysmon;
+        msg.pause                = true;
+        dcgmReturn_t ret         = sysmon.ProcessMessage(&msg.header);
+        CHECK(ret == DCGM_ST_FUNCTION_NOT_FOUND);
+        CHECK_FALSE(sysmon.m_paused);
+    }
+
+    SECTION("Module rejects message with incorrect version info")
+    {
+        DcgmModuleSysmon &sysmon = getSysmon();
+        msg.header.version       = ~0;
+        msg.header.moduleId      = DcgmModuleIdCore;
+        msg.pause                = true;
+        CHECK_THROWS_AS(sysmon.ProcessMessage(&msg.header), VersionMismatchException);
+        CHECK_FALSE(sysmon.m_paused);
+    }
+}
+
+TEST_CASE_METHOD(PauseResumeTestFixture, "DcgmModuleSysmon PauseResume Module accepts valid messages", "[create]")
+{
+    SECTION("Module accepts valid pause message")
+    {
+        DcgmModuleSysmon &sysmon = getSysmon();
+        msg.pause                = true;
+        dcgmReturn_t ret         = sysmon.ProcessMessage(&msg.header);
+        CHECK(ret == DCGM_ST_OK);
+        CHECK(sysmon.m_paused);
+    }
+
+    SECTION("Module accepts valid resume message")
+    {
+        DcgmModuleSysmon &sysmon = getSysmon();
+        msg.pause                = false;
+        dcgmReturn_t ret         = sysmon.ProcessMessage(&msg.header);
+        CHECK(ret == DCGM_ST_OK);
+        CHECK_FALSE(sysmon.m_paused);
     }
 }

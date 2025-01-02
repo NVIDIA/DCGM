@@ -11,7 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_executable(stub_library_test)
+
 target_sources(stub_library_test PRIVATE stub_library_test.c)
-target_link_libraries(stub_library_test PRIVATE dcgm_stub dcgm_interface)
-target_link_libraries(stub_library_test PRIVATE dl rt)
+target_link_libraries(stub_library_test
+    PRIVATE
+        dcgm_interface
+        dcgm_stub
+        dl
+        rt)
+
+install(
+    TARGETS stub_library_test
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        COMPONENT Tests)

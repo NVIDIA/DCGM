@@ -24,6 +24,22 @@
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
+#include <variant>
+
+/**
+ * This is used as user data for policy register API and will be passed to callback for testing. It helps to test
+ * various data type with the same callback function. At this point only int and string types are tested.
+ */
+using testUserData_t = std::variant<int, std::string>;
+
+template <class... Ts>
+struct overloaded : Ts...
+{
+    using Ts::operator()...;
+};
+
+template <class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
 
 class TestPolicyManager : public TestDcgmModule
 {
@@ -34,9 +50,9 @@ public:
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
     int Init(const TestDcgmModuleInitParams &initParams) override;
-    int Run();
-    int Cleanup();
-    std::string GetTag();
+    int Run() override;
+    int Cleanup() override;
+    std::string GetTag() override;
 
 private:
     int TestPolicySetGet();
@@ -44,4 +60,4 @@ private:
     int TestPolicyRegUnregXID();
 };
 
-#endif /* TESTVERSIONING_H */
+#endif /* TESTPOLICYMANAGER_H */

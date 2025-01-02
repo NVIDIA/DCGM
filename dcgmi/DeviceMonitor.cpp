@@ -16,14 +16,18 @@
 
 #include "DeviceMonitor.h"
 #include "Query.h"
+#include "dcgm_fields.h"
 #include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
 
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
+#include <EntityListHelpers.h>
 
+#include <memory>
 #include <thread>
+#include <type_traits>
 #include <unordered_set>
 
 
@@ -41,47 +45,51 @@ static const char cNA[] = "N/A";
    we've received a signal from a ctrl-c... etc that we should stop */
 static std::atomic<bool> gDeviceMonitorShouldStop = false;
 
-template <>
-struct fmt::formatter<dcgm_field_entity_group_t> : fmt::formatter<fmt::string_view>
+fmt::string_view format_as(dcgm_field_entity_group_t entityGroupId)
 {
-    template <typename FormatContext>
-    auto format(dcgm_field_entity_group_t entityGroupId, FormatContext &ctx)
+    fmt::string_view val = "UNKNOWN";
+    switch (entityGroupId)
     {
-        fmt::string_view val = "UNKNOWN";
-        switch (entityGroupId)
-        {
-            case DCGM_FE_GPU:
-                val = "GPU";
-                break;
-            case DCGM_FE_VGPU:
-                val = "vGPU";
-                break;
-            case DCGM_FE_SWITCH:
-                val = "Switch";
-                break;
-            case DCGM_FE_GPU_I:
-                val = "GPU-I";
-                break;
-            case DCGM_FE_GPU_CI:
-                val = "GPU-CI";
-                break;
-            case DCGM_FE_LINK:
-                val = "LINK";
-                break;
-            case DCGM_FE_CPU:
-                val = "CPU";
-                break;
-            case DCGM_FE_CPU_CORE:
-                val = "CPU Core";
-                break;
-            case DCGM_FE_NONE:
-            case DCGM_FE_COUNT:
-                break;
-        }
-
-        return fmt::formatter<fmt::string_view>::format(val, ctx);
+        case DCGM_FE_GPU:
+            val = "GPU";
+            break;
+        case DCGM_FE_VGPU:
+            val = "vGPU";
+            break;
+        case DCGM_FE_SWITCH:
+            val = "Switch";
+            break;
+        case DCGM_FE_GPU_I:
+            val = "GPU-I";
+            break;
+        case DCGM_FE_GPU_CI:
+            val = "GPU-CI";
+            break;
+        case DCGM_FE_LINK:
+            val = "LINK";
+            break;
+        case DCGM_FE_CPU:
+            val = "CPU";
+            break;
+        case DCGM_FE_CPU_CORE:
+            val = "CPU Core";
+            break;
+        case DCGM_FE_NONE:
+            /**
+             * We used to display this as "GPU" if there is no non-GLOBAL
+             * entity to combine global data with to display. We did this
+             * since GLOBAL data was still reported per GPU. But, current
+             * code should not be sending DCGM_FE_NONE, so we tag it as
+             * "UNKNOWN".
+             */
+            break;
+        case DCGM_FE_COUNT:
+            break;
     }
-};
+
+    return val;
+}
+
 
 template <>
 struct std::hash<dcgmi_entity_pair_t>
@@ -290,7 +298,8 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
     {
         // Including a switch statement here for handling different
         // types of values (except binary blobs).
-        dcgm_field_meta_p field = DcgmFieldGetById(values[i].fieldId);
+        auto fieldId            = values[i].fieldId;
+        dcgm_field_meta_p field = DcgmFieldGetById(fieldId);
 
         if (field == nullptr)
         {
@@ -302,7 +311,7 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
         {
             case DCGM_FT_BINARY:
             {
-                entityStats[entityKey].emplace_back(cNA);
+                entityStats[entityKey].emplace_back(EntityStatItem(fieldId, cNA));
                 break;
             }
             case DCGM_FT_DOUBLE:
@@ -320,12 +329,12 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                     {
                         value = fmt::format("{:.{}F}", val, FLOAT_VAL_PREC);
                     }
-                    entityStats[entityKey].emplace_back(std::move(value));
+                    entityStats[entityKey].emplace_back(EntityStatItem(fieldId, std::move(value)));
                 }
                 catch (fmt::format_error const &e)
                 {
                     SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
-                    entityStats[entityKey].emplace_back(cNA);
+                    entityStats[entityKey].emplace_back(EntityStatItem(fieldId, cNA));
                 }
 
                 break;
@@ -345,19 +354,19 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
                     {
                         value = fmt::to_string(val);
                     }
-                    entityStats[entityKey].emplace_back(std::move(value));
+                    entityStats[entityKey].emplace_back(EntityStatItem(fieldId, std::move(value)));
                 }
                 catch (fmt::format_error const &e)
                 {
                     SHOW_AND_LOG_ERROR << "Formatting error: " << e.what();
-                    entityStats[entityKey].emplace_back(cNA);
+                    entityStats[entityKey].emplace_back(EntityStatItem(fieldId, cNA));
                 }
 
                 break;
             }
             case DCGM_FT_STRING:
             {
-                entityStats[entityKey].emplace_back(values[i].value.str);
+                entityStats[entityKey].emplace_back(EntityStatItem(fieldId, values[i].value.str));
                 break;
             }
             default:
@@ -372,27 +381,184 @@ static int ListFieldValues(dcgm_field_entity_group_t entityGroupId,
 }
 
 template <typename T>
-void PrintMetricsRow(dcgmi_entity_pair_t const &entity, std::vector<std::string> const &values, T const &widths)
+void PrintMetricsRow(dcgmi_entity_pair_t const &entity,
+                     std::vector<EntityStatItem> const &values,
+                     T const &widths,
+                     std::vector<unsigned short> &fieldIds)
 {
     using namespace fmt::literals;
     fmt::print("{entityPair:{colWidth}}",
                "entityPair"_a = fmt::format("{} {}", entity.entityGroupId, entity.entityId),
                "colWidth"_a   = widths[0]);
 
-    for (size_t i = 0; i < values.size(); i++)
+    size_t valuesIdx = 0;
+
+    for (size_t fieldIdx = 0; fieldIdx < fieldIds.size(); fieldIdx++)
     {
-        auto const width = widths[i + 1];
-        if (width == 0)
+        if ((valuesIdx < values.size()) && (values[valuesIdx].fieldId == fieldIds[fieldIdx]))
         {
-            /* There were to field metadata, so no room allocated in the output table for actual value */
-            fmt::print("{:{}}", "", PADDING);
+            auto const width = widths[fieldIdx + 1];
+
+            if (width == 0)
+            {
+                /**
+                 * There were no field metadata, so no room allocated in the
+                 * output table for actual value.
+                 */
+                fmt::print("{:{}}", "", PADDING);
+            }
+            else
+            {
+                fmt::print("{:{}s}", FixedSizeString { values[valuesIdx].value, width }, width + PADDING);
+            }
+
+            valuesIdx++;
         }
         else
         {
-            fmt::print("{:{}s}", FixedSizeString { values[i], width }, width + PADDING);
+            auto const width = widths[fieldIdx + 1];
+
+            fmt::print("{:{}s}", FixedSizeString { "", width }, width + PADDING);
         }
     }
+
     fmt::print("\n");
+}
+
+/**
+ * MergeGpuAndMigEntities merges GPUs in a group with MIG GIs in the group in
+ * an order with GPUs primary and GPU GIs secondary.
+ *
+ * @param dcgmGroupInfo:  a reference to a DCGM entity group.
+ * @param migHierarchy:   a const reference to the MIG hierarchy.
+ *
+ * @return dcgmReturn_t:  DCGM return code.
+ */
+dcgmReturn_t DeviceMonitor::MergeGpuAndMigEntities(dcgmGroupInfo_t &dcgmGroupInfo,
+                                                   dcgmMigHierarchy_v2 const &migHierarchy)
+{
+    /**
+     * Map MIG entities to their MIG hierarchy entries.
+     */
+
+    std::map<std::tuple<decltype(migHierarchy.entityList[0].entity.entityGroupId),
+                        decltype(migHierarchy.entityList[0].entity.entityId)>,
+             std::decay_t<decltype(migHierarchy.entityList[0])>>
+        migMap;
+
+    for (unsigned int migEntityIdx = 0; migEntityIdx < migHierarchy.count; ++migEntityIdx)
+    {
+        dcgmMigHierarchyInfo_v2 migEntity = migHierarchy.entityList[migEntityIdx];
+
+        migMap[std::tie(migEntity.entity.entityGroupId, migEntity.entity.entityId)] = migEntity;
+    }
+
+    /**
+     * The comparison depends on whether the entity is a MIG entity or not
+     * (like an NvSwitch, or CPU).
+     */
+
+    std::sort(dcgmGroupInfo.entityList, dcgmGroupInfo.entityList + dcgmGroupInfo.count, [&](auto &left, auto &right) {
+        auto const &migEntity = migHierarchy.entityList[0];
+
+        using CompareType = std::tuple<decltype(migEntity.entity.entityGroupId),
+                                       decltype(migEntity.info.nvmlGpuIndex),
+                                       decltype(migEntity.info.nvmlInstanceId),
+                                       decltype(migEntity.entity.entityGroupId),
+                                       decltype(migEntity.info.nvmlComputeInstanceId)>;
+
+        CompareType leftItem  = std::make_tuple(DCGM_FE_NONE, 0U, 0U, DCGM_FE_NONE, 0U),
+                    rightItem = std::make_tuple(DCGM_FE_NONE, 0U, 0U, DCGM_FE_NONE, 0U);
+
+        if (migMap.contains(std::tie(left.entityGroupId, left.entityId)))
+        {
+            leftItem = std::make_tuple(DCGM_FE_GPU,
+                                       migMap[std::tie(left.entityGroupId, left.entityId)].info.nvmlGpuIndex,
+                                       migMap[std::tie(left.entityGroupId, left.entityId)].info.nvmlInstanceId,
+                                       migMap[std::tie(left.entityGroupId, left.entityId)].entity.entityGroupId,
+                                       migMap[std::tie(left.entityGroupId, left.entityId)].info.nvmlComputeInstanceId);
+        }
+        else
+        {
+            leftItem = std::make_tuple(left.entityGroupId, left.entityId, 0U, DCGM_FE_NONE, 0U);
+        }
+
+        if (migMap.contains(std::tie(right.entityGroupId, right.entityId)))
+        {
+            rightItem
+                = std::make_tuple(DCGM_FE_GPU,
+                                  migMap[std::tie(right.entityGroupId, right.entityId)].info.nvmlGpuIndex,
+                                  migMap[std::tie(right.entityGroupId, right.entityId)].info.nvmlInstanceId,
+                                  migMap[std::tie(right.entityGroupId, right.entityId)].entity.entityGroupId,
+                                  migMap[std::tie(right.entityGroupId, right.entityId)].info.nvmlComputeInstanceId);
+        }
+        else
+        {
+            rightItem = std::make_tuple(right.entityGroupId, right.entityId, 0U, DCGM_FE_NONE, 0U);
+        }
+
+        return leftItem < rightItem;
+    });
+
+    return DCGM_ST_OK;
+}
+
+static bool HasGpuEntity(dcgmGroupInfo_t &dcgmGroupInfo)
+{
+    for (unsigned idx = 0; idx < dcgmGroupInfo.count; ++idx)
+    {
+        if (dcgmGroupInfo.entityList[idx].entityGroupId == DCGM_FE_GPU
+            || dcgmGroupInfo.entityList[idx].entityGroupId == DCGM_FE_GPU_I
+            || dcgmGroupInfo.entityList[idx].entityGroupId == DCGM_FE_GPU_CI)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * GetSortedEntities: return a list of MIG and non-MIG entities to watch.
+ *
+ * @param  sortedEntities: a references to a dcgmGroupInfo_t.
+ *
+ * @return dcgmReturn_t: DCGM return code.
+ */
+dcgmReturn_t DeviceMonitor::GetSortedEntities(dcgmGroupInfo_t &dcgmGroupInfo)
+{
+    /* Get Group ID info to indentify GPUs monitored that might not be
+     * MIG-enabled.
+     */
+
+    dcgmGroupInfo.version = dcgmGroupInfo_version;
+
+    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo); ret != DCGM_ST_OK)
+    {
+        SHOW_AND_LOG_ERROR << fmt::format(
+            "Unable to retrieve information about group. Error: {}: {}",
+            ret,
+            (ret == DCGM_ST_NOT_CONFIGURED ? "The Group is not found" : errorString(ret)));
+
+        return ret;
+    }
+
+    auto hierarchyV2  = dcgmMigHierarchy_v2 {};
+    hierarchyV2.count = 0;
+
+    if (HasGpuEntity(dcgmGroupInfo))
+    {
+        hierarchyV2.version = dcgmMigHierarchy_version2;
+        auto ret            = dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchyV2);
+        if (ret != DCGM_ST_OK)
+        {
+            SHOW_AND_LOG_ERROR << fmt::format(
+                "Unable to get GPU topology information. The entities in the output may be unsorted. Error: {}: {}",
+                ret,
+                errorString(ret));
+        }
+    }
+
+    return MergeGpuAndMigEntities(dcgmGroupInfo, hierarchyV2);
 }
 
 /**
@@ -407,50 +573,18 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
     int decrement        = 0;
     int printHeaderCount = 0;
 
+    std::unique_ptr<dcgmGroupInfo_t> dcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+
     /* Install a signal handler to catch ctrl-c */
     signal(SIGINT, &killHandler);
 
-    std::vector<dcgmi_entity_pair_t> sortedEntities;
-    auto hierarchyV2    = dcgmMigHierarchy_v2 {};
-    hierarchyV2.version = dcgmMigHierarchy_version2;
-    auto ret            = dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchyV2);
+    auto ret = GetSortedEntities(*(dcgmGroupInfo));
+
     if (ret != DCGM_ST_OK)
     {
-        SHOW_AND_LOG_ERROR << fmt::format(
-            "Unable to get GPU topology information. The entities in the output may be unsorted. Error: {}: {}",
-            ret,
-            errorString(ret));
-    }
+        SHOW_AND_LOG_ERROR << fmt::format("Unable to get DCGM sorted entities. Error: {}: {}", ret, errorString(ret));
 
-    /* Only MIG hiearchies are sorted */
-    if (hierarchyV2.count > 0)
-    {
-        TopologicalSort(hierarchyV2);
-        std::unordered_set<decltype(dcgmi_entity_pair_t::entityId)> seenGpus;
-        sortedEntities.reserve(hierarchyV2.count);
-        seenGpus.reserve(sortedEntities.capacity());
-
-        /*
-         * The hierarchy list does not have GPUs in direct form.
-         * We need to add GPU entity into the index first time we find a child MIG entity.
-         */
-        for (size_t i = 0; i < hierarchyV2.count; ++i)
-        {
-            auto const &parent = hierarchyV2.entityList[i].parent;
-            auto const &entity = hierarchyV2.entityList[i].entity;
-
-            if (parent.entityGroupId == DCGM_FE_GPU && seenGpus.insert(parent.entityId).second)
-            {
-                sortedEntities.push_back({ parent.entityGroupId, parent.entityId });
-                /**
-                 * Some global entity values indicate a GPU entity but are global.
-                 * This matches them.
-                 */
-                sortedEntities.push_back({ DCGM_FE_NONE, parent.entityId });
-            }
-
-            sortedEntities.push_back({ entity.entityGroupId, entity.entityId });
-        }
+        return ret;
     }
 
     // set the watch on field group id for Group of gpus.
@@ -502,14 +636,13 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
         decrement = true;
     }
 
-    std::vector<dcgmi_entity_pair_t> tmpSortedEntities;
     while (running && !gDeviceMonitorShouldStop.load(std::memory_order_relaxed))
     {
         EntityStats entityStats;
 
         // entityStats should be preallocated before calling dcgmGetLatestValues_v2.
         // Otherwise, reallocation may happen in the libdcgm context using wrong memory allocator.
-        entityStats.reserve(sortedEntities.empty() ? DCGM_MAX_NUM_DEVICES : sortedEntities.size());
+        entityStats.reserve(dcgmGroupInfo->count ? dcgmGroupInfo->count : DCGM_MAX_NUM_DEVICES);
 
         result = dcgmGetLatestValues_v2(m_dcgmHandle, m_myGroupId, m_fieldGroupId, &ListFieldValues, &entityStats);
 
@@ -527,24 +660,31 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
             return DCGM_ST_NO_DATA; /* Propagate this to any callers */
         }
 
-        if (sortedEntities.empty())
+        for (unsigned int idx = 0; idx < dcgmGroupInfo->count; idx++)
         {
-            for (auto const &[entity, values] : entityStats)
+            auto const &entity = dcgmGroupInfo->entityList[idx];
+
+            dcgmi_entity_pair_t entityPair { .entityGroupId = entity.entityGroupId, .entityId = entity.entityId };
+
+            auto it = entityStats.find(entityPair);
+            if (it == entityStats.end())
             {
-                PrintMetricsRow(entity, values, m_widthArray);
+                /**
+                 * If we specify entities but not request fields from those
+                 * entities, nothing will be returned.
+                 *
+                 * For example:
+                 *
+                 * dcgmi dmon -i 0 -e 1,2,3,4,5
+                 *
+                 * Global data for GPU 0 will be returned but no GPU-specific
+                 * data to render the global data with. In this case, we render
+                 * the global data alone.
+                 */
+                continue;
             }
-        }
-        else
-        {
-            for (auto const &entity : sortedEntities)
-            {
-                auto it = entityStats.find(entity);
-                if (it == entityStats.end())
-                {
-                    continue;
-                }
-                PrintMetricsRow(it->first, it->second, m_widthArray);
-            }
+
+            PrintMetricsRow(it->first, it->second, m_widthArray, m_fieldIds);
         }
 
         fflush(stdout);
@@ -570,7 +710,7 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
 
     if (gDeviceMonitorShouldStop)
     {
-        fmt::print("\n\ndmon was stopped do to receiving a signal\n");
+        fmt::print("\n\ndmon was stopped due to receiving a signal\n");
         fflush(stdout);
     }
 
@@ -602,15 +742,16 @@ void DeviceMonitor::SetHeaderForOutput(unsigned short fieldIds[], unsigned int c
     fmt::memory_buffer unitBuffer;
     headBuffer.reserve(512);
     unitBuffer.reserve(512);
+    constexpr int firstFieldWidth = 11;
 
     /*
      * #Entity sName   sName    sName
      * ID
      */
-    fmt::format_to(std::back_inserter(headBuffer), "{:<10}", "#Entity");
-    fmt::format_to(std::back_inserter(unitBuffer), "{:<10}", "ID");
+    fmt::format_to(std::back_inserter(headBuffer), "{:<{}}", "#Entity", firstFieldWidth);
+    fmt::format_to(std::back_inserter(unitBuffer), "{:<{}}", "ID", firstFieldWidth);
 
-    m_widthArray[0] = 10;
+    m_widthArray[0] = firstFieldWidth;
 
     for (std::uint32_t i = 0; i < numFields; ++i)
     {
@@ -650,21 +791,12 @@ dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
 
     if (m_requestedEntityIds != "-1")
     {
-        auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, m_requestedEntityIds);
-
-        // Fallback to old method
-
-        std::vector<dcgmGroupEntityPair_t> oldEntityList;
-
-        /* Convert the string to a list of entities */
-        auto dcgmReturn = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
-        if (dcgmReturn != DCGM_ST_OK)
+        auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, m_requestedEntityIds, entityList);
+        if (!err.empty())
         {
-            return dcgmReturn;
+            SHOW_AND_LOG_ERROR << err;
+            return DCGM_ST_BADPARAM;
         }
-
-        std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityList));
-        std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
     }
 
     /* Create a group based on this list of entities */
@@ -711,14 +843,13 @@ dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()
     m_myGroupId = static_cast<dcgmGpuGrp_t>(groupIdAsInt);
 
     /* Try to get a handle to the group the user specified */
-    dcgmGroupInfo_t dcgmGroupInfo {};
-    dcgmGroupInfo.version = dcgmGroupInfo_version;
+    std::unique_ptr<dcgmGroupInfo_t> dcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmGroupInfo->version                         = dcgmGroupInfo_version;
 
-    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo); ret != DCGM_ST_OK)
+    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, dcgmGroupInfo.get()); ret != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format(
-            "Enable to retrieve information about group {}. Error: {}: {}",
-            groupIdAsInt,
+            "Enable to retrieve information about group. Error: {}: {}",
             ret,
             (ret == DCGM_ST_NOT_CONFIGURED ? "The Group is not found" : errorString(ret)));
 

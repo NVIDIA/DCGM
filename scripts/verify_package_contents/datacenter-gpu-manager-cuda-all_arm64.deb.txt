@@ -1,0 +1,5 @@
+./usr/
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda-all/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda-all/copyright

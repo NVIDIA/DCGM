@@ -494,9 +494,9 @@ class DcgmReader(object):
 
                         if mapById == False:
                             fieldTag = self.m_fieldIdToInfo[fieldId].tag
-                            systemDictionary[gpuId][fieldTag] = val.value if isinstance(val.value, bytes) else val.value
+                            systemDictionary[gpuId][fieldTag] = val.value
                         else:
-                            systemDictionary[gpuId][fieldId] = val.value if isinstance(val.value, bytes) else val.value
+                            systemDictionary[gpuId][fieldId] = val.value
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
                 self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()
@@ -534,9 +534,9 @@ class DcgmReader(object):
 
                             if mapById == False:
                                 fieldTag = self.m_fieldIdToInfo[fieldId].tag
-                                systemDictionary[entityGroupId][entityId][fieldTag] = val.value if isinstance(val.value, bytes) else val.value
+                                systemDictionary[entityGroupId][entityId][fieldTag] = val.value
                             else:
-                                systemDictionary[entityGroupId][entityId][fieldId] = val.value if isinstance(val.value, bytes) else val.value
+                                systemDictionary[entityGroupId][entityId][fieldId] = val.value
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
                 self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()

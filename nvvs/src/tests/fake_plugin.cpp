@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "DcgmStringHelpers.h"
+#include "PluginStrings.h"
+#include "dcgm_fields.h"
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <dcgm_structs.h>
@@ -28,71 +30,90 @@ unsigned int GetPluginInterfaceVersion(void)
     return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
 }
 
-dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
+static dcgmDiagPluginAttr_v1 fakePluginAttrs {};
+
+dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPluginInfo_t *info)
 {
-    snprintf(info->pluginName, sizeof(info->pluginName), "software");
-    info->numValidTests               = 1;
+    char const *testName    = SW_PLUGIN_NAME;
+    char const *description = "test only";
+    snprintf(info->pluginName, sizeof(info->pluginName), SW_PLUGIN_NAME);
+    info->numTests = 1;
+    SafeCopyTo(info->tests[0].testName, testName);
+    SafeCopyTo(info->tests[0].description, description);
     info->tests[0].numValidParameters = 0;
-    const char *testName              = "test";
-    SafeCopyTo(info->tests[0].testeName, testName);
-    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "test");
+    snprintf(info->tests[0].testCategory, sizeof(info->tests[0].testCategory), "test");
     snprintf(info->description, sizeof(info->description), "test only");
+    info->tests[0].targetEntityGroup = DCGM_FE_GPU;
     return DCGM_ST_OK;
 }
 
 
-dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                              dcgmDiagPluginGpuList_t *gpuInfo,
-                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
-                              void **userData,
-                              DcgmLoggingSeverity_t loggingSeverity,
-                              hostEngineAppenderCallbackFp_t loggingCallback)
+dcgmReturn_t InitializePlugin(dcgmHandle_t /* handle */,
+                              dcgmDiagPluginStatFieldIds_t * /* statFieldIds */,
+                              void ** /* userData */,
+                              DcgmLoggingSeverity_t /* loggingSeverity */,
+                              hostEngineAppenderCallbackFp_t /* loggingCallback */,
+                              dcgmDiagPluginAttr_v1 const *pluginAttr)
 {
-    for (unsigned int i = 0; i < gpuInfo->numGpus; i++)
+    if (pluginAttr != nullptr)
     {
-        g_gpuIds[i] = gpuInfo->gpus[i].gpuId;
+        fakePluginAttrs = *pluginAttr;
     }
-    g_numGpus = gpuInfo->numGpus;
+    else
+    {
+        return DCGM_ST_BADPARAM;
+    }
 
     return DCGM_ST_OK;
 }
 
-void RunTest(const char *testName,
-             unsigned int timeout,
-             unsigned int numParameters,
-             const dcgmDiagPluginTestParameter_t *testParameters,
-             void *userData)
+void RunTest(char const * /* testName */,
+             unsigned int /* timeout */,
+             unsigned int /* numParameters */,
+             const dcgmDiagPluginTestParameter_t * /* testParameters */,
+             dcgmDiagPluginEntityList_v1 const *entityInfo,
+             void * /* userData */)
+{
+    g_numGpus = 0;
+    for (unsigned int i = 0; i < entityInfo->numEntities; i++)
+    {
+        if (entityInfo->entities[i].entity.entityGroupId == DCGM_FE_GPU)
+        {
+            g_gpuIds[i] = entityInfo->entities[i].entity.entityId;
+            g_numGpus += 1;
+        }
+    }
+}
+
+void RetrieveCustomStats(char const * /* testName */, dcgmDiagCustomStats_t * /* customStats */, void * /* userData */)
 {}
 
-void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
-{}
-
-void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const * /* testName */, dcgmDiagEntityResults_v1 *entityResults, void * /* userData */)
 {
     char *result = getenv("result");
 
     for (unsigned int i = 0; i < g_numGpus; i++)
     {
-        results->perGpuResults[i].gpuId  = g_gpuIds[i];
-        results->perGpuResults[i].result = NVVS_RESULT_PASS;
+        entityResults->results[i].entity = { .entityGroupId = DCGM_FE_GPU, .entityId = g_gpuIds[i] };
+        entityResults->results[i].result = DCGM_DIAG_RESULT_PASS;
     }
-    results->numResults = g_numGpus;
-    results->numErrors  = 0;
-    results->numInfo    = 0;
+    entityResults->numErrors  = 0;
+    entityResults->numInfo    = 0;
+    entityResults->numResults = g_numGpus;
 
     if (result == 0 || strcmp(result, "pass"))
     {
         /* fail normally */
-        results->errors[0].code  = 1;
-        results->errors[0].gpuId = g_gpuIds[0];
-        snprintf(results->errors[0].msg, sizeof(results->errors[0].msg), "we failed hard bruh");
-        results->numErrors = 1;
+        entityResults->numErrors        = 1;
+        entityResults->errors[0].code   = 1;
+        entityResults->errors[0].entity = { .entityGroupId = DCGM_FE_GPU, .entityId = g_gpuIds[0] };
+        SafeCopyTo(entityResults->errors[0].msg, static_cast<char const *>("capoo"));
     }
     else if (!strcmp(result, "pass"))
     {
-        results->numInfo       = 1;
-        results->info[0].gpuId = g_gpuIds[0];
-        snprintf(results->info[0].msg, sizeof(results->info[0].msg), "This test is skipped for this GPU.");
+        entityResults->numInfo        = 1;
+        entityResults->info[0].entity = { .entityGroupId = DCGM_FE_GPU, .entityId = g_gpuIds[0] };
+        SafeCopyTo(entityResults->info[0].msg, static_cast<char const *>("capoo"));
     }
 }
 

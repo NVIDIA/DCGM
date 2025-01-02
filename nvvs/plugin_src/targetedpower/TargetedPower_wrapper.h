@@ -29,7 +29,6 @@
 #include <CudaCommon.h>
 
 #include <NvvsStructs.h>
-#include <PluginStrings.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 
@@ -76,8 +75,8 @@ public:
 
     bool m_lowPowerLimit;
 
-    CPDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(TP_PLUGIN_NAME, ndi, pciBusId, p)
+    CPDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
+        : PluginDevice(testName, ndi, pciBusId, p)
         , maxPowerTarget(0)
         , NcudaStreams(0)
         , allocatedCublasHandle(0)
@@ -141,13 +140,14 @@ public:
 class ConstantPower : public Plugin
 {
 public:
-    ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    ConstantPower(dcgmHandle_t handle);
     ~ConstantPower();
 
     /*************************************************************************/
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     /*************************************************************************/
     /*
@@ -173,7 +173,9 @@ public:
      * Returns: true on success
      *          false on error
      */
-    bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
+    bool Init(dcgmDiagPluginEntityList_v1 const *entityInfo);
+
+    std::string GetTargetedPowerTestName() const;
 
 private:
     /*************************************************************************/
@@ -193,7 +195,7 @@ private:
      *      false if there were issues running the test (test failures are not considered issues),
      *      true otherwise.
      */
-    bool RunTest();
+    bool RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo);
     /*************************************************************************/
     /*
      * Clean up any resources used by this object, freeing all memory and closing
@@ -232,15 +234,17 @@ private:
 
     /*************************************************************************/
     /* Variables */
-    TestParameters *m_testParameters; /* Parameters for this test */
-    bool m_dcgmCommErrorOccurred;     /* Has there been a communication error with DCGM? */
-    bool m_dcgmRecorderInitialized;   /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;      /* DCGM stats recording interfact object */
-    dcgmHandle_t m_handle;            /* Handle to communicate with DCGM */
-    std::vector<CPDevice *> m_device; /* Per-device data */
+    std::unique_ptr<TestParameters> m_testParameters; /* Parameters for this test */
+    bool m_dcgmCommErrorOccurred;                     /* Has there been a communication error with DCGM? */
+    bool m_dcgmRecorderInitialized;                   /* Has DcgmRecorder been initialized? */
+    DcgmRecorder m_dcgmRecorder;                      /* DCGM stats recording interfact object */
+    dcgmHandle_t m_handle;                            /* Handle to communicate with DCGM */
+    std::vector<CPDevice *> m_device;                 /* Per-device data */
 
     /* Cached parameters read from testParameters */
-    double m_testDuration;        /* Test duration in seconds */
+    double m_testDuration; /* Test duration in seconds */
+    int m_maxMatrixDim;
+    int m_useDgemv;               /* Whether or not to use dgemv 1=use dgemv */
     int m_useDgemm;               /* Whether or not to use dgemm (or sgemm) 1=use dgemm */
     double m_targetPower;         /* Target power for the test in watts */
     double m_sbeFailureThreshold; /* how many SBEs constitutes a failure */
@@ -249,7 +253,7 @@ private:
     void *m_hostA;
     void *m_hostB;
     void *m_hostC;
-    dcgmDiagPluginGpuList_t m_gpuInfo;
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
 };
 
 

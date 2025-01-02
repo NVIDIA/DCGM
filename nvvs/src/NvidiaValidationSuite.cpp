@@ -18,10 +18,12 @@
 #include "DcgmHandle.h"
 #include "DcgmLogging.h"
 #include "DcgmSystem.h"
+#include "EntitySet.h"
 #include "NvvsJsonStrings.h"
 #include "ParameterValidator.h"
 #include "ParsingUtility.h"
 #include "PluginStrings.h"
+#include "dcgm_fields.h"
 #include "dcgm_structs_internal.h"
 #include <DcgmBuildInfo.hpp>
 #include <DcgmStringHelpers.h>
@@ -30,6 +32,7 @@
 #include <PluginInterface.h>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <setjmp.h>
 #include <signal.h>
 #include <sstream>
@@ -155,7 +158,7 @@ void NvidiaValidationSuite::CheckDriverVersion()
 }
 
 // Handler for SIGALRM as part of ensuring we can't stall indefinitely on DCGM init
-void alarm_handler(int sig)
+void alarm_handler(int /* sig */)
 {
     initTimedOut = true;
     longjmp(exitInitialization, 1);
@@ -223,7 +226,6 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
     bool isMigModeEnabled   = false;
     bool anyMigModeDisabled = false;
     unsigned int numGpus    = gpuIndices.size();
-    unsigned int mgpusIndex = 0;
     std::vector<unsigned int> originalList(gpuIndices);
     if (numGpus == 0)
     {
@@ -269,9 +271,6 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
                    " CUDA needs to execute on a compute instance if MIG is enabled.";
         }
 
-        nvvsCommon.m_gpus[mgpusIndex] = visibleGpus[i];
-        mgpusIndex++;
-
         if (originalList.empty())
         {
             // If our originally specified list was empty, record the GPUs being used
@@ -313,7 +312,6 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
 std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 {
     std::vector<unsigned int> gpuIndices;
-    std::string info;
 
     processCommandLine(argc, argv);
     if (nvvsCommon.quietMode)
@@ -370,7 +368,6 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     stopTimer();
     */
 
-
     if (configFile.size() > 0)
         parser->setConfigFile(configFile);
     if (!parser->Init() && !nvvsCommon.configless)
@@ -385,58 +382,64 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         else
         {
             // If they didn't specify a config file, just warn
-            out << "/etc/nvidia-validation-suite/nvvs.conf. " << std::endl;
+            out << "/etc/datacenter-gpu-manager-4/nvvs.conf. " << std::endl;
             out << "Please check the path or specify a config file via the \"-c\" command line option." << std::endl;
             out << "Add --configless to suppress this warning." << std::endl;
-            info = out.str();
+            log_warning(out.str());
 
             // Force to true if we couldn't open a config file
             nvvsCommon.configless = true;
         }
     }
 
+    parser->PrepareEntitySets(dcgmHandle.GetHandle());
     parser->legacyGlobalStructHelper();
 
-    std::vector<std::unique_ptr<GpuSet>> &gpuSets = parser->getGpuSetVec();
-    const bool hasSupportedGpus                   = !gpuSets.empty() && gpuSets[0]->properties.present;
+    std::vector<std::unique_ptr<EntitySet>> &entitySets = parser->GetEntitySets();
+    bool hasGpuEntity                                   = false;
 
-    if (hasSupportedGpus)
+    for (size_t i = 0; i < entitySets.size(); i++)
     {
-        CheckDriverVersion();
-        EnumerateAllVisibleGpus();
+        if (entitySets[i]->GetEntityGroup() != DCGM_FE_GPU)
+        {
+            continue;
+        }
+
+        if (!hasGpuEntity)
+        {
+            CheckDriverVersion();
+            EnumerateAllVisibleGpus();
+        }
+        hasGpuEntity   = true;
+        GpuSet *gpuSet = ToGpuSet(entitySets[i].get());
+        if (gpuSet == nullptr)
+        {
+            log_error("failed to covert entity set to gpu set.");
+            continue;
+        }
+        for (size_t j = 0; j < gpuSet->GetProperties().index.size(); j++)
+        {
+            gpuIndices.push_back(gpuSet->GetProperties().index[j]);
+        }
+        InitializeAndCheckGpuObjs(gpuSet);
     }
 
     if (listGpus)
     {
-        if (hasSupportedGpus)
-        {
-            std::cout << "Supported GPUs available:" << std::endl;
+        std::cout << "Supported GPUs available:" << std::endl;
 
-            for (std::vector<Gpu *>::iterator it = m_gpuVect.begin(); it != m_gpuVect.end(); ++it)
-            {
-                std::cout << "\t"
-                          << "[" << (*it)->getDevicePciBusId() << "] -- " << (*it)->getDeviceName() << std::endl;
-            }
-            std::cout << std::endl;
-        }
-        else
+        for (std::vector<Gpu *>::iterator it = m_gpuVect.begin(); it != m_gpuVect.end(); ++it)
         {
-            std::cout << "No GPUs available" << std::endl;
+            std::cout << "\t" << "[" << (*it)->getDevicePciBusId() << "] -- " << (*it)->getDeviceName() << std::endl;
         }
+        std::cout << std::endl;
         return "";
     }
 
-    for (size_t i = 0; i < gpuSets.size(); i++)
+    if (entitySets.empty())
     {
-        for (size_t j = 0; j < gpuSets[i]->properties.index.size(); j++)
-        {
-            gpuIndices.push_back(gpuSets[i]->properties.index[j]);
-        }
-    }
-
-    if (hasSupportedGpus)
-    {
-        InitializeAndCheckGpuObjs(gpuSets);
+        log_error("No available testing entities.");
+        throw std::runtime_error("Error: No available testing entities.");
     }
 
     std::string errorString = BuildCommonGpusList(gpuIndices, m_gpuVect);
@@ -445,14 +448,15 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return errorString;
     }
 
-    // construct the test framework now that we have the GPU and test objects
-    // Only pass gpuSets[0] because there is always only 1 group of GPUs. This will
-    // be refactored in a separate check-in.
-    m_tf = new TestFramework(nvvsCommon.jsonOutput, gpuSets[0].get());
+    m_tf = new TestFramework(entitySets);
     m_tf->loadPlugins();
-    if (info.size() > 0)
+    if (auto ret = m_tf->SetDiagResponseVersion(nvvsCommon.diagResponseVersion); ret != DCGM_ST_OK)
     {
-        m_tf->addInfoStatement(info);
+        std::string const errMsg
+            = fmt::format("failed to set version [{}], err: [{}].", nvvsCommon.diagResponseVersion, ret);
+        log_error(errMsg);
+        std::cerr << errMsg << std::endl;
+        return errMsg;
     }
 
     ValidateSubtestParameters();
@@ -464,17 +468,18 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
         for (std::vector<Test *>::iterator it = testVect.begin(); it != testVect.end(); ++it)
         {
-            std::cout << "\t" << (*it)->GetTestName() << " -- " << (*it)->getTestDesc() << std::endl;
+            if (it + 1 != testVect.end()) // last object is a "skip" object that does not need to be displayed
+                std::cout << "\t" << (*it)->GetTestName() << " -- " << (*it)->getTestDesc() << std::endl;
         }
         std::cout << std::endl;
         return "";
     }
 
-    CheckGpuSetTests(gpuSets);
+    DistributeTests(entitySets);
 
     // Execute the tests... let the TF catch all exceptions and decide
     // whether to throw them higher.
-    m_tf->go(gpuSets);
+    m_tf->Go(entitySets);
 
     return "";
 }
@@ -482,12 +487,9 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 /*****************************************************************************/
 void NvidiaValidationSuite::banner()
 {
-    if (nvvsCommon.jsonOutput == false)
-    {
-        std::cout << std::endl
-                  << NVVS_NAME << " (version " << std::string(DcgmNs::DcgmBuildInfo().GetVersion()) << ")\n"
-                  << std::endl;
-    }
+    std::cout << std::endl
+              << NVVS_NAME << " (version " << std::string(DcgmNs::DcgmBuildInfo().GetVersion()) << ")\n"
+              << std::endl;
 }
 
 /*****************************************************************************/
@@ -657,133 +659,204 @@ void NvidiaValidationSuite::overrideParameters(TestParameters *tp, const std::st
     }
 }
 
-/*****************************************************************************/
-void NvidiaValidationSuite::InitializeAndCheckGpuObjs(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
+void NvidiaValidationSuite::InitializeAndCheckGpuObjs(GpuSet *gpuSet)
 {
-    for (unsigned int i = 0; i < gpuSets.size(); i++)
+    if (!gpuSet->GetProperties().present)
     {
-        if (!gpuSets[i]->properties.present)
-        {
-            gpuSets[i]->gpuObjs = m_gpuVect;
-        }
-        else
-        {
-            gpuSets[i]->gpuObjs = decipherProperties(gpuSets[i].get());
-        }
+        gpuSet->SetGpuObjs(m_gpuVect);
+    }
+    else
+    {
+        gpuSet->SetGpuObjs(decipherProperties(gpuSet));
+    }
 
-        if (gpuSets[i]->gpuObjs.size() == 0)
-        { // nothing matched
+    if (gpuSet->GetGpuObjs().empty())
+    { // nothing matched
+        std::ostringstream ss;
+        ss << "Unable to match GPU set '" << gpuSet->GetName() << "' to any GPU(s) on the system.";
+        log_error(ss.str());
+        throw std::runtime_error(ss.str());
+    }
+
+    // ensure homogeneity
+    std::string firstName = gpuSet->GetGpuObjs()[0]->getDeviceName();
+    for (auto gpuIt = gpuSet->GetGpuObjs().cbegin(); gpuIt != gpuSet->GetGpuObjs().cend(); gpuIt++)
+    {
+        // no need to check the first but...
+        if (firstName != (*gpuIt)->getDeviceName())
+        {
             std::ostringstream ss;
-            ss << "Unable to match GPU set '" << gpuSets[i]->name << "' to any GPU(s) on the system.";
+            ss << "NVVS does not support running on non-homogeneous GPUs during a single run: " << firstName
+               << " != " << (*gpuIt)->getDeviceName() << ".";
+            ss << "Please use the -i option to specify a list of identical GPUs. ";
+            ss << "Run nvvs -g to list the GPUs on the system. Run nvvs --help for additional usage info. ";
             log_error(ss.str());
             throw std::runtime_error(ss.str());
         }
-
-        // ensure homogeneity
-        std::string firstName = gpuSets[i]->gpuObjs[0]->getDeviceName();
-        for (std::vector<Gpu *>::iterator gpuIt = gpuSets[i]->gpuObjs.begin(); gpuIt != gpuSets[i]->gpuObjs.end();
-             gpuIt++)
-        {
-            // no need to check the first but...
-            if (firstName != (*gpuIt)->getDeviceName())
-            {
-                std::ostringstream ss;
-                ss << "NVVS does not support running on non-homogeneous GPUs during a single run: " << firstName
-                   << " != " << (*gpuIt)->getDeviceName() << ".";
-                ss << "Please use the -i option to specify a list of identical GPUs. ";
-                ss << "Run nvvs -g to list the GPUs on the system. Run nvvs --help for additional usage info. ";
-                log_error(ss.str());
-                throw std::runtime_error(ss.str());
-            }
-        }
-    }
-
-    if (gpuSets.empty())
-    {
-        std::string err("No GPUs were found on which to run the tests.");
-        throw std::runtime_error(err);
     }
 }
 
-/*****************************************************************************/
-// take our GPU sets vector and fill in the appropriate GPU objects that match that set
-void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
+void NvidiaValidationSuite::ThrowTestNotFoundExecption() const
 {
+    std::vector<std::string> notFoundTests;
+    std::vector<std::string> noSupportedEntityTests;
+    std::vector<std::string> eudTests;
+
+    for (auto const &requestedTestName : nvvsCommon.desiredTest)
+    {
+        bool foundInTestVect = false;
+
+        for (auto const *test : testVect)
+        {
+            std::string compareTestName = test->GetTestName();
+            std::transform(compareTestName.begin(), compareTestName.end(), compareTestName.begin(), ::tolower);
+            std::string const compareRequestedName = m_tf->GetCompareName(requestedTestName);
+
+            if (compareTestName == compareRequestedName)
+            {
+                foundInTestVect = true;
+                break;
+            }
+        }
+
+        if (foundInTestVect)
+        {
+            noSupportedEntityTests.push_back(requestedTestName);
+        }
+        else
+        {
+            // If the required packages are not available, EUD-related tests will not be exported.
+            // To inform users about installing packages, we'd like to display a distinct notification.
+            if (requestedTestName == EUD_PLUGIN_NAME || requestedTestName == CPU_EUD_TEST_NAME)
+            {
+                eudTests.push_back(requestedTestName);
+            }
+            else
+            {
+                notFoundTests.push_back(requestedTestName);
+            }
+        }
+    }
+    std::string noSupportedEntityTestsMsg;
+    if (!noSupportedEntityTests.empty())
+    {
+        noSupportedEntityTestsMsg
+            = fmt::format("[{}] cannot find supported entity to test. ", fmt::join(noSupportedEntityTests, ", "));
+    }
+    std::string notFoundTestsMsg;
+    if (!notFoundTests.empty())
+    {
+        notFoundTestsMsg
+            = fmt::format("[{}] were not found among possible test choices. ", fmt::join(notFoundTests, ", "));
+    }
+    std::string eudTestsMsg;
+    if (!eudTests.empty())
+    {
+        eudTestsMsg = fmt::format("[{}] cannot find dependent package.", fmt::join(eudTests, ", "));
+    }
+    std::string errMsg
+        = fmt::format("Error: requested test(s): {}{}{}", noSupportedEntityTestsMsg, notFoundTestsMsg, eudTestsMsg);
+    log_error(errMsg);
+    throw NvvsException(errMsg, NVVS_ST_TEST_NOT_FOUND);
+}
+
+/*****************************************************************************/
+// take our entity sets vector and fill in the appropriate GPU objects that match that set
+void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySet>> &entitySets)
+{
+    std::unordered_set<std::string> foundSuites;
+    bool anyTestAssigned = false;
+
     // The rules are:
     // a) the "properties" struct is exclusionary. If properties is empty (properties.present == false)
     //    then all available GPU objects are included in the set
     // b) the "tests" vector is also exclusionary. If tests.size() == 0 then all available test
     //    objects are included in the set
-    for (auto &&gpuSet : gpuSets)
+    for (auto &&entitySet : entitySets)
     {
         bool first_pass = true;
 
         // go through the vector of tests requested and try to match them with an actual test.
         // push a warning if no match found
-        for (auto &&req : gpuSet->testsRequested)
+        for (auto requestedTestNameIt = nvvsCommon.desiredTest.begin();
+             requestedTestNameIt != nvvsCommon.desiredTest.end();)
         {
-            bool found                    = false;
-            std::string requestedTestName = req["name"];
-            std::string compareTestName   = requestedTestName;
+            bool found                           = false;
+            bool foundSuite                      = false;
+            std::string const &requestedTestName = *requestedTestNameIt;
+            std::string compareTestName          = requestedTestName;
             std::transform(compareTestName.begin(), compareTestName.end(), compareTestName.begin(), ::tolower);
 
             // first check the test suite names
             suiteNames_enum suite;
             if (compareTestName == "quick" || compareTestName == "short")
             {
-                found = true;
-                suite = NVVS_SUITE_QUICK;
+                foundSuite = true;
+                suite      = NVVS_SUITE_QUICK;
             }
             else if (compareTestName == "medium")
             {
-                found = true;
-                suite = NVVS_SUITE_MEDIUM;
+                foundSuite = true;
+                suite      = NVVS_SUITE_MEDIUM;
             }
             else if (compareTestName == "long")
             {
-                found = true;
-                suite = NVVS_SUITE_LONG;
+                foundSuite = true;
+                suite      = NVVS_SUITE_LONG;
             }
             else if (compareTestName == "xlong")
             {
-                found = true;
-                suite = NVVS_SUITE_XLONG;
+                foundSuite = true;
+                suite      = NVVS_SUITE_XLONG;
             }
             else if (compareTestName == "production_testing")
             {
-                found = true;
-                suite = NVVS_SUITE_PRODUCTION_TESTING;
+                foundSuite = true;
+                suite      = NVVS_SUITE_PRODUCTION_TESTING;
             }
 
-            if (found)
+            if (foundSuite)
             {
-                fillTestVectors(suite, Test::NVVS_CLASS_SOFTWARE, gpuSet.get());
-                fillTestVectors(suite, Test::NVVS_CLASS_HARDWARE, gpuSet.get());
-                fillTestVectors(suite, Test::NVVS_CLASS_INTEGRATION, gpuSet.get());
-                fillTestVectors(suite, Test::NVVS_CLASS_PERFORMANCE, gpuSet.get());
+                // It at least contains software plugin.
+                found = (entitySet->GetEntityGroup() == DCGM_FE_GPU);
+                if (FillTestVectors(suite, Test::NVVS_CLASS_HARDWARE, entitySet.get()))
+                {
+                    found = true;
+                }
+                if (FillTestVectors(suite, Test::NVVS_CLASS_INTEGRATION, entitySet.get()))
+                {
+                    found = true;
+                }
+                if (FillTestVectors(suite, Test::NVVS_CLASS_PERFORMANCE, entitySet.get()))
+                {
+                    found = true;
+                }
             }
-            // then check the test groups
+            // then check the test categories
             else
             {
                 /*
                  * When diag module runs EUD with enabled service-account, the EUD is the only test in the command line.
                  */
-                if (first_pass == true && compareTestName != "eud" && compareTestName != "cpu_eud")
+                if (first_pass == true && compareTestName != "eud")
                 {
-                    fillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, gpuSet.get());
+                    found      = FillTestVectors(NVVS_SUITE_CUSTOM, Test::NVVS_CLASS_SOFTWARE, entitySet.get());
                     first_pass = false;
                 }
-                std::map<std::string, std::vector<Test *>> groups       = m_tf->getTestGroups();
-                std::map<std::string, std::vector<Test *>>::iterator it = groups.find(requestedTestName);
+                std::map<std::string, std::vector<Test *>> testCategories = m_tf->GetTestCategories();
+                std::map<std::string, std::vector<Test *>>::iterator it   = testCategories.find(requestedTestName);
 
-                if (it != groups.end())
+                if (it != testCategories.end())
                 {
-                    found = true;
-
                     // Add each test from the list
-                    for (size_t i = 0; i < groups[requestedTestName].size(); i++)
+                    for (size_t i = 0; i < testCategories[requestedTestName].size(); i++)
                     {
-                        gpuSet->AddTestObject(CUSTOM_TEST_OBJS, groups[requestedTestName][i]);
+                        if (testCategories[requestedTestName][i]->GetTargetEntityGroup() != entitySet->GetEntityGroup())
+                        {
+                            continue;
+                        }
+                        found = true;
+                        entitySet->AddTestObject(CUSTOM_TEST_OBJS, testCategories[requestedTestName][i]);
                     }
                 }
                 else // now check individual tests
@@ -794,20 +867,21 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                         std::string compareTestName = (*testIt)->GetTestName();
                         std::transform(
                             compareTestName.begin(), compareTestName.end(), compareTestName.begin(), ::tolower);
-                        std::string compareRequestedName
-                            = m_tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, requestedTestName);
+                        std::string compareRequestedName = m_tf->GetCompareName(requestedTestName);
 
-                        if (compareTestName == compareRequestedName)
+                        if (compareTestName == compareRequestedName
+                            && (*testIt)->GetTargetEntityGroup() == entitySet->GetEntityGroup())
                         {
                             found = true;
                             // Make a full copy of the test parameters
                             TestParameters *tp = new TestParameters();
                             tpVect.push_back(tp); // purely for accounting when we go to cleanup
 
-                            if (!gpuSet->gpuObjs.empty())
+                            if (entitySet->GetEntityGroup() == DCGM_FE_GPU)
                             {
+                                GpuSet *gpuSet = ToGpuSet(entitySet.get());
                                 m_allowlist->getDefaultsByDeviceId(
-                                    compareRequestedName, gpuSet->gpuObjs[0]->getDeviceId(), tp);
+                                    compareRequestedName, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
                             }
 
                             if (nvvsCommon.parms.size() > 0)
@@ -816,30 +890,56 @@ void NvidiaValidationSuite::CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>
                             }
 
                             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
+                            tp->AddString(PS_TEST_NAME, (*testIt)->GetTestName());
                             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
 
                             (*testIt)->pushArgVectorElement(Test::NVVS_CLASS_CUSTOM, tp);
-                            gpuSet->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
+                            entitySet->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
                             break;
                         }
                     }
                 }
             }
 
-            if (!found)
+            if (found)
             {
-                std::stringstream ss;
-                ss << "Error: requested test \"" << requestedTestName << "\" was not found among possible test choices."
-                   << std::endl;
-                log_error(ss.str());
-                throw NvvsException(ss.str(), NVVS_ST_TEST_NOT_FOUND);
+                anyTestAssigned = true;
+                if (foundSuite)
+                {
+                    // A suite can consist of tests that span multiple entity sets.
+                    // To ensure all tests are well distributed into all entity sets.
+                    // We keep suite here and remove the suite from desiredTest in the end.
+                    foundSuites.insert(*requestedTestNameIt);
+                    ++requestedTestNameIt;
+                }
+                else
+                {
+                    requestedTestNameIt = nvvsCommon.desiredTest.erase(requestedTestNameIt);
+                }
             }
+            else
+            {
+                ++requestedTestNameIt;
+            }
+        }
+    }
+
+    for (auto const &suite : foundSuites)
+    {
+        nvvsCommon.desiredTest.erase(suite);
+    }
+
+    if (!nvvsCommon.desiredTest.empty())
+    {
+        if (!anyTestAssigned || !nvvsCommon.rerunAsRoot)
+        {
+            ThrowTestNotFoundExecption();
         }
     }
 }
 
 /*****************************************************************************/
-void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, GpuSet *set)
+bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, EntitySet *set)
 {
     int type;
     std::vector<std::string> testNames;
@@ -859,6 +959,7 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             testNames.push_back("Page Retirement/Row Remap");
             testNames.push_back("Graphics Processes");
             testNames.push_back("Inforom");
+            testNames.push_back("Fabric Manager");
             type = SOFTWARE_TEST_OBJS;
             break;
         case Test::NVVS_CLASS_HARDWARE:
@@ -870,7 +971,9 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                 if (DcgmNs::Utils::IsRunningAsRoot())
                 {
                     testNames.push_back(EUD_PLUGIN_NAME);
+                    testNames.push_back(CPU_EUD_TEST_NAME);
                 }
+                testNames.push_back(NVBANDWIDTH_PLUGIN_NAME);
             }
             if (suite >= NVVS_SUITE_XLONG)
             {
@@ -895,34 +998,25 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
             break;
         default:
         {
-            std::stringstream buf;
-            buf << "Received test class '" << testClass << "' that is not valid.";
-            throw std::runtime_error(buf.str());
-            break;
+            throw std::runtime_error(fmt::format("Received test class '{}' that is not valid.", testClass));
         }
     }
 
+    bool testAdded = false;
     for (std::vector<std::string>::iterator it = testNames.begin(); it != testNames.end(); it++)
     {
         std::vector<Test *>::iterator testIt;
-        if (testClass != Test::NVVS_CLASS_SOFTWARE)
-            testIt = FindTestName(testClass, *it);
-        else
-        {
-            testIt = FindTestName(testClass, SW_PLUGIN_NAME);
-            if (testIt == testVect.end())
-            {
-                throw NvvsException(
-                    "The software deployment program was not properly loaded. Please check the plugin path and that "
-                    "the plugins are valid.",
-                    NVVS_ST_TEST_NOT_FOUND);
-            }
-        }
+        testIt = FindTestName(*it);
 
         if (testIt != testVect.end())
         {
             TestParameters *tp = new TestParameters();
             tpVect.push_back(tp); // purely for accounting when we go to cleanup
+
+            if ((*testIt)->GetTargetEntityGroup() != set->GetEntityGroup())
+            {
+                continue;
+            }
 
             if (testClass != Test::NVVS_CLASS_SOFTWARE)
             {
@@ -934,32 +1028,34 @@ void NvidiaValidationSuite::fillTestVectors(suiteNames_enum suite, Test::testCla
                 */
 
                 // pull just the first GPU device ID since they are all meant to be the same at this point
-                m_allowlist->getDefaultsByDeviceId(*it, set->gpuObjs[0]->getDeviceId(), tp);
+                if (set->GetEntityGroup() == DCGM_FE_GPU)
+                {
+                    GpuSet *gpuSet = ToGpuSet(set);
+                    m_allowlist->getDefaultsByDeviceId(*it, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
+                }
 
                 if (nvvsCommon.parms.size() > 0)
                     overrideParameters(tp, *it);
             }
 
-            std::string pluginName = *it;
-            if (testClass != Test::NVVS_CLASS_SOFTWARE)
-            {
-                pluginName = m_tf->GetPluginNameFromTestName(*it);
-            }
-            tp->AddString(PS_PLUGIN_NAME, pluginName);
+            tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
+            tp->AddString(PS_TEST_NAME, (*it));
             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
             tp->AddDouble(PS_SUITE_LEVEL, (double)suite);
 
             (*testIt)->pushArgVectorElement(testClass, tp);
             set->AddTestObject(type, *testIt);
+            testAdded = true;
         }
     }
+
+    return testAdded;
 }
 
 /*****************************************************************************/
-std::vector<Test *>::iterator NvidiaValidationSuite::FindTestName(Test::testClasses_enum testClass,
-                                                                  std::string testName)
+std::vector<Test *>::iterator NvidiaValidationSuite::FindTestName(std::string testName)
 {
-    std::string compareName = m_tf->GetCompareName(testClass, testName);
+    std::string compareName = m_tf->GetCompareName(testName);
 
     for (auto it = testVect.begin(); it != testVect.end(); ++it)
     {
@@ -984,56 +1080,56 @@ std::vector<Gpu *> NvidiaValidationSuite::decipherProperties(GpuSet *set)
     while (it != m_gpuVect.end())
     {
         bool brand = false, name = false;
-        if (set->properties.brand.length() > 0)
+        if (set->GetProperties().brand.length() > 0)
             brand = true;
-        if (set->properties.name.length() > 0)
+        if (set->GetProperties().name.length() > 0)
         {
             name = true;
             // kludge to handle special naming of K10
-            if (set->properties.name == "Tesla K10")
-                set->properties.name = "Tesla K10.G1.8GB";
+            if (set->GetProperties().name == "Tesla K10")
+                set->GetProperties().name = "Tesla K10.G1.8GB";
         }
 
-        if (set->properties.uuid.length() > 0)
+        if (set->GetProperties().uuid.length() > 0)
         {
-            if (set->properties.uuid == (*it)->getDeviceGpuUuid())
+            if (set->GetProperties().uuid == (*it)->getDeviceGpuUuid())
                 tempGpuVec.push_back(*it);
             ++it;
             continue; // skip everything else
         }
-        else if (set->properties.busid.length() > 0)
+        else if (set->GetProperties().busid.length() > 0)
         {
-            if (set->properties.busid == (*it)->getDevicePciBusId())
+            if (set->GetProperties().busid == (*it)->getDevicePciBusId())
                 tempGpuVec.push_back(*it);
             ++it;
             continue; // skip everything else
         }
-        else if (set->properties.index.size() > 0)
+        else if (set->GetProperties().index.size() > 0)
         {
-            for (unsigned int i = 0; i < set->properties.index.size(); i++)
+            for (unsigned int i = 0; i < set->GetProperties().index.size(); i++)
             {
-                if (set->properties.index[i] == (*it)->getDeviceIndex())
+                if (set->GetProperties().index[i] == (*it)->getDeviceIndex())
                 {
                     if (!brand && !name)
                         tempGpuVec.push_back(*it);
-                    if (brand && !name && set->properties.brand == (*it)->getDeviceBrandAsString())
+                    if (brand && !name && set->GetProperties().brand == (*it)->getDeviceBrandAsString())
                         tempGpuVec.push_back(*it);
-                    if (name && !brand && set->properties.name == (*it)->getDeviceName())
+                    if (name && !brand && set->GetProperties().name == (*it)->getDeviceName())
                         tempGpuVec.push_back(*it);
-                    if (brand && name && set->properties.brand == (*it)->getDeviceBrandAsString()
-                        && set->properties.name == (*it)->getDeviceName())
+                    if (brand && name && set->GetProperties().brand == (*it)->getDeviceBrandAsString()
+                        && set->GetProperties().name == (*it)->getDeviceName())
                         tempGpuVec.push_back(*it);
                 }
             }
         }
         else if (brand || name)
         {
-            if (brand && !name && set->properties.brand == (*it)->getDeviceBrandAsString())
+            if (brand && !name && set->GetProperties().brand == (*it)->getDeviceBrandAsString())
                 tempGpuVec.push_back(*it);
-            if (name && !brand && set->properties.name == (*it)->getDeviceName())
+            if (name && !brand && set->GetProperties().name == (*it)->getDeviceName())
                 tempGpuVec.push_back(*it);
-            if (brand && name && set->properties.brand == (*it)->getDeviceBrandAsString()
-                && set->properties.name == (*it)->getDeviceName())
+            if (brand && name && set->GetProperties().brand == (*it)->getDeviceBrandAsString()
+                && set->GetProperties().name == (*it)->getDeviceName())
                 tempGpuVec.push_back(*it);
         }
         ++it;
@@ -1114,7 +1210,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                     throw std::runtime_error(buf.str());
                 }
 
-                std::string requestedName                 = m_tf->GetCompareName(Test::NVVS_CLASS_CUSTOM, testName);
+                std::string requestedName                 = m_tf->GetCompareName(testName);
                 nvvsCommon.parms[requestedName][parmName] = parmValue;
             }
             else
@@ -1134,7 +1230,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
 class NVVSOutput : public TCLAP::StdOutput
 {
 public:
-    virtual void usage(TCLAP::CmdLineInterface &_cmd)
+    void usage(TCLAP::CmdLineInterface &_cmd) override
     {
         TCLAP::StdOutput::usage(_cmd);
 
@@ -1234,8 +1330,6 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
                                            "",
                                            "parameters to set for tests",
                                            cmd);
-        TCLAP::SwitchArg jsonArg(
-            "j", "jsonOutput", "Format output as json. Note: prevents progress updates.", cmd, false);
         TCLAP::ValueArg<unsigned int> initializationWaitTime(
             "w",
             "initwaittime",
@@ -1246,25 +1340,27 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             cmd);
         TCLAP::ValueArg<std::string> dcgmHost(
             "", "dcgmHostname", "Specify the hostname where DCGM is running.", false, "", "DCGM hostname", cmd);
-        TCLAP::SwitchArg fromDcgmArg("z",
-                                     "from-dcgm",
-                                     "Specify that this was launched by dcgmi diag and not from invoking nvvs directly",
-                                     cmd,
-                                     false);
+        TCLAP::ValueArg<std::string> throttleMask("",
+                                                  "throttle-mask",
+                                                  "Deprecated: please use clocksevent-mask instead.",
+                                                  false,
+                                                  "",
+                                                  "deprecated: throttle reasons to ignore",
+                                                  cmd);
 
-        TCLAP::ValueArg<std::string> throttleMask(
+        TCLAP::ValueArg<std::string> clocksEventMask(
             "",
-            "throttle-mask",
-            "Specify which throttling reasons should be ignored. You can provide a comma separated list of reasons. "
-            "For example, specifying 'HW_SLOWDOWN,SW_THERMAL' would ignore the HW_SLOWDOWN and SW_THERMAL throttling "
+            "clocksevent-mask",
+            "Specify which clocks event reasons should be ignored. You can provide a comma separated list of reasons. "
+            "For example, specifying 'HW_SLOWDOWN,SW_THERMAL' would ignore the HW_SLOWDOWN and SW_THERMAL clocks event "
             "reasons. Alternatively, you can specify the integer value of the ignore bitmask. For the bitmask, "
             "multiple reasons may be specified by the sum of their bit masks. For "
-            "example, specifying '40' would ignore the HW_SLOWDOWN and SW_THERMAL throttling reasons.\n"
-            "Valid throttling reasons and their corresponding bitmasks (given in parentheses) are:\n"
+            "example, specifying '40' would ignore the HW_SLOWDOWN and SW_THERMAL clocks event reasons.\n"
+            "Valid clocks event reasons and their corresponding bitmasks (given in parentheses) are:\n"
             "HW_SLOWDOWN (8)\nSW_THERMAL (32)\nHW_THERMAL (64)\nHW_POWER_BRAKE (128)",
             false,
             "",
-            "throttle reasons to ignore",
+            "clocks event reasons to ignore",
             cmd);
 
         TCLAP::SwitchArg failEarly(
@@ -1304,7 +1400,34 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
                                                       1,
                                                       "total iterations",
                                                       cmd);
+        TCLAP::ValueArg<std::string> entityIds(
+            "", "entity-id", " Comma-separated list of entities to run the diag on.", false, "", "entityId", cmd);
+        TCLAP::ValueArg<int> channelFd(
+            "", "channel-fd", "A file description used to send back response to caller.", false, -1, "channel fd", cmd);
+        TCLAP::ValueArg<unsigned int> responseVersion("",
+                                                      "response-version",
+                                                      "The version of diag response to be returned via channel-fd.",
+                                                      false,
+                                                      dcgmDiagResponse_version11,
+                                                      "responseVersion",
+                                                      cmd);
+        TCLAP::SwitchArg rerunAsRoot(
+            "",
+            "rerun-as-root",
+            "Flag to indicate we are running all tests with root for the current term, attempting to execute as many tests as possible "
+            "without failing due to 'test not found' errors unless all specified tests are genuinely unavailable.",
+            cmd,
+            false);
 
+        unsigned int constexpr DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS { 5000000 };
+        TCLAP::ValueArg<unsigned int> watchFrequency(
+            "",
+            "watch-frequency",
+            "Specify the watch frequency in microseconds for the fields being watched.",
+            false,
+            DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS,
+            "watch frquency",
+            cmd);
 
         cmd.parse(argc, argv);
 
@@ -1314,22 +1437,24 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             configFile = configFileArg;
         }
 
-        listGpus                    = listGpusArg.getValue();
-        listTests                   = listTestsArg.getValue();
-        nvvsCommon.verbose          = verboseArg.getValue();
-        nvvsCommon.pluginPath       = pluginPathArg.getValue();
-        nvvsCommon.parse            = parseArg.getValue();
-        nvvsCommon.quietMode        = quietModeArg.getValue();
-        nvvsCommon.configless       = configLessArg.getValue();
-        nvvsCommon.fakegpusString   = fakeGpusArg.getValue();
-        nvvsCommon.statsOnlyOnFail  = statsOnFailArg.getValue();
-        nvvsCommon.indexString      = indexArg.getValue();
-        nvvsCommon.parmsString      = parms.getValue();
-        nvvsCommon.jsonOutput       = jsonArg.getValue();
-        nvvsCommon.dcgmHostname     = dcgmHost.getValue();
-        nvvsCommon.fromDcgm         = fromDcgmArg.getValue();
-        nvvsCommon.currentIteration = currentIteration.getValue();
-        nvvsCommon.totalIterations  = totalIterations.getValue();
+        listGpus                       = listGpusArg.getValue();
+        listTests                      = listTestsArg.getValue();
+        nvvsCommon.verbose             = verboseArg.getValue();
+        nvvsCommon.pluginPath          = pluginPathArg.getValue();
+        nvvsCommon.parse               = parseArg.getValue();
+        nvvsCommon.quietMode           = quietModeArg.getValue();
+        nvvsCommon.configless          = configLessArg.getValue();
+        nvvsCommon.fakegpusString      = fakeGpusArg.getValue();
+        nvvsCommon.statsOnlyOnFail     = statsOnFailArg.getValue();
+        nvvsCommon.indexString         = indexArg.getValue();
+        nvvsCommon.parmsString         = parms.getValue();
+        nvvsCommon.dcgmHostname        = dcgmHost.getValue();
+        nvvsCommon.currentIteration    = currentIteration.getValue();
+        nvvsCommon.totalIterations     = totalIterations.getValue();
+        nvvsCommon.entityIds           = entityIds.getValue();
+        nvvsCommon.channelFd           = channelFd.getValue();
+        nvvsCommon.diagResponseVersion = responseVersion.getValue();
+        nvvsCommon.rerunAsRoot         = rerunAsRoot.isSet();
         nvvsCommon.SetStatsPath(statsPathArg.getValue());
 
         this->initWaitTime = initializationWaitTime.getValue();
@@ -1351,13 +1476,27 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
         if (hwdiaglogfileArg.isSet())
             hwDiagLogFile = hwdiaglogfileArg.getValue();
 
-        // Set bitmask for ignoring user specified throttling reasons
-        if (throttleMask.isSet())
+
+        if (clocksEventMask.isSet() && throttleMask.isSet())
+        {
+            throw TCLAP::CmdLineParseException("Must specify no more than one of: clocksevent-mask, throttle-mask");
+        }
+
+        // Set bitmask for ignoring user specified clocks reasons
+        if (clocksEventMask.isSet())
+        {
+            std::string reasonStr = clocksEventMask.getValue();
+            // Make reasonStr lower case for parsing
+            std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
+            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(reasonStr);
+        }
+        // Set bitmask for ignoring user specified clocks reasons (deprecated)
+        else if (throttleMask.isSet())
         {
             std::string reasonStr = throttleMask.getValue();
             // Make reasonStr lower case for parsing
             std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
-            nvvsCommon.throttleIgnoreMask = GetThrottleIgnoreReasonMaskFromString(reasonStr);
+            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(reasonStr);
         }
 
         // Enable early failure checks if requested
@@ -1367,6 +1506,21 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             if (failCheckInterval.isSet())
             {
                 nvvsCommon.failCheckInterval = failCheckInterval.getValue();
+            }
+        }
+
+        if (watchFrequency.isSet())
+        {
+            unsigned int watchFrequencyVal = watchFrequency.getValue();
+            // Safe guard the lower bound to avoid excessive memory usage
+            // Revert to default values when users input too fast (100 ms) /slow (60 s) watch frequency
+            if (watchFrequencyVal < 100000 || watchFrequencyVal > 60000000)
+            {
+                nvvsCommon.watchFrequency = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
+            }
+            else
+            {
+                nvvsCommon.watchFrequency = watchFrequencyVal;
             }
         }
     }

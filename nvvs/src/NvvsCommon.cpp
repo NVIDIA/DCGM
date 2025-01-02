@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 #include <sys/stat.h>
@@ -22,6 +23,8 @@
 #include "NvvsCommon.h"
 #include "PluginStrings.h"
 #include "dcgm_structs.h"
+#include <DcgmStringHelpers.h>
+#include <NvvsExitCode.h>
 
 NvvsCommon::NvvsCommon()
     : logFile()
@@ -43,18 +46,17 @@ NvvsCommon::NvvsCommon()
     , fakegpusString()
     , parmsString()
     , parms()
-    , jsonOutput(false)
-    , fromDcgm(false)
     , dcgmHostname()
-    , throttleIgnoreMask(DCGM_INT64_BLANK)
+    , clocksEventIgnoreMask(DCGM_INT64_BLANK)
     , failEarly(false)
     , failCheckInterval(5)
     , currentIteration(0)
     , totalIterations(1)
-
-{
-    memset(m_gpus, 0, sizeof(m_gpus));
-}
+    , channelFd(-1)
+    , diagResponseVersion(dcgmDiagResponse_version11)
+    , rerunAsRoot(false)
+    , watchFrequency(DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS)
+{}
 
 NvvsCommon::NvvsCommon(const NvvsCommon &other)
     : logFile(other.logFile)
@@ -76,17 +78,17 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , fakegpusString(other.fakegpusString)
     , parmsString(other.parmsString)
     , parms(other.parms)
-    , jsonOutput(other.jsonOutput)
-    , fromDcgm(other.fromDcgm)
     , dcgmHostname(other.dcgmHostname)
-    , throttleIgnoreMask(other.throttleIgnoreMask)
+    , clocksEventIgnoreMask(other.clocksEventIgnoreMask)
     , failEarly(other.failEarly)
     , failCheckInterval(other.failCheckInterval)
     , currentIteration(other.currentIteration)
     , totalIterations(other.totalIterations)
-{
-    memset(m_gpus, 0, sizeof(m_gpus));
-}
+    , channelFd(other.channelFd)
+    , diagResponseVersion(other.diagResponseVersion)
+    , rerunAsRoot(other.rerunAsRoot)
+    , watchFrequency(other.watchFrequency)
+{}
 
 NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
 {
@@ -109,14 +111,16 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     fakegpusString         = other.fakegpusString;
     parmsString            = other.parmsString;
     parms                  = other.parms;
-    jsonOutput             = other.jsonOutput;
-    fromDcgm               = other.fromDcgm;
     dcgmHostname           = other.dcgmHostname;
-    throttleIgnoreMask     = other.throttleIgnoreMask;
+    clocksEventIgnoreMask  = other.clocksEventIgnoreMask;
     failEarly              = other.failEarly;
     failCheckInterval      = other.failCheckInterval;
     currentIteration       = other.currentIteration;
     totalIterations        = other.totalIterations;
+    channelFd              = other.channelFd;
+    diagResponseVersion    = other.diagResponseVersion;
+    rerunAsRoot            = other.rerunAsRoot;
+    watchFrequency         = other.watchFrequency;
 
     return *this;
 }
@@ -142,14 +146,14 @@ void NvvsCommon::Init()
     fakegpusString = "";
     parmsString    = "";
     parms.clear();
-    jsonOutput         = false;
-    fromDcgm           = false;
-    dcgmHostname       = "";
-    throttleIgnoreMask = DCGM_INT64_BLANK;
-    failEarly          = false;
-    failCheckInterval  = 5;
-    currentIteration   = 0;
-    totalIterations    = 1;
+    dcgmHostname          = "";
+    clocksEventIgnoreMask = DCGM_INT64_BLANK;
+    failEarly             = false;
+    failCheckInterval     = 5;
+    currentIteration      = 0;
+    totalIterations       = 1;
+    channelFd             = -1;
+    watchFrequency        = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
 }
 
 void NvvsCommon::SetStatsPath(const std::string &statsPath)
@@ -211,8 +215,8 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(PULSE_TEST_PLUGIN_NAME);
         case DCGM_EUD_TEST_INDEX:
             return std::string(EUD_PLUGIN_NAME);
-        case DCGM_CPU_EUD_TEST_INDEX:
-            return std::string(EUD_CPU_EUD_TEST_NAME);
+        case DCGM_NVBANDWIDTH_INDEX:
+            return std::string(NVBANDWIDTH_PLUGIN_NAME);
         default:
             return std::string("Unknown");
     }
@@ -271,10 +275,47 @@ dcgmPerGpuTestIndices_t GetTestIndex(const std::string name)
     {
         return DCGM_EUD_TEST_INDEX;
     }
-    else if (testName == EUD_CPU_EUD_TEST_NAME)
+    else if (testName == NVBANDWIDTH_PLUGIN_NAME)
     {
-        return DCGM_CPU_EUD_TEST_INDEX;
+        return DCGM_NVBANDWIDTH_INDEX;
     }
 
     return DCGM_UNKNOWN_INDEX;
+}
+
+dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult)
+{
+    switch (nvvsResult)
+    {
+        case NVVS_RESULT_PASS:
+            return DCGM_DIAG_RESULT_PASS;
+        case NVVS_RESULT_WARN:
+            return DCGM_DIAG_RESULT_WARN;
+        case NVVS_RESULT_FAIL:
+            return DCGM_DIAG_RESULT_FAIL;
+        case NVVS_RESULT_SKIP:
+            return DCGM_DIAG_RESULT_SKIP;
+        default:
+        {
+            log_error("Unknown NVVS result {}", static_cast<int>(nvvsResult));
+            return DCGM_DIAG_RESULT_FAIL;
+        }
+    }
+}
+
+nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result)
+{
+    switch (result)
+    {
+        case DCGM_DIAG_RESULT_PASS:
+            return NVVS_RESULT_PASS;
+        case DCGM_DIAG_RESULT_WARN:
+            return NVVS_RESULT_WARN;
+        case DCGM_DIAG_RESULT_FAIL:
+            return NVVS_RESULT_FAIL;
+        case DCGM_DIAG_RESULT_SKIP:
+        case DCGM_DIAG_RESULT_NOT_RUN:
+        default:
+            return NVVS_RESULT_SKIP;
+    }
 }

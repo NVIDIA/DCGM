@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "PluginInterface.h"
+#include "dcgm_fields.h"
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
 
@@ -25,64 +27,62 @@
 #include <PluginStrings.h>
 
 /*************************************************************************/
-ConstantPower::ConstantPower(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
+ConstantPower::ConstantPower(dcgmHandle_t handle)
     : m_testParameters(nullptr)
     , m_dcgmCommErrorOccurred(false)
     , m_dcgmRecorderInitialized(true)
     , m_dcgmRecorder(handle)
     , m_handle(handle)
     , m_testDuration(0)
+    , m_maxMatrixDim(TP_MAX_DIMENSION)
+    , m_useDgemv(false)
     , m_useDgemm(false)
     , m_targetPower(0.0)
     , m_sbeFailureThreshold(0.0)
     , m_hostA(nullptr)
     , m_hostB(nullptr)
     , m_hostC(nullptr)
+    , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
-    TestParameters *tp;
-
     m_infoStruct.testIndex        = DCGM_TARGETED_POWER_INDEX;
     m_infoStruct.shortDescription = "This plugin will keep the list of GPUs at a constant power level.";
-    m_infoStruct.testGroups       = "Power";
+    m_infoStruct.testCategories   = "Power";
     m_infoStruct.selfParallel     = true;
     m_infoStruct.logFileTag       = TP_PLUGIN_NAME;
 
     /* Populate default test parameters */
-    tp = new TestParameters();
-    tp->AddString(PS_RUN_IF_GOM_ENABLED, "False");
-    tp->AddString(TP_STR_USE_DGEMM, "True");
-    tp->AddString(TP_STR_FAIL_ON_CLOCK_DROP, "True");
-    tp->AddDouble(TP_STR_TEST_DURATION, 120.0);
-    tp->AddDouble(TP_STR_TARGET_POWER, 100.0);
-    tp->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 4.0);
-    tp->AddDouble(TP_STR_READJUST_INTERVAL, 2.0);
-    tp->AddDouble(TP_STR_PRINT_INTERVAL, 1.0);
-    tp->AddDouble(TP_STR_TARGET_POWER_MIN_RATIO, 0.75);
-    tp->AddDouble(TP_STR_TARGET_POWER_MAX_RATIO, 1.2);
-    tp->AddDouble(TP_STR_MOV_AVG_PERIODS, 15.0); // Max is same as max for test duration
-    tp->AddDouble(TP_STR_TARGET_MOVAVG_MIN_RATIO, 0.95);
-    tp->AddDouble(TP_STR_TARGET_MOVAVG_MAX_RATIO, 1.05);
-    tp->AddDouble(TP_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
-    tp->AddDouble(TP_STR_MAX_MEMORY_CLOCK, 0.0);
-    tp->AddDouble(TP_STR_MAX_GRAPHICS_CLOCK, 0.0);
-    tp->AddDouble(TP_STR_OPS_PER_REQUEUE, 1.0);
-    tp->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1.0);
-    tp->AddDouble(TP_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
-    tp->AddString(TP_STR_IS_ALLOWED, "False");
-    tp->AddString(PS_LOGFILE, "stats_targeted_power.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
-    m_infoStruct.defaultTestParameters = tp;
-    m_testParameters                   = new TestParameters(*tp);
+    m_testParameters = std::make_unique<TestParameters>();
+    m_testParameters->AddString(PS_RUN_IF_GOM_ENABLED, "False");
+    m_testParameters->AddString(TP_STR_USE_DGEMV, "False");
+    m_testParameters->AddString(TP_STR_USE_DGEMM, "True");
+    m_testParameters->AddString(TP_STR_FAIL_ON_CLOCK_DROP, "True");
+    m_testParameters->AddDouble(TP_STR_TEST_DURATION, 120.0);
+    m_testParameters->AddDouble(TP_STR_TARGET_POWER, 100.0);
+    m_testParameters->AddDouble(TP_STR_CUDA_STREAMS_PER_GPU, 4.0);
+    m_testParameters->AddDouble(TP_STR_READJUST_INTERVAL, 2.0);
+    m_testParameters->AddDouble(TP_STR_PRINT_INTERVAL, 1.0);
+    m_testParameters->AddDouble(TP_STR_TARGET_POWER_MIN_RATIO, 0.75);
+    m_testParameters->AddDouble(TP_STR_TARGET_POWER_MAX_RATIO, 1.2);
+    m_testParameters->AddDouble(TP_STR_MOV_AVG_PERIODS, 15.0); // Max is same as max for test duration
+    m_testParameters->AddDouble(TP_STR_TARGET_MOVAVG_MIN_RATIO, 0.95);
+    m_testParameters->AddDouble(TP_STR_TARGET_MOVAVG_MAX_RATIO, 1.05);
+    m_testParameters->AddDouble(TP_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
+    m_testParameters->AddDouble(TP_STR_MAX_MEMORY_CLOCK, 0.0);
+    m_testParameters->AddDouble(TP_STR_MAX_GRAPHICS_CLOCK, 0.0);
+    m_testParameters->AddDouble(TP_STR_OPS_PER_REQUEUE, 1.0);
+    m_testParameters->AddDouble(TP_STR_STARTING_MATRIX_DIM, 1.0);
+    m_testParameters->AddDouble(TP_STR_MAX_MATRIX_DIM, TP_MAX_DIMENSION * 1.0);
+    m_testParameters->AddDouble(TP_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
+    m_testParameters->AddString(TP_STR_IS_ALLOWED, "False");
+    m_testParameters->AddString(PS_LOGFILE, "stats_targeted_power.json");
+    m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
 }
 
 /*************************************************************************/
 ConstantPower::~ConstantPower()
 {
     Cleanup();
-    if (m_testParameters != nullptr)
-    {
-        delete m_testParameters;
-    }
 }
 
 void ConstantPower::Cleanup()
@@ -136,33 +136,41 @@ void ConstantPower::Cleanup()
 }
 
 /*************************************************************************/
-bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
+bool ConstantPower::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
     std::unique_ptr<CPDevice> device;
 
-    if (gpuInfo == nullptr)
+    if (entityInfo == nullptr)
     {
         DCGM_LOG_ERROR << "Cannot initialize without GPU information";
         return false;
     }
 
-    m_gpuInfo = *gpuInfo;
+    InitializeForEntityList(GetTargetedPowerTestName(), *entityInfo);
 
-    for (int gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
+    for (unsigned int gpuListIndex = 0; gpuListIndex < entityInfo->numEntities; ++gpuListIndex)
     {
-        if (gpuInfo->gpus[gpuListIndex].status == DcgmEntityStatusFake
-            || gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciDeviceId == 0)
+        if (entityInfo->entities[gpuListIndex].entity.entityGroupId != DCGM_FE_GPU)
         {
-            log_debug("Skipping cuda init for fake gpu {}", gpuInfo->gpus[gpuListIndex].gpuId);
             continue;
         }
 
-        unsigned int gpuId = gpuInfo->gpus[gpuListIndex].gpuId;
+        if (entityInfo->entities[gpuListIndex].auxField.gpu.status == DcgmEntityStatusFake
+            || entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciDeviceId == 0)
+        {
+            log_debug("Skipping cuda init for fake gpu {}", entityInfo->entities[gpuListIndex].entity.entityId);
+            continue;
+        }
+
+        unsigned int gpuId = entityInfo->entities[gpuListIndex].entity.entityId;
 
         try
         {
-            device
-                = std::make_unique<CPDevice>(gpuId, gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciBusId, this);
+            device = std::make_unique<CPDevice>(
+                GetTargetedPowerTestName(),
+                gpuId,
+                entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciBusId,
+                this);
 
             /* Get the power management limits for the device */
             dcgmDeviceAttributes_t attrs;
@@ -175,21 +183,22 @@ bool ConstantPower::Init(dcgmDiagPluginGpuList_t *gpuInfo)
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_DCGM_API, d, ret, "dcgmGetDeviceAttributes");
-                AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
+                AddError(GetTargetedPowerTestName(), d);
                 log_error("Can't get the enforced power limit: {}", d.GetMessage());
                 return false;
             }
         }
-        catch (const DcgmError &d)
+        catch (DcgmError &d)
         {
-            AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
+            d.SetGpuId(gpuId);
+            AddError(GetTargetedPowerTestName(), d);
             return false;
         }
         catch (const std::runtime_error &re)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
-            AddErrorForGpu(TP_PLUGIN_NAME, gpuId, d);
+            AddError(GetTargetedPowerTestName(), d);
 
             return false;
         }
@@ -214,11 +223,11 @@ int ConstantPower::CudaInit()
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
-    if (m_useDgemm)
+    if (m_useDgemv || m_useDgemm)
     {
         valueSize = sizeof(double);
     }
@@ -227,8 +236,10 @@ int ConstantPower::CudaInit()
         valueSize = sizeof(float);
     }
 
-    arrayByteSize = valueSize * TP_MAX_DIMENSION * TP_MAX_DIMENSION;
-    arrayNelem    = TP_MAX_DIMENSION * TP_MAX_DIMENSION;
+    // arrayByteSize = valueSize * TP_MAX_DIMENSION * TP_MAX_DIMENSION;
+    // arrayNelem    = TP_MAX_DIMENSION * TP_MAX_DIMENSION;
+    arrayByteSize = valueSize * m_maxMatrixDim * m_maxMatrixDim;
+    arrayNelem    = m_maxMatrixDim * m_maxMatrixDim;
 
     m_hostA = malloc(arrayByteSize);
     m_hostB = malloc(arrayByteSize);
@@ -238,20 +249,20 @@ int ConstantPower::CudaInit()
         log_error("Error allocating {} bytes x 3 on the host (malloc)", (int)arrayByteSize);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC_HOST, d, arrayByteSize);
-        AddError(TP_PLUGIN_NAME, d);
+        AddError(GetTargetedPowerTestName(), d);
         return -1;
     }
 
     /* Fill the arrays with random values */
     srand(time(NULL));
 
-    if (m_useDgemm)
+    if (m_useDgemv || m_useDgemm)
     {
         double *doubleHostA = (double *)m_hostA;
         double *doubleHostB = (double *)m_hostB;
         double *doubleHostC = (double *)m_hostC;
 
-        for (int i = 0; i < arrayNelem; i++)
+        for (size_t i = 0; i < arrayNelem; ++i)
         {
             doubleHostA[i] = (double)rand() / 100.0;
             doubleHostB[i] = (double)rand() / 100.0;
@@ -265,7 +276,7 @@ int ConstantPower::CudaInit()
         float *floatHostB = (float *)m_hostB;
         float *floatHostC = (float *)m_hostC;
 
-        for (int i = 0; i < arrayNelem; i++)
+        for (size_t i = 0; i < arrayNelem; ++i)
         {
             floatHostA[i] = (float)rand() / 100.0;
             floatHostB[i] = (float)rand() / 100.0;
@@ -285,7 +296,7 @@ int ConstantPower::CudaInit()
         cuSt = cudaGetDeviceProperties(&device->cudaDevProp, device->cudaDeviceIdx);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaGetDeviceProperties", cuSt, device->gpuId);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaGetDeviceProperties", cuSt, device->gpuId);
             return -1;
         }
 
@@ -300,7 +311,7 @@ int ConstantPower::CudaInit()
                 std::stringstream ss;
                 ss << "'" << cudaGetErrorString(cuSt) << "' for GPU " << device->gpuId;
                 d.AddDetail(ss.str());
-                AddErrorForGpu(TP_PLUGIN_NAME, device->gpuId, d);
+                AddError(GetTargetedPowerTestName(), d);
                 return -1;
             }
             device->NcudaStreams++;
@@ -310,7 +321,7 @@ int ConstantPower::CudaInit()
         cubSt = CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR(TP_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(GetTargetedPowerTestName(), "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         device->allocatedCublasHandle = 1;
@@ -318,13 +329,13 @@ int ConstantPower::CudaInit()
         cuSt = cudaMalloc((void **)&device->deviceA, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceB, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
@@ -334,7 +345,7 @@ int ConstantPower::CudaInit()
             cuSt = cudaMalloc((void **)&device->deviceC[i], arrayByteSize);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
             device->NdeviceC++;
@@ -344,21 +355,21 @@ int ConstantPower::CudaInit()
         cuSt = cudaMemcpy(device->deviceA, m_hostA, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
         cuSt = cudaMemcpy(device->deviceB, m_hostB, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
         cuSt = cudaMemcpy(device->deviceC[0], m_hostC, arrayByteSize, cudaMemcpyHostToDevice);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         /* Copy the rest of the C arrays from the first C array */
@@ -367,7 +378,7 @@ int ConstantPower::CudaInit()
             cuSt = cudaMemcpy(device->deviceC[i], device->deviceC[0], arrayByteSize, cudaMemcpyDeviceToDevice);
             if (cuSt != cudaSuccess)
             {
-                LOG_CUDA_ERROR(TP_PLUGIN_NAME, "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy", cuSt, device->gpuId, arrayByteSize);
                 return -1;
             }
         }
@@ -378,12 +389,23 @@ int ConstantPower::CudaInit()
 
 /*************************************************************************/
 void ConstantPower::Go(std::string const &testName,
+                       dcgmDiagPluginEntityList_v1 const *entityInfo,
                        unsigned int numParameters,
-                       const dcgmDiagPluginTestParameter_t *testParameters)
+                       dcgmDiagPluginTestParameter_t const *testParameters)
 {
-    InitializeForGpuList(testName, m_gpuInfo);
+    if (testName != GetTargetedPowerTestName())
+    {
+        log_error("failed to test due to unknown test name [{}].", testName);
+        return;
+    }
 
-    if (UsingFakeGpus())
+    if (!Init(entityInfo))
+    {
+        log_error("Failed to initialize devices for targeted power plugin");
+        return;
+    }
+
+    if (UsingFakeGpus(testName))
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
@@ -405,12 +427,15 @@ void ConstantPower::Go(std::string const &testName,
     }
 
     /* Cache test parameters */
+    m_useDgemv            = m_testParameters->GetBoolFromString(TP_STR_USE_DGEMV);
     m_useDgemm            = m_testParameters->GetBoolFromString(TP_STR_USE_DGEMM);
     m_testDuration        = m_testParameters->GetDouble(TP_STR_TEST_DURATION);
     m_targetPower         = m_testParameters->GetDouble(TP_STR_TARGET_POWER);
     m_sbeFailureThreshold = m_testParameters->GetDouble(TP_STR_SBE_ERROR_THRESHOLD);
+    m_maxMatrixDim        = m_testParameters->GetDouble(TP_STR_MAX_MATRIX_DIM);
 
-    result = RunTest();
+
+    result = RunTest(entityInfo);
     if (main_should_stop)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -456,7 +481,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
     double minRatio       = m_testParameters->GetDouble(TP_STR_TARGET_POWER_MIN_RATIO);
     double minRatioTarget = minRatio * m_targetPower;
 
-    RecordObservedMetric(device->gpuId, TP_STR_TARGET_POWER, maxVal);
+    RecordObservedMetric(GetTargetedPowerTestName(), device->gpuId, TP_STR_TARGET_POWER, maxVal);
 
     if (maxVal < minRatioTarget)
     {
@@ -469,7 +494,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
             buf << "Max power of " << maxVal << " did not reach desired power minimum " << TP_STR_TARGET_POWER_MIN_RATIO
                 << " of " << minRatioTarget << " for GPU " << device->gpuId
                 << " because the enforced power limit has been set to " << device->maxPowerTarget;
-            AddInfoVerboseForGpu(TP_PLUGIN_NAME, device->gpuId, buf.str());
+            AddInfoVerboseForGpu(GetTargetedPowerTestName(), device->gpuId, buf.str());
         }
         else
         {
@@ -491,7 +516,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
     // Add a message about the max / average power usage
     std::string infoStr = fmt::format(
         "GPU {} max power: {:.1f} W average power usage: {:.1f} W", device->gpuId, maxVal, fsr.response.values[1].fp64);
-    AddInfoVerboseForGpu(TP_PLUGIN_NAME, device->gpuId, infoStr);
+    AddInfoVerboseForGpu(GetTargetedPowerTestName(), device->gpuId, infoStr);
 
     return true;
 }
@@ -530,9 +555,10 @@ bool ConstantPower::CheckPassFail(timelib64_t startTime, timelib64_t earliestSto
                  "Test duration of %.1f will not produce useful results as "
                  "this test takes at least 30 seconds to get to target power.",
                  m_testDuration);
-        AddInfo(TP_PLUGIN_NAME, buf);
+        AddInfo(GetTargetedPowerTestName(), buf);
     }
 
+    auto const &gpuList = m_tests.at(GetTargetedPowerTestName()).GetGpuList();
     for (size_t i = 0; i < m_device.size(); i++)
     {
         if (m_device[i]->m_lowPowerLimit)
@@ -542,7 +568,8 @@ bool ConstantPower::CheckPassFail(timelib64_t startTime, timelib64_t earliestSto
 
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, TP_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(
+            this, GetTargetedPowerTestName(), gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -566,8 +593,8 @@ bool ConstantPower::EnforcedPowerLimitTooLow()
             // Enforced power limit is too low. Skip the test.
             DcgmError d { m_device[i]->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ENFORCED_POWER_LIMIT, d, m_device[i]->gpuId, m_device[i]->maxPowerTarget);
-            AddErrorForGpu(TP_PLUGIN_NAME, m_device[i]->gpuId, d);
-            SetResultForGpu(TP_PLUGIN_NAME, m_device[i]->gpuId, NVVS_RESULT_SKIP);
+            AddError(GetTargetedPowerTestName(), d);
+            SetResultForGpu(GetTargetedPowerTestName(), m_device[i]->gpuId, NVVS_RESULT_SKIP);
             m_device[i]->m_lowPowerLimit = true;
         }
         else
@@ -587,17 +614,19 @@ private:
     ConstantPower &m_plugin;          /* ConstantPower plugin for logging and failure checks */
     TestParameters *m_testParameters; /* Read-only test parameters */
     DcgmRecorder &m_dcgmRecorder;
-    int m_useDgemm;                    /* Wheter to use dgemm (1) or sgemm (0) for operations */
-    double m_targetPower;              /* Target stress in gflops */
-    double m_testDuration;             /* Target test duration in seconds */
-    timelib64_t m_stopTime;            /* Timestamp when run() finished */
-    double m_reAdjustInterval;         /* How often to change the matrix size in seconds */
-    double m_printInterval;            /* How often to print out status to stdout */
-    int m_opsPerRequeue;               /* How many cublas operations to queue to each stream each time we queue work
-                                                   to it */
-    int m_startingMatrixDim;           /* Matrix size to start at when ramping up to target power. Since we ramp
-                                                   up our matrix size slowly, setting this higher will decrease the ramp up
-                                                   time needed */
+    int m_useDgemv;            /* Wheter to use dgemv (true) for operations */
+    int m_useDgemm;            /* Wheter to use dgemm (1) or sgemm (0) for operations */
+    double m_targetPower;      /* Target stress in gflops */
+    double m_testDuration;     /* Target test duration in seconds */
+    timelib64_t m_stopTime;    /* Timestamp when run() finished */
+    double m_reAdjustInterval; /* How often to change the matrix size in seconds */
+    double m_printInterval;    /* How often to print out status to stdout */
+    int m_opsPerRequeue;       /* How many cublas operations to queue to each stream each time we queue work
+                                           to it */
+    int m_startingMatrixDim;   /* Matrix size to start at when ramping up to target power. Since we ramp
+                                           up our matrix size slowly, setting this higher will decrease the ramp up
+                                           time needed */
+    int m_maxMatrixDim;
     bool m_failEarly;                  /* true if we should stop when we hit the first error */
     unsigned long m_failCheckInterval; /* the interval at which we should check for errors */
 
@@ -640,7 +669,7 @@ public:
      * Worker thread main - streams version
      *
      */
-    void run(void);
+    void run(void) override;
 
 private:
     /*****************************************************************************/
@@ -669,7 +698,7 @@ private:
  * ConstantPower RunTest
  */
 /****************************************************************************/
-bool ConstantPower::RunTest()
+bool ConstantPower::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
     int st, Nrunning = 0;
     ConstantPowerWorker *workerThreads[TP_MAX_DEVICES] = { 0 };
@@ -696,7 +725,7 @@ bool ConstantPower::RunTest()
     bool failEarly                  = m_testParameters->GetBoolFromString(FAIL_EARLY);
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
 
-    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
+    EarlyFailChecker efc(m_testParameters.get(), failEarly, failCheckInterval, *entityInfo);
 
     try /* Catch runtime errors */
     {
@@ -706,7 +735,7 @@ bool ConstantPower::RunTest()
             if (m_device[i]->m_lowPowerLimit == false)
             {
                 workerThreads[i] = new ConstantPowerWorker(
-                    m_device[i], *this, m_testParameters, m_dcgmRecorder, failEarly, failCheckInterval);
+                    m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
                 workerThreads[i]->Start();
                 Nrunning++;
             }
@@ -748,8 +777,8 @@ bool ConstantPower::RunTest()
         log_error("Caught runtime_error {}", e.what());
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
-        AddError(TP_PLUGIN_NAME, d);
-        SetResult(TP_PLUGIN_NAME, NVVS_RESULT_FAIL);
+        AddError(GetTargetedPowerTestName(), d);
+        SetResult(GetTargetedPowerTestName(), NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -805,6 +834,10 @@ bool ConstantPower::RunTest()
     return true;
 }
 
+std::string ConstantPower::GetTargetedPowerTestName() const
+{
+    return TP_PLUGIN_NAME;
+}
 
 /****************************************************************************/
 /*
@@ -825,6 +858,7 @@ ConstantPowerWorker::ConstantPowerWorker(CPDevice *device,
     , m_failEarly(failEarly)
     , m_failCheckInterval(failCheckInterval)
 {
+    m_useDgemv          = tp->GetBoolFromString(TP_STR_USE_DGEMV);
     m_useDgemm          = tp->GetBoolFromString(TP_STR_USE_DGEMM);
     m_targetPower       = tp->GetDouble(TP_STR_TARGET_POWER);
     m_testDuration      = tp->GetDouble(TP_STR_TEST_DURATION);
@@ -832,6 +866,7 @@ ConstantPowerWorker::ConstantPowerWorker(CPDevice *device,
     m_printInterval     = tp->GetDouble(TP_STR_PRINT_INTERVAL);
     m_opsPerRequeue     = (int)tp->GetDouble(TP_STR_OPS_PER_REQUEUE);
     m_startingMatrixDim = (int)tp->GetDouble(TP_STR_STARTING_MATRIX_DIM);
+    m_maxMatrixDim      = (int)tp->GetDouble(TP_STR_MAX_MATRIX_DIM);
 }
 
 /****************************************************************************/
@@ -871,7 +906,8 @@ int ConstantPowerWorker::RecalcMatrixDim(int currentMatrixDim, double power)
     /* if we're targeting close to max power, just go for it  */
     if (m_targetPower >= (0.90 * m_device->maxPowerTarget))
     {
-        return TP_MAX_DIMENSION;
+        // return TP_MAX_DIMENSION;
+        return m_maxMatrixDim;
     }
 
     pctDiff = PercentDiff(power, m_targetPower);
@@ -895,7 +931,8 @@ int ConstantPowerWorker::RecalcMatrixDim(int currentMatrixDim, double power)
         /* Try to guess jump in load based on pct change desired and pct change in matrix ops */
         if (pctDiff < 0.0)
         {
-            for (workPctDiff = 0.0; workPctDiff < (-pctDiff) && matrixDim < TP_MAX_DIMENSION; matrixDim++)
+            // for (workPctDiff = 0.0; workPctDiff < (-pctDiff) && matrixDim < TP_MAX_DIMENSION; matrixDim++)
+            for (workPctDiff = 0.0; workPctDiff < (-pctDiff) && matrixDim < m_maxMatrixDim; matrixDim++)
             {
                 workPctDiff = PercentDiff(matrixDim * matrixDim, currentMatrixDim * currentMatrixDim);
                 // printf("loop pctdiff %.2f. workPctDiff %.2f\n", pctDiff, workPctDiff);
@@ -927,9 +964,13 @@ int ConstantPowerWorker::RecalcMatrixDim(int currentMatrixDim, double power)
     {
         matrixDim = 1;
     }
-    if (matrixDim > TP_MAX_DIMENSION)
+    // if (matrixDim > TP_MAX_DIMENSION)
+    // {
+    //     matrixDim = TP_MAX_DIMENSION;
+    // }
+    if (matrixDim > m_maxMatrixDim)
     {
-        matrixDim = TP_MAX_DIMENSION;
+        matrixDim = m_maxMatrixDim;
     }
 
     return matrixDim;
@@ -987,58 +1028,91 @@ void ConstantPowerWorker::run()
                     if (cubSt != CUBLAS_STATUS_SUCCESS)
                     {
                         LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                            &m_plugin, TP_PLUGIN_NAME, "cublasSetStream", cubSt, m_device->gpuId);
+                            &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasSetStream", cubSt, m_device->gpuId);
                         m_stopTime = timelib_usecSince1970();
                         return;
                     }
                     /* Make sure all streams have work. These are async calls, so they will
                        return immediately */
-                    if (m_useDgemm)
+                    if (m_useDgemv)
                     {
-                        cubSt = CublasProxy::CublasDgemm(m_device->cublasHandle,
+                        // Only the first column vector of matrix deviceB is used
+                        cubSt = CublasProxy::CublasDgemv(m_device->cublasHandle,
                                                          CUBLAS_OP_N,
-                                                         CUBLAS_OP_N,
-                                                         matrixDim,
                                                          matrixDim,
                                                          matrixDim,
                                                          &alpha,
                                                          (double *)m_device->deviceA,
                                                          matrixDim,
-                                                         (double *)m_device->deviceB,
-                                                         matrixDim,
+                                                         (double *)(m_device->deviceB),
+                                                         1,
                                                          &beta,
-                                                         (double *)m_device->deviceC[Cindex],
-                                                         matrixDim);
+                                                         (double *)(m_device->deviceC[Cindex]),
+                                                         1);
+
                         if (cubSt != CUBLAS_STATUS_SUCCESS)
                         {
                             LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                                &m_plugin, TP_PLUGIN_NAME, "cublasDgemm", cubSt, m_device->gpuId);
+                                &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasDgemv", cubSt, m_device->gpuId);
                             m_stopTime = timelib_usecSince1970();
                             return;
                         }
                     }
                     else
                     {
-                        cubSt = CublasProxy::CublasSgemm(m_device->cublasHandle,
-                                                         CUBLAS_OP_N,
-                                                         CUBLAS_OP_N,
-                                                         matrixDim,
-                                                         matrixDim,
-                                                         matrixDim,
-                                                         &floatAlpha,
-                                                         (float *)m_device->deviceA,
-                                                         matrixDim,
-                                                         (float *)m_device->deviceB,
-                                                         matrixDim,
-                                                         &floatBeta,
-                                                         (float *)m_device->deviceC[Cindex],
-                                                         matrixDim);
-                        if (cubSt != CUBLAS_STATUS_SUCCESS)
+                        if (m_useDgemm)
                         {
-                            LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                                &m_plugin, TP_PLUGIN_NAME, "cublasSgemm", cubSt, m_device->gpuId);
-                            m_stopTime = timelib_usecSince1970();
-                            return;
+                            cubSt = CublasProxy::CublasDgemm(m_device->cublasHandle,
+                                                             CUBLAS_OP_T,
+                                                             CUBLAS_OP_T,
+                                                             matrixDim,
+                                                             matrixDim,
+                                                             matrixDim,
+                                                             &alpha,
+                                                             (double *)m_device->deviceA,
+                                                             matrixDim,
+                                                             (double *)m_device->deviceB,
+                                                             matrixDim,
+                                                             &beta,
+                                                             (double *)m_device->deviceC[Cindex],
+                                                             matrixDim);
+                            if (cubSt != CUBLAS_STATUS_SUCCESS)
+                            {
+                                LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin,
+                                                            m_plugin.GetTargetedPowerTestName(),
+                                                            "cublasDgemm",
+                                                            cubSt,
+                                                            m_device->gpuId);
+                                m_stopTime = timelib_usecSince1970();
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            cubSt = CublasProxy::CublasSgemm(m_device->cublasHandle,
+                                                             CUBLAS_OP_T,
+                                                             CUBLAS_OP_T,
+                                                             matrixDim,
+                                                             matrixDim,
+                                                             matrixDim,
+                                                             &floatAlpha,
+                                                             (float *)m_device->deviceA,
+                                                             matrixDim,
+                                                             (float *)m_device->deviceB,
+                                                             matrixDim,
+                                                             &floatBeta,
+                                                             (float *)m_device->deviceC[Cindex],
+                                                             matrixDim);
+                            if (cubSt != CUBLAS_STATUS_SUCCESS)
+                            {
+                                LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin,
+                                                            m_plugin.GetTargetedPowerTestName(),
+                                                            "cublasSgemm",
+                                                            cubSt,
+                                                            m_device->gpuId);
+                                m_stopTime = timelib_usecSince1970();
+                                return;
+                            }
                         }
                     }
                 }

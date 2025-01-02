@@ -24,6 +24,7 @@
 #include "DcgmError.h"
 #include "TestDiagManager.h"
 #include "TestDiagManagerStrings.h"
+#include "dcgm_structs.h"
 #include <DcgmCoreCommunication.h>
 
 dcgmCoreCallbacks_t g_coreCallbacks;
@@ -33,7 +34,7 @@ TestDiagManager::TestDiagManager()
 TestDiagManager::~TestDiagManager()
 {}
 
-int TestDiagManager::Init(const TestDcgmModuleInitParams &initParams)
+int TestDiagManager::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     g_coreCallbacks.postfunc = PostRequestToCore;
     g_coreCallbacks.version  = dcgmCoreCallbacks_version;
@@ -94,15 +95,6 @@ int TestDiagManager::Run()
     else
         printf("TestDiagManager::TestInvalidVersion PASSED\n");
 
-    st = TestFillResponseStructure();
-    if (st < 0)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestDiagManager::TestFillResponseStructure FAILED with %d\n", st);
-    }
-    else
-        printf("TestDiagManager::TestFillRespsonseStructure PASSED\n");
-
     st = TestPerformExternalCommand();
     if (st < 0)
     {
@@ -111,24 +103,6 @@ int TestDiagManager::Run()
     }
     else
         printf("TestDiagManager::TestPerformExternalCommand PASSED\n");
-
-    st = TestErrorsFromLevelOne();
-    if (st < 0)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestDiagManager::TestErrorsFromLevelOne FAILED with %d\n", st);
-    }
-    else
-        printf("TestDiagManager::TestErrorsFromLevelOne PASSED\n");
-
-    st = TestParseExpectedNumEntitiesForGpus();
-    if (st < 0)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestDiagManager::TestParseExpectedNumEntitiesForGpus FAILED with %d\n", st);
-    }
-    else
-        printf("TestDiagManager::TestParseExpectedNumEntitiesForGpus PASSED\n");
 
     if (Nfailed > 0)
     {
@@ -238,7 +212,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     dcgmReturn_t result;
     std::string command;
     std::vector<std::string> cmdArgs;
-    dcgmRunDiag_v8 drd = {};
+    dcgmRunDiag_v9 drd = {};
     DcgmDiagManager am(g_coreCallbacks);
 
     std::string nvvsBinPath;
@@ -248,18 +222,20 @@ int TestDiagManager::TestCreateNvvsCommand()
     if (nvvsPathEnv)
         nvvsBinPath = std::string(nvvsPathEnv) + "/nvvs";
     else
-        nvvsBinPath = "/usr/share/nvidia-validation-suite/nvvs";
+        nvvsBinPath = "/usr/libexec/datacenter-gpu-manager-4/nvvs";
 
-    expected.push_back(nvvsBinPath + " -j -z --specifiedtest long --configless -d NONE");
-    expected.push_back(nvvsBinPath
-                       + " -j -z --specifiedtest \"memory bandwidth,sm stress,targeted stress\" --configless -d WARN");
+    std::string diagResponseVersionArg = fmt::format("--response-version {}", dcgmDiagResponse_version11);
+    expected.push_back(nvvsBinPath + " --channel-fd 3 " + diagResponseVersionArg
+                       + " --specifiedtest long --configless -d NONE");
+    expected.push_back(nvvsBinPath + " --channel-fd 3 " + diagResponseVersionArg
+                       + " --specifiedtest \"memory bandwidth,sm stress,targeted stress\" --configless -d WARN");
     expected.push_back(
-        nvvsBinPath
-        + " -j -z --specifiedtest \"memory bandwidth,sm stress,targeted stress\" --parameters \"memory bandwidth.minimum_bandwidth=5000;sm perf.target_stress=8500;targeted stress.test_duration=600\" --configless -d DEBUG");
+        nvvsBinPath + " --channel-fd 3 " + diagResponseVersionArg
+        + " --specifiedtest \"memory bandwidth,sm stress,targeted stress\" --parameters \"memory bandwidth.minimum_bandwidth=5000;sm perf.target_stress=8500;targeted stress.test_duration=600\" --configless -d DEBUG");
 
     // When no test names are specified, none isn't valid
     drd.validate = DCGM_POLICY_VALID_NONE;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
     if (result == 0)
     {
         // Should've failed
@@ -269,7 +245,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     // Check a valid scenario
     cmdArgs.clear();
     drd.validate = DCGM_POLICY_VALID_SV_LONG;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -286,7 +262,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testNames[1], sizeof(drd.testNames[1]), "sm stress");
     snprintf(drd.testNames[2], sizeof(drd.testNames[2]), "targeted stress");
     drd.debugLevel = DcgmLoggingSeverityWarning;
-    result         = am.CreateNvvsCommand(cmdArgs, &drd);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -304,7 +280,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testParms[2], sizeof(drd.testParms[2]), "targeted stress.test_duration=600");
     // Invalid severity to test default value
     drd.debugLevel = 20; // TODO (nik, aalsuldani): this is UB. Let's find a better way
-    result         = am.CreateNvvsCommand(cmdArgs, &drd);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -320,91 +296,42 @@ int TestDiagManager::TestCreateNvvsCommand()
     return result;
 }
 
-int TestDiagManager::TestParseExpectedNumEntitiesForGpus()
-{
-    dcgmReturn_t result    = DCGM_ST_OK;
-    unsigned int numErrors = 0;
-    std::string expectedNumEntities;
-
-    auto verifyCountAndError
-        = [&numErrors](std::string const &expectedNumEntities, unsigned int const &expectedGpuCount, bool error) {
-              unsigned int gpuCount;
-              auto err = ParseExpectedNumEntitiesForGpus(expectedNumEntities, gpuCount);
-              if (gpuCount != expectedGpuCount)
-              {
-                  fprintf(stderr, "Expected gpuCount %u, got %u.\n", expectedGpuCount, gpuCount);
-                  numErrors++;
-              }
-              else if (error && err.empty())
-              {
-                  fprintf(stderr,
-                          "Expected an error, but got no error for expectedNumEntities string '%s'\n",
-                          expectedNumEntities.c_str());
-                  numErrors++;
-              }
-              else if (!error && !err.empty())
-              {
-                  fprintf(stderr,
-                          "Expected no error, but got an error for expectedNumEntities string '%s': '%s'\n",
-                          expectedNumEntities.c_str(),
-                          err.c_str());
-                  numErrors++;
-              }
-          };
-
-    expectedNumEntities = "";
-    verifyCountAndError(expectedNumEntities, 0, false);
-
-    expectedNumEntities = "gpu:0";
-    verifyCountAndError(expectedNumEntities, 0, false);
-
-    expectedNumEntities = "Gpu:2";
-    verifyCountAndError(expectedNumEntities, 2, false);
-
-    expectedNumEntities = "GPU:4";
-    verifyCountAndError(expectedNumEntities, 4, false);
-
-    expectedNumEntities = "g:2";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "gpu:";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "cpu:0";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "gpu:2,cpu:3";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "gibberish2";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "gpu0";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    expectedNumEntities = "gpu";
-    verifyCountAndError(expectedNumEntities, 0, true);
-
-    if (numErrors > 0)
-    {
-        return -1;
-    }
-
-    return result;
-}
-
 int TestDiagManager::TestPopulateRunDiag()
 {
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmRunDiag_v8 drd  = {};
+    dcgmRunDiag_v9 drd  = {};
 
-    drd.version = dcgmRunDiag_version8;
+    drd.version = dcgmRunDiag_version9;
 
     std::string error;
+    unsigned int const defaultFrequency = 5000000;
 
-    // Basic test, nothing should get populated
-    dcgm_diag_common_populate_run_diag(
-        drd, "1", "", "", "", "", false, false, "", "", 0, "", 1, true, 3, 60, "", error);
+    // Basic test
+    result = dcgm_diag_common_populate_run_diag(drd,
+                                                "1",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                false,
+                                                false,
+                                                "",
+                                                "",
+                                                0,
+                                                "",
+                                                DCGM_GROUP_ALL_GPUS,
+                                                true,
+                                                3,
+                                                60,
+                                                "*,cpu:*",
+                                                "gpu:1",
+                                                defaultFrequency,
+                                                error);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected DCGM_ST_OK but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
     if (strlen(drd.testNames[0]) != 0)
     {
         fprintf(stderr, "Expected testNames to be empty but found '%s'\n", drd.testNames[0]);
@@ -453,15 +380,18 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (strcmp(drd.throttleMask, ""))
+    if (strcmp(drd.clocksEventMask, ""))
     {
-        fprintf(stderr, "The throttle mask should be empty, but found '%s'.\n", drd.throttleMask);
+        fprintf(stderr, "The clocks event mask should be empty, but found '%s'.\n", drd.clocksEventMask);
         return -1;
     }
 
-    if (drd.groupId != (dcgmGpuGrp_t)1)
+    if (drd.groupId != DCGM_GROUP_ALL_GPUS)
     {
-        fprintf(stderr, "Expected groupid to be 1, but found %llu.\n", (unsigned long long)drd.groupId);
+        fprintf(stderr,
+                "Expected groupid to be %llu, but found %llu.\n",
+                (unsigned long long)DCGM_GROUP_ALL_GPUS,
+                (unsigned long long)drd.groupId);
         return -1;
     }
 
@@ -477,14 +407,32 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
+    if (std::string_view(drd.entityIds) != "*,cpu:*")
+    {
+        fprintf(stderr, "Expected entityIds to be '*,cpu:*', but found %s.\n", drd.entityIds);
+        return -1;
+    }
+
+    if (std::string_view(drd.expectedNumEntities) != "gpu:1")
+    {
+        fprintf(stderr, "Expected expectedNumEntities to be 'gpu:1', but found %s.\n", drd.expectedNumEntities);
+        return -1;
+    }
+
+    if (drd.watchFrequency != defaultFrequency)
+    {
+        fprintf(stderr, "Expected watchFrequency to be %u, but found %u.\n", defaultFrequency, drd.watchFrequency);
+        return -1;
+    }
+
     const char *tn1[] = { "pcie", "targeted power" };
     const char *tp1[] = { "pcie.test_pinned=false", "pcie.min_bandwidth=25000", "targeted power.temperature_max=82" };
     std::string debugFileName("kaladin");
     std::string statsPath("/home/aimian/");
-    std::string throttleMask("HW_SLOWDOWN");
-    drd         = dcgmRunDiag_v8(); // Need to reset the struct
-    drd.version = dcgmRunDiag_version8;
-    dcgm_diag_common_populate_run_diag(
+    std::string clocksEventMask("HW_SLOWDOWN");
+    drd         = dcgmRunDiag_v9(); // Need to reset the struct
+    drd.version = dcgmRunDiag_version9;
+    result      = dcgm_diag_common_populate_run_diag(
         drd,
         "pcie,targeted power",
         "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
@@ -496,13 +444,20 @@ int TestDiagManager::TestPopulateRunDiag()
         debugFileName,
         statsPath,
         3,
-        throttleMask,
-        DCGM_GROUP_ALL_GPUS,
+        clocksEventMask,
+        0,
         false,
         3,
         60,
-        "gpu:8",
+        "*,cpu:*",
+        "",
+        defaultFrequency,
         error);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected DCGM_ST_OK but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
     for (int i = 0; i < 2; i++)
     {
         if (strcmp(drd.testNames[i], tn1[i]))
@@ -520,9 +475,9 @@ int TestDiagManager::TestPopulateRunDiag()
         }
     }
 
-    if (strcmp(drd.gpuList, "0,1,2"))
+    if (strcmp(drd.entityIds, "0,1,2"))
     {
-        fprintf(stderr, "Gpu list should be '0,1,2' but found '%s'\n", drd.gpuList);
+        fprintf(stderr, "Gpu list should be '0,1,2' but found '%s'\n", drd.entityIds);
         return -1;
     }
 
@@ -566,9 +521,12 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (throttleMask != drd.throttleMask)
+    if (clocksEventMask != drd.clocksEventMask)
     {
-        fprintf(stderr, "Expected throttle mask to be '%s', but found '%s'.\n", throttleMask.c_str(), drd.throttleMask);
+        fprintf(stderr,
+                "Expected clocks event mask to be '%s', but found '%s'.\n",
+                clocksEventMask.c_str(),
+                drd.clocksEventMask);
         return -1;
     }
 
@@ -578,18 +536,9 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
-    if (drd.groupId != DCGM_GROUP_ALL_GPUS)
+    if (drd.groupId != (dcgmGpuGrp_t)0)
     {
-        fprintf(stderr,
-                "Expected groupid to be %llu, but found %llu.\n",
-                (unsigned long long)DCGM_GROUP_ALL_GPUS,
-                (unsigned long long)drd.groupId);
-        return -1;
-    }
-
-    if (std::string_view(drd.expectedNumEntities) != "gpu:8")
-    {
-        fprintf(stderr, "Expected expectedNumEntities to be 'gpu:8', but found %s.\n", drd.expectedNumEntities);
+        fprintf(stderr, "Expected groupid to be 0, but found %llu.\n", (unsigned long long)drd.groupId);
         return -1;
     }
 
@@ -606,32 +555,100 @@ int TestDiagManager::TestPopulateRunDiag()
     }
 
     // Config file is set to correct value
-    dcgm_diag_common_populate_run_diag(drd,
-                                       "pcie,targeted power",
-                                       "pcie.test_pinned=false",
-                                       "configfile",
-                                       "",
-                                       "0",
-                                       true,
-                                       true,
-                                       debugFileName,
-                                       statsPath,
-                                       3,
-                                       "",
-                                       0,
-                                       false,
-                                       0,
-                                       60,
-                                       "",
-                                       error);
+    result = dcgm_diag_common_populate_run_diag(drd,
+                                                "pcie,targeted power",
+                                                "pcie.test_pinned=false",
+                                                "configfile",
+                                                "",
+                                                "0",
+                                                true,
+                                                true,
+                                                debugFileName,
+                                                statsPath,
+                                                3,
+                                                "",
+                                                0,
+                                                false,
+                                                0,
+                                                60,
+                                                "",
+                                                "",
+                                                defaultFrequency,
+                                                error);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected DCGM_ST_OK but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
     if (strcmp(drd.configFileContents, "configfile"))
     {
         fprintf(stderr, "Config file should be 'configfile', but found %s.\n", drd.configFileContents);
         return -1;
     }
 
-    drd              = dcgmRunDiag_v8(); // Need to reset the struct
-    dcgmReturn_t ret = dcgm_diag_common_populate_run_diag(
+    // Empty entity ids
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(
+        drd,
+        "pcie,targeted power",
+        "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
+        "",
+        "",
+        "",
+        true,
+        true,
+        debugFileName,
+        statsPath,
+        3,
+        clocksEventMask,
+        0,
+        false,
+        3,
+        60,
+        "",
+        "",
+        defaultFrequency,
+        error);
+    if (result != DCGM_ST_BADPARAM)
+    {
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
+
+    // Too large entity ids
+    std::string entityIds(DCGM_ENTITY_ID_LIST_LEN + 1, '6');
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(
+        drd,
+        "pcie,targeted power",
+        "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
+        "",
+        "",
+        "",
+        true,
+        true,
+        debugFileName,
+        statsPath,
+        3,
+        clocksEventMask,
+        0,
+        false,
+        3,
+        60,
+        entityIds,
+        "",
+        defaultFrequency,
+        error);
+    if (result != DCGM_ST_BADPARAM)
+    {
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
+
+    // Too large expectedNumEntities
+    std::string invalidExpectedNumEntities(DCGM_EXPECTED_ENTITIES_LEN + 1, '6');
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(
         drd,
         "pcie,targeted power",
         "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
@@ -643,167 +660,142 @@ int TestDiagManager::TestPopulateRunDiag()
         debugFileName,
         statsPath,
         3,
-        throttleMask,
+        clocksEventMask,
         0,
         false,
         3,
         60,
-        "gpu:8",
+        "*,cpu:*",
+        invalidExpectedNumEntities,
+        defaultFrequency,
         error);
-    if (ret != DCGM_ST_BADPARAM)
+    if (result != DCGM_ST_BADPARAM)
     {
-        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", ret, error.c_str());
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
         return -1;
     }
 
-    return result;
-}
-
-int TestDiagManager::TestErrorsFromLevelOne()
-{
-    DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0, true);
-
-    std::string errorReported(
-        "Persistence mode for GPU 1 is currently disabled. NVVS requires persistence mode to be enabled. Enable persistence mode by running (as root): nvidia-smi -i 1 -pm 1");
-
-    std::string rawJsonOutput = fmt::format(R"(
-    {{
-        "DCGM GPU Diagnostic" :
-            {{
-                "test_categories" : [
-                    {{
-                        "category" : "Deployment",
-                        "tests" : [
-                            {{
-                                "name" : "Denylist",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
-                            }},
-                            {{
-                                "name" : "NVML Library",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
-                            }},
-                            {{
-                                "name" : "CUDA Main Library",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
-                            }},
-                            {{
-                                "name" : "Permissions and OS-related Blocks",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "PASS" }} ]
-                            }},
-                            {{
-                                "name" : "Persistence Mode",
-                                "results" : [
-                                    {{
-                                        "gpu_ids" : "0,1,2,3",
-                                        "status" : "FAIL",
-                                        "warnings" : ["{}"]
-                                    }}
-                                ]
-                            }},
-                            {{
-                                "name" : "Environmental Variables",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
-                            }},
-                            {{
-                                "name" : "Page Retirement/Row Remap",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
-                            }},
-                            {{
-                                "name" : "Graphics Processes",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
-                            }},
-                            {{
-                                "name" : "Inforom",
-                                "results" : [ {{ "gpu_ids" : "0,1,2,3", "status" : "SKIP" }} ]
-                            }}
-                        ]
-                    }}
-                ],
-                "version" : "1.7"
-            }}
-    }})",
-                                            errorReported);
-
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-
-    DcgmCoreCommunication dcc;
-    DcgmGroupManager dgm { &dcm };
-    dcc.Init(&dcm, &dgm);
-    g_coreCallbacks.poster = &dcc;
-    DcgmDiagManager am(g_coreCallbacks);
-    dcgmDiagResponse_v10 response;
-    response.version = dcgmDiagResponse_version10;
-    DcgmDiagResponseWrapper drw;
-    drw.SetVersion10(&response);
-
-    auto nvvsResults
-        = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { rawJsonOutput });
-    dcgmReturn_t ret = am.FillResponseStructure(nvvsResults, drw, 0, DCGM_ST_OK);
-
-    if (ret != DCGM_ST_OK)
+    // expectedNumEntities with ALL_ENTITIES groupId
+    std::string expectedNumEntities(DCGM_EXPECTED_ENTITIES_LEN, '6');
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(
+        drd,
+        "pcie,targeted power",
+        "pcie.test_pinned=false;pcie.min_bandwidth=25000;targeted power.temperature_max=82",
+        "",
+        "",
+        "0,1,2",
+        true,
+        true,
+        debugFileName,
+        statsPath,
+        3,
+        clocksEventMask,
+        DCGM_GROUP_ALL_ENTITIES,
+        false,
+        3,
+        60,
+        "*,cpu:*",
+        expectedNumEntities,
+        defaultFrequency,
+        error);
+    if (result != DCGM_ST_BADPARAM)
     {
-        fprintf(stderr, "Failed to parse JSON, fix the JSON input!");
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
         return -1;
     }
 
-    // Make sure that we are getting the error message recorded correctly
-    for (unsigned int i = 0; i < DCGM_SWTEST_COUNT; i++)
+    unsigned int validWatchFrequency = 5000000;
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(drd,
+                                                "1",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                false,
+                                                false,
+                                                "",
+                                                "",
+                                                0,
+                                                "",
+                                                DCGM_GROUP_ALL_GPUS,
+                                                true,
+                                                3,
+                                                60,
+                                                "*,cpu:*",
+                                                "gpu:1",
+                                                validWatchFrequency,
+                                                error);
+    if (result != DCGM_ST_OK)
     {
-        if (i == DCGM_SWTEST_CUDA_RUNTIME_LIBRARY)
-        {
-            if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_NOT_RUN)
-            {
-                fprintf(
-                    stderr, "Test %d should not have run, but result was %d\n", i, response.levelOneResults[i].status);
-                return -1;
-            }
-        }
-        else if (i < DCGM_SWTEST_PERSISTENCE_MODE)
-        {
-            if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_PASS)
-            {
-                fprintf(
-                    stderr, "Test %d should have passed, but result was %d\n", i, response.levelOneResults[i].status);
-                return -1;
-            }
-        }
-        else if (i == DCGM_SWTEST_PERSISTENCE_MODE)
-        {
-            if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_FAIL)
-            {
-                fprintf(
-                    stderr, "Test %d should have failed, but result was %d\n", i, response.levelOneResults[i].status);
-                return -1;
-            }
-
-            if (errorReported != response.levelOneResults[i].error[0].msg)
-            {
-                fprintf(stderr,
-                        "Expected error '%s' but found '%s'\n",
-                        errorReported.c_str(),
-                        response.levelOneResults[i].error[0].msg);
-                return -1;
-            }
-        }
-        else
-        {
-            // After the failed tests, all these others should be skipped
-            if (response.levelOneResults[i].status != DCGM_DIAG_RESULT_SKIP)
-            {
-                fprintf(stderr,
-                        "Test %d should have been skipped, but result was %d\n",
-                        i,
-                        response.levelOneResults[i].status);
-                return -1;
-            }
-        }
+        fprintf(stderr, "Expected DCGM_ST_OK but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
     }
 
-    return DCGM_ST_OK;
+    if (drd.watchFrequency != validWatchFrequency)
+    {
+        fprintf(stderr, "Expected watchFrequency to be %u, but found %u.\n", validWatchFrequency, drd.watchFrequency);
+        return -1;
+    }
+
+    unsigned int invalidWatchFrequency = 99999;
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(drd,
+                                                "1",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                false,
+                                                false,
+                                                "",
+                                                "",
+                                                0,
+                                                "",
+                                                DCGM_GROUP_ALL_GPUS,
+                                                true,
+                                                3,
+                                                60,
+                                                "*,cpu:*",
+                                                "gpu:1",
+                                                invalidWatchFrequency,
+                                                error);
+    if (result != DCGM_ST_BADPARAM)
+    {
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
+
+    invalidWatchFrequency = 60000001;
+    std::memset(&drd, 0, sizeof(drd));
+    result = dcgm_diag_common_populate_run_diag(drd,
+                                                "1",
+                                                "",
+                                                "",
+                                                "",
+                                                "",
+                                                false,
+                                                false,
+                                                "",
+                                                "",
+                                                0,
+                                                "",
+                                                DCGM_GROUP_ALL_GPUS,
+                                                true,
+                                                3,
+                                                60,
+                                                "*,cpu:*",
+                                                "gpu:1",
+                                                invalidWatchFrequency,
+                                                error);
+    if (result != DCGM_ST_BADPARAM)
+    {
+        fprintf(stderr, "Expected DCGM_ST_BADPARAM but found '%d', error '%s'\n", result, error.c_str());
+        return -1;
+    }
+
+    return 0;
 }
 
 int TestDiagManager::TestInvalidVersion()
@@ -851,215 +843,6 @@ int TestDiagManager::TestInvalidVersion()
     return DCGM_ST_OK;
 }
 
-int TestDiagManager::TestFillResponseStructure()
-{
-    dcgmReturn_t result = DCGM_ST_OK;
-    DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0, true);
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-    dcm.AddFakeGpu();
-
-    DcgmGroupManager dgm { &dcm };
-
-    DcgmCoreCommunication dcc;
-    dcc.Init(&dcm, &dgm);
-
-    g_coreCallbacks.poster = &dcc;
-    DcgmDiagManager am(g_coreCallbacks);
-
-    const char *testNames[]
-        = { "Denylist",         "NVML Library", "CUDA Main Library",         "CUDA SDK Library",   "Permissions",
-            "Persistence Mode", "Environment",  "Page Retirement/Row Remap", "Graphics Processes", "Inforom" };
-
-    /* Version 1.7 (v5), 2.0 (v6) / Per GPU JSON */
-    dcgmDiagResponse_v10 perGpuResponse;
-    perGpuResponse.version = dcgmDiagResponse_version10;
-    DcgmDiagResponseWrapper perGpuDrw;
-    perGpuDrw.SetVersion10(&perGpuResponse);
-
-    fprintf(stdout, "Checking Per GPU (v1.7/2.0) JSON parsing");
-
-    auto nvvsResult
-        = DcgmNs::JsonSerialize::Deserialize<DcgmNs::Nvvs::Json::DiagnosticResults>(std::string_view { PER_GPU_JSON });
-    auto ret = am.FillResponseStructure(nvvsResult, perGpuDrw, 0, DCGM_ST_OK);
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "Expected successful parsing, but got %d instead!\n", ret);
-        return -1;
-    }
-
-    if (perGpuResponse.gpuCount != 4)
-    {
-        fprintf(stderr, "Expected 4 gpus, got %d\n", perGpuResponse.gpuCount);
-        return -1;
-    }
-
-    for (int i = 0; i < 4; i++)
-    {
-        if (i != 1)
-        {
-            if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status != DCGM_DIAG_RESULT_FAIL)
-            {
-                fprintf(stderr,
-                        "Expected the Sm Stress test to have failed with gpu %d, but got %d\n",
-                        i,
-                        perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status);
-                return -1;
-            }
-        }
-        else
-        {
-            if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status != DCGM_DIAG_RESULT_PASS)
-            {
-                fprintf(stderr,
-                        "Expected the Sm Stress test to have passed for gpu %d, but got %d\n",
-                        i,
-                        perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].status);
-                return -1;
-            }
-        }
-
-        // Make sure all of the GPUs except GPU 1 have warnings
-        if ((perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].msg[0] == '\0') && (i != 1))
-        {
-            fprintf(stderr, "Gpu %d should have a warning for Sm Stress, but doesn't\n", i);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].info[0] == '\0')
-        {
-            fprintf(stderr, "Gpu %d has information reported, but we captured none\n", i);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].code != DCGM_FR_STRESS_LEVEL
-            && i != 1)
-        {
-            fprintf(stderr,
-                    "Expected the SM Stress test to have error code %d, but found %d\n",
-                    DCGM_FR_STRESS_LEVEL,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_SM_STRESS_INDEX].error[0].code);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Diagnostic test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].status);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error[0].code != 1)
-        {
-            // Code 1 is used above because the error reported is from old, saved json and doesn't correspond
-            // to an error it's actually possible to get today. I manually added it.
-            fprintf(stderr,
-                    "Expected the diagnostic test to have error code 1, but found %d\n",
-                    perGpuResponse.perGpuResponses[i].results[DCGM_DIAGNOSTIC_INDEX].error[0].code);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_TARGETED_STRESS_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Targeted Stress test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_TARGETED_STRESS_INDEX].status);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Memory Bandwidth test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].status);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error[0].code
-            != DCGM_FR_TEST_DISABLED)
-        {
-            fprintf(stderr,
-                    "Expected the Memory Bandwidth test to have error code %d, but found %d.\n",
-                    DCGM_FR_TEST_DISABLED,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_BANDWIDTH_INDEX].error[0].code);
-            return -1;
-        }
-
-        if (perGpuResponse.perGpuResponses[i].results[DCGM_TARGETED_POWER_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-        {
-            fprintf(stderr,
-                    "Expected the Targeted Power test to have been skipped with gpu %d, but got %d\n",
-                    i,
-                    perGpuResponse.perGpuResponses[i].results[DCGM_TARGETED_POWER_INDEX].status);
-            return -1;
-        }
-
-        if (i == 0)
-        {
-            if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status != DCGM_DIAG_RESULT_SKIP)
-            {
-                fprintf(stderr,
-                        "Expected GPU %d's Memory test to have been skipped, but found result %d\n",
-                        i,
-                        perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status);
-                return -1;
-            }
-        }
-        else
-        {
-            if (perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status != DCGM_DIAG_RESULT_PASS)
-            {
-                fprintf(stderr,
-                        "Expected the Memory test to have been passed with gpu %d, but got %d\n",
-                        i,
-                        perGpuResponse.perGpuResponses[i].results[DCGM_MEMORY_INDEX].status);
-                return -1;
-            }
-        }
-    }
-
-    if (perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error[0].code != DCGM_FR_ECC_DISABLED)
-    {
-        fprintf(stderr,
-                "Expected to find error code %d but found %d\n",
-                DCGM_FR_ECC_DISABLED,
-                perGpuResponse.perGpuResponses[0].results[DCGM_MEMORY_INDEX].error[0].code);
-        return -1;
-    }
-
-    for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
-    {
-        if (i == DCGM_SWTEST_CUDA_RUNTIME_LIBRARY)
-        {
-            if (perGpuResponse.levelOneResults[i].status != DCGM_DIAG_RESULT_NOT_RUN)
-            {
-                fprintf(stderr,
-                        "Test %d should not have run, but result was %d\n",
-                        i,
-                        perGpuResponse.levelOneResults[i].status);
-                return -1;
-            }
-        }
-        else if (perGpuResponse.levelOneResults[i].status != DCGM_DIAG_RESULT_PASS)
-        {
-            fprintf(stderr,
-                    "%s test should've passed but got %d\n",
-                    testNames[i],
-                    perGpuResponse.levelOneResults[i].status);
-
-            return -1;
-        }
-    }
-
-    return result;
-}
-
 void TestDiagManager::CreateDummyFailScript()
 {
     std::ofstream dummyScript;
@@ -1076,13 +859,16 @@ int TestDiagManager::TestPerformExternalCommand()
     std::string stderrStr;
     std::vector<std::string> dummyCmds;
     dummyCmds.push_back("dummy"); // added to DcgmDiagManager so we can generate stderr
-    dcgmReturn_t result = DCGM_ST_OK;
+    dcgmReturn_t result                                = DCGM_ST_OK;
+    std::unique_ptr<dcgmDiagResponse_v11> diagResponse = std::make_unique<dcgmDiagResponse_v11>();
+    DcgmDiagResponseWrapper wrapper;
 
     DcgmDiagManager am(g_coreCallbacks);
 
+    wrapper.SetVersion11(diagResponse.get());
     // Make the script that will fail
     CreateDummyFailScript();
-    am.PerformExternalCommand(dummyCmds, &stdoutStr, &stderrStr);
+    am.PerformExternalCommand(dummyCmds, wrapper, &stdoutStr, &stderrStr);
     if (stdoutStr.empty() && stderrStr.empty())
     {
         fprintf(stderr, "TestPerformExternalCommand should've captured stderr, but failed to do so.\n");

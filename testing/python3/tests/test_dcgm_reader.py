@@ -24,7 +24,6 @@ import test_utils
 import time
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_default(handle, gpuIds):
     # pylint: disable=undefined-variable
@@ -55,7 +54,6 @@ def test_dcgm_reader_default(handle, gpuIds):
             assert dcgm_fields.DcgmFieldGetById(fieldId) != None
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_specific_fields(handle, gpuIds):
     specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE, dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
@@ -68,7 +66,6 @@ def test_dcgm_reader_specific_fields(handle, gpuIds):
         assert len(latest[gpuId]) <= len(specificFields)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_reading_specific_data(handle, gpuIds):
     """ 
@@ -109,7 +106,6 @@ def test_reading_specific_data(handle, gpuIds):
         assert latest[gpuIds[0]][specificFieldIds[i]] == fieldValues[i]
         
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_on_non_mig_gpus()
 @test_utils.run_with_non_mig_cuda_visible_devices()
@@ -126,7 +122,7 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     dr = DcgmReader(fieldIds=[ fieldTag ], updateFrequency=100000)
     logger.debug("Trying for 5 seconds")
     exit_loop = False
-    for _ in range(45):
+    for _ in range(150):
         if (exit_loop):
             break
 
@@ -186,25 +182,21 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
                 assert key in specificFields
                     
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_all_since_last_call_false(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, False)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_all_since_last_call_true(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, False)
         
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, True)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, True)
@@ -366,7 +358,28 @@ def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, map
             assert(foundValues == len(fieldValues))
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
+@test_utils.run_only_with_live_gpus() # Pick up existing GPUs
+@test_utils.run_with_injection_gpu_instances(1)
+@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpu_instances(1, 1)
+@test_utils.run_with_injection_gpu_compute_instances(1, 1)
+def test_dcgm_reader_wildcard_gi(handle, gpuIds, instanceIds, ciIds):
+    """
+    Test DcgmCacheManager for removal of wildcard GI Fake Ci insertion.
+    """
+
+    for i in gpuIds:
+        logger.debug("GPU ID: %d" % (i))
+
+    for i in instanceIds:
+        logger.debug("GPU Instance ID: %d" % (i))
+        
+    for i in ciIds:
+        logger.debug("Compute Instance ID: %d" % (i))
+        
+    assert ciIds[0] == dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU
+
+@test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
@@ -378,7 +391,6 @@ def test_dcgm_reader_latest_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciI
     helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, True)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
@@ -390,7 +402,6 @@ def test_dcgm_reader_all_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds)
     helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, True)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
@@ -402,7 +413,6 @@ def test_dcgm_reader_latest_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ci
     helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, False)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)

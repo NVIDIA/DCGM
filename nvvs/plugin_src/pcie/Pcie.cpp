@@ -30,12 +30,13 @@
 #include <TimeLib.hpp>
 
 #include "PcieMain.h"
-#include "PluginStrings.h"
+#include "PluginInterface.h"
+#include "dcgm_fields.h"
 #include <cstdlib>
 #include <cstring>
 
 /*****************************************************************************/
-BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
+BusGrind::BusGrind(dcgmHandle_t handle)
     : test_pinned(true)
     , test_unpinned(true)
     , test_p2p_on(true)
@@ -69,11 +70,10 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     , m_matrixDim(0)
     , m_maxAer(1)
     , m_handle(handle)
-    , m_gpuInfo()
 {
     m_infoStruct.testIndex        = DCGM_PCI_INDEX;
     m_infoStruct.shortDescription = "This plugin will exercise the PCIe bus for a given list of GPUs.";
-    m_infoStruct.testGroups       = "Perf";
+    m_infoStruct.testCategories   = PCIE_PLUGIN_CATEGORY;
     m_infoStruct.selfParallel     = true;
     m_infoStruct.logFileTag       = PCIE_PLUGIN_NAME;
 
@@ -104,23 +104,23 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddDouble(PCIE_STR_PARALLEL_BW_CHECK_DURATION, 15.0);
     tp->AddString(PCIE_STR_DONT_BIND_NUMA, "False");
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, PCIE_DEFAULT_ITERATIONS);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
@@ -132,29 +132,31 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, 10000000.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0);
 
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, 4096.0);
+    tp->AddSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_DEFAULT_BROKEN_P2P_SIZE);
 
     /* SM Stress related parameters */
     tp->AddString(SMSTRESS_STR_USE_DGEMM, "True");
@@ -167,26 +169,27 @@ BusGrind::BusGrind(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     m_testParameters = new TestParameters(*tp);
 
     m_infoStruct.defaultTestParameters = tp;
-
-    if (gpuInfo == nullptr)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified.");
-        AddError(PCIE_PLUGIN_NAME, d);
-    }
-    else
-    {
-        InitializeForGpuList(PCIE_PLUGIN_NAME, *gpuInfo);
-        m_gpuInfo = *gpuInfo;
-    }
 }
 
 /*****************************************************************************/
 void BusGrind::Go(std::string const &testName,
+                  dcgmDiagPluginEntityList_v1 const *entityInfo,
                   unsigned int numParameters,
-                  const dcgmDiagPluginTestParameter_t *tpStruct)
+                  dcgmDiagPluginTestParameter_t const *tpStruct)
 {
-    if (UsingFakeGpus())
+    if (testName != GetPcieTestName())
+    {
+        log_error("failed to test due to unknown test name [{}].", testName);
+        return;
+    }
+
+    if (!Init(entityInfo))
+    {
+        log_error("failed to init bus grid");
+        return;
+    }
+
+    if (UsingFakeGpus(testName))
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
@@ -198,7 +201,7 @@ void BusGrind::Go(std::string const &testName,
 
     m_testParameters->SetFromStruct(numParameters, tpStruct);
 
-    if (main_init(*this, m_gpuInfo) != DCGM_ST_OK)
+    if (main_init(*this, *entityInfo) != DCGM_ST_OK)
     {
         // The error has been logged by main_init()
         log_error("Failed while initializing the PCIe plugin.");
@@ -208,7 +211,7 @@ void BusGrind::Go(std::string const &testName,
 
     if (m_testParameters->GetBoolFromString(PCIE_STR_IS_ALLOWED))
     {
-        st = main_entry(this, m_gpuInfo);
+        st = main_entry(this, *entityInfo);
         if (main_should_stop)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -235,7 +238,7 @@ void BusGrind::Go(std::string const &testName,
         m_matrixDim    = m_testParameters->GetDouble(SMSTRESS_STR_MATRIX_DIM);
         m_maxAer       = m_testParameters->GetDouble(PCIE_STR_AER_THRESHOLD);
 
-        bool result = RunTest_sm();
+        bool result = RunTest_sm(entityInfo);
         if (main_should_stop)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -313,37 +316,43 @@ void BusGrind::Cleanup(void)
 }
 
 /*****************************************************************************/
-bool BusGrind::Init(dcgmDiagPluginGpuList_t *gpuInfo)
+bool BusGrind::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
-    int gpuListIndex;
     SmPerfDevice *smDevice = 0;
 
-    if (gpuInfo == nullptr)
+    if (entityInfo == nullptr)
     {
         DCGM_LOG_ERROR << "Cannot initialize without GPU information";
         return false;
     }
 
-    m_gpuInfo = *gpuInfo;
-    m_device.reserve(gpuInfo->numGpus);
-    InitializeForGpuList(PCIE_PLUGIN_NAME, *gpuInfo);
+    InitializeForEntityList(GetPcieTestName(), *entityInfo);
+    m_device.reserve(entityInfo->numEntities);
 
-    if (UsingFakeGpus())
+    if (UsingFakeGpus(GetPcieTestName()))
     {
         log_debug("Skipping cuda init for fake gpus");
         return true;
     }
 
-    for (gpuListIndex = 0; gpuListIndex < gpuInfo->numGpus; gpuListIndex++)
+    for (unsigned int gpuListIndex = 0; gpuListIndex < entityInfo->numEntities; ++gpuListIndex)
     {
+        if (entityInfo->entities[gpuListIndex].entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+
         try
         {
-            smDevice = new SmPerfDevice(
-                gpuInfo->gpus[gpuListIndex].gpuId, gpuInfo->gpus[gpuListIndex].attributes.identifiers.pciBusId, this);
+            smDevice = new SmPerfDevice(GetPcieTestName(),
+                                        entityInfo->entities[gpuListIndex].entity.entityId,
+                                        entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciBusId,
+                                        this);
         }
         catch (DcgmError &d)
         {
-            AddErrorForGpu(PCIE_PLUGIN_NAME, gpuInfo->gpus[gpuListIndex].gpuId, d);
+            d.SetGpuId(entityInfo->entities[gpuListIndex].entity.entityId);
+            AddError(GetPcieTestName(), d);
             delete smDevice;
             return false;
         }
@@ -416,7 +425,7 @@ void BusGrind::ParseDisableTests(std::string tests)
 int BusGrind::CudaInit(void)
 {
     using namespace Dcgm;
-    int j, count, valueSize;
+    int count, valueSize;
     size_t arrayByteSize, arrayNelem;
     cudaError_t cuSt;
     cublasStatus_t cubSt;
@@ -425,7 +434,7 @@ int BusGrind::CudaInit(void)
     cuSt = cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(GetPcieTestName(), "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -461,19 +470,19 @@ int BusGrind::CudaInit(void)
         cuSt = cudaHostAlloc(&device->hostA, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaHostAlloc(&device->hostB, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaHostAlloc(&device->hostC, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
@@ -483,7 +492,7 @@ int BusGrind::CudaInit(void)
             double *doubleHostB = (double *)device->hostB;
             double *doubleHostC = (double *)device->hostC;
 
-            for (j = 0; j < arrayNelem; j++)
+            for (size_t j = 0; j < arrayNelem; j++)
             {
                 doubleHostA[j] = (double)rand() / 100.0;
                 doubleHostB[j] = (double)rand() / 100.0;
@@ -497,7 +506,7 @@ int BusGrind::CudaInit(void)
             float *floatHostB = (float *)device->hostB;
             float *floatHostC = (float *)device->hostC;
 
-            for (j = 0; j < arrayNelem; j++)
+            for (size_t j = 0; j < arrayNelem; j++)
             {
                 floatHostA[j] = (float)rand() / 100.0;
                 floatHostB[j] = (float)rand() / 100.0;
@@ -509,7 +518,7 @@ int BusGrind::CudaInit(void)
         cubSt = Dcgm::CublasProxy::CublasCreate(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR(PCIE_PLUGIN_NAME, "cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(GetPcieTestName(), "cublasCreate", cubSt, device->gpuId);
             return -1;
         }
         log_debug("cublasCreate cudaDeviceIdx {}, handle {}", device->cudaDeviceIdx, (void *)device->cublasHandle);
@@ -519,19 +528,19 @@ int BusGrind::CudaInit(void)
         cuSt = cudaMalloc((void **)&device->deviceA, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceB, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
         cuSt = cudaMalloc((void **)&device->deviceC, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(PCIE_PLUGIN_NAME, "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
     }
@@ -656,9 +665,9 @@ int BusGrind::GetAERThresholdRate(SmPerfDevice *gpu)
 
 /*****************************************************************************/
 bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
-                                      std::vector<DcgmError> &errorList,
-                                      timelib64_t startTime,
-                                      timelib64_t earliestStopTime,
+                                      std::vector<DcgmError> & /* errorList */,
+                                      timelib64_t /* startTime */,
+                                      timelib64_t /* earliestStopTime */,
                                       bool testFinished)
 {
     using namespace DcgmNs::Timelib;
@@ -668,7 +677,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
     if (testFinished)
     {
         // This check is only performed once the test is finished
-        std::vector<dcgmTimeseriesInfo_t> data = GetCustomGpuStat(device->gpuId, PCI_CORR_ERR_COUNT);
+        std::vector<dcgmTimeseriesInfo_t> data = GetCustomGpuStat(GetPcieTestName(), device->gpuId, PCI_CORR_ERR_COUNT);
 
         if (data.size() != 2)
         {
@@ -701,20 +710,20 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
 
         auto limit = GetAERThresholdRate(device);
 
-        if (elapsed >= 1 && (totalCorrectedErrors / elapsed) > limit)
+        if (elapsed >= 1 && (totalCorrectedErrors / elapsed) > static_cast<unsigned int>(limit))
         {
-            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DcgmError d { device->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
-            AddErrorForGpu(PCIE_PLUGIN_NAME, device->gpuId, d);
+            AddError(GetPcieTestName(), d);
 
             return false;
         }
 
         if (totalCorrectedErrors >= m_maxAer)
         {
-            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DcgmError d { device->gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_H_REPLAY_VIOLATION, d, device->gpuId);
-            AddErrorForGpu(PCIE_PLUGIN_NAME, device->gpuId, d);
+            AddError(GetPcieTestName(), d);
 
             return false;
         }
@@ -729,12 +738,13 @@ bool BusGrind::CheckPassFail(timelib64_t startTime, timelib64_t earliestStopTime
     bool passed, allPassed = true;
     std::vector<DcgmError> errorList;
     std::vector<DcgmError> errorListAllGpus;
+    auto const &gpuList = m_tests.at(GetPcieTestName()).GetGpuList();
 
     for (size_t i = 0; i < m_device.size(); i++)
     {
         errorList.clear();
         passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
-        CheckAndSetResult(this, PCIE_PLUGIN_NAME, m_gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
+        CheckAndSetResult(this, GetPcieTestName(), gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
         {
             /* No point in checking other GPUs until communication is restored */
@@ -805,7 +815,7 @@ public:
      * Worker thread main.
      *
      */
-    void run(void);
+    void run(void) override;
 
 private:
     /*************************************************************************/
@@ -826,7 +836,7 @@ private:
  * SmPerfPlugin RunTest
  */
 /*****************************************************************************/
-bool BusGrind::RunTest_sm()
+bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
 {
     int st = 0, Nrunning = 0;
     SmPerfWorker *workerThreads[SMSTRESS_MAX_DEVICES] = { 0 };
@@ -869,7 +879,7 @@ bool BusGrind::RunTest_sm()
         m_testParameters->SetSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 1000);
     }
 
-    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, m_gpuInfo);
+    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, *entityInfo);
 
     try /* Catch runtime errors */
     {
@@ -885,7 +895,7 @@ bool BusGrind::RunTest_sm()
         while (Nrunning > 0)
         {
             log_info("Launching PCIe tests while running background sm stress");
-            main_entry(this, m_gpuInfo);
+            main_entry(this, *entityInfo);
             Nrunning = 0;
             /* Just go in a round-robin loop around our workers until
              * they have all exited. These calls will return immediately
@@ -919,8 +929,8 @@ bool BusGrind::RunTest_sm()
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, e.what());
         log_error("Caught exception {}", e.what());
-        AddError(PCIE_PLUGIN_NAME, d);
-        SetResult(PCIE_PLUGIN_NAME, NVVS_RESULT_FAIL);
+        AddError(GetPcieTestName(), d);
+        SetResult(GetPcieTestName(), NVVS_RESULT_FAIL);
         for (size_t i = 0; i < m_device.size(); i++)
         {
             // If a worker was not initialized, we skip over it (e.g. we caught a bad_alloc exception)
@@ -965,6 +975,11 @@ bool BusGrind::RunTest_sm()
 
     Cleanup();
     return true;
+}
+
+std::string BusGrind::GetPcieTestName() const
+{
+    return PCIE_PLUGIN_NAME;
 }
 
 /****************************************************************************/
@@ -1022,7 +1037,8 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
                                             m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cublasDgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetPcieTestName(), "cublasDgemm", cublasSt, m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
@@ -1045,7 +1061,8 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
                                             m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cublasSgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetPcieTestName(), "cublasSgemm", cublasSt, m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
@@ -1058,7 +1075,8 @@ void SmPerfWorker::recordPciCorrErrorCount()
 {
     unsigned long correctedErrorCount = getPciCorrectedErrorCount(m_dcgmRecorder, m_device->gpuId);
 
-    m_plugin.SetGpuStat(m_device->gpuId, PCI_CORR_ERR_COUNT, (long long)correctedErrorCount);
+    m_plugin.SetGpuStat(
+        m_plugin.GetPcieTestName(), m_device->gpuId, PCI_CORR_ERR_COUNT, (long long)correctedErrorCount);
 }
 
 /*****************************************************************************/
@@ -1095,7 +1113,8 @@ void SmPerfWorker::run(void)
     cuSt = cudaMemcpyAsync(m_device->deviceA, m_device->hostA, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cudaMemcpy", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetPcieTestName(), "cudaMemcpy", cuSt, m_device->gpuId, arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
@@ -1103,7 +1122,8 @@ void SmPerfWorker::run(void)
     cuSt = cudaMemcpyAsync(m_device->deviceB, m_device->hostB, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, PCIE_PLUGIN_NAME, "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetPcieTestName(), "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
@@ -1123,8 +1143,8 @@ void SmPerfWorker::run(void)
     gflopsKey = std::string(PERF_STAT_NAME);
 
     /* Record some of our static calculated parameters in case we need them for debugging */
-    m_plugin.SetGpuStat(m_device->gpuId, "flops_per_op", flopsPerOp);
-    m_plugin.SetGpuStat(m_device->gpuId, "try_ops_per_sec", opsPerSec);
+    m_plugin.SetGpuStat(m_plugin.GetPcieTestName(), m_device->gpuId, "flops_per_op", flopsPerOp);
+    m_plugin.SetGpuStat(m_plugin.GetPcieTestName(), m_device->gpuId, "try_ops_per_sec", opsPerSec);
 
     recordPciCorrErrorCount();
 
@@ -1133,7 +1153,7 @@ void SmPerfWorker::run(void)
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";
-    m_plugin.AddInfo(PCIE_PLUGIN_NAME, ss.str());
+    m_plugin.AddInfo(m_plugin.GetPcieTestName(), ss.str());
     startTime            = timelib_dsecSince1970();
     lastPrintTime        = startTime;
     lastFailureCheckTime = startTime;
@@ -1173,12 +1193,12 @@ void SmPerfWorker::run(void)
             elapsed       = now - startTime;
             double gflops = (flopsPerOp * (double)Nops) / (1000000000.0 * elapsed);
 
-            m_plugin.SetGpuStat(m_device->gpuId, gflopsKey, gflops);
-            m_plugin.SetGpuStat(m_device->gpuId, "nops_so_far", Nops);
+            m_plugin.SetGpuStat(m_plugin.GetPcieTestName(), m_device->gpuId, gflopsKey, gflops);
+            m_plugin.SetGpuStat(m_plugin.GetPcieTestName(), m_device->gpuId, "nops_so_far", Nops);
 
             ss.str("");
             ss << "GPU " << m_device->gpuId << ", ops " << Nops << ", gflops " << gflops;
-            m_plugin.AddInfo(PCIE_PLUGIN_NAME, ss.str());
+            m_plugin.AddInfo(m_plugin.GetPcieTestName(), ss.str());
             lastPrintTime = now;
         }
 

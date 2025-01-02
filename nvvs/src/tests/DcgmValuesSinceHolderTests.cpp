@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <DcgmValuesSinceHolder.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 

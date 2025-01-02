@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
 
-add_library(module_common_interface INTERFACE)
 target_include_directories(module_common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(module_common_interface INTERFACE modules_interface)
 
-add_library(module_common_objects STATIC)
 target_sources(module_common_objects PRIVATE
         DcgmCoreProxy.cpp
 )

@@ -31,7 +31,6 @@
 #include <DcgmRecorder.h>
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
-#include <PluginStrings.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 
@@ -104,8 +103,8 @@ public:
     double usecInCopies; /* How long (microseconds) have we spent copying data to and from the GPU */
     double usecInGemm;   /* How long (microseconds) have we spent running gemm */
 
-    CPerfDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(TS_PLUGIN_NAME, ndi, pciBusId, p)
+    CPerfDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
+        : PluginDevice(testName, ndi, pciBusId, p)
         , Nstreams(0)
         , allocatedCublasHandle(0)
         , cublasHandle(0)
@@ -185,13 +184,14 @@ public:
 class ConstantPerf : public Plugin
 {
 public:
-    ConstantPerf(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    ConstantPerf(dcgmHandle_t handle);
     ~ConstantPerf();
 
     /*************************************************************************/
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     /*************************************************************************/
     /*
@@ -219,7 +219,9 @@ public:
      * Returns: true on success
      *          false on error
      */
-    bool Init(dcgmDiagPluginGpuList_t *gpuInfo);
+    bool Init(dcgmDiagPluginEntityList_v1 const *entityInfo);
+
+    std::string GetTargetedStressTestName() const;
 
 #ifndef TARGETED_STRESS_TESTS
 private:
@@ -241,7 +243,7 @@ private:
      *      false if there were issues running the test (test failures are not considered issues),
      *      true otherwise.
      */
-    bool RunTest();
+    bool RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo);
     /*************************************************************************/
     /*
      * Clean up any resources used by this object, freeing all memory and closing
@@ -274,12 +276,11 @@ private:
 
     /*************************************************************************/
     /* Variables */
-    TestParameters *m_testParameters;    /* Parameters for this test, passed in from the framework.
-                                                               DO NOT DELETE */
-    bool m_dcgmCommErrorOccurred;        /* Has there been a communication error with DCGM? */
-    bool m_dcgmRecorderInitialized;      /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;         /* DCGM stats recording interfact object */
-    std::vector<CPerfDevice *> m_device; /* Per-device data */
+    std::unique_ptr<TestParameters> m_testParameters; /* Parameters for this test, passed in from the framework. */
+    bool m_dcgmCommErrorOccurred;                     /* Has there been a communication error with DCGM? */
+    bool m_dcgmRecorderInitialized;                   /* Has DcgmRecorder been initialized? */
+    DcgmRecorder m_dcgmRecorder;                      /* DCGM stats recording interfact object */
+    std::vector<CPerfDevice *> m_device;              /* Per-device data */
 
     /* Cached parameters read from testParameters */
     double m_testDuration;        /* Test duration in seconds */
@@ -288,7 +289,6 @@ private:
     int m_atATime;                /* Number of ops to queue to the stream at a time */
     double m_sbeFailureThreshold; /* how many SBEs constitutes a failure */
     dcgmHandle_t m_handle;        /* Dcgm handle*/
-    dcgmDiagPluginGpuList_t m_gpuInfo;
 };
 
 

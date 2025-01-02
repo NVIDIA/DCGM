@@ -30,7 +30,7 @@
 
 /*****************************************************************************/
 DcgmIpc::DcgmIpc(int numWorkerThreads)
-    : DcgmThread(false, "dcgm_ipc")
+    : DcgmThread("dcgm_ipc")
     , m_workersPool(numWorkerThreads)
 {
     m_tcpParameters         = std::nullopt;
@@ -1120,7 +1120,7 @@ dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
         }
 
         /* Read the message body. Do we have enough input data? */
-        if (inputBufRemaining < m_readHeader.length)
+        if (inputBufRemaining < static_cast<size_t>(m_readHeader.length))
         {
             DCGM_LOG_DEBUG << "Have " << inputBufRemaining << "/" << m_readHeader.length << " bytes of msgType 0x"
                            << std::hex << m_readHeader.msgType;
@@ -1136,7 +1136,7 @@ dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
         /* Read Length of message. Make sure the complete message is received */
         msgBytes->resize(m_readHeader.length);
         numBytes = bufferevent_read(bev, msgBytes->data(), m_readHeader.length);
-        if (numBytes != m_readHeader.length)
+        if (numBytes != static_cast<size_t>(m_readHeader.length))
         {
             DCGM_LOG_ERROR << "Unexpected numBytes " << numBytes << " != " << m_readHeader.length;
             /* Try to read a header after this. We're really in a bad state now, so we'll probably

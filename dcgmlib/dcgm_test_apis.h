@@ -444,6 +444,25 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPauseTelemetryForDiag(dcgmHandle_t pDcgmHandle)
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmResumeTelemetryForDiag(dcgmHandle_t pDcgmHandle);
 
+/**
+ * @brief Query the active NVSwitch backend
+ *
+ * Ask the NVSwitch module to provide the name of the active backend
+ *
+ * @param[in] pDcgmHandle        - DCGM Handle of an active connection
+ * @param[out] active            - whether the backend is active
+ * @param[out] backendName       - the name of the backend
+ * @param[out] backendNameLength - size of backendName
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_* on error
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmNvswitchGetBackend(dcgmHandle_t pDcgmHandle,
+                                                    bool *active,
+                                                    char *backendName,
+                                                    unsigned int backendNameLength);
+
 #ifdef __cplusplus
 }
 #endif

@@ -106,26 +106,13 @@ def setupEnvironment(cmdArgs):
 def trimJsonText(text):
     return text[text.find('{'):text.rfind('}') + 1]
 
-
-NAME_FIELD = "name"
-RESULTS_FIELD = "results"
-WARNING_FIELD = "warnings"
-STATUS_FIELD = "status"
-INFO_FIELD = "info"
-GPU_FIELD = "gpu_ids"
-RUNTIME_ERROR_FIELD = "runtime_error"
-
-DIAG_THROTTLE_WARNING = "Clocks are being throttled for"
-DIAG_DBE_WARNING = "ecc_dbe_volatile_total"
-DIAG_ECC_MODE_WARNING = "because ECC is not enabled on GPU"
+DIAG_CLOCKS_EVENT_WARNING = "Clocks are being optimized for"
 DIAG_INFOROM_WARNING = "Error calling NVML API nvmlDeviceValidateInforom"
 DIAG_THERMAL_WARNING = "Thermal violations totaling "
 DIAG_MIG_INCOMPATIBLE_WARNING = "is incompatible with the diagnostic because it prevents access to the entire GPU."
 DIAG_MIG_MULTIPLE_GPU_WARNING = "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled"
 
-DIAG_THROTTLE_SUGGEST = "A GPU's clocks are being throttled due to a cooling issue. Please make sure your GPUs are properly cooled."
-DIAG_DBE_SUGGEST = "This GPU needs to be drained and reset to clear the non-recoverable double bit errors."
-DIAG_ECC_MODE_SUGGEST = "Run 'nvidia-smi -i <gpu id> -e 1' and then reboot to enable ECC memory."
+DIAG_CLOCKS_EVENT_SUGGEST = "A GPU's clocks are being optimized due to a cooling issue. Please make sure your GPUs are properly cooled."
 DIAG_INFOROM_SUGGEST = "A GPU's inforom is corrupt. You should re-flash it with iromflsh or replace the GPU. Run nvidia-smi without arguments to see which GPU."
 DIAG_THERMAL_SUGGEST = "A GPU has thermal violations happening. Please make sure your GPUs are properly cooled."
 DIAG_MIG_INCOMPATIBLE_SUGGEST = "You must disable MIG mode or configure instances that use the entire GPU to run the diagnostic."
@@ -143,7 +130,7 @@ class TestRunner():
         # The exclusion list is a list of [textToSearchFor, whatToPrintIfFound] entries
         self.exclusions = [
             [DIAG_INFOROM_WARNING, DIAG_INFOROM_SUGGEST],
-            [DIAG_THROTTLE_WARNING, DIAG_THROTTLE_SUGGEST],
+            [DIAG_CLOCKS_EVENT_WARNING, DIAG_CLOCKS_EVENT_SUGGEST],
             [DIAG_THERMAL_WARNING, DIAG_THERMAL_SUGGEST],
             [DIAG_MIG_INCOMPATIBLE_WARNING, DIAG_MIG_INCOMPATIBLE_SUGGEST],
             [DIAG_MIG_MULTIPLE_GPU_WARNING, DIAG_MIG_MULTIPLE_GPU_SUGGEST],
@@ -211,7 +198,10 @@ class TestRunner():
         ret = 0
         for runIndex in range(cycles):
             self.dcgmiDiag.Run()
-            self.failing_tests[runIndex] = self.dcgmiDiag.failed_list
+            if self.dcgmiDiag.failed_list:
+                self.failing_tests[runIndex] = self.dcgmiDiag.failed_list
+            else:
+                self.failing_tests[runIndex] = []
             if self.dcgmiDiag.diagRet and not ret:
                 ret = self.dcgmiDiag.diagRet
 
@@ -230,7 +220,8 @@ class TestRunner():
             print("ExclusionCount: %d" % exclusionCount)
             print("FailCount: %d" % failCount)
             print("&&&& FAILED")
-            print("Diagnostic test failed with code %d.\n" % ret)
+            from ctypes import c_int8
+            print("Diagnostic test failed with code %d.\n" % c_int8(ret).value)
 
             # Popen returns 0 even if diag test fails, so failing here
             return [failCount, exclusionCount]
@@ -360,7 +351,6 @@ def main(cmdArgs):
     paramsStr = "pcie.test_nvlink_status=false"
     paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
-
 
     dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=3, 
                 debugLevel=5, debugFile=debugFile)

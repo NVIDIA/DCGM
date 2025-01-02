@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "PluginInterface.h"
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <Gpu.h>
 #include <NvidiaValidationSuite.h>
@@ -29,6 +29,7 @@
 #define CLEANUP()                      \
     do                                 \
     {                                  \
+        nvvsCommon = NvvsCommon();     \
         for (int i = 0; i < argc; i++) \
         {                              \
             delete[] argv[i];          \
@@ -60,14 +61,13 @@ public:
     void WrapperEnumerateAllVisibleGpus();
     void WrapperDecipherProperties(GpuSet *set);
     void WrapperEnumerateAllVisibleTests();
-    std::vector<Test *>::iterator WrapperFindTestName(Test::testClasses_enum testClass, std::string test);
+    std::vector<Test *>::iterator WrapperFindTestName(std::string test);
     void WrapperOverrideParameters(TestParameters *tp, const std::string &lowerCaseTestName);
-    void WrapperInitializeAndCheckGpuObjs(std::vector<std::unique_ptr<GpuSet>> &gpuSets);
     void WrapperInitializeParameters(const std::string &params, const ParameterValidator &pv);
 };
 
 /* define this here so we can control when it fails */
-dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v2 *hierarchy)
+dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t /* handle */, dcgmMigHierarchy_v2 *hierarchy)
 {
     if (incompatibleGpus && hierarchy != nullptr)
     {
@@ -86,7 +86,7 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v
     else if (migEnabled && hierarchy != nullptr)
     {
         hierarchy->count = hierarchyCount;
-        for (int i = 0; i < hierarchy->count; i++)
+        for (unsigned int i = 0; i < hierarchy->count; i++)
         {
             hierarchy->entityList[i].parent.entityId        = i;
             hierarchy->entityList[i].parent.entityGroupId   = DCGM_FE_GPU;
@@ -100,12 +100,12 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t handle, dcgmMigHierarchy_v
 }
 
 unsigned int fieldIntVal = 0;
-dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t handle,
-                                         dcgmGroupEntityPair_t &entity,
-                                         unsigned int entityCount,
+dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t /* handle */,
+                                         dcgmGroupEntityPair_t & /* entity */,
+                                         unsigned int /* entityCount */,
                                          unsigned short fieldIds[],
-                                         unsigned int fieldCount,
-                                         unsigned int flags,
+                                         unsigned int /* fieldCount */,
+                                         unsigned int /* flags */,
                                          dcgmFieldValue_v2 values[])
 {
     switch (fieldIds[0])
@@ -147,9 +147,6 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
     for (unsigned int i = 0; i < 4; i++)
     {
         REQUIRE(gpuIndices[i] == i);
-        REQUIRE(nvvsCommon.m_gpus[i] == visibleGpus[i]);
-        // reset for the next test
-        nvvsCommon.m_gpus[i] = nullptr;
     }
 
     // Set up gpuIndices for the next test
@@ -157,18 +154,12 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
     gpuIndices.push_back(3);
     errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
     REQUIRE(errorString.empty());
-    REQUIRE(nvvsCommon.m_gpus[0] == visibleGpus[3]);
-    nvvsCommon.m_gpus[0] = nullptr;
     gpuIndices.clear();
 
     gpuIndices.push_back(1);
     gpuIndices.push_back(2);
     errorString = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
     REQUIRE(errorString.empty());
-    REQUIRE(nvvsCommon.m_gpus[0] == visibleGpus[1]);
-    REQUIRE(nvvsCommon.m_gpus[1] == visibleGpus[2]);
-    nvvsCommon.m_gpus[0] = nullptr;
-    nvvsCommon.m_gpus[1] = nullptr;
 
     // Make sure we pass with 1 MIG GPU
     migEnabled = true;
@@ -177,8 +168,6 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
     incompatibleGpus = false;
     errorString      = nvs.BuildCommonGpusList(gpuIndices, visibleGpus);
     REQUIRE(errorString.empty());
-    REQUIRE(nvvsCommon.m_gpus[0] == visibleGpus[0]);
-    nvvsCommon.m_gpus[0] = nullptr;
 
     // Make sure we fail if the slice configuration is wrong with 1 GPU
     incompatibleGpus = true;
@@ -238,7 +227,7 @@ TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
 
 SCENARIO("NVVS correctly processes command line arguments")
 {
-    GIVEN("no paramters -- default values")
+    GIVEN("default values")
     {
         SETUP();
         WrapperNvidiaValidationSuite nvvs;
@@ -254,10 +243,10 @@ SCENARIO("NVVS correctly processes command line arguments")
         CHECK(nvvsCommon.configless == false);
         CHECK(nvvsCommon.statsOnlyOnFail == false);
         CHECK(nvvsCommon.indexString == "");
-        CHECK(nvvsCommon.jsonOutput == false);
         CHECK(nvvsCommon.dcgmHostname == "");
-        CHECK(nvvsCommon.fromDcgm == false);
         CHECK(nvvsCommon.m_statsPath == "./");
+        CHECK(nvvsCommon.watchFrequency == 5000000);
+        CHECK(nvvsCommon.channelFd == -1);
         CLEANUP();
     }
 
@@ -292,18 +281,21 @@ SCENARIO("NVVS correctly processes command line arguments")
         add_argument(statsDir);
         add_argument("--parameters");
         add_argument("sm stress.test_duration=5");
-        add_argument("-j");
         add_argument("-w");
         add_argument("3");
         add_argument("--dcgmHostname");
         add_argument("host");
-        add_argument("-z");
+        add_argument("--channel-fd");
+        add_argument("3");
+        add_argument("--clocksevent-mask");
         add_argument("--throttle-mask");
         add_argument("--fail-early");
         add_argument("--check-interval");
         add_argument("3");
         add_argument("-l");
         add_argument("logfile");
+        add_argument("--watch-frequency");
+        add_argument("1000000");
 
         nvvs.WrapperProcessCommandLine(argc, &argv[0]);
 
@@ -315,13 +307,106 @@ SCENARIO("NVVS correctly processes command line arguments")
         CHECK(nvvsCommon.configless == true);
         CHECK(nvvsCommon.statsOnlyOnFail == true);
         CHECK(nvvsCommon.indexString == "1");
-        CHECK(nvvsCommon.jsonOutput == true);
         CHECK(nvvsCommon.dcgmHostname == "host");
-        CHECK(nvvsCommon.fromDcgm == true);
         CHECK(nvvsCommon.m_statsPath == statsDir);
+        CHECK(nvvsCommon.watchFrequency == 1000000);
+        CHECK(nvvsCommon.channelFd == 3);
 
         rmdir(statsDir);
         CLEANUP();
+    }
+
+    GIVEN("Conflicting throttle and clocks events")
+    {
+        SETUP();
+        char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
+        mkdtemp(statsDir);
+
+        WrapperNvidiaValidationSuite nvvs;
+
+        add_argument("nvvs");
+        add_argument("--throttle-mask hw_power_brake");
+        add_argument("--clocksevent-mask sw_thermal");
+
+        CHECK_THROWS(nvvs.WrapperProcessCommandLine(argc, &argv[0]));
+
+        rmdir(statsDir);
+        CLEANUP();
+    }
+
+    GIVEN("Invalid throttle and clock events")
+    {
+        {
+            SETUP();
+            char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
+            mkdtemp(statsDir);
+
+            WrapperNvidiaValidationSuite nvvs;
+
+            add_argument("nvvs");
+            add_argument("--throttle-mask invalid");
+
+            nvvs.WrapperProcessCommandLine(argc, &argv[0]);
+            CHECK(nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK);
+
+            rmdir(statsDir);
+            CLEANUP();
+        }
+
+        {
+            SETUP();
+            char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
+            mkdtemp(statsDir);
+
+            WrapperNvidiaValidationSuite nvvs;
+
+            add_argument("nvvs");
+            add_argument("--clocksevent-mask sonotvalid");
+
+            nvvs.WrapperProcessCommandLine(argc, &argv[0]);
+            CHECK(nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK);
+
+            rmdir(statsDir);
+            CLEANUP();
+        }
+    }
+
+    GIVEN("Revert to default value for invalid user-set watch frequencies")
+    {
+        {
+            SETUP();
+            char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
+            mkdtemp(statsDir);
+
+            WrapperNvidiaValidationSuite nvvs;
+
+            add_argument("nvvs");
+            add_argument("--watch-frequency");
+            add_argument("99999");
+
+            nvvs.WrapperProcessCommandLine(argc, &argv[0]);
+            CHECK(nvvsCommon.watchFrequency == 5000000);
+
+            rmdir(statsDir);
+            CLEANUP();
+        }
+        {
+            SETUP();
+            char statsDir[] = "/tmp/dcgm-diag-test-stats-dir-XXXXXX";
+            mkdtemp(statsDir);
+
+            WrapperNvidiaValidationSuite nvvs;
+
+            add_argument("nvvs");
+            add_argument("--watch-frequency");
+            add_argument("60000001");
+
+            nvvs.WrapperProcessCommandLine(argc, &argv[0]);
+            CHECK(nvvsCommon.watchFrequency == 5000000);
+
+            rmdir(statsDir);
+            CLEANUP();
+        }
     }
 }
 
@@ -331,8 +416,8 @@ SCENARIO("findTestName finds the test if it exists", "[.]")
     nvvs.WrapperEnumerateAllVisibleTests();
     // We need to load the plugins for this to work. So we will only test the negative cases
     // std::vector<Test *>::iterator sm_stress = nvvs.WrapperFindTestName("SM Stress");
-    std::vector<Test *>::iterator skip        = nvvs.WrapperFindTestName(Test::NVVS_CLASS_HARDWARE, "Skip");
-    std::vector<Test *>::iterator nonexistent = nvvs.WrapperFindTestName(Test::NVVS_CLASS_HARDWARE, "Nonexistent");
+    std::vector<Test *>::iterator skip        = nvvs.WrapperFindTestName("Skip");
+    std::vector<Test *>::iterator nonexistent = nvvs.WrapperFindTestName("Nonexistent");
     CHECK(skip == nonexistent);
 }
 
@@ -381,20 +466,14 @@ void WrapperNvidiaValidationSuite::WrapperInitializeParameters(const std::string
 
 void WrapperNvidiaValidationSuite::WrapperEnumerateAllVisibleTests()
 {
-    std::unique_ptr<GpuSet> gpuSet = std::make_unique<GpuSet>();
-    m_tf                           = new TestFramework(false, gpuSet.get());
+    std::vector<std::unique_ptr<EntitySet>> entitySet;
+    m_tf = new TestFramework(entitySet);
     enumerateAllVisibleTests();
 }
 
-void WrapperNvidiaValidationSuite::WrapperInitializeAndCheckGpuObjs(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
+std::vector<Test *>::iterator WrapperNvidiaValidationSuite::WrapperFindTestName(std::string test)
 {
-    InitializeAndCheckGpuObjs(gpuSets);
-}
-
-std::vector<Test *>::iterator WrapperNvidiaValidationSuite::WrapperFindTestName(Test::testClasses_enum testClass,
-                                                                                std::string test)
-{
-    return FindTestName(testClass, test);
+    return FindTestName(test);
 }
 
 void WrapperNvidiaValidationSuite::WrapperOverrideParameters(TestParameters *tp, const std::string &lowerCaseTestName)

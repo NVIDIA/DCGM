@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "TargetedPower_wrapper.h"
-
 #include "DcgmStringHelpers.h"
+#include "TargetedPower_wrapper.h"
+#include "dcgm_fields.h"
 
 #include <PluginLib.h>
 #include <PluginStrings.h>
@@ -27,7 +27,7 @@ unsigned int GetPluginInterfaceVersion(void)
     return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
 }
 
-dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
+dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPluginInfo_t *info)
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
@@ -35,6 +35,7 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      TP_STR_TARGET_POWER,
                                      TP_STR_TEMPERATURE_MAX,
                                      TP_STR_FAIL_ON_CLOCK_DROP,
+                                     TP_STR_USE_DGEMV,
                                      TP_STR_USE_DGEMM,
                                      TP_STR_CUDA_STREAMS_PER_GPU,
                                      TP_STR_READJUST_INTERVAL,
@@ -49,90 +50,81 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
                                      TP_STR_MAX_GRAPHICS_CLOCK,
                                      TP_STR_OPS_PER_REQUEUE,
                                      TP_STR_STARTING_MATRIX_DIM,
+                                     TP_STR_MAX_MATRIX_DIM,
                                      TP_STR_IS_ALLOWED,
                                      TP_STR_SBE_ERROR_THRESHOLD,
                                      nullptr };
-
+    char const *description      = "This plugin will keep the list of GPUs at a constant power level.";
     const dcgmPluginValue_t paramTypes[]
         = { DcgmPluginParamInt,   DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamBool,
-            DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamInt,   DcgmPluginParamInt,
-            DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamInt,   DcgmPluginParamFloat,
+            DcgmPluginParamBool,  DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamInt,
+            DcgmPluginParamInt,   DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamInt,
             DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamFloat,
-            DcgmPluginParamInt,   DcgmPluginParamInt,   DcgmPluginParamBool,  DcgmPluginParamInt,
-            DcgmPluginParamNone };
+            DcgmPluginParamFloat, DcgmPluginParamInt,   DcgmPluginParamInt,   DcgmPluginParamInt,
+            DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
     unsigned int paramCount = 0;
 
-    info->numValidTests = 1;
-
+    info->numTests = 1;
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->tests[0].validParameters[paramCount].parameterName,
-                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
-                 "%s",
-                 parameterNames[paramCount]);
+        SafeCopyTo(info->tests[0].validParameters[paramCount].parameterName, parameterNames[paramCount]);
         info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
 
-    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(TP_PLUGIN_NAME)>(info->tests[0].testeName, TP_PLUGIN_NAME);
     info->tests[0].numValidParameters = paramCount;
 
-    snprintf(info->pluginName, sizeof(info->pluginName), "%s", TP_PLUGIN_NAME);
-    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "Power");
-    snprintf(info->description,
-             sizeof(info->description),
-             "This plugin will keep the list of GPUs at a constant power level.");
+    SafeCopyTo(info->pluginName, static_cast<char const *>(TP_PLUGIN_NAME));
+    SafeCopyTo(info->description, description);
+    SafeCopyTo(info->tests[0].testName, static_cast<char const *>(TP_PLUGIN_NAME));
+    SafeCopyTo(info->tests[0].description, description);
+    SafeCopyTo(info->tests[0].testCategory, TP_PLUGIN_CATEGORY);
+    info->tests[0].targetEntityGroup = DCGM_FE_GPU;
 
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                              dcgmDiagPluginGpuList_t *gpuInfo,
-                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
+                              dcgmDiagPluginStatFieldIds_t * /* statFieldIds */,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
-                              hostEngineAppenderCallbackFp_t loggingCallback)
+                              hostEngineAppenderCallbackFp_t loggingCallback,
+                              dcgmDiagPluginAttr_v1 const *pluginAttr)
 {
-    ConstantPower *cp = new ConstantPower(handle, gpuInfo);
+    ConstantPower *cp = new ConstantPower(handle);
     *userData         = cp;
 
-    if (!cp->Init(gpuInfo))
-    {
-        DCGM_LOG_ERROR << "Failed to initialize devices for targeted power plugin";
-
-        return DCGM_ST_PLUGIN_EXCEPTION;
-    }
-
+    cp->SetPluginAttr(pluginAttr);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, cp->GetDisplayName());
     return DCGM_ST_OK;
 }
 
-void RunTest(const char *testName,
-             unsigned int timeout,
+void RunTest(char const *testName,
+             unsigned int /* timeout */,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
+             dcgmDiagPluginEntityList_v1 const *entityInfo,
              void *userData)
 {
-    auto cp = (ConstantPower *)userData;
-    cp->Go(testName, numParameters, testParameters);
+    auto *cp = static_cast<ConstantPower *>(userData);
+    cp->Go(testName, entityInfo, numParameters, testParameters);
 }
-
 
 void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
-    if (customStats != nullptr)
+    if (testName != nullptr && customStats != nullptr)
     {
-        auto cp = (ConstantPower *)userData;
-        cp->PopulateCustomStats(*customStats);
+        auto *cp = static_cast<ConstantPower *>(userData);
+        cp->PopulateCustomStats(testName, *customStats);
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
 {
-    auto cp = (ConstantPower *)userData;
-    cp->GetResults(testName, results);
+    auto *cp = static_cast<ConstantPower *>(userData);
+    cp->GetResults(testName, entityResults);
 }
 
 } // END extern "C"

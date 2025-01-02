@@ -28,7 +28,6 @@ class LspciApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./lspci/Linux-x86/",
             "Linux_64bit": "./lspci/Linux-x86_64/",
-            "Linux_ppc64le": "./lspci/Linux-ppc64le/",
             "Linux_aarch64": "./lspci/Linux-aarch64/",
             }
     

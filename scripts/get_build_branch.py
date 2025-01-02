@@ -29,13 +29,19 @@ def get_branch_names(commit):
     if status != 0:
         raise Exception("git branch returned an error")
 
-    return out.split()
+    return out.split('\n')
 
-def ignore_mr_branches(branches):
-    return filter(lambda branch: not re.match(r'^merge[-_]requests/', branch), branches)
+def is_detached_head(branch):
+    return bool(re.match(r'^\(HEAD detached at [a-z0-9]+\)', branch))
 
-def trim_branch_names(branches):
-    return map(lambda branch: re.sub(r'^(origin|remotes)/', '', branch), branches)
+def is_mr_branch(branch):
+    return bool(re.match(r'^merge[-_]requests/', branch))
+
+def trim_branch_name(branch):
+    return re.sub(r'^(origin|remotes)/', '', branch)
+
+def negate(fn):
+    return lambda x: not fn(x)
 
 def pick_release_branch(branches):
     found = filter(lambda branch: re.match(r'^rel_dcgm_\d+_\d+', branch), branches)
@@ -47,9 +53,11 @@ def pick_main_branch(branches):
 
 def main():
     commit = sys.argv[1]
-    b1 = get_branch_names(commit)
-    b2 = ignore_mr_branches(b1)
-    branches = list(trim_branch_names(b2))
+    branches = list(
+      map(trim_branch_name,
+      filter(negate(is_detached_head),
+      filter(negate(is_mr_branch),
+      get_branch_names(commit)))))
 
     release_branch = pick_release_branch(branches)
     main_branch = pick_main_branch(branches)

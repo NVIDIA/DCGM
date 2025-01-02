@@ -44,24 +44,12 @@ def helper_test_dcgm_error_get_msg(handle, gpuIds):
     msg = dcgm_errors.dcgmErrorGetFormatMsgByCode(-1)
     assert not msg, "Non-existent error should be empty, but found %s" % msg
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_error_get_priority_embedded(handle, gpuIds):
-    helper_test_dcgm_error_get_priority(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_error_get_priority_standalone(handle, gpuIds):
     helper_test_dcgm_error_get_priority(handle, gpuIds)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_error_get_msg_embedded(handle, gpuIds):
-    helper_test_dcgm_error_get_msg(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_error_get_msg_standalone(handle, gpuIds):
     helper_test_dcgm_error_get_msg(handle, gpuIds)

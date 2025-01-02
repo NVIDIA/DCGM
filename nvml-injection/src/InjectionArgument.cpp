@@ -23,6 +23,7 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 // clang-format off
 #include <InjectionArgument.h>
+#include "NvmlLogging.h"
 #include <limits.h>
 #include <cstring>
 
@@ -32,6 +33,7 @@ namespace
 {
 
 // The following snippet is generated from write_struct_compare_declare
+int nvmlPciInfoExt_tCompare(const nvmlPciInfoExt_t &a, const nvmlPciInfoExt_t &b);
 int nvmlPciInfo_tCompare(const nvmlPciInfo_t &a, const nvmlPciInfo_t &b);
 int nvmlEccErrorCounts_tCompare(const nvmlEccErrorCounts_t &a, const nvmlEccErrorCounts_t &b);
 int nvmlUtilization_tCompare(const nvmlUtilization_t &a, const nvmlUtilization_t &b);
@@ -39,25 +41,52 @@ int nvmlMemory_tCompare(const nvmlMemory_t &a, const nvmlMemory_t &b);
 int nvmlMemory_v2_tCompare(const nvmlMemory_v2_t &a, const nvmlMemory_v2_t &b);
 int nvmlBAR1Memory_tCompare(const nvmlBAR1Memory_t &a, const nvmlBAR1Memory_t &b);
 int nvmlProcessInfo_v1_tCompare(const nvmlProcessInfo_v1_t &a, const nvmlProcessInfo_v1_t &b);
-int nvmlProcessInfo_v2_tCompare(const nvmlProcessInfo_v2_t &a, const nvmlProcessInfo_v2_t &b);
 int nvmlProcessInfo_tCompare(const nvmlProcessInfo_t &a, const nvmlProcessInfo_t &b);
+int nvmlProcessDetail_v1_tCompare(const nvmlProcessDetail_v1_t &a, const nvmlProcessDetail_v1_t &b);
+int nvmlProcessDetailList_tCompare(const nvmlProcessDetailList_t &a, const nvmlProcessDetailList_t &b);
 int nvmlDeviceAttributes_tCompare(const nvmlDeviceAttributes_t &a, const nvmlDeviceAttributes_t &b);
+int nvmlC2cModeInfo_v1_tCompare(const nvmlC2cModeInfo_v1_t &a, const nvmlC2cModeInfo_v1_t &b);
 int nvmlRowRemapperHistogramValues_tCompare(const nvmlRowRemapperHistogramValues_t &a, const nvmlRowRemapperHistogramValues_t &b);
 int nvmlNvLinkUtilizationControl_tCompare(const nvmlNvLinkUtilizationControl_t &a, const nvmlNvLinkUtilizationControl_t &b);
 int nvmlBridgeChipInfo_tCompare(const nvmlBridgeChipInfo_t &a, const nvmlBridgeChipInfo_t &b);
 int nvmlBridgeChipHierarchy_tCompare(const nvmlBridgeChipHierarchy_t &a, const nvmlBridgeChipHierarchy_t &b);
 int nvmlSample_tCompare(const nvmlSample_t &a, const nvmlSample_t &b);
 int nvmlViolationTime_tCompare(const nvmlViolationTime_t &a, const nvmlViolationTime_t &b);
+int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b);
 int nvmlClkMonFaultInfo_tCompare(const nvmlClkMonFaultInfo_t &a, const nvmlClkMonFaultInfo_t &b);
 int nvmlClkMonStatus_tCompare(const nvmlClkMonStatus_t &a, const nvmlClkMonStatus_t &b);
+int nvmlClockOffset_tCompare(const nvmlClockOffset_t &a, const nvmlClockOffset_t &b);
+int nvmlFanSpeedInfo_tCompare(const nvmlFanSpeedInfo_t &a, const nvmlFanSpeedInfo_t &b);
+int nvmlDevicePerfModes_tCompare(const nvmlDevicePerfModes_t &a, const nvmlDevicePerfModes_t &b);
+int nvmlDeviceCurrentClockFreqs_tCompare(const nvmlDeviceCurrentClockFreqs_t &a, const nvmlDeviceCurrentClockFreqs_t &b);
+int nvmlProcessUtilizationSample_tCompare(const nvmlProcessUtilizationSample_t &a, const nvmlProcessUtilizationSample_t &b);
+int nvmlProcessUtilizationInfo_v1_tCompare(const nvmlProcessUtilizationInfo_v1_t &a, const nvmlProcessUtilizationInfo_v1_t &b);
+int nvmlProcessesUtilizationInfo_tCompare(const nvmlProcessesUtilizationInfo_t &a, const nvmlProcessesUtilizationInfo_t &b);
+int nvmlEccSramErrorStatus_tCompare(const nvmlEccSramErrorStatus_t &a, const nvmlEccSramErrorStatus_t &b);
+int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInfo_t &b);
+int nvmlPowerValue_v2_tCompare(const nvmlPowerValue_v2_t &a, const nvmlPowerValue_v2_t &b);
+int nvmlVgpuHeterogeneousMode_tCompare(const nvmlVgpuHeterogeneousMode_t &a, const nvmlVgpuHeterogeneousMode_t &b);
+int nvmlVgpuPlacementId_tCompare(const nvmlVgpuPlacementId_t &a, const nvmlVgpuPlacementId_t &b);
+int nvmlVgpuPlacementList_v1_tCompare(const nvmlVgpuPlacementList_v1_t &a, const nvmlVgpuPlacementList_v1_t &b);
+int nvmlVgpuPlacementList_tCompare(const nvmlVgpuPlacementList_t &a, const nvmlVgpuPlacementList_t &b);
+int nvmlVgpuTypeBar1Info_tCompare(const nvmlVgpuTypeBar1Info_t &a, const nvmlVgpuTypeBar1Info_t &b);
 int nvmlVgpuInstanceUtilizationSample_tCompare(const nvmlVgpuInstanceUtilizationSample_t &a, const nvmlVgpuInstanceUtilizationSample_t &b);
+int nvmlVgpuInstanceUtilizationInfo_v1_tCompare(const nvmlVgpuInstanceUtilizationInfo_v1_t &a, const nvmlVgpuInstanceUtilizationInfo_v1_t &b);
+int nvmlVgpuInstancesUtilizationInfo_tCompare(const nvmlVgpuInstancesUtilizationInfo_t &a, const nvmlVgpuInstancesUtilizationInfo_t &b);
 int nvmlVgpuProcessUtilizationSample_tCompare(const nvmlVgpuProcessUtilizationSample_t &a, const nvmlVgpuProcessUtilizationSample_t &b);
+int nvmlVgpuProcessUtilizationInfo_v1_tCompare(const nvmlVgpuProcessUtilizationInfo_v1_t &a, const nvmlVgpuProcessUtilizationInfo_v1_t &b);
+int nvmlVgpuProcessesUtilizationInfo_tCompare(const nvmlVgpuProcessesUtilizationInfo_t &a, const nvmlVgpuProcessesUtilizationInfo_t &b);
+int nvmlVgpuSchedulerLogEntry_tCompare(const nvmlVgpuSchedulerLogEntry_t &a, const nvmlVgpuSchedulerLogEntry_t &b);
+int nvmlVgpuSchedulerLog_tCompare(const nvmlVgpuSchedulerLog_t &a, const nvmlVgpuSchedulerLog_t &b);
+int nvmlVgpuSchedulerGetState_tCompare(const nvmlVgpuSchedulerGetState_t &a, const nvmlVgpuSchedulerGetState_t &b);
+int nvmlVgpuSchedulerSetState_tCompare(const nvmlVgpuSchedulerSetState_t &a, const nvmlVgpuSchedulerSetState_t &b);
+int nvmlVgpuSchedulerCapabilities_tCompare(const nvmlVgpuSchedulerCapabilities_t &a, const nvmlVgpuSchedulerCapabilities_t &b);
 int nvmlVgpuLicenseExpiry_tCompare(const nvmlVgpuLicenseExpiry_t &a, const nvmlVgpuLicenseExpiry_t &b);
 int nvmlVgpuLicenseInfo_tCompare(const nvmlVgpuLicenseInfo_t &a, const nvmlVgpuLicenseInfo_t &b);
-int nvmlProcessUtilizationSample_tCompare(const nvmlProcessUtilizationSample_t &a, const nvmlProcessUtilizationSample_t &b);
 int nvmlGridLicenseExpiry_tCompare(const nvmlGridLicenseExpiry_t &a, const nvmlGridLicenseExpiry_t &b);
 int nvmlGridLicensableFeature_tCompare(const nvmlGridLicensableFeature_t &a, const nvmlGridLicensableFeature_t &b);
 int nvmlGridLicensableFeatures_tCompare(const nvmlGridLicensableFeatures_t &a, const nvmlGridLicensableFeatures_t &b);
+int nvmlNvLinkPowerThres_tCompare(const nvmlNvLinkPowerThres_t &a, const nvmlNvLinkPowerThres_t &b);
 int nvmlFieldValue_tCompare(const nvmlFieldValue_t &a, const nvmlFieldValue_t &b);
 int nvmlHwbcEntry_tCompare(const nvmlHwbcEntry_t &a, const nvmlHwbcEntry_t &b);
 int nvmlLedState_tCompare(const nvmlLedState_t &a, const nvmlLedState_t &b);
@@ -72,9 +101,16 @@ int nvmlFBCStats_tCompare(const nvmlFBCStats_t &a, const nvmlFBCStats_t &b);
 int nvmlFBCSessionInfo_tCompare(const nvmlFBCSessionInfo_t &a, const nvmlFBCSessionInfo_t &b);
 int nvmlConfComputeSystemCaps_tCompare(const nvmlConfComputeSystemCaps_t &a, const nvmlConfComputeSystemCaps_t &b);
 int nvmlConfComputeSystemState_tCompare(const nvmlConfComputeSystemState_t &a, const nvmlConfComputeSystemState_t &b);
+int nvmlSystemConfComputeSettings_tCompare(const nvmlSystemConfComputeSettings_t &a, const nvmlSystemConfComputeSettings_t &b);
 int nvmlConfComputeMemSizeInfo_tCompare(const nvmlConfComputeMemSizeInfo_t &a, const nvmlConfComputeMemSizeInfo_t &b);
 int nvmlConfComputeGpuCertificate_tCompare(const nvmlConfComputeGpuCertificate_t &a, const nvmlConfComputeGpuCertificate_t &b);
 int nvmlConfComputeGpuAttestationReport_tCompare(const nvmlConfComputeGpuAttestationReport_t &a, const nvmlConfComputeGpuAttestationReport_t &b);
+int nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &b);
+int nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &b);
+int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabricInfo_t &b);
+int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b);
+int nvmlSystemDriverBranchInfo_tCompare(const nvmlSystemDriverBranchInfo_t &a, const nvmlSystemDriverBranchInfo_t &b);
+int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t &b);
 int nvmlVgpuVersion_tCompare(const nvmlVgpuVersion_t &a, const nvmlVgpuVersion_t &b);
 int nvmlVgpuMetadata_tCompare(const nvmlVgpuMetadata_t &a, const nvmlVgpuMetadata_t &b);
 int nvmlVgpuPgpuMetadata_tCompare(const nvmlVgpuPgpuMetadata_t &a, const nvmlVgpuPgpuMetadata_t &b);
@@ -83,12 +119,71 @@ int nvmlExcludedDeviceInfo_tCompare(const nvmlExcludedDeviceInfo_t &a, const nvm
 int nvmlGpuInstancePlacement_tCompare(const nvmlGpuInstancePlacement_t &a, const nvmlGpuInstancePlacement_t &b);
 int nvmlGpuInstanceProfileInfo_tCompare(const nvmlGpuInstanceProfileInfo_t &a, const nvmlGpuInstanceProfileInfo_t &b);
 int nvmlGpuInstanceProfileInfo_v2_tCompare(const nvmlGpuInstanceProfileInfo_v2_t &a, const nvmlGpuInstanceProfileInfo_v2_t &b);
+int nvmlGpuInstanceProfileInfo_v3_tCompare(const nvmlGpuInstanceProfileInfo_v3_t &a, const nvmlGpuInstanceProfileInfo_v3_t &b);
 int nvmlGpuInstanceInfo_tCompare(const nvmlGpuInstanceInfo_t &a, const nvmlGpuInstanceInfo_t &b);
 int nvmlComputeInstancePlacement_tCompare(const nvmlComputeInstancePlacement_t &a, const nvmlComputeInstancePlacement_t &b);
 int nvmlComputeInstanceProfileInfo_tCompare(const nvmlComputeInstanceProfileInfo_t &a, const nvmlComputeInstanceProfileInfo_t &b);
 int nvmlComputeInstanceProfileInfo_v2_tCompare(const nvmlComputeInstanceProfileInfo_v2_t &a, const nvmlComputeInstanceProfileInfo_v2_t &b);
+int nvmlComputeInstanceProfileInfo_v3_tCompare(const nvmlComputeInstanceProfileInfo_v3_t &a, const nvmlComputeInstanceProfileInfo_v3_t &b);
 int nvmlComputeInstanceInfo_tCompare(const nvmlComputeInstanceInfo_t &a, const nvmlComputeInstanceInfo_t &b);
 int nvmlGpmSupport_tCompare(const nvmlGpmSupport_t &a, const nvmlGpmSupport_t &b);
+int nvmlDeviceCapabilities_tCompare(const nvmlDeviceCapabilities_t &a, const nvmlDeviceCapabilities_t &b);
+int nvmlMask255_tCompare(const nvmlMask255_t &a, const nvmlMask255_t &b);
+int nvmlWorkloadPowerProfileInfo_tCompare(const nvmlWorkloadPowerProfileInfo_t &a, const nvmlWorkloadPowerProfileInfo_t &b);
+int nvmlWorkloadPowerProfileProfilesInfo_tCompare(const nvmlWorkloadPowerProfileProfilesInfo_t &a, const nvmlWorkloadPowerProfileProfilesInfo_t &b);
+int nvmlWorkloadPowerProfileCurrentProfiles_tCompare(const nvmlWorkloadPowerProfileCurrentProfiles_t &a, const nvmlWorkloadPowerProfileCurrentProfiles_t &b);
+int nvmlWorkloadPowerProfileRequestedProfiles_tCompare(const nvmlWorkloadPowerProfileRequestedProfiles_t &a, const nvmlWorkloadPowerProfileRequestedProfiles_t &b);
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPciInfoExt_tCompare(const nvmlPciInfoExt_t &a, const nvmlPciInfoExt_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.domain != b.domain)
+    {
+        return a.domain < b.domain ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bus != b.bus)
+    {
+        return a.bus < b.bus ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.device != b.device)
+    {
+        return a.device < b.device ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pciDeviceId != b.pciDeviceId)
+    {
+        return a.pciDeviceId < b.pciDeviceId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pciSubSystemId != b.pciSubSystemId)
+    {
+        return a.pciSubSystemId < b.pciSubSystemId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.baseClass != b.baseClass)
+    {
+        return a.baseClass < b.baseClass ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.subClass != b.subClass)
+    {
+        return a.subClass < b.subClass ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.busId, b.busId); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
 
 // The following snippet is generated from write_struct_compare_definition
 int nvmlPciInfo_tCompare(const nvmlPciInfo_t &a, const nvmlPciInfo_t &b)
@@ -263,7 +358,7 @@ int nvmlProcessInfo_v1_tCompare(const nvmlProcessInfo_v1_t &a, const nvmlProcess
 }
 
 // The following snippet is generated from write_struct_compare_definition
-int nvmlProcessInfo_v2_tCompare(const nvmlProcessInfo_v2_t &a, const nvmlProcessInfo_v2_t &b)
+int nvmlProcessInfo_tCompare(const nvmlProcessInfo_t &a, const nvmlProcessInfo_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
     if (a.pid != b.pid)
@@ -289,7 +384,7 @@ int nvmlProcessInfo_v2_tCompare(const nvmlProcessInfo_v2_t &a, const nvmlProcess
 }
 
 // The following snippet is generated from write_struct_compare_definition
-int nvmlProcessInfo_tCompare(const nvmlProcessInfo_t &a, const nvmlProcessInfo_t &b)
+int nvmlProcessDetail_v1_tCompare(const nvmlProcessDetail_v1_t &a, const nvmlProcessDetail_v1_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
     if (a.pid != b.pid)
@@ -315,6 +410,32 @@ int nvmlProcessInfo_tCompare(const nvmlProcessInfo_t &a, const nvmlProcessInfo_t
     if (a.usedGpuCcProtectedMemory != b.usedGpuCcProtectedMemory)
     {
         return a.usedGpuCcProtectedMemory < b.usedGpuCcProtectedMemory ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlProcessDetailList_tCompare(const nvmlProcessDetailList_t &a, const nvmlProcessDetailList_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.mode != b.mode)
+    {
+        return a.mode < b.mode ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.numProcArrayEntries != b.numProcArrayEntries)
+    {
+        return a.numProcArrayEntries < b.numProcArrayEntries ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlProcessDetail_v1_tCompare(*a.procArray, *b.procArray); ret)
+    {
+        return ret;
     }
     return 0;
 }
@@ -366,6 +487,17 @@ int nvmlDeviceAttributes_tCompare(const nvmlDeviceAttributes_t &a, const nvmlDev
     if (a.memorySizeMB != b.memorySizeMB)
     {
         return a.memorySizeMB < b.memorySizeMB ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlC2cModeInfo_v1_tCompare(const nvmlC2cModeInfo_v1_t &a, const nvmlC2cModeInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.isC2cEnabled != b.isC2cEnabled)
+    {
+        return a.isC2cEnabled < b.isC2cEnabled ? -1 : 1;
     }
     return 0;
 }
@@ -485,6 +617,32 @@ int nvmlViolationTime_tCompare(const nvmlViolationTime_t &a, const nvmlViolation
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.index != b.index)
+    {
+        return a.index < b.index ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.signalType != b.signalType)
+    {
+        return a.signalType < b.signalType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.target != b.target)
+    {
+        return a.target < b.target ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlClkMonFaultInfo_tCompare(const nvmlClkMonFaultInfo_t &a, const nvmlClkMonFaultInfo_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -525,6 +683,446 @@ int nvmlClkMonStatus_tCompare(const nvmlClkMonStatus_t &a, const nvmlClkMonStatu
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlClockOffset_tCompare(const nvmlClockOffset_t &a, const nvmlClockOffset_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.type != b.type)
+    {
+        return a.type < b.type ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pstate != b.pstate)
+    {
+        return a.pstate < b.pstate ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.clockOffsetMHz != b.clockOffsetMHz)
+    {
+        return a.clockOffsetMHz < b.clockOffsetMHz ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minClockOffsetMHz != b.minClockOffsetMHz)
+    {
+        return a.minClockOffsetMHz < b.minClockOffsetMHz ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.maxClockOffsetMHz != b.maxClockOffsetMHz)
+    {
+        return a.maxClockOffsetMHz < b.maxClockOffsetMHz ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlFanSpeedInfo_tCompare(const nvmlFanSpeedInfo_t &a, const nvmlFanSpeedInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.fan != b.fan)
+    {
+        return a.fan < b.fan ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.speed != b.speed)
+    {
+        return a.speed < b.speed ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlDevicePerfModes_tCompare(const nvmlDevicePerfModes_t &a, const nvmlDevicePerfModes_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.str, b.str); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlDeviceCurrentClockFreqs_tCompare(const nvmlDeviceCurrentClockFreqs_t &a, const nvmlDeviceCurrentClockFreqs_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.str, b.str); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlProcessUtilizationSample_tCompare(const nvmlProcessUtilizationSample_t &a, const nvmlProcessUtilizationSample_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pid != b.pid)
+    {
+        return a.pid < b.pid ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeStamp != b.timeStamp)
+    {
+        return a.timeStamp < b.timeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.smUtil != b.smUtil)
+    {
+        return a.smUtil < b.smUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.memUtil != b.memUtil)
+    {
+        return a.memUtil < b.memUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.encUtil != b.encUtil)
+    {
+        return a.encUtil < b.encUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.decUtil != b.decUtil)
+    {
+        return a.decUtil < b.decUtil ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlProcessUtilizationInfo_v1_tCompare(const nvmlProcessUtilizationInfo_v1_t &a, const nvmlProcessUtilizationInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeStamp != b.timeStamp)
+    {
+        return a.timeStamp < b.timeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pid != b.pid)
+    {
+        return a.pid < b.pid ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.smUtil != b.smUtil)
+    {
+        return a.smUtil < b.smUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.memUtil != b.memUtil)
+    {
+        return a.memUtil < b.memUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.encUtil != b.encUtil)
+    {
+        return a.encUtil < b.encUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.decUtil != b.decUtil)
+    {
+        return a.decUtil < b.decUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.jpgUtil != b.jpgUtil)
+    {
+        return a.jpgUtil < b.jpgUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.ofaUtil != b.ofaUtil)
+    {
+        return a.ofaUtil < b.ofaUtil ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlProcessesUtilizationInfo_tCompare(const nvmlProcessesUtilizationInfo_t &a, const nvmlProcessesUtilizationInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.processSamplesCount != b.processSamplesCount)
+    {
+        return a.processSamplesCount < b.processSamplesCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.lastSeenTimeStamp != b.lastSeenTimeStamp)
+    {
+        return a.lastSeenTimeStamp < b.lastSeenTimeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlProcessUtilizationInfo_v1_tCompare(*a.procUtilArray, *b.procUtilArray); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEccSramErrorStatus_tCompare(const nvmlEccSramErrorStatus_t &a, const nvmlEccSramErrorStatus_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncParity != b.aggregateUncParity)
+    {
+        return a.aggregateUncParity < b.aggregateUncParity ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncSecDed != b.aggregateUncSecDed)
+    {
+        return a.aggregateUncSecDed < b.aggregateUncSecDed ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateCor != b.aggregateCor)
+    {
+        return a.aggregateCor < b.aggregateCor ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.volatileUncParity != b.volatileUncParity)
+    {
+        return a.volatileUncParity < b.volatileUncParity ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.volatileUncSecDed != b.volatileUncSecDed)
+    {
+        return a.volatileUncSecDed < b.volatileUncSecDed ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.volatileCor != b.volatileCor)
+    {
+        return a.volatileCor < b.volatileCor ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncBucketL2 != b.aggregateUncBucketL2)
+    {
+        return a.aggregateUncBucketL2 < b.aggregateUncBucketL2 ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncBucketSm != b.aggregateUncBucketSm)
+    {
+        return a.aggregateUncBucketSm < b.aggregateUncBucketSm ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncBucketPcie != b.aggregateUncBucketPcie)
+    {
+        return a.aggregateUncBucketPcie < b.aggregateUncBucketPcie ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncBucketMcu != b.aggregateUncBucketMcu)
+    {
+        return a.aggregateUncBucketMcu < b.aggregateUncBucketMcu ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.aggregateUncBucketOther != b.aggregateUncBucketOther)
+    {
+        return a.aggregateUncBucketOther < b.aggregateUncBucketOther ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bThresholdExceeded != b.bThresholdExceeded)
+    {
+        return a.bThresholdExceeded < b.bThresholdExceeded ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.ibGuid, b.ibGuid, sizeof(a.ibGuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.rackGuid, b.rackGuid, sizeof(a.rackGuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.chassisPhysicalSlotNumber != b.chassisPhysicalSlotNumber)
+    {
+        return a.chassisPhysicalSlotNumber < b.chassisPhysicalSlotNumber ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.computeSlotIndex != b.computeSlotIndex)
+    {
+        return a.computeSlotIndex < b.computeSlotIndex ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.nodeIndex != b.nodeIndex)
+    {
+        return a.nodeIndex < b.nodeIndex ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.peerType != b.peerType)
+    {
+        return a.peerType < b.peerType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.moduleId != b.moduleId)
+    {
+        return a.moduleId < b.moduleId ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPowerValue_v2_tCompare(const nvmlPowerValue_v2_t &a, const nvmlPowerValue_v2_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.powerScope != b.powerScope)
+    {
+        return a.powerScope < b.powerScope ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.powerValueMw != b.powerValueMw)
+    {
+        return a.powerValueMw < b.powerValueMw ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuHeterogeneousMode_tCompare(const nvmlVgpuHeterogeneousMode_t &a, const nvmlVgpuHeterogeneousMode_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.mode != b.mode)
+    {
+        return a.mode < b.mode ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuPlacementId_tCompare(const nvmlVgpuPlacementId_t &a, const nvmlVgpuPlacementId_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.placementId != b.placementId)
+    {
+        return a.placementId < b.placementId ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuPlacementList_v1_tCompare(const nvmlVgpuPlacementList_v1_t &a, const nvmlVgpuPlacementList_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.placementSize != b.placementSize)
+    {
+        return a.placementSize < b.placementSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.count != b.count)
+    {
+        return a.count < b.count ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (*a.placementIds != *b.placementIds)
+    {
+        return *a.placementIds < *b.placementIds;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuPlacementList_tCompare(const nvmlVgpuPlacementList_t &a, const nvmlVgpuPlacementList_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.placementSize != b.placementSize)
+    {
+        return a.placementSize < b.placementSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.count != b.count)
+    {
+        return a.count < b.count ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (*a.placementIds != *b.placementIds)
+    {
+        return *a.placementIds < *b.placementIds;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.mode != b.mode)
+    {
+        return a.mode < b.mode ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuTypeBar1Info_tCompare(const nvmlVgpuTypeBar1Info_t &a, const nvmlVgpuTypeBar1Info_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bar1Size != b.bar1Size)
+    {
+        return a.bar1Size < b.bar1Size ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlVgpuInstanceUtilizationSample_tCompare(const nvmlVgpuInstanceUtilizationSample_t &a, const nvmlVgpuInstanceUtilizationSample_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -554,6 +1152,83 @@ int nvmlVgpuInstanceUtilizationSample_tCompare(const nvmlVgpuInstanceUtilization
     }
     // The following snippet is generated from write_struct_compare_definition
     if (auto ret = memcmp(&a.decUtil, &b.decUtil, sizeof(a.decUtil)); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuInstanceUtilizationInfo_v1_tCompare(const nvmlVgpuInstanceUtilizationInfo_v1_t &a, const nvmlVgpuInstanceUtilizationInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeStamp != b.timeStamp)
+    {
+        return a.timeStamp < b.timeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.vgpuInstance != b.vgpuInstance)
+    {
+        return a.vgpuInstance < b.vgpuInstance ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.smUtil, &b.smUtil, sizeof(a.smUtil)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.memUtil, &b.memUtil, sizeof(a.memUtil)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.encUtil, &b.encUtil, sizeof(a.encUtil)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.decUtil, &b.decUtil, sizeof(a.decUtil)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.jpgUtil, &b.jpgUtil, sizeof(a.jpgUtil)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.ofaUtil, &b.ofaUtil, sizeof(a.ofaUtil)); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuInstancesUtilizationInfo_tCompare(const nvmlVgpuInstancesUtilizationInfo_t &a, const nvmlVgpuInstancesUtilizationInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sampleValType != b.sampleValType)
+    {
+        return a.sampleValType < b.sampleValType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.vgpuInstanceCount != b.vgpuInstanceCount)
+    {
+        return a.vgpuInstanceCount < b.vgpuInstanceCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.lastSeenTimeStamp != b.lastSeenTimeStamp)
+    {
+        return a.lastSeenTimeStamp < b.lastSeenTimeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlVgpuInstanceUtilizationInfo_v1_tCompare(*a.vgpuUtilArray, *b.vgpuUtilArray); ret)
     {
         return ret;
     }
@@ -602,6 +1277,242 @@ int nvmlVgpuProcessUtilizationSample_tCompare(const nvmlVgpuProcessUtilizationSa
     if (a.decUtil != b.decUtil)
     {
         return a.decUtil < b.decUtil ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuProcessUtilizationInfo_v1_tCompare(const nvmlVgpuProcessUtilizationInfo_v1_t &a, const nvmlVgpuProcessUtilizationInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.processName, b.processName); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeStamp != b.timeStamp)
+    {
+        return a.timeStamp < b.timeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.vgpuInstance != b.vgpuInstance)
+    {
+        return a.vgpuInstance < b.vgpuInstance ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.pid != b.pid)
+    {
+        return a.pid < b.pid ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.smUtil != b.smUtil)
+    {
+        return a.smUtil < b.smUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.memUtil != b.memUtil)
+    {
+        return a.memUtil < b.memUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.encUtil != b.encUtil)
+    {
+        return a.encUtil < b.encUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.decUtil != b.decUtil)
+    {
+        return a.decUtil < b.decUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.jpgUtil != b.jpgUtil)
+    {
+        return a.jpgUtil < b.jpgUtil ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.ofaUtil != b.ofaUtil)
+    {
+        return a.ofaUtil < b.ofaUtil ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuProcessesUtilizationInfo_tCompare(const nvmlVgpuProcessesUtilizationInfo_t &a, const nvmlVgpuProcessesUtilizationInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.vgpuProcessCount != b.vgpuProcessCount)
+    {
+        return a.vgpuProcessCount < b.vgpuProcessCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.lastSeenTimeStamp != b.lastSeenTimeStamp)
+    {
+        return a.lastSeenTimeStamp < b.lastSeenTimeStamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlVgpuProcessUtilizationInfo_v1_tCompare(*a.vgpuProcUtilArray, *b.vgpuProcUtilArray); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuSchedulerLogEntry_tCompare(const nvmlVgpuSchedulerLogEntry_t &a, const nvmlVgpuSchedulerLogEntry_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timestamp != b.timestamp)
+    {
+        return a.timestamp < b.timestamp ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeRunTotal != b.timeRunTotal)
+    {
+        return a.timeRunTotal < b.timeRunTotal ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeRun != b.timeRun)
+    {
+        return a.timeRun < b.timeRun ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.swRunlistId != b.swRunlistId)
+    {
+        return a.swRunlistId < b.swRunlistId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.targetTimeSlice != b.targetTimeSlice)
+    {
+        return a.targetTimeSlice < b.targetTimeSlice ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.cumulativePreemptionTime != b.cumulativePreemptionTime)
+    {
+        return a.cumulativePreemptionTime < b.cumulativePreemptionTime ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuSchedulerLog_tCompare(const nvmlVgpuSchedulerLog_t &a, const nvmlVgpuSchedulerLog_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.engineId != b.engineId)
+    {
+        return a.engineId < b.engineId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.schedulerPolicy != b.schedulerPolicy)
+    {
+        return a.schedulerPolicy < b.schedulerPolicy ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.arrMode != b.arrMode)
+    {
+        return a.arrMode < b.arrMode ? -1 : 1;
+    }
+    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t conatins union, and cannot compare now. May cause problems...");
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.entriesCount != b.entriesCount)
+    {
+        return a.entriesCount < b.entriesCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    for (unsigned int i = 0; i < sizeof(a.logEntries) / sizeof(a.logEntries[0]); ++i)
+    {
+        if (auto ret = nvmlVgpuSchedulerLogEntry_tCompare(a.logEntries[i], b.logEntries[i]); ret)
+        {
+            return ret;
+        }
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuSchedulerGetState_tCompare(const nvmlVgpuSchedulerGetState_t &a, const nvmlVgpuSchedulerGetState_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.schedulerPolicy != b.schedulerPolicy)
+    {
+        return a.schedulerPolicy < b.schedulerPolicy ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.arrMode != b.arrMode)
+    {
+        return a.arrMode < b.arrMode ? -1 : 1;
+    }
+    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t conatins union, and cannot compare now. May cause problems...");
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuSchedulerSetState_tCompare(const nvmlVgpuSchedulerSetState_t &a, const nvmlVgpuSchedulerSetState_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.schedulerPolicy != b.schedulerPolicy)
+    {
+        return a.schedulerPolicy < b.schedulerPolicy ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.enableARRMode != b.enableARRMode)
+    {
+        return a.enableARRMode < b.enableARRMode ? -1 : 1;
+    }
+    NVML_LOG_ERR("nvmlVgpuSchedulerSetParams_t conatins union, and cannot compare now. May cause problems...");
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuSchedulerCapabilities_tCompare(const nvmlVgpuSchedulerCapabilities_t &a, const nvmlVgpuSchedulerCapabilities_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    for (unsigned int i = 0; i < sizeof(a.supportedSchedulers) / sizeof(a.supportedSchedulers[0]); ++i)
+    {
+        if (a.supportedSchedulers[i] != b.supportedSchedulers[i])
+        {
+            return a.supportedSchedulers[i] < b.supportedSchedulers[i] ? -1 : 1;
+        }
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.maxTimeslice != b.maxTimeslice)
+    {
+        return a.maxTimeslice < b.maxTimeslice ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minTimeslice != b.minTimeslice)
+    {
+        return a.minTimeslice < b.minTimeslice ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.isArrModeSupported != b.isArrModeSupported)
+    {
+        return a.isArrModeSupported < b.isArrModeSupported ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.maxFrequencyForARR != b.maxFrequencyForARR)
+    {
+        return a.maxFrequencyForARR < b.maxFrequencyForARR ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minFrequencyForARR != b.minFrequencyForARR)
+    {
+        return a.minFrequencyForARR < b.minFrequencyForARR ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.maxAvgFactorForARR != b.maxAvgFactorForARR)
+    {
+        return a.maxAvgFactorForARR < b.maxAvgFactorForARR ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minAvgFactorForARR != b.minAvgFactorForARR)
+    {
+        return a.minAvgFactorForARR < b.minAvgFactorForARR ? -1 : 1;
     }
     return 0;
 }
@@ -664,42 +1575,6 @@ int nvmlVgpuLicenseInfo_tCompare(const nvmlVgpuLicenseInfo_t &a, const nvmlVgpuL
     if (a.currentState != b.currentState)
     {
         return a.currentState < b.currentState ? -1 : 1;
-    }
-    return 0;
-}
-
-// The following snippet is generated from write_struct_compare_definition
-int nvmlProcessUtilizationSample_tCompare(const nvmlProcessUtilizationSample_t &a, const nvmlProcessUtilizationSample_t &b)
-{
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.pid != b.pid)
-    {
-        return a.pid < b.pid ? -1 : 1;
-    }
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.timeStamp != b.timeStamp)
-    {
-        return a.timeStamp < b.timeStamp ? -1 : 1;
-    }
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.smUtil != b.smUtil)
-    {
-        return a.smUtil < b.smUtil ? -1 : 1;
-    }
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.memUtil != b.memUtil)
-    {
-        return a.memUtil < b.memUtil ? -1 : 1;
-    }
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.encUtil != b.encUtil)
-    {
-        return a.encUtil < b.encUtil ? -1 : 1;
-    }
-    // The following snippet is generated from write_struct_compare_definition
-    if (a.decUtil != b.decUtil)
-    {
-        return a.decUtil < b.decUtil ? -1 : 1;
     }
     return 0;
 }
@@ -801,6 +1676,17 @@ int nvmlGridLicensableFeatures_tCompare(const nvmlGridLicensableFeatures_t &a, c
         {
             return ret;
         }
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlNvLinkPowerThres_tCompare(const nvmlNvLinkPowerThres_t &a, const nvmlNvLinkPowerThres_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.lowPwrThreshold != b.lowPwrThreshold)
+    {
+        return a.lowPwrThreshold < b.lowPwrThreshold ? -1 : 1;
     }
     return 0;
 }
@@ -1203,9 +2089,40 @@ int nvmlConfComputeSystemState_tCompare(const nvmlConfComputeSystemState_t &a, c
         return a.ccFeature < b.ccFeature ? -1 : 1;
     }
     // The following snippet is generated from write_struct_compare_definition
-    if (a.devMode != b.devMode)
+    if (a.devToolsMode != b.devToolsMode)
     {
-        return a.devMode < b.devMode ? -1 : 1;
+        return a.devToolsMode < b.devToolsMode ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlSystemConfComputeSettings_tCompare(const nvmlSystemConfComputeSettings_t &a, const nvmlSystemConfComputeSettings_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.environment != b.environment)
+    {
+        return a.environment < b.environment ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.ccFeature != b.ccFeature)
+    {
+        return a.ccFeature < b.ccFeature ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.devToolsMode != b.devToolsMode)
+    {
+        return a.devToolsMode < b.devToolsMode ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.multiGpuMode != b.multiGpuMode)
+    {
+        return a.multiGpuMode < b.multiGpuMode ? -1 : 1;
     }
     return 0;
 }
@@ -1284,6 +2201,137 @@ int nvmlConfComputeGpuAttestationReport_tCompare(const nvmlConfComputeGpuAttesta
     if (auto ret = memcmp(a.cecAttestationReport, b.cecAttestationReport, sizeof(a.cecAttestationReport)); ret)
     {
         return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.maxAttackerAdvantage != b.maxAttackerAdvantage)
+    {
+        return a.maxAttackerAdvantage < b.maxAttackerAdvantage ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.attackerAdvantage != b.attackerAdvantage)
+    {
+        return a.attackerAdvantage < b.attackerAdvantage ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabricInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.clusterUuid, b.clusterUuid, sizeof(a.clusterUuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.status != b.status)
+    {
+        return a.status < b.status ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.cliqueId != b.cliqueId)
+    {
+        return a.cliqueId < b.cliqueId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.state != b.state)
+    {
+        return a.state < b.state ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.clusterUuid, b.clusterUuid, sizeof(a.clusterUuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.status != b.status)
+    {
+        return a.status < b.status ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.cliqueId != b.cliqueId)
+    {
+        return a.cliqueId < b.cliqueId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.state != b.state)
+    {
+        return a.state < b.state ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.healthMask != b.healthMask)
+    {
+        return a.healthMask < b.healthMask ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlSystemDriverBranchInfo_tCompare(const nvmlSystemDriverBranchInfo_t &a, const nvmlSystemDriverBranchInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.branch, b.branch); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sensorType != b.sensorType)
+    {
+        return a.sensorType < b.sensorType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.temperature != b.temperature)
+    {
+        return a.temperature < b.temperature ? -1 : 1;
     }
     return 0;
 }
@@ -1593,6 +2641,77 @@ int nvmlGpuInstanceProfileInfo_v2_tCompare(const nvmlGpuInstanceProfileInfo_v2_t
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlGpuInstanceProfileInfo_v3_tCompare(const nvmlGpuInstanceProfileInfo_v3_t &a, const nvmlGpuInstanceProfileInfo_v3_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.id != b.id)
+    {
+        return a.id < b.id ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sliceCount != b.sliceCount)
+    {
+        return a.sliceCount < b.sliceCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.instanceCount != b.instanceCount)
+    {
+        return a.instanceCount < b.instanceCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.multiprocessorCount != b.multiprocessorCount)
+    {
+        return a.multiprocessorCount < b.multiprocessorCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.copyEngineCount != b.copyEngineCount)
+    {
+        return a.copyEngineCount < b.copyEngineCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.decoderCount != b.decoderCount)
+    {
+        return a.decoderCount < b.decoderCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.encoderCount != b.encoderCount)
+    {
+        return a.encoderCount < b.encoderCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.jpegCount != b.jpegCount)
+    {
+        return a.jpegCount < b.jpegCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.ofaCount != b.ofaCount)
+    {
+        return a.ofaCount < b.ofaCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.memorySizeMB != b.memorySizeMB)
+    {
+        return a.memorySizeMB < b.memorySizeMB ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.name, b.name); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.capabilities != b.capabilities)
+    {
+        return a.capabilities < b.capabilities ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlGpuInstanceInfo_tCompare(const nvmlGpuInstanceInfo_t &a, const nvmlGpuInstanceInfo_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -1747,6 +2866,72 @@ int nvmlComputeInstanceProfileInfo_v2_tCompare(const nvmlComputeInstanceProfileI
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlComputeInstanceProfileInfo_v3_tCompare(const nvmlComputeInstanceProfileInfo_v3_t &a, const nvmlComputeInstanceProfileInfo_v3_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.id != b.id)
+    {
+        return a.id < b.id ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sliceCount != b.sliceCount)
+    {
+        return a.sliceCount < b.sliceCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.instanceCount != b.instanceCount)
+    {
+        return a.instanceCount < b.instanceCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.multiprocessorCount != b.multiprocessorCount)
+    {
+        return a.multiprocessorCount < b.multiprocessorCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sharedCopyEngineCount != b.sharedCopyEngineCount)
+    {
+        return a.sharedCopyEngineCount < b.sharedCopyEngineCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sharedDecoderCount != b.sharedDecoderCount)
+    {
+        return a.sharedDecoderCount < b.sharedDecoderCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sharedEncoderCount != b.sharedEncoderCount)
+    {
+        return a.sharedEncoderCount < b.sharedEncoderCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sharedJpegCount != b.sharedJpegCount)
+    {
+        return a.sharedJpegCount < b.sharedJpegCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sharedOfaCount != b.sharedOfaCount)
+    {
+        return a.sharedOfaCount < b.sharedOfaCount ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.name, b.name); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.capabilities != b.capabilities)
+    {
+        return a.capabilities < b.capabilities ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlComputeInstanceInfo_tCompare(const nvmlComputeInstanceInfo_t &a, const nvmlComputeInstanceInfo_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -1793,6 +2978,128 @@ int nvmlGpmSupport_tCompare(const nvmlGpmSupport_t &a, const nvmlGpmSupport_t &b
     return 0;
 }
 
+// The following snippet is generated from write_struct_compare_definition
+int nvmlDeviceCapabilities_tCompare(const nvmlDeviceCapabilities_t &a, const nvmlDeviceCapabilities_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.capMask != b.capMask)
+    {
+        return a.capMask < b.capMask ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlMask255_tCompare(const nvmlMask255_t &a, const nvmlMask255_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    for (unsigned int i = 0; i < sizeof(a.mask) / sizeof(a.mask[0]); ++i)
+    {
+        if (a.mask[i] != b.mask[i])
+        {
+            return a.mask[i] < b.mask[i] ? -1 : 1;
+        }
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlWorkloadPowerProfileInfo_tCompare(const nvmlWorkloadPowerProfileInfo_t &a, const nvmlWorkloadPowerProfileInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.profileId != b.profileId)
+    {
+        return a.profileId < b.profileId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.priority != b.priority)
+    {
+        return a.priority < b.priority ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.conflictingMask, b.conflictingMask); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlWorkloadPowerProfileProfilesInfo_tCompare(const nvmlWorkloadPowerProfileProfilesInfo_t &a, const nvmlWorkloadPowerProfileProfilesInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.perfProfilesMask, b.perfProfilesMask); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    for (unsigned int i = 0; i < sizeof(a.perfProfile) / sizeof(a.perfProfile[0]); ++i)
+    {
+        if (auto ret = nvmlWorkloadPowerProfileInfo_tCompare(a.perfProfile[i], b.perfProfile[i]); ret)
+        {
+            return ret;
+        }
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlWorkloadPowerProfileCurrentProfiles_tCompare(const nvmlWorkloadPowerProfileCurrentProfiles_t &a, const nvmlWorkloadPowerProfileCurrentProfiles_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.perfProfilesMask, b.perfProfilesMask); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.requestedProfilesMask, b.requestedProfilesMask); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.enforcedProfilesMask, b.enforcedProfilesMask); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlWorkloadPowerProfileRequestedProfiles_tCompare(const nvmlWorkloadPowerProfileRequestedProfiles_t &a, const nvmlWorkloadPowerProfileRequestedProfiles_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.requestedProfilesMask, b.requestedProfilesMask); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
 }
 
 // The following snippet is generated from write_injection_argument_cpp
@@ -1806,2610 +3113,5812 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
     }
     switch (this->m_type)
     {
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_CHAR:
         {
             if (other.m_type == INJECTION_CHAR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.c, &other.m_value.c, sizeof(*&this->m_value.c));
+                memcpy(&m_value.Char, &other.m_value.Char, sizeof(*&m_value.Char));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_CHAR_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.c, other.m_value.str, sizeof(*&this->m_value.c));
+                memcpy(&m_value.Char, other.m_value.Str, sizeof(*&m_value.Char));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_CHAR_PTR:
         {
             if (other.m_type == INJECTION_CHAR_PTR)
             {
-                return NVML_ERROR_INVALID_ARGUMENT;
+                memcpy(m_value.Str, other.m_value.Str, sizeof(*m_value.Str) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_CHAR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.str, &other.m_value.str, sizeof(*this->m_value.str));
+                memcpy(m_value.Str, &other.m_value.Char, sizeof(*m_value.Str));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DOUBLE:
+        {
+            if (other.m_type == INJECTION_DOUBLE)
+            {
+                memcpy(&m_value.Double, &other.m_value.Double, sizeof(*&m_value.Double));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DOUBLE_PTR)
+            {
+                memcpy(&m_value.Double, other.m_value.DoublePtr, sizeof(*&m_value.Double));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DOUBLE_PTR:
+        {
+            if (other.m_type == INJECTION_DOUBLE_PTR)
+            {
+                memcpy(m_value.DoublePtr, other.m_value.DoublePtr, sizeof(*m_value.DoublePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DOUBLE)
+            {
+                memcpy(m_value.DoublePtr, &other.m_value.Double, sizeof(*m_value.DoublePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_INT:
         {
             if (other.m_type == INJECTION_INT)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.i, &other.m_value.i, sizeof(*&this->m_value.i));
+                memcpy(&m_value.Int, &other.m_value.Int, sizeof(*&m_value.Int));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_INT_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.i, other.m_value.iPtr, sizeof(*&this->m_value.i));
+                memcpy(&m_value.Int, other.m_value.IntPtr, sizeof(*&m_value.Int));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_UINT && other.m_value.ui <= INT_MAX)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UINT && other.m_value.UInt <= INT_MAX)
             {
-                this->m_value.i = other.m_value.ui;
+                this->m_value.Int = other.m_value.UInt;
                 set = true;
             }
-            else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.uiPtr <= INT_MAX)
+            else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.UIntPtr <= INT_MAX)
             {
-                this->m_value.i = *other.m_value.uiPtr;
+                this->m_value.Int = *other.m_value.UIntPtr;
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_INT_PTR:
         {
             if (other.m_type == INJECTION_INT_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.iPtr, other.m_value.iPtr, sizeof(*this->m_value.iPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                memcpy(m_value.IntPtr, other.m_value.IntPtr, sizeof(*m_value.IntPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_INT)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.iPtr, &other.m_value.i, sizeof(*this->m_value.iPtr));
+                memcpy(m_value.IntPtr, &other.m_value.Int, sizeof(*m_value.IntPtr));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_UINT && other.m_value.ui <= INT_MAX)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UINT && other.m_value.UInt <= INT_MAX)
             {
-                *this->m_value.iPtr = other.m_value.ui;
+                *this->m_value.IntPtr = other.m_value.UInt;
                 set = true;
             }
-            else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.uiPtr <= INT_MAX)
+            else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.UIntPtr <= INT_MAX)
             {
-                *this->m_value.iPtr = *other.m_value.uiPtr;
+                *this->m_value.IntPtr = *other.m_value.UIntPtr;
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_LONG:
+        {
+            if (other.m_type == INJECTION_LONG)
+            {
+                memcpy(&m_value.Long, &other.m_value.Long, sizeof(*&m_value.Long));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LONG_PTR)
+            {
+                memcpy(&m_value.Long, other.m_value.LongPtr, sizeof(*&m_value.Long));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_LONG_PTR:
+        {
+            if (other.m_type == INJECTION_LONG_PTR)
+            {
+                memcpy(m_value.LongPtr, other.m_value.LongPtr, sizeof(*m_value.LongPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LONG)
+            {
+                memcpy(m_value.LongPtr, &other.m_value.Long, sizeof(*m_value.LongPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_LONG_LONG:
+        {
+            if (other.m_type == INJECTION_LONG_LONG)
+            {
+                memcpy(&m_value.LongLong, &other.m_value.LongLong, sizeof(*&m_value.LongLong));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LONG_LONG_PTR)
+            {
+                memcpy(&m_value.LongLong, other.m_value.LongLongPtr, sizeof(*&m_value.LongLong));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_LONG_LONG_PTR:
+        {
+            if (other.m_type == INJECTION_LONG_LONG_PTR)
+            {
+                memcpy(m_value.LongLongPtr, other.m_value.LongLongPtr, sizeof(*m_value.LongLongPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LONG_LONG)
+            {
+                memcpy(m_value.LongLongPtr, &other.m_value.LongLong, sizeof(*m_value.LongLongPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ACCOUNTINGSTATS:
         {
             if (other.m_type == INJECTION_ACCOUNTINGSTATS)
             {
-                memcpy(&m_value.accountingStats, &other.m_value.accountingStats, sizeof(m_value.accountingStats));
+                memcpy(&m_value.AccountingStats, &other.m_value.AccountingStats, sizeof(*&m_value.AccountingStats));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ACCOUNTINGSTATS_PTR)
             {
-                memcpy(&m_value.accountingStats, other.m_value.accountingStatsPtr, sizeof(m_value.accountingStats));
+                memcpy(&m_value.AccountingStats, other.m_value.AccountingStatsPtr, sizeof(*&m_value.AccountingStats));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ACCOUNTINGSTATS_PTR:
         {
             if (other.m_type == INJECTION_ACCOUNTINGSTATS_PTR)
             {
-                memcpy(m_value.accountingStatsPtr, other.m_value.accountingStatsPtr, sizeof(*m_value.accountingStatsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.AccountingStatsPtr, other.m_value.AccountingStatsPtr, sizeof(*m_value.AccountingStatsPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ACCOUNTINGSTATS)
             {
-                memcpy(m_value.accountingStatsPtr, &other.m_value.accountingStats, sizeof(*m_value.accountingStatsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.AccountingStatsPtr, &other.m_value.AccountingStats, sizeof(*m_value.AccountingStatsPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_AFFINITYSCOPE:
+        {
+            if (other.m_type == INJECTION_AFFINITYSCOPE)
+            {
+                memcpy(&m_value.AffinityScope, &other.m_value.AffinityScope, sizeof(*&m_value.AffinityScope));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_AFFINITYSCOPE_PTR)
+            {
+                memcpy(&m_value.AffinityScope, other.m_value.AffinityScopePtr, sizeof(*&m_value.AffinityScope));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_AFFINITYSCOPE_PTR:
+        {
+            if (other.m_type == INJECTION_AFFINITYSCOPE_PTR)
+            {
+                memcpy(m_value.AffinityScopePtr, other.m_value.AffinityScopePtr, sizeof(*m_value.AffinityScopePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_AFFINITYSCOPE)
+            {
+                memcpy(m_value.AffinityScopePtr, &other.m_value.AffinityScope, sizeof(*m_value.AffinityScopePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_BAR1MEMORY:
         {
             if (other.m_type == INJECTION_BAR1MEMORY)
             {
-                memcpy(&m_value.bar1Memory, &other.m_value.bar1Memory, sizeof(m_value.bar1Memory));
+                memcpy(&m_value.BAR1Memory, &other.m_value.BAR1Memory, sizeof(*&m_value.BAR1Memory));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BAR1MEMORY_PTR)
             {
-                memcpy(&m_value.bar1Memory, other.m_value.bar1MemoryPtr, sizeof(m_value.bar1Memory));
+                memcpy(&m_value.BAR1Memory, other.m_value.BAR1MemoryPtr, sizeof(*&m_value.BAR1Memory));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_BAR1MEMORY_PTR:
         {
             if (other.m_type == INJECTION_BAR1MEMORY_PTR)
             {
-                memcpy(m_value.bar1MemoryPtr, other.m_value.bar1MemoryPtr, sizeof(*m_value.bar1MemoryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BAR1MemoryPtr, other.m_value.BAR1MemoryPtr, sizeof(*m_value.BAR1MemoryPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BAR1MEMORY)
             {
-                memcpy(m_value.bar1MemoryPtr, &other.m_value.bar1Memory, sizeof(*m_value.bar1MemoryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BAR1MemoryPtr, &other.m_value.BAR1Memory, sizeof(*m_value.BAR1MemoryPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_BRANDTYPE:
         {
             if (other.m_type == INJECTION_BRANDTYPE)
             {
-                memcpy(&m_value.brandType, &other.m_value.brandType, sizeof(m_value.brandType));
+                memcpy(&m_value.BrandType, &other.m_value.BrandType, sizeof(*&m_value.BrandType));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BRANDTYPE_PTR)
             {
-                memcpy(&m_value.brandType, other.m_value.brandTypePtr, sizeof(m_value.brandType));
+                memcpy(&m_value.BrandType, other.m_value.BrandTypePtr, sizeof(*&m_value.BrandType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_BRANDTYPE_PTR:
         {
             if (other.m_type == INJECTION_BRANDTYPE_PTR)
             {
-                memcpy(m_value.brandTypePtr, other.m_value.brandTypePtr, sizeof(*m_value.brandTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BrandTypePtr, other.m_value.BrandTypePtr, sizeof(*m_value.BrandTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BRANDTYPE)
             {
-                memcpy(m_value.brandTypePtr, &other.m_value.brandType, sizeof(*m_value.brandTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BrandTypePtr, &other.m_value.BrandType, sizeof(*m_value.BrandTypePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_BRIDGECHIPHIERARCHY:
         {
             if (other.m_type == INJECTION_BRIDGECHIPHIERARCHY)
             {
-                memcpy(&m_value.bridgeChipHierarchy, &other.m_value.bridgeChipHierarchy, sizeof(m_value.bridgeChipHierarchy));
+                memcpy(&m_value.BridgeChipHierarchy, &other.m_value.BridgeChipHierarchy, sizeof(*&m_value.BridgeChipHierarchy));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BRIDGECHIPHIERARCHY_PTR)
             {
-                memcpy(&m_value.bridgeChipHierarchy, other.m_value.bridgeChipHierarchyPtr, sizeof(m_value.bridgeChipHierarchy));
+                memcpy(&m_value.BridgeChipHierarchy, other.m_value.BridgeChipHierarchyPtr, sizeof(*&m_value.BridgeChipHierarchy));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_BRIDGECHIPHIERARCHY_PTR:
         {
             if (other.m_type == INJECTION_BRIDGECHIPHIERARCHY_PTR)
             {
-                memcpy(m_value.bridgeChipHierarchyPtr, other.m_value.bridgeChipHierarchyPtr, sizeof(*m_value.bridgeChipHierarchyPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BridgeChipHierarchyPtr, other.m_value.BridgeChipHierarchyPtr, sizeof(*m_value.BridgeChipHierarchyPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_BRIDGECHIPHIERARCHY)
             {
-                memcpy(m_value.bridgeChipHierarchyPtr, &other.m_value.bridgeChipHierarchy, sizeof(*m_value.bridgeChipHierarchyPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.BridgeChipHierarchyPtr, &other.m_value.BridgeChipHierarchy, sizeof(*m_value.BridgeChipHierarchyPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_BRIDGECHIPINFO:
+        {
+            if (other.m_type == INJECTION_BRIDGECHIPINFO)
+            {
+                memcpy(&m_value.BridgeChipInfo, &other.m_value.BridgeChipInfo, sizeof(*&m_value.BridgeChipInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BRIDGECHIPINFO_PTR)
+            {
+                memcpy(&m_value.BridgeChipInfo, other.m_value.BridgeChipInfoPtr, sizeof(*&m_value.BridgeChipInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_BRIDGECHIPINFO_PTR:
+        {
+            if (other.m_type == INJECTION_BRIDGECHIPINFO_PTR)
+            {
+                memcpy(m_value.BridgeChipInfoPtr, other.m_value.BridgeChipInfoPtr, sizeof(*m_value.BridgeChipInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BRIDGECHIPINFO)
+            {
+                memcpy(m_value.BridgeChipInfoPtr, &other.m_value.BridgeChipInfo, sizeof(*m_value.BridgeChipInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_BRIDGECHIPTYPE:
+        {
+            if (other.m_type == INJECTION_BRIDGECHIPTYPE)
+            {
+                memcpy(&m_value.BridgeChipType, &other.m_value.BridgeChipType, sizeof(*&m_value.BridgeChipType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BRIDGECHIPTYPE_PTR)
+            {
+                memcpy(&m_value.BridgeChipType, other.m_value.BridgeChipTypePtr, sizeof(*&m_value.BridgeChipType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_BRIDGECHIPTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_BRIDGECHIPTYPE_PTR)
+            {
+                memcpy(m_value.BridgeChipTypePtr, other.m_value.BridgeChipTypePtr, sizeof(*m_value.BridgeChipTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BRIDGECHIPTYPE)
+            {
+                memcpy(m_value.BridgeChipTypePtr, &other.m_value.BridgeChipType, sizeof(*m_value.BridgeChipTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_BUSTYPE:
+        {
+            if (other.m_type == INJECTION_BUSTYPE)
+            {
+                memcpy(&m_value.BusType, &other.m_value.BusType, sizeof(*&m_value.BusType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BUSTYPE_PTR)
+            {
+                memcpy(&m_value.BusType, other.m_value.BusTypePtr, sizeof(*&m_value.BusType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_BUSTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_BUSTYPE_PTR)
+            {
+                memcpy(m_value.BusTypePtr, other.m_value.BusTypePtr, sizeof(*m_value.BusTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_BUSTYPE)
+            {
+                memcpy(m_value.BusTypePtr, &other.m_value.BusType, sizeof(*m_value.BusTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_C2CMODEINFO_V1:
+        {
+            if (other.m_type == INJECTION_C2CMODEINFO_V1)
+            {
+                memcpy(&m_value.C2cModeInfo_v1, &other.m_value.C2cModeInfo_v1, sizeof(*&m_value.C2cModeInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_C2CMODEINFO_V1_PTR)
+            {
+                memcpy(&m_value.C2cModeInfo_v1, other.m_value.C2cModeInfo_v1Ptr, sizeof(*&m_value.C2cModeInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_C2CMODEINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_C2CMODEINFO_V1_PTR)
+            {
+                memcpy(m_value.C2cModeInfo_v1Ptr, other.m_value.C2cModeInfo_v1Ptr, sizeof(*m_value.C2cModeInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_C2CMODEINFO_V1)
+            {
+                memcpy(m_value.C2cModeInfo_v1Ptr, &other.m_value.C2cModeInfo_v1, sizeof(*m_value.C2cModeInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CLKMONFAULTINFO:
+        {
+            if (other.m_type == INJECTION_CLKMONFAULTINFO)
+            {
+                memcpy(&m_value.ClkMonFaultInfo, &other.m_value.ClkMonFaultInfo, sizeof(*&m_value.ClkMonFaultInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLKMONFAULTINFO_PTR)
+            {
+                memcpy(&m_value.ClkMonFaultInfo, other.m_value.ClkMonFaultInfoPtr, sizeof(*&m_value.ClkMonFaultInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CLKMONFAULTINFO_PTR:
+        {
+            if (other.m_type == INJECTION_CLKMONFAULTINFO_PTR)
+            {
+                memcpy(m_value.ClkMonFaultInfoPtr, other.m_value.ClkMonFaultInfoPtr, sizeof(*m_value.ClkMonFaultInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLKMONFAULTINFO)
+            {
+                memcpy(m_value.ClkMonFaultInfoPtr, &other.m_value.ClkMonFaultInfo, sizeof(*m_value.ClkMonFaultInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CLKMONSTATUS:
+        {
+            if (other.m_type == INJECTION_CLKMONSTATUS)
+            {
+                memcpy(&m_value.ClkMonStatus, &other.m_value.ClkMonStatus, sizeof(*&m_value.ClkMonStatus));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLKMONSTATUS_PTR)
+            {
+                memcpy(&m_value.ClkMonStatus, other.m_value.ClkMonStatusPtr, sizeof(*&m_value.ClkMonStatus));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CLKMONSTATUS_PTR:
+        {
+            if (other.m_type == INJECTION_CLKMONSTATUS_PTR)
+            {
+                memcpy(m_value.ClkMonStatusPtr, other.m_value.ClkMonStatusPtr, sizeof(*m_value.ClkMonStatusPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLKMONSTATUS)
+            {
+                memcpy(m_value.ClkMonStatusPtr, &other.m_value.ClkMonStatus, sizeof(*m_value.ClkMonStatusPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_CLOCKID:
         {
             if (other.m_type == INJECTION_CLOCKID)
             {
-                memcpy(&m_value.clockId, &other.m_value.clockId, sizeof(m_value.clockId));
+                memcpy(&m_value.ClockId, &other.m_value.ClockId, sizeof(*&m_value.ClockId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKID_PTR)
+            {
+                memcpy(&m_value.ClockId, other.m_value.ClockIdPtr, sizeof(*&m_value.ClockId));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_CLOCKID_PTR:
+        {
+            if (other.m_type == INJECTION_CLOCKID_PTR)
+            {
+                memcpy(m_value.ClockIdPtr, other.m_value.ClockIdPtr, sizeof(*m_value.ClockIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKID)
+            {
+                memcpy(m_value.ClockIdPtr, &other.m_value.ClockId, sizeof(*m_value.ClockIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CLOCKLIMITID:
+        {
+            if (other.m_type == INJECTION_CLOCKLIMITID)
+            {
+                memcpy(&m_value.ClockLimitId, &other.m_value.ClockLimitId, sizeof(*&m_value.ClockLimitId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKLIMITID_PTR)
+            {
+                memcpy(&m_value.ClockLimitId, other.m_value.ClockLimitIdPtr, sizeof(*&m_value.ClockLimitId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CLOCKLIMITID_PTR:
+        {
+            if (other.m_type == INJECTION_CLOCKLIMITID_PTR)
+            {
+                memcpy(m_value.ClockLimitIdPtr, other.m_value.ClockLimitIdPtr, sizeof(*m_value.ClockLimitIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKLIMITID)
+            {
+                memcpy(m_value.ClockLimitIdPtr, &other.m_value.ClockLimitId, sizeof(*m_value.ClockLimitIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CLOCKOFFSET:
+        {
+            if (other.m_type == INJECTION_CLOCKOFFSET)
+            {
+                memcpy(&m_value.ClockOffset, &other.m_value.ClockOffset, sizeof(*&m_value.ClockOffset));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKOFFSET_PTR)
+            {
+                memcpy(&m_value.ClockOffset, other.m_value.ClockOffsetPtr, sizeof(*&m_value.ClockOffset));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CLOCKOFFSET_PTR:
+        {
+            if (other.m_type == INJECTION_CLOCKOFFSET_PTR)
+            {
+                memcpy(m_value.ClockOffsetPtr, other.m_value.ClockOffsetPtr, sizeof(*m_value.ClockOffsetPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKOFFSET)
+            {
+                memcpy(m_value.ClockOffsetPtr, &other.m_value.ClockOffset, sizeof(*m_value.ClockOffsetPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_CLOCKTYPE:
         {
             if (other.m_type == INJECTION_CLOCKTYPE)
             {
-                memcpy(&m_value.clockType, &other.m_value.clockType, sizeof(m_value.clockType));
+                memcpy(&m_value.ClockType, &other.m_value.ClockType, sizeof(*&m_value.ClockType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKTYPE_PTR)
+            {
+                memcpy(&m_value.ClockType, other.m_value.ClockTypePtr, sizeof(*&m_value.ClockType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_CLOCKTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_CLOCKTYPE_PTR)
+            {
+                memcpy(m_value.ClockTypePtr, other.m_value.ClockTypePtr, sizeof(*m_value.ClockTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CLOCKTYPE)
+            {
+                memcpy(m_value.ClockTypePtr, &other.m_value.ClockType, sizeof(*m_value.ClockTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_COMPUTEINSTANCEINFO:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEINFO)
             {
-                memcpy(&m_value.computeInstanceInfo, &other.m_value.computeInstanceInfo, sizeof(m_value.computeInstanceInfo));
+                memcpy(&m_value.ComputeInstanceInfo, &other.m_value.ComputeInstanceInfo, sizeof(*&m_value.ComputeInstanceInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEINFO_PTR)
             {
-                memcpy(&m_value.computeInstanceInfo, other.m_value.computeInstanceInfoPtr, sizeof(m_value.computeInstanceInfo));
+                memcpy(&m_value.ComputeInstanceInfo, other.m_value.ComputeInstanceInfoPtr, sizeof(*&m_value.ComputeInstanceInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_COMPUTEINSTANCEINFO_PTR:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEINFO_PTR)
             {
-                memcpy(m_value.computeInstanceInfoPtr, other.m_value.computeInstanceInfoPtr, sizeof(*m_value.computeInstanceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceInfoPtr, other.m_value.ComputeInstanceInfoPtr, sizeof(*m_value.ComputeInstanceInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEINFO)
             {
-                memcpy(m_value.computeInstanceInfoPtr, &other.m_value.computeInstanceInfo, sizeof(*m_value.computeInstanceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceInfoPtr, &other.m_value.ComputeInstanceInfo, sizeof(*m_value.ComputeInstanceInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_COMPUTEINSTANCEPLACEMENT:
+        {
+            if (other.m_type == INJECTION_COMPUTEINSTANCEPLACEMENT)
+            {
+                memcpy(&m_value.ComputeInstancePlacement, &other.m_value.ComputeInstancePlacement, sizeof(*&m_value.ComputeInstancePlacement));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COMPUTEINSTANCEPLACEMENT_PTR)
+            {
+                memcpy(&m_value.ComputeInstancePlacement, other.m_value.ComputeInstancePlacementPtr, sizeof(*&m_value.ComputeInstancePlacement));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_COMPUTEINSTANCEPLACEMENT_PTR:
+        {
+            if (other.m_type == INJECTION_COMPUTEINSTANCEPLACEMENT_PTR)
+            {
+                memcpy(m_value.ComputeInstancePlacementPtr, other.m_value.ComputeInstancePlacementPtr, sizeof(*m_value.ComputeInstancePlacementPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COMPUTEINSTANCEPLACEMENT)
+            {
+                memcpy(m_value.ComputeInstancePlacementPtr, &other.m_value.ComputeInstancePlacement, sizeof(*m_value.ComputeInstancePlacementPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_COMPUTEINSTANCEPROFILEINFO:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO)
             {
-                memcpy(&m_value.computeInstanceProfileInfo, &other.m_value.computeInstanceProfileInfo, sizeof(m_value.computeInstanceProfileInfo));
+                memcpy(&m_value.ComputeInstanceProfileInfo, &other.m_value.ComputeInstanceProfileInfo, sizeof(*&m_value.ComputeInstanceProfileInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR)
             {
-                memcpy(&m_value.computeInstanceProfileInfo, other.m_value.computeInstanceProfileInfoPtr, sizeof(m_value.computeInstanceProfileInfo));
+                memcpy(&m_value.ComputeInstanceProfileInfo, other.m_value.ComputeInstanceProfileInfoPtr, sizeof(*&m_value.ComputeInstanceProfileInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR)
             {
-                memcpy(m_value.computeInstanceProfileInfoPtr, other.m_value.computeInstanceProfileInfoPtr, sizeof(*m_value.computeInstanceProfileInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceProfileInfoPtr, other.m_value.ComputeInstanceProfileInfoPtr, sizeof(*m_value.ComputeInstanceProfileInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO)
             {
-                memcpy(m_value.computeInstanceProfileInfoPtr, &other.m_value.computeInstanceProfileInfo, sizeof(*m_value.computeInstanceProfileInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceProfileInfoPtr, &other.m_value.ComputeInstanceProfileInfo, sizeof(*m_value.ComputeInstanceProfileInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V2)
             {
-                memcpy(&m_value.computeInstanceProfileInfo_v2, &other.m_value.computeInstanceProfileInfo_v2, sizeof(m_value.computeInstanceProfileInfo_v2));
+                memcpy(&m_value.ComputeInstanceProfileInfo_v2, &other.m_value.ComputeInstanceProfileInfo_v2, sizeof(*&m_value.ComputeInstanceProfileInfo_v2));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR)
             {
-                memcpy(&m_value.computeInstanceProfileInfo_v2, other.m_value.computeInstanceProfileInfo_v2Ptr, sizeof(m_value.computeInstanceProfileInfo_v2));
+                memcpy(&m_value.ComputeInstanceProfileInfo_v2, other.m_value.ComputeInstanceProfileInfo_v2Ptr, sizeof(*&m_value.ComputeInstanceProfileInfo_v2));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR)
             {
-                memcpy(m_value.computeInstanceProfileInfo_v2Ptr, other.m_value.computeInstanceProfileInfo_v2Ptr, sizeof(*m_value.computeInstanceProfileInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceProfileInfo_v2Ptr, other.m_value.ComputeInstanceProfileInfo_v2Ptr, sizeof(*m_value.ComputeInstanceProfileInfo_v2Ptr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V2)
             {
-                memcpy(m_value.computeInstanceProfileInfo_v2Ptr, &other.m_value.computeInstanceProfileInfo_v2, sizeof(*m_value.computeInstanceProfileInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstanceProfileInfo_v2Ptr, &other.m_value.ComputeInstanceProfileInfo_v2, sizeof(*m_value.ComputeInstanceProfileInfo_v2Ptr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3:
+        {
+            if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V3)
+            {
+                memcpy(&m_value.ComputeInstanceProfileInfo_v3, &other.m_value.ComputeInstanceProfileInfo_v3, sizeof(*&m_value.ComputeInstanceProfileInfo_v3));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR)
+            {
+                memcpy(&m_value.ComputeInstanceProfileInfo_v3, other.m_value.ComputeInstanceProfileInfo_v3Ptr, sizeof(*&m_value.ComputeInstanceProfileInfo_v3));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR:
+        {
+            if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR)
+            {
+                memcpy(m_value.ComputeInstanceProfileInfo_v3Ptr, other.m_value.ComputeInstanceProfileInfo_v3Ptr, sizeof(*m_value.ComputeInstanceProfileInfo_v3Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COMPUTEINSTANCEPROFILEINFO_V3)
+            {
+                memcpy(m_value.ComputeInstanceProfileInfo_v3Ptr, &other.m_value.ComputeInstanceProfileInfo_v3, sizeof(*m_value.ComputeInstanceProfileInfo_v3Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_COMPUTEINSTANCE:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCE)
             {
-                memcpy(&m_value.computeInstance, &other.m_value.computeInstance, sizeof(m_value.computeInstance));
+                memcpy(&m_value.ComputeInstance, &other.m_value.ComputeInstance, sizeof(*&m_value.ComputeInstance));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCE_PTR)
             {
-                memcpy(&m_value.computeInstance, other.m_value.computeInstancePtr, sizeof(m_value.computeInstance));
+                memcpy(&m_value.ComputeInstance, other.m_value.ComputeInstancePtr, sizeof(*&m_value.ComputeInstance));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_COMPUTEINSTANCE_PTR:
         {
             if (other.m_type == INJECTION_COMPUTEINSTANCE_PTR)
             {
-                memcpy(m_value.computeInstancePtr, other.m_value.computeInstancePtr, sizeof(*m_value.computeInstancePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstancePtr, other.m_value.ComputeInstancePtr, sizeof(*m_value.ComputeInstancePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEINSTANCE)
             {
-                memcpy(m_value.computeInstancePtr, &other.m_value.computeInstance, sizeof(*m_value.computeInstancePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeInstancePtr, &other.m_value.ComputeInstance, sizeof(*m_value.ComputeInstancePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_COMPUTEMODE:
         {
             if (other.m_type == INJECTION_COMPUTEMODE)
             {
-                memcpy(&m_value.computeMode, &other.m_value.computeMode, sizeof(m_value.computeMode));
+                memcpy(&m_value.ComputeMode, &other.m_value.ComputeMode, sizeof(*&m_value.ComputeMode));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEMODE_PTR)
             {
-                memcpy(&m_value.computeMode, other.m_value.computeModePtr, sizeof(m_value.computeMode));
+                memcpy(&m_value.ComputeMode, other.m_value.ComputeModePtr, sizeof(*&m_value.ComputeMode));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_COMPUTEMODE_PTR:
         {
             if (other.m_type == INJECTION_COMPUTEMODE_PTR)
             {
-                memcpy(m_value.computeModePtr, other.m_value.computeModePtr, sizeof(*m_value.computeModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeModePtr, other.m_value.ComputeModePtr, sizeof(*m_value.ComputeModePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_COMPUTEMODE)
             {
-                memcpy(m_value.computeModePtr, &other.m_value.computeMode, sizeof(*m_value.computeModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ComputeModePtr, &other.m_value.ComputeMode, sizeof(*m_value.ComputeModePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1)
+            {
+                memcpy(&m_value.ConfComputeGetKeyRotationThresholdInfo_v1, &other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1, sizeof(*&m_value.ConfComputeGetKeyRotationThresholdInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR)
+            {
+                memcpy(&m_value.ConfComputeGetKeyRotationThresholdInfo_v1, other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, sizeof(*&m_value.ConfComputeGetKeyRotationThresholdInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR)
+            {
+                memcpy(m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, sizeof(*m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1)
+            {
+                memcpy(m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, &other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1, sizeof(*m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT)
+            {
+                memcpy(&m_value.ConfComputeGpuAttestationReport, &other.m_value.ConfComputeGpuAttestationReport, sizeof(*&m_value.ConfComputeGpuAttestationReport));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR)
+            {
+                memcpy(&m_value.ConfComputeGpuAttestationReport, other.m_value.ConfComputeGpuAttestationReportPtr, sizeof(*&m_value.ConfComputeGpuAttestationReport));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR)
+            {
+                memcpy(m_value.ConfComputeGpuAttestationReportPtr, other.m_value.ConfComputeGpuAttestationReportPtr, sizeof(*m_value.ConfComputeGpuAttestationReportPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT)
+            {
+                memcpy(m_value.ConfComputeGpuAttestationReportPtr, &other.m_value.ConfComputeGpuAttestationReport, sizeof(*m_value.ConfComputeGpuAttestationReportPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTEGPUCERTIFICATE:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGPUCERTIFICATE)
+            {
+                memcpy(&m_value.ConfComputeGpuCertificate, &other.m_value.ConfComputeGpuCertificate, sizeof(*&m_value.ConfComputeGpuCertificate));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR)
+            {
+                memcpy(&m_value.ConfComputeGpuCertificate, other.m_value.ConfComputeGpuCertificatePtr, sizeof(*&m_value.ConfComputeGpuCertificate));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR)
+            {
+                memcpy(m_value.ConfComputeGpuCertificatePtr, other.m_value.ConfComputeGpuCertificatePtr, sizeof(*m_value.ConfComputeGpuCertificatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEGPUCERTIFICATE)
+            {
+                memcpy(m_value.ConfComputeGpuCertificatePtr, &other.m_value.ConfComputeGpuCertificate, sizeof(*m_value.ConfComputeGpuCertificatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTEMEMSIZEINFO:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEMEMSIZEINFO)
+            {
+                memcpy(&m_value.ConfComputeMemSizeInfo, &other.m_value.ConfComputeMemSizeInfo, sizeof(*&m_value.ConfComputeMemSizeInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR)
+            {
+                memcpy(&m_value.ConfComputeMemSizeInfo, other.m_value.ConfComputeMemSizeInfoPtr, sizeof(*&m_value.ConfComputeMemSizeInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR)
+            {
+                memcpy(m_value.ConfComputeMemSizeInfoPtr, other.m_value.ConfComputeMemSizeInfoPtr, sizeof(*m_value.ConfComputeMemSizeInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTEMEMSIZEINFO)
+            {
+                memcpy(m_value.ConfComputeMemSizeInfoPtr, &other.m_value.ConfComputeMemSizeInfo, sizeof(*m_value.ConfComputeMemSizeInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1)
+            {
+                memcpy(&m_value.ConfComputeSetKeyRotationThresholdInfo_v1, &other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1, sizeof(*&m_value.ConfComputeSetKeyRotationThresholdInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR)
+            {
+                memcpy(&m_value.ConfComputeSetKeyRotationThresholdInfo_v1, other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, sizeof(*&m_value.ConfComputeSetKeyRotationThresholdInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR)
+            {
+                memcpy(m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, sizeof(*m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1)
+            {
+                memcpy(m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, &other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1, sizeof(*m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_CONFCOMPUTESYSTEMCAPS:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTESYSTEMCAPS)
+            {
+                memcpy(&m_value.ConfComputeSystemCaps, &other.m_value.ConfComputeSystemCaps, sizeof(*&m_value.ConfComputeSystemCaps));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTESYSTEMCAPS_PTR)
+            {
+                memcpy(&m_value.ConfComputeSystemCaps, other.m_value.ConfComputeSystemCapsPtr, sizeof(*&m_value.ConfComputeSystemCaps));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTESYSTEMCAPS_PTR:
+        {
+            if (other.m_type == INJECTION_CONFCOMPUTESYSTEMCAPS_PTR)
+            {
+                memcpy(m_value.ConfComputeSystemCapsPtr, other.m_value.ConfComputeSystemCapsPtr, sizeof(*m_value.ConfComputeSystemCapsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_CONFCOMPUTESYSTEMCAPS)
+            {
+                memcpy(m_value.ConfComputeSystemCapsPtr, &other.m_value.ConfComputeSystemCaps, sizeof(*m_value.ConfComputeSystemCapsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_CONFCOMPUTESYSTEMSTATE:
         {
             if (other.m_type == INJECTION_CONFCOMPUTESYSTEMSTATE)
             {
-                memcpy(&m_value.confComputeSystemState, &other.m_value.confComputeSystemState, sizeof(m_value.confComputeSystemState));
+                memcpy(&m_value.ConfComputeSystemState, &other.m_value.ConfComputeSystemState, sizeof(*&m_value.ConfComputeSystemState));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_CONFCOMPUTESYSTEMSTATE_PTR)
             {
-                memcpy(&m_value.confComputeSystemState, other.m_value.confComputeSystemStatePtr, sizeof(m_value.confComputeSystemState));
+                memcpy(&m_value.ConfComputeSystemState, other.m_value.ConfComputeSystemStatePtr, sizeof(*&m_value.ConfComputeSystemState));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_CONFCOMPUTESYSTEMSTATE_PTR:
         {
             if (other.m_type == INJECTION_CONFCOMPUTESYSTEMSTATE_PTR)
             {
-                memcpy(m_value.confComputeSystemStatePtr, other.m_value.confComputeSystemStatePtr, sizeof(*m_value.confComputeSystemStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ConfComputeSystemStatePtr, other.m_value.ConfComputeSystemStatePtr, sizeof(*m_value.ConfComputeSystemStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_CONFCOMPUTESYSTEMSTATE)
             {
-                memcpy(m_value.confComputeSystemStatePtr, &other.m_value.confComputeSystemState, sizeof(*m_value.confComputeSystemStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ConfComputeSystemStatePtr, &other.m_value.ConfComputeSystemState, sizeof(*m_value.ConfComputeSystemStatePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_COOLERCONTROL:
+        {
+            if (other.m_type == INJECTION_COOLERCONTROL)
+            {
+                memcpy(&m_value.CoolerControl, &other.m_value.CoolerControl, sizeof(*&m_value.CoolerControl));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERCONTROL_PTR)
+            {
+                memcpy(&m_value.CoolerControl, other.m_value.CoolerControlPtr, sizeof(*&m_value.CoolerControl));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_COOLERCONTROL_PTR:
+        {
+            if (other.m_type == INJECTION_COOLERCONTROL_PTR)
+            {
+                memcpy(m_value.CoolerControlPtr, other.m_value.CoolerControlPtr, sizeof(*m_value.CoolerControlPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERCONTROL)
+            {
+                memcpy(m_value.CoolerControlPtr, &other.m_value.CoolerControl, sizeof(*m_value.CoolerControlPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_COOLERINFO:
+        {
+            if (other.m_type == INJECTION_COOLERINFO)
+            {
+                memcpy(&m_value.CoolerInfo, &other.m_value.CoolerInfo, sizeof(*&m_value.CoolerInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERINFO_PTR)
+            {
+                memcpy(&m_value.CoolerInfo, other.m_value.CoolerInfoPtr, sizeof(*&m_value.CoolerInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_COOLERINFO_PTR:
+        {
+            if (other.m_type == INJECTION_COOLERINFO_PTR)
+            {
+                memcpy(m_value.CoolerInfoPtr, other.m_value.CoolerInfoPtr, sizeof(*m_value.CoolerInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERINFO)
+            {
+                memcpy(m_value.CoolerInfoPtr, &other.m_value.CoolerInfo, sizeof(*m_value.CoolerInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_COOLERTARGET:
+        {
+            if (other.m_type == INJECTION_COOLERTARGET)
+            {
+                memcpy(&m_value.CoolerTarget, &other.m_value.CoolerTarget, sizeof(*&m_value.CoolerTarget));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERTARGET_PTR)
+            {
+                memcpy(&m_value.CoolerTarget, other.m_value.CoolerTargetPtr, sizeof(*&m_value.CoolerTarget));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_COOLERTARGET_PTR:
+        {
+            if (other.m_type == INJECTION_COOLERTARGET_PTR)
+            {
+                memcpy(m_value.CoolerTargetPtr, other.m_value.CoolerTargetPtr, sizeof(*m_value.CoolerTargetPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_COOLERTARGET)
+            {
+                memcpy(m_value.CoolerTargetPtr, &other.m_value.CoolerTarget, sizeof(*m_value.CoolerTargetPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_DETACHGPUSTATE:
         {
             if (other.m_type == INJECTION_DETACHGPUSTATE)
             {
-                memcpy(&m_value.detachGpuState, &other.m_value.detachGpuState, sizeof(m_value.detachGpuState));
+                memcpy(&m_value.DetachGpuState, &other.m_value.DetachGpuState, sizeof(*&m_value.DetachGpuState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DETACHGPUSTATE_PTR)
+            {
+                memcpy(&m_value.DetachGpuState, other.m_value.DetachGpuStatePtr, sizeof(*&m_value.DetachGpuState));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_DETACHGPUSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_DETACHGPUSTATE_PTR)
+            {
+                memcpy(m_value.DetachGpuStatePtr, other.m_value.DetachGpuStatePtr, sizeof(*m_value.DetachGpuStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DETACHGPUSTATE)
+            {
+                memcpy(m_value.DetachGpuStatePtr, &other.m_value.DetachGpuState, sizeof(*m_value.DetachGpuStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICEARCHITECTURE:
+        {
+            if (other.m_type == INJECTION_DEVICEARCHITECTURE)
+            {
+                memcpy(&m_value.DeviceArchitecture, &other.m_value.DeviceArchitecture, sizeof(*&m_value.DeviceArchitecture));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEARCHITECTURE_PTR)
+            {
+                memcpy(&m_value.DeviceArchitecture, other.m_value.DeviceArchitecturePtr, sizeof(*&m_value.DeviceArchitecture));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICEARCHITECTURE_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICEARCHITECTURE_PTR)
+            {
+                memcpy(m_value.DeviceArchitecturePtr, other.m_value.DeviceArchitecturePtr, sizeof(*m_value.DeviceArchitecturePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEARCHITECTURE)
+            {
+                memcpy(m_value.DeviceArchitecturePtr, &other.m_value.DeviceArchitecture, sizeof(*m_value.DeviceArchitecturePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_DEVICEATTRIBUTES:
         {
             if (other.m_type == INJECTION_DEVICEATTRIBUTES)
             {
-                memcpy(&m_value.deviceAttributes, &other.m_value.deviceAttributes, sizeof(m_value.deviceAttributes));
+                memcpy(&m_value.DeviceAttributes, &other.m_value.DeviceAttributes, sizeof(*&m_value.DeviceAttributes));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DEVICEATTRIBUTES_PTR)
             {
-                memcpy(&m_value.deviceAttributes, other.m_value.deviceAttributesPtr, sizeof(m_value.deviceAttributes));
+                memcpy(&m_value.DeviceAttributes, other.m_value.DeviceAttributesPtr, sizeof(*&m_value.DeviceAttributes));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_DEVICEATTRIBUTES_PTR:
         {
             if (other.m_type == INJECTION_DEVICEATTRIBUTES_PTR)
             {
-                memcpy(m_value.deviceAttributesPtr, other.m_value.deviceAttributesPtr, sizeof(*m_value.deviceAttributesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DeviceAttributesPtr, other.m_value.DeviceAttributesPtr, sizeof(*m_value.DeviceAttributesPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DEVICEATTRIBUTES)
             {
-                memcpy(m_value.deviceAttributesPtr, &other.m_value.deviceAttributes, sizeof(*m_value.deviceAttributesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DeviceAttributesPtr, &other.m_value.DeviceAttributes, sizeof(*m_value.DeviceAttributesPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICECAPABILITIES:
+        {
+            if (other.m_type == INJECTION_DEVICECAPABILITIES)
+            {
+                memcpy(&m_value.DeviceCapabilities, &other.m_value.DeviceCapabilities, sizeof(*&m_value.DeviceCapabilities));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICECAPABILITIES_PTR)
+            {
+                memcpy(&m_value.DeviceCapabilities, other.m_value.DeviceCapabilitiesPtr, sizeof(*&m_value.DeviceCapabilities));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICECAPABILITIES_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICECAPABILITIES_PTR)
+            {
+                memcpy(m_value.DeviceCapabilitiesPtr, other.m_value.DeviceCapabilitiesPtr, sizeof(*m_value.DeviceCapabilitiesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICECAPABILITIES)
+            {
+                memcpy(m_value.DeviceCapabilitiesPtr, &other.m_value.DeviceCapabilities, sizeof(*m_value.DeviceCapabilitiesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICECURRENTCLOCKFREQS:
+        {
+            if (other.m_type == INJECTION_DEVICECURRENTCLOCKFREQS)
+            {
+                memcpy(&m_value.DeviceCurrentClockFreqs, &other.m_value.DeviceCurrentClockFreqs, sizeof(*&m_value.DeviceCurrentClockFreqs));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICECURRENTCLOCKFREQS_PTR)
+            {
+                memcpy(&m_value.DeviceCurrentClockFreqs, other.m_value.DeviceCurrentClockFreqsPtr, sizeof(*&m_value.DeviceCurrentClockFreqs));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICECURRENTCLOCKFREQS_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICECURRENTCLOCKFREQS_PTR)
+            {
+                memcpy(m_value.DeviceCurrentClockFreqsPtr, other.m_value.DeviceCurrentClockFreqsPtr, sizeof(*m_value.DeviceCurrentClockFreqsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICECURRENTCLOCKFREQS)
+            {
+                memcpy(m_value.DeviceCurrentClockFreqsPtr, &other.m_value.DeviceCurrentClockFreqs, sizeof(*m_value.DeviceCurrentClockFreqsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICEGPURECOVERYACTION:
+        {
+            if (other.m_type == INJECTION_DEVICEGPURECOVERYACTION)
+            {
+                memcpy(&m_value.DeviceGpuRecoveryAction, &other.m_value.DeviceGpuRecoveryAction, sizeof(*&m_value.DeviceGpuRecoveryAction));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEGPURECOVERYACTION_PTR)
+            {
+                memcpy(&m_value.DeviceGpuRecoveryAction, other.m_value.DeviceGpuRecoveryActionPtr, sizeof(*&m_value.DeviceGpuRecoveryAction));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICEGPURECOVERYACTION_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICEGPURECOVERYACTION_PTR)
+            {
+                memcpy(m_value.DeviceGpuRecoveryActionPtr, other.m_value.DeviceGpuRecoveryActionPtr, sizeof(*m_value.DeviceGpuRecoveryActionPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEGPURECOVERYACTION)
+            {
+                memcpy(m_value.DeviceGpuRecoveryActionPtr, &other.m_value.DeviceGpuRecoveryAction, sizeof(*m_value.DeviceGpuRecoveryActionPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICEPERFMODES:
+        {
+            if (other.m_type == INJECTION_DEVICEPERFMODES)
+            {
+                memcpy(&m_value.DevicePerfModes, &other.m_value.DevicePerfModes, sizeof(*&m_value.DevicePerfModes));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEPERFMODES_PTR)
+            {
+                memcpy(&m_value.DevicePerfModes, other.m_value.DevicePerfModesPtr, sizeof(*&m_value.DevicePerfModes));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICEPERFMODES_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICEPERFMODES_PTR)
+            {
+                memcpy(m_value.DevicePerfModesPtr, other.m_value.DevicePerfModesPtr, sizeof(*m_value.DevicePerfModesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEPERFMODES)
+            {
+                memcpy(m_value.DevicePerfModesPtr, &other.m_value.DevicePerfModes, sizeof(*m_value.DevicePerfModesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DEVICEVGPUCAPABILITY:
+        {
+            if (other.m_type == INJECTION_DEVICEVGPUCAPABILITY)
+            {
+                memcpy(&m_value.DeviceVgpuCapability, &other.m_value.DeviceVgpuCapability, sizeof(*&m_value.DeviceVgpuCapability));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEVGPUCAPABILITY_PTR)
+            {
+                memcpy(&m_value.DeviceVgpuCapability, other.m_value.DeviceVgpuCapabilityPtr, sizeof(*&m_value.DeviceVgpuCapability));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DEVICEVGPUCAPABILITY_PTR:
+        {
+            if (other.m_type == INJECTION_DEVICEVGPUCAPABILITY_PTR)
+            {
+                memcpy(m_value.DeviceVgpuCapabilityPtr, other.m_value.DeviceVgpuCapabilityPtr, sizeof(*m_value.DeviceVgpuCapabilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DEVICEVGPUCAPABILITY)
+            {
+                memcpy(m_value.DeviceVgpuCapabilityPtr, &other.m_value.DeviceVgpuCapability, sizeof(*m_value.DeviceVgpuCapabilityPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_DEVICE:
         {
             if (other.m_type == INJECTION_DEVICE)
             {
-                memcpy(&m_value.device, &other.m_value.device, sizeof(m_value.device));
+                memcpy(&m_value.Device, &other.m_value.Device, sizeof(*&m_value.Device));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DEVICE_PTR)
             {
-                memcpy(&m_value.device, other.m_value.devicePtr, sizeof(m_value.device));
+                memcpy(&m_value.Device, other.m_value.DevicePtr, sizeof(*&m_value.Device));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_DEVICE_PTR:
         {
             if (other.m_type == INJECTION_DEVICE_PTR)
             {
-                memcpy(m_value.devicePtr, other.m_value.devicePtr, sizeof(*m_value.devicePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DevicePtr, other.m_value.DevicePtr, sizeof(*m_value.DevicePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DEVICE)
             {
-                memcpy(m_value.devicePtr, &other.m_value.device, sizeof(*m_value.devicePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DevicePtr, &other.m_value.Device, sizeof(*m_value.DevicePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_DRIVERMODEL:
         {
             if (other.m_type == INJECTION_DRIVERMODEL)
             {
-                memcpy(&m_value.driverModel, &other.m_value.driverModel, sizeof(m_value.driverModel));
+                memcpy(&m_value.DriverModel, &other.m_value.DriverModel, sizeof(*&m_value.DriverModel));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DRIVERMODEL_PTR)
             {
-                memcpy(&m_value.driverModel, other.m_value.driverModelPtr, sizeof(m_value.driverModel));
+                memcpy(&m_value.DriverModel, other.m_value.DriverModelPtr, sizeof(*&m_value.DriverModel));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_DRIVERMODEL_PTR:
         {
             if (other.m_type == INJECTION_DRIVERMODEL_PTR)
             {
-                memcpy(m_value.driverModelPtr, other.m_value.driverModelPtr, sizeof(*m_value.driverModelPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DriverModelPtr, other.m_value.DriverModelPtr, sizeof(*m_value.DriverModelPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_DRIVERMODEL)
             {
-                memcpy(m_value.driverModelPtr, &other.m_value.driverModel, sizeof(*m_value.driverModelPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.DriverModelPtr, &other.m_value.DriverModel, sizeof(*m_value.DriverModelPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ECCCOUNTERTYPE:
         {
             if (other.m_type == INJECTION_ECCCOUNTERTYPE)
             {
-                memcpy(&m_value.eccCounterType, &other.m_value.eccCounterType, sizeof(m_value.eccCounterType));
+                memcpy(&m_value.EccCounterType, &other.m_value.EccCounterType, sizeof(*&m_value.EccCounterType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ECCCOUNTERTYPE_PTR)
+            {
+                memcpy(&m_value.EccCounterType, other.m_value.EccCounterTypePtr, sizeof(*&m_value.EccCounterType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_ECCCOUNTERTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_ECCCOUNTERTYPE_PTR)
+            {
+                memcpy(m_value.EccCounterTypePtr, other.m_value.EccCounterTypePtr, sizeof(*m_value.EccCounterTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ECCCOUNTERTYPE)
+            {
+                memcpy(m_value.EccCounterTypePtr, &other.m_value.EccCounterType, sizeof(*m_value.EccCounterTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ECCERRORCOUNTS:
         {
             if (other.m_type == INJECTION_ECCERRORCOUNTS)
             {
-                memcpy(&m_value.eccErrorCounts, &other.m_value.eccErrorCounts, sizeof(m_value.eccErrorCounts));
+                memcpy(&m_value.EccErrorCounts, &other.m_value.EccErrorCounts, sizeof(*&m_value.EccErrorCounts));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ECCERRORCOUNTS_PTR)
             {
-                memcpy(&m_value.eccErrorCounts, other.m_value.eccErrorCountsPtr, sizeof(m_value.eccErrorCounts));
+                memcpy(&m_value.EccErrorCounts, other.m_value.EccErrorCountsPtr, sizeof(*&m_value.EccErrorCounts));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ECCERRORCOUNTS_PTR:
         {
             if (other.m_type == INJECTION_ECCERRORCOUNTS_PTR)
             {
-                memcpy(m_value.eccErrorCountsPtr, other.m_value.eccErrorCountsPtr, sizeof(*m_value.eccErrorCountsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EccErrorCountsPtr, other.m_value.EccErrorCountsPtr, sizeof(*m_value.EccErrorCountsPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ECCERRORCOUNTS)
             {
-                memcpy(m_value.eccErrorCountsPtr, &other.m_value.eccErrorCounts, sizeof(*m_value.eccErrorCountsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EccErrorCountsPtr, &other.m_value.EccErrorCounts, sizeof(*m_value.EccErrorCountsPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_ECCSRAMERRORSTATUS:
+        {
+            if (other.m_type == INJECTION_ECCSRAMERRORSTATUS)
+            {
+                memcpy(&m_value.EccSramErrorStatus, &other.m_value.EccSramErrorStatus, sizeof(*&m_value.EccSramErrorStatus));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ECCSRAMERRORSTATUS_PTR)
+            {
+                memcpy(&m_value.EccSramErrorStatus, other.m_value.EccSramErrorStatusPtr, sizeof(*&m_value.EccSramErrorStatus));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_ECCSRAMERRORSTATUS_PTR:
+        {
+            if (other.m_type == INJECTION_ECCSRAMERRORSTATUS_PTR)
+            {
+                memcpy(m_value.EccSramErrorStatusPtr, other.m_value.EccSramErrorStatusPtr, sizeof(*m_value.EccSramErrorStatusPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ECCSRAMERRORSTATUS)
+            {
+                memcpy(m_value.EccSramErrorStatusPtr, &other.m_value.EccSramErrorStatus, sizeof(*m_value.EccSramErrorStatusPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ENABLESTATE:
         {
             if (other.m_type == INJECTION_ENABLESTATE)
             {
-                memcpy(&m_value.enableState, &other.m_value.enableState, sizeof(m_value.enableState));
+                memcpy(&m_value.EnableState, &other.m_value.EnableState, sizeof(*&m_value.EnableState));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ENABLESTATE_PTR)
             {
-                memcpy(&m_value.enableState, other.m_value.enableStatePtr, sizeof(m_value.enableState));
+                memcpy(&m_value.EnableState, other.m_value.EnableStatePtr, sizeof(*&m_value.EnableState));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ENABLESTATE_PTR:
         {
             if (other.m_type == INJECTION_ENABLESTATE_PTR)
             {
-                memcpy(m_value.enableStatePtr, other.m_value.enableStatePtr, sizeof(*m_value.enableStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EnableStatePtr, other.m_value.EnableStatePtr, sizeof(*m_value.EnableStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ENABLESTATE)
             {
-                memcpy(m_value.enableStatePtr, &other.m_value.enableState, sizeof(*m_value.enableStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EnableStatePtr, &other.m_value.EnableState, sizeof(*m_value.EnableStatePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ENCODERSESSIONINFO:
         {
             if (other.m_type == INJECTION_ENCODERSESSIONINFO)
             {
-                memcpy(&m_value.encoderSessionInfo, &other.m_value.encoderSessionInfo, sizeof(m_value.encoderSessionInfo));
+                memcpy(&m_value.EncoderSessionInfo, &other.m_value.EncoderSessionInfo, sizeof(*&m_value.EncoderSessionInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ENCODERSESSIONINFO_PTR)
             {
-                memcpy(&m_value.encoderSessionInfo, other.m_value.encoderSessionInfoPtr, sizeof(m_value.encoderSessionInfo));
+                memcpy(&m_value.EncoderSessionInfo, other.m_value.EncoderSessionInfoPtr, sizeof(*&m_value.EncoderSessionInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ENCODERSESSIONINFO_PTR:
         {
             if (other.m_type == INJECTION_ENCODERSESSIONINFO_PTR)
             {
-                memcpy(m_value.encoderSessionInfoPtr, other.m_value.encoderSessionInfoPtr, sizeof(*m_value.encoderSessionInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EncoderSessionInfoPtr, other.m_value.EncoderSessionInfoPtr, sizeof(*m_value.EncoderSessionInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ENCODERSESSIONINFO)
             {
-                memcpy(m_value.encoderSessionInfoPtr, &other.m_value.encoderSessionInfo, sizeof(*m_value.encoderSessionInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EncoderSessionInfoPtr, &other.m_value.EncoderSessionInfo, sizeof(*m_value.EncoderSessionInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ENCODERTYPE:
         {
             if (other.m_type == INJECTION_ENCODERTYPE)
             {
-                memcpy(&m_value.encoderType, &other.m_value.encoderType, sizeof(m_value.encoderType));
+                memcpy(&m_value.EncoderType, &other.m_value.EncoderType, sizeof(*&m_value.EncoderType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ENCODERTYPE_PTR)
+            {
+                memcpy(&m_value.EncoderType, other.m_value.EncoderTypePtr, sizeof(*&m_value.EncoderType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_ENCODERTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_ENCODERTYPE_PTR)
+            {
+                memcpy(m_value.EncoderTypePtr, other.m_value.EncoderTypePtr, sizeof(*m_value.EncoderTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_ENCODERTYPE)
+            {
+                memcpy(m_value.EncoderTypePtr, &other.m_value.EncoderType, sizeof(*m_value.EncoderTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_EVENTDATA:
         {
             if (other.m_type == INJECTION_EVENTDATA)
             {
-                memcpy(&m_value.eventData, &other.m_value.eventData, sizeof(m_value.eventData));
+                memcpy(&m_value.EventData, &other.m_value.EventData, sizeof(*&m_value.EventData));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EVENTDATA_PTR)
             {
-                memcpy(&m_value.eventData, other.m_value.eventDataPtr, sizeof(m_value.eventData));
+                memcpy(&m_value.EventData, other.m_value.EventDataPtr, sizeof(*&m_value.EventData));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_EVENTDATA_PTR:
         {
             if (other.m_type == INJECTION_EVENTDATA_PTR)
             {
-                memcpy(m_value.eventDataPtr, other.m_value.eventDataPtr, sizeof(*m_value.eventDataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EventDataPtr, other.m_value.EventDataPtr, sizeof(*m_value.EventDataPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EVENTDATA)
             {
-                memcpy(m_value.eventDataPtr, &other.m_value.eventData, sizeof(*m_value.eventDataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EventDataPtr, &other.m_value.EventData, sizeof(*m_value.EventDataPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_EVENTSET:
         {
             if (other.m_type == INJECTION_EVENTSET)
             {
-                memcpy(&m_value.eventSet, &other.m_value.eventSet, sizeof(m_value.eventSet));
+                memcpy(&m_value.EventSet, &other.m_value.EventSet, sizeof(*&m_value.EventSet));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EVENTSET_PTR)
             {
-                memcpy(&m_value.eventSet, other.m_value.eventSetPtr, sizeof(m_value.eventSet));
+                memcpy(&m_value.EventSet, other.m_value.EventSetPtr, sizeof(*&m_value.EventSet));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_EVENTSET_PTR:
         {
             if (other.m_type == INJECTION_EVENTSET_PTR)
             {
-                memcpy(m_value.eventSetPtr, other.m_value.eventSetPtr, sizeof(*m_value.eventSetPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EventSetPtr, other.m_value.EventSetPtr, sizeof(*m_value.EventSetPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EVENTSET)
             {
-                memcpy(m_value.eventSetPtr, &other.m_value.eventSet, sizeof(*m_value.eventSetPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.EventSetPtr, &other.m_value.EventSet, sizeof(*m_value.EventSetPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_EXCLUDEDDEVICEINFO:
         {
             if (other.m_type == INJECTION_EXCLUDEDDEVICEINFO)
             {
-                memcpy(&m_value.excludedDeviceInfo, &other.m_value.excludedDeviceInfo, sizeof(m_value.excludedDeviceInfo));
+                memcpy(&m_value.ExcludedDeviceInfo, &other.m_value.ExcludedDeviceInfo, sizeof(*&m_value.ExcludedDeviceInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EXCLUDEDDEVICEINFO_PTR)
             {
-                memcpy(&m_value.excludedDeviceInfo, other.m_value.excludedDeviceInfoPtr, sizeof(m_value.excludedDeviceInfo));
+                memcpy(&m_value.ExcludedDeviceInfo, other.m_value.ExcludedDeviceInfoPtr, sizeof(*&m_value.ExcludedDeviceInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_EXCLUDEDDEVICEINFO_PTR:
         {
             if (other.m_type == INJECTION_EXCLUDEDDEVICEINFO_PTR)
             {
-                memcpy(m_value.excludedDeviceInfoPtr, other.m_value.excludedDeviceInfoPtr, sizeof(*m_value.excludedDeviceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ExcludedDeviceInfoPtr, other.m_value.ExcludedDeviceInfoPtr, sizeof(*m_value.ExcludedDeviceInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_EXCLUDEDDEVICEINFO)
             {
-                memcpy(m_value.excludedDeviceInfoPtr, &other.m_value.excludedDeviceInfo, sizeof(*m_value.excludedDeviceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ExcludedDeviceInfoPtr, &other.m_value.ExcludedDeviceInfo, sizeof(*m_value.ExcludedDeviceInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_FBCSESSIONINFO:
         {
             if (other.m_type == INJECTION_FBCSESSIONINFO)
             {
-                memcpy(&m_value.fBCSessionInfo, &other.m_value.fBCSessionInfo, sizeof(m_value.fBCSessionInfo));
+                memcpy(&m_value.FBCSessionInfo, &other.m_value.FBCSessionInfo, sizeof(*&m_value.FBCSessionInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FBCSESSIONINFO_PTR)
             {
-                memcpy(&m_value.fBCSessionInfo, other.m_value.fBCSessionInfoPtr, sizeof(m_value.fBCSessionInfo));
+                memcpy(&m_value.FBCSessionInfo, other.m_value.FBCSessionInfoPtr, sizeof(*&m_value.FBCSessionInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_FBCSESSIONINFO_PTR:
         {
             if (other.m_type == INJECTION_FBCSESSIONINFO_PTR)
             {
-                memcpy(m_value.fBCSessionInfoPtr, other.m_value.fBCSessionInfoPtr, sizeof(*m_value.fBCSessionInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FBCSessionInfoPtr, other.m_value.FBCSessionInfoPtr, sizeof(*m_value.FBCSessionInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FBCSESSIONINFO)
             {
-                memcpy(m_value.fBCSessionInfoPtr, &other.m_value.fBCSessionInfo, sizeof(*m_value.fBCSessionInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FBCSessionInfoPtr, &other.m_value.FBCSessionInfo, sizeof(*m_value.FBCSessionInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_FBCSESSIONTYPE:
+        {
+            if (other.m_type == INJECTION_FBCSESSIONTYPE)
+            {
+                memcpy(&m_value.FBCSessionType, &other.m_value.FBCSessionType, sizeof(*&m_value.FBCSessionType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FBCSESSIONTYPE_PTR)
+            {
+                memcpy(&m_value.FBCSessionType, other.m_value.FBCSessionTypePtr, sizeof(*&m_value.FBCSessionType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_FBCSESSIONTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_FBCSESSIONTYPE_PTR)
+            {
+                memcpy(m_value.FBCSessionTypePtr, other.m_value.FBCSessionTypePtr, sizeof(*m_value.FBCSessionTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FBCSESSIONTYPE)
+            {
+                memcpy(m_value.FBCSessionTypePtr, &other.m_value.FBCSessionType, sizeof(*m_value.FBCSessionTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_FBCSTATS:
         {
             if (other.m_type == INJECTION_FBCSTATS)
             {
-                memcpy(&m_value.fBCStats, &other.m_value.fBCStats, sizeof(m_value.fBCStats));
+                memcpy(&m_value.FBCStats, &other.m_value.FBCStats, sizeof(*&m_value.FBCStats));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FBCSTATS_PTR)
             {
-                memcpy(&m_value.fBCStats, other.m_value.fBCStatsPtr, sizeof(m_value.fBCStats));
+                memcpy(&m_value.FBCStats, other.m_value.FBCStatsPtr, sizeof(*&m_value.FBCStats));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_FBCSTATS_PTR:
         {
             if (other.m_type == INJECTION_FBCSTATS_PTR)
             {
-                memcpy(m_value.fBCStatsPtr, other.m_value.fBCStatsPtr, sizeof(*m_value.fBCStatsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FBCStatsPtr, other.m_value.FBCStatsPtr, sizeof(*m_value.FBCStatsPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FBCSTATS)
             {
-                memcpy(m_value.fBCStatsPtr, &other.m_value.fBCStats, sizeof(*m_value.fBCStatsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FBCStatsPtr, &other.m_value.FBCStats, sizeof(*m_value.FBCStatsPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_FANCONTROLPOLICY:
+        {
+            if (other.m_type == INJECTION_FANCONTROLPOLICY)
+            {
+                memcpy(&m_value.FanControlPolicy, &other.m_value.FanControlPolicy, sizeof(*&m_value.FanControlPolicy));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANCONTROLPOLICY_PTR)
+            {
+                memcpy(&m_value.FanControlPolicy, other.m_value.FanControlPolicyPtr, sizeof(*&m_value.FanControlPolicy));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_FANCONTROLPOLICY_PTR:
+        {
+            if (other.m_type == INJECTION_FANCONTROLPOLICY_PTR)
+            {
+                memcpy(m_value.FanControlPolicyPtr, other.m_value.FanControlPolicyPtr, sizeof(*m_value.FanControlPolicyPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANCONTROLPOLICY)
+            {
+                memcpy(m_value.FanControlPolicyPtr, &other.m_value.FanControlPolicy, sizeof(*m_value.FanControlPolicyPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_FANSPEEDINFO:
+        {
+            if (other.m_type == INJECTION_FANSPEEDINFO)
+            {
+                memcpy(&m_value.FanSpeedInfo, &other.m_value.FanSpeedInfo, sizeof(*&m_value.FanSpeedInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANSPEEDINFO_PTR)
+            {
+                memcpy(&m_value.FanSpeedInfo, other.m_value.FanSpeedInfoPtr, sizeof(*&m_value.FanSpeedInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_FANSPEEDINFO_PTR:
+        {
+            if (other.m_type == INJECTION_FANSPEEDINFO_PTR)
+            {
+                memcpy(m_value.FanSpeedInfoPtr, other.m_value.FanSpeedInfoPtr, sizeof(*m_value.FanSpeedInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANSPEEDINFO)
+            {
+                memcpy(m_value.FanSpeedInfoPtr, &other.m_value.FanSpeedInfo, sizeof(*m_value.FanSpeedInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_FANSTATE:
+        {
+            if (other.m_type == INJECTION_FANSTATE)
+            {
+                memcpy(&m_value.FanState, &other.m_value.FanState, sizeof(*&m_value.FanState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANSTATE_PTR)
+            {
+                memcpy(&m_value.FanState, other.m_value.FanStatePtr, sizeof(*&m_value.FanState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_FANSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_FANSTATE_PTR)
+            {
+                memcpy(m_value.FanStatePtr, other.m_value.FanStatePtr, sizeof(*m_value.FanStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_FANSTATE)
+            {
+                memcpy(m_value.FanStatePtr, &other.m_value.FanState, sizeof(*m_value.FanStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_FIELDVALUE:
         {
             if (other.m_type == INJECTION_FIELDVALUE)
             {
-                memcpy(&m_value.fieldValue, &other.m_value.fieldValue, sizeof(m_value.fieldValue));
+                memcpy(&m_value.FieldValue, &other.m_value.FieldValue, sizeof(*&m_value.FieldValue));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FIELDVALUE_PTR)
             {
-                memcpy(&m_value.fieldValue, other.m_value.fieldValuePtr, sizeof(m_value.fieldValue));
+                memcpy(&m_value.FieldValue, other.m_value.FieldValuePtr, sizeof(*&m_value.FieldValue));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_FIELDVALUE_PTR:
         {
             if (other.m_type == INJECTION_FIELDVALUE_PTR)
             {
-                memcpy(m_value.fieldValuePtr, other.m_value.fieldValuePtr, sizeof(*m_value.fieldValuePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FieldValuePtr, other.m_value.FieldValuePtr, sizeof(*m_value.FieldValuePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_FIELDVALUE)
             {
-                memcpy(m_value.fieldValuePtr, &other.m_value.fieldValue, sizeof(*m_value.fieldValuePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.FieldValuePtr, &other.m_value.FieldValue, sizeof(*m_value.FieldValuePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPMMETRICID:
+        {
+            if (other.m_type == INJECTION_GPMMETRICID)
+            {
+                memcpy(&m_value.GpmMetricId, &other.m_value.GpmMetricId, sizeof(*&m_value.GpmMetricId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPMMETRICID_PTR)
+            {
+                memcpy(&m_value.GpmMetricId, other.m_value.GpmMetricIdPtr, sizeof(*&m_value.GpmMetricId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPMMETRICID_PTR:
+        {
+            if (other.m_type == INJECTION_GPMMETRICID_PTR)
+            {
+                memcpy(m_value.GpmMetricIdPtr, other.m_value.GpmMetricIdPtr, sizeof(*m_value.GpmMetricIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPMMETRICID)
+            {
+                memcpy(m_value.GpmMetricIdPtr, &other.m_value.GpmMetricId, sizeof(*m_value.GpmMetricIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPMMETRIC:
+        {
+            if (other.m_type == INJECTION_GPMMETRIC)
+            {
+                memcpy(&m_value.GpmMetric, &other.m_value.GpmMetric, sizeof(*&m_value.GpmMetric));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPMMETRIC_PTR)
+            {
+                memcpy(&m_value.GpmMetric, other.m_value.GpmMetricPtr, sizeof(*&m_value.GpmMetric));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPMMETRIC_PTR:
+        {
+            if (other.m_type == INJECTION_GPMMETRIC_PTR)
+            {
+                memcpy(m_value.GpmMetricPtr, other.m_value.GpmMetricPtr, sizeof(*m_value.GpmMetricPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPMMETRIC)
+            {
+                memcpy(m_value.GpmMetricPtr, &other.m_value.GpmMetric, sizeof(*m_value.GpmMetricPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPMMETRICSGET:
         {
             if (other.m_type == INJECTION_GPMMETRICSGET)
             {
-                memcpy(&m_value.gpmMetricsGet, &other.m_value.gpmMetricsGet, sizeof(m_value.gpmMetricsGet));
+                memcpy(&m_value.GpmMetricsGet, &other.m_value.GpmMetricsGet, sizeof(*&m_value.GpmMetricsGet));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMMETRICSGET_PTR)
             {
-                memcpy(&m_value.gpmMetricsGet, other.m_value.gpmMetricsGetPtr, sizeof(m_value.gpmMetricsGet));
+                memcpy(&m_value.GpmMetricsGet, other.m_value.GpmMetricsGetPtr, sizeof(*&m_value.GpmMetricsGet));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPMMETRICSGET_PTR:
         {
             if (other.m_type == INJECTION_GPMMETRICSGET_PTR)
             {
-                memcpy(m_value.gpmMetricsGetPtr, other.m_value.gpmMetricsGetPtr, sizeof(*m_value.gpmMetricsGetPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmMetricsGetPtr, other.m_value.GpmMetricsGetPtr, sizeof(*m_value.GpmMetricsGetPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMMETRICSGET)
             {
-                memcpy(m_value.gpmMetricsGetPtr, &other.m_value.gpmMetricsGet, sizeof(*m_value.gpmMetricsGetPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmMetricsGetPtr, &other.m_value.GpmMetricsGet, sizeof(*m_value.GpmMetricsGetPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPMSAMPLE:
         {
             if (other.m_type == INJECTION_GPMSAMPLE)
             {
-                memcpy(&m_value.gpmSample, &other.m_value.gpmSample, sizeof(m_value.gpmSample));
+                memcpy(&m_value.GpmSample, &other.m_value.GpmSample, sizeof(*&m_value.GpmSample));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMSAMPLE_PTR)
             {
-                memcpy(&m_value.gpmSample, other.m_value.gpmSamplePtr, sizeof(m_value.gpmSample));
+                memcpy(&m_value.GpmSample, other.m_value.GpmSamplePtr, sizeof(*&m_value.GpmSample));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPMSAMPLE_PTR:
         {
             if (other.m_type == INJECTION_GPMSAMPLE_PTR)
             {
-                memcpy(m_value.gpmSamplePtr, other.m_value.gpmSamplePtr, sizeof(*m_value.gpmSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmSamplePtr, other.m_value.GpmSamplePtr, sizeof(*m_value.GpmSamplePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMSAMPLE)
             {
-                memcpy(m_value.gpmSamplePtr, &other.m_value.gpmSample, sizeof(*m_value.gpmSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmSamplePtr, &other.m_value.GpmSample, sizeof(*m_value.GpmSamplePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPMSUPPORT:
         {
             if (other.m_type == INJECTION_GPMSUPPORT)
             {
-                memcpy(&m_value.gpmSupport, &other.m_value.gpmSupport, sizeof(m_value.gpmSupport));
+                memcpy(&m_value.GpmSupport, &other.m_value.GpmSupport, sizeof(*&m_value.GpmSupport));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMSUPPORT_PTR)
             {
-                memcpy(&m_value.gpmSupport, other.m_value.gpmSupportPtr, sizeof(m_value.gpmSupport));
+                memcpy(&m_value.GpmSupport, other.m_value.GpmSupportPtr, sizeof(*&m_value.GpmSupport));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPMSUPPORT_PTR:
         {
             if (other.m_type == INJECTION_GPMSUPPORT_PTR)
             {
-                memcpy(m_value.gpmSupportPtr, other.m_value.gpmSupportPtr, sizeof(*m_value.gpmSupportPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmSupportPtr, other.m_value.GpmSupportPtr, sizeof(*m_value.GpmSupportPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPMSUPPORT)
             {
-                memcpy(m_value.gpmSupportPtr, &other.m_value.gpmSupport, sizeof(*m_value.gpmSupportPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpmSupportPtr, &other.m_value.GpmSupport, sizeof(*m_value.GpmSupportPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUDYNAMICPSTATESINFO:
         {
             if (other.m_type == INJECTION_GPUDYNAMICPSTATESINFO)
             {
-                memcpy(&m_value.gpuDynamicPstatesInfo, &other.m_value.gpuDynamicPstatesInfo, sizeof(m_value.gpuDynamicPstatesInfo));
+                memcpy(&m_value.GpuDynamicPstatesInfo, &other.m_value.GpuDynamicPstatesInfo, sizeof(*&m_value.GpuDynamicPstatesInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUDYNAMICPSTATESINFO_PTR)
             {
-                memcpy(&m_value.gpuDynamicPstatesInfo, other.m_value.gpuDynamicPstatesInfoPtr, sizeof(m_value.gpuDynamicPstatesInfo));
+                memcpy(&m_value.GpuDynamicPstatesInfo, other.m_value.GpuDynamicPstatesInfoPtr, sizeof(*&m_value.GpuDynamicPstatesInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUDYNAMICPSTATESINFO_PTR:
         {
             if (other.m_type == INJECTION_GPUDYNAMICPSTATESINFO_PTR)
             {
-                memcpy(m_value.gpuDynamicPstatesInfoPtr, other.m_value.gpuDynamicPstatesInfoPtr, sizeof(*m_value.gpuDynamicPstatesInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuDynamicPstatesInfoPtr, other.m_value.GpuDynamicPstatesInfoPtr, sizeof(*m_value.GpuDynamicPstatesInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUDYNAMICPSTATESINFO)
             {
-                memcpy(m_value.gpuDynamicPstatesInfoPtr, &other.m_value.gpuDynamicPstatesInfo, sizeof(*m_value.gpuDynamicPstatesInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuDynamicPstatesInfoPtr, &other.m_value.GpuDynamicPstatesInfo, sizeof(*m_value.GpuDynamicPstatesInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUFABRICINFOV:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFOV)
+            {
+                memcpy(&m_value.GpuFabricInfoV, &other.m_value.GpuFabricInfoV, sizeof(*&m_value.GpuFabricInfoV));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFOV_PTR)
+            {
+                memcpy(&m_value.GpuFabricInfoV, other.m_value.GpuFabricInfoVPtr, sizeof(*&m_value.GpuFabricInfoV));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICINFOV_PTR:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFOV_PTR)
+            {
+                memcpy(m_value.GpuFabricInfoVPtr, other.m_value.GpuFabricInfoVPtr, sizeof(*m_value.GpuFabricInfoVPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFOV)
+            {
+                memcpy(m_value.GpuFabricInfoVPtr, &other.m_value.GpuFabricInfoV, sizeof(*m_value.GpuFabricInfoVPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUFABRICINFO:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFO)
+            {
+                memcpy(&m_value.GpuFabricInfo, &other.m_value.GpuFabricInfo, sizeof(*&m_value.GpuFabricInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFO_PTR)
+            {
+                memcpy(&m_value.GpuFabricInfo, other.m_value.GpuFabricInfoPtr, sizeof(*&m_value.GpuFabricInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICINFO_PTR:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFO_PTR)
+            {
+                memcpy(m_value.GpuFabricInfoPtr, other.m_value.GpuFabricInfoPtr, sizeof(*m_value.GpuFabricInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFO)
+            {
+                memcpy(m_value.GpuFabricInfoPtr, &other.m_value.GpuFabricInfo, sizeof(*m_value.GpuFabricInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUFABRICSTATE:
+        {
+            if (other.m_type == INJECTION_GPUFABRICSTATE)
+            {
+                memcpy(&m_value.GpuFabricState, &other.m_value.GpuFabricState, sizeof(*&m_value.GpuFabricState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICSTATE_PTR)
+            {
+                memcpy(&m_value.GpuFabricState, other.m_value.GpuFabricStatePtr, sizeof(*&m_value.GpuFabricState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_GPUFABRICSTATE_PTR)
+            {
+                memcpy(m_value.GpuFabricStatePtr, other.m_value.GpuFabricStatePtr, sizeof(*m_value.GpuFabricStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICSTATE)
+            {
+                memcpy(m_value.GpuFabricStatePtr, &other.m_value.GpuFabricState, sizeof(*m_value.GpuFabricStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUINSTANCEINFO:
         {
             if (other.m_type == INJECTION_GPUINSTANCEINFO)
             {
-                memcpy(&m_value.gpuInstanceInfo, &other.m_value.gpuInstanceInfo, sizeof(m_value.gpuInstanceInfo));
+                memcpy(&m_value.GpuInstanceInfo, &other.m_value.GpuInstanceInfo, sizeof(*&m_value.GpuInstanceInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEINFO_PTR)
             {
-                memcpy(&m_value.gpuInstanceInfo, other.m_value.gpuInstanceInfoPtr, sizeof(m_value.gpuInstanceInfo));
+                memcpy(&m_value.GpuInstanceInfo, other.m_value.GpuInstanceInfoPtr, sizeof(*&m_value.GpuInstanceInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUINSTANCEINFO_PTR:
         {
             if (other.m_type == INJECTION_GPUINSTANCEINFO_PTR)
             {
-                memcpy(m_value.gpuInstanceInfoPtr, other.m_value.gpuInstanceInfoPtr, sizeof(*m_value.gpuInstanceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceInfoPtr, other.m_value.GpuInstanceInfoPtr, sizeof(*m_value.GpuInstanceInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEINFO)
             {
-                memcpy(m_value.gpuInstanceInfoPtr, &other.m_value.gpuInstanceInfo, sizeof(*m_value.gpuInstanceInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceInfoPtr, &other.m_value.GpuInstanceInfo, sizeof(*m_value.GpuInstanceInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUINSTANCEPLACEMENT:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPLACEMENT)
             {
-                memcpy(&m_value.gpuInstancePlacement, &other.m_value.gpuInstancePlacement, sizeof(m_value.gpuInstancePlacement));
+                memcpy(&m_value.GpuInstancePlacement, &other.m_value.GpuInstancePlacement, sizeof(*&m_value.GpuInstancePlacement));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPLACEMENT_PTR)
             {
-                memcpy(&m_value.gpuInstancePlacement, other.m_value.gpuInstancePlacementPtr, sizeof(m_value.gpuInstancePlacement));
+                memcpy(&m_value.GpuInstancePlacement, other.m_value.GpuInstancePlacementPtr, sizeof(*&m_value.GpuInstancePlacement));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUINSTANCEPLACEMENT_PTR:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPLACEMENT_PTR)
             {
-                memcpy(m_value.gpuInstancePlacementPtr, other.m_value.gpuInstancePlacementPtr, sizeof(*m_value.gpuInstancePlacementPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstancePlacementPtr, other.m_value.GpuInstancePlacementPtr, sizeof(*m_value.GpuInstancePlacementPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPLACEMENT)
             {
-                memcpy(m_value.gpuInstancePlacementPtr, &other.m_value.gpuInstancePlacement, sizeof(*m_value.gpuInstancePlacementPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstancePlacementPtr, &other.m_value.GpuInstancePlacement, sizeof(*m_value.GpuInstancePlacementPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUINSTANCEPROFILEINFO:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO)
             {
-                memcpy(&m_value.gpuInstanceProfileInfo, &other.m_value.gpuInstanceProfileInfo, sizeof(m_value.gpuInstanceProfileInfo));
+                memcpy(&m_value.GpuInstanceProfileInfo, &other.m_value.GpuInstanceProfileInfo, sizeof(*&m_value.GpuInstanceProfileInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_PTR)
             {
-                memcpy(&m_value.gpuInstanceProfileInfo, other.m_value.gpuInstanceProfileInfoPtr, sizeof(m_value.gpuInstanceProfileInfo));
+                memcpy(&m_value.GpuInstanceProfileInfo, other.m_value.GpuInstanceProfileInfoPtr, sizeof(*&m_value.GpuInstanceProfileInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUINSTANCEPROFILEINFO_PTR:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_PTR)
             {
-                memcpy(m_value.gpuInstanceProfileInfoPtr, other.m_value.gpuInstanceProfileInfoPtr, sizeof(*m_value.gpuInstanceProfileInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceProfileInfoPtr, other.m_value.GpuInstanceProfileInfoPtr, sizeof(*m_value.GpuInstanceProfileInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO)
             {
-                memcpy(m_value.gpuInstanceProfileInfoPtr, &other.m_value.gpuInstanceProfileInfo, sizeof(*m_value.gpuInstanceProfileInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceProfileInfoPtr, &other.m_value.GpuInstanceProfileInfo, sizeof(*m_value.GpuInstanceProfileInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUINSTANCEPROFILEINFO_V2:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V2)
             {
-                memcpy(&m_value.gpuInstanceProfileInfo_v2, &other.m_value.gpuInstanceProfileInfo_v2, sizeof(m_value.gpuInstanceProfileInfo_v2));
+                memcpy(&m_value.GpuInstanceProfileInfo_v2, &other.m_value.GpuInstanceProfileInfo_v2, sizeof(*&m_value.GpuInstanceProfileInfo_v2));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR)
             {
-                memcpy(&m_value.gpuInstanceProfileInfo_v2, other.m_value.gpuInstanceProfileInfo_v2Ptr, sizeof(m_value.gpuInstanceProfileInfo_v2));
+                memcpy(&m_value.GpuInstanceProfileInfo_v2, other.m_value.GpuInstanceProfileInfo_v2Ptr, sizeof(*&m_value.GpuInstanceProfileInfo_v2));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR:
         {
             if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR)
             {
-                memcpy(m_value.gpuInstanceProfileInfo_v2Ptr, other.m_value.gpuInstanceProfileInfo_v2Ptr, sizeof(*m_value.gpuInstanceProfileInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceProfileInfo_v2Ptr, other.m_value.GpuInstanceProfileInfo_v2Ptr, sizeof(*m_value.GpuInstanceProfileInfo_v2Ptr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V2)
             {
-                memcpy(m_value.gpuInstanceProfileInfo_v2Ptr, &other.m_value.gpuInstanceProfileInfo_v2, sizeof(*m_value.gpuInstanceProfileInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstanceProfileInfo_v2Ptr, &other.m_value.GpuInstanceProfileInfo_v2, sizeof(*m_value.GpuInstanceProfileInfo_v2Ptr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUINSTANCEPROFILEINFO_V3:
+        {
+            if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V3)
+            {
+                memcpy(&m_value.GpuInstanceProfileInfo_v3, &other.m_value.GpuInstanceProfileInfo_v3, sizeof(*&m_value.GpuInstanceProfileInfo_v3));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR)
+            {
+                memcpy(&m_value.GpuInstanceProfileInfo_v3, other.m_value.GpuInstanceProfileInfo_v3Ptr, sizeof(*&m_value.GpuInstanceProfileInfo_v3));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR:
+        {
+            if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR)
+            {
+                memcpy(m_value.GpuInstanceProfileInfo_v3Ptr, other.m_value.GpuInstanceProfileInfo_v3Ptr, sizeof(*m_value.GpuInstanceProfileInfo_v3Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUINSTANCEPROFILEINFO_V3)
+            {
+                memcpy(m_value.GpuInstanceProfileInfo_v3Ptr, &other.m_value.GpuInstanceProfileInfo_v3, sizeof(*m_value.GpuInstanceProfileInfo_v3Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUINSTANCE:
         {
             if (other.m_type == INJECTION_GPUINSTANCE)
             {
-                memcpy(&m_value.gpuInstance, &other.m_value.gpuInstance, sizeof(m_value.gpuInstance));
+                memcpy(&m_value.GpuInstance, &other.m_value.GpuInstance, sizeof(*&m_value.GpuInstance));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCE_PTR)
             {
-                memcpy(&m_value.gpuInstance, other.m_value.gpuInstancePtr, sizeof(m_value.gpuInstance));
+                memcpy(&m_value.GpuInstance, other.m_value.GpuInstancePtr, sizeof(*&m_value.GpuInstance));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUINSTANCE_PTR:
         {
             if (other.m_type == INJECTION_GPUINSTANCE_PTR)
             {
-                memcpy(m_value.gpuInstancePtr, other.m_value.gpuInstancePtr, sizeof(*m_value.gpuInstancePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstancePtr, other.m_value.GpuInstancePtr, sizeof(*m_value.GpuInstancePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUINSTANCE)
             {
-                memcpy(m_value.gpuInstancePtr, &other.m_value.gpuInstance, sizeof(*m_value.gpuInstancePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuInstancePtr, &other.m_value.GpuInstance, sizeof(*m_value.GpuInstancePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUOPERATIONMODE:
         {
             if (other.m_type == INJECTION_GPUOPERATIONMODE)
             {
-                memcpy(&m_value.gpuOperationMode, &other.m_value.gpuOperationMode, sizeof(m_value.gpuOperationMode));
+                memcpy(&m_value.GpuOperationMode, &other.m_value.GpuOperationMode, sizeof(*&m_value.GpuOperationMode));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUOPERATIONMODE_PTR)
             {
-                memcpy(&m_value.gpuOperationMode, other.m_value.gpuOperationModePtr, sizeof(m_value.gpuOperationMode));
+                memcpy(&m_value.GpuOperationMode, other.m_value.GpuOperationModePtr, sizeof(*&m_value.GpuOperationMode));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUOPERATIONMODE_PTR:
         {
             if (other.m_type == INJECTION_GPUOPERATIONMODE_PTR)
             {
-                memcpy(m_value.gpuOperationModePtr, other.m_value.gpuOperationModePtr, sizeof(*m_value.gpuOperationModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuOperationModePtr, other.m_value.GpuOperationModePtr, sizeof(*m_value.GpuOperationModePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUOPERATIONMODE)
             {
-                memcpy(m_value.gpuOperationModePtr, &other.m_value.gpuOperationMode, sizeof(*m_value.gpuOperationModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuOperationModePtr, &other.m_value.GpuOperationMode, sizeof(*m_value.GpuOperationModePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUP2PCAPSINDEX:
         {
             if (other.m_type == INJECTION_GPUP2PCAPSINDEX)
             {
-                memcpy(&m_value.gpuP2PCapsIndex, &other.m_value.gpuP2PCapsIndex, sizeof(m_value.gpuP2PCapsIndex));
+                memcpy(&m_value.GpuP2PCapsIndex, &other.m_value.GpuP2PCapsIndex, sizeof(*&m_value.GpuP2PCapsIndex));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUP2PCAPSINDEX_PTR)
+            {
+                memcpy(&m_value.GpuP2PCapsIndex, other.m_value.GpuP2PCapsIndexPtr, sizeof(*&m_value.GpuP2PCapsIndex));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_GPUP2PCAPSINDEX_PTR:
+        {
+            if (other.m_type == INJECTION_GPUP2PCAPSINDEX_PTR)
+            {
+                memcpy(m_value.GpuP2PCapsIndexPtr, other.m_value.GpuP2PCapsIndexPtr, sizeof(*m_value.GpuP2PCapsIndexPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUP2PCAPSINDEX)
+            {
+                memcpy(m_value.GpuP2PCapsIndexPtr, &other.m_value.GpuP2PCapsIndex, sizeof(*m_value.GpuP2PCapsIndexPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUP2PSTATUS:
         {
             if (other.m_type == INJECTION_GPUP2PSTATUS)
             {
-                memcpy(&m_value.gpuP2PStatus, &other.m_value.gpuP2PStatus, sizeof(m_value.gpuP2PStatus));
+                memcpy(&m_value.GpuP2PStatus, &other.m_value.GpuP2PStatus, sizeof(*&m_value.GpuP2PStatus));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUP2PSTATUS_PTR)
             {
-                memcpy(&m_value.gpuP2PStatus, other.m_value.gpuP2PStatusPtr, sizeof(m_value.gpuP2PStatus));
+                memcpy(&m_value.GpuP2PStatus, other.m_value.GpuP2PStatusPtr, sizeof(*&m_value.GpuP2PStatus));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUP2PSTATUS_PTR:
         {
             if (other.m_type == INJECTION_GPUP2PSTATUS_PTR)
             {
-                memcpy(m_value.gpuP2PStatusPtr, other.m_value.gpuP2PStatusPtr, sizeof(*m_value.gpuP2PStatusPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuP2PStatusPtr, other.m_value.GpuP2PStatusPtr, sizeof(*m_value.GpuP2PStatusPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUP2PSTATUS)
             {
-                memcpy(m_value.gpuP2PStatusPtr, &other.m_value.gpuP2PStatus, sizeof(*m_value.gpuP2PStatusPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuP2PStatusPtr, &other.m_value.GpuP2PStatus, sizeof(*m_value.GpuP2PStatusPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUTHERMALSETTINGS:
         {
             if (other.m_type == INJECTION_GPUTHERMALSETTINGS)
             {
-                memcpy(&m_value.gpuThermalSettings, &other.m_value.gpuThermalSettings, sizeof(m_value.gpuThermalSettings));
+                memcpy(&m_value.GpuThermalSettings, &other.m_value.GpuThermalSettings, sizeof(*&m_value.GpuThermalSettings));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUTHERMALSETTINGS_PTR)
             {
-                memcpy(&m_value.gpuThermalSettings, other.m_value.gpuThermalSettingsPtr, sizeof(m_value.gpuThermalSettings));
+                memcpy(&m_value.GpuThermalSettings, other.m_value.GpuThermalSettingsPtr, sizeof(*&m_value.GpuThermalSettings));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUTHERMALSETTINGS_PTR:
         {
             if (other.m_type == INJECTION_GPUTHERMALSETTINGS_PTR)
             {
-                memcpy(m_value.gpuThermalSettingsPtr, other.m_value.gpuThermalSettingsPtr, sizeof(*m_value.gpuThermalSettingsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuThermalSettingsPtr, other.m_value.GpuThermalSettingsPtr, sizeof(*m_value.GpuThermalSettingsPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUTHERMALSETTINGS)
             {
-                memcpy(m_value.gpuThermalSettingsPtr, &other.m_value.gpuThermalSettings, sizeof(*m_value.gpuThermalSettingsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuThermalSettingsPtr, &other.m_value.GpuThermalSettings, sizeof(*m_value.GpuThermalSettingsPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUTOPOLOGYLEVEL:
         {
             if (other.m_type == INJECTION_GPUTOPOLOGYLEVEL)
             {
-                memcpy(&m_value.gpuTopologyLevel, &other.m_value.gpuTopologyLevel, sizeof(m_value.gpuTopologyLevel));
+                memcpy(&m_value.GpuTopologyLevel, &other.m_value.GpuTopologyLevel, sizeof(*&m_value.GpuTopologyLevel));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUTOPOLOGYLEVEL_PTR)
             {
-                memcpy(&m_value.gpuTopologyLevel, other.m_value.gpuTopologyLevelPtr, sizeof(m_value.gpuTopologyLevel));
+                memcpy(&m_value.GpuTopologyLevel, other.m_value.GpuTopologyLevelPtr, sizeof(*&m_value.GpuTopologyLevel));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUTOPOLOGYLEVEL_PTR:
         {
             if (other.m_type == INJECTION_GPUTOPOLOGYLEVEL_PTR)
             {
-                memcpy(m_value.gpuTopologyLevelPtr, other.m_value.gpuTopologyLevelPtr, sizeof(*m_value.gpuTopologyLevelPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuTopologyLevelPtr, other.m_value.GpuTopologyLevelPtr, sizeof(*m_value.GpuTopologyLevelPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUTOPOLOGYLEVEL)
             {
-                memcpy(m_value.gpuTopologyLevelPtr, &other.m_value.gpuTopologyLevel, sizeof(*m_value.gpuTopologyLevelPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuTopologyLevelPtr, &other.m_value.GpuTopologyLevel, sizeof(*m_value.GpuTopologyLevelPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUUTILIZATIONDOMAINID:
+        {
+            if (other.m_type == INJECTION_GPUUTILIZATIONDOMAINID)
+            {
+                memcpy(&m_value.GpuUtilizationDomainId, &other.m_value.GpuUtilizationDomainId, sizeof(*&m_value.GpuUtilizationDomainId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUUTILIZATIONDOMAINID_PTR)
+            {
+                memcpy(&m_value.GpuUtilizationDomainId, other.m_value.GpuUtilizationDomainIdPtr, sizeof(*&m_value.GpuUtilizationDomainId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUUTILIZATIONDOMAINID_PTR:
+        {
+            if (other.m_type == INJECTION_GPUUTILIZATIONDOMAINID_PTR)
+            {
+                memcpy(m_value.GpuUtilizationDomainIdPtr, other.m_value.GpuUtilizationDomainIdPtr, sizeof(*m_value.GpuUtilizationDomainIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUUTILIZATIONDOMAINID)
+            {
+                memcpy(m_value.GpuUtilizationDomainIdPtr, &other.m_value.GpuUtilizationDomainId, sizeof(*m_value.GpuUtilizationDomainIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GPUVIRTUALIZATIONMODE:
         {
             if (other.m_type == INJECTION_GPUVIRTUALIZATIONMODE)
             {
-                memcpy(&m_value.gpuVirtualizationMode, &other.m_value.gpuVirtualizationMode, sizeof(m_value.gpuVirtualizationMode));
+                memcpy(&m_value.GpuVirtualizationMode, &other.m_value.GpuVirtualizationMode, sizeof(*&m_value.GpuVirtualizationMode));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUVIRTUALIZATIONMODE_PTR)
             {
-                memcpy(&m_value.gpuVirtualizationMode, other.m_value.gpuVirtualizationModePtr, sizeof(m_value.gpuVirtualizationMode));
+                memcpy(&m_value.GpuVirtualizationMode, other.m_value.GpuVirtualizationModePtr, sizeof(*&m_value.GpuVirtualizationMode));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GPUVIRTUALIZATIONMODE_PTR:
         {
             if (other.m_type == INJECTION_GPUVIRTUALIZATIONMODE_PTR)
             {
-                memcpy(m_value.gpuVirtualizationModePtr, other.m_value.gpuVirtualizationModePtr, sizeof(*m_value.gpuVirtualizationModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuVirtualizationModePtr, other.m_value.GpuVirtualizationModePtr, sizeof(*m_value.GpuVirtualizationModePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GPUVIRTUALIZATIONMODE)
             {
-                memcpy(m_value.gpuVirtualizationModePtr, &other.m_value.gpuVirtualizationMode, sizeof(*m_value.gpuVirtualizationModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GpuVirtualizationModePtr, &other.m_value.GpuVirtualizationMode, sizeof(*m_value.GpuVirtualizationModePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GRIDLICENSABLEFEATURE:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSABLEFEATURE)
+            {
+                memcpy(&m_value.GridLicensableFeature, &other.m_value.GridLicensableFeature, sizeof(*&m_value.GridLicensableFeature));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSABLEFEATURE_PTR)
+            {
+                memcpy(&m_value.GridLicensableFeature, other.m_value.GridLicensableFeaturePtr, sizeof(*&m_value.GridLicensableFeature));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GRIDLICENSABLEFEATURE_PTR:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSABLEFEATURE_PTR)
+            {
+                memcpy(m_value.GridLicensableFeaturePtr, other.m_value.GridLicensableFeaturePtr, sizeof(*m_value.GridLicensableFeaturePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSABLEFEATURE)
+            {
+                memcpy(m_value.GridLicensableFeaturePtr, &other.m_value.GridLicensableFeature, sizeof(*m_value.GridLicensableFeaturePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_GRIDLICENSABLEFEATURES:
         {
             if (other.m_type == INJECTION_GRIDLICENSABLEFEATURES)
             {
-                memcpy(&m_value.gridLicensableFeatures, &other.m_value.gridLicensableFeatures, sizeof(m_value.gridLicensableFeatures));
+                memcpy(&m_value.GridLicensableFeatures, &other.m_value.GridLicensableFeatures, sizeof(*&m_value.GridLicensableFeatures));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GRIDLICENSABLEFEATURES_PTR)
             {
-                memcpy(&m_value.gridLicensableFeatures, other.m_value.gridLicensableFeaturesPtr, sizeof(m_value.gridLicensableFeatures));
+                memcpy(&m_value.GridLicensableFeatures, other.m_value.GridLicensableFeaturesPtr, sizeof(*&m_value.GridLicensableFeatures));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_GRIDLICENSABLEFEATURES_PTR:
         {
             if (other.m_type == INJECTION_GRIDLICENSABLEFEATURES_PTR)
             {
-                memcpy(m_value.gridLicensableFeaturesPtr, other.m_value.gridLicensableFeaturesPtr, sizeof(*m_value.gridLicensableFeaturesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GridLicensableFeaturesPtr, other.m_value.GridLicensableFeaturesPtr, sizeof(*m_value.GridLicensableFeaturesPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_GRIDLICENSABLEFEATURES)
             {
-                memcpy(m_value.gridLicensableFeaturesPtr, &other.m_value.gridLicensableFeatures, sizeof(*m_value.gridLicensableFeaturesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.GridLicensableFeaturesPtr, &other.m_value.GridLicensableFeatures, sizeof(*m_value.GridLicensableFeaturesPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GRIDLICENSEEXPIRY:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSEEXPIRY)
+            {
+                memcpy(&m_value.GridLicenseExpiry, &other.m_value.GridLicenseExpiry, sizeof(*&m_value.GridLicenseExpiry));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSEEXPIRY_PTR)
+            {
+                memcpy(&m_value.GridLicenseExpiry, other.m_value.GridLicenseExpiryPtr, sizeof(*&m_value.GridLicenseExpiry));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GRIDLICENSEEXPIRY_PTR:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSEEXPIRY_PTR)
+            {
+                memcpy(m_value.GridLicenseExpiryPtr, other.m_value.GridLicenseExpiryPtr, sizeof(*m_value.GridLicenseExpiryPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSEEXPIRY)
+            {
+                memcpy(m_value.GridLicenseExpiryPtr, &other.m_value.GridLicenseExpiry, sizeof(*m_value.GridLicenseExpiryPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GRIDLICENSEFEATURECODE:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSEFEATURECODE)
+            {
+                memcpy(&m_value.GridLicenseFeatureCode, &other.m_value.GridLicenseFeatureCode, sizeof(*&m_value.GridLicenseFeatureCode));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSEFEATURECODE_PTR)
+            {
+                memcpy(&m_value.GridLicenseFeatureCode, other.m_value.GridLicenseFeatureCodePtr, sizeof(*&m_value.GridLicenseFeatureCode));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GRIDLICENSEFEATURECODE_PTR:
+        {
+            if (other.m_type == INJECTION_GRIDLICENSEFEATURECODE_PTR)
+            {
+                memcpy(m_value.GridLicenseFeatureCodePtr, other.m_value.GridLicenseFeatureCodePtr, sizeof(*m_value.GridLicenseFeatureCodePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GRIDLICENSEFEATURECODE)
+            {
+                memcpy(m_value.GridLicenseFeatureCodePtr, &other.m_value.GridLicenseFeatureCode, sizeof(*m_value.GridLicenseFeatureCodePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_HOSTVGPUMODE:
         {
             if (other.m_type == INJECTION_HOSTVGPUMODE)
             {
-                memcpy(&m_value.hostVgpuMode, &other.m_value.hostVgpuMode, sizeof(m_value.hostVgpuMode));
+                memcpy(&m_value.HostVgpuMode, &other.m_value.HostVgpuMode, sizeof(*&m_value.HostVgpuMode));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_HOSTVGPUMODE_PTR)
             {
-                memcpy(&m_value.hostVgpuMode, other.m_value.hostVgpuModePtr, sizeof(m_value.hostVgpuMode));
+                memcpy(&m_value.HostVgpuMode, other.m_value.HostVgpuModePtr, sizeof(*&m_value.HostVgpuMode));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_HOSTVGPUMODE_PTR:
         {
             if (other.m_type == INJECTION_HOSTVGPUMODE_PTR)
             {
-                memcpy(m_value.hostVgpuModePtr, other.m_value.hostVgpuModePtr, sizeof(*m_value.hostVgpuModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.HostVgpuModePtr, other.m_value.HostVgpuModePtr, sizeof(*m_value.HostVgpuModePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_HOSTVGPUMODE)
             {
-                memcpy(m_value.hostVgpuModePtr, &other.m_value.hostVgpuMode, sizeof(*m_value.hostVgpuModePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.HostVgpuModePtr, &other.m_value.HostVgpuMode, sizeof(*m_value.HostVgpuModePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_HWBCENTRY:
         {
             if (other.m_type == INJECTION_HWBCENTRY)
             {
-                memcpy(&m_value.hwbcEntry, &other.m_value.hwbcEntry, sizeof(m_value.hwbcEntry));
+                memcpy(&m_value.HwbcEntry, &other.m_value.HwbcEntry, sizeof(*&m_value.HwbcEntry));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_HWBCENTRY_PTR)
             {
-                memcpy(&m_value.hwbcEntry, other.m_value.hwbcEntryPtr, sizeof(m_value.hwbcEntry));
+                memcpy(&m_value.HwbcEntry, other.m_value.HwbcEntryPtr, sizeof(*&m_value.HwbcEntry));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_HWBCENTRY_PTR:
         {
             if (other.m_type == INJECTION_HWBCENTRY_PTR)
             {
-                memcpy(m_value.hwbcEntryPtr, other.m_value.hwbcEntryPtr, sizeof(*m_value.hwbcEntryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.HwbcEntryPtr, other.m_value.HwbcEntryPtr, sizeof(*m_value.HwbcEntryPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_HWBCENTRY)
             {
-                memcpy(m_value.hwbcEntryPtr, &other.m_value.hwbcEntry, sizeof(*m_value.hwbcEntryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.HwbcEntryPtr, &other.m_value.HwbcEntry, sizeof(*m_value.HwbcEntryPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_INFOROMOBJECT:
         {
             if (other.m_type == INJECTION_INFOROMOBJECT)
             {
-                memcpy(&m_value.inforomObject, &other.m_value.inforomObject, sizeof(m_value.inforomObject));
+                memcpy(&m_value.InforomObject, &other.m_value.InforomObject, sizeof(*&m_value.InforomObject));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_INFOROMOBJECT_PTR)
+            {
+                memcpy(&m_value.InforomObject, other.m_value.InforomObjectPtr, sizeof(*&m_value.InforomObject));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_INFOROMOBJECT_PTR:
+        {
+            if (other.m_type == INJECTION_INFOROMOBJECT_PTR)
+            {
+                memcpy(m_value.InforomObjectPtr, other.m_value.InforomObjectPtr, sizeof(*m_value.InforomObjectPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_INFOROMOBJECT)
+            {
+                memcpy(m_value.InforomObjectPtr, &other.m_value.InforomObject, sizeof(*m_value.InforomObjectPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_INTNVLINKDEVICETYPE:
         {
             if (other.m_type == INJECTION_INTNVLINKDEVICETYPE)
             {
-                memcpy(&m_value.intNvLinkDeviceType, &other.m_value.intNvLinkDeviceType, sizeof(m_value.intNvLinkDeviceType));
+                memcpy(&m_value.IntNvLinkDeviceType, &other.m_value.IntNvLinkDeviceType, sizeof(*&m_value.IntNvLinkDeviceType));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_INTNVLINKDEVICETYPE_PTR)
             {
-                memcpy(&m_value.intNvLinkDeviceType, other.m_value.intNvLinkDeviceTypePtr, sizeof(m_value.intNvLinkDeviceType));
+                memcpy(&m_value.IntNvLinkDeviceType, other.m_value.IntNvLinkDeviceTypePtr, sizeof(*&m_value.IntNvLinkDeviceType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_INTNVLINKDEVICETYPE_PTR:
         {
             if (other.m_type == INJECTION_INTNVLINKDEVICETYPE_PTR)
             {
-                memcpy(m_value.intNvLinkDeviceTypePtr, other.m_value.intNvLinkDeviceTypePtr, sizeof(*m_value.intNvLinkDeviceTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.IntNvLinkDeviceTypePtr, other.m_value.IntNvLinkDeviceTypePtr, sizeof(*m_value.IntNvLinkDeviceTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_INTNVLINKDEVICETYPE)
             {
-                memcpy(m_value.intNvLinkDeviceTypePtr, &other.m_value.intNvLinkDeviceType, sizeof(*m_value.intNvLinkDeviceTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.IntNvLinkDeviceTypePtr, &other.m_value.IntNvLinkDeviceType, sizeof(*m_value.IntNvLinkDeviceTypePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_LEDCOLOR:
         {
             if (other.m_type == INJECTION_LEDCOLOR)
             {
-                memcpy(&m_value.ledColor, &other.m_value.ledColor, sizeof(m_value.ledColor));
+                memcpy(&m_value.LedColor, &other.m_value.LedColor, sizeof(*&m_value.LedColor));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LEDCOLOR_PTR)
+            {
+                memcpy(&m_value.LedColor, other.m_value.LedColorPtr, sizeof(*&m_value.LedColor));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_LEDCOLOR_PTR:
+        {
+            if (other.m_type == INJECTION_LEDCOLOR_PTR)
+            {
+                memcpy(m_value.LedColorPtr, other.m_value.LedColorPtr, sizeof(*m_value.LedColorPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_LEDCOLOR)
+            {
+                memcpy(m_value.LedColorPtr, &other.m_value.LedColor, sizeof(*m_value.LedColorPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_LEDSTATE:
         {
             if (other.m_type == INJECTION_LEDSTATE)
             {
-                memcpy(&m_value.ledState, &other.m_value.ledState, sizeof(m_value.ledState));
+                memcpy(&m_value.LedState, &other.m_value.LedState, sizeof(*&m_value.LedState));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_LEDSTATE_PTR)
             {
-                memcpy(&m_value.ledState, other.m_value.ledStatePtr, sizeof(m_value.ledState));
+                memcpy(&m_value.LedState, other.m_value.LedStatePtr, sizeof(*&m_value.LedState));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_LEDSTATE_PTR:
         {
             if (other.m_type == INJECTION_LEDSTATE_PTR)
             {
-                memcpy(m_value.ledStatePtr, other.m_value.ledStatePtr, sizeof(*m_value.ledStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.LedStatePtr, other.m_value.LedStatePtr, sizeof(*m_value.LedStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_LEDSTATE)
             {
-                memcpy(m_value.ledStatePtr, &other.m_value.ledState, sizeof(*m_value.ledStatePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.LedStatePtr, &other.m_value.LedState, sizeof(*m_value.LedStatePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_MASK255:
+        {
+            if (other.m_type == INJECTION_MASK255)
+            {
+                memcpy(&m_value.Mask255, &other.m_value.Mask255, sizeof(*&m_value.Mask255));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MASK255_PTR)
+            {
+                memcpy(&m_value.Mask255, other.m_value.Mask255Ptr, sizeof(*&m_value.Mask255));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_MASK255_PTR:
+        {
+            if (other.m_type == INJECTION_MASK255_PTR)
+            {
+                memcpy(m_value.Mask255Ptr, other.m_value.Mask255Ptr, sizeof(*m_value.Mask255Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MASK255)
+            {
+                memcpy(m_value.Mask255Ptr, &other.m_value.Mask255, sizeof(*m_value.Mask255Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_MEMORYERRORTYPE:
         {
             if (other.m_type == INJECTION_MEMORYERRORTYPE)
             {
-                memcpy(&m_value.memoryErrorType, &other.m_value.memoryErrorType, sizeof(m_value.memoryErrorType));
+                memcpy(&m_value.MemoryErrorType, &other.m_value.MemoryErrorType, sizeof(*&m_value.MemoryErrorType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MEMORYERRORTYPE_PTR)
+            {
+                memcpy(&m_value.MemoryErrorType, other.m_value.MemoryErrorTypePtr, sizeof(*&m_value.MemoryErrorType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_MEMORYERRORTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_MEMORYERRORTYPE_PTR)
+            {
+                memcpy(m_value.MemoryErrorTypePtr, other.m_value.MemoryErrorTypePtr, sizeof(*m_value.MemoryErrorTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MEMORYERRORTYPE)
+            {
+                memcpy(m_value.MemoryErrorTypePtr, &other.m_value.MemoryErrorType, sizeof(*m_value.MemoryErrorTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_MEMORYLOCATION:
         {
             if (other.m_type == INJECTION_MEMORYLOCATION)
             {
-                memcpy(&m_value.memoryLocation, &other.m_value.memoryLocation, sizeof(m_value.memoryLocation));
+                memcpy(&m_value.MemoryLocation, &other.m_value.MemoryLocation, sizeof(*&m_value.MemoryLocation));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MEMORYLOCATION_PTR)
+            {
+                memcpy(&m_value.MemoryLocation, other.m_value.MemoryLocationPtr, sizeof(*&m_value.MemoryLocation));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_MEMORYLOCATION_PTR:
+        {
+            if (other.m_type == INJECTION_MEMORYLOCATION_PTR)
+            {
+                memcpy(m_value.MemoryLocationPtr, other.m_value.MemoryLocationPtr, sizeof(*m_value.MemoryLocationPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MEMORYLOCATION)
+            {
+                memcpy(m_value.MemoryLocationPtr, &other.m_value.MemoryLocation, sizeof(*m_value.MemoryLocationPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_MEMORY:
         {
             if (other.m_type == INJECTION_MEMORY)
             {
-                memcpy(&m_value.memory, &other.m_value.memory, sizeof(m_value.memory));
+                memcpy(&m_value.Memory, &other.m_value.Memory, sizeof(*&m_value.Memory));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_MEMORY_PTR)
             {
-                memcpy(&m_value.memory, other.m_value.memoryPtr, sizeof(m_value.memory));
+                memcpy(&m_value.Memory, other.m_value.MemoryPtr, sizeof(*&m_value.Memory));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_MEMORY_PTR:
         {
             if (other.m_type == INJECTION_MEMORY_PTR)
             {
-                memcpy(m_value.memoryPtr, other.m_value.memoryPtr, sizeof(*m_value.memoryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.MemoryPtr, other.m_value.MemoryPtr, sizeof(*m_value.MemoryPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_MEMORY)
             {
-                memcpy(m_value.memoryPtr, &other.m_value.memory, sizeof(*m_value.memoryPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.MemoryPtr, &other.m_value.Memory, sizeof(*m_value.MemoryPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_MEMORY_V2:
         {
             if (other.m_type == INJECTION_MEMORY_V2)
             {
-                memcpy(&m_value.memory_v2, &other.m_value.memory_v2, sizeof(m_value.memory_v2));
+                memcpy(&m_value.Memory_v2, &other.m_value.Memory_v2, sizeof(*&m_value.Memory_v2));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_MEMORY_V2_PTR)
             {
-                memcpy(&m_value.memory_v2, other.m_value.memory_v2Ptr, sizeof(m_value.memory_v2));
+                memcpy(&m_value.Memory_v2, other.m_value.Memory_v2Ptr, sizeof(*&m_value.Memory_v2));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_MEMORY_V2_PTR:
         {
             if (other.m_type == INJECTION_MEMORY_V2_PTR)
             {
-                memcpy(m_value.memory_v2Ptr, other.m_value.memory_v2Ptr, sizeof(*m_value.memory_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.Memory_v2Ptr, other.m_value.Memory_v2Ptr, sizeof(*m_value.Memory_v2Ptr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_MEMORY_V2)
             {
-                memcpy(m_value.memory_v2Ptr, &other.m_value.memory_v2, sizeof(*m_value.memory_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.Memory_v2Ptr, &other.m_value.Memory_v2, sizeof(*m_value.Memory_v2Ptr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_NVLINKCAPABILITY:
         {
             if (other.m_type == INJECTION_NVLINKCAPABILITY)
             {
-                memcpy(&m_value.nvLinkCapability, &other.m_value.nvLinkCapability, sizeof(m_value.nvLinkCapability));
+                memcpy(&m_value.NvLinkCapability, &other.m_value.NvLinkCapability, sizeof(*&m_value.NvLinkCapability));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKCAPABILITY_PTR)
+            {
+                memcpy(&m_value.NvLinkCapability, other.m_value.NvLinkCapabilityPtr, sizeof(*&m_value.NvLinkCapability));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_NVLINKCAPABILITY_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKCAPABILITY_PTR)
+            {
+                memcpy(m_value.NvLinkCapabilityPtr, other.m_value.NvLinkCapabilityPtr, sizeof(*m_value.NvLinkCapabilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKCAPABILITY)
+            {
+                memcpy(m_value.NvLinkCapabilityPtr, &other.m_value.NvLinkCapability, sizeof(*m_value.NvLinkCapabilityPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_NVLINKERRORCOUNTER:
         {
             if (other.m_type == INJECTION_NVLINKERRORCOUNTER)
             {
-                memcpy(&m_value.nvLinkErrorCounter, &other.m_value.nvLinkErrorCounter, sizeof(m_value.nvLinkErrorCounter));
+                memcpy(&m_value.NvLinkErrorCounter, &other.m_value.NvLinkErrorCounter, sizeof(*&m_value.NvLinkErrorCounter));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKERRORCOUNTER_PTR)
+            {
+                memcpy(&m_value.NvLinkErrorCounter, other.m_value.NvLinkErrorCounterPtr, sizeof(*&m_value.NvLinkErrorCounter));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_NVLINKERRORCOUNTER_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKERRORCOUNTER_PTR)
+            {
+                memcpy(m_value.NvLinkErrorCounterPtr, other.m_value.NvLinkErrorCounterPtr, sizeof(*m_value.NvLinkErrorCounterPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKERRORCOUNTER)
+            {
+                memcpy(m_value.NvLinkErrorCounterPtr, &other.m_value.NvLinkErrorCounter, sizeof(*m_value.NvLinkErrorCounterPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKPOWERTHRES:
+        {
+            if (other.m_type == INJECTION_NVLINKPOWERTHRES)
+            {
+                memcpy(&m_value.NvLinkPowerThres, &other.m_value.NvLinkPowerThres, sizeof(*&m_value.NvLinkPowerThres));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKPOWERTHRES_PTR)
+            {
+                memcpy(&m_value.NvLinkPowerThres, other.m_value.NvLinkPowerThresPtr, sizeof(*&m_value.NvLinkPowerThres));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKPOWERTHRES_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKPOWERTHRES_PTR)
+            {
+                memcpy(m_value.NvLinkPowerThresPtr, other.m_value.NvLinkPowerThresPtr, sizeof(*m_value.NvLinkPowerThresPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKPOWERTHRES)
+            {
+                memcpy(m_value.NvLinkPowerThresPtr, &other.m_value.NvLinkPowerThres, sizeof(*m_value.NvLinkPowerThresPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_NVLINKUTILIZATIONCONTROL:
         {
             if (other.m_type == INJECTION_NVLINKUTILIZATIONCONTROL)
             {
-                memcpy(&m_value.nvLinkUtilizationControl, &other.m_value.nvLinkUtilizationControl, sizeof(m_value.nvLinkUtilizationControl));
+                memcpy(&m_value.NvLinkUtilizationControl, &other.m_value.NvLinkUtilizationControl, sizeof(*&m_value.NvLinkUtilizationControl));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_NVLINKUTILIZATIONCONTROL_PTR)
             {
-                memcpy(&m_value.nvLinkUtilizationControl, other.m_value.nvLinkUtilizationControlPtr, sizeof(m_value.nvLinkUtilizationControl));
+                memcpy(&m_value.NvLinkUtilizationControl, other.m_value.NvLinkUtilizationControlPtr, sizeof(*&m_value.NvLinkUtilizationControl));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_NVLINKUTILIZATIONCONTROL_PTR:
         {
             if (other.m_type == INJECTION_NVLINKUTILIZATIONCONTROL_PTR)
             {
-                memcpy(m_value.nvLinkUtilizationControlPtr, other.m_value.nvLinkUtilizationControlPtr, sizeof(*m_value.nvLinkUtilizationControlPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.NvLinkUtilizationControlPtr, other.m_value.NvLinkUtilizationControlPtr, sizeof(*m_value.NvLinkUtilizationControlPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_NVLINKUTILIZATIONCONTROL)
             {
-                memcpy(m_value.nvLinkUtilizationControlPtr, &other.m_value.nvLinkUtilizationControl, sizeof(*m_value.nvLinkUtilizationControlPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.NvLinkUtilizationControlPtr, &other.m_value.NvLinkUtilizationControl, sizeof(*m_value.NvLinkUtilizationControlPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES:
+        {
+            if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES)
+            {
+                memcpy(&m_value.NvLinkUtilizationCountPktTypes, &other.m_value.NvLinkUtilizationCountPktTypes, sizeof(*&m_value.NvLinkUtilizationCountPktTypes));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR)
+            {
+                memcpy(&m_value.NvLinkUtilizationCountPktTypes, other.m_value.NvLinkUtilizationCountPktTypesPtr, sizeof(*&m_value.NvLinkUtilizationCountPktTypes));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR)
+            {
+                memcpy(m_value.NvLinkUtilizationCountPktTypesPtr, other.m_value.NvLinkUtilizationCountPktTypesPtr, sizeof(*m_value.NvLinkUtilizationCountPktTypesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES)
+            {
+                memcpy(m_value.NvLinkUtilizationCountPktTypesPtr, &other.m_value.NvLinkUtilizationCountPktTypes, sizeof(*m_value.NvLinkUtilizationCountPktTypesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKUTILIZATIONCOUNTUNITS:
+        {
+            if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTUNITS)
+            {
+                memcpy(&m_value.NvLinkUtilizationCountUnits, &other.m_value.NvLinkUtilizationCountUnits, sizeof(*&m_value.NvLinkUtilizationCountUnits));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR)
+            {
+                memcpy(&m_value.NvLinkUtilizationCountUnits, other.m_value.NvLinkUtilizationCountUnitsPtr, sizeof(*&m_value.NvLinkUtilizationCountUnits));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR)
+            {
+                memcpy(m_value.NvLinkUtilizationCountUnitsPtr, other.m_value.NvLinkUtilizationCountUnitsPtr, sizeof(*m_value.NvLinkUtilizationCountUnitsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKUTILIZATIONCOUNTUNITS)
+            {
+                memcpy(m_value.NvLinkUtilizationCountUnitsPtr, &other.m_value.NvLinkUtilizationCountUnits, sizeof(*m_value.NvLinkUtilizationCountUnitsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKVERSION:
+        {
+            if (other.m_type == INJECTION_NVLINKVERSION)
+            {
+                memcpy(&m_value.NvlinkVersion, &other.m_value.NvlinkVersion, sizeof(*&m_value.NvlinkVersion));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKVERSION_PTR)
+            {
+                memcpy(&m_value.NvlinkVersion, other.m_value.NvlinkVersionPtr, sizeof(*&m_value.NvlinkVersion));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKVERSION_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKVERSION_PTR)
+            {
+                memcpy(m_value.NvlinkVersionPtr, other.m_value.NvlinkVersionPtr, sizeof(*m_value.NvlinkVersionPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKVERSION)
+            {
+                memcpy(m_value.NvlinkVersionPtr, &other.m_value.NvlinkVersion, sizeof(*m_value.NvlinkVersionPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PSUINFO:
         {
             if (other.m_type == INJECTION_PSUINFO)
             {
-                memcpy(&m_value.pSUInfo, &other.m_value.pSUInfo, sizeof(m_value.pSUInfo));
+                memcpy(&m_value.PSUInfo, &other.m_value.PSUInfo, sizeof(*&m_value.PSUInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PSUINFO_PTR)
             {
-                memcpy(&m_value.pSUInfo, other.m_value.pSUInfoPtr, sizeof(m_value.pSUInfo));
+                memcpy(&m_value.PSUInfo, other.m_value.PSUInfoPtr, sizeof(*&m_value.PSUInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PSUINFO_PTR:
         {
             if (other.m_type == INJECTION_PSUINFO_PTR)
             {
-                memcpy(m_value.pSUInfoPtr, other.m_value.pSUInfoPtr, sizeof(*m_value.pSUInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PSUInfoPtr, other.m_value.PSUInfoPtr, sizeof(*m_value.PSUInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PSUINFO)
             {
-                memcpy(m_value.pSUInfoPtr, &other.m_value.pSUInfo, sizeof(*m_value.pSUInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PSUInfoPtr, &other.m_value.PSUInfo, sizeof(*m_value.PSUInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PAGERETIREMENTCAUSE:
         {
             if (other.m_type == INJECTION_PAGERETIREMENTCAUSE)
             {
-                memcpy(&m_value.pageRetirementCause, &other.m_value.pageRetirementCause, sizeof(m_value.pageRetirementCause));
+                memcpy(&m_value.PageRetirementCause, &other.m_value.PageRetirementCause, sizeof(*&m_value.PageRetirementCause));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PAGERETIREMENTCAUSE_PTR)
+            {
+                memcpy(&m_value.PageRetirementCause, other.m_value.PageRetirementCausePtr, sizeof(*&m_value.PageRetirementCause));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_PAGERETIREMENTCAUSE_PTR:
+        {
+            if (other.m_type == INJECTION_PAGERETIREMENTCAUSE_PTR)
+            {
+                memcpy(m_value.PageRetirementCausePtr, other.m_value.PageRetirementCausePtr, sizeof(*m_value.PageRetirementCausePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PAGERETIREMENTCAUSE)
+            {
+                memcpy(m_value.PageRetirementCausePtr, &other.m_value.PageRetirementCause, sizeof(*m_value.PageRetirementCausePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PCIINFOEXT:
+        {
+            if (other.m_type == INJECTION_PCIINFOEXT)
+            {
+                memcpy(&m_value.PciInfoExt, &other.m_value.PciInfoExt, sizeof(*&m_value.PciInfoExt));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIINFOEXT_PTR)
+            {
+                memcpy(&m_value.PciInfoExt, other.m_value.PciInfoExtPtr, sizeof(*&m_value.PciInfoExt));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PCIINFOEXT_PTR:
+        {
+            if (other.m_type == INJECTION_PCIINFOEXT_PTR)
+            {
+                memcpy(m_value.PciInfoExtPtr, other.m_value.PciInfoExtPtr, sizeof(*m_value.PciInfoExtPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIINFOEXT)
+            {
+                memcpy(m_value.PciInfoExtPtr, &other.m_value.PciInfoExt, sizeof(*m_value.PciInfoExtPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PCIINFO:
         {
             if (other.m_type == INJECTION_PCIINFO)
             {
-                memcpy(&m_value.pciInfo, &other.m_value.pciInfo, sizeof(m_value.pciInfo));
+                memcpy(&m_value.PciInfo, &other.m_value.PciInfo, sizeof(*&m_value.PciInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PCIINFO_PTR)
             {
-                memcpy(&m_value.pciInfo, other.m_value.pciInfoPtr, sizeof(m_value.pciInfo));
+                memcpy(&m_value.PciInfo, other.m_value.PciInfoPtr, sizeof(*&m_value.PciInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PCIINFO_PTR:
         {
             if (other.m_type == INJECTION_PCIINFO_PTR)
             {
-                memcpy(m_value.pciInfoPtr, other.m_value.pciInfoPtr, sizeof(*m_value.pciInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PciInfoPtr, other.m_value.PciInfoPtr, sizeof(*m_value.PciInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PCIINFO)
             {
-                memcpy(m_value.pciInfoPtr, &other.m_value.pciInfo, sizeof(*m_value.pciInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PciInfoPtr, &other.m_value.PciInfo, sizeof(*m_value.PciInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PCIELINKSTATE:
         {
             if (other.m_type == INJECTION_PCIELINKSTATE)
             {
-                memcpy(&m_value.pcieLinkState, &other.m_value.pcieLinkState, sizeof(m_value.pcieLinkState));
+                memcpy(&m_value.PcieLinkState, &other.m_value.PcieLinkState, sizeof(*&m_value.PcieLinkState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIELINKSTATE_PTR)
+            {
+                memcpy(&m_value.PcieLinkState, other.m_value.PcieLinkStatePtr, sizeof(*&m_value.PcieLinkState));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_PCIELINKSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_PCIELINKSTATE_PTR)
+            {
+                memcpy(m_value.PcieLinkStatePtr, other.m_value.PcieLinkStatePtr, sizeof(*m_value.PcieLinkStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIELINKSTATE)
+            {
+                memcpy(m_value.PcieLinkStatePtr, &other.m_value.PcieLinkState, sizeof(*m_value.PcieLinkStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PCIEUTILCOUNTER:
         {
             if (other.m_type == INJECTION_PCIEUTILCOUNTER)
             {
-                memcpy(&m_value.pcieUtilCounter, &other.m_value.pcieUtilCounter, sizeof(m_value.pcieUtilCounter));
+                memcpy(&m_value.PcieUtilCounter, &other.m_value.PcieUtilCounter, sizeof(*&m_value.PcieUtilCounter));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIEUTILCOUNTER_PTR)
+            {
+                memcpy(&m_value.PcieUtilCounter, other.m_value.PcieUtilCounterPtr, sizeof(*&m_value.PcieUtilCounter));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_PCIEUTILCOUNTER_PTR:
+        {
+            if (other.m_type == INJECTION_PCIEUTILCOUNTER_PTR)
+            {
+                memcpy(m_value.PcieUtilCounterPtr, other.m_value.PcieUtilCounterPtr, sizeof(*m_value.PcieUtilCounterPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PCIEUTILCOUNTER)
+            {
+                memcpy(m_value.PcieUtilCounterPtr, &other.m_value.PcieUtilCounter, sizeof(*m_value.PcieUtilCounterPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PERFPOLICYTYPE:
         {
             if (other.m_type == INJECTION_PERFPOLICYTYPE)
             {
-                memcpy(&m_value.perfPolicyType, &other.m_value.perfPolicyType, sizeof(m_value.perfPolicyType));
+                memcpy(&m_value.PerfPolicyType, &other.m_value.PerfPolicyType, sizeof(*&m_value.PerfPolicyType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PERFPOLICYTYPE_PTR)
+            {
+                memcpy(&m_value.PerfPolicyType, other.m_value.PerfPolicyTypePtr, sizeof(*&m_value.PerfPolicyType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_PERFPOLICYTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_PERFPOLICYTYPE_PTR)
+            {
+                memcpy(m_value.PerfPolicyTypePtr, other.m_value.PerfPolicyTypePtr, sizeof(*m_value.PerfPolicyTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PERFPOLICYTYPE)
+            {
+                memcpy(m_value.PerfPolicyTypePtr, &other.m_value.PerfPolicyType, sizeof(*m_value.PerfPolicyTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PLATFORMINFO:
+        {
+            if (other.m_type == INJECTION_PLATFORMINFO)
+            {
+                memcpy(&m_value.PlatformInfo, &other.m_value.PlatformInfo, sizeof(*&m_value.PlatformInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PLATFORMINFO_PTR)
+            {
+                memcpy(&m_value.PlatformInfo, other.m_value.PlatformInfoPtr, sizeof(*&m_value.PlatformInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PLATFORMINFO_PTR:
+        {
+            if (other.m_type == INJECTION_PLATFORMINFO_PTR)
+            {
+                memcpy(m_value.PlatformInfoPtr, other.m_value.PlatformInfoPtr, sizeof(*m_value.PlatformInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PLATFORMINFO)
+            {
+                memcpy(m_value.PlatformInfoPtr, &other.m_value.PlatformInfo, sizeof(*m_value.PlatformInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_POWERPROFILETYPE:
+        {
+            if (other.m_type == INJECTION_POWERPROFILETYPE)
+            {
+                memcpy(&m_value.PowerProfileType, &other.m_value.PowerProfileType, sizeof(*&m_value.PowerProfileType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERPROFILETYPE_PTR)
+            {
+                memcpy(&m_value.PowerProfileType, other.m_value.PowerProfileTypePtr, sizeof(*&m_value.PowerProfileType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_POWERPROFILETYPE_PTR:
+        {
+            if (other.m_type == INJECTION_POWERPROFILETYPE_PTR)
+            {
+                memcpy(m_value.PowerProfileTypePtr, other.m_value.PowerProfileTypePtr, sizeof(*m_value.PowerProfileTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERPROFILETYPE)
+            {
+                memcpy(m_value.PowerProfileTypePtr, &other.m_value.PowerProfileType, sizeof(*m_value.PowerProfileTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_POWERSCOPETYPE:
+        {
+            if (other.m_type == INJECTION_POWERSCOPETYPE)
+            {
+                memcpy(&m_value.PowerScopeType, &other.m_value.PowerScopeType, sizeof(*&m_value.PowerScopeType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERSCOPETYPE_PTR)
+            {
+                memcpy(&m_value.PowerScopeType, other.m_value.PowerScopeTypePtr, sizeof(*&m_value.PowerScopeType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_POWERSCOPETYPE_PTR:
+        {
+            if (other.m_type == INJECTION_POWERSCOPETYPE_PTR)
+            {
+                memcpy(m_value.PowerScopeTypePtr, other.m_value.PowerScopeTypePtr, sizeof(*m_value.PowerScopeTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERSCOPETYPE)
+            {
+                memcpy(m_value.PowerScopeTypePtr, &other.m_value.PowerScopeType, sizeof(*m_value.PowerScopeTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_POWERSOURCE:
+        {
+            if (other.m_type == INJECTION_POWERSOURCE)
+            {
+                memcpy(&m_value.PowerSource, &other.m_value.PowerSource, sizeof(*&m_value.PowerSource));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERSOURCE_PTR)
+            {
+                memcpy(&m_value.PowerSource, other.m_value.PowerSourcePtr, sizeof(*&m_value.PowerSource));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_POWERSOURCE_PTR:
+        {
+            if (other.m_type == INJECTION_POWERSOURCE_PTR)
+            {
+                memcpy(m_value.PowerSourcePtr, other.m_value.PowerSourcePtr, sizeof(*m_value.PowerSourcePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERSOURCE)
+            {
+                memcpy(m_value.PowerSourcePtr, &other.m_value.PowerSource, sizeof(*m_value.PowerSourcePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_POWERVALUE_V2:
+        {
+            if (other.m_type == INJECTION_POWERVALUE_V2)
+            {
+                memcpy(&m_value.PowerValue_v2, &other.m_value.PowerValue_v2, sizeof(*&m_value.PowerValue_v2));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERVALUE_V2_PTR)
+            {
+                memcpy(&m_value.PowerValue_v2, other.m_value.PowerValue_v2Ptr, sizeof(*&m_value.PowerValue_v2));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_POWERVALUE_V2_PTR:
+        {
+            if (other.m_type == INJECTION_POWERVALUE_V2_PTR)
+            {
+                memcpy(m_value.PowerValue_v2Ptr, other.m_value.PowerValue_v2Ptr, sizeof(*m_value.PowerValue_v2Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERVALUE_V2)
+            {
+                memcpy(m_value.PowerValue_v2Ptr, &other.m_value.PowerValue_v2, sizeof(*m_value.PowerValue_v2Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PROCESSDETAILLIST:
+        {
+            if (other.m_type == INJECTION_PROCESSDETAILLIST)
+            {
+                memcpy(&m_value.ProcessDetailList, &other.m_value.ProcessDetailList, sizeof(*&m_value.ProcessDetailList));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSDETAILLIST_PTR)
+            {
+                memcpy(&m_value.ProcessDetailList, other.m_value.ProcessDetailListPtr, sizeof(*&m_value.ProcessDetailList));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PROCESSDETAILLIST_PTR:
+        {
+            if (other.m_type == INJECTION_PROCESSDETAILLIST_PTR)
+            {
+                memcpy(m_value.ProcessDetailListPtr, other.m_value.ProcessDetailListPtr, sizeof(*m_value.ProcessDetailListPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSDETAILLIST)
+            {
+                memcpy(m_value.ProcessDetailListPtr, &other.m_value.ProcessDetailList, sizeof(*m_value.ProcessDetailListPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PROCESSDETAIL_V1:
+        {
+            if (other.m_type == INJECTION_PROCESSDETAIL_V1)
+            {
+                memcpy(&m_value.ProcessDetail_v1, &other.m_value.ProcessDetail_v1, sizeof(*&m_value.ProcessDetail_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSDETAIL_V1_PTR)
+            {
+                memcpy(&m_value.ProcessDetail_v1, other.m_value.ProcessDetail_v1Ptr, sizeof(*&m_value.ProcessDetail_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PROCESSDETAIL_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PROCESSDETAIL_V1_PTR)
+            {
+                memcpy(m_value.ProcessDetail_v1Ptr, other.m_value.ProcessDetail_v1Ptr, sizeof(*m_value.ProcessDetail_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSDETAIL_V1)
+            {
+                memcpy(m_value.ProcessDetail_v1Ptr, &other.m_value.ProcessDetail_v1, sizeof(*m_value.ProcessDetail_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PROCESSINFO:
         {
             if (other.m_type == INJECTION_PROCESSINFO)
             {
-                memcpy(&m_value.processInfo, &other.m_value.processInfo, sizeof(m_value.processInfo));
+                memcpy(&m_value.ProcessInfo, &other.m_value.ProcessInfo, sizeof(*&m_value.ProcessInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSINFO_PTR)
             {
-                memcpy(&m_value.processInfo, other.m_value.processInfoPtr, sizeof(m_value.processInfo));
+                memcpy(&m_value.ProcessInfo, other.m_value.ProcessInfoPtr, sizeof(*&m_value.ProcessInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PROCESSINFO_PTR:
         {
             if (other.m_type == INJECTION_PROCESSINFO_PTR)
             {
-                memcpy(m_value.processInfoPtr, other.m_value.processInfoPtr, sizeof(*m_value.processInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessInfoPtr, other.m_value.ProcessInfoPtr, sizeof(*m_value.ProcessInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSINFO)
             {
-                memcpy(m_value.processInfoPtr, &other.m_value.processInfo, sizeof(*m_value.processInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessInfoPtr, &other.m_value.ProcessInfo, sizeof(*m_value.ProcessInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PROCESSINFO_V1:
         {
             if (other.m_type == INJECTION_PROCESSINFO_V1)
             {
-                memcpy(&m_value.processInfo_v1, &other.m_value.processInfo_v1, sizeof(m_value.processInfo_v1));
+                memcpy(&m_value.ProcessInfo_v1, &other.m_value.ProcessInfo_v1, sizeof(*&m_value.ProcessInfo_v1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSINFO_V1_PTR)
             {
-                memcpy(&m_value.processInfo_v1, other.m_value.processInfo_v1Ptr, sizeof(m_value.processInfo_v1));
+                memcpy(&m_value.ProcessInfo_v1, other.m_value.ProcessInfo_v1Ptr, sizeof(*&m_value.ProcessInfo_v1));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PROCESSINFO_V1_PTR:
         {
             if (other.m_type == INJECTION_PROCESSINFO_V1_PTR)
             {
-                memcpy(m_value.processInfo_v1Ptr, other.m_value.processInfo_v1Ptr, sizeof(*m_value.processInfo_v1Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessInfo_v1Ptr, other.m_value.ProcessInfo_v1Ptr, sizeof(*m_value.ProcessInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSINFO_V1)
             {
-                memcpy(m_value.processInfo_v1Ptr, &other.m_value.processInfo_v1, sizeof(*m_value.processInfo_v1Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessInfo_v1Ptr, &other.m_value.ProcessInfo_v1, sizeof(*m_value.ProcessInfo_v1Ptr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
-        case INJECTION_PROCESSINFO_V2:
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PROCESSUTILIZATIONINFO_V1:
         {
-            if (other.m_type == INJECTION_PROCESSINFO_V2)
+            if (other.m_type == INJECTION_PROCESSUTILIZATIONINFO_V1)
             {
-                memcpy(&m_value.processInfo_v2, &other.m_value.processInfo_v2, sizeof(m_value.processInfo_v2));
+                memcpy(&m_value.ProcessUtilizationInfo_v1, &other.m_value.ProcessUtilizationInfo_v1, sizeof(*&m_value.ProcessUtilizationInfo_v1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_PROCESSINFO_V2_PTR)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSUTILIZATIONINFO_V1_PTR)
             {
-                memcpy(&m_value.processInfo_v2, other.m_value.processInfo_v2Ptr, sizeof(m_value.processInfo_v2));
+                memcpy(&m_value.ProcessUtilizationInfo_v1, other.m_value.ProcessUtilizationInfo_v1Ptr, sizeof(*&m_value.ProcessUtilizationInfo_v1));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
-        case INJECTION_PROCESSINFO_V2_PTR:
+        case INJECTION_PROCESSUTILIZATIONINFO_V1_PTR:
         {
-            if (other.m_type == INJECTION_PROCESSINFO_V2_PTR)
+            if (other.m_type == INJECTION_PROCESSUTILIZATIONINFO_V1_PTR)
             {
-                memcpy(m_value.processInfo_v2Ptr, other.m_value.processInfo_v2Ptr, sizeof(*m_value.processInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessUtilizationInfo_v1Ptr, other.m_value.ProcessUtilizationInfo_v1Ptr, sizeof(*m_value.ProcessUtilizationInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_PROCESSINFO_V2)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSUTILIZATIONINFO_V1)
             {
-                memcpy(m_value.processInfo_v2Ptr, &other.m_value.processInfo_v2, sizeof(*m_value.processInfo_v2Ptr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessUtilizationInfo_v1Ptr, &other.m_value.ProcessUtilizationInfo_v1, sizeof(*m_value.ProcessUtilizationInfo_v1Ptr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PROCESSUTILIZATIONSAMPLE:
         {
             if (other.m_type == INJECTION_PROCESSUTILIZATIONSAMPLE)
             {
-                memcpy(&m_value.processUtilizationSample, &other.m_value.processUtilizationSample, sizeof(m_value.processUtilizationSample));
+                memcpy(&m_value.ProcessUtilizationSample, &other.m_value.ProcessUtilizationSample, sizeof(*&m_value.ProcessUtilizationSample));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(&m_value.processUtilizationSample, other.m_value.processUtilizationSamplePtr, sizeof(m_value.processUtilizationSample));
+                memcpy(&m_value.ProcessUtilizationSample, other.m_value.ProcessUtilizationSamplePtr, sizeof(*&m_value.ProcessUtilizationSample));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PROCESSUTILIZATIONSAMPLE_PTR:
         {
             if (other.m_type == INJECTION_PROCESSUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(m_value.processUtilizationSamplePtr, other.m_value.processUtilizationSamplePtr, sizeof(*m_value.processUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessUtilizationSamplePtr, other.m_value.ProcessUtilizationSamplePtr, sizeof(*m_value.ProcessUtilizationSamplePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PROCESSUTILIZATIONSAMPLE)
             {
-                memcpy(m_value.processUtilizationSamplePtr, &other.m_value.processUtilizationSample, sizeof(*m_value.processUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ProcessUtilizationSamplePtr, &other.m_value.ProcessUtilizationSample, sizeof(*m_value.ProcessUtilizationSamplePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PROCESSESUTILIZATIONINFO:
+        {
+            if (other.m_type == INJECTION_PROCESSESUTILIZATIONINFO)
+            {
+                memcpy(&m_value.ProcessesUtilizationInfo, &other.m_value.ProcessesUtilizationInfo, sizeof(*&m_value.ProcessesUtilizationInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSESUTILIZATIONINFO_PTR)
+            {
+                memcpy(&m_value.ProcessesUtilizationInfo, other.m_value.ProcessesUtilizationInfoPtr, sizeof(*&m_value.ProcessesUtilizationInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PROCESSESUTILIZATIONINFO_PTR:
+        {
+            if (other.m_type == INJECTION_PROCESSESUTILIZATIONINFO_PTR)
+            {
+                memcpy(m_value.ProcessesUtilizationInfoPtr, other.m_value.ProcessesUtilizationInfoPtr, sizeof(*m_value.ProcessesUtilizationInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PROCESSESUTILIZATIONINFO)
+            {
+                memcpy(m_value.ProcessesUtilizationInfoPtr, &other.m_value.ProcessesUtilizationInfo, sizeof(*m_value.ProcessesUtilizationInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_PSTATES:
         {
             if (other.m_type == INJECTION_PSTATES)
             {
-                memcpy(&m_value.pstates, &other.m_value.pstates, sizeof(m_value.pstates));
+                memcpy(&m_value.Pstates, &other.m_value.Pstates, sizeof(*&m_value.Pstates));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PSTATES_PTR)
             {
-                memcpy(&m_value.pstates, other.m_value.pstatesPtr, sizeof(m_value.pstates));
+                memcpy(&m_value.Pstates, other.m_value.PstatesPtr, sizeof(*&m_value.Pstates));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_PSTATES_PTR:
         {
             if (other.m_type == INJECTION_PSTATES_PTR)
             {
-                memcpy(m_value.pstatesPtr, other.m_value.pstatesPtr, sizeof(*m_value.pstatesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PstatesPtr, other.m_value.PstatesPtr, sizeof(*m_value.PstatesPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_PSTATES)
             {
-                memcpy(m_value.pstatesPtr, &other.m_value.pstates, sizeof(*m_value.pstatesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.PstatesPtr, &other.m_value.Pstates, sizeof(*m_value.PstatesPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_RESTRICTEDAPI:
         {
             if (other.m_type == INJECTION_RESTRICTEDAPI)
             {
-                memcpy(&m_value.restrictedAPI, &other.m_value.restrictedAPI, sizeof(m_value.restrictedAPI));
+                memcpy(&m_value.RestrictedAPI, &other.m_value.RestrictedAPI, sizeof(*&m_value.RestrictedAPI));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_RESTRICTEDAPI_PTR)
+            {
+                memcpy(&m_value.RestrictedAPI, other.m_value.RestrictedAPIPtr, sizeof(*&m_value.RestrictedAPI));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_RESTRICTEDAPI_PTR:
+        {
+            if (other.m_type == INJECTION_RESTRICTEDAPI_PTR)
+            {
+                memcpy(m_value.RestrictedAPIPtr, other.m_value.RestrictedAPIPtr, sizeof(*m_value.RestrictedAPIPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_RESTRICTEDAPI)
+            {
+                memcpy(m_value.RestrictedAPIPtr, &other.m_value.RestrictedAPI, sizeof(*m_value.RestrictedAPIPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_RETURN:
         {
             if (other.m_type == INJECTION_RETURN)
             {
-                memcpy(&m_value.nvmlReturn, &other.m_value.nvmlReturn, sizeof(m_value.nvmlReturn));
+                memcpy(&m_value.Return, &other.m_value.Return, sizeof(*&m_value.Return));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_RETURN_PTR)
             {
-                memcpy(&m_value.nvmlReturn, other.m_value.nvmlReturnPtr, sizeof(m_value.nvmlReturn));
+                memcpy(&m_value.Return, other.m_value.ReturnPtr, sizeof(*&m_value.Return));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_RETURN_PTR:
         {
             if (other.m_type == INJECTION_RETURN_PTR)
             {
-                memcpy(m_value.nvmlReturnPtr, other.m_value.nvmlReturnPtr, sizeof(*m_value.nvmlReturnPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ReturnPtr, other.m_value.ReturnPtr, sizeof(*m_value.ReturnPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_RETURN)
             {
-                memcpy(m_value.nvmlReturnPtr, &other.m_value.nvmlReturn, sizeof(*m_value.nvmlReturnPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ReturnPtr, &other.m_value.Return, sizeof(*m_value.ReturnPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ROWREMAPPERHISTOGRAMVALUES:
         {
             if (other.m_type == INJECTION_ROWREMAPPERHISTOGRAMVALUES)
             {
-                memcpy(&m_value.rowRemapperHistogramValues, &other.m_value.rowRemapperHistogramValues, sizeof(m_value.rowRemapperHistogramValues));
+                memcpy(&m_value.RowRemapperHistogramValues, &other.m_value.RowRemapperHistogramValues, sizeof(*&m_value.RowRemapperHistogramValues));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR)
             {
-                memcpy(&m_value.rowRemapperHistogramValues, other.m_value.rowRemapperHistogramValuesPtr, sizeof(m_value.rowRemapperHistogramValues));
+                memcpy(&m_value.RowRemapperHistogramValues, other.m_value.RowRemapperHistogramValuesPtr, sizeof(*&m_value.RowRemapperHistogramValues));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR:
         {
             if (other.m_type == INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR)
             {
-                memcpy(m_value.rowRemapperHistogramValuesPtr, other.m_value.rowRemapperHistogramValuesPtr, sizeof(*m_value.rowRemapperHistogramValuesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.RowRemapperHistogramValuesPtr, other.m_value.RowRemapperHistogramValuesPtr, sizeof(*m_value.RowRemapperHistogramValuesPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ROWREMAPPERHISTOGRAMVALUES)
             {
-                memcpy(m_value.rowRemapperHistogramValuesPtr, &other.m_value.rowRemapperHistogramValues, sizeof(*m_value.rowRemapperHistogramValuesPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.RowRemapperHistogramValuesPtr, &other.m_value.RowRemapperHistogramValues, sizeof(*m_value.RowRemapperHistogramValuesPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_SAMPLE:
         {
             if (other.m_type == INJECTION_SAMPLE)
             {
-                memcpy(&m_value.sample, &other.m_value.sample, sizeof(m_value.sample));
+                memcpy(&m_value.Sample, &other.m_value.Sample, sizeof(*&m_value.Sample));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_SAMPLE_PTR)
             {
-                memcpy(&m_value.sample, other.m_value.samplePtr, sizeof(m_value.sample));
+                memcpy(&m_value.Sample, other.m_value.SamplePtr, sizeof(*&m_value.Sample));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_SAMPLE_PTR:
         {
             if (other.m_type == INJECTION_SAMPLE_PTR)
             {
-                memcpy(m_value.samplePtr, other.m_value.samplePtr, sizeof(*m_value.samplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.SamplePtr, other.m_value.SamplePtr, sizeof(*m_value.SamplePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_SAMPLE)
             {
-                memcpy(m_value.samplePtr, &other.m_value.sample, sizeof(*m_value.samplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.SamplePtr, &other.m_value.Sample, sizeof(*m_value.SamplePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_SAMPLINGTYPE:
         {
             if (other.m_type == INJECTION_SAMPLINGTYPE)
             {
-                memcpy(&m_value.samplingType, &other.m_value.samplingType, sizeof(m_value.samplingType));
+                memcpy(&m_value.SamplingType, &other.m_value.SamplingType, sizeof(*&m_value.SamplingType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SAMPLINGTYPE_PTR)
+            {
+                memcpy(&m_value.SamplingType, other.m_value.SamplingTypePtr, sizeof(*&m_value.SamplingType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_SAMPLINGTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_SAMPLINGTYPE_PTR)
+            {
+                memcpy(m_value.SamplingTypePtr, other.m_value.SamplingTypePtr, sizeof(*m_value.SamplingTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SAMPLINGTYPE)
+            {
+                memcpy(m_value.SamplingTypePtr, &other.m_value.SamplingType, sizeof(*m_value.SamplingTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMCONFCOMPUTESETTINGS:
+        {
+            if (other.m_type == INJECTION_SYSTEMCONFCOMPUTESETTINGS)
+            {
+                memcpy(&m_value.SystemConfComputeSettings, &other.m_value.SystemConfComputeSettings, sizeof(*&m_value.SystemConfComputeSettings));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR)
+            {
+                memcpy(&m_value.SystemConfComputeSettings, other.m_value.SystemConfComputeSettingsPtr, sizeof(*&m_value.SystemConfComputeSettings));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR)
+            {
+                memcpy(m_value.SystemConfComputeSettingsPtr, other.m_value.SystemConfComputeSettingsPtr, sizeof(*m_value.SystemConfComputeSettingsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMCONFCOMPUTESETTINGS)
+            {
+                memcpy(m_value.SystemConfComputeSettingsPtr, &other.m_value.SystemConfComputeSettings, sizeof(*m_value.SystemConfComputeSettingsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMDRIVERBRANCHINFO:
+        {
+            if (other.m_type == INJECTION_SYSTEMDRIVERBRANCHINFO)
+            {
+                memcpy(&m_value.SystemDriverBranchInfo, &other.m_value.SystemDriverBranchInfo, sizeof(*&m_value.SystemDriverBranchInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMDRIVERBRANCHINFO_PTR)
+            {
+                memcpy(&m_value.SystemDriverBranchInfo, other.m_value.SystemDriverBranchInfoPtr, sizeof(*&m_value.SystemDriverBranchInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMDRIVERBRANCHINFO_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMDRIVERBRANCHINFO_PTR)
+            {
+                memcpy(m_value.SystemDriverBranchInfoPtr, other.m_value.SystemDriverBranchInfoPtr, sizeof(*m_value.SystemDriverBranchInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMDRIVERBRANCHINFO)
+            {
+                memcpy(m_value.SystemDriverBranchInfoPtr, &other.m_value.SystemDriverBranchInfo, sizeof(*m_value.SystemDriverBranchInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_TEMPERATURESENSORS:
         {
             if (other.m_type == INJECTION_TEMPERATURESENSORS)
             {
-                memcpy(&m_value.temperatureSensors, &other.m_value.temperatureSensors, sizeof(m_value.temperatureSensors));
+                memcpy(&m_value.TemperatureSensors, &other.m_value.TemperatureSensors, sizeof(*&m_value.TemperatureSensors));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURESENSORS_PTR)
+            {
+                memcpy(&m_value.TemperatureSensors, other.m_value.TemperatureSensorsPtr, sizeof(*&m_value.TemperatureSensors));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_TEMPERATURESENSORS_PTR:
+        {
+            if (other.m_type == INJECTION_TEMPERATURESENSORS_PTR)
+            {
+                memcpy(m_value.TemperatureSensorsPtr, other.m_value.TemperatureSensorsPtr, sizeof(*m_value.TemperatureSensorsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURESENSORS)
+            {
+                memcpy(m_value.TemperatureSensorsPtr, &other.m_value.TemperatureSensors, sizeof(*m_value.TemperatureSensorsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_TEMPERATURETHRESHOLDS:
         {
             if (other.m_type == INJECTION_TEMPERATURETHRESHOLDS)
             {
-                memcpy(&m_value.temperatureThresholds, &other.m_value.temperatureThresholds, sizeof(m_value.temperatureThresholds));
+                memcpy(&m_value.TemperatureThresholds, &other.m_value.TemperatureThresholds, sizeof(*&m_value.TemperatureThresholds));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURETHRESHOLDS_PTR)
+            {
+                memcpy(&m_value.TemperatureThresholds, other.m_value.TemperatureThresholdsPtr, sizeof(*&m_value.TemperatureThresholds));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_TEMPERATURETHRESHOLDS_PTR:
+        {
+            if (other.m_type == INJECTION_TEMPERATURETHRESHOLDS_PTR)
+            {
+                memcpy(m_value.TemperatureThresholdsPtr, other.m_value.TemperatureThresholdsPtr, sizeof(*m_value.TemperatureThresholdsPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURETHRESHOLDS)
+            {
+                memcpy(m_value.TemperatureThresholdsPtr, &other.m_value.TemperatureThresholds, sizeof(*m_value.TemperatureThresholdsPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_TEMPERATURE:
+        {
+            if (other.m_type == INJECTION_TEMPERATURE)
+            {
+                memcpy(&m_value.Temperature, &other.m_value.Temperature, sizeof(*&m_value.Temperature));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURE_PTR)
+            {
+                memcpy(&m_value.Temperature, other.m_value.TemperaturePtr, sizeof(*&m_value.Temperature));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_TEMPERATURE_PTR:
+        {
+            if (other.m_type == INJECTION_TEMPERATURE_PTR)
+            {
+                memcpy(m_value.TemperaturePtr, other.m_value.TemperaturePtr, sizeof(*m_value.TemperaturePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_TEMPERATURE)
+            {
+                memcpy(m_value.TemperaturePtr, &other.m_value.Temperature, sizeof(*m_value.TemperaturePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_THERMALCONTROLLER:
+        {
+            if (other.m_type == INJECTION_THERMALCONTROLLER)
+            {
+                memcpy(&m_value.ThermalController, &other.m_value.ThermalController, sizeof(*&m_value.ThermalController));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_THERMALCONTROLLER_PTR)
+            {
+                memcpy(&m_value.ThermalController, other.m_value.ThermalControllerPtr, sizeof(*&m_value.ThermalController));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_THERMALCONTROLLER_PTR:
+        {
+            if (other.m_type == INJECTION_THERMALCONTROLLER_PTR)
+            {
+                memcpy(m_value.ThermalControllerPtr, other.m_value.ThermalControllerPtr, sizeof(*m_value.ThermalControllerPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_THERMALCONTROLLER)
+            {
+                memcpy(m_value.ThermalControllerPtr, &other.m_value.ThermalController, sizeof(*m_value.ThermalControllerPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_THERMALTARGET:
+        {
+            if (other.m_type == INJECTION_THERMALTARGET)
+            {
+                memcpy(&m_value.ThermalTarget, &other.m_value.ThermalTarget, sizeof(*&m_value.ThermalTarget));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_THERMALTARGET_PTR)
+            {
+                memcpy(&m_value.ThermalTarget, other.m_value.ThermalTargetPtr, sizeof(*&m_value.ThermalTarget));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_THERMALTARGET_PTR:
+        {
+            if (other.m_type == INJECTION_THERMALTARGET_PTR)
+            {
+                memcpy(m_value.ThermalTargetPtr, other.m_value.ThermalTargetPtr, sizeof(*m_value.ThermalTargetPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_THERMALTARGET)
+            {
+                memcpy(m_value.ThermalTargetPtr, &other.m_value.ThermalTarget, sizeof(*m_value.ThermalTargetPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_UNITFANINFO:
+        {
+            if (other.m_type == INJECTION_UNITFANINFO)
+            {
+                memcpy(&m_value.UnitFanInfo, &other.m_value.UnitFanInfo, sizeof(*&m_value.UnitFanInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UNITFANINFO_PTR)
+            {
+                memcpy(&m_value.UnitFanInfo, other.m_value.UnitFanInfoPtr, sizeof(*&m_value.UnitFanInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_UNITFANINFO_PTR:
+        {
+            if (other.m_type == INJECTION_UNITFANINFO_PTR)
+            {
+                memcpy(m_value.UnitFanInfoPtr, other.m_value.UnitFanInfoPtr, sizeof(*m_value.UnitFanInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UNITFANINFO)
+            {
+                memcpy(m_value.UnitFanInfoPtr, &other.m_value.UnitFanInfo, sizeof(*m_value.UnitFanInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UNITFANSPEEDS:
         {
             if (other.m_type == INJECTION_UNITFANSPEEDS)
             {
-                memcpy(&m_value.unitFanSpeeds, &other.m_value.unitFanSpeeds, sizeof(m_value.unitFanSpeeds));
+                memcpy(&m_value.UnitFanSpeeds, &other.m_value.UnitFanSpeeds, sizeof(*&m_value.UnitFanSpeeds));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNITFANSPEEDS_PTR)
             {
-                memcpy(&m_value.unitFanSpeeds, other.m_value.unitFanSpeedsPtr, sizeof(m_value.unitFanSpeeds));
+                memcpy(&m_value.UnitFanSpeeds, other.m_value.UnitFanSpeedsPtr, sizeof(*&m_value.UnitFanSpeeds));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_UNITFANSPEEDS_PTR:
         {
             if (other.m_type == INJECTION_UNITFANSPEEDS_PTR)
             {
-                memcpy(m_value.unitFanSpeedsPtr, other.m_value.unitFanSpeedsPtr, sizeof(*m_value.unitFanSpeedsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitFanSpeedsPtr, other.m_value.UnitFanSpeedsPtr, sizeof(*m_value.UnitFanSpeedsPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNITFANSPEEDS)
             {
-                memcpy(m_value.unitFanSpeedsPtr, &other.m_value.unitFanSpeeds, sizeof(*m_value.unitFanSpeedsPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitFanSpeedsPtr, &other.m_value.UnitFanSpeeds, sizeof(*m_value.UnitFanSpeedsPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UNITINFO:
         {
             if (other.m_type == INJECTION_UNITINFO)
             {
-                memcpy(&m_value.unitInfo, &other.m_value.unitInfo, sizeof(m_value.unitInfo));
+                memcpy(&m_value.UnitInfo, &other.m_value.UnitInfo, sizeof(*&m_value.UnitInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNITINFO_PTR)
             {
-                memcpy(&m_value.unitInfo, other.m_value.unitInfoPtr, sizeof(m_value.unitInfo));
+                memcpy(&m_value.UnitInfo, other.m_value.UnitInfoPtr, sizeof(*&m_value.UnitInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_UNITINFO_PTR:
         {
             if (other.m_type == INJECTION_UNITINFO_PTR)
             {
-                memcpy(m_value.unitInfoPtr, other.m_value.unitInfoPtr, sizeof(*m_value.unitInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitInfoPtr, other.m_value.UnitInfoPtr, sizeof(*m_value.UnitInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNITINFO)
             {
-                memcpy(m_value.unitInfoPtr, &other.m_value.unitInfo, sizeof(*m_value.unitInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitInfoPtr, &other.m_value.UnitInfo, sizeof(*m_value.UnitInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UNIT:
         {
             if (other.m_type == INJECTION_UNIT)
             {
-                memcpy(&m_value.unit, &other.m_value.unit, sizeof(m_value.unit));
+                memcpy(&m_value.Unit, &other.m_value.Unit, sizeof(*&m_value.Unit));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNIT_PTR)
             {
-                memcpy(&m_value.unit, other.m_value.unitPtr, sizeof(m_value.unit));
+                memcpy(&m_value.Unit, other.m_value.UnitPtr, sizeof(*&m_value.Unit));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_UNIT_PTR:
         {
             if (other.m_type == INJECTION_UNIT_PTR)
             {
-                memcpy(m_value.unitPtr, other.m_value.unitPtr, sizeof(*m_value.unitPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitPtr, other.m_value.UnitPtr, sizeof(*m_value.UnitPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UNIT)
             {
-                memcpy(m_value.unitPtr, &other.m_value.unit, sizeof(*m_value.unitPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UnitPtr, &other.m_value.Unit, sizeof(*m_value.UnitPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UTILIZATION:
         {
             if (other.m_type == INJECTION_UTILIZATION)
             {
-                memcpy(&m_value.utilization, &other.m_value.utilization, sizeof(m_value.utilization));
+                memcpy(&m_value.Utilization, &other.m_value.Utilization, sizeof(*&m_value.Utilization));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UTILIZATION_PTR)
             {
-                memcpy(&m_value.utilization, other.m_value.utilizationPtr, sizeof(m_value.utilization));
+                memcpy(&m_value.Utilization, other.m_value.UtilizationPtr, sizeof(*&m_value.Utilization));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_UTILIZATION_PTR:
         {
             if (other.m_type == INJECTION_UTILIZATION_PTR)
             {
-                memcpy(m_value.utilizationPtr, other.m_value.utilizationPtr, sizeof(*m_value.utilizationPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UtilizationPtr, other.m_value.UtilizationPtr, sizeof(*m_value.UtilizationPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UTILIZATION)
             {
-                memcpy(m_value.utilizationPtr, &other.m_value.utilization, sizeof(*m_value.utilizationPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.UtilizationPtr, &other.m_value.Utilization, sizeof(*m_value.UtilizationPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VALUETYPE:
         {
             if (other.m_type == INJECTION_VALUETYPE)
             {
-                memcpy(&m_value.valueType, &other.m_value.valueType, sizeof(m_value.valueType));
+                memcpy(&m_value.ValueType, &other.m_value.ValueType, sizeof(*&m_value.ValueType));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VALUETYPE_PTR)
             {
-                memcpy(&m_value.valueType, other.m_value.valueTypePtr, sizeof(m_value.valueType));
+                memcpy(&m_value.ValueType, other.m_value.ValueTypePtr, sizeof(*&m_value.ValueType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VALUETYPE_PTR:
         {
             if (other.m_type == INJECTION_VALUETYPE_PTR)
             {
-                memcpy(m_value.valueTypePtr, other.m_value.valueTypePtr, sizeof(*m_value.valueTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ValueTypePtr, other.m_value.ValueTypePtr, sizeof(*m_value.ValueTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VALUETYPE)
             {
-                memcpy(m_value.valueTypePtr, &other.m_value.valueType, sizeof(*m_value.valueTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ValueTypePtr, &other.m_value.ValueType, sizeof(*m_value.ValueTypePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUCAPABILITY:
         {
             if (other.m_type == INJECTION_VGPUCAPABILITY)
             {
-                memcpy(&m_value.vgpuCapability, &other.m_value.vgpuCapability, sizeof(m_value.vgpuCapability));
+                memcpy(&m_value.VgpuCapability, &other.m_value.VgpuCapability, sizeof(*&m_value.VgpuCapability));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUCAPABILITY_PTR)
+            {
+                memcpy(&m_value.VgpuCapability, other.m_value.VgpuCapabilityPtr, sizeof(*&m_value.VgpuCapability));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        case INJECTION_VGPUCAPABILITY_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUCAPABILITY_PTR)
+            {
+                memcpy(m_value.VgpuCapabilityPtr, other.m_value.VgpuCapabilityPtr, sizeof(*m_value.VgpuCapabilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUCAPABILITY)
+            {
+                memcpy(m_value.VgpuCapabilityPtr, &other.m_value.VgpuCapability, sizeof(*m_value.VgpuCapabilityPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUDRIVERCAPABILITY:
+        {
+            if (other.m_type == INJECTION_VGPUDRIVERCAPABILITY)
+            {
+                memcpy(&m_value.VgpuDriverCapability, &other.m_value.VgpuDriverCapability, sizeof(*&m_value.VgpuDriverCapability));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUDRIVERCAPABILITY_PTR)
+            {
+                memcpy(&m_value.VgpuDriverCapability, other.m_value.VgpuDriverCapabilityPtr, sizeof(*&m_value.VgpuDriverCapability));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUDRIVERCAPABILITY_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUDRIVERCAPABILITY_PTR)
+            {
+                memcpy(m_value.VgpuDriverCapabilityPtr, other.m_value.VgpuDriverCapabilityPtr, sizeof(*m_value.VgpuDriverCapabilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUDRIVERCAPABILITY)
+            {
+                memcpy(m_value.VgpuDriverCapabilityPtr, &other.m_value.VgpuDriverCapability, sizeof(*m_value.VgpuDriverCapabilityPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUGUESTINFOSTATE:
+        {
+            if (other.m_type == INJECTION_VGPUGUESTINFOSTATE)
+            {
+                memcpy(&m_value.VgpuGuestInfoState, &other.m_value.VgpuGuestInfoState, sizeof(*&m_value.VgpuGuestInfoState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUGUESTINFOSTATE_PTR)
+            {
+                memcpy(&m_value.VgpuGuestInfoState, other.m_value.VgpuGuestInfoStatePtr, sizeof(*&m_value.VgpuGuestInfoState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUGUESTINFOSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUGUESTINFOSTATE_PTR)
+            {
+                memcpy(m_value.VgpuGuestInfoStatePtr, other.m_value.VgpuGuestInfoStatePtr, sizeof(*m_value.VgpuGuestInfoStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUGUESTINFOSTATE)
+            {
+                memcpy(m_value.VgpuGuestInfoStatePtr, &other.m_value.VgpuGuestInfoState, sizeof(*m_value.VgpuGuestInfoStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUHETEROGENEOUSMODE:
+        {
+            if (other.m_type == INJECTION_VGPUHETEROGENEOUSMODE)
+            {
+                memcpy(&m_value.VgpuHeterogeneousMode, &other.m_value.VgpuHeterogeneousMode, sizeof(*&m_value.VgpuHeterogeneousMode));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUHETEROGENEOUSMODE_PTR)
+            {
+                memcpy(&m_value.VgpuHeterogeneousMode, other.m_value.VgpuHeterogeneousModePtr, sizeof(*&m_value.VgpuHeterogeneousMode));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUHETEROGENEOUSMODE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUHETEROGENEOUSMODE_PTR)
+            {
+                memcpy(m_value.VgpuHeterogeneousModePtr, other.m_value.VgpuHeterogeneousModePtr, sizeof(*m_value.VgpuHeterogeneousModePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUHETEROGENEOUSMODE)
+            {
+                memcpy(m_value.VgpuHeterogeneousModePtr, &other.m_value.VgpuHeterogeneousMode, sizeof(*m_value.VgpuHeterogeneousModePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1)
+            {
+                memcpy(&m_value.VgpuInstanceUtilizationInfo_v1, &other.m_value.VgpuInstanceUtilizationInfo_v1, sizeof(*&m_value.VgpuInstanceUtilizationInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR)
+            {
+                memcpy(&m_value.VgpuInstanceUtilizationInfo_v1, other.m_value.VgpuInstanceUtilizationInfo_v1Ptr, sizeof(*&m_value.VgpuInstanceUtilizationInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR)
+            {
+                memcpy(m_value.VgpuInstanceUtilizationInfo_v1Ptr, other.m_value.VgpuInstanceUtilizationInfo_v1Ptr, sizeof(*m_value.VgpuInstanceUtilizationInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1)
+            {
+                memcpy(m_value.VgpuInstanceUtilizationInfo_v1Ptr, &other.m_value.VgpuInstanceUtilizationInfo_v1, sizeof(*m_value.VgpuInstanceUtilizationInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE:
         {
             if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE)
             {
-                memcpy(&m_value.vgpuInstanceUtilizationSample, &other.m_value.vgpuInstanceUtilizationSample, sizeof(m_value.vgpuInstanceUtilizationSample));
+                memcpy(&m_value.VgpuInstanceUtilizationSample, &other.m_value.VgpuInstanceUtilizationSample, sizeof(*&m_value.VgpuInstanceUtilizationSample));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(&m_value.vgpuInstanceUtilizationSample, other.m_value.vgpuInstanceUtilizationSamplePtr, sizeof(m_value.vgpuInstanceUtilizationSample));
+                memcpy(&m_value.VgpuInstanceUtilizationSample, other.m_value.VgpuInstanceUtilizationSamplePtr, sizeof(*&m_value.VgpuInstanceUtilizationSample));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR:
         {
             if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(m_value.vgpuInstanceUtilizationSamplePtr, other.m_value.vgpuInstanceUtilizationSamplePtr, sizeof(*m_value.vgpuInstanceUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuInstanceUtilizationSamplePtr, other.m_value.VgpuInstanceUtilizationSamplePtr, sizeof(*m_value.VgpuInstanceUtilizationSamplePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE)
             {
-                memcpy(m_value.vgpuInstanceUtilizationSamplePtr, &other.m_value.vgpuInstanceUtilizationSample, sizeof(*m_value.vgpuInstanceUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuInstanceUtilizationSamplePtr, &other.m_value.VgpuInstanceUtilizationSample, sizeof(*m_value.VgpuInstanceUtilizationSamplePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUINSTANCE:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCE)
+            {
+                memcpy(&m_value.VgpuInstance, &other.m_value.VgpuInstance, sizeof(*&m_value.VgpuInstance));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCE_PTR)
+            {
+                memcpy(&m_value.VgpuInstance, other.m_value.VgpuInstancePtr, sizeof(*&m_value.VgpuInstance));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUINSTANCE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCE_PTR)
+            {
+                memcpy(m_value.VgpuInstancePtr, other.m_value.VgpuInstancePtr, sizeof(*m_value.VgpuInstancePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCE)
+            {
+                memcpy(m_value.VgpuInstancePtr, &other.m_value.VgpuInstance, sizeof(*m_value.VgpuInstancePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUINSTANCESUTILIZATIONINFO:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCESUTILIZATIONINFO)
+            {
+                memcpy(&m_value.VgpuInstancesUtilizationInfo, &other.m_value.VgpuInstancesUtilizationInfo, sizeof(*&m_value.VgpuInstancesUtilizationInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR)
+            {
+                memcpy(&m_value.VgpuInstancesUtilizationInfo, other.m_value.VgpuInstancesUtilizationInfoPtr, sizeof(*&m_value.VgpuInstancesUtilizationInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR)
+            {
+                memcpy(m_value.VgpuInstancesUtilizationInfoPtr, other.m_value.VgpuInstancesUtilizationInfoPtr, sizeof(*m_value.VgpuInstancesUtilizationInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUINSTANCESUTILIZATIONINFO)
+            {
+                memcpy(m_value.VgpuInstancesUtilizationInfoPtr, &other.m_value.VgpuInstancesUtilizationInfo, sizeof(*m_value.VgpuInstancesUtilizationInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPULICENSEEXPIRY:
+        {
+            if (other.m_type == INJECTION_VGPULICENSEEXPIRY)
+            {
+                memcpy(&m_value.VgpuLicenseExpiry, &other.m_value.VgpuLicenseExpiry, sizeof(*&m_value.VgpuLicenseExpiry));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPULICENSEEXPIRY_PTR)
+            {
+                memcpy(&m_value.VgpuLicenseExpiry, other.m_value.VgpuLicenseExpiryPtr, sizeof(*&m_value.VgpuLicenseExpiry));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPULICENSEEXPIRY_PTR:
+        {
+            if (other.m_type == INJECTION_VGPULICENSEEXPIRY_PTR)
+            {
+                memcpy(m_value.VgpuLicenseExpiryPtr, other.m_value.VgpuLicenseExpiryPtr, sizeof(*m_value.VgpuLicenseExpiryPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPULICENSEEXPIRY)
+            {
+                memcpy(m_value.VgpuLicenseExpiryPtr, &other.m_value.VgpuLicenseExpiry, sizeof(*m_value.VgpuLicenseExpiryPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPULICENSEINFO:
         {
             if (other.m_type == INJECTION_VGPULICENSEINFO)
             {
-                memcpy(&m_value.vgpuLicenseInfo, &other.m_value.vgpuLicenseInfo, sizeof(m_value.vgpuLicenseInfo));
+                memcpy(&m_value.VgpuLicenseInfo, &other.m_value.VgpuLicenseInfo, sizeof(*&m_value.VgpuLicenseInfo));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPULICENSEINFO_PTR)
             {
-                memcpy(&m_value.vgpuLicenseInfo, other.m_value.vgpuLicenseInfoPtr, sizeof(m_value.vgpuLicenseInfo));
+                memcpy(&m_value.VgpuLicenseInfo, other.m_value.VgpuLicenseInfoPtr, sizeof(*&m_value.VgpuLicenseInfo));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPULICENSEINFO_PTR:
         {
             if (other.m_type == INJECTION_VGPULICENSEINFO_PTR)
             {
-                memcpy(m_value.vgpuLicenseInfoPtr, other.m_value.vgpuLicenseInfoPtr, sizeof(*m_value.vgpuLicenseInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuLicenseInfoPtr, other.m_value.VgpuLicenseInfoPtr, sizeof(*m_value.VgpuLicenseInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPULICENSEINFO)
             {
-                memcpy(m_value.vgpuLicenseInfoPtr, &other.m_value.vgpuLicenseInfo, sizeof(*m_value.vgpuLicenseInfoPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuLicenseInfoPtr, &other.m_value.VgpuLicenseInfo, sizeof(*m_value.VgpuLicenseInfoPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUMETADATA:
         {
             if (other.m_type == INJECTION_VGPUMETADATA)
             {
-                memcpy(&m_value.vgpuMetadata, &other.m_value.vgpuMetadata, sizeof(m_value.vgpuMetadata));
+                memcpy(&m_value.VgpuMetadata, &other.m_value.VgpuMetadata, sizeof(*&m_value.VgpuMetadata));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUMETADATA_PTR)
             {
-                memcpy(&m_value.vgpuMetadata, other.m_value.vgpuMetadataPtr, sizeof(m_value.vgpuMetadata));
+                memcpy(&m_value.VgpuMetadata, other.m_value.VgpuMetadataPtr, sizeof(*&m_value.VgpuMetadata));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUMETADATA_PTR:
         {
             if (other.m_type == INJECTION_VGPUMETADATA_PTR)
             {
-                memcpy(m_value.vgpuMetadataPtr, other.m_value.vgpuMetadataPtr, sizeof(*m_value.vgpuMetadataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuMetadataPtr, other.m_value.VgpuMetadataPtr, sizeof(*m_value.VgpuMetadataPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUMETADATA)
             {
-                memcpy(m_value.vgpuMetadataPtr, &other.m_value.vgpuMetadata, sizeof(*m_value.vgpuMetadataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuMetadataPtr, &other.m_value.VgpuMetadata, sizeof(*m_value.VgpuMetadataPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE:
+        {
+            if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE)
+            {
+                memcpy(&m_value.VgpuPgpuCompatibilityLimitCode, &other.m_value.VgpuPgpuCompatibilityLimitCode, sizeof(*&m_value.VgpuPgpuCompatibilityLimitCode));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR)
+            {
+                memcpy(&m_value.VgpuPgpuCompatibilityLimitCode, other.m_value.VgpuPgpuCompatibilityLimitCodePtr, sizeof(*&m_value.VgpuPgpuCompatibilityLimitCode));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR)
+            {
+                memcpy(m_value.VgpuPgpuCompatibilityLimitCodePtr, other.m_value.VgpuPgpuCompatibilityLimitCodePtr, sizeof(*m_value.VgpuPgpuCompatibilityLimitCodePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE)
+            {
+                memcpy(m_value.VgpuPgpuCompatibilityLimitCodePtr, &other.m_value.VgpuPgpuCompatibilityLimitCode, sizeof(*m_value.VgpuPgpuCompatibilityLimitCodePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUPGPUCOMPATIBILITY:
         {
             if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITY)
             {
-                memcpy(&m_value.vgpuPgpuCompatibility, &other.m_value.vgpuPgpuCompatibility, sizeof(m_value.vgpuPgpuCompatibility));
+                memcpy(&m_value.VgpuPgpuCompatibility, &other.m_value.VgpuPgpuCompatibility, sizeof(*&m_value.VgpuPgpuCompatibility));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITY_PTR)
             {
-                memcpy(&m_value.vgpuPgpuCompatibility, other.m_value.vgpuPgpuCompatibilityPtr, sizeof(m_value.vgpuPgpuCompatibility));
+                memcpy(&m_value.VgpuPgpuCompatibility, other.m_value.VgpuPgpuCompatibilityPtr, sizeof(*&m_value.VgpuPgpuCompatibility));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUPGPUCOMPATIBILITY_PTR:
         {
             if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITY_PTR)
             {
-                memcpy(m_value.vgpuPgpuCompatibilityPtr, other.m_value.vgpuPgpuCompatibilityPtr, sizeof(*m_value.vgpuPgpuCompatibilityPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuPgpuCompatibilityPtr, other.m_value.VgpuPgpuCompatibilityPtr, sizeof(*m_value.VgpuPgpuCompatibilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPGPUCOMPATIBILITY)
             {
-                memcpy(m_value.vgpuPgpuCompatibilityPtr, &other.m_value.vgpuPgpuCompatibility, sizeof(*m_value.vgpuPgpuCompatibilityPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuPgpuCompatibilityPtr, &other.m_value.VgpuPgpuCompatibility, sizeof(*m_value.VgpuPgpuCompatibilityPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUPGPUMETADATA:
         {
             if (other.m_type == INJECTION_VGPUPGPUMETADATA)
             {
-                memcpy(&m_value.vgpuPgpuMetadata, &other.m_value.vgpuPgpuMetadata, sizeof(m_value.vgpuPgpuMetadata));
+                memcpy(&m_value.VgpuPgpuMetadata, &other.m_value.VgpuPgpuMetadata, sizeof(*&m_value.VgpuPgpuMetadata));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPGPUMETADATA_PTR)
             {
-                memcpy(&m_value.vgpuPgpuMetadata, other.m_value.vgpuPgpuMetadataPtr, sizeof(m_value.vgpuPgpuMetadata));
+                memcpy(&m_value.VgpuPgpuMetadata, other.m_value.VgpuPgpuMetadataPtr, sizeof(*&m_value.VgpuPgpuMetadata));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUPGPUMETADATA_PTR:
         {
             if (other.m_type == INJECTION_VGPUPGPUMETADATA_PTR)
             {
-                memcpy(m_value.vgpuPgpuMetadataPtr, other.m_value.vgpuPgpuMetadataPtr, sizeof(*m_value.vgpuPgpuMetadataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuPgpuMetadataPtr, other.m_value.VgpuPgpuMetadataPtr, sizeof(*m_value.VgpuPgpuMetadataPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPGPUMETADATA)
             {
-                memcpy(m_value.vgpuPgpuMetadataPtr, &other.m_value.vgpuPgpuMetadata, sizeof(*m_value.vgpuPgpuMetadataPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuPgpuMetadataPtr, &other.m_value.VgpuPgpuMetadata, sizeof(*m_value.VgpuPgpuMetadataPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPLACEMENTID:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTID)
+            {
+                memcpy(&m_value.VgpuPlacementId, &other.m_value.VgpuPlacementId, sizeof(*&m_value.VgpuPlacementId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTID_PTR)
+            {
+                memcpy(&m_value.VgpuPlacementId, other.m_value.VgpuPlacementIdPtr, sizeof(*&m_value.VgpuPlacementId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPLACEMENTID_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTID_PTR)
+            {
+                memcpy(m_value.VgpuPlacementIdPtr, other.m_value.VgpuPlacementIdPtr, sizeof(*m_value.VgpuPlacementIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTID)
+            {
+                memcpy(m_value.VgpuPlacementIdPtr, &other.m_value.VgpuPlacementId, sizeof(*m_value.VgpuPlacementIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPLACEMENTLIST:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTLIST)
+            {
+                memcpy(&m_value.VgpuPlacementList, &other.m_value.VgpuPlacementList, sizeof(*&m_value.VgpuPlacementList));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTLIST_PTR)
+            {
+                memcpy(&m_value.VgpuPlacementList, other.m_value.VgpuPlacementListPtr, sizeof(*&m_value.VgpuPlacementList));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPLACEMENTLIST_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTLIST_PTR)
+            {
+                memcpy(m_value.VgpuPlacementListPtr, other.m_value.VgpuPlacementListPtr, sizeof(*m_value.VgpuPlacementListPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTLIST)
+            {
+                memcpy(m_value.VgpuPlacementListPtr, &other.m_value.VgpuPlacementList, sizeof(*m_value.VgpuPlacementListPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPLACEMENTLIST_V1:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTLIST_V1)
+            {
+                memcpy(&m_value.VgpuPlacementList_v1, &other.m_value.VgpuPlacementList_v1, sizeof(*&m_value.VgpuPlacementList_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTLIST_V1_PTR)
+            {
+                memcpy(&m_value.VgpuPlacementList_v1, other.m_value.VgpuPlacementList_v1Ptr, sizeof(*&m_value.VgpuPlacementList_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPLACEMENTLIST_V1_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPLACEMENTLIST_V1_PTR)
+            {
+                memcpy(m_value.VgpuPlacementList_v1Ptr, other.m_value.VgpuPlacementList_v1Ptr, sizeof(*m_value.VgpuPlacementList_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPLACEMENTLIST_V1)
+            {
+                memcpy(m_value.VgpuPlacementList_v1Ptr, &other.m_value.VgpuPlacementList_v1, sizeof(*m_value.VgpuPlacementList_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1:
+        {
+            if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONINFO_V1)
+            {
+                memcpy(&m_value.VgpuProcessUtilizationInfo_v1, &other.m_value.VgpuProcessUtilizationInfo_v1, sizeof(*&m_value.VgpuProcessUtilizationInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR)
+            {
+                memcpy(&m_value.VgpuProcessUtilizationInfo_v1, other.m_value.VgpuProcessUtilizationInfo_v1Ptr, sizeof(*&m_value.VgpuProcessUtilizationInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR)
+            {
+                memcpy(m_value.VgpuProcessUtilizationInfo_v1Ptr, other.m_value.VgpuProcessUtilizationInfo_v1Ptr, sizeof(*m_value.VgpuProcessUtilizationInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONINFO_V1)
+            {
+                memcpy(m_value.VgpuProcessUtilizationInfo_v1Ptr, &other.m_value.VgpuProcessUtilizationInfo_v1, sizeof(*m_value.VgpuProcessUtilizationInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE:
         {
             if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONSAMPLE)
             {
-                memcpy(&m_value.vgpuProcessUtilizationSample, &other.m_value.vgpuProcessUtilizationSample, sizeof(m_value.vgpuProcessUtilizationSample));
+                memcpy(&m_value.VgpuProcessUtilizationSample, &other.m_value.VgpuProcessUtilizationSample, sizeof(*&m_value.VgpuProcessUtilizationSample));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(&m_value.vgpuProcessUtilizationSample, other.m_value.vgpuProcessUtilizationSamplePtr, sizeof(m_value.vgpuProcessUtilizationSample));
+                memcpy(&m_value.VgpuProcessUtilizationSample, other.m_value.VgpuProcessUtilizationSamplePtr, sizeof(*&m_value.VgpuProcessUtilizationSample));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR:
         {
             if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR)
             {
-                memcpy(m_value.vgpuProcessUtilizationSamplePtr, other.m_value.vgpuProcessUtilizationSamplePtr, sizeof(*m_value.vgpuProcessUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuProcessUtilizationSamplePtr, other.m_value.VgpuProcessUtilizationSamplePtr, sizeof(*m_value.VgpuProcessUtilizationSamplePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUPROCESSUTILIZATIONSAMPLE)
             {
-                memcpy(m_value.vgpuProcessUtilizationSamplePtr, &other.m_value.vgpuProcessUtilizationSample, sizeof(*m_value.vgpuProcessUtilizationSamplePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuProcessUtilizationSamplePtr, &other.m_value.VgpuProcessUtilizationSample, sizeof(*m_value.VgpuProcessUtilizationSamplePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUPROCESSESUTILIZATIONINFO:
+        {
+            if (other.m_type == INJECTION_VGPUPROCESSESUTILIZATIONINFO)
+            {
+                memcpy(&m_value.VgpuProcessesUtilizationInfo, &other.m_value.VgpuProcessesUtilizationInfo, sizeof(*&m_value.VgpuProcessesUtilizationInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR)
+            {
+                memcpy(&m_value.VgpuProcessesUtilizationInfo, other.m_value.VgpuProcessesUtilizationInfoPtr, sizeof(*&m_value.VgpuProcessesUtilizationInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR)
+            {
+                memcpy(m_value.VgpuProcessesUtilizationInfoPtr, other.m_value.VgpuProcessesUtilizationInfoPtr, sizeof(*m_value.VgpuProcessesUtilizationInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUPROCESSESUTILIZATIONINFO)
+            {
+                memcpy(m_value.VgpuProcessesUtilizationInfoPtr, &other.m_value.VgpuProcessesUtilizationInfo, sizeof(*m_value.VgpuProcessesUtilizationInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUSCHEDULERCAPABILITIES:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERCAPABILITIES)
+            {
+                memcpy(&m_value.VgpuSchedulerCapabilities, &other.m_value.VgpuSchedulerCapabilities, sizeof(*&m_value.VgpuSchedulerCapabilities));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERCAPABILITIES_PTR)
+            {
+                memcpy(&m_value.VgpuSchedulerCapabilities, other.m_value.VgpuSchedulerCapabilitiesPtr, sizeof(*&m_value.VgpuSchedulerCapabilities));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERCAPABILITIES_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERCAPABILITIES_PTR)
+            {
+                memcpy(m_value.VgpuSchedulerCapabilitiesPtr, other.m_value.VgpuSchedulerCapabilitiesPtr, sizeof(*m_value.VgpuSchedulerCapabilitiesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERCAPABILITIES)
+            {
+                memcpy(m_value.VgpuSchedulerCapabilitiesPtr, &other.m_value.VgpuSchedulerCapabilities, sizeof(*m_value.VgpuSchedulerCapabilitiesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUSCHEDULERGETSTATE:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERGETSTATE)
+            {
+                memcpy(&m_value.VgpuSchedulerGetState, &other.m_value.VgpuSchedulerGetState, sizeof(*&m_value.VgpuSchedulerGetState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERGETSTATE_PTR)
+            {
+                memcpy(&m_value.VgpuSchedulerGetState, other.m_value.VgpuSchedulerGetStatePtr, sizeof(*&m_value.VgpuSchedulerGetState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERGETSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERGETSTATE_PTR)
+            {
+                memcpy(m_value.VgpuSchedulerGetStatePtr, other.m_value.VgpuSchedulerGetStatePtr, sizeof(*m_value.VgpuSchedulerGetStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERGETSTATE)
+            {
+                memcpy(m_value.VgpuSchedulerGetStatePtr, &other.m_value.VgpuSchedulerGetState, sizeof(*m_value.VgpuSchedulerGetStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUSCHEDULERLOGENTRY:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERLOGENTRY)
+            {
+                memcpy(&m_value.VgpuSchedulerLogEntry, &other.m_value.VgpuSchedulerLogEntry, sizeof(*&m_value.VgpuSchedulerLogEntry));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERLOGENTRY_PTR)
+            {
+                memcpy(&m_value.VgpuSchedulerLogEntry, other.m_value.VgpuSchedulerLogEntryPtr, sizeof(*&m_value.VgpuSchedulerLogEntry));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERLOGENTRY_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERLOGENTRY_PTR)
+            {
+                memcpy(m_value.VgpuSchedulerLogEntryPtr, other.m_value.VgpuSchedulerLogEntryPtr, sizeof(*m_value.VgpuSchedulerLogEntryPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERLOGENTRY)
+            {
+                memcpy(m_value.VgpuSchedulerLogEntryPtr, &other.m_value.VgpuSchedulerLogEntry, sizeof(*m_value.VgpuSchedulerLogEntryPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUSCHEDULERLOG:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERLOG)
+            {
+                memcpy(&m_value.VgpuSchedulerLog, &other.m_value.VgpuSchedulerLog, sizeof(*&m_value.VgpuSchedulerLog));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERLOG_PTR)
+            {
+                memcpy(&m_value.VgpuSchedulerLog, other.m_value.VgpuSchedulerLogPtr, sizeof(*&m_value.VgpuSchedulerLog));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERLOG_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERLOG_PTR)
+            {
+                memcpy(m_value.VgpuSchedulerLogPtr, other.m_value.VgpuSchedulerLogPtr, sizeof(*m_value.VgpuSchedulerLogPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERLOG)
+            {
+                memcpy(m_value.VgpuSchedulerLogPtr, &other.m_value.VgpuSchedulerLog, sizeof(*m_value.VgpuSchedulerLogPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUSCHEDULERSETSTATE:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERSETSTATE)
+            {
+                memcpy(&m_value.VgpuSchedulerSetState, &other.m_value.VgpuSchedulerSetState, sizeof(*&m_value.VgpuSchedulerSetState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERSETSTATE_PTR)
+            {
+                memcpy(&m_value.VgpuSchedulerSetState, other.m_value.VgpuSchedulerSetStatePtr, sizeof(*&m_value.VgpuSchedulerSetState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERSETSTATE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUSCHEDULERSETSTATE_PTR)
+            {
+                memcpy(m_value.VgpuSchedulerSetStatePtr, other.m_value.VgpuSchedulerSetStatePtr, sizeof(*m_value.VgpuSchedulerSetStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUSCHEDULERSETSTATE)
+            {
+                memcpy(m_value.VgpuSchedulerSetStatePtr, &other.m_value.VgpuSchedulerSetState, sizeof(*m_value.VgpuSchedulerSetStatePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUTYPEBAR1INFO:
+        {
+            if (other.m_type == INJECTION_VGPUTYPEBAR1INFO)
+            {
+                memcpy(&m_value.VgpuTypeBar1Info, &other.m_value.VgpuTypeBar1Info, sizeof(*&m_value.VgpuTypeBar1Info));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUTYPEBAR1INFO_PTR)
+            {
+                memcpy(&m_value.VgpuTypeBar1Info, other.m_value.VgpuTypeBar1InfoPtr, sizeof(*&m_value.VgpuTypeBar1Info));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUTYPEBAR1INFO_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUTYPEBAR1INFO_PTR)
+            {
+                memcpy(m_value.VgpuTypeBar1InfoPtr, other.m_value.VgpuTypeBar1InfoPtr, sizeof(*m_value.VgpuTypeBar1InfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUTYPEBAR1INFO)
+            {
+                memcpy(m_value.VgpuTypeBar1InfoPtr, &other.m_value.VgpuTypeBar1Info, sizeof(*m_value.VgpuTypeBar1InfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUTYPEID:
+        {
+            if (other.m_type == INJECTION_VGPUTYPEID)
+            {
+                memcpy(&m_value.VgpuTypeId, &other.m_value.VgpuTypeId, sizeof(*&m_value.VgpuTypeId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUTYPEID_PTR)
+            {
+                memcpy(&m_value.VgpuTypeId, other.m_value.VgpuTypeIdPtr, sizeof(*&m_value.VgpuTypeId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUTYPEID_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUTYPEID_PTR)
+            {
+                memcpy(m_value.VgpuTypeIdPtr, other.m_value.VgpuTypeIdPtr, sizeof(*m_value.VgpuTypeIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUTYPEID)
+            {
+                memcpy(m_value.VgpuTypeIdPtr, &other.m_value.VgpuTypeId, sizeof(*m_value.VgpuTypeIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUVERSION:
         {
             if (other.m_type == INJECTION_VGPUVERSION)
             {
-                memcpy(&m_value.vgpuVersion, &other.m_value.vgpuVersion, sizeof(m_value.vgpuVersion));
+                memcpy(&m_value.VgpuVersion, &other.m_value.VgpuVersion, sizeof(*&m_value.VgpuVersion));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUVERSION_PTR)
             {
-                memcpy(&m_value.vgpuVersion, other.m_value.vgpuVersionPtr, sizeof(m_value.vgpuVersion));
+                memcpy(&m_value.VgpuVersion, other.m_value.VgpuVersionPtr, sizeof(*&m_value.VgpuVersion));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUVERSION_PTR:
         {
             if (other.m_type == INJECTION_VGPUVERSION_PTR)
             {
-                memcpy(m_value.vgpuVersionPtr, other.m_value.vgpuVersionPtr, sizeof(*m_value.vgpuVersionPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuVersionPtr, other.m_value.VgpuVersionPtr, sizeof(*m_value.VgpuVersionPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUVERSION)
             {
-                memcpy(m_value.vgpuVersionPtr, &other.m_value.vgpuVersion, sizeof(*m_value.vgpuVersionPtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuVersionPtr, &other.m_value.VgpuVersion, sizeof(*m_value.VgpuVersionPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPUVMCOMPATIBILITY:
+        {
+            if (other.m_type == INJECTION_VGPUVMCOMPATIBILITY)
+            {
+                memcpy(&m_value.VgpuVmCompatibility, &other.m_value.VgpuVmCompatibility, sizeof(*&m_value.VgpuVmCompatibility));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUVMCOMPATIBILITY_PTR)
+            {
+                memcpy(&m_value.VgpuVmCompatibility, other.m_value.VgpuVmCompatibilityPtr, sizeof(*&m_value.VgpuVmCompatibility));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPUVMCOMPATIBILITY_PTR:
+        {
+            if (other.m_type == INJECTION_VGPUVMCOMPATIBILITY_PTR)
+            {
+                memcpy(m_value.VgpuVmCompatibilityPtr, other.m_value.VgpuVmCompatibilityPtr, sizeof(*m_value.VgpuVmCompatibilityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPUVMCOMPATIBILITY)
+            {
+                memcpy(m_value.VgpuVmCompatibilityPtr, &other.m_value.VgpuVmCompatibility, sizeof(*m_value.VgpuVmCompatibilityPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VGPUVMIDTYPE:
         {
             if (other.m_type == INJECTION_VGPUVMIDTYPE)
             {
-                memcpy(&m_value.vgpuVmIdType, &other.m_value.vgpuVmIdType, sizeof(m_value.vgpuVmIdType));
+                memcpy(&m_value.VgpuVmIdType, &other.m_value.VgpuVmIdType, sizeof(*&m_value.VgpuVmIdType));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUVMIDTYPE_PTR)
             {
-                memcpy(&m_value.vgpuVmIdType, other.m_value.vgpuVmIdTypePtr, sizeof(m_value.vgpuVmIdType));
+                memcpy(&m_value.VgpuVmIdType, other.m_value.VgpuVmIdTypePtr, sizeof(*&m_value.VgpuVmIdType));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VGPUVMIDTYPE_PTR:
         {
             if (other.m_type == INJECTION_VGPUVMIDTYPE_PTR)
             {
-                memcpy(m_value.vgpuVmIdTypePtr, other.m_value.vgpuVmIdTypePtr, sizeof(*m_value.vgpuVmIdTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuVmIdTypePtr, other.m_value.VgpuVmIdTypePtr, sizeof(*m_value.VgpuVmIdTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VGPUVMIDTYPE)
             {
-                memcpy(m_value.vgpuVmIdTypePtr, &other.m_value.vgpuVmIdType, sizeof(*m_value.vgpuVmIdTypePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.VgpuVmIdTypePtr, &other.m_value.VgpuVmIdType, sizeof(*m_value.VgpuVmIdTypePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_VIOLATIONTIME:
         {
             if (other.m_type == INJECTION_VIOLATIONTIME)
             {
-                memcpy(&m_value.violationTime, &other.m_value.violationTime, sizeof(m_value.violationTime));
+                memcpy(&m_value.ViolationTime, &other.m_value.ViolationTime, sizeof(*&m_value.ViolationTime));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VIOLATIONTIME_PTR)
             {
-                memcpy(&m_value.violationTime, other.m_value.violationTimePtr, sizeof(m_value.violationTime));
+                memcpy(&m_value.ViolationTime, other.m_value.ViolationTimePtr, sizeof(*&m_value.ViolationTime));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_VIOLATIONTIME_PTR:
         {
             if (other.m_type == INJECTION_VIOLATIONTIME_PTR)
             {
-                memcpy(m_value.violationTimePtr, other.m_value.violationTimePtr, sizeof(*m_value.violationTimePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ViolationTimePtr, other.m_value.ViolationTimePtr, sizeof(*m_value.ViolationTimePtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_VIOLATIONTIME)
             {
-                memcpy(m_value.violationTimePtr, &other.m_value.violationTime, sizeof(*m_value.violationTimePtr) * (m_isArray ? m_arrLen : 1));
+                memcpy(m_value.ViolationTimePtr, &other.m_value.ViolationTime, sizeof(*m_value.ViolationTimePtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES)
+            {
+                memcpy(&m_value.WorkloadPowerProfileCurrentProfiles, &other.m_value.WorkloadPowerProfileCurrentProfiles, sizeof(*&m_value.WorkloadPowerProfileCurrentProfiles));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR)
+            {
+                memcpy(&m_value.WorkloadPowerProfileCurrentProfiles, other.m_value.WorkloadPowerProfileCurrentProfilesPtr, sizeof(*&m_value.WorkloadPowerProfileCurrentProfiles));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR)
+            {
+                memcpy(m_value.WorkloadPowerProfileCurrentProfilesPtr, other.m_value.WorkloadPowerProfileCurrentProfilesPtr, sizeof(*m_value.WorkloadPowerProfileCurrentProfilesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES)
+            {
+                memcpy(m_value.WorkloadPowerProfileCurrentProfilesPtr, &other.m_value.WorkloadPowerProfileCurrentProfiles, sizeof(*m_value.WorkloadPowerProfileCurrentProfilesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_WORKLOADPOWERPROFILEINFO:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEINFO)
+            {
+                memcpy(&m_value.WorkloadPowerProfileInfo, &other.m_value.WorkloadPowerProfileInfo, sizeof(*&m_value.WorkloadPowerProfileInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEINFO_PTR)
+            {
+                memcpy(&m_value.WorkloadPowerProfileInfo, other.m_value.WorkloadPowerProfileInfoPtr, sizeof(*&m_value.WorkloadPowerProfileInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEINFO_PTR:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEINFO_PTR)
+            {
+                memcpy(m_value.WorkloadPowerProfileInfoPtr, other.m_value.WorkloadPowerProfileInfoPtr, sizeof(*m_value.WorkloadPowerProfileInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEINFO)
+            {
+                memcpy(m_value.WorkloadPowerProfileInfoPtr, &other.m_value.WorkloadPowerProfileInfo, sizeof(*m_value.WorkloadPowerProfileInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEPROFILESINFO)
+            {
+                memcpy(&m_value.WorkloadPowerProfileProfilesInfo, &other.m_value.WorkloadPowerProfileProfilesInfo, sizeof(*&m_value.WorkloadPowerProfileProfilesInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR)
+            {
+                memcpy(&m_value.WorkloadPowerProfileProfilesInfo, other.m_value.WorkloadPowerProfileProfilesInfoPtr, sizeof(*&m_value.WorkloadPowerProfileProfilesInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR)
+            {
+                memcpy(m_value.WorkloadPowerProfileProfilesInfoPtr, other.m_value.WorkloadPowerProfileProfilesInfoPtr, sizeof(*m_value.WorkloadPowerProfileProfilesInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEPROFILESINFO)
+            {
+                memcpy(m_value.WorkloadPowerProfileProfilesInfoPtr, &other.m_value.WorkloadPowerProfileProfilesInfo, sizeof(*m_value.WorkloadPowerProfileProfilesInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES)
+            {
+                memcpy(&m_value.WorkloadPowerProfileRequestedProfiles, &other.m_value.WorkloadPowerProfileRequestedProfiles, sizeof(*&m_value.WorkloadPowerProfileRequestedProfiles));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR)
+            {
+                memcpy(&m_value.WorkloadPowerProfileRequestedProfiles, other.m_value.WorkloadPowerProfileRequestedProfilesPtr, sizeof(*&m_value.WorkloadPowerProfileRequestedProfiles));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR)
+            {
+                memcpy(m_value.WorkloadPowerProfileRequestedProfilesPtr, other.m_value.WorkloadPowerProfileRequestedProfilesPtr, sizeof(*m_value.WorkloadPowerProfileRequestedProfilesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES)
+            {
+                memcpy(m_value.WorkloadPowerProfileRequestedProfilesPtr, &other.m_value.WorkloadPowerProfileRequestedProfiles, sizeof(*m_value.WorkloadPowerProfileRequestedProfilesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SHORT:
+        {
+            if (other.m_type == INJECTION_SHORT)
+            {
+                memcpy(&m_value.Short, &other.m_value.Short, sizeof(*&m_value.Short));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SHORT_PTR)
+            {
+                memcpy(&m_value.Short, other.m_value.ShortPtr, sizeof(*&m_value.Short));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SHORT_PTR:
+        {
+            if (other.m_type == INJECTION_SHORT_PTR)
+            {
+                memcpy(m_value.ShortPtr, other.m_value.ShortPtr, sizeof(*m_value.ShortPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SHORT)
+            {
+                memcpy(m_value.ShortPtr, &other.m_value.Short, sizeof(*m_value.ShortPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_UCHAR:
+        {
+            if (other.m_type == INJECTION_UCHAR)
+            {
+                memcpy(&m_value.UChar, &other.m_value.UChar, sizeof(*&m_value.UChar));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UCHAR_PTR)
+            {
+                memcpy(&m_value.UChar, other.m_value.UCharPtr, sizeof(*&m_value.UChar));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_UCHAR_PTR:
+        {
+            if (other.m_type == INJECTION_UCHAR_PTR)
+            {
+                memcpy(m_value.UCharPtr, other.m_value.UCharPtr, sizeof(*m_value.UCharPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UCHAR)
+            {
+                memcpy(m_value.UCharPtr, &other.m_value.UChar, sizeof(*m_value.UCharPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UINT:
         {
             if (other.m_type == INJECTION_UINT)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ui, &other.m_value.ui, sizeof(*&this->m_value.ui));
+                memcpy(&m_value.UInt, &other.m_value.UInt, sizeof(*&m_value.UInt));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UINT_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ui, other.m_value.uiPtr, sizeof(*&this->m_value.ui));
+                memcpy(&m_value.UInt, other.m_value.UIntPtr, sizeof(*&m_value.UInt));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_INT && other.m_value.i > 0)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_INT && other.m_value.Int > 0)
             {
-                this->m_value.ui = other.m_value.i;
+                this->m_value.UInt = other.m_value.Int;
                 set = true;
             }
-            else if (other.m_type == INJECTION_INT_PTR && *other.m_value.iPtr > 0)
+            else if (other.m_type == INJECTION_INT_PTR && *other.m_value.IntPtr > 0)
             {
-                this->m_value.ui = *other.m_value.iPtr;
+                this->m_value.UInt = *other.m_value.IntPtr;
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_UINT_PTR:
         {
             if (other.m_type == INJECTION_UINT_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.uiPtr, other.m_value.uiPtr, sizeof(*this->m_value.uiPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                memcpy(m_value.UIntPtr, other.m_value.UIntPtr, sizeof(*m_value.UIntPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_UINT)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.uiPtr, &other.m_value.ui, sizeof(*this->m_value.uiPtr));
+                memcpy(m_value.UIntPtr, &other.m_value.UInt, sizeof(*m_value.UIntPtr));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
-            else if (other.m_type == INJECTION_INT && other.m_value.i > 0)
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_INT && other.m_value.Int > 0)
             {
-                *this->m_value.uiPtr = other.m_value.i;
+                *this->m_value.UIntPtr = other.m_value.Int;
                 set = true;
             }
-            else if (other.m_type == INJECTION_INT_PTR && *other.m_value.iPtr > 0)
+            else if (other.m_type == INJECTION_INT_PTR && *other.m_value.IntPtr > 0)
             {
-                *this->m_value.uiPtr = *other.m_value.iPtr;
+                *this->m_value.UIntPtr = *other.m_value.IntPtr;
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ULONG:
         {
             if (other.m_type == INJECTION_ULONG)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ul, &other.m_value.ul, sizeof(*&this->m_value.ul));
+                memcpy(&m_value.ULong, &other.m_value.ULong, sizeof(*&m_value.ULong));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ULONG_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ul, other.m_value.ulPtr, sizeof(*&this->m_value.ul));
+                memcpy(&m_value.ULong, other.m_value.ULongPtr, sizeof(*&m_value.ULong));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ULONG_PTR:
         {
             if (other.m_type == INJECTION_ULONG_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.ulPtr, other.m_value.ulPtr, sizeof(*this->m_value.ulPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                memcpy(m_value.ULongPtr, other.m_value.ULongPtr, sizeof(*m_value.ULongPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ULONG)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.ulPtr, &other.m_value.ul, sizeof(*this->m_value.ulPtr));
+                memcpy(m_value.ULongPtr, &other.m_value.ULong, sizeof(*m_value.ULongPtr));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_ULONG_LONG:
         {
             if (other.m_type == INJECTION_ULONG_LONG)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ull, &other.m_value.ull, sizeof(*&this->m_value.ull));
+                memcpy(&m_value.ULongLong, &other.m_value.ULongLong, sizeof(*&m_value.ULongLong));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ULONG_LONG_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(&this->m_value.ull, other.m_value.ullPtr, sizeof(*&this->m_value.ull));
+                memcpy(&m_value.ULongLong, other.m_value.ULongLongPtr, sizeof(*&m_value.ULongLong));
                 set = true;
             }
             break;
         }
-        // The following snippet is generated from write_case_entry
         case INJECTION_ULONG_LONG_PTR:
         {
             if (other.m_type == INJECTION_ULONG_LONG_PTR)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.ullPtr, other.m_value.ullPtr, sizeof(*this->m_value.ullPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                memcpy(m_value.ULongLongPtr, other.m_value.ULongLongPtr, sizeof(*m_value.ULongLongPtr) * (other.m_isArray ? other.m_arrLen : 1));
                 set = true;
             }
-            // The following snippet is generated from write_case_entry
+            // The following snippet is generated from write_set_value_from_case_entry
             else if (other.m_type == INJECTION_ULONG_LONG)
             {
-                // The following snippet is generated from print_equals_and_set
-                std::memcpy(this->m_value.ullPtr, &other.m_value.ull, sizeof(*this->m_value.ullPtr));
+                memcpy(m_value.ULongLongPtr, &other.m_value.ULongLong, sizeof(*m_value.ULongLongPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_USHORT:
+        {
+            if (other.m_type == INJECTION_USHORT)
+            {
+                memcpy(&m_value.UShort, &other.m_value.UShort, sizeof(*&m_value.UShort));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_USHORT_PTR)
+            {
+                memcpy(&m_value.UShort, other.m_value.UShortPtr, sizeof(*&m_value.UShort));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_USHORT_PTR:
+        {
+            if (other.m_type == INJECTION_USHORT_PTR)
+            {
+                memcpy(m_value.UShortPtr, other.m_value.UShortPtr, sizeof(*m_value.UShortPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_USHORT)
+            {
+                memcpy(m_value.UShortPtr, &other.m_value.UShort, sizeof(*m_value.UShortPtr));
                 set = true;
             }
             break;
@@ -4422,14 +8931,9 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
                 this->m_str = other.m_str;
                 set         = true;
             }
-            else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.str != nullptr)
+            else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.Str != nullptr)
             {
-                this->m_str = other.m_value.str;
-                set         = true;
-            }
-            else if (other.m_type == INJECTION_CONST_CHAR_PTR && other.m_value.const_str != nullptr)
-            {
-                this->m_str = other.m_value.const_str;
+                this->m_str = other.m_value.Str;
                 set         = true;
             }
             break;
@@ -4475,18 +8979,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 return 0;
             }
         }
+        else if (m_type == INJECTION_CONST_CHAR_PTR)
+        {
+            return strcmp(m_value.ConstStr, other.m_value.ConstStr);
+        }
         else
         {
             switch (m_type)
             {
+                case INJECTION_CHAR_PTR:
+                {
+                    return strcmp(m_value.Str, other.m_value.Str);
+                    break; // NOT REACHED
+                }
                 case INJECTION_CHAR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.c < other.m_value.c)
+                    if (m_value.Char < other.m_value.Char)
                     {
                         return -1;
                     }
-                    else if (m_value.c > other.m_value.c)
+                    else if (m_value.Char > other.m_value.Char)
                     {
                         return 1;
                     }
@@ -4496,41 +9009,36 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_CHAR_PTR:
-                {
-                    return strcmp(m_value.str, other.m_value.str);
-                    break; // NOT REACHED
-                }
-                case INJECTION_CONST_CHAR_PTR:
-                {
-                    return strcmp(m_value.const_str, other.m_value.const_str);
-                    break; // NOT REACHED
-                }
-                case INJECTION_CONST_NVMLGPUINSTANCEPLACEMENT_T_PTR:
+                case INJECTION_DOUBLE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpuInstancePlacement_tCompare(*m_value.cnPtr, *other.m_value.cnPtr);
+                        if (*m_value.DoublePtr == *other.m_value.DoublePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.DoublePtr < *other.m_value.DoublePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstancePlacement_tCompare(*m_value.cnPtr, *other.m_value.cnPtr); ret)
+                        if (m_value.DoublePtr[i] == other.m_value.DoublePtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.DoublePtr[i] < other.m_value.DoublePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_INT:
+                case INJECTION_DOUBLE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.i < other.m_value.i)
+                    if (m_value.Double < other.m_value.Double)
                     {
                         return -1;
                     }
-                    else if (m_value.i > other.m_value.i)
+                    else if (m_value.Double > other.m_value.Double)
                     {
                         return 1;
                     }
@@ -4545,27 +9053,116 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.iPtr == *other.m_value.iPtr)
+                        if (*m_value.IntPtr == *other.m_value.IntPtr)
                         {
                             return 0;
                         }
-                        return *m_value.iPtr < *other.m_value.iPtr ? -1 : 1;
+                        return *m_value.IntPtr < *other.m_value.IntPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.iPtr[i] == other.m_value.iPtr[i])
+                        if (m_value.IntPtr[i] == other.m_value.IntPtr[i])
                         {
                             continue;
                         }
-                        return m_value.iPtr[i] < other.m_value.iPtr[i] ? -1 : 1;
+                        return m_value.IntPtr[i] < other.m_value.IntPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ACCOUNTINGSTATS:
+                case INJECTION_INT:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlAccountingStats_tCompare(m_value.accountingStats, other.m_value.accountingStats);
+                    if (m_value.Int < other.m_value.Int)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.Int > other.m_value.Int)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_LONG_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.LongPtr == *other.m_value.LongPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.LongPtr < *other.m_value.LongPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.LongPtr[i] == other.m_value.LongPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.LongPtr[i] < other.m_value.LongPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_LONG:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.Long < other.m_value.Long)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.Long > other.m_value.Long)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_LONG_LONG_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.LongLongPtr == *other.m_value.LongLongPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.LongLongPtr < *other.m_value.LongLongPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.LongLongPtr[i] == other.m_value.LongLongPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.LongLongPtr[i] < other.m_value.LongLongPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_LONG_LONG:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.LongLong < other.m_value.LongLong)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.LongLong > other.m_value.LongLong)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 case INJECTION_ACCOUNTINGSTATS_PTR:
@@ -4573,11 +9170,73 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlAccountingStats_tCompare(*m_value.accountingStatsPtr, *other.m_value.accountingStatsPtr);
+                        return nvmlAccountingStats_tCompare(*m_value.AccountingStatsPtr, *other.m_value.AccountingStatsPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlAccountingStats_tCompare(*m_value.accountingStatsPtr, *other.m_value.accountingStatsPtr); ret)
+                        if (auto ret = nvmlAccountingStats_tCompare(*m_value.AccountingStatsPtr, *other.m_value.AccountingStatsPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_ACCOUNTINGSTATS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlAccountingStats_tCompare(m_value.AccountingStats, other.m_value.AccountingStats);
+                    break; // NOT REACHED
+                }
+                case INJECTION_AFFINITYSCOPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.AffinityScopePtr == *other.m_value.AffinityScopePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.AffinityScopePtr < *other.m_value.AffinityScopePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.AffinityScopePtr[i] == other.m_value.AffinityScopePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.AffinityScopePtr[i] < other.m_value.AffinityScopePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_AFFINITYSCOPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.AffinityScope < other.m_value.AffinityScope)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.AffinityScope > other.m_value.AffinityScope)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_BAR1MEMORY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlBAR1Memory_tCompare(*m_value.BAR1MemoryPtr, *other.m_value.BAR1MemoryPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlBAR1Memory_tCompare(*m_value.BAR1MemoryPtr, *other.m_value.BAR1MemoryPtr); ret)
                         {
                             return ret;
                         }
@@ -4588,41 +9247,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_BAR1MEMORY:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlBAR1Memory_tCompare(m_value.bar1Memory, other.m_value.bar1Memory);
-                    break; // NOT REACHED
-                }
-                case INJECTION_BAR1MEMORY_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (!m_isArray)
-                    {
-                        return nvmlBAR1Memory_tCompare(*m_value.bar1MemoryPtr, *other.m_value.bar1MemoryPtr);
-                    }
-                    for (unsigned i = 0; i < m_arrLen; ++i)
-                    {
-                        if (auto ret = nvmlBAR1Memory_tCompare(*m_value.bar1MemoryPtr, *other.m_value.bar1MemoryPtr); ret)
-                        {
-                            return ret;
-                        }
-                    }
-                    return 0;
-                    break; // NOT REACHED
-                }
-                case INJECTION_BRANDTYPE:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.brandType < other.m_value.brandType)
-                    {
-                        return -1;
-                    }
-                    else if (m_value.brandType > other.m_value.brandType)
-                    {
-                        return 1;
-                    }
-                    else
-                    {
-                        return 0;
-                    }
+                    return nvmlBAR1Memory_tCompare(m_value.BAR1Memory, other.m_value.BAR1Memory);
                     break; // NOT REACHED
                 }
                 case INJECTION_BRANDTYPE_PTR:
@@ -4630,27 +9255,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.brandTypePtr == *other.m_value.brandTypePtr)
+                        if (*m_value.BrandTypePtr == *other.m_value.BrandTypePtr)
                         {
                             return 0;
                         }
-                        return *m_value.brandTypePtr < *other.m_value.brandTypePtr ? -1 : 1;
+                        return *m_value.BrandTypePtr < *other.m_value.BrandTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.brandTypePtr[i] == other.m_value.brandTypePtr[i])
+                        if (m_value.BrandTypePtr[i] == other.m_value.BrandTypePtr[i])
                         {
                             continue;
                         }
-                        return m_value.brandTypePtr[i] < other.m_value.brandTypePtr[i] ? -1 : 1;
+                        return m_value.BrandTypePtr[i] < other.m_value.BrandTypePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_BRIDGECHIPHIERARCHY:
+                case INJECTION_BRANDTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlBridgeChipHierarchy_tCompare(m_value.bridgeChipHierarchy, other.m_value.bridgeChipHierarchy);
+                    if (m_value.BrandType < other.m_value.BrandType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.BrandType > other.m_value.BrandType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 case INJECTION_BRIDGECHIPHIERARCHY_PTR:
@@ -4658,11 +9294,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlBridgeChipHierarchy_tCompare(*m_value.bridgeChipHierarchyPtr, *other.m_value.bridgeChipHierarchyPtr);
+                        return nvmlBridgeChipHierarchy_tCompare(*m_value.BridgeChipHierarchyPtr, *other.m_value.BridgeChipHierarchyPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlBridgeChipHierarchy_tCompare(*m_value.bridgeChipHierarchyPtr, *other.m_value.bridgeChipHierarchyPtr); ret)
+                        if (auto ret = nvmlBridgeChipHierarchy_tCompare(*m_value.BridgeChipHierarchyPtr, *other.m_value.BridgeChipHierarchyPtr); ret)
                         {
                             return ret;
                         }
@@ -4670,14 +9306,65 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_CLOCKID:
+                case INJECTION_BRIDGECHIPHIERARCHY:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.clockId < other.m_value.clockId)
+                    return nvmlBridgeChipHierarchy_tCompare(m_value.BridgeChipHierarchy, other.m_value.BridgeChipHierarchy);
+                    break; // NOT REACHED
+                }
+                case INJECTION_BRIDGECHIPINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlBridgeChipInfo_tCompare(*m_value.BridgeChipInfoPtr, *other.m_value.BridgeChipInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlBridgeChipInfo_tCompare(*m_value.BridgeChipInfoPtr, *other.m_value.BridgeChipInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_BRIDGECHIPINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlBridgeChipInfo_tCompare(m_value.BridgeChipInfo, other.m_value.BridgeChipInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_BRIDGECHIPTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.BridgeChipTypePtr == *other.m_value.BridgeChipTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.BridgeChipTypePtr < *other.m_value.BridgeChipTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.BridgeChipTypePtr[i] == other.m_value.BridgeChipTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.BridgeChipTypePtr[i] < other.m_value.BridgeChipTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_BRIDGECHIPTYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.BridgeChipType < other.m_value.BridgeChipType)
                     {
                         return -1;
                     }
-                    else if (m_value.clockId > other.m_value.clockId)
+                    else if (m_value.BridgeChipType > other.m_value.BridgeChipType)
                     {
                         return 1;
                     }
@@ -4685,16 +9372,247 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_BUSTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.BusTypePtr == *other.m_value.BusTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.BusTypePtr < *other.m_value.BusTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.BusTypePtr[i] == other.m_value.BusTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.BusTypePtr[i] < other.m_value.BusTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_BUSTYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.BusType < other.m_value.BusType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.BusType > other.m_value.BusType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_C2CMODEINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlC2cModeInfo_v1_tCompare(*m_value.C2cModeInfo_v1Ptr, *other.m_value.C2cModeInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlC2cModeInfo_v1_tCompare(*m_value.C2cModeInfo_v1Ptr, *other.m_value.C2cModeInfo_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_C2CMODEINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlC2cModeInfo_v1_tCompare(m_value.C2cModeInfo_v1, other.m_value.C2cModeInfo_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLKMONFAULTINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlClkMonFaultInfo_tCompare(*m_value.ClkMonFaultInfoPtr, *other.m_value.ClkMonFaultInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlClkMonFaultInfo_tCompare(*m_value.ClkMonFaultInfoPtr, *other.m_value.ClkMonFaultInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLKMONFAULTINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlClkMonFaultInfo_tCompare(m_value.ClkMonFaultInfo, other.m_value.ClkMonFaultInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLKMONSTATUS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlClkMonStatus_tCompare(*m_value.ClkMonStatusPtr, *other.m_value.ClkMonStatusPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlClkMonStatus_tCompare(*m_value.ClkMonStatusPtr, *other.m_value.ClkMonStatusPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLKMONSTATUS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlClkMonStatus_tCompare(m_value.ClkMonStatus, other.m_value.ClkMonStatus);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKID_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ClockIdPtr == *other.m_value.ClockIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ClockIdPtr < *other.m_value.ClockIdPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ClockIdPtr[i] == other.m_value.ClockIdPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ClockIdPtr[i] < other.m_value.ClockIdPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.ClockId < other.m_value.ClockId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.ClockId > other.m_value.ClockId)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKLIMITID_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ClockLimitIdPtr == *other.m_value.ClockLimitIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ClockLimitIdPtr < *other.m_value.ClockLimitIdPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ClockLimitIdPtr[i] == other.m_value.ClockLimitIdPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ClockLimitIdPtr[i] < other.m_value.ClockLimitIdPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKLIMITID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.ClockLimitId < other.m_value.ClockLimitId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.ClockLimitId > other.m_value.ClockLimitId)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKOFFSET_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlClockOffset_tCompare(*m_value.ClockOffsetPtr, *other.m_value.ClockOffsetPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlClockOffset_tCompare(*m_value.ClockOffsetPtr, *other.m_value.ClockOffsetPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKOFFSET:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlClockOffset_tCompare(m_value.ClockOffset, other.m_value.ClockOffset);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CLOCKTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ClockTypePtr == *other.m_value.ClockTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ClockTypePtr < *other.m_value.ClockTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ClockTypePtr[i] == other.m_value.ClockTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ClockTypePtr[i] < other.m_value.ClockTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_CLOCKTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.clockType < other.m_value.clockType)
+                    if (m_value.ClockType < other.m_value.ClockType)
                     {
                         return -1;
                     }
-                    else if (m_value.clockType > other.m_value.clockType)
+                    else if (m_value.ClockType > other.m_value.ClockType)
                     {
                         return 1;
                     }
@@ -4702,12 +9620,6 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
-                    break; // NOT REACHED
-                }
-                case INJECTION_COMPUTEINSTANCEINFO:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlComputeInstanceInfo_tCompare(m_value.computeInstanceInfo, other.m_value.computeInstanceInfo);
                     break; // NOT REACHED
                 }
                 case INJECTION_COMPUTEINSTANCEINFO_PTR:
@@ -4715,11 +9627,57 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlComputeInstanceInfo_tCompare(*m_value.computeInstanceInfoPtr, *other.m_value.computeInstanceInfoPtr);
+                        return nvmlComputeInstanceInfo_tCompare(*m_value.ComputeInstanceInfoPtr, *other.m_value.ComputeInstanceInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceInfo_tCompare(*m_value.computeInstanceInfoPtr, *other.m_value.computeInstanceInfoPtr); ret)
+                        if (auto ret = nvmlComputeInstanceInfo_tCompare(*m_value.ComputeInstanceInfoPtr, *other.m_value.ComputeInstanceInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_COMPUTEINSTANCEINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlComputeInstanceInfo_tCompare(m_value.ComputeInstanceInfo, other.m_value.ComputeInstanceInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_COMPUTEINSTANCEPLACEMENT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlComputeInstancePlacement_tCompare(*m_value.ComputeInstancePlacementPtr, *other.m_value.ComputeInstancePlacementPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlComputeInstancePlacement_tCompare(*m_value.ComputeInstancePlacementPtr, *other.m_value.ComputeInstancePlacementPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_COMPUTEINSTANCEPLACEMENT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlComputeInstancePlacement_tCompare(m_value.ComputeInstancePlacement, other.m_value.ComputeInstancePlacement);
+                    break; // NOT REACHED
+                }
+                case INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlComputeInstanceProfileInfo_tCompare(*m_value.ComputeInstanceProfileInfoPtr, *other.m_value.ComputeInstanceProfileInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlComputeInstanceProfileInfo_tCompare(*m_value.ComputeInstanceProfileInfoPtr, *other.m_value.ComputeInstanceProfileInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -4730,19 +9688,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_COMPUTEINSTANCEPROFILEINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlComputeInstanceProfileInfo_tCompare(m_value.computeInstanceProfileInfo, other.m_value.computeInstanceProfileInfo);
+                    return nvmlComputeInstanceProfileInfo_tCompare(m_value.ComputeInstanceProfileInfo, other.m_value.ComputeInstanceProfileInfo);
                     break; // NOT REACHED
                 }
-                case INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR:
+                case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlComputeInstanceProfileInfo_tCompare(*m_value.computeInstanceProfileInfoPtr, *other.m_value.computeInstanceProfileInfoPtr);
+                        return nvmlComputeInstanceProfileInfo_v2_tCompare(*m_value.ComputeInstanceProfileInfo_v2Ptr, *other.m_value.ComputeInstanceProfileInfo_v2Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceProfileInfo_tCompare(*m_value.computeInstanceProfileInfoPtr, *other.m_value.computeInstanceProfileInfoPtr); ret)
+                        if (auto ret = nvmlComputeInstanceProfileInfo_v2_tCompare(*m_value.ComputeInstanceProfileInfo_v2Ptr, *other.m_value.ComputeInstanceProfileInfo_v2Ptr); ret)
                         {
                             return ret;
                         }
@@ -4753,19 +9711,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlComputeInstanceProfileInfo_v2_tCompare(m_value.computeInstanceProfileInfo_v2, other.m_value.computeInstanceProfileInfo_v2);
+                    return nvmlComputeInstanceProfileInfo_v2_tCompare(m_value.ComputeInstanceProfileInfo_v2, other.m_value.ComputeInstanceProfileInfo_v2);
                     break; // NOT REACHED
                 }
-                case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR:
+                case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlComputeInstanceProfileInfo_v2_tCompare(*m_value.computeInstanceProfileInfo_v2Ptr, *other.m_value.computeInstanceProfileInfo_v2Ptr);
+                        return nvmlComputeInstanceProfileInfo_v3_tCompare(*m_value.ComputeInstanceProfileInfo_v3Ptr, *other.m_value.ComputeInstanceProfileInfo_v3Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceProfileInfo_v2_tCompare(*m_value.computeInstanceProfileInfo_v2Ptr, *other.m_value.computeInstanceProfileInfo_v2Ptr); ret)
+                        if (auto ret = nvmlComputeInstanceProfileInfo_v3_tCompare(*m_value.ComputeInstanceProfileInfo_v3Ptr, *other.m_value.ComputeInstanceProfileInfo_v3Ptr); ret)
                         {
                             return ret;
                         }
@@ -4773,38 +9731,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_COMPUTEINSTANCE:
+                case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.computeInstance < other.m_value.computeInstance)
-                    {
-                        return -1;
-                    }
-                    else if (m_value.computeInstance > other.m_value.computeInstance)
-                    {
-                        return 1;
-                    }
-                    else
-                    {
-                        return 0;
-                    }
+                    return nvmlComputeInstanceProfileInfo_v3_tCompare(m_value.ComputeInstanceProfileInfo_v3, other.m_value.ComputeInstanceProfileInfo_v3);
                     break; // NOT REACHED
                 }
                 case INJECTION_COMPUTEINSTANCE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.computeInstancePtr, other.m_value.computeInstancePtr, size * sizeof(*m_value.computeInstancePtr));
+                    return memcmp(m_value.ComputeInstancePtr, other.m_value.ComputeInstancePtr, size * sizeof(*m_value.ComputeInstancePtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_COMPUTEMODE:
+                case INJECTION_COMPUTEINSTANCE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.computeMode < other.m_value.computeMode)
+                    if (m_value.ComputeInstance < other.m_value.ComputeInstance)
                     {
                         return -1;
                     }
-                    else if (m_value.computeMode > other.m_value.computeMode)
+                    else if (m_value.ComputeInstance > other.m_value.ComputeInstance)
                     {
                         return 1;
                     }
@@ -4819,54 +9766,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.computeModePtr == *other.m_value.computeModePtr)
+                        if (*m_value.ComputeModePtr == *other.m_value.ComputeModePtr)
                         {
                             return 0;
                         }
-                        return *m_value.computeModePtr < *other.m_value.computeModePtr ? -1 : 1;
+                        return *m_value.ComputeModePtr < *other.m_value.ComputeModePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.computeModePtr[i] == other.m_value.computeModePtr[i])
+                        if (m_value.ComputeModePtr[i] == other.m_value.ComputeModePtr[i])
                         {
                             continue;
                         }
-                        return m_value.computeModePtr[i] < other.m_value.computeModePtr[i] ? -1 : 1;
+                        return m_value.ComputeModePtr[i] < other.m_value.ComputeModePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_CONFCOMPUTESYSTEMSTATE:
+                case INJECTION_COMPUTEMODE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlConfComputeSystemState_tCompare(m_value.confComputeSystemState, other.m_value.confComputeSystemState);
-                    break; // NOT REACHED
-                }
-                case INJECTION_CONFCOMPUTESYSTEMSTATE_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (!m_isArray)
-                    {
-                        return nvmlConfComputeSystemState_tCompare(*m_value.confComputeSystemStatePtr, *other.m_value.confComputeSystemStatePtr);
-                    }
-                    for (unsigned i = 0; i < m_arrLen; ++i)
-                    {
-                        if (auto ret = nvmlConfComputeSystemState_tCompare(*m_value.confComputeSystemStatePtr, *other.m_value.confComputeSystemStatePtr); ret)
-                        {
-                            return ret;
-                        }
-                    }
-                    return 0;
-                    break; // NOT REACHED
-                }
-                case INJECTION_DETACHGPUSTATE:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.detachGpuState < other.m_value.detachGpuState)
+                    if (m_value.ComputeMode < other.m_value.ComputeMode)
                     {
                         return -1;
                     }
-                    else if (m_value.detachGpuState > other.m_value.detachGpuState)
+                    else if (m_value.ComputeMode > other.m_value.ComputeMode)
                     {
                         return 1;
                     }
@@ -4876,22 +9800,16 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_DEVICEATTRIBUTES:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlDeviceAttributes_tCompare(m_value.deviceAttributes, other.m_value.deviceAttributes);
-                    break; // NOT REACHED
-                }
-                case INJECTION_DEVICEATTRIBUTES_PTR:
+                case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlDeviceAttributes_tCompare(*m_value.deviceAttributesPtr, *other.m_value.deviceAttributesPtr);
+                        return nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDeviceAttributes_tCompare(*m_value.deviceAttributesPtr, *other.m_value.deviceAttributesPtr); ret)
+                        if (auto ret = nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr); ret)
                         {
                             return ret;
                         }
@@ -4899,14 +9817,490 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_DEVICE:
+                case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.device < other.m_value.device)
+                    return nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(m_value.ConfComputeGetKeyRotationThresholdInfo_v1, other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeGpuAttestationReport_tCompare(*m_value.ConfComputeGpuAttestationReportPtr, *other.m_value.ConfComputeGpuAttestationReportPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeGpuAttestationReport_tCompare(*m_value.ConfComputeGpuAttestationReportPtr, *other.m_value.ConfComputeGpuAttestationReportPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeGpuAttestationReport_tCompare(m_value.ConfComputeGpuAttestationReport, other.m_value.ConfComputeGpuAttestationReport);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeGpuCertificate_tCompare(*m_value.ConfComputeGpuCertificatePtr, *other.m_value.ConfComputeGpuCertificatePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeGpuCertificate_tCompare(*m_value.ConfComputeGpuCertificatePtr, *other.m_value.ConfComputeGpuCertificatePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEGPUCERTIFICATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeGpuCertificate_tCompare(m_value.ConfComputeGpuCertificate, other.m_value.ConfComputeGpuCertificate);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeMemSizeInfo_tCompare(*m_value.ConfComputeMemSizeInfoPtr, *other.m_value.ConfComputeMemSizeInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeMemSizeInfo_tCompare(*m_value.ConfComputeMemSizeInfoPtr, *other.m_value.ConfComputeMemSizeInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTEMEMSIZEINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeMemSizeInfo_tCompare(m_value.ConfComputeMemSizeInfo, other.m_value.ConfComputeMemSizeInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(m_value.ConfComputeSetKeyRotationThresholdInfo_v1, other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESYSTEMCAPS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeSystemCaps_tCompare(*m_value.ConfComputeSystemCapsPtr, *other.m_value.ConfComputeSystemCapsPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeSystemCaps_tCompare(*m_value.ConfComputeSystemCapsPtr, *other.m_value.ConfComputeSystemCapsPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESYSTEMCAPS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeSystemCaps_tCompare(m_value.ConfComputeSystemCaps, other.m_value.ConfComputeSystemCaps);
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESYSTEMSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlConfComputeSystemState_tCompare(*m_value.ConfComputeSystemStatePtr, *other.m_value.ConfComputeSystemStatePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlConfComputeSystemState_tCompare(*m_value.ConfComputeSystemStatePtr, *other.m_value.ConfComputeSystemStatePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_CONFCOMPUTESYSTEMSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlConfComputeSystemState_tCompare(m_value.ConfComputeSystemState, other.m_value.ConfComputeSystemState);
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERCONTROL_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.CoolerControlPtr == *other.m_value.CoolerControlPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.CoolerControlPtr < *other.m_value.CoolerControlPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.CoolerControlPtr[i] == other.m_value.CoolerControlPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.CoolerControlPtr[i] < other.m_value.CoolerControlPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERCONTROL:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.CoolerControl < other.m_value.CoolerControl)
                     {
                         return -1;
                     }
-                    else if (m_value.device > other.m_value.device)
+                    else if (m_value.CoolerControl > other.m_value.CoolerControl)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlCoolerInfo_tCompare(*m_value.CoolerInfoPtr, *other.m_value.CoolerInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlCoolerInfo_tCompare(*m_value.CoolerInfoPtr, *other.m_value.CoolerInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlCoolerInfo_tCompare(m_value.CoolerInfo, other.m_value.CoolerInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERTARGET_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.CoolerTargetPtr == *other.m_value.CoolerTargetPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.CoolerTargetPtr < *other.m_value.CoolerTargetPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.CoolerTargetPtr[i] == other.m_value.CoolerTargetPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.CoolerTargetPtr[i] < other.m_value.CoolerTargetPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_COOLERTARGET:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.CoolerTarget < other.m_value.CoolerTarget)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.CoolerTarget > other.m_value.CoolerTarget)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_DETACHGPUSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.DetachGpuStatePtr == *other.m_value.DetachGpuStatePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.DetachGpuStatePtr < *other.m_value.DetachGpuStatePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.DetachGpuStatePtr[i] == other.m_value.DetachGpuStatePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.DetachGpuStatePtr[i] < other.m_value.DetachGpuStatePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DETACHGPUSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.DetachGpuState < other.m_value.DetachGpuState)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.DetachGpuState > other.m_value.DetachGpuState)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEARCHITECTURE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.DeviceArchitecturePtr == *other.m_value.DeviceArchitecturePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.DeviceArchitecturePtr < *other.m_value.DeviceArchitecturePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.DeviceArchitecturePtr[i] == other.m_value.DeviceArchitecturePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.DeviceArchitecturePtr[i] < other.m_value.DeviceArchitecturePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEARCHITECTURE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.DeviceArchitecture < other.m_value.DeviceArchitecture)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.DeviceArchitecture > other.m_value.DeviceArchitecture)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEATTRIBUTES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlDeviceAttributes_tCompare(*m_value.DeviceAttributesPtr, *other.m_value.DeviceAttributesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlDeviceAttributes_tCompare(*m_value.DeviceAttributesPtr, *other.m_value.DeviceAttributesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEATTRIBUTES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlDeviceAttributes_tCompare(m_value.DeviceAttributes, other.m_value.DeviceAttributes);
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICECAPABILITIES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlDeviceCapabilities_tCompare(*m_value.DeviceCapabilitiesPtr, *other.m_value.DeviceCapabilitiesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlDeviceCapabilities_tCompare(*m_value.DeviceCapabilitiesPtr, *other.m_value.DeviceCapabilitiesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICECAPABILITIES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlDeviceCapabilities_tCompare(m_value.DeviceCapabilities, other.m_value.DeviceCapabilities);
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICECURRENTCLOCKFREQS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlDeviceCurrentClockFreqs_tCompare(*m_value.DeviceCurrentClockFreqsPtr, *other.m_value.DeviceCurrentClockFreqsPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlDeviceCurrentClockFreqs_tCompare(*m_value.DeviceCurrentClockFreqsPtr, *other.m_value.DeviceCurrentClockFreqsPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICECURRENTCLOCKFREQS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlDeviceCurrentClockFreqs_tCompare(m_value.DeviceCurrentClockFreqs, other.m_value.DeviceCurrentClockFreqs);
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEGPURECOVERYACTION_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.DeviceGpuRecoveryActionPtr == *other.m_value.DeviceGpuRecoveryActionPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.DeviceGpuRecoveryActionPtr < *other.m_value.DeviceGpuRecoveryActionPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.DeviceGpuRecoveryActionPtr[i] == other.m_value.DeviceGpuRecoveryActionPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.DeviceGpuRecoveryActionPtr[i] < other.m_value.DeviceGpuRecoveryActionPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEGPURECOVERYACTION:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.DeviceGpuRecoveryAction < other.m_value.DeviceGpuRecoveryAction)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.DeviceGpuRecoveryAction > other.m_value.DeviceGpuRecoveryAction)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEPERFMODES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlDevicePerfModes_tCompare(*m_value.DevicePerfModesPtr, *other.m_value.DevicePerfModesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlDevicePerfModes_tCompare(*m_value.DevicePerfModesPtr, *other.m_value.DevicePerfModesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEPERFMODES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlDevicePerfModes_tCompare(m_value.DevicePerfModes, other.m_value.DevicePerfModes);
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEVGPUCAPABILITY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.DeviceVgpuCapabilityPtr == *other.m_value.DeviceVgpuCapabilityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.DeviceVgpuCapabilityPtr < *other.m_value.DeviceVgpuCapabilityPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.DeviceVgpuCapabilityPtr[i] == other.m_value.DeviceVgpuCapabilityPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.DeviceVgpuCapabilityPtr[i] < other.m_value.DeviceVgpuCapabilityPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DEVICEVGPUCAPABILITY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.DeviceVgpuCapability < other.m_value.DeviceVgpuCapability)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.DeviceVgpuCapability > other.m_value.DeviceVgpuCapability)
                     {
                         return 1;
                     }
@@ -4920,17 +10314,17 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.devicePtr, other.m_value.devicePtr, size * sizeof(*m_value.devicePtr));
+                    return memcmp(m_value.DevicePtr, other.m_value.DevicePtr, size * sizeof(*m_value.DevicePtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_DRIVERMODEL:
+                case INJECTION_DEVICE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.driverModel < other.m_value.driverModel)
+                    if (m_value.Device < other.m_value.Device)
                     {
                         return -1;
                     }
-                    else if (m_value.driverModel > other.m_value.driverModel)
+                    else if (m_value.Device > other.m_value.Device)
                     {
                         return 1;
                     }
@@ -4945,19 +10339,58 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.driverModelPtr == *other.m_value.driverModelPtr)
+                        if (*m_value.DriverModelPtr == *other.m_value.DriverModelPtr)
                         {
                             return 0;
                         }
-                        return *m_value.driverModelPtr < *other.m_value.driverModelPtr ? -1 : 1;
+                        return *m_value.DriverModelPtr < *other.m_value.DriverModelPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.driverModelPtr[i] == other.m_value.driverModelPtr[i])
+                        if (m_value.DriverModelPtr[i] == other.m_value.DriverModelPtr[i])
                         {
                             continue;
                         }
-                        return m_value.driverModelPtr[i] < other.m_value.driverModelPtr[i] ? -1 : 1;
+                        return m_value.DriverModelPtr[i] < other.m_value.DriverModelPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DRIVERMODEL:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.DriverModel < other.m_value.DriverModel)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.DriverModel > other.m_value.DriverModel)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_ECCCOUNTERTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.EccCounterTypePtr == *other.m_value.EccCounterTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.EccCounterTypePtr < *other.m_value.EccCounterTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.EccCounterTypePtr[i] == other.m_value.EccCounterTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.EccCounterTypePtr[i] < other.m_value.EccCounterTypePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
@@ -4965,11 +10398,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_ECCCOUNTERTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.eccCounterType < other.m_value.eccCounterType)
+                    if (m_value.EccCounterType < other.m_value.EccCounterType)
                     {
                         return -1;
                     }
-                    else if (m_value.eccCounterType > other.m_value.eccCounterType)
+                    else if (m_value.EccCounterType > other.m_value.EccCounterType)
                     {
                         return 1;
                     }
@@ -4977,12 +10410,6 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
-                    break; // NOT REACHED
-                }
-                case INJECTION_ECCERRORCOUNTS:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlEccErrorCounts_tCompare(m_value.eccErrorCounts, other.m_value.eccErrorCounts);
                     break; // NOT REACHED
                 }
                 case INJECTION_ECCERRORCOUNTS_PTR:
@@ -4990,11 +10417,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlEccErrorCounts_tCompare(*m_value.eccErrorCountsPtr, *other.m_value.eccErrorCountsPtr);
+                        return nvmlEccErrorCounts_tCompare(*m_value.EccErrorCountsPtr, *other.m_value.EccErrorCountsPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEccErrorCounts_tCompare(*m_value.eccErrorCountsPtr, *other.m_value.eccErrorCountsPtr); ret)
+                        if (auto ret = nvmlEccErrorCounts_tCompare(*m_value.EccErrorCountsPtr, *other.m_value.EccErrorCountsPtr); ret)
                         {
                             return ret;
                         }
@@ -5002,21 +10429,33 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ENABLESTATE:
+                case INJECTION_ECCERRORCOUNTS:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.enableState < other.m_value.enableState)
+                    return nvmlEccErrorCounts_tCompare(m_value.EccErrorCounts, other.m_value.EccErrorCounts);
+                    break; // NOT REACHED
+                }
+                case INJECTION_ECCSRAMERRORSTATUS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
                     {
-                        return -1;
+                        return nvmlEccSramErrorStatus_tCompare(*m_value.EccSramErrorStatusPtr, *other.m_value.EccSramErrorStatusPtr);
                     }
-                    else if (m_value.enableState > other.m_value.enableState)
+                    for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        return 1;
+                        if (auto ret = nvmlEccSramErrorStatus_tCompare(*m_value.EccSramErrorStatusPtr, *other.m_value.EccSramErrorStatusPtr); ret)
+                        {
+                            return ret;
+                        }
                     }
-                    else
-                    {
-                        return 0;
-                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_ECCSRAMERRORSTATUS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEccSramErrorStatus_tCompare(m_value.EccSramErrorStatus, other.m_value.EccSramErrorStatus);
                     break; // NOT REACHED
                 }
                 case INJECTION_ENABLESTATE_PTR:
@@ -5024,54 +10463,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.enableStatePtr == *other.m_value.enableStatePtr)
+                        if (*m_value.EnableStatePtr == *other.m_value.EnableStatePtr)
                         {
                             return 0;
                         }
-                        return *m_value.enableStatePtr < *other.m_value.enableStatePtr ? -1 : 1;
+                        return *m_value.EnableStatePtr < *other.m_value.EnableStatePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.enableStatePtr[i] == other.m_value.enableStatePtr[i])
+                        if (m_value.EnableStatePtr[i] == other.m_value.EnableStatePtr[i])
                         {
                             continue;
                         }
-                        return m_value.enableStatePtr[i] < other.m_value.enableStatePtr[i] ? -1 : 1;
+                        return m_value.EnableStatePtr[i] < other.m_value.EnableStatePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ENCODERSESSIONINFO:
+                case INJECTION_ENABLESTATE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlEncoderSessionInfo_tCompare(m_value.encoderSessionInfo, other.m_value.encoderSessionInfo);
-                    break; // NOT REACHED
-                }
-                case INJECTION_ENCODERSESSIONINFO_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (!m_isArray)
-                    {
-                        return nvmlEncoderSessionInfo_tCompare(*m_value.encoderSessionInfoPtr, *other.m_value.encoderSessionInfoPtr);
-                    }
-                    for (unsigned i = 0; i < m_arrLen; ++i)
-                    {
-                        if (auto ret = nvmlEncoderSessionInfo_tCompare(*m_value.encoderSessionInfoPtr, *other.m_value.encoderSessionInfoPtr); ret)
-                        {
-                            return ret;
-                        }
-                    }
-                    return 0;
-                    break; // NOT REACHED
-                }
-                case INJECTION_ENCODERTYPE:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.encoderType < other.m_value.encoderType)
+                    if (m_value.EnableState < other.m_value.EnableState)
                     {
                         return -1;
                     }
-                    else if (m_value.encoderType > other.m_value.encoderType)
+                    else if (m_value.EnableState > other.m_value.EnableState)
                     {
                         return 1;
                     }
@@ -5081,22 +10497,16 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_EVENTDATA:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlEventData_tCompare(m_value.eventData, other.m_value.eventData);
-                    break; // NOT REACHED
-                }
-                case INJECTION_EVENTDATA_PTR:
+                case INJECTION_ENCODERSESSIONINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlEventData_tCompare(*m_value.eventDataPtr, *other.m_value.eventDataPtr);
+                        return nvmlEncoderSessionInfo_tCompare(*m_value.EncoderSessionInfoPtr, *other.m_value.EncoderSessionInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEventData_tCompare(*m_value.eventDataPtr, *other.m_value.eventDataPtr); ret)
+                        if (auto ret = nvmlEncoderSessionInfo_tCompare(*m_value.EncoderSessionInfoPtr, *other.m_value.EncoderSessionInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -5104,23 +10514,85 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_EVENTSET:
+                case INJECTION_ENCODERSESSIONINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.eventSet, &other.m_value.eventSet, sizeof(m_value.eventSet));
+                    return nvmlEncoderSessionInfo_tCompare(m_value.EncoderSessionInfo, other.m_value.EncoderSessionInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_ENCODERTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.EncoderTypePtr == *other.m_value.EncoderTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.EncoderTypePtr < *other.m_value.EncoderTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.EncoderTypePtr[i] == other.m_value.EncoderTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.EncoderTypePtr[i] < other.m_value.EncoderTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_ENCODERTYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.EncoderType < other.m_value.EncoderType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.EncoderType > other.m_value.EncoderType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTDATA_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventData_tCompare(*m_value.EventDataPtr, *other.m_value.EventDataPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventData_tCompare(*m_value.EventDataPtr, *other.m_value.EventDataPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTDATA:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventData_tCompare(m_value.EventData, other.m_value.EventData);
                     break; // NOT REACHED
                 }
                 case INJECTION_EVENTSET_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.eventSetPtr, other.m_value.eventSetPtr, size * sizeof(*m_value.eventSetPtr));
+                    return memcmp(m_value.EventSetPtr, other.m_value.EventSetPtr, size * sizeof(*m_value.EventSetPtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_EXCLUDEDDEVICEINFO:
+                case INJECTION_EVENTSET:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlExcludedDeviceInfo_tCompare(m_value.excludedDeviceInfo, other.m_value.excludedDeviceInfo);
+                    return memcmp(&m_value.EventSet, &other.m_value.EventSet, sizeof(m_value.EventSet));
                     break; // NOT REACHED
                 }
                 case INJECTION_EXCLUDEDDEVICEINFO_PTR:
@@ -5128,11 +10600,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlExcludedDeviceInfo_tCompare(*m_value.excludedDeviceInfoPtr, *other.m_value.excludedDeviceInfoPtr);
+                        return nvmlExcludedDeviceInfo_tCompare(*m_value.ExcludedDeviceInfoPtr, *other.m_value.ExcludedDeviceInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlExcludedDeviceInfo_tCompare(*m_value.excludedDeviceInfoPtr, *other.m_value.excludedDeviceInfoPtr); ret)
+                        if (auto ret = nvmlExcludedDeviceInfo_tCompare(*m_value.ExcludedDeviceInfoPtr, *other.m_value.ExcludedDeviceInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EXCLUDEDDEVICEINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlExcludedDeviceInfo_tCompare(m_value.ExcludedDeviceInfo, other.m_value.ExcludedDeviceInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_FBCSESSIONINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlFBCSessionInfo_tCompare(*m_value.FBCSessionInfoPtr, *other.m_value.FBCSessionInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlFBCSessionInfo_tCompare(*m_value.FBCSessionInfoPtr, *other.m_value.FBCSessionInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -5143,19 +10638,58 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_FBCSESSIONINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlFBCSessionInfo_tCompare(m_value.fBCSessionInfo, other.m_value.fBCSessionInfo);
+                    return nvmlFBCSessionInfo_tCompare(m_value.FBCSessionInfo, other.m_value.FBCSessionInfo);
                     break; // NOT REACHED
                 }
-                case INJECTION_FBCSESSIONINFO_PTR:
+                case INJECTION_FBCSESSIONTYPE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlFBCSessionInfo_tCompare(*m_value.fBCSessionInfoPtr, *other.m_value.fBCSessionInfoPtr);
+                        if (*m_value.FBCSessionTypePtr == *other.m_value.FBCSessionTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.FBCSessionTypePtr < *other.m_value.FBCSessionTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFBCSessionInfo_tCompare(*m_value.fBCSessionInfoPtr, *other.m_value.fBCSessionInfoPtr); ret)
+                        if (m_value.FBCSessionTypePtr[i] == other.m_value.FBCSessionTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.FBCSessionTypePtr[i] < other.m_value.FBCSessionTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_FBCSESSIONTYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.FBCSessionType < other.m_value.FBCSessionType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.FBCSessionType > other.m_value.FBCSessionType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_FBCSTATS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlFBCStats_tCompare(*m_value.FBCStatsPtr, *other.m_value.FBCStatsPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlFBCStats_tCompare(*m_value.FBCStatsPtr, *other.m_value.FBCStatsPtr); ret)
                         {
                             return ret;
                         }
@@ -5166,19 +10700,120 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_FBCSTATS:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlFBCStats_tCompare(m_value.fBCStats, other.m_value.fBCStats);
+                    return nvmlFBCStats_tCompare(m_value.FBCStats, other.m_value.FBCStats);
                     break; // NOT REACHED
                 }
-                case INJECTION_FBCSTATS_PTR:
+                case INJECTION_FANCONTROLPOLICY_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlFBCStats_tCompare(*m_value.fBCStatsPtr, *other.m_value.fBCStatsPtr);
+                        if (*m_value.FanControlPolicyPtr == *other.m_value.FanControlPolicyPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.FanControlPolicyPtr < *other.m_value.FanControlPolicyPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFBCStats_tCompare(*m_value.fBCStatsPtr, *other.m_value.fBCStatsPtr); ret)
+                        if (m_value.FanControlPolicyPtr[i] == other.m_value.FanControlPolicyPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.FanControlPolicyPtr[i] < other.m_value.FanControlPolicyPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_FANCONTROLPOLICY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.FanControlPolicy < other.m_value.FanControlPolicy)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.FanControlPolicy > other.m_value.FanControlPolicy)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_FANSPEEDINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlFanSpeedInfo_tCompare(*m_value.FanSpeedInfoPtr, *other.m_value.FanSpeedInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlFanSpeedInfo_tCompare(*m_value.FanSpeedInfoPtr, *other.m_value.FanSpeedInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_FANSPEEDINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlFanSpeedInfo_tCompare(m_value.FanSpeedInfo, other.m_value.FanSpeedInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_FANSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.FanStatePtr == *other.m_value.FanStatePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.FanStatePtr < *other.m_value.FanStatePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.FanStatePtr[i] == other.m_value.FanStatePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.FanStatePtr[i] < other.m_value.FanStatePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_FANSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.FanState < other.m_value.FanState)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.FanState > other.m_value.FanState)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_FIELDVALUE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlFieldValue_tCompare(*m_value.FieldValuePtr, *other.m_value.FieldValuePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlFieldValue_tCompare(*m_value.FieldValuePtr, *other.m_value.FieldValuePtr); ret)
                         {
                             return ret;
                         }
@@ -5189,56 +10824,85 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_FIELDVALUE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlFieldValue_tCompare(m_value.fieldValue, other.m_value.fieldValue);
+                    return nvmlFieldValue_tCompare(m_value.FieldValue, other.m_value.FieldValue);
                     break; // NOT REACHED
                 }
-                case INJECTION_FIELDVALUE_PTR:
+                case INJECTION_GPMMETRICID_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlFieldValue_tCompare(*m_value.fieldValuePtr, *other.m_value.fieldValuePtr);
+                        if (*m_value.GpmMetricIdPtr == *other.m_value.GpmMetricIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpmMetricIdPtr < *other.m_value.GpmMetricIdPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFieldValue_tCompare(*m_value.fieldValuePtr, *other.m_value.fieldValuePtr); ret)
+                        if (m_value.GpmMetricIdPtr[i] == other.m_value.GpmMetricIdPtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.GpmMetricIdPtr[i] < other.m_value.GpmMetricIdPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPMMETRICSGET:
+                case INJECTION_GPMMETRICID:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.gpmMetricsGet, &other.m_value.gpmMetricsGet, sizeof(m_value.gpmMetricsGet));
+                    if (m_value.GpmMetricId < other.m_value.GpmMetricId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpmMetricId > other.m_value.GpmMetricId)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPMMETRIC_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.GpmMetricPtr, other.m_value.GpmMetricPtr, size * sizeof(*m_value.GpmMetricPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPMMETRIC:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.GpmMetric, &other.m_value.GpmMetric, sizeof(m_value.GpmMetric));
                     break; // NOT REACHED
                 }
                 case INJECTION_GPMMETRICSGET_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.gpmMetricsGetPtr, other.m_value.gpmMetricsGetPtr, size * sizeof(*m_value.gpmMetricsGetPtr));
+                    return memcmp(m_value.GpmMetricsGetPtr, other.m_value.GpmMetricsGetPtr, size * sizeof(*m_value.GpmMetricsGetPtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_GPMSAMPLE:
+                case INJECTION_GPMMETRICSGET:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.gpmSample, &other.m_value.gpmSample, sizeof(m_value.gpmSample));
+                    return memcmp(&m_value.GpmMetricsGet, &other.m_value.GpmMetricsGet, sizeof(m_value.GpmMetricsGet));
                     break; // NOT REACHED
                 }
                 case INJECTION_GPMSAMPLE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.gpmSamplePtr, other.m_value.gpmSamplePtr, size * sizeof(*m_value.gpmSamplePtr));
+                    return memcmp(m_value.GpmSamplePtr, other.m_value.GpmSamplePtr, size * sizeof(*m_value.GpmSamplePtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_GPMSUPPORT:
+                case INJECTION_GPMSAMPLE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGpmSupport_tCompare(m_value.gpmSupport, other.m_value.gpmSupport);
+                    return memcmp(&m_value.GpmSample, &other.m_value.GpmSample, sizeof(m_value.GpmSample));
                     break; // NOT REACHED
                 }
                 case INJECTION_GPMSUPPORT_PTR:
@@ -5246,11 +10910,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpmSupport_tCompare(*m_value.gpmSupportPtr, *other.m_value.gpmSupportPtr);
+                        return nvmlGpmSupport_tCompare(*m_value.GpmSupportPtr, *other.m_value.GpmSupportPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpmSupport_tCompare(*m_value.gpmSupportPtr, *other.m_value.gpmSupportPtr); ret)
+                        if (auto ret = nvmlGpmSupport_tCompare(*m_value.GpmSupportPtr, *other.m_value.GpmSupportPtr); ret)
                         {
                             return ret;
                         }
@@ -5258,23 +10922,108 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUDYNAMICPSTATESINFO:
+                case INJECTION_GPMSUPPORT:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.gpuDynamicPstatesInfo, &other.m_value.gpuDynamicPstatesInfo, sizeof(m_value.gpuDynamicPstatesInfo));
+                    return nvmlGpmSupport_tCompare(m_value.GpmSupport, other.m_value.GpmSupport);
                     break; // NOT REACHED
                 }
                 case INJECTION_GPUDYNAMICPSTATESINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.gpuDynamicPstatesInfoPtr, other.m_value.gpuDynamicPstatesInfoPtr, size * sizeof(*m_value.gpuDynamicPstatesInfoPtr));
+                    return memcmp(m_value.GpuDynamicPstatesInfoPtr, other.m_value.GpuDynamicPstatesInfoPtr, size * sizeof(*m_value.GpuDynamicPstatesInfoPtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUINSTANCEINFO:
+                case INJECTION_GPUDYNAMICPSTATESINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGpuInstanceInfo_tCompare(m_value.gpuInstanceInfo, other.m_value.gpuInstanceInfo);
+                    return memcmp(&m_value.GpuDynamicPstatesInfo, &other.m_value.GpuDynamicPstatesInfo, sizeof(m_value.GpuDynamicPstatesInfo));
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICINFOV_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGpuFabricInfoV_tCompare(*m_value.GpuFabricInfoVPtr, *other.m_value.GpuFabricInfoVPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGpuFabricInfoV_tCompare(*m_value.GpuFabricInfoVPtr, *other.m_value.GpuFabricInfoVPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICINFOV:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGpuFabricInfoV_tCompare(m_value.GpuFabricInfoV, other.m_value.GpuFabricInfoV);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGpuFabricInfo_tCompare(*m_value.GpuFabricInfoPtr, *other.m_value.GpuFabricInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGpuFabricInfo_tCompare(*m_value.GpuFabricInfoPtr, *other.m_value.GpuFabricInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGpuFabricInfo_tCompare(m_value.GpuFabricInfo, other.m_value.GpuFabricInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GpuFabricStatePtr == *other.m_value.GpuFabricStatePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpuFabricStatePtr < *other.m_value.GpuFabricStatePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GpuFabricStatePtr[i] == other.m_value.GpuFabricStatePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GpuFabricStatePtr[i] < other.m_value.GpuFabricStatePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GpuFabricState < other.m_value.GpuFabricState)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpuFabricState > other.m_value.GpuFabricState)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 case INJECTION_GPUINSTANCEINFO_PTR:
@@ -5282,11 +11031,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpuInstanceInfo_tCompare(*m_value.gpuInstanceInfoPtr, *other.m_value.gpuInstanceInfoPtr);
+                        return nvmlGpuInstanceInfo_tCompare(*m_value.GpuInstanceInfoPtr, *other.m_value.GpuInstanceInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceInfo_tCompare(*m_value.gpuInstanceInfoPtr, *other.m_value.gpuInstanceInfoPtr); ret)
+                        if (auto ret = nvmlGpuInstanceInfo_tCompare(*m_value.GpuInstanceInfoPtr, *other.m_value.GpuInstanceInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUINSTANCEINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGpuInstanceInfo_tCompare(m_value.GpuInstanceInfo, other.m_value.GpuInstanceInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUINSTANCEPLACEMENT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGpuInstancePlacement_tCompare(*m_value.GpuInstancePlacementPtr, *other.m_value.GpuInstancePlacementPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGpuInstancePlacement_tCompare(*m_value.GpuInstancePlacementPtr, *other.m_value.GpuInstancePlacementPtr); ret)
                         {
                             return ret;
                         }
@@ -5297,19 +11069,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_GPUINSTANCEPLACEMENT:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGpuInstancePlacement_tCompare(m_value.gpuInstancePlacement, other.m_value.gpuInstancePlacement);
+                    return nvmlGpuInstancePlacement_tCompare(m_value.GpuInstancePlacement, other.m_value.GpuInstancePlacement);
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUINSTANCEPLACEMENT_PTR:
+                case INJECTION_GPUINSTANCEPROFILEINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpuInstancePlacement_tCompare(*m_value.gpuInstancePlacementPtr, *other.m_value.gpuInstancePlacementPtr);
+                        return nvmlGpuInstanceProfileInfo_tCompare(*m_value.GpuInstanceProfileInfoPtr, *other.m_value.GpuInstanceProfileInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstancePlacement_tCompare(*m_value.gpuInstancePlacementPtr, *other.m_value.gpuInstancePlacementPtr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_tCompare(*m_value.GpuInstanceProfileInfoPtr, *other.m_value.GpuInstanceProfileInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -5320,19 +11092,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_GPUINSTANCEPROFILEINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGpuInstanceProfileInfo_tCompare(m_value.gpuInstanceProfileInfo, other.m_value.gpuInstanceProfileInfo);
+                    return nvmlGpuInstanceProfileInfo_tCompare(m_value.GpuInstanceProfileInfo, other.m_value.GpuInstanceProfileInfo);
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUINSTANCEPROFILEINFO_PTR:
+                case INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpuInstanceProfileInfo_tCompare(*m_value.gpuInstanceProfileInfoPtr, *other.m_value.gpuInstanceProfileInfoPtr);
+                        return nvmlGpuInstanceProfileInfo_v2_tCompare(*m_value.GpuInstanceProfileInfo_v2Ptr, *other.m_value.GpuInstanceProfileInfo_v2Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceProfileInfo_tCompare(*m_value.gpuInstanceProfileInfoPtr, *other.m_value.gpuInstanceProfileInfoPtr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_v2_tCompare(*m_value.GpuInstanceProfileInfo_v2Ptr, *other.m_value.GpuInstanceProfileInfo_v2Ptr); ret)
                         {
                             return ret;
                         }
@@ -5343,19 +11115,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_GPUINSTANCEPROFILEINFO_V2:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGpuInstanceProfileInfo_v2_tCompare(m_value.gpuInstanceProfileInfo_v2, other.m_value.gpuInstanceProfileInfo_v2);
+                    return nvmlGpuInstanceProfileInfo_v2_tCompare(m_value.GpuInstanceProfileInfo_v2, other.m_value.GpuInstanceProfileInfo_v2);
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR:
+                case INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGpuInstanceProfileInfo_v2_tCompare(*m_value.gpuInstanceProfileInfo_v2Ptr, *other.m_value.gpuInstanceProfileInfo_v2Ptr);
+                        return nvmlGpuInstanceProfileInfo_v3_tCompare(*m_value.GpuInstanceProfileInfo_v3Ptr, *other.m_value.GpuInstanceProfileInfo_v3Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceProfileInfo_v2_tCompare(*m_value.gpuInstanceProfileInfo_v2Ptr, *other.m_value.gpuInstanceProfileInfo_v2Ptr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_v3_tCompare(*m_value.GpuInstanceProfileInfo_v3Ptr, *other.m_value.GpuInstanceProfileInfo_v3Ptr); ret)
                         {
                             return ret;
                         }
@@ -5363,34 +11135,23 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUINSTANCE:
+                case INJECTION_GPUINSTANCEPROFILEINFO_V3:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.gpuInstance, &other.m_value.gpuInstance, sizeof(m_value.gpuInstance));
+                    return nvmlGpuInstanceProfileInfo_v3_tCompare(m_value.GpuInstanceProfileInfo_v3, other.m_value.GpuInstanceProfileInfo_v3);
                     break; // NOT REACHED
                 }
                 case INJECTION_GPUINSTANCE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.gpuInstancePtr, other.m_value.gpuInstancePtr, size * sizeof(*m_value.gpuInstancePtr));
+                    return memcmp(m_value.GpuInstancePtr, other.m_value.GpuInstancePtr, size * sizeof(*m_value.GpuInstancePtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUOPERATIONMODE:
+                case INJECTION_GPUINSTANCE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.gpuOperationMode < other.m_value.gpuOperationMode)
-                    {
-                        return -1;
-                    }
-                    else if (m_value.gpuOperationMode > other.m_value.gpuOperationMode)
-                    {
-                        return 1;
-                    }
-                    else
-                    {
-                        return 0;
-                    }
+                    return memcmp(&m_value.GpuInstance, &other.m_value.GpuInstance, sizeof(m_value.GpuInstance));
                     break; // NOT REACHED
                 }
                 case INJECTION_GPUOPERATIONMODE_PTR:
@@ -5398,31 +11159,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.gpuOperationModePtr == *other.m_value.gpuOperationModePtr)
+                        if (*m_value.GpuOperationModePtr == *other.m_value.GpuOperationModePtr)
                         {
                             return 0;
                         }
-                        return *m_value.gpuOperationModePtr < *other.m_value.gpuOperationModePtr ? -1 : 1;
+                        return *m_value.GpuOperationModePtr < *other.m_value.GpuOperationModePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.gpuOperationModePtr[i] == other.m_value.gpuOperationModePtr[i])
+                        if (m_value.GpuOperationModePtr[i] == other.m_value.GpuOperationModePtr[i])
                         {
                             continue;
                         }
-                        return m_value.gpuOperationModePtr[i] < other.m_value.gpuOperationModePtr[i] ? -1 : 1;
+                        return m_value.GpuOperationModePtr[i] < other.m_value.GpuOperationModePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUP2PCAPSINDEX:
+                case INJECTION_GPUOPERATIONMODE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.gpuP2PCapsIndex < other.m_value.gpuP2PCapsIndex)
+                    if (m_value.GpuOperationMode < other.m_value.GpuOperationMode)
                     {
                         return -1;
                     }
-                    else if (m_value.gpuP2PCapsIndex > other.m_value.gpuP2PCapsIndex)
+                    else if (m_value.GpuOperationMode > other.m_value.GpuOperationMode)
                     {
                         return 1;
                     }
@@ -5432,14 +11193,36 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUP2PSTATUS:
+                case INJECTION_GPUP2PCAPSINDEX_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.gpuP2PStatus < other.m_value.gpuP2PStatus)
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GpuP2PCapsIndexPtr == *other.m_value.GpuP2PCapsIndexPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpuP2PCapsIndexPtr < *other.m_value.GpuP2PCapsIndexPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GpuP2PCapsIndexPtr[i] == other.m_value.GpuP2PCapsIndexPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GpuP2PCapsIndexPtr[i] < other.m_value.GpuP2PCapsIndexPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUP2PCAPSINDEX:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GpuP2PCapsIndex < other.m_value.GpuP2PCapsIndex)
                     {
                         return -1;
                     }
-                    else if (m_value.gpuP2PStatus > other.m_value.gpuP2PStatus)
+                    else if (m_value.GpuP2PCapsIndex > other.m_value.GpuP2PCapsIndex)
                     {
                         return 1;
                     }
@@ -5454,44 +11237,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.gpuP2PStatusPtr == *other.m_value.gpuP2PStatusPtr)
+                        if (*m_value.GpuP2PStatusPtr == *other.m_value.GpuP2PStatusPtr)
                         {
                             return 0;
                         }
-                        return *m_value.gpuP2PStatusPtr < *other.m_value.gpuP2PStatusPtr ? -1 : 1;
+                        return *m_value.GpuP2PStatusPtr < *other.m_value.GpuP2PStatusPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.gpuP2PStatusPtr[i] == other.m_value.gpuP2PStatusPtr[i])
+                        if (m_value.GpuP2PStatusPtr[i] == other.m_value.GpuP2PStatusPtr[i])
                         {
                             continue;
                         }
-                        return m_value.gpuP2PStatusPtr[i] < other.m_value.gpuP2PStatusPtr[i] ? -1 : 1;
+                        return m_value.GpuP2PStatusPtr[i] < other.m_value.GpuP2PStatusPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUTHERMALSETTINGS:
+                case INJECTION_GPUP2PSTATUS:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.gpuThermalSettings, &other.m_value.gpuThermalSettings, sizeof(m_value.gpuThermalSettings));
-                    break; // NOT REACHED
-                }
-                case INJECTION_GPUTHERMALSETTINGS_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.gpuThermalSettingsPtr, other.m_value.gpuThermalSettingsPtr, size * sizeof(*m_value.gpuThermalSettingsPtr));
-                    break; // NOT REACHED
-                }
-                case INJECTION_GPUTOPOLOGYLEVEL:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.gpuTopologyLevel < other.m_value.gpuTopologyLevel)
+                    if (m_value.GpuP2PStatus < other.m_value.GpuP2PStatus)
                     {
                         return -1;
                     }
-                    else if (m_value.gpuTopologyLevel > other.m_value.gpuTopologyLevel)
+                    else if (m_value.GpuP2PStatus > other.m_value.GpuP2PStatus)
                     {
                         return 1;
                     }
@@ -5501,36 +11271,88 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
+                case INJECTION_GPUTHERMALSETTINGS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.GpuThermalSettingsPtr, other.m_value.GpuThermalSettingsPtr, size * sizeof(*m_value.GpuThermalSettingsPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUTHERMALSETTINGS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.GpuThermalSettings, &other.m_value.GpuThermalSettings, sizeof(m_value.GpuThermalSettings));
+                    break; // NOT REACHED
+                }
                 case INJECTION_GPUTOPOLOGYLEVEL_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.gpuTopologyLevelPtr == *other.m_value.gpuTopologyLevelPtr)
+                        if (*m_value.GpuTopologyLevelPtr == *other.m_value.GpuTopologyLevelPtr)
                         {
                             return 0;
                         }
-                        return *m_value.gpuTopologyLevelPtr < *other.m_value.gpuTopologyLevelPtr ? -1 : 1;
+                        return *m_value.GpuTopologyLevelPtr < *other.m_value.GpuTopologyLevelPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.gpuTopologyLevelPtr[i] == other.m_value.gpuTopologyLevelPtr[i])
+                        if (m_value.GpuTopologyLevelPtr[i] == other.m_value.GpuTopologyLevelPtr[i])
                         {
                             continue;
                         }
-                        return m_value.gpuTopologyLevelPtr[i] < other.m_value.gpuTopologyLevelPtr[i] ? -1 : 1;
+                        return m_value.GpuTopologyLevelPtr[i] < other.m_value.GpuTopologyLevelPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GPUVIRTUALIZATIONMODE:
+                case INJECTION_GPUTOPOLOGYLEVEL:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.gpuVirtualizationMode < other.m_value.gpuVirtualizationMode)
+                    if (m_value.GpuTopologyLevel < other.m_value.GpuTopologyLevel)
                     {
                         return -1;
                     }
-                    else if (m_value.gpuVirtualizationMode > other.m_value.gpuVirtualizationMode)
+                    else if (m_value.GpuTopologyLevel > other.m_value.GpuTopologyLevel)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUUTILIZATIONDOMAINID_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GpuUtilizationDomainIdPtr == *other.m_value.GpuUtilizationDomainIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpuUtilizationDomainIdPtr < *other.m_value.GpuUtilizationDomainIdPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GpuUtilizationDomainIdPtr[i] == other.m_value.GpuUtilizationDomainIdPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GpuUtilizationDomainIdPtr[i] < other.m_value.GpuUtilizationDomainIdPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUUTILIZATIONDOMAINID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GpuUtilizationDomainId < other.m_value.GpuUtilizationDomainId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpuUtilizationDomainId > other.m_value.GpuUtilizationDomainId)
                     {
                         return 1;
                     }
@@ -5545,39 +11367,50 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.gpuVirtualizationModePtr == *other.m_value.gpuVirtualizationModePtr)
+                        if (*m_value.GpuVirtualizationModePtr == *other.m_value.GpuVirtualizationModePtr)
                         {
                             return 0;
                         }
-                        return *m_value.gpuVirtualizationModePtr < *other.m_value.gpuVirtualizationModePtr ? -1 : 1;
+                        return *m_value.GpuVirtualizationModePtr < *other.m_value.GpuVirtualizationModePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.gpuVirtualizationModePtr[i] == other.m_value.gpuVirtualizationModePtr[i])
+                        if (m_value.GpuVirtualizationModePtr[i] == other.m_value.GpuVirtualizationModePtr[i])
                         {
                             continue;
                         }
-                        return m_value.gpuVirtualizationModePtr[i] < other.m_value.gpuVirtualizationModePtr[i] ? -1 : 1;
+                        return m_value.GpuVirtualizationModePtr[i] < other.m_value.GpuVirtualizationModePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_GRIDLICENSABLEFEATURES:
+                case INJECTION_GPUVIRTUALIZATIONMODE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlGridLicensableFeatures_tCompare(m_value.gridLicensableFeatures, other.m_value.gridLicensableFeatures);
+                    if (m_value.GpuVirtualizationMode < other.m_value.GpuVirtualizationMode)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpuVirtualizationMode > other.m_value.GpuVirtualizationMode)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
-                case INJECTION_GRIDLICENSABLEFEATURES_PTR:
+                case INJECTION_GRIDLICENSABLEFEATURE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlGridLicensableFeatures_tCompare(*m_value.gridLicensableFeaturesPtr, *other.m_value.gridLicensableFeaturesPtr);
+                        return nvmlGridLicensableFeature_tCompare(*m_value.GridLicensableFeaturePtr, *other.m_value.GridLicensableFeaturePtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGridLicensableFeatures_tCompare(*m_value.gridLicensableFeaturesPtr, *other.m_value.gridLicensableFeaturesPtr); ret)
+                        if (auto ret = nvmlGridLicensableFeature_tCompare(*m_value.GridLicensableFeaturePtr, *other.m_value.GridLicensableFeaturePtr); ret)
                         {
                             return ret;
                         }
@@ -5585,14 +11418,88 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_HOSTVGPUMODE:
+                case INJECTION_GRIDLICENSABLEFEATURE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.hostVgpuMode < other.m_value.hostVgpuMode)
+                    return nvmlGridLicensableFeature_tCompare(m_value.GridLicensableFeature, other.m_value.GridLicensableFeature);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSABLEFEATURES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGridLicensableFeatures_tCompare(*m_value.GridLicensableFeaturesPtr, *other.m_value.GridLicensableFeaturesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGridLicensableFeatures_tCompare(*m_value.GridLicensableFeaturesPtr, *other.m_value.GridLicensableFeaturesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSABLEFEATURES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGridLicensableFeatures_tCompare(m_value.GridLicensableFeatures, other.m_value.GridLicensableFeatures);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSEEXPIRY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGridLicenseExpiry_tCompare(*m_value.GridLicenseExpiryPtr, *other.m_value.GridLicenseExpiryPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGridLicenseExpiry_tCompare(*m_value.GridLicenseExpiryPtr, *other.m_value.GridLicenseExpiryPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSEEXPIRY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGridLicenseExpiry_tCompare(m_value.GridLicenseExpiry, other.m_value.GridLicenseExpiry);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSEFEATURECODE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GridLicenseFeatureCodePtr == *other.m_value.GridLicenseFeatureCodePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GridLicenseFeatureCodePtr < *other.m_value.GridLicenseFeatureCodePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GridLicenseFeatureCodePtr[i] == other.m_value.GridLicenseFeatureCodePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GridLicenseFeatureCodePtr[i] < other.m_value.GridLicenseFeatureCodePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GRIDLICENSEFEATURECODE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GridLicenseFeatureCode < other.m_value.GridLicenseFeatureCode)
                     {
                         return -1;
                     }
-                    else if (m_value.hostVgpuMode > other.m_value.hostVgpuMode)
+                    else if (m_value.GridLicenseFeatureCode > other.m_value.GridLicenseFeatureCode)
                     {
                         return 1;
                     }
@@ -5607,54 +11514,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.hostVgpuModePtr == *other.m_value.hostVgpuModePtr)
+                        if (*m_value.HostVgpuModePtr == *other.m_value.HostVgpuModePtr)
                         {
                             return 0;
                         }
-                        return *m_value.hostVgpuModePtr < *other.m_value.hostVgpuModePtr ? -1 : 1;
+                        return *m_value.HostVgpuModePtr < *other.m_value.HostVgpuModePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.hostVgpuModePtr[i] == other.m_value.hostVgpuModePtr[i])
+                        if (m_value.HostVgpuModePtr[i] == other.m_value.HostVgpuModePtr[i])
                         {
                             continue;
                         }
-                        return m_value.hostVgpuModePtr[i] < other.m_value.hostVgpuModePtr[i] ? -1 : 1;
+                        return m_value.HostVgpuModePtr[i] < other.m_value.HostVgpuModePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_HWBCENTRY:
+                case INJECTION_HOSTVGPUMODE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlHwbcEntry_tCompare(m_value.hwbcEntry, other.m_value.hwbcEntry);
-                    break; // NOT REACHED
-                }
-                case INJECTION_HWBCENTRY_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (!m_isArray)
-                    {
-                        return nvmlHwbcEntry_tCompare(*m_value.hwbcEntryPtr, *other.m_value.hwbcEntryPtr);
-                    }
-                    for (unsigned i = 0; i < m_arrLen; ++i)
-                    {
-                        if (auto ret = nvmlHwbcEntry_tCompare(*m_value.hwbcEntryPtr, *other.m_value.hwbcEntryPtr); ret)
-                        {
-                            return ret;
-                        }
-                    }
-                    return 0;
-                    break; // NOT REACHED
-                }
-                case INJECTION_INFOROMOBJECT:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.inforomObject < other.m_value.inforomObject)
+                    if (m_value.HostVgpuMode < other.m_value.HostVgpuMode)
                     {
                         return -1;
                     }
-                    else if (m_value.inforomObject > other.m_value.inforomObject)
+                    else if (m_value.HostVgpuMode > other.m_value.HostVgpuMode)
                     {
                         return 1;
                     }
@@ -5664,14 +11548,59 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_INTNVLINKDEVICETYPE:
+                case INJECTION_HWBCENTRY_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.intNvLinkDeviceType < other.m_value.intNvLinkDeviceType)
+                    if (!m_isArray)
+                    {
+                        return nvmlHwbcEntry_tCompare(*m_value.HwbcEntryPtr, *other.m_value.HwbcEntryPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlHwbcEntry_tCompare(*m_value.HwbcEntryPtr, *other.m_value.HwbcEntryPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_HWBCENTRY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlHwbcEntry_tCompare(m_value.HwbcEntry, other.m_value.HwbcEntry);
+                    break; // NOT REACHED
+                }
+                case INJECTION_INFOROMOBJECT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.InforomObjectPtr == *other.m_value.InforomObjectPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.InforomObjectPtr < *other.m_value.InforomObjectPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.InforomObjectPtr[i] == other.m_value.InforomObjectPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.InforomObjectPtr[i] < other.m_value.InforomObjectPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_INFOROMOBJECT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.InforomObject < other.m_value.InforomObject)
                     {
                         return -1;
                     }
-                    else if (m_value.intNvLinkDeviceType > other.m_value.intNvLinkDeviceType)
+                    else if (m_value.InforomObject > other.m_value.InforomObject)
                     {
                         return 1;
                     }
@@ -5686,19 +11615,58 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.intNvLinkDeviceTypePtr == *other.m_value.intNvLinkDeviceTypePtr)
+                        if (*m_value.IntNvLinkDeviceTypePtr == *other.m_value.IntNvLinkDeviceTypePtr)
                         {
                             return 0;
                         }
-                        return *m_value.intNvLinkDeviceTypePtr < *other.m_value.intNvLinkDeviceTypePtr ? -1 : 1;
+                        return *m_value.IntNvLinkDeviceTypePtr < *other.m_value.IntNvLinkDeviceTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.intNvLinkDeviceTypePtr[i] == other.m_value.intNvLinkDeviceTypePtr[i])
+                        if (m_value.IntNvLinkDeviceTypePtr[i] == other.m_value.IntNvLinkDeviceTypePtr[i])
                         {
                             continue;
                         }
-                        return m_value.intNvLinkDeviceTypePtr[i] < other.m_value.intNvLinkDeviceTypePtr[i] ? -1 : 1;
+                        return m_value.IntNvLinkDeviceTypePtr[i] < other.m_value.IntNvLinkDeviceTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_INTNVLINKDEVICETYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.IntNvLinkDeviceType < other.m_value.IntNvLinkDeviceType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.IntNvLinkDeviceType > other.m_value.IntNvLinkDeviceType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_LEDCOLOR_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.LedColorPtr == *other.m_value.LedColorPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.LedColorPtr < *other.m_value.LedColorPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.LedColorPtr[i] == other.m_value.LedColorPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.LedColorPtr[i] < other.m_value.LedColorPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
@@ -5706,11 +11674,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_LEDCOLOR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.ledColor < other.m_value.ledColor)
+                    if (m_value.LedColor < other.m_value.LedColor)
                     {
                         return -1;
                     }
-                    else if (m_value.ledColor > other.m_value.ledColor)
+                    else if (m_value.LedColor > other.m_value.LedColor)
                     {
                         return 1;
                     }
@@ -5718,12 +11686,6 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
-                    break; // NOT REACHED
-                }
-                case INJECTION_LEDSTATE:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlLedState_tCompare(m_value.ledState, other.m_value.ledState);
                     break; // NOT REACHED
                 }
                 case INJECTION_LEDSTATE_PTR:
@@ -5731,11 +11693,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlLedState_tCompare(*m_value.ledStatePtr, *other.m_value.ledStatePtr);
+                        return nvmlLedState_tCompare(*m_value.LedStatePtr, *other.m_value.LedStatePtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlLedState_tCompare(*m_value.ledStatePtr, *other.m_value.ledStatePtr); ret)
+                        if (auto ret = nvmlLedState_tCompare(*m_value.LedStatePtr, *other.m_value.LedStatePtr); ret)
                         {
                             return ret;
                         }
@@ -5743,14 +11705,65 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
+                case INJECTION_LEDSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlLedState_tCompare(m_value.LedState, other.m_value.LedState);
+                    break; // NOT REACHED
+                }
+                case INJECTION_MASK255_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlMask255_tCompare(*m_value.Mask255Ptr, *other.m_value.Mask255Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlMask255_tCompare(*m_value.Mask255Ptr, *other.m_value.Mask255Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_MASK255:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlMask255_tCompare(m_value.Mask255, other.m_value.Mask255);
+                    break; // NOT REACHED
+                }
+                case INJECTION_MEMORYERRORTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.MemoryErrorTypePtr == *other.m_value.MemoryErrorTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.MemoryErrorTypePtr < *other.m_value.MemoryErrorTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.MemoryErrorTypePtr[i] == other.m_value.MemoryErrorTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.MemoryErrorTypePtr[i] < other.m_value.MemoryErrorTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
                 case INJECTION_MEMORYERRORTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.memoryErrorType < other.m_value.memoryErrorType)
+                    if (m_value.MemoryErrorType < other.m_value.MemoryErrorType)
                     {
                         return -1;
                     }
-                    else if (m_value.memoryErrorType > other.m_value.memoryErrorType)
+                    else if (m_value.MemoryErrorType > other.m_value.MemoryErrorType)
                     {
                         return 1;
                     }
@@ -5758,16 +11771,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_MEMORYLOCATION_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.MemoryLocationPtr == *other.m_value.MemoryLocationPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.MemoryLocationPtr < *other.m_value.MemoryLocationPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.MemoryLocationPtr[i] == other.m_value.MemoryLocationPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.MemoryLocationPtr[i] < other.m_value.MemoryLocationPtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_MEMORYLOCATION:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.memoryLocation < other.m_value.memoryLocation)
+                    if (m_value.MemoryLocation < other.m_value.MemoryLocation)
                     {
                         return -1;
                     }
-                    else if (m_value.memoryLocation > other.m_value.memoryLocation)
+                    else if (m_value.MemoryLocation > other.m_value.MemoryLocation)
                     {
                         return 1;
                     }
@@ -5775,12 +11810,6 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
-                    break; // NOT REACHED
-                }
-                case INJECTION_MEMORY:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlMemory_tCompare(m_value.memory, other.m_value.memory);
                     break; // NOT REACHED
                 }
                 case INJECTION_MEMORY_PTR:
@@ -5788,11 +11817,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlMemory_tCompare(*m_value.memoryPtr, *other.m_value.memoryPtr);
+                        return nvmlMemory_tCompare(*m_value.MemoryPtr, *other.m_value.MemoryPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMemory_tCompare(*m_value.memoryPtr, *other.m_value.memoryPtr); ret)
+                        if (auto ret = nvmlMemory_tCompare(*m_value.MemoryPtr, *other.m_value.MemoryPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_MEMORY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlMemory_tCompare(m_value.Memory, other.m_value.Memory);
+                    break; // NOT REACHED
+                }
+                case INJECTION_MEMORY_V2_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlMemory_v2_tCompare(*m_value.Memory_v2Ptr, *other.m_value.Memory_v2Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlMemory_v2_tCompare(*m_value.Memory_v2Ptr, *other.m_value.Memory_v2Ptr); ret)
                         {
                             return ret;
                         }
@@ -5803,22 +11855,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_MEMORY_V2:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlMemory_v2_tCompare(m_value.memory_v2, other.m_value.memory_v2);
+                    return nvmlMemory_v2_tCompare(m_value.Memory_v2, other.m_value.Memory_v2);
                     break; // NOT REACHED
                 }
-                case INJECTION_MEMORY_V2_PTR:
+                case INJECTION_NVLINKCAPABILITY_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlMemory_v2_tCompare(*m_value.memory_v2Ptr, *other.m_value.memory_v2Ptr);
+                        if (*m_value.NvLinkCapabilityPtr == *other.m_value.NvLinkCapabilityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.NvLinkCapabilityPtr < *other.m_value.NvLinkCapabilityPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMemory_v2_tCompare(*m_value.memory_v2Ptr, *other.m_value.memory_v2Ptr); ret)
+                        if (m_value.NvLinkCapabilityPtr[i] == other.m_value.NvLinkCapabilityPtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.NvLinkCapabilityPtr[i] < other.m_value.NvLinkCapabilityPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
@@ -5826,11 +11883,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_NVLINKCAPABILITY:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.nvLinkCapability < other.m_value.nvLinkCapability)
+                    if (m_value.NvLinkCapability < other.m_value.NvLinkCapability)
                     {
                         return -1;
                     }
-                    else if (m_value.nvLinkCapability > other.m_value.nvLinkCapability)
+                    else if (m_value.NvLinkCapability > other.m_value.NvLinkCapability)
                     {
                         return 1;
                     }
@@ -5838,16 +11895,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKERRORCOUNTER_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.NvLinkErrorCounterPtr == *other.m_value.NvLinkErrorCounterPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.NvLinkErrorCounterPtr < *other.m_value.NvLinkErrorCounterPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.NvLinkErrorCounterPtr[i] == other.m_value.NvLinkErrorCounterPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.NvLinkErrorCounterPtr[i] < other.m_value.NvLinkErrorCounterPtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_NVLINKERRORCOUNTER:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.nvLinkErrorCounter < other.m_value.nvLinkErrorCounter)
+                    if (m_value.NvLinkErrorCounter < other.m_value.NvLinkErrorCounter)
                     {
                         return -1;
                     }
-                    else if (m_value.nvLinkErrorCounter > other.m_value.nvLinkErrorCounter)
+                    else if (m_value.NvLinkErrorCounter > other.m_value.NvLinkErrorCounter)
                     {
                         return 1;
                     }
@@ -5857,10 +11936,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_NVLINKUTILIZATIONCONTROL:
+                case INJECTION_NVLINKPOWERTHRES_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlNvLinkUtilizationControl_tCompare(m_value.nvLinkUtilizationControl, other.m_value.nvLinkUtilizationControl);
+                    if (!m_isArray)
+                    {
+                        return nvmlNvLinkPowerThres_tCompare(*m_value.NvLinkPowerThresPtr, *other.m_value.NvLinkPowerThresPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlNvLinkPowerThres_tCompare(*m_value.NvLinkPowerThresPtr, *other.m_value.NvLinkPowerThresPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKPOWERTHRES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlNvLinkPowerThres_tCompare(m_value.NvLinkPowerThres, other.m_value.NvLinkPowerThres);
                     break; // NOT REACHED
                 }
                 case INJECTION_NVLINKUTILIZATIONCONTROL_PTR:
@@ -5868,11 +11964,151 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlNvLinkUtilizationControl_tCompare(*m_value.nvLinkUtilizationControlPtr, *other.m_value.nvLinkUtilizationControlPtr);
+                        return nvmlNvLinkUtilizationControl_tCompare(*m_value.NvLinkUtilizationControlPtr, *other.m_value.NvLinkUtilizationControlPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvLinkUtilizationControl_tCompare(*m_value.nvLinkUtilizationControlPtr, *other.m_value.nvLinkUtilizationControlPtr); ret)
+                        if (auto ret = nvmlNvLinkUtilizationControl_tCompare(*m_value.NvLinkUtilizationControlPtr, *other.m_value.NvLinkUtilizationControlPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKUTILIZATIONCONTROL:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlNvLinkUtilizationControl_tCompare(m_value.NvLinkUtilizationControl, other.m_value.NvLinkUtilizationControl);
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.NvLinkUtilizationCountPktTypesPtr == *other.m_value.NvLinkUtilizationCountPktTypesPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.NvLinkUtilizationCountPktTypesPtr < *other.m_value.NvLinkUtilizationCountPktTypesPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.NvLinkUtilizationCountPktTypesPtr[i] == other.m_value.NvLinkUtilizationCountPktTypesPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.NvLinkUtilizationCountPktTypesPtr[i] < other.m_value.NvLinkUtilizationCountPktTypesPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.NvLinkUtilizationCountPktTypes < other.m_value.NvLinkUtilizationCountPktTypes)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.NvLinkUtilizationCountPktTypes > other.m_value.NvLinkUtilizationCountPktTypes)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.NvLinkUtilizationCountUnitsPtr == *other.m_value.NvLinkUtilizationCountUnitsPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.NvLinkUtilizationCountUnitsPtr < *other.m_value.NvLinkUtilizationCountUnitsPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.NvLinkUtilizationCountUnitsPtr[i] == other.m_value.NvLinkUtilizationCountUnitsPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.NvLinkUtilizationCountUnitsPtr[i] < other.m_value.NvLinkUtilizationCountUnitsPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKUTILIZATIONCOUNTUNITS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.NvLinkUtilizationCountUnits < other.m_value.NvLinkUtilizationCountUnits)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.NvLinkUtilizationCountUnits > other.m_value.NvLinkUtilizationCountUnits)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKVERSION_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.NvlinkVersionPtr == *other.m_value.NvlinkVersionPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.NvlinkVersionPtr < *other.m_value.NvlinkVersionPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.NvlinkVersionPtr[i] == other.m_value.NvlinkVersionPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.NvlinkVersionPtr[i] < other.m_value.NvlinkVersionPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKVERSION:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.NvlinkVersion < other.m_value.NvlinkVersion)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.NvlinkVersion > other.m_value.NvlinkVersion)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_PSUINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPSUInfo_tCompare(*m_value.PSUInfoPtr, *other.m_value.PSUInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPSUInfo_tCompare(*m_value.PSUInfoPtr, *other.m_value.PSUInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -5883,22 +12119,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_PSUINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlPSUInfo_tCompare(m_value.pSUInfo, other.m_value.pSUInfo);
+                    return nvmlPSUInfo_tCompare(m_value.PSUInfo, other.m_value.PSUInfo);
                     break; // NOT REACHED
                 }
-                case INJECTION_PSUINFO_PTR:
+                case INJECTION_PAGERETIREMENTCAUSE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlPSUInfo_tCompare(*m_value.pSUInfoPtr, *other.m_value.pSUInfoPtr);
+                        if (*m_value.PageRetirementCausePtr == *other.m_value.PageRetirementCausePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PageRetirementCausePtr < *other.m_value.PageRetirementCausePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPSUInfo_tCompare(*m_value.pSUInfoPtr, *other.m_value.pSUInfoPtr); ret)
+                        if (m_value.PageRetirementCausePtr[i] == other.m_value.PageRetirementCausePtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.PageRetirementCausePtr[i] < other.m_value.PageRetirementCausePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
@@ -5906,11 +12147,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_PAGERETIREMENTCAUSE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.pageRetirementCause < other.m_value.pageRetirementCause)
+                    if (m_value.PageRetirementCause < other.m_value.PageRetirementCause)
                     {
                         return -1;
                     }
-                    else if (m_value.pageRetirementCause > other.m_value.pageRetirementCause)
+                    else if (m_value.PageRetirementCause > other.m_value.PageRetirementCause)
                     {
                         return 1;
                     }
@@ -5920,22 +12161,16 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_PCIINFO:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return nvmlPciInfo_tCompare(m_value.pciInfo, other.m_value.pciInfo);
-                    break; // NOT REACHED
-                }
-                case INJECTION_PCIINFO_PTR:
+                case INJECTION_PCIINFOEXT_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlPciInfo_tCompare(*m_value.pciInfoPtr, *other.m_value.pciInfoPtr);
+                        return nvmlPciInfoExt_tCompare(*m_value.PciInfoExtPtr, *other.m_value.PciInfoExtPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPciInfo_tCompare(*m_value.pciInfoPtr, *other.m_value.pciInfoPtr); ret)
+                        if (auto ret = nvmlPciInfoExt_tCompare(*m_value.PciInfoExtPtr, *other.m_value.PciInfoExtPtr); ret)
                         {
                             return ret;
                         }
@@ -5943,14 +12178,65 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
+                case INJECTION_PCIINFOEXT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPciInfoExt_tCompare(m_value.PciInfoExt, other.m_value.PciInfoExt);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PCIINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPciInfo_tCompare(*m_value.PciInfoPtr, *other.m_value.PciInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPciInfo_tCompare(*m_value.PciInfoPtr, *other.m_value.PciInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PCIINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPciInfo_tCompare(m_value.PciInfo, other.m_value.PciInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PCIELINKSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PcieLinkStatePtr == *other.m_value.PcieLinkStatePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PcieLinkStatePtr < *other.m_value.PcieLinkStatePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PcieLinkStatePtr[i] == other.m_value.PcieLinkStatePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PcieLinkStatePtr[i] < other.m_value.PcieLinkStatePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
                 case INJECTION_PCIELINKSTATE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.pcieLinkState < other.m_value.pcieLinkState)
+                    if (m_value.PcieLinkState < other.m_value.PcieLinkState)
                     {
                         return -1;
                     }
-                    else if (m_value.pcieLinkState > other.m_value.pcieLinkState)
+                    else if (m_value.PcieLinkState > other.m_value.PcieLinkState)
                     {
                         return 1;
                     }
@@ -5958,16 +12244,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_PCIEUTILCOUNTER_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PcieUtilCounterPtr == *other.m_value.PcieUtilCounterPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PcieUtilCounterPtr < *other.m_value.PcieUtilCounterPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PcieUtilCounterPtr[i] == other.m_value.PcieUtilCounterPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PcieUtilCounterPtr[i] < other.m_value.PcieUtilCounterPtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_PCIEUTILCOUNTER:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.pcieUtilCounter < other.m_value.pcieUtilCounter)
+                    if (m_value.PcieUtilCounter < other.m_value.PcieUtilCounter)
                     {
                         return -1;
                     }
-                    else if (m_value.pcieUtilCounter > other.m_value.pcieUtilCounter)
+                    else if (m_value.PcieUtilCounter > other.m_value.PcieUtilCounter)
                     {
                         return 1;
                     }
@@ -5975,16 +12283,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_PERFPOLICYTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PerfPolicyTypePtr == *other.m_value.PerfPolicyTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PerfPolicyTypePtr < *other.m_value.PerfPolicyTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PerfPolicyTypePtr[i] == other.m_value.PerfPolicyTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PerfPolicyTypePtr[i] < other.m_value.PerfPolicyTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_PERFPOLICYTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.perfPolicyType < other.m_value.perfPolicyType)
+                    if (m_value.PerfPolicyType < other.m_value.PerfPolicyType)
                     {
                         return -1;
                     }
-                    else if (m_value.perfPolicyType > other.m_value.perfPolicyType)
+                    else if (m_value.PerfPolicyType > other.m_value.PerfPolicyType)
                     {
                         return 1;
                     }
@@ -5994,10 +12324,213 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_PROCESSINFO:
+                case INJECTION_PLATFORMINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlProcessInfo_tCompare(m_value.processInfo, other.m_value.processInfo);
+                    if (!m_isArray)
+                    {
+                        return nvmlPlatformInfo_tCompare(*m_value.PlatformInfoPtr, *other.m_value.PlatformInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPlatformInfo_tCompare(*m_value.PlatformInfoPtr, *other.m_value.PlatformInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PLATFORMINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPlatformInfo_tCompare(m_value.PlatformInfo, other.m_value.PlatformInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERPROFILETYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PowerProfileTypePtr == *other.m_value.PowerProfileTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PowerProfileTypePtr < *other.m_value.PowerProfileTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PowerProfileTypePtr[i] == other.m_value.PowerProfileTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PowerProfileTypePtr[i] < other.m_value.PowerProfileTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERPROFILETYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.PowerProfileType < other.m_value.PowerProfileType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.PowerProfileType > other.m_value.PowerProfileType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERSCOPETYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PowerScopeTypePtr == *other.m_value.PowerScopeTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PowerScopeTypePtr < *other.m_value.PowerScopeTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PowerScopeTypePtr[i] == other.m_value.PowerScopeTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PowerScopeTypePtr[i] < other.m_value.PowerScopeTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERSCOPETYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.PowerScopeType < other.m_value.PowerScopeType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.PowerScopeType > other.m_value.PowerScopeType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERSOURCE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PowerSourcePtr == *other.m_value.PowerSourcePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PowerSourcePtr < *other.m_value.PowerSourcePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PowerSourcePtr[i] == other.m_value.PowerSourcePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PowerSourcePtr[i] < other.m_value.PowerSourcePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERSOURCE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.PowerSource < other.m_value.PowerSource)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.PowerSource > other.m_value.PowerSource)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERVALUE_V2_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPowerValue_v2_tCompare(*m_value.PowerValue_v2Ptr, *other.m_value.PowerValue_v2Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPowerValue_v2_tCompare(*m_value.PowerValue_v2Ptr, *other.m_value.PowerValue_v2Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERVALUE_V2:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPowerValue_v2_tCompare(m_value.PowerValue_v2, other.m_value.PowerValue_v2);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSDETAILLIST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlProcessDetailList_tCompare(*m_value.ProcessDetailListPtr, *other.m_value.ProcessDetailListPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlProcessDetailList_tCompare(*m_value.ProcessDetailListPtr, *other.m_value.ProcessDetailListPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSDETAILLIST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlProcessDetailList_tCompare(m_value.ProcessDetailList, other.m_value.ProcessDetailList);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSDETAIL_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlProcessDetail_v1_tCompare(*m_value.ProcessDetail_v1Ptr, *other.m_value.ProcessDetail_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlProcessDetail_v1_tCompare(*m_value.ProcessDetail_v1Ptr, *other.m_value.ProcessDetail_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSDETAIL_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlProcessDetail_v1_tCompare(m_value.ProcessDetail_v1, other.m_value.ProcessDetail_v1);
                     break; // NOT REACHED
                 }
                 case INJECTION_PROCESSINFO_PTR:
@@ -6005,11 +12538,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlProcessInfo_tCompare(*m_value.processInfoPtr, *other.m_value.processInfoPtr);
+                        return nvmlProcessInfo_tCompare(*m_value.ProcessInfoPtr, *other.m_value.ProcessInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessInfo_tCompare(*m_value.processInfoPtr, *other.m_value.processInfoPtr); ret)
+                        if (auto ret = nvmlProcessInfo_tCompare(*m_value.ProcessInfoPtr, *other.m_value.ProcessInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlProcessInfo_tCompare(m_value.ProcessInfo, other.m_value.ProcessInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PROCESSINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlProcessInfo_v1_tCompare(*m_value.ProcessInfo_v1Ptr, *other.m_value.ProcessInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlProcessInfo_v1_tCompare(*m_value.ProcessInfo_v1Ptr, *other.m_value.ProcessInfo_v1Ptr); ret)
                         {
                             return ret;
                         }
@@ -6020,19 +12576,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_PROCESSINFO_V1:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlProcessInfo_v1_tCompare(m_value.processInfo_v1, other.m_value.processInfo_v1);
+                    return nvmlProcessInfo_v1_tCompare(m_value.ProcessInfo_v1, other.m_value.ProcessInfo_v1);
                     break; // NOT REACHED
                 }
-                case INJECTION_PROCESSINFO_V1_PTR:
+                case INJECTION_PROCESSUTILIZATIONINFO_V1_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlProcessInfo_v1_tCompare(*m_value.processInfo_v1Ptr, *other.m_value.processInfo_v1Ptr);
+                        return nvmlProcessUtilizationInfo_v1_tCompare(*m_value.ProcessUtilizationInfo_v1Ptr, *other.m_value.ProcessUtilizationInfo_v1Ptr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessInfo_v1_tCompare(*m_value.processInfo_v1Ptr, *other.m_value.processInfo_v1Ptr); ret)
+                        if (auto ret = nvmlProcessUtilizationInfo_v1_tCompare(*m_value.ProcessUtilizationInfo_v1Ptr, *other.m_value.ProcessUtilizationInfo_v1Ptr); ret)
                         {
                             return ret;
                         }
@@ -6040,22 +12596,22 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_PROCESSINFO_V2:
+                case INJECTION_PROCESSUTILIZATIONINFO_V1:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlProcessInfo_v2_tCompare(m_value.processInfo_v2, other.m_value.processInfo_v2);
+                    return nvmlProcessUtilizationInfo_v1_tCompare(m_value.ProcessUtilizationInfo_v1, other.m_value.ProcessUtilizationInfo_v1);
                     break; // NOT REACHED
                 }
-                case INJECTION_PROCESSINFO_V2_PTR:
+                case INJECTION_PROCESSUTILIZATIONSAMPLE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlProcessInfo_v2_tCompare(*m_value.processInfo_v2Ptr, *other.m_value.processInfo_v2Ptr);
+                        return nvmlProcessUtilizationSample_tCompare(*m_value.ProcessUtilizationSamplePtr, *other.m_value.ProcessUtilizationSamplePtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessInfo_v2_tCompare(*m_value.processInfo_v2Ptr, *other.m_value.processInfo_v2Ptr); ret)
+                        if (auto ret = nvmlProcessUtilizationSample_tCompare(*m_value.ProcessUtilizationSamplePtr, *other.m_value.ProcessUtilizationSamplePtr); ret)
                         {
                             return ret;
                         }
@@ -6066,19 +12622,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_PROCESSUTILIZATIONSAMPLE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlProcessUtilizationSample_tCompare(m_value.processUtilizationSample, other.m_value.processUtilizationSample);
+                    return nvmlProcessUtilizationSample_tCompare(m_value.ProcessUtilizationSample, other.m_value.ProcessUtilizationSample);
                     break; // NOT REACHED
                 }
-                case INJECTION_PROCESSUTILIZATIONSAMPLE_PTR:
+                case INJECTION_PROCESSESUTILIZATIONINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlProcessUtilizationSample_tCompare(*m_value.processUtilizationSamplePtr, *other.m_value.processUtilizationSamplePtr);
+                        return nvmlProcessesUtilizationInfo_tCompare(*m_value.ProcessesUtilizationInfoPtr, *other.m_value.ProcessesUtilizationInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessUtilizationSample_tCompare(*m_value.processUtilizationSamplePtr, *other.m_value.processUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlProcessesUtilizationInfo_tCompare(*m_value.ProcessesUtilizationInfoPtr, *other.m_value.ProcessesUtilizationInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -6086,21 +12642,10 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_PSTATES:
+                case INJECTION_PROCESSESUTILIZATIONINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.pstates < other.m_value.pstates)
-                    {
-                        return -1;
-                    }
-                    else if (m_value.pstates > other.m_value.pstates)
-                    {
-                        return 1;
-                    }
-                    else
-                    {
-                        return 0;
-                    }
+                    return nvmlProcessesUtilizationInfo_tCompare(m_value.ProcessesUtilizationInfo, other.m_value.ProcessesUtilizationInfo);
                     break; // NOT REACHED
                 }
                 case INJECTION_PSTATES_PTR:
@@ -6108,31 +12653,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.pstatesPtr == *other.m_value.pstatesPtr)
+                        if (*m_value.PstatesPtr == *other.m_value.PstatesPtr)
                         {
                             return 0;
                         }
-                        return *m_value.pstatesPtr < *other.m_value.pstatesPtr ? -1 : 1;
+                        return *m_value.PstatesPtr < *other.m_value.PstatesPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.pstatesPtr[i] == other.m_value.pstatesPtr[i])
+                        if (m_value.PstatesPtr[i] == other.m_value.PstatesPtr[i])
                         {
                             continue;
                         }
-                        return m_value.pstatesPtr[i] < other.m_value.pstatesPtr[i] ? -1 : 1;
+                        return m_value.PstatesPtr[i] < other.m_value.PstatesPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_RESTRICTEDAPI:
+                case INJECTION_PSTATES:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.restrictedAPI < other.m_value.restrictedAPI)
+                    if (m_value.Pstates < other.m_value.Pstates)
                     {
                         return -1;
                     }
-                    else if (m_value.restrictedAPI > other.m_value.restrictedAPI)
+                    else if (m_value.Pstates > other.m_value.Pstates)
                     {
                         return 1;
                     }
@@ -6142,14 +12687,36 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_RETURN:
+                case INJECTION_RESTRICTEDAPI_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.nvmlReturn < other.m_value.nvmlReturn)
+                    if (!m_isArray)
+                    {
+                        if (*m_value.RestrictedAPIPtr == *other.m_value.RestrictedAPIPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.RestrictedAPIPtr < *other.m_value.RestrictedAPIPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.RestrictedAPIPtr[i] == other.m_value.RestrictedAPIPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.RestrictedAPIPtr[i] < other.m_value.RestrictedAPIPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_RESTRICTEDAPI:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.RestrictedAPI < other.m_value.RestrictedAPI)
                     {
                         return -1;
                     }
-                    else if (m_value.nvmlReturn > other.m_value.nvmlReturn)
+                    else if (m_value.RestrictedAPI > other.m_value.RestrictedAPI)
                     {
                         return 1;
                     }
@@ -6164,27 +12731,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.nvmlReturnPtr == *other.m_value.nvmlReturnPtr)
+                        if (*m_value.ReturnPtr == *other.m_value.ReturnPtr)
                         {
                             return 0;
                         }
-                        return *m_value.nvmlReturnPtr < *other.m_value.nvmlReturnPtr ? -1 : 1;
+                        return *m_value.ReturnPtr < *other.m_value.ReturnPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.nvmlReturnPtr[i] == other.m_value.nvmlReturnPtr[i])
+                        if (m_value.ReturnPtr[i] == other.m_value.ReturnPtr[i])
                         {
                             continue;
                         }
-                        return m_value.nvmlReturnPtr[i] < other.m_value.nvmlReturnPtr[i] ? -1 : 1;
+                        return m_value.ReturnPtr[i] < other.m_value.ReturnPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ROWREMAPPERHISTOGRAMVALUES:
+                case INJECTION_RETURN:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlRowRemapperHistogramValues_tCompare(m_value.rowRemapperHistogramValues, other.m_value.rowRemapperHistogramValues);
+                    if (m_value.Return < other.m_value.Return)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.Return > other.m_value.Return)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 case INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR:
@@ -6192,11 +12770,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlRowRemapperHistogramValues_tCompare(*m_value.rowRemapperHistogramValuesPtr, *other.m_value.rowRemapperHistogramValuesPtr);
+                        return nvmlRowRemapperHistogramValues_tCompare(*m_value.RowRemapperHistogramValuesPtr, *other.m_value.RowRemapperHistogramValuesPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlRowRemapperHistogramValues_tCompare(*m_value.rowRemapperHistogramValuesPtr, *other.m_value.rowRemapperHistogramValuesPtr); ret)
+                        if (auto ret = nvmlRowRemapperHistogramValues_tCompare(*m_value.RowRemapperHistogramValuesPtr, *other.m_value.RowRemapperHistogramValuesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_ROWREMAPPERHISTOGRAMVALUES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlRowRemapperHistogramValues_tCompare(m_value.RowRemapperHistogramValues, other.m_value.RowRemapperHistogramValues);
+                    break; // NOT REACHED
+                }
+                case INJECTION_SAMPLE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlSample_tCompare(*m_value.SamplePtr, *other.m_value.SamplePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlSample_tCompare(*m_value.SamplePtr, *other.m_value.SamplePtr); ret)
                         {
                             return ret;
                         }
@@ -6207,22 +12808,27 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_SAMPLE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlSample_tCompare(m_value.sample, other.m_value.sample);
+                    return nvmlSample_tCompare(m_value.Sample, other.m_value.Sample);
                     break; // NOT REACHED
                 }
-                case INJECTION_SAMPLE_PTR:
+                case INJECTION_SAMPLINGTYPE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlSample_tCompare(*m_value.samplePtr, *other.m_value.samplePtr);
+                        if (*m_value.SamplingTypePtr == *other.m_value.SamplingTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.SamplingTypePtr < *other.m_value.SamplingTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlSample_tCompare(*m_value.samplePtr, *other.m_value.samplePtr); ret)
+                        if (m_value.SamplingTypePtr[i] == other.m_value.SamplingTypePtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.SamplingTypePtr[i] < other.m_value.SamplingTypePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
@@ -6230,11 +12836,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_SAMPLINGTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.samplingType < other.m_value.samplingType)
+                    if (m_value.SamplingType < other.m_value.SamplingType)
                     {
                         return -1;
                     }
-                    else if (m_value.samplingType > other.m_value.samplingType)
+                    else if (m_value.SamplingType > other.m_value.SamplingType)
                     {
                         return 1;
                     }
@@ -6242,16 +12848,84 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlSystemConfComputeSettings_tCompare(*m_value.SystemConfComputeSettingsPtr, *other.m_value.SystemConfComputeSettingsPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlSystemConfComputeSettings_tCompare(*m_value.SystemConfComputeSettingsPtr, *other.m_value.SystemConfComputeSettingsPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMCONFCOMPUTESETTINGS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlSystemConfComputeSettings_tCompare(m_value.SystemConfComputeSettings, other.m_value.SystemConfComputeSettings);
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMDRIVERBRANCHINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlSystemDriverBranchInfo_tCompare(*m_value.SystemDriverBranchInfoPtr, *other.m_value.SystemDriverBranchInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlSystemDriverBranchInfo_tCompare(*m_value.SystemDriverBranchInfoPtr, *other.m_value.SystemDriverBranchInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMDRIVERBRANCHINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlSystemDriverBranchInfo_tCompare(m_value.SystemDriverBranchInfo, other.m_value.SystemDriverBranchInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_TEMPERATURESENSORS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.TemperatureSensorsPtr == *other.m_value.TemperatureSensorsPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.TemperatureSensorsPtr < *other.m_value.TemperatureSensorsPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.TemperatureSensorsPtr[i] == other.m_value.TemperatureSensorsPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.TemperatureSensorsPtr[i] < other.m_value.TemperatureSensorsPtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_TEMPERATURESENSORS:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.temperatureSensors < other.m_value.temperatureSensors)
+                    if (m_value.TemperatureSensors < other.m_value.TemperatureSensors)
                     {
                         return -1;
                     }
-                    else if (m_value.temperatureSensors > other.m_value.temperatureSensors)
+                    else if (m_value.TemperatureSensors > other.m_value.TemperatureSensors)
                     {
                         return 1;
                     }
@@ -6259,16 +12933,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_TEMPERATURETHRESHOLDS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.TemperatureThresholdsPtr == *other.m_value.TemperatureThresholdsPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.TemperatureThresholdsPtr < *other.m_value.TemperatureThresholdsPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.TemperatureThresholdsPtr[i] == other.m_value.TemperatureThresholdsPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.TemperatureThresholdsPtr[i] < other.m_value.TemperatureThresholdsPtr[i] ? -1 : 1;
+                    }
+                    return 0;
                     break; // NOT REACHED
                 }
                 case INJECTION_TEMPERATURETHRESHOLDS:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.temperatureThresholds < other.m_value.temperatureThresholds)
+                    if (m_value.TemperatureThresholds < other.m_value.TemperatureThresholds)
                     {
                         return -1;
                     }
-                    else if (m_value.temperatureThresholds > other.m_value.temperatureThresholds)
+                    else if (m_value.TemperatureThresholds > other.m_value.TemperatureThresholds)
                     {
                         return 1;
                     }
@@ -6278,10 +12974,128 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_UNITFANSPEEDS:
+                case INJECTION_TEMPERATURE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlUnitFanSpeeds_tCompare(m_value.unitFanSpeeds, other.m_value.unitFanSpeeds);
+                    if (!m_isArray)
+                    {
+                        return nvmlTemperature_tCompare(*m_value.TemperaturePtr, *other.m_value.TemperaturePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlTemperature_tCompare(*m_value.TemperaturePtr, *other.m_value.TemperaturePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_TEMPERATURE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlTemperature_tCompare(m_value.Temperature, other.m_value.Temperature);
+                    break; // NOT REACHED
+                }
+                case INJECTION_THERMALCONTROLLER_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ThermalControllerPtr == *other.m_value.ThermalControllerPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ThermalControllerPtr < *other.m_value.ThermalControllerPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ThermalControllerPtr[i] == other.m_value.ThermalControllerPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ThermalControllerPtr[i] < other.m_value.ThermalControllerPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_THERMALCONTROLLER:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.ThermalController < other.m_value.ThermalController)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.ThermalController > other.m_value.ThermalController)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_THERMALTARGET_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ThermalTargetPtr == *other.m_value.ThermalTargetPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ThermalTargetPtr < *other.m_value.ThermalTargetPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ThermalTargetPtr[i] == other.m_value.ThermalTargetPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ThermalTargetPtr[i] < other.m_value.ThermalTargetPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_THERMALTARGET:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.ThermalTarget < other.m_value.ThermalTarget)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.ThermalTarget > other.m_value.ThermalTarget)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_UNITFANINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlUnitFanInfo_tCompare(*m_value.UnitFanInfoPtr, *other.m_value.UnitFanInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlUnitFanInfo_tCompare(*m_value.UnitFanInfoPtr, *other.m_value.UnitFanInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_UNITFANINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlUnitFanInfo_tCompare(m_value.UnitFanInfo, other.m_value.UnitFanInfo);
                     break; // NOT REACHED
                 }
                 case INJECTION_UNITFANSPEEDS_PTR:
@@ -6289,11 +13103,34 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlUnitFanSpeeds_tCompare(*m_value.unitFanSpeedsPtr, *other.m_value.unitFanSpeedsPtr);
+                        return nvmlUnitFanSpeeds_tCompare(*m_value.UnitFanSpeedsPtr, *other.m_value.UnitFanSpeedsPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUnitFanSpeeds_tCompare(*m_value.unitFanSpeedsPtr, *other.m_value.unitFanSpeedsPtr); ret)
+                        if (auto ret = nvmlUnitFanSpeeds_tCompare(*m_value.UnitFanSpeedsPtr, *other.m_value.UnitFanSpeedsPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_UNITFANSPEEDS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlUnitFanSpeeds_tCompare(m_value.UnitFanSpeeds, other.m_value.UnitFanSpeeds);
+                    break; // NOT REACHED
+                }
+                case INJECTION_UNITINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlUnitInfo_tCompare(*m_value.UnitInfoPtr, *other.m_value.UnitInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlUnitInfo_tCompare(*m_value.UnitInfoPtr, *other.m_value.UnitInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -6304,43 +13141,20 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_UNITINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlUnitInfo_tCompare(m_value.unitInfo, other.m_value.unitInfo);
-                    break; // NOT REACHED
-                }
-                case INJECTION_UNITINFO_PTR:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    if (!m_isArray)
-                    {
-                        return nvmlUnitInfo_tCompare(*m_value.unitInfoPtr, *other.m_value.unitInfoPtr);
-                    }
-                    for (unsigned i = 0; i < m_arrLen; ++i)
-                    {
-                        if (auto ret = nvmlUnitInfo_tCompare(*m_value.unitInfoPtr, *other.m_value.unitInfoPtr); ret)
-                        {
-                            return ret;
-                        }
-                    }
-                    return 0;
-                    break; // NOT REACHED
-                }
-                case INJECTION_UNIT:
-                {
-                    // The following snippet is generated from write_injection_argument_compare
-                    return memcmp(&m_value.unit, &other.m_value.unit, sizeof(m_value.unit));
+                    return nvmlUnitInfo_tCompare(m_value.UnitInfo, other.m_value.UnitInfo);
                     break; // NOT REACHED
                 }
                 case INJECTION_UNIT_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     unsigned size = m_isArray ? m_arrLen : 1;
-                    return memcmp(m_value.unitPtr, other.m_value.unitPtr, size * sizeof(*m_value.unitPtr));
+                    return memcmp(m_value.UnitPtr, other.m_value.UnitPtr, size * sizeof(*m_value.UnitPtr));
                     break; // NOT REACHED
                 }
-                case INJECTION_UTILIZATION:
+                case INJECTION_UNIT:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlUtilization_tCompare(m_value.utilization, other.m_value.utilization);
+                    return memcmp(&m_value.Unit, &other.m_value.Unit, sizeof(m_value.Unit));
                     break; // NOT REACHED
                 }
                 case INJECTION_UTILIZATION_PTR:
@@ -6348,11 +13162,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlUtilization_tCompare(*m_value.utilizationPtr, *other.m_value.utilizationPtr);
+                        return nvmlUtilization_tCompare(*m_value.UtilizationPtr, *other.m_value.UtilizationPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUtilization_tCompare(*m_value.utilizationPtr, *other.m_value.utilizationPtr); ret)
+                        if (auto ret = nvmlUtilization_tCompare(*m_value.UtilizationPtr, *other.m_value.UtilizationPtr); ret)
                         {
                             return ret;
                         }
@@ -6360,21 +13174,10 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_VALUETYPE:
+                case INJECTION_UTILIZATION:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.valueType < other.m_value.valueType)
-                    {
-                        return -1;
-                    }
-                    else if (m_value.valueType > other.m_value.valueType)
-                    {
-                        return 1;
-                    }
-                    else
-                    {
-                        return 0;
-                    }
+                    return nvmlUtilization_tCompare(m_value.Utilization, other.m_value.Utilization);
                     break; // NOT REACHED
                 }
                 case INJECTION_VALUETYPE_PTR:
@@ -6382,31 +13185,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.valueTypePtr == *other.m_value.valueTypePtr)
+                        if (*m_value.ValueTypePtr == *other.m_value.ValueTypePtr)
                         {
                             return 0;
                         }
-                        return *m_value.valueTypePtr < *other.m_value.valueTypePtr ? -1 : 1;
+                        return *m_value.ValueTypePtr < *other.m_value.ValueTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.valueTypePtr[i] == other.m_value.valueTypePtr[i])
+                        if (m_value.ValueTypePtr[i] == other.m_value.ValueTypePtr[i])
                         {
                             continue;
                         }
-                        return m_value.valueTypePtr[i] < other.m_value.valueTypePtr[i] ? -1 : 1;
+                        return m_value.ValueTypePtr[i] < other.m_value.ValueTypePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUCAPABILITY:
+                case INJECTION_VALUETYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.vgpuCapability < other.m_value.vgpuCapability)
+                    if (m_value.ValueType < other.m_value.ValueType)
                     {
                         return -1;
                     }
-                    else if (m_value.vgpuCapability > other.m_value.vgpuCapability)
+                    else if (m_value.ValueType > other.m_value.ValueType)
                     {
                         return 1;
                     }
@@ -6416,10 +13219,167 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE:
+                case INJECTION_VGPUCAPABILITY_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuInstanceUtilizationSample_tCompare(m_value.vgpuInstanceUtilizationSample, other.m_value.vgpuInstanceUtilizationSample);
+                    if (!m_isArray)
+                    {
+                        if (*m_value.VgpuCapabilityPtr == *other.m_value.VgpuCapabilityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuCapabilityPtr < *other.m_value.VgpuCapabilityPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.VgpuCapabilityPtr[i] == other.m_value.VgpuCapabilityPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuCapabilityPtr[i] < other.m_value.VgpuCapabilityPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUCAPABILITY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuCapability < other.m_value.VgpuCapability)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuCapability > other.m_value.VgpuCapability)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUDRIVERCAPABILITY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.VgpuDriverCapabilityPtr == *other.m_value.VgpuDriverCapabilityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuDriverCapabilityPtr < *other.m_value.VgpuDriverCapabilityPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.VgpuDriverCapabilityPtr[i] == other.m_value.VgpuDriverCapabilityPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuDriverCapabilityPtr[i] < other.m_value.VgpuDriverCapabilityPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUDRIVERCAPABILITY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuDriverCapability < other.m_value.VgpuDriverCapability)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuDriverCapability > other.m_value.VgpuDriverCapability)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUGUESTINFOSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.VgpuGuestInfoStatePtr == *other.m_value.VgpuGuestInfoStatePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuGuestInfoStatePtr < *other.m_value.VgpuGuestInfoStatePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.VgpuGuestInfoStatePtr[i] == other.m_value.VgpuGuestInfoStatePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuGuestInfoStatePtr[i] < other.m_value.VgpuGuestInfoStatePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUGUESTINFOSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuGuestInfoState < other.m_value.VgpuGuestInfoState)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuGuestInfoState > other.m_value.VgpuGuestInfoState)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUHETEROGENEOUSMODE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuHeterogeneousMode_tCompare(*m_value.VgpuHeterogeneousModePtr, *other.m_value.VgpuHeterogeneousModePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuHeterogeneousMode_tCompare(*m_value.VgpuHeterogeneousModePtr, *other.m_value.VgpuHeterogeneousModePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUHETEROGENEOUSMODE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuHeterogeneousMode_tCompare(m_value.VgpuHeterogeneousMode, other.m_value.VgpuHeterogeneousMode);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuInstanceUtilizationInfo_v1_tCompare(*m_value.VgpuInstanceUtilizationInfo_v1Ptr, *other.m_value.VgpuInstanceUtilizationInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuInstanceUtilizationInfo_v1_tCompare(*m_value.VgpuInstanceUtilizationInfo_v1Ptr, *other.m_value.VgpuInstanceUtilizationInfo_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuInstanceUtilizationInfo_v1_tCompare(m_value.VgpuInstanceUtilizationInfo_v1, other.m_value.VgpuInstanceUtilizationInfo_v1);
                     break; // NOT REACHED
                 }
                 case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR:
@@ -6427,11 +13387,119 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuInstanceUtilizationSample_tCompare(*m_value.vgpuInstanceUtilizationSamplePtr, *other.m_value.vgpuInstanceUtilizationSamplePtr);
+                        return nvmlVgpuInstanceUtilizationSample_tCompare(*m_value.VgpuInstanceUtilizationSamplePtr, *other.m_value.VgpuInstanceUtilizationSamplePtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuInstanceUtilizationSample_tCompare(*m_value.vgpuInstanceUtilizationSamplePtr, *other.m_value.vgpuInstanceUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlVgpuInstanceUtilizationSample_tCompare(*m_value.VgpuInstanceUtilizationSamplePtr, *other.m_value.VgpuInstanceUtilizationSamplePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuInstanceUtilizationSample_tCompare(m_value.VgpuInstanceUtilizationSample, other.m_value.VgpuInstanceUtilizationSample);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.VgpuInstancePtr == *other.m_value.VgpuInstancePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuInstancePtr < *other.m_value.VgpuInstancePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.VgpuInstancePtr[i] == other.m_value.VgpuInstancePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuInstancePtr[i] < other.m_value.VgpuInstancePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuInstance < other.m_value.VgpuInstance)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuInstance > other.m_value.VgpuInstance)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuInstancesUtilizationInfo_tCompare(*m_value.VgpuInstancesUtilizationInfoPtr, *other.m_value.VgpuInstancesUtilizationInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuInstancesUtilizationInfo_tCompare(*m_value.VgpuInstancesUtilizationInfoPtr, *other.m_value.VgpuInstancesUtilizationInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUINSTANCESUTILIZATIONINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuInstancesUtilizationInfo_tCompare(m_value.VgpuInstancesUtilizationInfo, other.m_value.VgpuInstancesUtilizationInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPULICENSEEXPIRY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuLicenseExpiry_tCompare(*m_value.VgpuLicenseExpiryPtr, *other.m_value.VgpuLicenseExpiryPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuLicenseExpiry_tCompare(*m_value.VgpuLicenseExpiryPtr, *other.m_value.VgpuLicenseExpiryPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPULICENSEEXPIRY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuLicenseExpiry_tCompare(m_value.VgpuLicenseExpiry, other.m_value.VgpuLicenseExpiry);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPULICENSEINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuLicenseInfo_tCompare(*m_value.VgpuLicenseInfoPtr, *other.m_value.VgpuLicenseInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuLicenseInfo_tCompare(*m_value.VgpuLicenseInfoPtr, *other.m_value.VgpuLicenseInfoPtr); ret)
                         {
                             return ret;
                         }
@@ -6442,19 +13510,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPULICENSEINFO:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuLicenseInfo_tCompare(m_value.vgpuLicenseInfo, other.m_value.vgpuLicenseInfo);
+                    return nvmlVgpuLicenseInfo_tCompare(m_value.VgpuLicenseInfo, other.m_value.VgpuLicenseInfo);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPULICENSEINFO_PTR:
+                case INJECTION_VGPUMETADATA_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuLicenseInfo_tCompare(*m_value.vgpuLicenseInfoPtr, *other.m_value.vgpuLicenseInfoPtr);
+                        return nvmlVgpuMetadata_tCompare(*m_value.VgpuMetadataPtr, *other.m_value.VgpuMetadataPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuLicenseInfo_tCompare(*m_value.vgpuLicenseInfoPtr, *other.m_value.vgpuLicenseInfoPtr); ret)
+                        if (auto ret = nvmlVgpuMetadata_tCompare(*m_value.VgpuMetadataPtr, *other.m_value.VgpuMetadataPtr); ret)
                         {
                             return ret;
                         }
@@ -6465,19 +13533,58 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPUMETADATA:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuMetadata_tCompare(m_value.vgpuMetadata, other.m_value.vgpuMetadata);
+                    return nvmlVgpuMetadata_tCompare(m_value.VgpuMetadata, other.m_value.VgpuMetadata);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUMETADATA_PTR:
+                case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuMetadata_tCompare(*m_value.vgpuMetadataPtr, *other.m_value.vgpuMetadataPtr);
+                        if (*m_value.VgpuPgpuCompatibilityLimitCodePtr == *other.m_value.VgpuPgpuCompatibilityLimitCodePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuPgpuCompatibilityLimitCodePtr < *other.m_value.VgpuPgpuCompatibilityLimitCodePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuMetadata_tCompare(*m_value.vgpuMetadataPtr, *other.m_value.vgpuMetadataPtr); ret)
+                        if (m_value.VgpuPgpuCompatibilityLimitCodePtr[i] == other.m_value.VgpuPgpuCompatibilityLimitCodePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuPgpuCompatibilityLimitCodePtr[i] < other.m_value.VgpuPgpuCompatibilityLimitCodePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuPgpuCompatibilityLimitCode < other.m_value.VgpuPgpuCompatibilityLimitCode)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuPgpuCompatibilityLimitCode > other.m_value.VgpuPgpuCompatibilityLimitCode)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPGPUCOMPATIBILITY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuPgpuCompatibility_tCompare(*m_value.VgpuPgpuCompatibilityPtr, *other.m_value.VgpuPgpuCompatibilityPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuPgpuCompatibility_tCompare(*m_value.VgpuPgpuCompatibilityPtr, *other.m_value.VgpuPgpuCompatibilityPtr); ret)
                         {
                             return ret;
                         }
@@ -6488,19 +13595,19 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPUPGPUCOMPATIBILITY:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuPgpuCompatibility_tCompare(m_value.vgpuPgpuCompatibility, other.m_value.vgpuPgpuCompatibility);
+                    return nvmlVgpuPgpuCompatibility_tCompare(m_value.VgpuPgpuCompatibility, other.m_value.VgpuPgpuCompatibility);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUPGPUCOMPATIBILITY_PTR:
+                case INJECTION_VGPUPGPUMETADATA_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuPgpuCompatibility_tCompare(*m_value.vgpuPgpuCompatibilityPtr, *other.m_value.vgpuPgpuCompatibilityPtr);
+                        return nvmlVgpuPgpuMetadata_tCompare(*m_value.VgpuPgpuMetadataPtr, *other.m_value.VgpuPgpuMetadataPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPgpuCompatibility_tCompare(*m_value.vgpuPgpuCompatibilityPtr, *other.m_value.vgpuPgpuCompatibilityPtr); ret)
+                        if (auto ret = nvmlVgpuPgpuMetadata_tCompare(*m_value.VgpuPgpuMetadataPtr, *other.m_value.VgpuPgpuMetadataPtr); ret)
                         {
                             return ret;
                         }
@@ -6511,19 +13618,111 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPUPGPUMETADATA:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuPgpuMetadata_tCompare(m_value.vgpuPgpuMetadata, other.m_value.vgpuPgpuMetadata);
+                    return nvmlVgpuPgpuMetadata_tCompare(m_value.VgpuPgpuMetadata, other.m_value.VgpuPgpuMetadata);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUPGPUMETADATA_PTR:
+                case INJECTION_VGPUPLACEMENTID_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuPgpuMetadata_tCompare(*m_value.vgpuPgpuMetadataPtr, *other.m_value.vgpuPgpuMetadataPtr);
+                        return nvmlVgpuPlacementId_tCompare(*m_value.VgpuPlacementIdPtr, *other.m_value.VgpuPlacementIdPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPgpuMetadata_tCompare(*m_value.vgpuPgpuMetadataPtr, *other.m_value.vgpuPgpuMetadataPtr); ret)
+                        if (auto ret = nvmlVgpuPlacementId_tCompare(*m_value.VgpuPlacementIdPtr, *other.m_value.VgpuPlacementIdPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPLACEMENTID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuPlacementId_tCompare(m_value.VgpuPlacementId, other.m_value.VgpuPlacementId);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPLACEMENTLIST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuPlacementList_tCompare(*m_value.VgpuPlacementListPtr, *other.m_value.VgpuPlacementListPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuPlacementList_tCompare(*m_value.VgpuPlacementListPtr, *other.m_value.VgpuPlacementListPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPLACEMENTLIST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuPlacementList_tCompare(m_value.VgpuPlacementList, other.m_value.VgpuPlacementList);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPLACEMENTLIST_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuPlacementList_v1_tCompare(*m_value.VgpuPlacementList_v1Ptr, *other.m_value.VgpuPlacementList_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuPlacementList_v1_tCompare(*m_value.VgpuPlacementList_v1Ptr, *other.m_value.VgpuPlacementList_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPLACEMENTLIST_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuPlacementList_v1_tCompare(m_value.VgpuPlacementList_v1, other.m_value.VgpuPlacementList_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuProcessUtilizationInfo_v1_tCompare(*m_value.VgpuProcessUtilizationInfo_v1Ptr, *other.m_value.VgpuProcessUtilizationInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuProcessUtilizationInfo_v1_tCompare(*m_value.VgpuProcessUtilizationInfo_v1Ptr, *other.m_value.VgpuProcessUtilizationInfo_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuProcessUtilizationInfo_v1_tCompare(m_value.VgpuProcessUtilizationInfo_v1, other.m_value.VgpuProcessUtilizationInfo_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuProcessUtilizationSample_tCompare(*m_value.VgpuProcessUtilizationSamplePtr, *other.m_value.VgpuProcessUtilizationSamplePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuProcessUtilizationSample_tCompare(*m_value.VgpuProcessUtilizationSamplePtr, *other.m_value.VgpuProcessUtilizationSamplePtr); ret)
                         {
                             return ret;
                         }
@@ -6534,19 +13733,219 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuProcessUtilizationSample_tCompare(m_value.vgpuProcessUtilizationSample, other.m_value.vgpuProcessUtilizationSample);
+                    return nvmlVgpuProcessUtilizationSample_tCompare(m_value.VgpuProcessUtilizationSample, other.m_value.VgpuProcessUtilizationSample);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR:
+                case INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuProcessUtilizationSample_tCompare(*m_value.vgpuProcessUtilizationSamplePtr, *other.m_value.vgpuProcessUtilizationSamplePtr);
+                        return nvmlVgpuProcessesUtilizationInfo_tCompare(*m_value.VgpuProcessesUtilizationInfoPtr, *other.m_value.VgpuProcessesUtilizationInfoPtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuProcessUtilizationSample_tCompare(*m_value.vgpuProcessUtilizationSamplePtr, *other.m_value.vgpuProcessUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlVgpuProcessesUtilizationInfo_tCompare(*m_value.VgpuProcessesUtilizationInfoPtr, *other.m_value.VgpuProcessesUtilizationInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUPROCESSESUTILIZATIONINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuProcessesUtilizationInfo_tCompare(m_value.VgpuProcessesUtilizationInfo, other.m_value.VgpuProcessesUtilizationInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERCAPABILITIES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuSchedulerCapabilities_tCompare(*m_value.VgpuSchedulerCapabilitiesPtr, *other.m_value.VgpuSchedulerCapabilitiesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuSchedulerCapabilities_tCompare(*m_value.VgpuSchedulerCapabilitiesPtr, *other.m_value.VgpuSchedulerCapabilitiesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERCAPABILITIES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuSchedulerCapabilities_tCompare(m_value.VgpuSchedulerCapabilities, other.m_value.VgpuSchedulerCapabilities);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERGETSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuSchedulerGetState_tCompare(*m_value.VgpuSchedulerGetStatePtr, *other.m_value.VgpuSchedulerGetStatePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuSchedulerGetState_tCompare(*m_value.VgpuSchedulerGetStatePtr, *other.m_value.VgpuSchedulerGetStatePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERGETSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuSchedulerGetState_tCompare(m_value.VgpuSchedulerGetState, other.m_value.VgpuSchedulerGetState);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERLOGENTRY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuSchedulerLogEntry_tCompare(*m_value.VgpuSchedulerLogEntryPtr, *other.m_value.VgpuSchedulerLogEntryPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuSchedulerLogEntry_tCompare(*m_value.VgpuSchedulerLogEntryPtr, *other.m_value.VgpuSchedulerLogEntryPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERLOGENTRY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuSchedulerLogEntry_tCompare(m_value.VgpuSchedulerLogEntry, other.m_value.VgpuSchedulerLogEntry);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERLOG_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuSchedulerLog_tCompare(*m_value.VgpuSchedulerLogPtr, *other.m_value.VgpuSchedulerLogPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuSchedulerLog_tCompare(*m_value.VgpuSchedulerLogPtr, *other.m_value.VgpuSchedulerLogPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERLOG:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuSchedulerLog_tCompare(m_value.VgpuSchedulerLog, other.m_value.VgpuSchedulerLog);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERSETSTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuSchedulerSetState_tCompare(*m_value.VgpuSchedulerSetStatePtr, *other.m_value.VgpuSchedulerSetStatePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuSchedulerSetState_tCompare(*m_value.VgpuSchedulerSetStatePtr, *other.m_value.VgpuSchedulerSetStatePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUSCHEDULERSETSTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuSchedulerSetState_tCompare(m_value.VgpuSchedulerSetState, other.m_value.VgpuSchedulerSetState);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUTYPEBAR1INFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuTypeBar1Info_tCompare(*m_value.VgpuTypeBar1InfoPtr, *other.m_value.VgpuTypeBar1InfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuTypeBar1Info_tCompare(*m_value.VgpuTypeBar1InfoPtr, *other.m_value.VgpuTypeBar1InfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUTYPEBAR1INFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuTypeBar1Info_tCompare(m_value.VgpuTypeBar1Info, other.m_value.VgpuTypeBar1Info);
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUTYPEID_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.VgpuTypeIdPtr == *other.m_value.VgpuTypeIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuTypeIdPtr < *other.m_value.VgpuTypeIdPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.VgpuTypeIdPtr[i] == other.m_value.VgpuTypeIdPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.VgpuTypeIdPtr[i] < other.m_value.VgpuTypeIdPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUTYPEID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.VgpuTypeId < other.m_value.VgpuTypeId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuTypeId > other.m_value.VgpuTypeId)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPUVERSION_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuVersion_tCompare(*m_value.VgpuVersionPtr, *other.m_value.VgpuVersionPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuVersion_tCompare(*m_value.VgpuVersionPtr, *other.m_value.VgpuVersionPtr); ret)
                         {
                             return ret;
                         }
@@ -6557,34 +13956,39 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 case INJECTION_VGPUVERSION:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlVgpuVersion_tCompare(m_value.vgpuVersion, other.m_value.vgpuVersion);
+                    return nvmlVgpuVersion_tCompare(m_value.VgpuVersion, other.m_value.VgpuVersion);
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUVERSION_PTR:
+                case INJECTION_VGPUVMCOMPATIBILITY_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlVgpuVersion_tCompare(*m_value.vgpuVersionPtr, *other.m_value.vgpuVersionPtr);
+                        if (*m_value.VgpuVmCompatibilityPtr == *other.m_value.VgpuVmCompatibilityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.VgpuVmCompatibilityPtr < *other.m_value.VgpuVmCompatibilityPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuVersion_tCompare(*m_value.vgpuVersionPtr, *other.m_value.vgpuVersionPtr); ret)
+                        if (m_value.VgpuVmCompatibilityPtr[i] == other.m_value.VgpuVmCompatibilityPtr[i])
                         {
-                            return ret;
+                            continue;
                         }
+                        return m_value.VgpuVmCompatibilityPtr[i] < other.m_value.VgpuVmCompatibilityPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_VGPUVMIDTYPE:
+                case INJECTION_VGPUVMCOMPATIBILITY:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.vgpuVmIdType < other.m_value.vgpuVmIdType)
+                    if (m_value.VgpuVmCompatibility < other.m_value.VgpuVmCompatibility)
                     {
                         return -1;
                     }
-                    else if (m_value.vgpuVmIdType > other.m_value.vgpuVmIdType)
+                    else if (m_value.VgpuVmCompatibility > other.m_value.VgpuVmCompatibility)
                     {
                         return 1;
                     }
@@ -6599,27 +14003,38 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.vgpuVmIdTypePtr == *other.m_value.vgpuVmIdTypePtr)
+                        if (*m_value.VgpuVmIdTypePtr == *other.m_value.VgpuVmIdTypePtr)
                         {
                             return 0;
                         }
-                        return *m_value.vgpuVmIdTypePtr < *other.m_value.vgpuVmIdTypePtr ? -1 : 1;
+                        return *m_value.VgpuVmIdTypePtr < *other.m_value.VgpuVmIdTypePtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.vgpuVmIdTypePtr[i] == other.m_value.vgpuVmIdTypePtr[i])
+                        if (m_value.VgpuVmIdTypePtr[i] == other.m_value.VgpuVmIdTypePtr[i])
                         {
                             continue;
                         }
-                        return m_value.vgpuVmIdTypePtr[i] < other.m_value.vgpuVmIdTypePtr[i] ? -1 : 1;
+                        return m_value.VgpuVmIdTypePtr[i] < other.m_value.VgpuVmIdTypePtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_VIOLATIONTIME:
+                case INJECTION_VGPUVMIDTYPE:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    return nvmlViolationTime_tCompare(m_value.violationTime, other.m_value.violationTime);
+                    if (m_value.VgpuVmIdType < other.m_value.VgpuVmIdType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.VgpuVmIdType > other.m_value.VgpuVmIdType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 case INJECTION_VIOLATIONTIME_PTR:
@@ -6627,11 +14042,11 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        return nvmlViolationTime_tCompare(*m_value.violationTimePtr, *other.m_value.violationTimePtr);
+                        return nvmlViolationTime_tCompare(*m_value.ViolationTimePtr, *other.m_value.ViolationTimePtr);
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlViolationTime_tCompare(*m_value.violationTimePtr, *other.m_value.violationTimePtr); ret)
+                        if (auto ret = nvmlViolationTime_tCompare(*m_value.ViolationTimePtr, *other.m_value.ViolationTimePtr); ret)
                         {
                             return ret;
                         }
@@ -6639,14 +14054,173 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_UINT:
+                case INJECTION_VIOLATIONTIME:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.ui < other.m_value.ui)
+                    return nvmlViolationTime_tCompare(m_value.ViolationTime, other.m_value.ViolationTime);
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlWorkloadPowerProfileCurrentProfiles_tCompare(*m_value.WorkloadPowerProfileCurrentProfilesPtr, *other.m_value.WorkloadPowerProfileCurrentProfilesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlWorkloadPowerProfileCurrentProfiles_tCompare(*m_value.WorkloadPowerProfileCurrentProfilesPtr, *other.m_value.WorkloadPowerProfileCurrentProfilesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlWorkloadPowerProfileCurrentProfiles_tCompare(m_value.WorkloadPowerProfileCurrentProfiles, other.m_value.WorkloadPowerProfileCurrentProfiles);
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlWorkloadPowerProfileInfo_tCompare(*m_value.WorkloadPowerProfileInfoPtr, *other.m_value.WorkloadPowerProfileInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlWorkloadPowerProfileInfo_tCompare(*m_value.WorkloadPowerProfileInfoPtr, *other.m_value.WorkloadPowerProfileInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlWorkloadPowerProfileInfo_tCompare(m_value.WorkloadPowerProfileInfo, other.m_value.WorkloadPowerProfileInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlWorkloadPowerProfileProfilesInfo_tCompare(*m_value.WorkloadPowerProfileProfilesInfoPtr, *other.m_value.WorkloadPowerProfileProfilesInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlWorkloadPowerProfileProfilesInfo_tCompare(*m_value.WorkloadPowerProfileProfilesInfoPtr, *other.m_value.WorkloadPowerProfileProfilesInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlWorkloadPowerProfileProfilesInfo_tCompare(m_value.WorkloadPowerProfileProfilesInfo, other.m_value.WorkloadPowerProfileProfilesInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlWorkloadPowerProfileRequestedProfiles_tCompare(*m_value.WorkloadPowerProfileRequestedProfilesPtr, *other.m_value.WorkloadPowerProfileRequestedProfilesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlWorkloadPowerProfileRequestedProfiles_tCompare(*m_value.WorkloadPowerProfileRequestedProfilesPtr, *other.m_value.WorkloadPowerProfileRequestedProfilesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlWorkloadPowerProfileRequestedProfiles_tCompare(m_value.WorkloadPowerProfileRequestedProfiles, other.m_value.WorkloadPowerProfileRequestedProfiles);
+                    break; // NOT REACHED
+                }
+                case INJECTION_SHORT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.ShortPtr == *other.m_value.ShortPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.ShortPtr < *other.m_value.ShortPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.ShortPtr[i] == other.m_value.ShortPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.ShortPtr[i] < other.m_value.ShortPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_SHORT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.Short < other.m_value.Short)
                     {
                         return -1;
                     }
-                    else if (m_value.ui > other.m_value.ui)
+                    else if (m_value.Short > other.m_value.Short)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_UCHAR_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.UCharPtr == *other.m_value.UCharPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.UCharPtr < *other.m_value.UCharPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.UCharPtr[i] == other.m_value.UCharPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.UCharPtr[i] < other.m_value.UCharPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_UCHAR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.UChar < other.m_value.UChar)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.UChar > other.m_value.UChar)
                     {
                         return 1;
                     }
@@ -6661,31 +14235,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.uiPtr == *other.m_value.uiPtr)
+                        if (*m_value.UIntPtr == *other.m_value.UIntPtr)
                         {
                             return 0;
                         }
-                        return *m_value.uiPtr < *other.m_value.uiPtr ? -1 : 1;
+                        return *m_value.UIntPtr < *other.m_value.UIntPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.uiPtr[i] == other.m_value.uiPtr[i])
+                        if (m_value.UIntPtr[i] == other.m_value.UIntPtr[i])
                         {
                             continue;
                         }
-                        return m_value.uiPtr[i] < other.m_value.uiPtr[i] ? -1 : 1;
+                        return m_value.UIntPtr[i] < other.m_value.UIntPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ULONG:
+                case INJECTION_UINT:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.ul < other.m_value.ul)
+                    if (m_value.UInt < other.m_value.UInt)
                     {
                         return -1;
                     }
-                    else if (m_value.ul > other.m_value.ul)
+                    else if (m_value.UInt > other.m_value.UInt)
                     {
                         return 1;
                     }
@@ -6700,31 +14274,31 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.ulPtr == *other.m_value.ulPtr)
+                        if (*m_value.ULongPtr == *other.m_value.ULongPtr)
                         {
                             return 0;
                         }
-                        return *m_value.ulPtr < *other.m_value.ulPtr ? -1 : 1;
+                        return *m_value.ULongPtr < *other.m_value.ULongPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.ulPtr[i] == other.m_value.ulPtr[i])
+                        if (m_value.ULongPtr[i] == other.m_value.ULongPtr[i])
                         {
                             continue;
                         }
-                        return m_value.ulPtr[i] < other.m_value.ulPtr[i] ? -1 : 1;
+                        return m_value.ULongPtr[i] < other.m_value.ULongPtr[i] ? -1 : 1;
                     }
                     return 0;
                     break; // NOT REACHED
                 }
-                case INJECTION_ULONG_LONG:
+                case INJECTION_ULONG:
                 {
                     // The following snippet is generated from write_injection_argument_compare
-                    if (m_value.ull < other.m_value.ull)
+                    if (m_value.ULong < other.m_value.ULong)
                     {
                         return -1;
                     }
-                    else if (m_value.ull > other.m_value.ull)
+                    else if (m_value.ULong > other.m_value.ULong)
                     {
                         return 1;
                     }
@@ -6739,21 +14313,77 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     // The following snippet is generated from write_injection_argument_compare
                     if (!m_isArray)
                     {
-                        if (*m_value.ullPtr == *other.m_value.ullPtr)
+                        if (*m_value.ULongLongPtr == *other.m_value.ULongLongPtr)
                         {
                             return 0;
                         }
-                        return *m_value.ullPtr < *other.m_value.ullPtr ? -1 : 1;
+                        return *m_value.ULongLongPtr < *other.m_value.ULongLongPtr ? -1 : 1;
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (m_value.ullPtr[i] == other.m_value.ullPtr[i])
+                        if (m_value.ULongLongPtr[i] == other.m_value.ULongLongPtr[i])
                         {
                             continue;
                         }
-                        return m_value.ullPtr[i] < other.m_value.ullPtr[i] ? -1 : 1;
+                        return m_value.ULongLongPtr[i] < other.m_value.ULongLongPtr[i] ? -1 : 1;
                     }
                     return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_ULONG_LONG:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.ULongLong < other.m_value.ULongLong)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.ULongLong > other.m_value.ULongLong)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_USHORT_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.UShortPtr == *other.m_value.UShortPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.UShortPtr < *other.m_value.UShortPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.UShortPtr[i] == other.m_value.UShortPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.UShortPtr[i] < other.m_value.UShortPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_USHORT:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.UShort < other.m_value.UShort)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.UShort > other.m_value.UShort)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
                     break; // NOT REACHED
                 }
                 default:
@@ -6774,588 +14404,1492 @@ InjectionArgument::~InjectionArgument()
     {
         case INJECTION_CHAR_PTR:
         {
-            if (m_inHeap && m_value.str)
+            if (m_inHeap && m_value.Str)
             {
-                free(m_value.str);
+                free(m_value.Str);
             }
+            break;
         }
-        break;
+        case INJECTION_DOUBLE_PTR:
+        {
+            if (m_inHeap && m_value.DoublePtr)
+            {
+                free(m_value.DoublePtr);
+            }
+            break;
+        }
         case INJECTION_INT_PTR:
         {
-            if (m_inHeap && m_value.iPtr)
+            if (m_inHeap && m_value.IntPtr)
             {
-                free(m_value.iPtr);
+                free(m_value.IntPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_LONG_PTR:
+        {
+            if (m_inHeap && m_value.LongPtr)
+            {
+                free(m_value.LongPtr);
+            }
+            break;
+        }
+        case INJECTION_LONG_LONG_PTR:
+        {
+            if (m_inHeap && m_value.LongLongPtr)
+            {
+                free(m_value.LongLongPtr);
+            }
+            break;
+        }
         case INJECTION_ACCOUNTINGSTATS_PTR:
         {
-            if (m_inHeap && m_value.accountingStatsPtr)
+            if (m_inHeap && m_value.AccountingStatsPtr)
             {
-                free(m_value.accountingStatsPtr);
+                free(m_value.AccountingStatsPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_AFFINITYSCOPE_PTR:
+        {
+            if (m_inHeap && m_value.AffinityScopePtr)
+            {
+                free(m_value.AffinityScopePtr);
+            }
+            break;
+        }
         case INJECTION_BAR1MEMORY_PTR:
         {
-            if (m_inHeap && m_value.bar1MemoryPtr)
+            if (m_inHeap && m_value.BAR1MemoryPtr)
             {
-                free(m_value.bar1MemoryPtr);
+                free(m_value.BAR1MemoryPtr);
             }
+            break;
         }
-        break;
         case INJECTION_BRANDTYPE_PTR:
         {
-            if (m_inHeap && m_value.brandTypePtr)
+            if (m_inHeap && m_value.BrandTypePtr)
             {
-                free(m_value.brandTypePtr);
+                free(m_value.BrandTypePtr);
             }
+            break;
         }
-        break;
         case INJECTION_BRIDGECHIPHIERARCHY_PTR:
         {
-            if (m_inHeap && m_value.bridgeChipHierarchyPtr)
+            if (m_inHeap && m_value.BridgeChipHierarchyPtr)
             {
-                free(m_value.bridgeChipHierarchyPtr);
+                free(m_value.BridgeChipHierarchyPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_BRIDGECHIPINFO_PTR:
+        {
+            if (m_inHeap && m_value.BridgeChipInfoPtr)
+            {
+                free(m_value.BridgeChipInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_BRIDGECHIPTYPE_PTR:
+        {
+            if (m_inHeap && m_value.BridgeChipTypePtr)
+            {
+                free(m_value.BridgeChipTypePtr);
+            }
+            break;
+        }
+        case INJECTION_BUSTYPE_PTR:
+        {
+            if (m_inHeap && m_value.BusTypePtr)
+            {
+                free(m_value.BusTypePtr);
+            }
+            break;
+        }
+        case INJECTION_C2CMODEINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.C2cModeInfo_v1Ptr)
+            {
+                free(m_value.C2cModeInfo_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_CLKMONFAULTINFO_PTR:
+        {
+            if (m_inHeap && m_value.ClkMonFaultInfoPtr)
+            {
+                free(m_value.ClkMonFaultInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_CLKMONSTATUS_PTR:
+        {
+            if (m_inHeap && m_value.ClkMonStatusPtr)
+            {
+                free(m_value.ClkMonStatusPtr);
+            }
+            break;
+        }
+        case INJECTION_CLOCKID_PTR:
+        {
+            if (m_inHeap && m_value.ClockIdPtr)
+            {
+                free(m_value.ClockIdPtr);
+            }
+            break;
+        }
+        case INJECTION_CLOCKLIMITID_PTR:
+        {
+            if (m_inHeap && m_value.ClockLimitIdPtr)
+            {
+                free(m_value.ClockLimitIdPtr);
+            }
+            break;
+        }
+        case INJECTION_CLOCKOFFSET_PTR:
+        {
+            if (m_inHeap && m_value.ClockOffsetPtr)
+            {
+                free(m_value.ClockOffsetPtr);
+            }
+            break;
+        }
+        case INJECTION_CLOCKTYPE_PTR:
+        {
+            if (m_inHeap && m_value.ClockTypePtr)
+            {
+                free(m_value.ClockTypePtr);
+            }
+            break;
+        }
         case INJECTION_COMPUTEINSTANCEINFO_PTR:
         {
-            if (m_inHeap && m_value.computeInstanceInfoPtr)
+            if (m_inHeap && m_value.ComputeInstanceInfoPtr)
             {
-                free(m_value.computeInstanceInfoPtr);
+                free(m_value.ComputeInstanceInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_COMPUTEINSTANCEPLACEMENT_PTR:
+        {
+            if (m_inHeap && m_value.ComputeInstancePlacementPtr)
+            {
+                free(m_value.ComputeInstancePlacementPtr);
+            }
+            break;
+        }
         case INJECTION_COMPUTEINSTANCEPROFILEINFO_PTR:
         {
-            if (m_inHeap && m_value.computeInstanceProfileInfoPtr)
+            if (m_inHeap && m_value.ComputeInstanceProfileInfoPtr)
             {
-                free(m_value.computeInstanceProfileInfoPtr);
+                free(m_value.ComputeInstanceProfileInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_COMPUTEINSTANCEPROFILEINFO_V2_PTR:
         {
-            if (m_inHeap && m_value.computeInstanceProfileInfo_v2Ptr)
+            if (m_inHeap && m_value.ComputeInstanceProfileInfo_v2Ptr)
             {
-                free(m_value.computeInstanceProfileInfo_v2Ptr);
+                free(m_value.ComputeInstanceProfileInfo_v2Ptr);
             }
+            break;
         }
-        break;
+        case INJECTION_COMPUTEINSTANCEPROFILEINFO_V3_PTR:
+        {
+            if (m_inHeap && m_value.ComputeInstanceProfileInfo_v3Ptr)
+            {
+                free(m_value.ComputeInstanceProfileInfo_v3Ptr);
+            }
+            break;
+        }
         case INJECTION_COMPUTEINSTANCE_PTR:
         {
-            if (m_inHeap && m_value.computeInstancePtr)
+            if (m_inHeap && m_value.ComputeInstancePtr)
             {
-                free(m_value.computeInstancePtr);
+                free(m_value.ComputeInstancePtr);
             }
+            break;
         }
-        break;
         case INJECTION_COMPUTEMODE_PTR:
         {
-            if (m_inHeap && m_value.computeModePtr)
+            if (m_inHeap && m_value.ComputeModePtr)
             {
-                free(m_value.computeModePtr);
+                free(m_value.ComputeModePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_CONFCOMPUTEGETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr)
+            {
+                free(m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEGPUATTESTATIONREPORT_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeGpuAttestationReportPtr)
+            {
+                free(m_value.ConfComputeGpuAttestationReportPtr);
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEGPUCERTIFICATE_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeGpuCertificatePtr)
+            {
+                free(m_value.ConfComputeGpuCertificatePtr);
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTEMEMSIZEINFO_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeMemSizeInfoPtr)
+            {
+                free(m_value.ConfComputeMemSizeInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTESETKEYROTATIONTHRESHOLDINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr)
+            {
+                free(m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_CONFCOMPUTESYSTEMCAPS_PTR:
+        {
+            if (m_inHeap && m_value.ConfComputeSystemCapsPtr)
+            {
+                free(m_value.ConfComputeSystemCapsPtr);
+            }
+            break;
+        }
         case INJECTION_CONFCOMPUTESYSTEMSTATE_PTR:
         {
-            if (m_inHeap && m_value.confComputeSystemStatePtr)
+            if (m_inHeap && m_value.ConfComputeSystemStatePtr)
             {
-                free(m_value.confComputeSystemStatePtr);
+                free(m_value.ConfComputeSystemStatePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_COOLERCONTROL_PTR:
+        {
+            if (m_inHeap && m_value.CoolerControlPtr)
+            {
+                free(m_value.CoolerControlPtr);
+            }
+            break;
+        }
+        case INJECTION_COOLERINFO_PTR:
+        {
+            if (m_inHeap && m_value.CoolerInfoPtr)
+            {
+                free(m_value.CoolerInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_COOLERTARGET_PTR:
+        {
+            if (m_inHeap && m_value.CoolerTargetPtr)
+            {
+                free(m_value.CoolerTargetPtr);
+            }
+            break;
+        }
+        case INJECTION_DETACHGPUSTATE_PTR:
+        {
+            if (m_inHeap && m_value.DetachGpuStatePtr)
+            {
+                free(m_value.DetachGpuStatePtr);
+            }
+            break;
+        }
+        case INJECTION_DEVICEARCHITECTURE_PTR:
+        {
+            if (m_inHeap && m_value.DeviceArchitecturePtr)
+            {
+                free(m_value.DeviceArchitecturePtr);
+            }
+            break;
+        }
         case INJECTION_DEVICEATTRIBUTES_PTR:
         {
-            if (m_inHeap && m_value.deviceAttributesPtr)
+            if (m_inHeap && m_value.DeviceAttributesPtr)
             {
-                free(m_value.deviceAttributesPtr);
+                free(m_value.DeviceAttributesPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_DEVICECAPABILITIES_PTR:
+        {
+            if (m_inHeap && m_value.DeviceCapabilitiesPtr)
+            {
+                free(m_value.DeviceCapabilitiesPtr);
+            }
+            break;
+        }
+        case INJECTION_DEVICECURRENTCLOCKFREQS_PTR:
+        {
+            if (m_inHeap && m_value.DeviceCurrentClockFreqsPtr)
+            {
+                free(m_value.DeviceCurrentClockFreqsPtr);
+            }
+            break;
+        }
+        case INJECTION_DEVICEGPURECOVERYACTION_PTR:
+        {
+            if (m_inHeap && m_value.DeviceGpuRecoveryActionPtr)
+            {
+                free(m_value.DeviceGpuRecoveryActionPtr);
+            }
+            break;
+        }
+        case INJECTION_DEVICEPERFMODES_PTR:
+        {
+            if (m_inHeap && m_value.DevicePerfModesPtr)
+            {
+                free(m_value.DevicePerfModesPtr);
+            }
+            break;
+        }
+        case INJECTION_DEVICEVGPUCAPABILITY_PTR:
+        {
+            if (m_inHeap && m_value.DeviceVgpuCapabilityPtr)
+            {
+                free(m_value.DeviceVgpuCapabilityPtr);
+            }
+            break;
+        }
         case INJECTION_DEVICE_PTR:
         {
-            if (m_inHeap && m_value.devicePtr)
+            if (m_inHeap && m_value.DevicePtr)
             {
-                free(m_value.devicePtr);
+                free(m_value.DevicePtr);
             }
+            break;
         }
-        break;
         case INJECTION_DRIVERMODEL_PTR:
         {
-            if (m_inHeap && m_value.driverModelPtr)
+            if (m_inHeap && m_value.DriverModelPtr)
             {
-                free(m_value.driverModelPtr);
+                free(m_value.DriverModelPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_ECCCOUNTERTYPE_PTR:
+        {
+            if (m_inHeap && m_value.EccCounterTypePtr)
+            {
+                free(m_value.EccCounterTypePtr);
+            }
+            break;
+        }
         case INJECTION_ECCERRORCOUNTS_PTR:
         {
-            if (m_inHeap && m_value.eccErrorCountsPtr)
+            if (m_inHeap && m_value.EccErrorCountsPtr)
             {
-                free(m_value.eccErrorCountsPtr);
+                free(m_value.EccErrorCountsPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_ECCSRAMERRORSTATUS_PTR:
+        {
+            if (m_inHeap && m_value.EccSramErrorStatusPtr)
+            {
+                free(m_value.EccSramErrorStatusPtr);
+            }
+            break;
+        }
         case INJECTION_ENABLESTATE_PTR:
         {
-            if (m_inHeap && m_value.enableStatePtr)
+            if (m_inHeap && m_value.EnableStatePtr)
             {
-                free(m_value.enableStatePtr);
+                free(m_value.EnableStatePtr);
             }
+            break;
         }
-        break;
         case INJECTION_ENCODERSESSIONINFO_PTR:
         {
-            if (m_inHeap && m_value.encoderSessionInfoPtr)
+            if (m_inHeap && m_value.EncoderSessionInfoPtr)
             {
-                free(m_value.encoderSessionInfoPtr);
+                free(m_value.EncoderSessionInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_ENCODERTYPE_PTR:
+        {
+            if (m_inHeap && m_value.EncoderTypePtr)
+            {
+                free(m_value.EncoderTypePtr);
+            }
+            break;
+        }
         case INJECTION_EVENTDATA_PTR:
         {
-            if (m_inHeap && m_value.eventDataPtr)
+            if (m_inHeap && m_value.EventDataPtr)
             {
-                free(m_value.eventDataPtr);
+                free(m_value.EventDataPtr);
             }
+            break;
         }
-        break;
         case INJECTION_EVENTSET_PTR:
         {
-            if (m_inHeap && m_value.eventSetPtr)
+            if (m_inHeap && m_value.EventSetPtr)
             {
-                free(m_value.eventSetPtr);
+                free(m_value.EventSetPtr);
             }
+            break;
         }
-        break;
         case INJECTION_EXCLUDEDDEVICEINFO_PTR:
         {
-            if (m_inHeap && m_value.excludedDeviceInfoPtr)
+            if (m_inHeap && m_value.ExcludedDeviceInfoPtr)
             {
-                free(m_value.excludedDeviceInfoPtr);
+                free(m_value.ExcludedDeviceInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_FBCSESSIONINFO_PTR:
         {
-            if (m_inHeap && m_value.fBCSessionInfoPtr)
+            if (m_inHeap && m_value.FBCSessionInfoPtr)
             {
-                free(m_value.fBCSessionInfoPtr);
+                free(m_value.FBCSessionInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_FBCSESSIONTYPE_PTR:
+        {
+            if (m_inHeap && m_value.FBCSessionTypePtr)
+            {
+                free(m_value.FBCSessionTypePtr);
+            }
+            break;
+        }
         case INJECTION_FBCSTATS_PTR:
         {
-            if (m_inHeap && m_value.fBCStatsPtr)
+            if (m_inHeap && m_value.FBCStatsPtr)
             {
-                free(m_value.fBCStatsPtr);
+                free(m_value.FBCStatsPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_FANCONTROLPOLICY_PTR:
+        {
+            if (m_inHeap && m_value.FanControlPolicyPtr)
+            {
+                free(m_value.FanControlPolicyPtr);
+            }
+            break;
+        }
+        case INJECTION_FANSPEEDINFO_PTR:
+        {
+            if (m_inHeap && m_value.FanSpeedInfoPtr)
+            {
+                free(m_value.FanSpeedInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_FANSTATE_PTR:
+        {
+            if (m_inHeap && m_value.FanStatePtr)
+            {
+                free(m_value.FanStatePtr);
+            }
+            break;
+        }
         case INJECTION_FIELDVALUE_PTR:
         {
-            if (m_inHeap && m_value.fieldValuePtr)
+            if (m_inHeap && m_value.FieldValuePtr)
             {
-                free(m_value.fieldValuePtr);
+                free(m_value.FieldValuePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GPMMETRICID_PTR:
+        {
+            if (m_inHeap && m_value.GpmMetricIdPtr)
+            {
+                free(m_value.GpmMetricIdPtr);
+            }
+            break;
+        }
+        case INJECTION_GPMMETRIC_PTR:
+        {
+            if (m_inHeap && m_value.GpmMetricPtr)
+            {
+                free(m_value.GpmMetricPtr);
+            }
+            break;
+        }
         case INJECTION_GPMMETRICSGET_PTR:
         {
-            if (m_inHeap && m_value.gpmMetricsGetPtr)
+            if (m_inHeap && m_value.GpmMetricsGetPtr)
             {
-                free(m_value.gpmMetricsGetPtr);
+                free(m_value.GpmMetricsGetPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPMSAMPLE_PTR:
         {
-            if (m_inHeap && m_value.gpmSamplePtr)
+            if (m_inHeap && m_value.GpmSamplePtr)
             {
-                free(m_value.gpmSamplePtr);
+                free(m_value.GpmSamplePtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPMSUPPORT_PTR:
         {
-            if (m_inHeap && m_value.gpmSupportPtr)
+            if (m_inHeap && m_value.GpmSupportPtr)
             {
-                free(m_value.gpmSupportPtr);
+                free(m_value.GpmSupportPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUDYNAMICPSTATESINFO_PTR:
         {
-            if (m_inHeap && m_value.gpuDynamicPstatesInfoPtr)
+            if (m_inHeap && m_value.GpuDynamicPstatesInfoPtr)
             {
-                free(m_value.gpuDynamicPstatesInfoPtr);
+                free(m_value.GpuDynamicPstatesInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GPUFABRICINFOV_PTR:
+        {
+            if (m_inHeap && m_value.GpuFabricInfoVPtr)
+            {
+                free(m_value.GpuFabricInfoVPtr);
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICINFO_PTR:
+        {
+            if (m_inHeap && m_value.GpuFabricInfoPtr)
+            {
+                free(m_value.GpuFabricInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICSTATE_PTR:
+        {
+            if (m_inHeap && m_value.GpuFabricStatePtr)
+            {
+                free(m_value.GpuFabricStatePtr);
+            }
+            break;
+        }
         case INJECTION_GPUINSTANCEINFO_PTR:
         {
-            if (m_inHeap && m_value.gpuInstanceInfoPtr)
+            if (m_inHeap && m_value.GpuInstanceInfoPtr)
             {
-                free(m_value.gpuInstanceInfoPtr);
+                free(m_value.GpuInstanceInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUINSTANCEPLACEMENT_PTR:
         {
-            if (m_inHeap && m_value.gpuInstancePlacementPtr)
+            if (m_inHeap && m_value.GpuInstancePlacementPtr)
             {
-                free(m_value.gpuInstancePlacementPtr);
+                free(m_value.GpuInstancePlacementPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUINSTANCEPROFILEINFO_PTR:
         {
-            if (m_inHeap && m_value.gpuInstanceProfileInfoPtr)
+            if (m_inHeap && m_value.GpuInstanceProfileInfoPtr)
             {
-                free(m_value.gpuInstanceProfileInfoPtr);
+                free(m_value.GpuInstanceProfileInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUINSTANCEPROFILEINFO_V2_PTR:
         {
-            if (m_inHeap && m_value.gpuInstanceProfileInfo_v2Ptr)
+            if (m_inHeap && m_value.GpuInstanceProfileInfo_v2Ptr)
             {
-                free(m_value.gpuInstanceProfileInfo_v2Ptr);
+                free(m_value.GpuInstanceProfileInfo_v2Ptr);
             }
+            break;
         }
-        break;
+        case INJECTION_GPUINSTANCEPROFILEINFO_V3_PTR:
+        {
+            if (m_inHeap && m_value.GpuInstanceProfileInfo_v3Ptr)
+            {
+                free(m_value.GpuInstanceProfileInfo_v3Ptr);
+            }
+            break;
+        }
         case INJECTION_GPUINSTANCE_PTR:
         {
-            if (m_inHeap && m_value.gpuInstancePtr)
+            if (m_inHeap && m_value.GpuInstancePtr)
             {
-                free(m_value.gpuInstancePtr);
+                free(m_value.GpuInstancePtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUOPERATIONMODE_PTR:
         {
-            if (m_inHeap && m_value.gpuOperationModePtr)
+            if (m_inHeap && m_value.GpuOperationModePtr)
             {
-                free(m_value.gpuOperationModePtr);
+                free(m_value.GpuOperationModePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GPUP2PCAPSINDEX_PTR:
+        {
+            if (m_inHeap && m_value.GpuP2PCapsIndexPtr)
+            {
+                free(m_value.GpuP2PCapsIndexPtr);
+            }
+            break;
+        }
         case INJECTION_GPUP2PSTATUS_PTR:
         {
-            if (m_inHeap && m_value.gpuP2PStatusPtr)
+            if (m_inHeap && m_value.GpuP2PStatusPtr)
             {
-                free(m_value.gpuP2PStatusPtr);
+                free(m_value.GpuP2PStatusPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUTHERMALSETTINGS_PTR:
         {
-            if (m_inHeap && m_value.gpuThermalSettingsPtr)
+            if (m_inHeap && m_value.GpuThermalSettingsPtr)
             {
-                free(m_value.gpuThermalSettingsPtr);
+                free(m_value.GpuThermalSettingsPtr);
             }
+            break;
         }
-        break;
         case INJECTION_GPUTOPOLOGYLEVEL_PTR:
         {
-            if (m_inHeap && m_value.gpuTopologyLevelPtr)
+            if (m_inHeap && m_value.GpuTopologyLevelPtr)
             {
-                free(m_value.gpuTopologyLevelPtr);
+                free(m_value.GpuTopologyLevelPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GPUUTILIZATIONDOMAINID_PTR:
+        {
+            if (m_inHeap && m_value.GpuUtilizationDomainIdPtr)
+            {
+                free(m_value.GpuUtilizationDomainIdPtr);
+            }
+            break;
+        }
         case INJECTION_GPUVIRTUALIZATIONMODE_PTR:
         {
-            if (m_inHeap && m_value.gpuVirtualizationModePtr)
+            if (m_inHeap && m_value.GpuVirtualizationModePtr)
             {
-                free(m_value.gpuVirtualizationModePtr);
+                free(m_value.GpuVirtualizationModePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GRIDLICENSABLEFEATURE_PTR:
+        {
+            if (m_inHeap && m_value.GridLicensableFeaturePtr)
+            {
+                free(m_value.GridLicensableFeaturePtr);
+            }
+            break;
+        }
         case INJECTION_GRIDLICENSABLEFEATURES_PTR:
         {
-            if (m_inHeap && m_value.gridLicensableFeaturesPtr)
+            if (m_inHeap && m_value.GridLicensableFeaturesPtr)
             {
-                free(m_value.gridLicensableFeaturesPtr);
+                free(m_value.GridLicensableFeaturesPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_GRIDLICENSEEXPIRY_PTR:
+        {
+            if (m_inHeap && m_value.GridLicenseExpiryPtr)
+            {
+                free(m_value.GridLicenseExpiryPtr);
+            }
+            break;
+        }
+        case INJECTION_GRIDLICENSEFEATURECODE_PTR:
+        {
+            if (m_inHeap && m_value.GridLicenseFeatureCodePtr)
+            {
+                free(m_value.GridLicenseFeatureCodePtr);
+            }
+            break;
+        }
         case INJECTION_HOSTVGPUMODE_PTR:
         {
-            if (m_inHeap && m_value.hostVgpuModePtr)
+            if (m_inHeap && m_value.HostVgpuModePtr)
             {
-                free(m_value.hostVgpuModePtr);
+                free(m_value.HostVgpuModePtr);
             }
+            break;
         }
-        break;
         case INJECTION_HWBCENTRY_PTR:
         {
-            if (m_inHeap && m_value.hwbcEntryPtr)
+            if (m_inHeap && m_value.HwbcEntryPtr)
             {
-                free(m_value.hwbcEntryPtr);
+                free(m_value.HwbcEntryPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_INFOROMOBJECT_PTR:
+        {
+            if (m_inHeap && m_value.InforomObjectPtr)
+            {
+                free(m_value.InforomObjectPtr);
+            }
+            break;
+        }
         case INJECTION_INTNVLINKDEVICETYPE_PTR:
         {
-            if (m_inHeap && m_value.intNvLinkDeviceTypePtr)
+            if (m_inHeap && m_value.IntNvLinkDeviceTypePtr)
             {
-                free(m_value.intNvLinkDeviceTypePtr);
+                free(m_value.IntNvLinkDeviceTypePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_LEDCOLOR_PTR:
+        {
+            if (m_inHeap && m_value.LedColorPtr)
+            {
+                free(m_value.LedColorPtr);
+            }
+            break;
+        }
         case INJECTION_LEDSTATE_PTR:
         {
-            if (m_inHeap && m_value.ledStatePtr)
+            if (m_inHeap && m_value.LedStatePtr)
             {
-                free(m_value.ledStatePtr);
+                free(m_value.LedStatePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_MASK255_PTR:
+        {
+            if (m_inHeap && m_value.Mask255Ptr)
+            {
+                free(m_value.Mask255Ptr);
+            }
+            break;
+        }
+        case INJECTION_MEMORYERRORTYPE_PTR:
+        {
+            if (m_inHeap && m_value.MemoryErrorTypePtr)
+            {
+                free(m_value.MemoryErrorTypePtr);
+            }
+            break;
+        }
+        case INJECTION_MEMORYLOCATION_PTR:
+        {
+            if (m_inHeap && m_value.MemoryLocationPtr)
+            {
+                free(m_value.MemoryLocationPtr);
+            }
+            break;
+        }
         case INJECTION_MEMORY_PTR:
         {
-            if (m_inHeap && m_value.memoryPtr)
+            if (m_inHeap && m_value.MemoryPtr)
             {
-                free(m_value.memoryPtr);
+                free(m_value.MemoryPtr);
             }
+            break;
         }
-        break;
         case INJECTION_MEMORY_V2_PTR:
         {
-            if (m_inHeap && m_value.memory_v2Ptr)
+            if (m_inHeap && m_value.Memory_v2Ptr)
             {
-                free(m_value.memory_v2Ptr);
+                free(m_value.Memory_v2Ptr);
             }
+            break;
         }
-        break;
+        case INJECTION_NVLINKCAPABILITY_PTR:
+        {
+            if (m_inHeap && m_value.NvLinkCapabilityPtr)
+            {
+                free(m_value.NvLinkCapabilityPtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKERRORCOUNTER_PTR:
+        {
+            if (m_inHeap && m_value.NvLinkErrorCounterPtr)
+            {
+                free(m_value.NvLinkErrorCounterPtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKPOWERTHRES_PTR:
+        {
+            if (m_inHeap && m_value.NvLinkPowerThresPtr)
+            {
+                free(m_value.NvLinkPowerThresPtr);
+            }
+            break;
+        }
         case INJECTION_NVLINKUTILIZATIONCONTROL_PTR:
         {
-            if (m_inHeap && m_value.nvLinkUtilizationControlPtr)
+            if (m_inHeap && m_value.NvLinkUtilizationControlPtr)
             {
-                free(m_value.nvLinkUtilizationControlPtr);
+                free(m_value.NvLinkUtilizationControlPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_NVLINKUTILIZATIONCOUNTPKTTYPES_PTR:
+        {
+            if (m_inHeap && m_value.NvLinkUtilizationCountPktTypesPtr)
+            {
+                free(m_value.NvLinkUtilizationCountPktTypesPtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKUTILIZATIONCOUNTUNITS_PTR:
+        {
+            if (m_inHeap && m_value.NvLinkUtilizationCountUnitsPtr)
+            {
+                free(m_value.NvLinkUtilizationCountUnitsPtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKVERSION_PTR:
+        {
+            if (m_inHeap && m_value.NvlinkVersionPtr)
+            {
+                free(m_value.NvlinkVersionPtr);
+            }
+            break;
+        }
         case INJECTION_PSUINFO_PTR:
         {
-            if (m_inHeap && m_value.pSUInfoPtr)
+            if (m_inHeap && m_value.PSUInfoPtr)
             {
-                free(m_value.pSUInfoPtr);
+                free(m_value.PSUInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_PAGERETIREMENTCAUSE_PTR:
+        {
+            if (m_inHeap && m_value.PageRetirementCausePtr)
+            {
+                free(m_value.PageRetirementCausePtr);
+            }
+            break;
+        }
+        case INJECTION_PCIINFOEXT_PTR:
+        {
+            if (m_inHeap && m_value.PciInfoExtPtr)
+            {
+                free(m_value.PciInfoExtPtr);
+            }
+            break;
+        }
         case INJECTION_PCIINFO_PTR:
         {
-            if (m_inHeap && m_value.pciInfoPtr)
+            if (m_inHeap && m_value.PciInfoPtr)
             {
-                free(m_value.pciInfoPtr);
+                free(m_value.PciInfoPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_PCIELINKSTATE_PTR:
+        {
+            if (m_inHeap && m_value.PcieLinkStatePtr)
+            {
+                free(m_value.PcieLinkStatePtr);
+            }
+            break;
+        }
+        case INJECTION_PCIEUTILCOUNTER_PTR:
+        {
+            if (m_inHeap && m_value.PcieUtilCounterPtr)
+            {
+                free(m_value.PcieUtilCounterPtr);
+            }
+            break;
+        }
+        case INJECTION_PERFPOLICYTYPE_PTR:
+        {
+            if (m_inHeap && m_value.PerfPolicyTypePtr)
+            {
+                free(m_value.PerfPolicyTypePtr);
+            }
+            break;
+        }
+        case INJECTION_PLATFORMINFO_PTR:
+        {
+            if (m_inHeap && m_value.PlatformInfoPtr)
+            {
+                free(m_value.PlatformInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_POWERPROFILETYPE_PTR:
+        {
+            if (m_inHeap && m_value.PowerProfileTypePtr)
+            {
+                free(m_value.PowerProfileTypePtr);
+            }
+            break;
+        }
+        case INJECTION_POWERSCOPETYPE_PTR:
+        {
+            if (m_inHeap && m_value.PowerScopeTypePtr)
+            {
+                free(m_value.PowerScopeTypePtr);
+            }
+            break;
+        }
+        case INJECTION_POWERSOURCE_PTR:
+        {
+            if (m_inHeap && m_value.PowerSourcePtr)
+            {
+                free(m_value.PowerSourcePtr);
+            }
+            break;
+        }
+        case INJECTION_POWERVALUE_V2_PTR:
+        {
+            if (m_inHeap && m_value.PowerValue_v2Ptr)
+            {
+                free(m_value.PowerValue_v2Ptr);
+            }
+            break;
+        }
+        case INJECTION_PROCESSDETAILLIST_PTR:
+        {
+            if (m_inHeap && m_value.ProcessDetailListPtr)
+            {
+                free(m_value.ProcessDetailListPtr);
+            }
+            break;
+        }
+        case INJECTION_PROCESSDETAIL_V1_PTR:
+        {
+            if (m_inHeap && m_value.ProcessDetail_v1Ptr)
+            {
+                free(m_value.ProcessDetail_v1Ptr);
+            }
+            break;
+        }
         case INJECTION_PROCESSINFO_PTR:
         {
-            if (m_inHeap && m_value.processInfoPtr)
+            if (m_inHeap && m_value.ProcessInfoPtr)
             {
-                free(m_value.processInfoPtr);
+                free(m_value.ProcessInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_PROCESSINFO_V1_PTR:
         {
-            if (m_inHeap && m_value.processInfo_v1Ptr)
+            if (m_inHeap && m_value.ProcessInfo_v1Ptr)
             {
-                free(m_value.processInfo_v1Ptr);
+                free(m_value.ProcessInfo_v1Ptr);
             }
+            break;
         }
-        break;
-        case INJECTION_PROCESSINFO_V2_PTR:
+        case INJECTION_PROCESSUTILIZATIONINFO_V1_PTR:
         {
-            if (m_inHeap && m_value.processInfo_v2Ptr)
+            if (m_inHeap && m_value.ProcessUtilizationInfo_v1Ptr)
             {
-                free(m_value.processInfo_v2Ptr);
+                free(m_value.ProcessUtilizationInfo_v1Ptr);
             }
+            break;
         }
-        break;
         case INJECTION_PROCESSUTILIZATIONSAMPLE_PTR:
         {
-            if (m_inHeap && m_value.processUtilizationSamplePtr)
+            if (m_inHeap && m_value.ProcessUtilizationSamplePtr)
             {
-                free(m_value.processUtilizationSamplePtr);
+                free(m_value.ProcessUtilizationSamplePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_PROCESSESUTILIZATIONINFO_PTR:
+        {
+            if (m_inHeap && m_value.ProcessesUtilizationInfoPtr)
+            {
+                free(m_value.ProcessesUtilizationInfoPtr);
+            }
+            break;
+        }
         case INJECTION_PSTATES_PTR:
         {
-            if (m_inHeap && m_value.pstatesPtr)
+            if (m_inHeap && m_value.PstatesPtr)
             {
-                free(m_value.pstatesPtr);
+                free(m_value.PstatesPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_RESTRICTEDAPI_PTR:
+        {
+            if (m_inHeap && m_value.RestrictedAPIPtr)
+            {
+                free(m_value.RestrictedAPIPtr);
+            }
+            break;
+        }
         case INJECTION_RETURN_PTR:
         {
-            if (m_inHeap && m_value.nvmlReturnPtr)
+            if (m_inHeap && m_value.ReturnPtr)
             {
-                free(m_value.nvmlReturnPtr);
+                free(m_value.ReturnPtr);
             }
+            break;
         }
-        break;
         case INJECTION_ROWREMAPPERHISTOGRAMVALUES_PTR:
         {
-            if (m_inHeap && m_value.rowRemapperHistogramValuesPtr)
+            if (m_inHeap && m_value.RowRemapperHistogramValuesPtr)
             {
-                free(m_value.rowRemapperHistogramValuesPtr);
+                free(m_value.RowRemapperHistogramValuesPtr);
             }
+            break;
         }
-        break;
         case INJECTION_SAMPLE_PTR:
         {
-            if (m_inHeap && m_value.samplePtr)
+            if (m_inHeap && m_value.SamplePtr)
             {
-                free(m_value.samplePtr);
+                free(m_value.SamplePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_SAMPLINGTYPE_PTR:
+        {
+            if (m_inHeap && m_value.SamplingTypePtr)
+            {
+                free(m_value.SamplingTypePtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMCONFCOMPUTESETTINGS_PTR:
+        {
+            if (m_inHeap && m_value.SystemConfComputeSettingsPtr)
+            {
+                free(m_value.SystemConfComputeSettingsPtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMDRIVERBRANCHINFO_PTR:
+        {
+            if (m_inHeap && m_value.SystemDriverBranchInfoPtr)
+            {
+                free(m_value.SystemDriverBranchInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_TEMPERATURESENSORS_PTR:
+        {
+            if (m_inHeap && m_value.TemperatureSensorsPtr)
+            {
+                free(m_value.TemperatureSensorsPtr);
+            }
+            break;
+        }
+        case INJECTION_TEMPERATURETHRESHOLDS_PTR:
+        {
+            if (m_inHeap && m_value.TemperatureThresholdsPtr)
+            {
+                free(m_value.TemperatureThresholdsPtr);
+            }
+            break;
+        }
+        case INJECTION_TEMPERATURE_PTR:
+        {
+            if (m_inHeap && m_value.TemperaturePtr)
+            {
+                free(m_value.TemperaturePtr);
+            }
+            break;
+        }
+        case INJECTION_THERMALCONTROLLER_PTR:
+        {
+            if (m_inHeap && m_value.ThermalControllerPtr)
+            {
+                free(m_value.ThermalControllerPtr);
+            }
+            break;
+        }
+        case INJECTION_THERMALTARGET_PTR:
+        {
+            if (m_inHeap && m_value.ThermalTargetPtr)
+            {
+                free(m_value.ThermalTargetPtr);
+            }
+            break;
+        }
+        case INJECTION_UNITFANINFO_PTR:
+        {
+            if (m_inHeap && m_value.UnitFanInfoPtr)
+            {
+                free(m_value.UnitFanInfoPtr);
+            }
+            break;
+        }
         case INJECTION_UNITFANSPEEDS_PTR:
         {
-            if (m_inHeap && m_value.unitFanSpeedsPtr)
+            if (m_inHeap && m_value.UnitFanSpeedsPtr)
             {
-                free(m_value.unitFanSpeedsPtr);
+                free(m_value.UnitFanSpeedsPtr);
             }
+            break;
         }
-        break;
         case INJECTION_UNITINFO_PTR:
         {
-            if (m_inHeap && m_value.unitInfoPtr)
+            if (m_inHeap && m_value.UnitInfoPtr)
             {
-                free(m_value.unitInfoPtr);
+                free(m_value.UnitInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_UNIT_PTR:
         {
-            if (m_inHeap && m_value.unitPtr)
+            if (m_inHeap && m_value.UnitPtr)
             {
-                free(m_value.unitPtr);
+                free(m_value.UnitPtr);
             }
+            break;
         }
-        break;
         case INJECTION_UTILIZATION_PTR:
         {
-            if (m_inHeap && m_value.utilizationPtr)
+            if (m_inHeap && m_value.UtilizationPtr)
             {
-                free(m_value.utilizationPtr);
+                free(m_value.UtilizationPtr);
             }
+            break;
         }
-        break;
         case INJECTION_VALUETYPE_PTR:
         {
-            if (m_inHeap && m_value.valueTypePtr)
+            if (m_inHeap && m_value.ValueTypePtr)
             {
-                free(m_value.valueTypePtr);
+                free(m_value.ValueTypePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUCAPABILITY_PTR:
+        {
+            if (m_inHeap && m_value.VgpuCapabilityPtr)
+            {
+                free(m_value.VgpuCapabilityPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUDRIVERCAPABILITY_PTR:
+        {
+            if (m_inHeap && m_value.VgpuDriverCapabilityPtr)
+            {
+                free(m_value.VgpuDriverCapabilityPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUGUESTINFOSTATE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuGuestInfoStatePtr)
+            {
+                free(m_value.VgpuGuestInfoStatePtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUHETEROGENEOUSMODE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuHeterogeneousModePtr)
+            {
+                free(m_value.VgpuHeterogeneousModePtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.VgpuInstanceUtilizationInfo_v1Ptr)
+            {
+                free(m_value.VgpuInstanceUtilizationInfo_v1Ptr);
+            }
+            break;
+        }
         case INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR:
         {
-            if (m_inHeap && m_value.vgpuInstanceUtilizationSamplePtr)
+            if (m_inHeap && m_value.VgpuInstanceUtilizationSamplePtr)
             {
-                free(m_value.vgpuInstanceUtilizationSamplePtr);
+                free(m_value.VgpuInstanceUtilizationSamplePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUINSTANCE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuInstancePtr)
+            {
+                free(m_value.VgpuInstancePtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR:
+        {
+            if (m_inHeap && m_value.VgpuInstancesUtilizationInfoPtr)
+            {
+                free(m_value.VgpuInstancesUtilizationInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPULICENSEEXPIRY_PTR:
+        {
+            if (m_inHeap && m_value.VgpuLicenseExpiryPtr)
+            {
+                free(m_value.VgpuLicenseExpiryPtr);
+            }
+            break;
+        }
         case INJECTION_VGPULICENSEINFO_PTR:
         {
-            if (m_inHeap && m_value.vgpuLicenseInfoPtr)
+            if (m_inHeap && m_value.VgpuLicenseInfoPtr)
             {
-                free(m_value.vgpuLicenseInfoPtr);
+                free(m_value.VgpuLicenseInfoPtr);
             }
+            break;
         }
-        break;
         case INJECTION_VGPUMETADATA_PTR:
         {
-            if (m_inHeap && m_value.vgpuMetadataPtr)
+            if (m_inHeap && m_value.VgpuMetadataPtr)
             {
-                free(m_value.vgpuMetadataPtr);
+                free(m_value.VgpuMetadataPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuPgpuCompatibilityLimitCodePtr)
+            {
+                free(m_value.VgpuPgpuCompatibilityLimitCodePtr);
+            }
+            break;
+        }
         case INJECTION_VGPUPGPUCOMPATIBILITY_PTR:
         {
-            if (m_inHeap && m_value.vgpuPgpuCompatibilityPtr)
+            if (m_inHeap && m_value.VgpuPgpuCompatibilityPtr)
             {
-                free(m_value.vgpuPgpuCompatibilityPtr);
+                free(m_value.VgpuPgpuCompatibilityPtr);
             }
+            break;
         }
-        break;
         case INJECTION_VGPUPGPUMETADATA_PTR:
         {
-            if (m_inHeap && m_value.vgpuPgpuMetadataPtr)
+            if (m_inHeap && m_value.VgpuPgpuMetadataPtr)
             {
-                free(m_value.vgpuPgpuMetadataPtr);
+                free(m_value.VgpuPgpuMetadataPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUPLACEMENTID_PTR:
+        {
+            if (m_inHeap && m_value.VgpuPlacementIdPtr)
+            {
+                free(m_value.VgpuPlacementIdPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUPLACEMENTLIST_PTR:
+        {
+            if (m_inHeap && m_value.VgpuPlacementListPtr)
+            {
+                free(m_value.VgpuPlacementListPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUPLACEMENTLIST_V1_PTR:
+        {
+            if (m_inHeap && m_value.VgpuPlacementList_v1Ptr)
+            {
+                free(m_value.VgpuPlacementList_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.VgpuProcessUtilizationInfo_v1Ptr)
+            {
+                free(m_value.VgpuProcessUtilizationInfo_v1Ptr);
+            }
+            break;
+        }
         case INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR:
         {
-            if (m_inHeap && m_value.vgpuProcessUtilizationSamplePtr)
+            if (m_inHeap && m_value.VgpuProcessUtilizationSamplePtr)
             {
-                free(m_value.vgpuProcessUtilizationSamplePtr);
+                free(m_value.VgpuProcessUtilizationSamplePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR:
+        {
+            if (m_inHeap && m_value.VgpuProcessesUtilizationInfoPtr)
+            {
+                free(m_value.VgpuProcessesUtilizationInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERCAPABILITIES_PTR:
+        {
+            if (m_inHeap && m_value.VgpuSchedulerCapabilitiesPtr)
+            {
+                free(m_value.VgpuSchedulerCapabilitiesPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERGETSTATE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuSchedulerGetStatePtr)
+            {
+                free(m_value.VgpuSchedulerGetStatePtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERLOGENTRY_PTR:
+        {
+            if (m_inHeap && m_value.VgpuSchedulerLogEntryPtr)
+            {
+                free(m_value.VgpuSchedulerLogEntryPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERLOG_PTR:
+        {
+            if (m_inHeap && m_value.VgpuSchedulerLogPtr)
+            {
+                free(m_value.VgpuSchedulerLogPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUSCHEDULERSETSTATE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuSchedulerSetStatePtr)
+            {
+                free(m_value.VgpuSchedulerSetStatePtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUTYPEBAR1INFO_PTR:
+        {
+            if (m_inHeap && m_value.VgpuTypeBar1InfoPtr)
+            {
+                free(m_value.VgpuTypeBar1InfoPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPUTYPEID_PTR:
+        {
+            if (m_inHeap && m_value.VgpuTypeIdPtr)
+            {
+                free(m_value.VgpuTypeIdPtr);
+            }
+            break;
+        }
         case INJECTION_VGPUVERSION_PTR:
         {
-            if (m_inHeap && m_value.vgpuVersionPtr)
+            if (m_inHeap && m_value.VgpuVersionPtr)
             {
-                free(m_value.vgpuVersionPtr);
+                free(m_value.VgpuVersionPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_VGPUVMCOMPATIBILITY_PTR:
+        {
+            if (m_inHeap && m_value.VgpuVmCompatibilityPtr)
+            {
+                free(m_value.VgpuVmCompatibilityPtr);
+            }
+            break;
+        }
         case INJECTION_VGPUVMIDTYPE_PTR:
         {
-            if (m_inHeap && m_value.vgpuVmIdTypePtr)
+            if (m_inHeap && m_value.VgpuVmIdTypePtr)
             {
-                free(m_value.vgpuVmIdTypePtr);
+                free(m_value.VgpuVmIdTypePtr);
             }
+            break;
         }
-        break;
         case INJECTION_VIOLATIONTIME_PTR:
         {
-            if (m_inHeap && m_value.violationTimePtr)
+            if (m_inHeap && m_value.ViolationTimePtr)
             {
-                free(m_value.violationTimePtr);
+                free(m_value.ViolationTimePtr);
             }
+            break;
         }
-        break;
+        case INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR:
+        {
+            if (m_inHeap && m_value.WorkloadPowerProfileCurrentProfilesPtr)
+            {
+                free(m_value.WorkloadPowerProfileCurrentProfilesPtr);
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEINFO_PTR:
+        {
+            if (m_inHeap && m_value.WorkloadPowerProfileInfoPtr)
+            {
+                free(m_value.WorkloadPowerProfileInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR:
+        {
+            if (m_inHeap && m_value.WorkloadPowerProfileProfilesInfoPtr)
+            {
+                free(m_value.WorkloadPowerProfileProfilesInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR:
+        {
+            if (m_inHeap && m_value.WorkloadPowerProfileRequestedProfilesPtr)
+            {
+                free(m_value.WorkloadPowerProfileRequestedProfilesPtr);
+            }
+            break;
+        }
+        case INJECTION_SHORT_PTR:
+        {
+            if (m_inHeap && m_value.ShortPtr)
+            {
+                free(m_value.ShortPtr);
+            }
+            break;
+        }
+        case INJECTION_UCHAR_PTR:
+        {
+            if (m_inHeap && m_value.UCharPtr)
+            {
+                free(m_value.UCharPtr);
+            }
+            break;
+        }
         case INJECTION_UINT_PTR:
         {
-            if (m_inHeap && m_value.uiPtr)
+            if (m_inHeap && m_value.UIntPtr)
             {
-                free(m_value.uiPtr);
+                free(m_value.UIntPtr);
             }
+            break;
         }
-        break;
         case INJECTION_ULONG_PTR:
         {
-            if (m_inHeap && m_value.ulPtr)
+            if (m_inHeap && m_value.ULongPtr)
             {
-                free(m_value.ulPtr);
+                free(m_value.ULongPtr);
             }
+            break;
         }
-        break;
         case INJECTION_ULONG_LONG_PTR:
         {
-            if (m_inHeap && m_value.ullPtr)
+            if (m_inHeap && m_value.ULongLongPtr)
             {
-                free(m_value.ullPtr);
+                free(m_value.ULongLongPtr);
             }
+            break;
         }
-        break;
+        case INJECTION_USHORT_PTR:
+        {
+            if (m_inHeap && m_value.UShortPtr)
+            {
+                free(m_value.UShortPtr);
+            }
+            break;
+        }
         default:
             break;
     }

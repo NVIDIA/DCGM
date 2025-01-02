@@ -14,13 +14,10 @@
 # limitations under the License.
 #
 
-add_library(dcgm_thread_interface INTERFACE)
 target_include_directories(dcgm_thread_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(dcgm_thread_interface INTERFACE common_interface)
 
-add_library(dcgm_thread STATIC)
 target_sources(dcgm_thread PRIVATE DcgmThread.cpp)
 target_link_libraries(dcgm_thread PUBLIC dcgm_thread_interface)
 
-find_package(Threads REQUIRED)
 target_link_libraries(dcgm_thread PUBLIC ${CMAKE_THREAD_LIBS_INIT})

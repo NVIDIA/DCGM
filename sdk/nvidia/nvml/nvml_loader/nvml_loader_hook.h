@@ -51,8 +51,6 @@ NVML_ENTRY_POINT(nvmlShutdown, nvmlShutdown, (void), "()")
 
 #include <entry_point_nvml_injection.h>
 
-NVML_INJECTION_ENTRY_POINT(injectionNvmlInit, injectionNvmlInit, (void), "()")
-
 #undef NVML_INJECTION_ENTRY_POINT
 #endif
 

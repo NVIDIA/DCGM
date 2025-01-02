@@ -35,13 +35,14 @@ public:
      * Process a DCGM module message that was sent to this module
      * (inherited from DcgmModule)
      */
-    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand);
+    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand) override;
 
     /*************************************************************************/
 private:
     /*************************************************************************/
     /* Subrequest helpers
      */
+    dcgmReturn_t ProcessRun_v10(dcgm_diag_msg_run_v10 *msg);
     dcgmReturn_t ProcessRun_v9(dcgm_diag_msg_run_v9 *msg);
     dcgmReturn_t ProcessRun_v8(dcgm_diag_msg_run_v8 *msg);
     dcgmReturn_t ProcessRun_v7(dcgm_diag_msg_run_v7 *msg);

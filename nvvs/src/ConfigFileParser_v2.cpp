@@ -27,8 +27,14 @@
 #include <unistd.h>
 
 #include "ConfigFileParser_v2.h"
+#include "CpuHelpers.h"
+#include "CpuSet.h"
 #include "FallbackDiagConfig.h"
+#include "NvvsCommon.h"
 #include "ParsingUtility.h"
+#include "dcgm_fields.h"
+#include "dcgm_structs.h"
+#include <EntityListHelpers.h>
 
 using namespace DcgmNs::Nvvs;
 
@@ -200,14 +206,22 @@ ConfigFileParser_v2::ConfigFileParser_v2(const std::string &configFile, const Fr
 
     try
     {
-        char execLocation[PATH_MAX] { 0 };
-        ssize_t ret = readlink("/proc/self/exe", execLocation, sizeof(execLocation) - 1);
+        const std::filesystem::path execLocation = [] {
+            thread_local char execLocation[PATH_MAX] { 0 };
+            ssize_t ret = readlink("/proc/self/exe", execLocation, sizeof(execLocation) - 1);
 
-        if (ret < 0)
-        {
-            throw std::runtime_error("Could not find nvvs executable's directory");
-        }
-        const auto packageYamlLocation = std::filesystem::path(dirname(execLocation)) / c_configFileName;
+            if (ret < 0)
+            {
+                throw std::runtime_error("Could not find nvvs executable's directory");
+            }
+            return std::filesystem::path { execLocation };
+        }();
+
+        const std::filesystem::path packageYamlLocation = [&execLocation] {
+            const auto libexecSubdirectory = execLocation.parent_path();
+            const auto packageName         = libexecSubdirectory.filename();
+            return libexecSubdirectory.parent_path().parent_path() / "share" / packageName / c_configFileName;
+        }();
 
         DCGM_LOG_DEBUG << "Loading package YAML from " << packageYamlLocation.string();
         m_fallbackYaml = YAML::LoadFile(packageYamlLocation);
@@ -216,7 +230,7 @@ ConfigFileParser_v2::ConfigFileParser_v2(const std::string &configFile, const Fr
     catch (const std::exception &e)
     {
         DCGM_LOG_ERROR
-            << "Could not read package diag config. Please ensure the datacanter-gpu-manager-config package is installed";
+            << "Could not read package diag config. Please ensure the datacenter-gpu-manager-config package is installed";
         DCGM_LOG_ERROR << "Exception: " << e.what();
         m_fallbackYaml = YAML::Load(c_fallbackBakedDiagYaml);
     }
@@ -368,26 +382,54 @@ const std::unordered_map<std::string, YAML::Node> &ConfigFileParser_v2::GetSkus(
     return m_skus;
 }
 
-/*****************************************************************************/
-/* Miscellaneous Initialization Code
- */
-void ConfigFileParser_v2::legacyGlobalStructHelper()
+template <typename ContainerType>
+static bool ContainDuplicate(ContainerType const &container)
+{
+    if (container.empty())
+    {
+        return false;
+    }
+    std::unordered_set<typename ContainerType::value_type> hashSet;
+    hashSet.reserve(container.size());
+
+    for (auto const &idx : container)
+    {
+        auto isValueInserted = hashSet.insert(idx);
+        if (!isValueInserted.second)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups)
 {
     /* gpu stuff */
     auto gpuSet               = std::make_unique<GpuSet>();
     NvvsFrameworkConfig fwcfg = m_fwcfg.GetFWCFG();
 
-    gpuSet->name = fwcfg.gpuSetIdentifier;
+    gpuSet->SetName(fwcfg.gpuSetIdentifier);
     if (!fwcfg.brand.empty() || !fwcfg.name.empty() || !fwcfg.busid.empty() || !fwcfg.uuid.empty()
         || !fwcfg.index.empty())
     {
-        gpuSet->properties.present = true;
+        gpuSet->GetProperties().present = true;
     }
 
-    gpuSet->properties.brand = fwcfg.brand;
-    gpuSet->properties.name  = fwcfg.name;
-    gpuSet->properties.busid = fwcfg.busid;
-    gpuSet->properties.uuid  = fwcfg.uuid;
+    std::vector<unsigned> gpuIndexesFromEntityGroups;
+    for (auto const &entityPair : entityGroups)
+    {
+        if (entityPair.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        gpuIndexesFromEntityGroups.push_back(entityPair.entityId);
+    }
+
+    gpuSet->GetProperties().brand = fwcfg.brand;
+    gpuSet->GetProperties().name  = fwcfg.name;
+    gpuSet->GetProperties().busid = fwcfg.busid;
+    gpuSet->GetProperties().uuid  = fwcfg.uuid;
     if (!nvvsCommon.fakegpusString.empty())
     {
         std::vector<unsigned int> indexVector;
@@ -403,8 +445,8 @@ void ConfigFileParser_v2::legacyGlobalStructHelper()
                 ss.ignore();
             }
         }
-        gpuSet->properties.index   = indexVector;
-        gpuSet->properties.present = true; // so that things are parsed further down
+        gpuSet->GetProperties().index   = indexVector;
+        gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
     else if (!nvvsCommon.indexString.empty())
     {
@@ -421,52 +463,126 @@ void ConfigFileParser_v2::legacyGlobalStructHelper()
                 ss.ignore();
             }
         }
-        gpuSet->properties.index   = indexVector;
-        gpuSet->properties.present = true; // so that things are parsed further down
+        gpuSet->GetProperties().index   = indexVector;
+        gpuSet->GetProperties().present = true; // so that things are parsed further down
+    }
+    else if (!gpuIndexesFromEntityGroups.empty())
+    {
+        gpuSet->GetProperties().index   = gpuIndexesFromEntityGroups;
+        gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
     else
     {
-        gpuSet->properties.index = fwcfg.index;
+        gpuSet->GetProperties().index = fwcfg.index;
     }
 
-    // Ensure that GPU ID vector does not contain duplicates
-    if (gpuSet->properties.index.size() > 1)
+    if (ContainDuplicate(gpuSet->GetProperties().index))
     {
-        std::unordered_set<unsigned int> ids;
-        ids.reserve(gpuSet->properties.index.size());
-        for (auto const &idx : gpuSet->properties.index)
+        throw std::runtime_error("The given GPU ID list contains duplicate IDs. "
+                                 "Please remove duplicate entries and verify that the list is correct.");
+    }
+
+    if (!gpuSet->GetProperties().present)
+    {
+        return nullptr;
+    }
+
+    if (nvvsCommon.desiredTest.empty())
+    {
+        nvvsCommon.desiredTest.insert(fwcfg.testname);
+    }
+
+    for (auto const &idx : gpuSet->GetProperties().index)
+    {
+        gpuSet->AddEntityId(idx);
+    }
+    gpuSet->SetEntityGroup(DCGM_FE_GPU);
+    return gpuSet;
+}
+
+std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareCpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups)
+{
+    std::vector<dcgm_field_eid_t> cpuEntityIds;
+
+    cpuEntityIds.reserve(entityGroups.size());
+    for (auto const entity : entityGroups)
+    {
+        if (entity.entityGroupId != DCGM_FE_CPU)
         {
-            auto isValueInserted = ids.insert(idx);
-            if (!isValueInserted.second)
-            {
-                throw std::runtime_error("The given GPU ID list contains duplicate IDs. "
-                                         "Please remove duplicate entries and verify that the list is correct.");
-            }
+            continue;
+        }
+
+        cpuEntityIds.push_back(entity.entityId);
+    }
+
+    if (cpuEntityIds.empty())
+    {
+        return nullptr;
+    }
+
+    if (ContainDuplicate(cpuEntityIds))
+    {
+        throw std::runtime_error("Error: The given CPU ID list contains duplicate IDs. "
+                                 "Please remove duplicate entries and verify that the list is correct.");
+    }
+
+    CpuHelpers cpuHelpers;
+
+    if (cpuHelpers.GetVendor() != CpuHelpers::GetNvidiaVendorName() && !CpuHelpers::SupportNonNvidiaCpu())
+    {
+        throw std::runtime_error("Error: Only support Nvidia CPUs.");
+    }
+    auto systemCpuIds = cpuHelpers.GetCpuIds();
+
+    sort(systemCpuIds.begin(), systemCpuIds.end());
+    sort(cpuEntityIds.begin(), cpuEntityIds.end());
+
+    if (systemCpuIds != cpuEntityIds)
+    {
+        throw std::runtime_error(fmt::format("Error: The given CPU ID list [{}] does not align with system [{}]. "
+                                             "Please provide all presented CPU.",
+                                             fmt::to_string(fmt::join(cpuEntityIds, ",")),
+                                             fmt::to_string(fmt::join(systemCpuIds, ","))));
+    }
+
+    auto cpuSet = std::make_unique<CpuSet>();
+    for (auto const cpuEntityId : cpuEntityIds)
+    {
+        cpuSet->AddEntityId(cpuEntityId);
+    }
+    return cpuSet;
+}
+
+void ConfigFileParser_v2::PrepareEntitySets(dcgmHandle_t dcgmHandle)
+{
+    std::vector<dcgmGroupEntityPair_t> entityGroups;
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, nvvsCommon.entityIds, entityGroups);
+    if (!err.empty())
+    {
+        std::string errMsg = fmt::format("failed to parse entity ids: {} with err: {}", nvvsCommon.entityIds, err);
+        log_error(errMsg);
+        throw std::runtime_error(errMsg);
+    }
+
+    for (auto const &creator : { &ConfigFileParser_v2::PrepareGpuSet, &ConfigFileParser_v2::PrepareCpuSet })
+    {
+        auto set = std::invoke(creator, this, entityGroups);
+        if (set)
+        {
+            m_entitySets.emplace_back(std::move(set));
         }
     }
+}
 
-    if (!nvvsCommon.desiredTest.empty())
-    {
-        for (auto const &testName : nvvsCommon.desiredTest)
-        {
-            std::map<std::string, std::string> tempMap;
-            tempMap["name"] = testName;
-            gpuSet->testsRequested.push_back(tempMap);
-        }
-    }
-    else
-    {
-        std::map<std::string, std::string> tempMap;
-        tempMap["name"] = fwcfg.testname;
-        gpuSet->testsRequested.push_back(tempMap);
-    }
-
-    gpuSets.push_back(std::move(gpuSet));
-
-    /* globals */
-    nvvsCommon.logFile     = fwcfg.dataFile;
-    nvvsCommon.logFileType = fwcfg.dataFileType;
-    nvvsCommon.serialize   = fwcfg.overrideSerial;
+/*****************************************************************************/
+/* Miscellaneous Initialization Code
+ */
+void ConfigFileParser_v2::legacyGlobalStructHelper()
+{
+    NvvsFrameworkConfig fwcfg = m_fwcfg.GetFWCFG();
+    nvvsCommon.logFile        = fwcfg.dataFile;
+    nvvsCommon.logFileType    = fwcfg.dataFileType;
+    nvvsCommon.serialize      = fwcfg.overrideSerial;
     if (nvvsCommon.parse == false) // if it was turned on in the command line, don't overwrite it
     {
         nvvsCommon.parse = fwcfg.scriptable;

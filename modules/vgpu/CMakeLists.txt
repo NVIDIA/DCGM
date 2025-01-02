@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(public_vgpu_interface INTERFACE)
 target_include_directories(public_vgpu_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(public_vgpu_interface INTERFACE dcgm_interface modules_interface)
 

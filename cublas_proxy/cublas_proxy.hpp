@@ -24,6 +24,18 @@
 
 namespace Dcgm::CublasProxy
 {
+cublasStatus_t PUBLIC_API CublasDgemv(cublasHandle_t handle,
+                                      cublasOperation_t trans,
+                                      int m,
+                                      int n,
+                                      const double *alpha, /* host or device pointer */
+                                      const double *A,
+                                      int lda,
+                                      const double *x,
+                                      int incx,
+                                      const double *beta, /* host or device pointer */
+                                      double *y,
+                                      int incy);
 cublasStatus_t PUBLIC_API CublasGetVersion(cublasHandle_t handle, int *version);
 cublasStatus_t PUBLIC_API CublasDgemm(cublasHandle_t handle,
                                       cublasOperation_t transa,
@@ -77,37 +89,9 @@ cublasStatus_t PUBLIC_API CublasHgemm(cublasHandle_t handle,
 #if (CUDA_VERSION_USED > 10)
 cublasStatus_t PUBLIC_API CublasLtCreate(cublasLtHandle_t *lightHandle);
 cublasStatus_t PUBLIC_API CublasLtDestroy(cublasLtHandle_t lightHandle);
-cublasStatus_t PUBLIC_API CublasLtMatmulDescCreate(cublasLtMatmulDesc_t *matmulDesc,
-                                                   cublasComputeType_t computeType,
-                                                   cudaDataType_t scaleType);
-cublasStatus_t PUBLIC_API CublasLtMatrixLayoutCreate(cublasLtMatrixLayout_t *matLayout,
-                                                     cudaDataType type,
-                                                     uint64_t rows,
-                                                     uint64_t cols,
-                                                     int64_t ld);
-cublasStatus_t PUBLIC_API CublasLtMatrixLayoutSetAttribute(cublasLtMatrixLayout_t matLayout,
-                                                           cublasLtMatrixLayoutAttribute_t attr,
-                                                           const void *buf,
-                                                           size_t sizeInBytes);
-cublasStatus_t PUBLIC_API CublasLtMatmulDescSetAttribute(cublasLtMatmulDesc_t matmulDesc,
-                                                         cublasLtMatmulDescAttributes_t attr,
-                                                         const void *buf,
-                                                         size_t sizeInBytes);
-cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceCreate(cublasLtMatmulPreference_t *pref);
-cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceSetAttribute(cublasLtMatmulPreference_t pref,
-                                                               cublasLtMatmulPreferenceAttributes_t attr,
-                                                               const void *buf,
-                                                               size_t sizeInBytes);
-cublasStatus_t PUBLIC_API CublasLtMatmulAlgoGetHeuristic(cublasLtHandle_t lightHandle,
-                                                         cublasLtMatmulDesc_t operationDesc,
-                                                         cublasLtMatrixLayout_t Adesc,
-                                                         cublasLtMatrixLayout_t Bdesc,
-                                                         cublasLtMatrixLayout_t Cdesc,
-                                                         cublasLtMatrixLayout_t Ddesc,
-                                                         cublasLtMatmulPreference_t preference,
-                                                         int requestedAlgoCount,
-                                                         cublasLtMatmulHeuristicResult_t heuristicResultsArray[],
-                                                         int *returnAlgoCount);
+cublasStatus_t PUBLIC_API CublasLtGetProperty(libraryPropertyType type, int *value);
+size_t PUBLIC_API CublasLtGetVersion(void);
+
 cublasStatus_t PUBLIC_API CublasLtMatmul(cublasLtHandle_t lightHandle,
                                          cublasLtMatmulDesc_t computeDesc,
                                          const void *alpha, /* host or device pointer */
@@ -124,10 +108,83 @@ cublasStatus_t PUBLIC_API CublasLtMatmul(cublasLtHandle_t lightHandle,
                                          void *workspace,
                                          size_t workspaceSizeInBytes,
                                          cudaStream_t stream);
-cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceDestroy(cublasLtMatmulPreference_t pref);
-cublasStatus_t PUBLIC_API CublasLtMatrixLayoutDestroy(cublasLtMatrixLayout_t matLayout);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoConfigGetAttribute(const cublasLtMatmulAlgo_t *algo,
+                                                               cublasLtMatmulAlgoConfigAttributes_t attr,
+                                                               void *buf,
+                                                               size_t sizeInBytes,
+                                                               size_t *sizeWritten);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoConfigSetAttribute(cublasLtMatmulAlgo_t *algo,
+                                                               cublasLtMatmulAlgoConfigAttributes_t attr,
+                                                               const void *buf,
+                                                               size_t sizeInBytes);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoGetHeuristic(cublasLtHandle_t lightHandle,
+                                                         cublasLtMatmulDesc_t operationDesc,
+                                                         cublasLtMatrixLayout_t Adesc,
+                                                         cublasLtMatrixLayout_t Bdesc,
+                                                         cublasLtMatrixLayout_t Cdesc,
+                                                         cublasLtMatrixLayout_t Ddesc,
+                                                         cublasLtMatmulPreference_t preference,
+                                                         int requestedAlgoCount,
+                                                         cublasLtMatmulHeuristicResult_t heuristicResultsArray[],
+                                                         int *returnAlgoCount);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoInit(cublasLtHandle_t lightHandle,
+                                                 cublasComputeType_t computeType,
+                                                 cudaDataType_t scaleType,
+                                                 cudaDataType_t Atype,
+                                                 cudaDataType_t Btype,
+                                                 cudaDataType_t Ctype,
+                                                 cudaDataType_t Dtype,
+                                                 int algoId,
+                                                 cublasLtMatmulAlgo_t *algo);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulDescCreate(cublasLtMatmulDesc_t *matmulDesc,
+                                                   cublasComputeType_t computeType,
+                                                   cudaDataType_t scaleType);
+
 cublasStatus_t PUBLIC_API CublasLtMatmulDescDestroy(cublasLtMatmulDesc_t matmulDesc);
-size_t PUBLIC_API CublasLtGetVersion(void);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulDescGetAttribute(cublasLtMatmulDesc_t matmulDesc,
+                                                         cublasLtMatmulDescAttributes_t attr,
+                                                         void *buf,
+                                                         size_t sizeInBytes,
+                                                         size_t *sizeWritten);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulDescSetAttribute(cublasLtMatmulDesc_t matmulDesc,
+                                                         cublasLtMatmulDescAttributes_t attr,
+                                                         const void *buf,
+                                                         size_t sizeInBytes);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceCreate(cublasLtMatmulPreference_t *pref);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceDestroy(cublasLtMatmulPreference_t pref);
+
+cublasStatus_t PUBLIC_API CublasLtMatmulPreferenceSetAttribute(cublasLtMatmulPreference_t pref,
+                                                               cublasLtMatmulPreferenceAttributes_t attr,
+                                                               const void *buf,
+                                                               size_t sizeInBytes);
+
+cublasStatus_t PUBLIC_API CublasLtMatrixLayoutCreate(cublasLtMatrixLayout_t *matLayout,
+                                                     cudaDataType type,
+                                                     uint64_t rows,
+                                                     uint64_t cols,
+                                                     int64_t ld);
+
+cublasStatus_t PUBLIC_API CublasLtMatrixLayoutDestroy(cublasLtMatrixLayout_t matLayout);
+
+cublasStatus_t PUBLIC_API CublasLtMatrixLayoutGetAttribute(cublasLtMatrixLayout_t matLayout,
+                                                           cublasLtMatrixLayoutAttribute_t attr,
+                                                           void *buf,
+                                                           size_t sizeInBytes,
+                                                           size_t *sizeWritten);
+
+cublasStatus_t PUBLIC_API CublasLtMatrixLayoutSetAttribute(cublasLtMatrixLayout_t matLayout,
+                                                           cublasLtMatrixLayoutAttribute_t attr,
+                                                           const void *buf,
+                                                           size_t sizeInBytes);
 
 #endif // CUDA_VERSION_USED > 10
 

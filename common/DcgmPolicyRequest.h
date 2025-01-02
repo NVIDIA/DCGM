@@ -23,14 +23,15 @@
 class DcgmPolicyRequest : public DcgmRequest
 {
 public:
-    DcgmPolicyRequest(fpRecvUpdates beginCB, fpRecvUpdates finishCB);
+    DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData, std::mutex &cbMutex);
     virtual ~DcgmPolicyRequest();
     int ProcessMessage(std::unique_ptr<DcgmMessage> msg) override;
 
 private:
     bool mIsAckRecvd;
-    fpRecvUpdates mBeginCB;
-    fpRecvUpdates mFinishCB;
+    fpRecvUpdates mCallback;
+    uint64_t mUserData;
+    std::mutex &mCbMutex;
 };
 
 #endif /* DCGMPOLICYREQUEST_H */

@@ -154,6 +154,12 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
     }
     else
     {
+        // If a GPU-CI is destroyed, nvmlDevice here is NULL
+        if (!nvmlDevice)
+        {
+            DCGM_LOG_ERROR << "Received null nvmlDevice ";
+            return DCGM_ST_NO_DATA;
+        }
         nvmlReturn = nvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
     }
     if (nvmlReturn != NVML_SUCCESS)
@@ -375,6 +381,8 @@ dcgmReturn_t DcgmGpmManager::GetLatestSample(dcgm_entity_key_t entityKey,
 bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice)
 {
     nvmlGpmSupport_t gpmSupport {};
+
+    gpmSupport.version = NVML_GPM_SUPPORT_VERSION;
 
     nvmlReturn_t nvmlReturn = nvmlGpmQueryDeviceSupport(nvmlDevice, &gpmSupport);
     if (nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)

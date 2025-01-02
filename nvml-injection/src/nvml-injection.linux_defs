@@ -1,7 +1,5 @@
 {
     global:
-        injectionNvmlInit;
-        injectionNvmlShutdown;
         nvmlInit_v2;
         nvmlErrorString;
         nvmlShutdown;
@@ -11,6 +9,8 @@
         nvmlDeviceReset;
         nvmlDeviceInjectFieldValue;
         nvmlGetFuncCallCount;
+        nvmlRemoveGpu;
+        nvmlRestoreGpu;
         nvmlResetFuncCallCount;
         nvmlDeviceGetClockInfo;
         nvmlDeviceGetMaxClockInfo;
@@ -302,9 +302,15 @@
         nvmlGpmSampleGet;
         nvmlGpmMigSampleGet;
         nvmlGpmQueryDeviceSupport;
+        nvmlDeviceGetGpuFabricInfo;
+        nvmlDeviceGetGpuFabricInfoV;
         nvmlDeviceGetCount_v2;
         nvmlDeviceGetHandleByIndex_v2;
         nvmlDeviceGetArchitecture;
+        nvmlDeviceWorkloadPowerProfileGetProfilesInfo;
+        nvmlDeviceWorkloadPowerProfileGetCurrentProfiles;
+        nvmlDeviceWorkloadPowerProfileSetRequestedProfiles;
+        nvmlDeviceWorkloadPowerProfileClearRequestedProfiles;
         extern "C++" {
             _ZTI*;
             _ZTS*;

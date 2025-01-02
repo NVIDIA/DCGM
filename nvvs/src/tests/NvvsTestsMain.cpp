@@ -16,7 +16,7 @@
 
 #define CATCH_IMPL
 #define CATCH_CONFIG_ALL_PARTS
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "DcgmDiagUnitTestCommon.h"
 

@@ -16,56 +16,73 @@
 
 set -euo pipefail
 
-DIR="$(dirname $(realpath $0))"
-source "$DIR/_common.sh"
+SCRIPTPATH="$(realpath "$(cat /proc/$$/cmdline | cut --delimiter="" --fields=2)")"
+SCRIPTDIR="$(dirname "$SCRIPTPATH")"
+
+source "$SCRIPTDIR/_common.sh"
 
 run_in_dcgmbuild "$@"
 
-LONG_OPTS=help,deb:,rpm:
+function generalize() {
+    local package_name=$1
+    local package_version=$2
+    local software_version
+    software_version=${package_version%%~*}
+    software_version=${software_version##*:}
 
-! PARSED=$(getopt --options= --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
-if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-    echo "Failed to parse arguments"
-    exit 1
-fi
+    local major_version=${software_version%%.*}
 
-eval set -- "${PARSED}"
+    local package_name_regex=$(echo $package_name | sed -E 's/(.)/[\1]/g')
+    local software_version_regex=$(echo $software_version | sed -E 's/(.)/[\1]/g')
+    local package_version_regex=$(
+        echo $package_version | \
+        sed -E "s/$software_version_regex/<SOFTWAREVERSION>/;s/(.)/[\1]/g")
 
-function usage() {
-   echo "$0 [--deb <debfile>|--rpm <rpmfile>]"
+    local substitution=$(echo $package_name | sed "s/$major_version/<MAJORVERSION>/")
+
+    sed -E "
+        s/$software_version_regex/<SOFTWAREVERSION>/g;
+        s/$package_version_regex/<PACKAGEVERSION>/g;
+        s/$package_name_regex/$substitution/;
+        s/[.]$major_version$/.<MAJORVERSION>/;
+        s/datacenter-gpu-manager-4/datacenter-gpu-manager-<MAJORVERSION>/g" $3
 }
 
-function generate_deb_contents() {
-    DEB="$1"
-    CONTENTS="$(normalize_deb_name "$DEB")"
-    list_deb_contents "$DEB" > "$CONTENTS"
+function write_template_deb() {
+    local path="$1"
+    local filename=$(basename "$path")
+    local package=$(dpkg-deb --field "$path" Package)
+    local version=$(dpkg-deb --field "$path" Version)
+
+    generalize $package $version <(dpkg --contents "$path" | awk '{print $6}' | sort) \
+    > "$SCRIPTDIR/$(template_deb $filename)"
 }
 
-function generate_rpm_contents() {
-    RPM="$1"
-    CONTENTS="$(normalize_rpm_name "$RPM")"
-    list_rpm_contents "$RPM" > "$CONTENTS"
+function write_template_rpm() {
+    local path="$1"
+    local filename=$(basename "$path")
+    local package=$(rpm --query --queryformat '%{NAME}' "$path")
+    local version=$(rpm --query --queryformat '%{VERSION}' "$path")
+
+    generalize $package $version <(rpm --query --list --package "$path" | sed -E '/.*\/[.]build-id.*/d' | sort) \
+    > "$SCRIPTDIR/$(template_rpm $filename)"
 }
 
-while true; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --help)
             usage
             exit 0
             ;;
-        --deb)
-            generate_deb_contents "$2"
-            echo "Generated contents for: $2"
-            shift 2
+        *.deb)
+            write_template_deb $1
+            >&2 echo "Generated contents for: $1"
+            shift 1
             ;;
-        --rpm)
-            generate_rpm_contents "$2"
-            echo "Generated contents for: $2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        *.rpm)
+            write_template_rpm $1
+            >&2 echo "Generated contents for: $1"
+            shift 1
             ;;
         *)
             echo "Unrecognized argument: $1"

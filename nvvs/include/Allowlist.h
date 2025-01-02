@@ -50,7 +50,8 @@ public:
 protected:
     /****************************************************************/
     /*
-     * Updates global (test-agnostic) configuration (e.g. throttle mask) for the given device if it is on the allowlist.
+     * Updates global (test-agnostic) configuration (e.g. clocks event mask) for the given device if it is on the
+     * allowlist.
      */
     void UpdateGlobalsForDeviceId(const std::string &deviceId);
 

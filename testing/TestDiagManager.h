@@ -32,9 +32,9 @@ public:
     /*************************************************************************/
     /* Inherited methods from TestDcgmModule */
     int Init(const TestDcgmModuleInitParams &initParams) override;
-    int Run();
-    int Cleanup();
-    std::string GetTag();
+    int Run() override;
+    int Cleanup() override;
+    std::string GetTag() override;
 
 private:
     /*************************************************************************/
@@ -50,14 +50,12 @@ private:
     int TestNegativeDummyExecutable();
     int TestCreateNvvsCommand();
     int TestPopulateRunDiag();
-    int TestFillResponseStructure();
     int TestPerformExternalCommand();
     int TestErrorsFromLevelOne();
     int TestInvalidVersion();
     void CreateDummyScript();
     void CreateDummyFailScript();
     void RemoveDummyScript();
-    int TestParseExpectedNumEntitiesForGpus();
 };
 
 #endif /* TESTDIAGMANAGER_H */

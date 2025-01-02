@@ -1,0 +1,16 @@
+./usr/
+./usr/lib/
+./usr/lib/x86_64-linux-gnu/
+./usr/lib/x86_64-linux-gnu/libdcgmmoduleprofiling.so.<MAJORVERSION>
+./usr/lib/x86_64-linux-gnu/libdcgmmoduleprofiling.so.<SOFTWAREVERSION>
+./usr/lib/x86_64-linux-gnu/libnvperf_dcgm_host.so
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libEud.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libEud.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary/copyright

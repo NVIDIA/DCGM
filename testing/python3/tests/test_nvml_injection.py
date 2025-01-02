@@ -33,9 +33,9 @@ def helper_inject_struct(handle, gpuIds):
     injectedRet = nvml_injection.c_injectNvmlRet_t()
     injectedRet.nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_BAR1MEMORY
-    injectedRet.values[0].value.bar1Memory.bar1Total = injectedBar1Total
-    injectedRet.values[0].value.bar1Memory.bar1Used = injectedBar1Used
-    injectedRet.values[0].value.bar1Memory.bar1Free = injectedBar1Free
+    injectedRet.values[0].value.BAR1Memory.bar1Total = injectedBar1Total
+    injectedRet.values[0].value.BAR1Memory.bar1Used = injectedBar1Used
+    injectedRet.values[0].value.BAR1Memory.bar1Free = injectedBar1Free
     injectedRet.valueCount = 1
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "BAR1MemoryInfo", None, 0, injectedRet)
@@ -57,16 +57,8 @@ def helper_inject_struct(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_struct_standalone(handle, gpuIds):
-    helper_inject_struct(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_struct_embedded(handle, gpuIds):
     helper_inject_struct(handle, gpuIds)
 
 def helper_inject_key_with_two_values(handle, gpuIds):
@@ -77,9 +69,9 @@ def helper_inject_key_with_two_values(handle, gpuIds):
     injectedRet = nvml_injection.c_injectNvmlRet_t()
     injectedRet.nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRet.values[0].value.ui = major
+    injectedRet.values[0].value.UInt = major
     injectedRet.values[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRet.values[1].value.ui = minor
+    injectedRet.values[1].value.UInt = minor
     injectedRet.valueCount = 2
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "CudaComputeCapability", None, 0, injectedRet)
@@ -97,16 +89,8 @@ def helper_inject_key_with_two_values(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_key_with_two_values_standalone(handle, gpuIds):
-    helper_inject_key_with_two_values(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_key_with_two_values_embedded(handle, gpuIds):
     helper_inject_key_with_two_values(handle, gpuIds)
 
 def helper_inject_with_extra_keys(handle, gpuIds):
@@ -116,12 +100,12 @@ def helper_inject_with_extra_keys(handle, gpuIds):
     injectedRet = nvml_injection.c_injectNvmlRet_t()
     injectedRet.nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRet.values[0].value.ui = injectedVal
+    injectedRet.values[0].value.UInt = injectedVal
     injectedRet.valueCount = 1
 
     extraKeys = nvml_injection_structs.c_injectNvmlVal_t()
     extraKeys.type = nvml_injection_structs.c_injectionArgType_t.INJECTION_CLOCKTYPE
-    extraKeys.value.clockType = 2
+    extraKeys.value.ClockType = 2
     ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "ApplicationsClock", extraKeys, 1, injectedRet)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
@@ -136,16 +120,8 @@ def helper_inject_with_extra_keys(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_with_extra_keys_standalone(handle, gpuIds):
-    helper_inject_with_extra_keys(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_with_extra_keys_embedded(handle, gpuIds):
     helper_inject_with_extra_keys(handle, gpuIds)
 
 def helper_inject_struct_for_following_calls(handle, gpuIds):
@@ -158,15 +134,15 @@ def helper_inject_struct_for_following_calls(handle, gpuIds):
     injectedRets = injectedRetsArray()
     injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_BAR1MEMORY
-    injectedRets[0].values[0].value.bar1Memory.bar1Total = injectedBar1Total
-    injectedRets[0].values[0].value.bar1Memory.bar1Used = injectedBar1Used
-    injectedRets[0].values[0].value.bar1Memory.bar1Free = injectedBar1Free
+    injectedRets[0].values[0].value.BAR1Memory.bar1Total = injectedBar1Total
+    injectedRets[0].values[0].value.BAR1Memory.bar1Used = injectedBar1Used
+    injectedRets[0].values[0].value.BAR1Memory.bar1Free = injectedBar1Free
     injectedRets[0].valueCount = 1
     injectedRets[1].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[1].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_BAR1MEMORY
-    injectedRets[1].values[0].value.bar1Memory.bar1Total = injectedBar1Total
-    injectedRets[1].values[0].value.bar1Memory.bar1Used = 0
-    injectedRets[1].values[0].value.bar1Memory.bar1Free = injectedBar1Total
+    injectedRets[1].values[0].value.BAR1Memory.bar1Total = injectedBar1Total
+    injectedRets[1].values[0].value.BAR1Memory.bar1Used = 0
+    injectedRets[1].values[0].value.BAR1Memory.bar1Free = injectedBar1Total
     injectedRets[1].valueCount = 1
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "BAR1MemoryInfo", None, 0, injectedRets, 2)
@@ -190,16 +166,8 @@ def helper_inject_struct_for_following_calls(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_struct_for_following_calls_standalone(handle, gpuIds):
-    helper_inject_struct_for_following_calls(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_struct_for_following_calls_embedded(handle, gpuIds):
     helper_inject_struct_for_following_calls(handle, gpuIds)
 
 def helper_inject_key_with_two_values_for_following_calls(handle, gpuIds):
@@ -211,9 +179,9 @@ def helper_inject_key_with_two_values_for_following_calls(handle, gpuIds):
     injectedRets = injectedRetsArray()
     injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[0].values[0].value.ui = major
+    injectedRets[0].values[0].value.UInt = major
     injectedRets[0].values[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[0].values[1].value.ui = minor
+    injectedRets[0].values[1].value.UInt = minor
     injectedRets[0].valueCount = 2
 
     ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "CudaComputeCapability", None, 0, injectedRets, 1)
@@ -234,16 +202,8 @@ def helper_inject_key_with_two_values_for_following_calls(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_key_with_two_values_for_following_calls_standalone(handle, gpuIds):
-    helper_inject_key_with_two_values_for_following_calls(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_key_with_two_values_for_following_calls_embedded(handle, gpuIds):
     helper_inject_key_with_two_values_for_following_calls(handle, gpuIds)
 
 def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
@@ -254,12 +214,12 @@ def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
     injectedRets = injectedRetsArray()
     injectedRets[0].nvmlRet = maybe_dcgm_nvml.NVML_SUCCESS
     injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
-    injectedRets[0].values[0].value.ui = injectedVal
+    injectedRets[0].values[0].value.UInt = injectedVal
     injectedRets[0].valueCount = 1
 
     extraKeys = nvml_injection_structs.c_injectNvmlVal_t()
     extraKeys.type = nvml_injection_structs.c_injectionArgType_t.INJECTION_CLOCKTYPE
-    extraKeys.value.clockType = 2
+    extraKeys.value.ClockType = 2
     ret = dcgm_agent_internal.dcgmInjectNvmlDeviceForFollowingCalls(handle, gpuId, "ApplicationsClock", extraKeys, 1, injectedRets, 1)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
@@ -274,14 +234,6 @@ def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_with_extra_keys_for_following_calls_standalone(handle, gpuIds):
-    helper_inject_with_extra_keys_for_following_calls(handle, gpuIds)
-
-@skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_nvml_injected_gpus()
-def test_inject_with_extra_keys_for_following_calls_embedded(handle, gpuIds):
     helper_inject_with_extra_keys_for_following_calls(handle, gpuIds)

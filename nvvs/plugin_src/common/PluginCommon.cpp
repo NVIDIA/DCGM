@@ -40,7 +40,9 @@ void CheckAndSetResult(Plugin *p,
         p->SetResultForGpu(testName, gpuList[i], NVVS_RESULT_FAIL);
         for (size_t j = 0; j < errorList.size(); j++)
         {
-            p->AddErrorForGpu(testName, gpuList[i], errorList[j]);
+            DcgmError d { errorList[j] };
+            d.SetGpuId(gpuList[i]);
+            p->AddError(testName, d);
         }
     }
 

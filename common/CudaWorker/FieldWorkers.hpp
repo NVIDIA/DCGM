@@ -15,15 +15,15 @@
  */
 #pragma once
 
-#include <cublas_proxy.hpp>
-#include <cuda.h>
-
 #if (CUDA_VERSION_USED >= 11)
 #include "DcgmDgemm.hpp"
 #endif
 
 #include <DcgmLogging.h>
-#include <fmt/format.h>
+
+#include <cublas_proxy.hpp>
+#include <cuda.h>
+
 #include <timelib.h>
 
 using namespace Dcgm;
@@ -61,6 +61,10 @@ typedef struct
  * here */
 class FieldWorkerBase
 {
+protected:
+    static const unsigned int s_gcdThreadsPerSmLimit     = 128;
+    static const unsigned int s_cudaThreadsPerBlockLimit = 1024; // CUDA limitation
+
 public:
     /* Attributes for the device we're running our workload on */
     CudaWorkerDevice_t m_cudaDevice;
@@ -132,8 +136,6 @@ public:
     {
         // The common divisor of 1024, 2048, and 1536 was chosen to be 128 to properly saturate the FP32 pipeline on
         // AD10x
-        static const unsigned int s_gcdThreadsPerSmLimit     = 128;
-        static const unsigned int s_cudaThreadsPerBlockLimit = 1024; // CUDA limitation
         CudaKernelDimensions result {};
 
         unsigned int gridDimX  = desiredNumberOfSms;
@@ -146,7 +148,7 @@ public:
         */
         if (desiredNumberOfThreadsPerSm > s_cudaThreadsPerBlockLimit)
         {
-            assert(m_cudaDevice.m_maxThreadsPerMultiProcessor >= s_cudaThreadsPerBlockLimit);
+            assert(m_cudaDevice.m_maxThreadsPerMultiProcessor >= static_cast<int>(s_cudaThreadsPerBlockLimit));
 
             // If we change the block size, we need to adjust the number of blocks launched to the desired load target.
             auto const loadRatio = (1.0 * desiredNumberOfThreadsPerSm) / m_cudaDevice.m_maxThreadsPerMultiProcessor;
@@ -157,8 +159,7 @@ public:
             auto const numOfBlocksPerSm = m_cudaDevice.m_maxThreadsPerMultiProcessor / s_gcdThreadsPerSmLimit;
             assert(numOfBlocksPerSm > 1);
 
-            gridDimX = desiredNumberOfSms * numOfBlocksPerSm;
-
+            gridDimX  = desiredNumberOfSms * numOfBlocksPerSm;
             blockDimX = s_gcdThreadsPerSmLimit * loadRatio;
 
             log_debug("Changing block size: "
@@ -192,9 +193,19 @@ public:
         void *kernelParams[2];
         unsigned int sharedMemBytes = 0;
 
-        if (numSms < 1 || ((int)numSms > m_cudaDevice.m_multiProcessorCount))
+        if (numSms == 0)
         {
-            DCGM_LOG_ERROR << "numSms " << numSms << " must be 1 <= X <= " << m_cudaDevice.m_multiProcessorCount;
+            /**
+             * We don't check for numSms exceeding the number of SMs since it
+             * is really a block count and we can schedule multiple blocks per
+             * SM. In fact, we deliberately do this below, when the desired
+             * number of threads per SM exceeds the CUDA limit
+             * (s_cudaThreadsPerBlockLimit). If a rebalancing between grid and
+             * block sizes other than the one computed below is desired
+             * it should be done before calling this method (i.e. for
+             * FieldWorkerSmOccupancy).
+             */
+            DCGM_LOG_ERROR << "numSms " << numSms << " must be >= 1";
             return DCGM_ST_BADPARAM;
         }
 
@@ -205,6 +216,12 @@ public:
 
         uint32_t waitInNs = runForUsec * 1000;
         kernelParams[1]   = &waitInNs;
+
+        if (waitInNs < (static_cast<uint64_t>(runForUsec) * 1000))
+        {
+            log_warning("Sleep kernel waitInNs is too large, using waitInNs={}", std::numeric_limits<uint32_t>::max());
+            waitInNs = std::numeric_limits<uint32_t>::max();
+        }
 
         log_debug("Running sleep kernel with gridDim({},{},{}), blockDim({},{},{}), sharedMemBytes={}, waitInNs={}",
                   gridDim.x,
@@ -274,7 +291,7 @@ public:
         void *pretendSideEffect = nullptr;
         kernelParams[0]         = &pretendSideEffect;
 
-        uint64_t waitInNs = runForUsec * 1000;
+        uint64_t waitInNs = static_cast<uint64_t>(runForUsec) * 1000;
         kernelParams[1]   = &waitInNs;
 
         log_debug("Running load kernel with gridDim({},{},{}), blockDim({},{},{}), sharedMemBytes={}, waitInNs={}",
@@ -395,9 +412,43 @@ public:
             return;
         }
 
+        /**
+         * Adjust for a maximum of s_cudeThreadsPerBlockLimit. We schedule more
+         * than one block per SM, if needed, for the smallest number of blocks
+         * to keep threads per block under the above limit. If we do not do this
+         * here, ComputeProperCudaDimensions() called from RunSleepKernel()
+         * may rebalance between block and grid sizes in an undesirable way.
+         */
+        unsigned int divisor = (threadsPerSm + s_cudaThreadsPerBlockLimit - 1) / s_cudaThreadsPerBlockLimit;
+        assert(divisor > 0);
+
+        /**
+         * if divisor is D, and threads per SM is not an exacty multiple of D,
+         * then the remainder threads per SM will be lost. For example, if
+         * threads per SM is 1031, divisor is 2 (floor((1031+1023)/1024)).
+         * dividing threadsPerSm by 2 yields 515 threads per SM over two blocks
+         * per SM, for a total of 1030. Instead we round up the threads per SM
+         * to the nearest multiple of the divisor, so they divide evenly, for a
+         * small increase.
+         *
+         * In practice the divisor will be 1 or 2, so at most an increase of
+         * one thread per SM will be seen.
+         */
+        threadsPerSm = (threadsPerSm + divisor - 1) / divisor;
+
+        numSms *= divisor;
+
+        /**
+         * Now threadsPerSm will be less than or equal to
+         *s_cudaThreadsPerBlockLimit.
+         */
+
         RunSleepKernel(numSms, threadsPerSm, dutyCycleLengthMs.count() * 1000);
 
-        /* Wait for this kernel to finish. This will block for m_dutyCycleLengthMs until the kernel finishes */
+        /**
+         * Wait for this kernel to finish. This will block for
+         * m_dutyCycleLengthMs until the kernel finishes
+         */
         cuCtxSynchronize();
 
         m_achievedLoad = loadTarget;
@@ -423,6 +474,7 @@ public:
         cuSt = cuMemAllocHost(&m_hostMem, m_bufferSize);
         if (cuSt)
         {
+            using fmt::v10::enums::format_as;
             std::string s = fmt::format("cuMemAllocHost returned {}", cuSt);
             throw std::runtime_error(s);
         }
@@ -456,7 +508,7 @@ public:
         }
     }
 
-    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    void DoOneDutyCycle(double /* loadTarget */, std::chrono::milliseconds dutyCycleLengthMs) override
     {
         CUresult cuSt;
         size_t totalBytesTransferred = 0;
@@ -548,7 +600,7 @@ public:
         }
     }
 
-    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    void DoOneDutyCycle(double /* loadTarget */, std::chrono::milliseconds dutyCycleLengthMs) override
     {
         CUresult cuSt;
         size_t totalBytesTransferred = 0;
@@ -680,7 +732,7 @@ public:
         }
     }
 
-    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    void DoOneDutyCycle(double /* loadTarget */, std::chrono::milliseconds dutyCycleLengthMs) override
     {
         CUresult cuSt;
         size_t totalBytesTransferred = 0;
@@ -941,7 +993,7 @@ public:
 #endif
     }
 
-    void DoOneDutyCycle(double loadTarget, std::chrono::milliseconds dutyCycleLengthMs) override
+    void DoOneDutyCycle(double /* loadTarget */, std::chrono::milliseconds dutyCycleLengthMs) override
     {
         cublasStatus_t cubSt {};
 #if (CUDA_VERSION_USED >= 11)

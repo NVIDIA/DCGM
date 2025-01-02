@@ -30,7 +30,6 @@ import pprint
 import DcgmSystem
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_all_supported_gpus()
 @test_utils.run_only_with_nvml()
 def test_dcgm_topology_device_standalone(handle, gpuIds):
@@ -48,10 +47,17 @@ def test_dcgm_topology_device_standalone(handle, gpuIds):
     topologyInfo = systemObj.discovery.GetGpuTopology(gpuIds[0])
 
     assert (topologyInfo.numGpus == len(gpuIds) - 1), "Expected %d, received numGpus = %d" % (len(gpuIds) - 1, topologyInfo.numGpus)
-    assert (topologyInfo.cpuAffinityMask[0] != 0), "GPU 0 should have *some* affinity"
+
+    affinity = False
+    
+    for bitmapIndex in range(dcgm_structs.DCGM_AFFINITY_BITMASK_ARRAY_SIZE):
+        if (topologyInfo.cpuAffinityMask[bitmapIndex] != 0):
+            affinity = True;
+            break
+
+    assert (affinity == True), "GPU 0 should have *some* affinity"
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_all_supported_gpus()
 @test_utils.run_only_with_nvml()
 def test_dcgm_topology_group_single_gpu_standalone(handle, gpuIds):
@@ -74,7 +80,6 @@ def test_dcgm_topology_group_single_gpu_standalone(handle, gpuIds):
     assert (topologyInfo.slowestPath == 0), "with a single GPU, slowest path shouldn't be set"
     
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_all_supported_gpus()
 def test_dcgm_topology_device_nvlink_standalone(handle, gpuIds):
     """
@@ -136,14 +141,7 @@ def helper_test_select_gpus_by_topology(handle, gpuIds):
             assert (sysSelectedMask.value == selectedMask.value)
             intputList = inputList | (gpuBits[gpuId])
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_nvml()
-def test_select_gpus_by_topology_embedded(handle, gpuIds):
-    helper_test_select_gpus_by_topology(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_all_supported_gpus()
 @test_utils.run_only_with_nvml()
 def test_select_gpus_by_topology_standalone(handle, gpuIds):

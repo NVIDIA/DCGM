@@ -21,7 +21,6 @@ class RunCudaAssert(app_runner.AppRunner):
     
     paths = {
             "Linux_64bit": "./apps/cuda_ctx_create/cuda_assert_64bit",
-            "Linux_ppc64le": "./apps/cuda_ctx_create/cuda_assert_ppc64le",
             "Linux_aarch64": "./apps/cuda_ctx_create/cuda_assert_aarch64",
             }
 

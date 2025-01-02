@@ -70,8 +70,8 @@ private:
 public:
     ConcreteDcgmiOutputBox(const T &t);
     virtual ~ConcreteDcgmiOutputBox();
-    ConcreteDcgmiOutputBox *clone() const;
-    std::string str() const;
+    ConcreteDcgmiOutputBox *clone() const override;
+    std::string str() const override;
 };
 
 /* Internal class. Do not instantiate directly.
@@ -108,19 +108,19 @@ public:
     const DcgmiOutputBox *getBox() const
     {
         return pb.get();
-    };
+    }
     const std::vector<std::unique_ptr<DcgmiOutputBox>> &getOverflow() const
     {
         return overflow;
-    };
+    }
     const std::map<std::string, std::unique_ptr<DcgmiOutputBoxer>> &getChildren() const
     {
         return children;
-    };
+    }
     const std::vector<std::string> &getChildrenOrder() const
     {
         return childrenOrder;
-    };
+    }
 };
 
 class DcgmiOutputFieldSelector
@@ -167,9 +167,9 @@ public:
     DcgmiOutputBoxer &operator[](const std::string &sectionName);
     void addHeader(const std::string &headerStr);
     int setOption(const unsigned int option, const bool value);
-    virtual void addColumn(const unsigned int width,
-                           const std::string &columnName,
-                           const DcgmiOutputFieldSelector &selector)
+    virtual void addColumn(const unsigned int /* width */,
+                           const std::string & /* columnName */,
+                           const DcgmiOutputFieldSelector & /* selector */)
     {}
     virtual std::string str() = 0;
 };
@@ -187,7 +187,7 @@ private:
 public:
     DcgmiOutputTree(unsigned int leftWidth, unsigned int rightWidth);
     virtual ~DcgmiOutputTree();
-    std::string str();
+    std::string str() override;
 };
 
 class DcgmiOutputJson : public DcgmiOutput
@@ -195,7 +195,7 @@ class DcgmiOutputJson : public DcgmiOutput
 public:
     DcgmiOutputJson();
     virtual ~DcgmiOutputJson();
-    std::string str();
+    std::string str() override;
 };
 
 class DcgmiOutputColumns : public DcgmiOutput
@@ -208,13 +208,15 @@ private:
     std::string headerStr(const std::string &line) const;
     std::string overflowStr(DcgmiOutputBoxer &boxer) const;
     std::string rowStr(const std::vector<std::string> &strs) const;
-    std::string sectionStr(const std::string &sectionName, DcgmiOutputBoxer &boxer) const;
+    std::string sectionStr(DcgmiOutputBoxer &boxer) const;
 
 public:
     DcgmiOutputColumns();
     virtual ~DcgmiOutputColumns();
-    void addColumn(const unsigned int width, const std::string &columnName, const DcgmiOutputFieldSelector &selector);
-    std::string str();
+    void addColumn(const unsigned int width,
+                   const std::string &columnName,
+                   const DcgmiOutputFieldSelector &selector) override;
+    std::string str() override;
 };
 
 /* ************************************************************************** */

@@ -54,7 +54,7 @@ static int kv_test_cmpCB(void *Left, void *Right)
 }
 
 /*****************************************************************************/
-static int kv_test_mergeCB(void *current, void *inserting, void *user)
+static int kv_test_mergeCB(void * /* current */, void * /* inserting */, void * /* user */)
 {
     /* Do nothing */
     return 0;
@@ -186,7 +186,7 @@ std::string TestKeyedVector::GetTag()
 }
 
 /*****************************************************************************/
-int TestKeyedVector::Init(const TestDcgmModuleInitParams &initParams)
+int TestKeyedVector::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }

@@ -16,7 +16,7 @@
 #include <DcgmError.h>
 #include <ParsingUtility.h>
 #include <PluginStrings.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <fstream>
 #include <stdexcept>
 
@@ -216,23 +216,23 @@ SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
         GIVEN("An ID that requires global change")
         {
             std::string id = "102d";
-            WHEN("throttleIgnoreMask is blank")
+            WHEN("clocksEventIgnoreMask is blank")
             {
-                nvvsCommon.throttleIgnoreMask = DCGM_INT64_BLANK;
-                THEN("UpdateGlobalsForDeviceId sets throttle mask")
+                nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
+                THEN("UpdateGlobalsForDeviceId sets clocksEvent mask")
                 {
                     wl.WrapperUpdateGlobalsForDeviceId(id);
-                    CHECK(nvvsCommon.throttleIgnoreMask == MAX_THROTTLE_IGNORE_MASK_VALUE);
+                    CHECK(nvvsCommon.clocksEventIgnoreMask == MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE);
                 }
             }
 
-            WHEN("throttleIgnoreMask is not blank")
+            WHEN("clocksEventIgnoreMask is not blank")
             {
-                nvvsCommon.throttleIgnoreMask = 1;
-                THEN("UpdateGlobalsForDeviceId does not set throttle mask")
+                nvvsCommon.clocksEventIgnoreMask = 1;
+                THEN("UpdateGlobalsForDeviceId does not set clocks event mask")
                 {
                     wl.WrapperUpdateGlobalsForDeviceId(id);
-                    CHECK(nvvsCommon.throttleIgnoreMask == 1);
+                    CHECK(nvvsCommon.clocksEventIgnoreMask == 1);
                 }
             }
         }
@@ -241,23 +241,23 @@ SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
         {
             std::string id = "0000";
 
-            WHEN("throttleIgnoreMask is blank")
+            WHEN("clocksEventIgnoreMask is blank")
             {
-                nvvsCommon.throttleIgnoreMask = DCGM_INT64_BLANK;
-                THEN("UpdateGlobalsForDeviceId does not set throttle mask")
+                nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
+                THEN("UpdateGlobalsForDeviceId does not set clocksEvent mask")
                 {
                     wl.WrapperUpdateGlobalsForDeviceId(id);
-                    CHECK(nvvsCommon.throttleIgnoreMask == DCGM_INT64_BLANK);
+                    CHECK(nvvsCommon.clocksEventIgnoreMask == DCGM_INT64_BLANK);
                 }
             }
 
-            WHEN("throttleIgnoreMask is not blank")
+            WHEN("clocksEventIgnoreMask is not blank")
             {
-                nvvsCommon.throttleIgnoreMask = 1;
-                THEN("UpdateGlobalsForDeviceId does not set throttle mask")
+                nvvsCommon.clocksEventIgnoreMask = 1;
+                THEN("UpdateGlobalsForDeviceId does not set clocksEvent mask")
                 {
                     wl.WrapperUpdateGlobalsForDeviceId(id);
-                    CHECK(nvvsCommon.throttleIgnoreMask == 1);
+                    CHECK(nvvsCommon.clocksEventIgnoreMask == 1);
                 }
             }
         }

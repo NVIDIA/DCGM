@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(public_profiling_interface INTERFACE)
 target_include_directories(public_profiling_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(public_profiling_interface INTERFACE modules_interface nvvs_interface config_interface)
 

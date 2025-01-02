@@ -26,7 +26,6 @@ class DcgmStubRunnerApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/x86/stub_library_test",
             "Linux_64bit": "./apps/amd64/stub_library_test",
-            "Linux_ppc64le": "./apps/ppc64le/stub_library_test",
             "Linux_aarch64": "./apps/aarch64/stub_library_test",
             "Windows_64bit": "./apps/amd64/stub_library_test.exe"
             }

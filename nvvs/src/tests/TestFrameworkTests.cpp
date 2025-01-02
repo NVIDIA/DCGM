@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include "DcgmStringHelpers.h"
+#include "dcgm_fields.h"
+#include "dcgm_structs.h"
+#include <catch2/catch_all.hpp>
 #include <cstring>
 #include <sys/stat.h>
 
@@ -22,15 +25,15 @@
 class WrapperTestFramework : protected TestFramework
 {
 public:
-    WrapperTestFramework(bool jsonOutput, std::unique_ptr<GpuSet> &gpuSet);
+    WrapperTestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet);
     std::string WrapperGetPluginUsingDriverDir();
     std::string WrapperGetPluginBaseDir();
     std::string WrapperGetPluginCudaDirExtension() const;
     std::string WrapperGetPluginCudalessDir();
 };
 
-WrapperTestFramework::WrapperTestFramework(bool jsonOutput, std::unique_ptr<GpuSet> &gpuSet)
-    : TestFramework(jsonOutput, gpuSet.get())
+WrapperTestFramework::WrapperTestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet)
+    : TestFramework(entitySet)
 {}
 
 std::string WrapperTestFramework::WrapperGetPluginUsingDriverDir()
@@ -75,10 +78,10 @@ std::string getThisExecsLocation()
 
 SCENARIO("GetPluginBaseDir returns plugin directory relative to current process's location")
 {
-    const std::string myLocation   = getThisExecsLocation();
-    const std::string pluginDir    = myLocation + "/plugins";
-    std::unique_ptr<GpuSet> gpuSet = std::make_unique<GpuSet>();
-    WrapperTestFramework tf(true, gpuSet);
+    const std::string myLocation = getThisExecsLocation();
+    const std::string pluginDir  = myLocation + "/plugins";
+    std::vector<std::unique_ptr<EntitySet>> entitySet;
+    WrapperTestFramework tf(entitySet);
 
     rmdir(pluginDir.c_str());
     CHECK_THROWS(tf.WrapperGetPluginBaseDir());
@@ -95,9 +98,9 @@ SCENARIO("GetPluginBaseDir returns plugin directory relative to current process'
 
 SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
 {
-    const std::string myLocation   = getThisExecsLocation();
-    const std::string pluginDir    = myLocation + "/plugins/cudaless/";
-    std::unique_ptr<GpuSet> gpuSet = std::make_unique<GpuSet>();
-    WrapperTestFramework tf(true, gpuSet);
+    const std::string myLocation = getThisExecsLocation();
+    const std::string pluginDir  = myLocation + "/plugins/cudaless/";
+    std::vector<std::unique_ptr<EntitySet>> entitySet;
+    WrapperTestFramework tf(entitySet);
     CHECK(tf.WrapperGetPluginCudalessDir() == pluginDir);
 }

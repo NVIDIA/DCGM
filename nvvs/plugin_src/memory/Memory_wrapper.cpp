@@ -18,14 +18,13 @@
 #include "memory_plugin.h"
 
 /*****************************************************************************/
-Memory::Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
+Memory::Memory(dcgmHandle_t handle)
     : m_handle(handle)
-    , m_gpuInfo()
-
+    , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
     m_infoStruct.testIndex        = DCGM_MEMORY_INDEX;
     m_infoStruct.shortDescription = "This plugin will test the memory of a given GPU.";
-    m_infoStruct.testGroups       = "";
+    m_infoStruct.testCategories   = "";
     m_infoStruct.selfParallel     = false;
     m_infoStruct.logFileTag       = MEMORY_PLUGIN_NAME;
 
@@ -43,44 +42,29 @@ Memory::Memory(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo)
     tp->AddString(PS_LOGFILE, "stats_memory.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_infoStruct.defaultTestParameters = tp;
-
-    if (gpuInfo == nullptr)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "No GPU information specified");
-        AddError(MEMORY_PLUGIN_NAME, d);
-    }
-    else
-    {
-        m_gpuInfo = *gpuInfo;
-        InitializeForGpuList(MEMORY_PLUGIN_NAME, *gpuInfo);
-    }
 }
 
-
 /*****************************************************************************/
-void Memory::Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &gpu)
+void Memory::Go(std::string const &testName,
+                dcgmDiagPluginEntityList_v1 const *entityInfo,
+                unsigned int numParameters,
+                dcgmDiagPluginTestParameter_t const *tpStruct)
 {
-    // UNUSED function. Delete when the Plugin Interface's extra methods are eliminated.
-    dcgmDiagGpuList_t list = {};
-    list.gpuCount          = 1;
-    list.gpus[0]           = gpu;
-
-    if (!testParameters->GetBoolFromString(MEMORY_STR_IS_ALLOWED))
+    if (testName != GetMemoryTestName())
     {
-        DcgmError d { gpu.gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
-        AddInfo(MEMORY_PLUGIN_NAME, d.GetMessage());
-        SetResult(MEMORY_PLUGIN_NAME, NVVS_RESULT_SKIP);
+        log_error("failed to test due to unknown test name [{}].", testName);
         return;
     }
-    //    main_entry(gpu, this, testParameters);
-}
 
-/*****************************************************************************/
-void Memory::Go(std::string const &testName, unsigned int numParameters, const dcgmDiagPluginTestParameter_t *tpStruct)
-{
-    if (UsingFakeGpus())
+    if (!entityInfo)
+    {
+        log_error("failed to test due to entityInfo is nullptr.");
+        return;
+    }
+
+    InitializeForEntityList(testName, *entityInfo);
+
+    if (UsingFakeGpus(testName))
     {
         DCGM_LOG_WARNING << "Plugin is using fake gpus";
         sleep(1);
@@ -100,9 +84,15 @@ void Memory::Go(std::string const &testName, unsigned int numParameters, const d
         return;
     }
 
-    for (unsigned int i = 0; i < m_gpuInfo.numGpus; i++)
+    unsigned const numEntities = std::min(
+        entityInfo->numEntities, static_cast<unsigned>(sizeof(entityInfo->entities) / sizeof(entityInfo->entities[0])));
+    for (unsigned int i = 0; i < numEntities; i++)
     {
-        main_entry(m_gpuInfo.gpus[i], this, &testParameters);
+        if (entityInfo->entities[i].entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        main_entry(entityInfo->entities[i], this, &testParameters);
     }
 }
 
@@ -110,4 +100,9 @@ void Memory::Go(std::string const &testName, unsigned int numParameters, const d
 dcgmHandle_t Memory::GetHandle()
 {
     return m_handle;
+}
+
+std::string Memory::GetMemoryTestName() const
+{
+    return MEMORY_PLUGIN_NAME;
 }

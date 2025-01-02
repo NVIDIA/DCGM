@@ -16,60 +16,71 @@
 
 set -euo pipefail
 
-DIR="$(dirname $(realpath $0))"
-source "$DIR/_common.sh"
+SCRIPTPATH=$(realpath $(cat /proc/$$/cmdline | cut --delimiter="" --fields=2))
+export SCRIPTDIR=$(dirname $SCRIPTPATH)
+
+source $SCRIPTDIR/_common.sh
 
 run_in_dcgmbuild "$@"
 
-LONG_OPTS=help,deb:,rpm:
-
-! PARSED=$(getopt --options= --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
-if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-    echo "Failed to parse arguments"
-    exit 1
-fi
-
-eval set -- "${PARSED}"
-
 function usage() {
-   echo "$0 [--deb <debfile>|--rpm <rpmfile>]"
+   echo "$0 [[<deb file>] [<rpm file>]]..."
 }
 
-function verify_deb() {
-    DEB="$1"
-    CONTENTS="$(normalize_deb_name "$DEB")"
-    diff <(sort "$CONTENTS") <(list_deb_contents "$1" | sort)
+function specialize() {
+    local filepath="$1"
+    local package_version=$2
+    local software_version
+    software_version=${package_version%%~*}
+    software_version=${software_version##*:}
+
+    local major_version=${software_version%%.*}
+
+    sed "
+        s/<PACKAGEVERSION>/$package_version/g;
+        s/<SOFTWAREVERSION>/$software_version/g;
+        s/<MAJORVERSION>/$major_version/g;" "$filepath"
 }
 
-function verify_rpm() {
-    RPM="$1"
-    CONTENTS="$(normalize_rpm_name "$RPM")"
-    diff <(sort "$CONTENTS") <(list_rpm_contents "$1" | sort)
-}
+function verify() {
+    local path="$1"
+    local filename=$(basename "$path")
+    local version
 
-while true; do
-    case "$1" in
-        --help)
-            usage
-            exit 0
+    case $filename in
+        *.deb)
+            package_version=$(dpkg-deb --field "$path" Version)
+            diff \
+            <(specialize "$SCRIPTDIR/$(template_deb $filename)" $package_version) \
+            <(dpkg --contents "$path" | awk '{print $6}' | sort)
             ;;
-        --deb)
-            verify_deb "$2"
-            echo "Passed: $2"
-            shift 2
-            ;;
-        --rpm)
-            verify_rpm "$2"
-            echo "Passed: $2"
-            shift 2
-            ;;
-        --)
-            shift
-            break
+        *.rpm)
+            package_version=$(rpm --query --queryformat '%{VERSION}' "$path")
+            diff \
+            <(specialize "$SCRIPTDIR/$(template_rpm $filename)" $package_version) \
+            <(rpm --query --list --package "$path" | sed -E '/.*\/[.]build-id.*/d' | sort)
             ;;
         *)
-            echo "Unrecognized argument: $1"
-            exit 1
+            >&2 echo "Unrecognized argument: $1"
+            return 1
     esac
-done
 
+    if [[ $? -eq 0 ]]
+    then
+        >&2 echo "Passed: $path"
+    else
+        >&2 echo "Failed: $path"
+        return 1
+    fi
+}
+
+if [[ $# -eq 0 ]] || [[ $1 == '-h' ]] || [[ $1 == '--help' ]]
+then
+    usage
+    exit 0
+fi
+
+export SCRIPTDIR
+export -f verify specialize template_deb template_rpm
+
+printf "%s\n" $@ | xargs --max-args=1 bash -c 'verify "$@"' _ 

@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include "dcgm_fields.h"
+#include <catch2/catch_all.hpp>
 
 #include <Pcie.h>
 #include <PcieMain.h>
@@ -24,27 +25,30 @@ unsigned int failingSwitchId = DCGM_MAX_NUM_SWITCHES;
 
 TEST_CASE("Pcie: pcie_gpu_id_in_list")
 {
-    dcgmDiagPluginGpuList_t gpuInfo = {};
-    gpuInfo.numGpus                 = 2;
-    gpuInfo.gpus[0].gpuId           = 1;
-    gpuInfo.gpus[1].gpuId           = 2;
-
-    CHECK(pcie_gpu_id_in_list(0, gpuInfo) == false);
-    for (unsigned int i = 3; i < 10; i++)
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    entityInfo->numEntities                                 = 2;
+    for (unsigned idx = 0; idx < entityInfo->numEntities; ++idx)
     {
-        CHECK(pcie_gpu_id_in_list(i, gpuInfo) == false);
+        entityInfo->entities[idx].entity.entityId      = idx + 1;
+        entityInfo->entities[idx].entity.entityGroupId = DCGM_FE_GPU;
     }
 
-    for (unsigned int i = 0; i < gpuInfo.numGpus; i++)
+    CHECK(pcie_gpu_id_in_list(0, *(entityInfo)) == false);
+    for (unsigned int i = 3; i < 10; i++)
     {
-        CHECK(pcie_gpu_id_in_list(gpuInfo.gpus[i].gpuId, gpuInfo) == true);
+        CHECK(pcie_gpu_id_in_list(i, *(entityInfo)) == false);
+    }
+
+    for (unsigned int i = 0; i < entityInfo->numEntities; i++)
+    {
+        CHECK(pcie_gpu_id_in_list(entityInfo->entities[i].entity.entityId, *(entityInfo)) == true);
     }
 }
 
 /*
  * Spoof this dcgmlib function so we can control program execution
  */
-dcgmReturn_t dcgmGetNvLinkLinkStatus(dcgmHandle_t handle, dcgmNvLinkStatus_v3 *linkStatus)
+dcgmReturn_t dcgmGetNvLinkLinkStatus(dcgmHandle_t /* handle */, dcgmNvLinkStatus_v4 *linkStatus)
 {
     memset(linkStatus, 0, sizeof(*linkStatus));
     linkStatus->numGpus                    = 2;
@@ -73,40 +77,48 @@ dcgmReturn_t dcgmGetNvLinkLinkStatus(dcgmHandle_t handle, dcgmNvLinkStatus_v3 *l
 
 TEST_CASE("Pcie: pcie_check_nvlink_status_expected")
 {
-    dcgmHandle_t handle             = {};
-    dcgmDiagPluginGpuList_t gpuInfo = {};
-    gpuInfo.numGpus                 = 2;
-    const unsigned int ourGpuId     = 1;
-    gpuInfo.gpus[0].gpuId           = ourGpuId;
-    gpuInfo.gpus[1].gpuId           = 2;
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    dcgmHandle_t handle                                     = {};
+    entityInfo->numEntities                                 = 2;
+    const unsigned int ourGpuId                             = 1;
+    entityInfo->entities[0].entity.entityId                 = ourGpuId;
+    entityInfo->entities[0].entity.entityGroupId            = DCGM_FE_GPU;
+    entityInfo->entities[1].entity.entityId                 = 2;
+    entityInfo->entities[1].entity.entityGroupId            = DCGM_FE_GPU;
+    std::unique_ptr<dcgmDiagEntityResults_v1> entityResults = std::make_unique<dcgmDiagEntityResults_v1>();
+    memset(entityResults.get(), 0, sizeof(*entityResults));
 
-    BusGrind bg1               = BusGrind(handle, &gpuInfo);
-    dcgmDiagResults_t results  = {};
+
+    BusGrind bg1 = BusGrind(handle);
+    bg1.InitializeForEntityList(bg1.GetPcieTestName(), *entityInfo);
     bg1.m_gpuNvlinksExpectedUp = 1;
-    pcie_check_nvlink_status(&bg1, gpuInfo);
-    bg1.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 0);
+    pcie_check_nvlink_status(&bg1, *entityInfo);
+    bg1.GetResults(bg1.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 0);
 
-    memset(&results, 0, sizeof(results));
-    BusGrind bg2               = BusGrind(handle, &gpuInfo);
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    BusGrind bg2 = BusGrind(handle);
+    bg2.InitializeForEntityList(bg2.GetPcieTestName(), *entityInfo);
     bg2.m_gpuNvlinksExpectedUp = 2;
-    pcie_check_nvlink_status(&bg2, gpuInfo);
-    bg2.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 1);
+    pcie_check_nvlink_status(&bg2, *entityInfo);
+    bg2.GetResults(bg2.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);
 
-    memset(&results, 0, sizeof(results));
-    BusGrind bg3                    = BusGrind(handle, &gpuInfo);
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    BusGrind bg3 = BusGrind(handle);
+    bg3.InitializeForEntityList(bg3.GetPcieTestName(), *entityInfo);
     bg3.m_nvSwitchNvlinksExpectedUp = 1;
-    pcie_check_nvlink_status(&bg3, gpuInfo);
-    bg3.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 0);
+    pcie_check_nvlink_status(&bg3, *entityInfo);
+    bg3.GetResults(bg3.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 0);
 
-    memset(&results, 0, sizeof(results));
-    BusGrind bg4                    = BusGrind(handle, &gpuInfo);
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    BusGrind bg4 = BusGrind(handle);
+    bg4.InitializeForEntityList(bg4.GetPcieTestName(), *entityInfo);
     bg4.m_nvSwitchNvlinksExpectedUp = 2;
-    pcie_check_nvlink_status(&bg4, gpuInfo);
-    bg4.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 1);
+    pcie_check_nvlink_status(&bg4, *entityInfo);
+    bg4.GetResults(bg4.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);
 }
 
 #define BWC_JSON_GPUS   "GPUs"
@@ -153,14 +165,15 @@ std::string testJson3 = R""(
 
 TEST_CASE("Pcie: ProcessChildrenOutputs")
 {
-    dcgmHandle_t handle             = {};
-    dcgmDiagPluginGpuList_t gpuInfo = {};
-    gpuInfo.numGpus                 = 1;
-    const unsigned int ourGpuId     = 2;
-    gpuInfo.gpus[0].gpuId           = ourGpuId;
+    dcgmHandle_t handle = {};
 
-    BusGrind bg(handle, &gpuInfo);
-    dcgmDiagResults_t results = {};
+    std::unique_ptr<dcgmDiagEntityResults_v1> entityResults = std::make_unique<dcgmDiagEntityResults_v1>();
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    BusGrind bg(handle);
+    entityInfo->numEntities                      = 1;
+    entityInfo->entities[0].entity.entityId      = 0;
+    entityInfo->entities[0].entity.entityGroupId = DCGM_FE_GPU;
 
     std::vector<dcgmChildInfo_t> childrenInfo;
     dcgmChildInfo_t childInfo;
@@ -174,55 +187,148 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     std::string groupName("bobby");
     auto tp = new TestParameters();
     tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
+    bg.InitializeForEntityList(bg.GetPcieTestName(), *entityInfo);
     bg.m_testParameters = tp;
     unsigned int ret    = ProcessChildrenOutputs(childrenInfo, bg, groupName);
     CHECK(ret == 1); // we should have one failed test
-    bg.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 1);
-    CHECK(results.errors[0].gpuId == 4);
+    bg.GetResults(bg.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);
+    CHECK(entityResults->errors[0].entity.entityId == 4);
+    CHECK(entityResults->errors[0].entity.entityGroupId == DCGM_FE_GPU);
 
-    BusGrind bg2(handle, &gpuInfo);
+    BusGrind bg2(handle);
+    bg2.InitializeForEntityList(bg2.GetPcieTestName(), *entityInfo);
     // We can discard the old pointer as its ownership was passed to bg
     tp = new TestParameters();
     tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
     bg2.m_testParameters = tp;
-    memset(&results, 0, sizeof(results));
+    memset(entityResults.get(), 0, sizeof(*entityResults));
     childrenInfo.clear();
     childInfo.stdoutStr     = testJson1;
     childInfo.readOutputRet = 0;
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg2, groupName);
     CHECK(ret == 1); // we should have one failed test due to low bandwidth
-    bg2.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 1);
-    CHECK(results.errors[0].gpuId == 7);
+    bg2.GetResults(bg2.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);
+    CHECK(entityResults->errors[0].entity.entityId == 7);
+    CHECK(entityResults->errors[0].entity.entityGroupId == DCGM_FE_GPU);
 
-    BusGrind bg3(handle, &gpuInfo);
+    BusGrind bg3(handle);
+    bg3.InitializeForEntityList(bg3.GetPcieTestName(), *entityInfo);
     // We can discard the old pointer as its ownership was passed to bg2
     tp = new TestParameters();
     tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
     bg3.m_testParameters = tp;
-    memset(&results, 0, sizeof(results));
+    memset(entityResults.get(), 0, sizeof(*entityResults));
     childrenInfo.clear();
     childInfo.stdoutStr = testJson2;
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg3, groupName);
     CHECK(ret == 0); // we shouldn't have any failures
-    bg3.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 0);
+    bg3.GetResults(bg3.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 0);
 
-    BusGrind bg4(handle, &gpuInfo);
+    BusGrind bg4(handle);
+    bg4.InitializeForEntityList(bg4.GetPcieTestName(), *entityInfo);
     // We can discard the old pointer as its ownership was passed to bg2
     tp = new TestParameters();
     tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
     bg4.m_testParameters = tp;
-    memset(&results, 0, sizeof(results));
+    memset(entityResults.get(), 0, sizeof(*entityResults));
     childrenInfo.clear();
     childInfo.stdoutStr = "This isn't json";
     childrenInfo.push_back(childInfo);
     ret = ProcessChildrenOutputs(childrenInfo, bg4, groupName);
     CHECK(ret == 1);
-    bg4.GetResults(PCIE_PLUGIN_NAME, &results);
-    CHECK(results.numErrors == 1);        // we get one failure for bad json
-    CHECK(results.errors[0].gpuId == -1); // this error isn't tied to a GPU id
+    bg4.GetResults(bg4.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);                 // we get one failure for bad json
+    CHECK(entityResults->errors[0].entity.entityId == 0); // this error isn't tied to a GPU id
+    CHECK(entityResults->errors[0].entity.entityGroupId == DCGM_FE_NONE);
+}
+
+
+dcgmReturn_t globalWatchError;
+dcgmReturn_t globalGroupCreateError;
+dcgmReturn_t globalFieldGroupCreateError;
+
+// Mock the dcgm functions used by DcgmGroup
+dcgmReturn_t dcgmGroupCreate(dcgmHandle_t, dcgmGroupType_t, const char *, dcgmGpuGrp_t *groupId)
+{
+    *groupId = 1;
+    return globalGroupCreateError;
+}
+
+dcgmReturn_t dcgmGroupDestroy(dcgmHandle_t, dcgmGpuGrp_t)
+{
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmGroupAddDevice(dcgmHandle_t, dcgmGpuGrp_t, unsigned int)
+{
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t, int, unsigned short *, const char *, dcgmFieldGrp_t *groupId)
+{
+    *groupId = 1;
+    return globalFieldGroupCreateError;
+}
+
+dcgmReturn_t dcgmFieldGroupDestroy(dcgmHandle_t, dcgmFieldGrp_t)
+{
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t dcgmWatchFields(dcgmHandle_t, dcgmGpuGrp_t, dcgmFieldGrp_t, long long, double, int)
+{
+    return globalWatchError;
+}
+
+dcgmReturn_t dcgmUnwatchFields(dcgmHandle_t, dcgmGpuGrp_t, dcgmFieldGrp_t)
+{
+    return DCGM_ST_OK;
+}
+
+static void SetUp()
+{
+    globalWatchError            = DCGM_ST_OK;
+    globalGroupCreateError      = DCGM_ST_OK;
+    globalFieldGroupCreateError = DCGM_ST_OK;
+}
+
+TEST_CASE("Pcie: StartDcgmGroupWatch")
+{
+    dcgmHandle_t handle = 2;
+    BusGrind bg(handle);
+    std::vector<unsigned short> fieldIds = { DCGM_FI_PROF_NVLINK_TX_BYTES };
+    std::vector<unsigned int> gpuIds     = { 0, 1, 2 };
+
+    SECTION("Happy path returns valid DcgmGroup ptr")
+    {
+        SetUp();
+        std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
+        REQUIRE(dcgmGroupPtr.get() != nullptr);
+    }
+    SECTION("Field group creation error returns nullptr")
+    {
+        SetUp();
+        globalFieldGroupCreateError             = DCGM_ST_BADPARAM;
+        std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
+        REQUIRE(dcgmGroupPtr.get() == nullptr);
+    }
+    SECTION("Group creation error returns nullptr")
+    {
+        SetUp();
+        globalGroupCreateError                  = DCGM_ST_BADPARAM;
+        std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
+        REQUIRE(dcgmGroupPtr.get() == nullptr);
+    }
+    SECTION("Watch field error returns nullptr")
+    {
+        SetUp();
+        globalWatchError                        = DCGM_ST_BADPARAM;
+        std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
+        REQUIRE(dcgmGroupPtr.get() == nullptr);
+    }
 }

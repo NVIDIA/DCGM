@@ -30,50 +30,55 @@
  */
 typedef enum dcgmError_enum
 {
-    DCGM_FR_OK                         = 0,  //!< 0 No error
-    DCGM_FR_UNKNOWN                    = 1,  //!< 1 Unknown error code
-    DCGM_FR_UNRECOGNIZED               = 2,  //!< 2 Unrecognized error code
-    DCGM_FR_PCI_REPLAY_RATE            = 3,  //!< 3 Unacceptable rate of PCI errors
-    DCGM_FR_VOLATILE_DBE_DETECTED      = 4,  //!< 4 Uncorrectable volatile double bit error
-    DCGM_FR_VOLATILE_SBE_DETECTED      = 5,  //!< 5 Unacceptable rate of volatile single bit errors
-    DCGM_FR_PENDING_PAGE_RETIREMENTS   = 6,  //!< 6 Pending page retirements detected
-    DCGM_FR_RETIRED_PAGES_LIMIT        = 7,  //!< 7 Unacceptable total page retirements detected
-    DCGM_FR_RETIRED_PAGES_DBE_LIMIT    = 8,  //!< 8 Unacceptable total page retirements due to uncorrectable errors
-    DCGM_FR_CORRUPT_INFOROM            = 9,  //!< 9 Corrupt inforom found
-    DCGM_FR_CLOCK_THROTTLE_THERMAL     = 10, //!< 10 Clocks being throttled due to overheating
-    DCGM_FR_POWER_UNREADABLE           = 11, //!< 11 Cannot get a reading for power from NVML
-    DCGM_FR_CLOCK_THROTTLE_POWER       = 12, //!< 12 Clock being throttled due to power restrictions
-    DCGM_FR_NVLINK_ERROR_THRESHOLD     = 13, //!< 13 Unacceptable rate of NVLink errors
-    DCGM_FR_NVLINK_DOWN                = 14, //!< 14 NVLink is down
-    DCGM_FR_NVSWITCH_FATAL_ERROR       = 15, //!< 15 Fatal errors on the NVSwitch
-    DCGM_FR_NVSWITCH_NON_FATAL_ERROR   = 16, //!< 16 Non-fatal errors on the NVSwitch
-    DCGM_FR_NVSWITCH_DOWN              = 17, //!< 17 NVSwitch is down - NOT USED: DEPRECATED
-    DCGM_FR_NO_ACCESS_TO_FILE          = 18, //!< 18 Cannot access a file
-    DCGM_FR_NVML_API                   = 19, //!< 19 Error occurred on an NVML API - NOT USED: DEPRECATED
-    DCGM_FR_DEVICE_COUNT_MISMATCH      = 20, //!< 20 Disagreement in GPU count between /dev and NVML
-    DCGM_FR_BAD_PARAMETER              = 21, //!< 21 Bad parameter passed to API
-    DCGM_FR_CANNOT_OPEN_LIB            = 22, //!< 22 Cannot open a library that must be accessed
-    DCGM_FR_DENYLISTED_DRIVER          = 23, //!< 23 A driver on the denylist (nouveau) is active
-    DCGM_FR_NVML_LIB_BAD               = 24, //!< 24 NVML library is missing expected functions - NOT USED: DEPRECATED
-    DCGM_FR_GRAPHICS_PROCESSES         = 25, //!< 25 Graphics processes are active on this GPU
-    DCGM_FR_HOSTENGINE_CONN            = 26, //!< 26 Bad connection to nv-hostengine - NOT USED: DEPRECATED
-    DCGM_FR_FIELD_QUERY                = 27, //!< 27 Error querying a field from DCGM
-    DCGM_FR_BAD_CUDA_ENV               = 28, //!< 28 The environment has variables that hurt CUDA
-    DCGM_FR_PERSISTENCE_MODE           = 29, //!< 29 Persistence mode is disabled
-    DCGM_FR_LOW_BANDWIDTH              = 30, //!< 30 The bandwidth is unacceptably low
-    DCGM_FR_HIGH_LATENCY               = 31, //!< 31 Latency is too high
-    DCGM_FR_CANNOT_GET_FIELD_TAG       = 32, //!< 32 Cannot find a tag for a field
-    DCGM_FR_FIELD_VIOLATION            = 33, //!< 33 The value for the specified error field is above 0
-    DCGM_FR_FIELD_THRESHOLD            = 34, //!< 34 The value for the specified field is above the threshold
-    DCGM_FR_FIELD_VIOLATION_DBL        = 35, //!< 35 The value for the specified error field is above 0
-    DCGM_FR_FIELD_THRESHOLD_DBL        = 36, //!< 36 The value for the specified field is above the threshold
-    DCGM_FR_UNSUPPORTED_FIELD_TYPE     = 37, //!< 37 Field type cannot be supported
-    DCGM_FR_FIELD_THRESHOLD_TS         = 38, //!< 38 The value for the specified field is above the threshold
-    DCGM_FR_FIELD_THRESHOLD_TS_DBL     = 39, //!< 39 The value for the specified field is above the threshold
-    DCGM_FR_THERMAL_VIOLATIONS         = 40, //!< 40 Thermal violations detected
-    DCGM_FR_THERMAL_VIOLATIONS_TS      = 41, //!< 41 Thermal violations detected with a timestamp
-    DCGM_FR_TEMP_VIOLATION             = 42, //!< 42 Temperature is too high
-    DCGM_FR_THROTTLING_VIOLATION       = 43, //!< 43 Non-benign clock throttling is occurring
+    DCGM_FR_OK                       = 0,  //!< 0 No error
+    DCGM_FR_UNKNOWN                  = 1,  //!< 1 Unknown error code
+    DCGM_FR_UNRECOGNIZED             = 2,  //!< 2 Unrecognized error code
+    DCGM_FR_PCI_REPLAY_RATE          = 3,  //!< 3 Unacceptable rate of PCI errors
+    DCGM_FR_VOLATILE_DBE_DETECTED    = 4,  //!< 4 Uncorrectable volatile double bit error
+    DCGM_FR_VOLATILE_SBE_DETECTED    = 5,  //!< 5 Unacceptable rate of volatile single bit errors
+    DCGM_FR_PENDING_PAGE_RETIREMENTS = 6,  //!< 6 Pending page retirements detected
+    DCGM_FR_RETIRED_PAGES_LIMIT      = 7,  //!< 7 Unacceptable total page retirements detected
+    DCGM_FR_RETIRED_PAGES_DBE_LIMIT  = 8,  //!< 8 Unacceptable total page retirements due to uncorrectable errors
+    DCGM_FR_CORRUPT_INFOROM          = 9,  //!< 9 Corrupt inforom found
+    DCGM_FR_CLOCKS_EVENT_THERMAL     = 10, //!< 10 Clocks being optimized for thermal performance
+    DCGM_FR_CLOCK_THROTTLE_THERMAL
+        = DCGM_FR_CLOCKS_EVENT_THERMAL,  //!< Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
+    DCGM_FR_POWER_UNREADABLE       = 11, //!< 11 Cannot get a reading for power from NVML
+    DCGM_FR_CLOCKS_EVENT_POWER     = 12, //!< 12 Clock being optimized to meet the product's power limit requirements
+    DCGM_FR_CLOCK_THROTTLE_POWER   = DCGM_FR_CLOCKS_EVENT_POWER, //!< Deprecated: Use DCGM_FR_CLOCKS_EVENT_POWER instead
+    DCGM_FR_NVLINK_ERROR_THRESHOLD = 13,                         //!< 13 Unacceptable rate of NVLink errors
+    DCGM_FR_NVLINK_DOWN            = 14,                         //!< 14 NVLink is down
+    DCGM_FR_NVSWITCH_FATAL_ERROR   = 15,                         //!< 15 Fatal errors on the NVSwitch
+    DCGM_FR_NVSWITCH_NON_FATAL_ERROR = 16,                       //!< 16 Non-fatal errors on the NVSwitch
+    DCGM_FR_NVSWITCH_DOWN            = 17,                       //!< 17 NVSwitch is down - NOT USED: DEPRECATED
+    DCGM_FR_NO_ACCESS_TO_FILE        = 18,                       //!< 18 Cannot access a file
+    DCGM_FR_NVML_API                 = 19, //!< 19 Error occurred on an NVML API - NOT USED: DEPRECATED
+    DCGM_FR_DEVICE_COUNT_MISMATCH    = 20, //!< 20 Disagreement in GPU count between /dev and NVML
+    DCGM_FR_BAD_PARAMETER            = 21, //!< 21 Bad parameter passed to API
+    DCGM_FR_CANNOT_OPEN_LIB          = 22, //!< 22 Cannot open a library that must be accessed
+    DCGM_FR_DENYLISTED_DRIVER        = 23, //!< 23 A driver on the denylist (nouveau) is active
+    DCGM_FR_NVML_LIB_BAD             = 24, //!< 24 NVML library is missing expected functions - NOT USED: DEPRECATED
+    DCGM_FR_GRAPHICS_PROCESSES       = 25, //!< 25 Graphics processes are active on this GPU
+    DCGM_FR_HOSTENGINE_CONN          = 26, //!< 26 Bad connection to nv-hostengine - NOT USED: DEPRECATED
+    DCGM_FR_FIELD_QUERY              = 27, //!< 27 Error querying a field from DCGM
+    DCGM_FR_BAD_CUDA_ENV             = 28, //!< 28 The environment has variables that hurt CUDA
+    DCGM_FR_PERSISTENCE_MODE         = 29, //!< 29 Persistence mode is disabled
+    DCGM_FR_LOW_BANDWIDTH            = 30, //!< 30 The bandwidth is unacceptably low
+    DCGM_FR_HIGH_LATENCY             = 31, //!< 31 Latency is too high
+    DCGM_FR_CANNOT_GET_FIELD_TAG     = 32, //!< 32 Cannot find a tag for a field
+    DCGM_FR_FIELD_VIOLATION          = 33, //!< 33 The value for the specified error field is above 0
+    DCGM_FR_FIELD_THRESHOLD          = 34, //!< 34 The value for the specified field is above the threshold
+    DCGM_FR_FIELD_VIOLATION_DBL      = 35, //!< 35 The value for the specified error field is above 0
+    DCGM_FR_FIELD_THRESHOLD_DBL      = 36, //!< 36 The value for the specified field is above the threshold
+    DCGM_FR_UNSUPPORTED_FIELD_TYPE   = 37, //!< 37 Field type cannot be supported
+    DCGM_FR_FIELD_THRESHOLD_TS       = 38, //!< 38 The value for the specified field is above the threshold
+    DCGM_FR_FIELD_THRESHOLD_TS_DBL   = 39, //!< 39 The value for the specified field is above the threshold
+    DCGM_FR_THERMAL_VIOLATIONS       = 40, //!< 40 Thermal violations detected
+    DCGM_FR_THERMAL_VIOLATIONS_TS    = 41, //!< 41 Thermal violations detected with a timestamp
+    DCGM_FR_TEMP_VIOLATION           = 42, //!< 42 Temperature is too high
+    DCGM_FR_CLOCKS_EVENT_VIOLATION   = 43, //!< 43 Non-benign clocks event is occurring
+    DCGM_FR_THROTTLING_VIOLATION
+        = DCGM_FR_CLOCKS_EVENT_VIOLATION,    //!< Deprecated: Use DCGM_FR_CLOCKS_EVENT_VIOLATION instead
     DCGM_FR_INTERNAL                   = 44, //!< 44 An internal error was detected
     DCGM_FR_PCIE_GENERATION            = 45, //!< 45 PCIe generation is too low
     DCGM_FR_PCIE_WIDTH                 = 46, //!< 46 PCIe width is too low
@@ -142,7 +147,16 @@ typedef enum dcgmError_enum
     DCGM_FR_SXID_ERROR                      = 109, //!< 109 NvSwitch fatal error detected
     DCGM_FR_GFLOPS_THRESHOLD_VIOLATION      = 110, //!< 110 GPU GFLOPs threshold violated
     DCGM_FR_NAN_VALUE                       = 111, //!< 111 NaN value detected on this GPU
-    DCGM_FR_ERROR_SENTINEL                  = 112, //!< 112 MUST BE THE LAST ERROR CODE
+    DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR   = 112, //!< 112 Fabric Manager did not finish training
+    DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE = 113, //!< 113 P2P copy test detected an error writing to this GPU over PCIE
+    DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE
+        = 114, //!< 114 P2P copy test detected an error writing from this GPU over PCIE
+    DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE
+        = 115, //!< 115 P2P copy test detected an error writing to this GPU over NVLink
+    DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE
+        = 116,                    //!< 116 P2P copy test detected an error writing from this GPU over NVLink
+    DCGM_FR_TEST_SKIPPED   = 117, //!< 117 Indicates that the test was skipped
+    DCGM_FR_ERROR_SENTINEL = 118, //!< 117 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -223,11 +237,11 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // gpu id
 #define DCGM_FR_CORRUPT_INFOROM_MSG "A corrupt InfoROM has been detected in GPU %u."
 // gpu id
-#define DCGM_FR_CLOCK_THROTTLE_THERMAL_MSG "Detected clock throttling due to thermal violation in GPU %u."
+#define DCGM_FR_CLOCKS_EVENT_THERMAL_MSG "Detected clocks event due to thermal violation in GPU %u."
 // gpu id
 #define DCGM_FR_POWER_UNREADABLE_MSG "Cannot reliably read the power usage for GPU %u."
 // gpu id
-#define DCGM_FR_CLOCK_THROTTLE_POWER_MSG "Detected clock throttling due to power violation in GPU %u."
+#define DCGM_FR_CLOCKS_EVENT_POWER_MSG "Detected clocks event due to power violation in GPU %u."
 // nvlink errors detected, nvlink id, error threshold
 #define DCGM_FR_NVLINK_ERROR_THRESHOLD_MSG                            \
     "Detected %ld %s NvLink errors on GPU %u's NVLink which exceeds " \
@@ -306,14 +320,14 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_THERMAL_VIOLATIONS_TS_MSG                               \
     "Thermal violations totaling %.1f seconds started at %.1f seconds " \
     "into the test for GPU %u"
-// observed temperature, gpu id, max allowed temperature
-#define DCGM_FR_TEMP_VIOLATION_MSG                                \
-    "Temperature %lld of GPU %u exceeded user-specified maximum " \
+// observed temperature, hbm memory on gpu/gpu, gpu id, max allowed temperature
+#define DCGM_FR_TEMP_VIOLATION_MSG                               \
+    "Temperature %lld of %s %u exceeded user-specified maximum " \
     "allowed temperature %lld"
-// gpu id, seconds into test, details about throttling
-#define DCGM_FR_THROTTLING_VIOLATION_MSG                      \
-    "Clocks are being throttled for GPU %u because of clock " \
-    "throttling starting %.1f seconds into the test. %s"
+// gpu id, seconds into test, details about clock event
+#define DCGM_FR_CLOCKS_EVENT_VIOLATION_MSG             \
+    "Clocks event for GPU %u because of clocks event " \
+    "starting %.1f seconds into the test. %s"
 // details about error
 #define DCGM_FR_INTERNAL_MSG "There was an internal error during the test: '%s'"
 // gpu id, PCIe generation, minimum allowed, parameter to control
@@ -336,7 +350,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // CUDA API name
 #define DCGM_FR_CUDA_API_MSG "Error using CUDA API %s"
 // count, gpu id
-#define DCGM_FR_FAULTY_MEMORY_MSG "Found %d faulty memory elements on GPU %u"
+#define DCGM_FR_FAULTY_MEMORY_MSG "Found %lld faulty memory elements on GPU %u"
 // error detail
 #define DCGM_FR_CANNOT_SET_WATCHES_MSG "Unable to add field watches to DCGM: %s"
 // gpu id
@@ -413,9 +427,21 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // gpu id
 #define DCGM_FR_PENDING_ROW_REMAP_MSG "GPU %u had memory errors and row remappings are pending"
 // gpu id, test name
-#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG "GPU %u was unsuccessfully written to in a peer-to-peer test: %s"
+#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG "GPU %u was unsuccessfully written to by GPU %u in a peer-to-peer test: %s"
 // gpu id, test name
-#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG "GPU %u unsuccessfully wrote data in a peer-to-peer test: %s"
+#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG "GPU %u unsuccessfully wrote data to GPU %u in a peer-to-peer test: %s"
+// gpu id, test name
+#define DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE_MSG \
+    "GPU %u was unsuccessfully written to by GPU %u over PCIe in a peer-to-peer test: %s"
+// gpu id, test name
+#define DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE_MSG \
+    "GPU %u unsuccessfully wrote data to GPU %u over PCIe in a peer-to-peer test: %s"
+// gpu id, test name
+#define DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE_MSG \
+    "GPU %u was unsuccessfully written to by GPU %u over NVLink in a peer-to-peer test: %s"
+// gpu id, test name
+#define DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE_MSG \
+    "GPU %u unsuccessfully wrote data to GPU %u over NVLink in a peer-to-peer test: %s"
 // nvswitch id, nvlink id
 #define DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG   "NVSwitch %u's NvLink %u is down."
 #define DCGM_FR_EUD_BINARY_PERMISSIONS_MSG "" /* See message inplace */
@@ -445,7 +471,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_CUDA_FM_NOT_INITIALIZED_MSG         ""
 #define DCGM_FR_SXID_ERROR_MSG                      "Detected fatal NvSwitch SXID %u"
 #define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_MSG      "Detected %.2f %s for GPU %u which is below the threshold %.2f"
-#define DCGM_FR_NAN_VALUE_MSG                       "Found %d NaN-value memory elements on GPU %u"
+#define DCGM_FR_NAN_VALUE_MSG                       "Found %lld NaN-value memory elements on GPU %u"
+#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG   "Fabric Manager (Cluster UUID: %s, Clique ID: %ld): %s."
+#define DCGM_FR_TEST_SKIPPED_MSG                    "Test %s was skipped."
 #define DCGM_FR_ERROR_SENTINEL_MSG                  "" /* See message inplace */
 
 /*
@@ -464,9 +492,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_RETIRED_PAGES_LIMIT_NEXT      TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_RETIRED_PAGES_DBE_LIMIT_NEXT  TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_CORRUPT_INFOROM_NEXT          "Flash the InfoROM to clear this corruption."
-#define DCGM_FR_CLOCK_THROTTLE_THERMAL_NEXT   DEBUG_COOLING_MSG
+#define DCGM_FR_CLOCKS_EVENT_THERMAL_NEXT     DEBUG_COOLING_MSG
 #define DCGM_FR_POWER_UNREADABLE_NEXT         SYSTEM_TRIAGE_MSG
-#define DCGM_FR_CLOCK_THROTTLE_POWER_NEXT     "Monitor the power conditions. This GPU can still perform workload."
+#define DCGM_FR_CLOCKS_EVENT_POWER_NEXT       "Monitor the power conditions. This GPU can still perform workload."
 #define DCGM_FR_NVLINK_ERROR_THRESHOLD_NEXT   "Monitor the NVLink. It can still perform workload."
 #define DCGM_FR_NVLINK_DOWN_NEXT              SYSTEM_TRIAGE_MSG
 #define DCGM_FR_NVSWITCH_FATAL_ERROR_NEXT     TRIAGE_RUN_FIELD_DIAG_MSG
@@ -525,12 +553,12 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_TEMP_VIOLATION_NEXT                              \
     "Verify that the user-specified temperature maximum is set " \
     "correctly. If it is, check the cooling for this GPU and node: " DEBUG_COOLING_MSG
-#define DCGM_FR_THROTTLING_VIOLATION_NEXT SYSTEM_TRIAGE_MSG
-#define DCGM_FR_INTERNAL_NEXT             SYSTEM_TRIAGE_MSG
-#define DCGM_FR_PCIE_GENERATION_NEXT      CONFIG_MSG
-#define DCGM_FR_PCIE_WIDTH_NEXT           CONFIG_MSG
-#define DCGM_FR_ABORTED_NEXT              ""
-#define DCGM_FR_TEST_DISABLED_NEXT        CONFIG_MSG
+#define DCGM_FR_CLOCKS_EVENT_VIOLATION_NEXT SYSTEM_TRIAGE_MSG
+#define DCGM_FR_INTERNAL_NEXT               SYSTEM_TRIAGE_MSG
+#define DCGM_FR_PCIE_GENERATION_NEXT        CONFIG_MSG
+#define DCGM_FR_PCIE_WIDTH_NEXT             CONFIG_MSG
+#define DCGM_FR_ABORTED_NEXT                ""
+#define DCGM_FR_TEST_DISABLED_NEXT          CONFIG_MSG
 #define DCGM_FR_CANNOT_GET_STAT_NEXT                               \
     "If running a standalone nv-hostengine, verify that it is up " \
     "and responsive."
@@ -571,19 +599,23 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_GPU_OP_MODE_NEXT                                     \
     "Fix by running nvidia-smi as root with: nvidia-smi --gom=0 -i " \
     "<gpu index>"
-#define DCGM_FR_NO_MEMORY_CLOCKS_NEXT             ""
-#define DCGM_FR_NO_GRAPHICS_CLOCKS_NEXT           ""
-#define DCGM_FR_HAD_TO_RESTORE_STATE_NEXT         SYSTEM_TRIAGE_MSG
-#define DCGM_FR_L1TAG_UNSUPPORTED_NEXT            CONFIG_MSG
-#define DCGM_FR_L1TAG_MISCOMPARE_NEXT             TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_ROW_REMAP_FAILURE_NEXT            TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_UNCONTAINED_ERROR_NEXT            DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
-#define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT "Drain the GPU and reset it or reboot the node to resolve this issue."
-#define DCGM_FR_EMPTY_GPU_LIST_NEXT               CONFIG_MSG
-#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT      ""
-#define DCGM_FR_PENDING_ROW_REMAP_NEXT            SYSTEM_TRIAGE_MSG
-#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT     BUG_REPORT_MSG
-#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT     BUG_REPORT_MSG
+#define DCGM_FR_NO_MEMORY_CLOCKS_NEXT                ""
+#define DCGM_FR_NO_GRAPHICS_CLOCKS_NEXT              ""
+#define DCGM_FR_HAD_TO_RESTORE_STATE_NEXT            SYSTEM_TRIAGE_MSG
+#define DCGM_FR_L1TAG_UNSUPPORTED_NEXT               CONFIG_MSG
+#define DCGM_FR_L1TAG_MISCOMPARE_NEXT                TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_ROW_REMAP_FAILURE_NEXT               TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_UNCONTAINED_ERROR_NEXT               DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
+#define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT    "Drain the GPU and reset it or reboot the node to resolve this issue."
+#define DCGM_FR_EMPTY_GPU_LIST_NEXT                  CONFIG_MSG
+#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT         ""
+#define DCGM_FR_PENDING_ROW_REMAP_NEXT               SYSTEM_TRIAGE_MSG
+#define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT        BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT        BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE_NEXT   BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE_NEXT   BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE_NEXT BUG_REPORT_MSG
+#define DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE_NEXT BUG_REPORT_MSG
 #define DCGM_FR_NVSWITCH_NVLINK_DOWN_NEXT                                                      \
     "Please check fabric manager and initialization logs to figure out why the link is down. " \
     "You may also need to run a field diagnostic."
@@ -611,8 +643,10 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT                                   \
     "Please verify your user-specified variance tolerance is set appropriately; " \
     "if so, and if errors are persistent, please run a field diagnostic."
-#define DCGM_FR_NAN_VALUE_NEXT      TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_ERROR_SENTINEL_NEXT                  "" /* See message inplace */
+#define DCGM_FR_NAN_VALUE_NEXT                     TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
+#define DCGM_FR_TEST_SKIPPED_NEXT                  ""
+#define DCGM_FR_ERROR_SENTINEL_NEXT                "" /* See message inplace */
 
 #ifdef __cplusplus
 extern "C" {

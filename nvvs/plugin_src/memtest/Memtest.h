@@ -45,6 +45,7 @@
 #include "NvvsDeviceList.h"
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include "memtest_wrapper.h"
 #include "misc.h"
 
 
@@ -121,7 +122,7 @@ using memtest_device_p = memtest_device_t *;
 class Memtest
 {
 public:
-    Memtest(TestParameters *testParameters, Plugin *plugin);
+    Memtest(TestParameters *testParameters, MemtestPlugin *plugin);
     ~Memtest();
 
     /*************************************************************************/
@@ -139,7 +140,7 @@ public:
      *        <0 on plugin / test initialization failure
      *
      */
-    int Run(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t &gpuList);
+    int Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityList);
 
     /*************************************************************************/
 
@@ -151,7 +152,7 @@ private:
      * Returns: 0 on success
      *         <0 on error
      */
-    dcgmReturn_t Init(const dcgmDiagPluginGpuList_t &gpuList);
+    dcgmReturn_t Init(const dcgmDiagPluginEntityList_v1 &entityList);
 
     /*************************************************************************/
     /*
@@ -212,8 +213,8 @@ private:
 
     /*************************************************************************/
 
-    Plugin *m_plugin;                 /* Which plugin we're running as part of. This will be
-                                         a pointer to a Memtest instance */
+    MemtestPlugin *m_plugin;          /* Which plugin we're running as part of. This will be
+                                  a pointer to a Memtest instance */
     TestParameters *m_testParameters; /* Parameters for this test, passed in from
                                          the framework. DO NOT FREE */
 
@@ -254,7 +255,7 @@ public:
      * Worker thread main.
      *
      */
-    void run(void);
+    void run(void) override;
 };
 
 

@@ -16,7 +16,7 @@ def _python_version_check():
     import sys
     python_version = sys.version.split(None, 1)[0]
     if python_version < '3':
-        print('[ERROR] Detected Python version {}. These bindings are for Python 3.5+. Please load the Python 2 bindings found at /usr/local/dcgm/bindings'.format(python_version))
+        print('[ERROR] Detected Python version {}. These bindings are for Python 3.5+.'.format(python_version))
         sys.exit(1)
 _python_version_check()
 

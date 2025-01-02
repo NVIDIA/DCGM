@@ -15,7 +15,7 @@
  */
 
 #include "DcgmStringHelpers.h"
-
+#include "dcgm_fields.h"
 #include <DiagnosticPlugin.h>
 #include <PluginInterface.h>
 #include <PluginLib.h>
@@ -28,7 +28,7 @@ unsigned int GetPluginInterfaceVersion(void)
     return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
 }
 
-dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginInfo_t *info)
+dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPluginInfo_t *info)
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
@@ -44,70 +44,71 @@ dcgmReturn_t GetPluginInfo(unsigned int pluginInterfaceVersion, dcgmDiagPluginIn
     const dcgmPluginValue_t paramTypes[]
         = { DcgmPluginParamInt, DcgmPluginParamInt,  DcgmPluginParamBool,   DcgmPluginParamFloat, DcgmPluginParamBool,
             DcgmPluginParamInt, DcgmPluginParamNone, DcgmPluginParamString, DcgmPluginParamFloat };
+    char const *descripton = "This plugin will stress the framebuffer of a list of GPUs.";
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
     unsigned int paramCount = 0;
 
-    info->numValidTests = 1;
+    info->numTests = 1;
     for (; parameterNames[paramCount] != nullptr; paramCount++)
     {
-        snprintf(info->tests[0].validParameters[paramCount].parameterName,
-                 sizeof(info->tests[0].validParameters[paramCount].parameterName),
-                 "%s",
-                 parameterNames[paramCount]);
+        SafeCopyTo(info->tests[0].validParameters[paramCount].parameterName, parameterNames[paramCount]);
         info->tests[0].validParameters[paramCount].parameterType = paramTypes[paramCount];
     }
-    SafeCopyTo<sizeof(info->tests[0].testeName), sizeof(DIAGNOSTIC_PLUGIN_NAME)>(info->tests[0].testeName,
-                                                                                 DIAGNOSTIC_PLUGIN_NAME);
+
     info->tests[0].numValidParameters = paramCount;
 
-    snprintf(info->pluginName, sizeof(info->pluginName), "%s", DIAGNOSTIC_PLUGIN_NAME);
-    snprintf(info->tests[0].testGroup, sizeof(info->tests[0].testGroup), "Hardware");
-    snprintf(
-        info->description, sizeof(info->description), "This plugin will stress the framebuffer of a list of GPUs.");
+    SafeCopyTo(info->pluginName, static_cast<char const *>(DIAGNOSTIC_PLUGIN_NAME));
+    SafeCopyTo(info->description, descripton);
+    SafeCopyTo(info->tests[0].testName, static_cast<char const *>(DIAGNOSTIC_PLUGIN_NAME));
+    SafeCopyTo(info->tests[0].description, descripton);
+    SafeCopyTo(info->tests[0].testCategory, DIAGNOSTIC_PLUGIN_CATEGORY);
+    info->tests[0].targetEntityGroup = DCGM_FE_GPU;
 
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                              dcgmDiagPluginGpuList_t *gpuInfo,
-                              dcgmDiagPluginStatFieldIds_t *statFieldIds,
+                              dcgmDiagPluginStatFieldIds_t * /* statFieldIds */,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
-                              hostEngineAppenderCallbackFp_t loggingCallback)
+                              hostEngineAppenderCallbackFp_t loggingCallback,
+                              dcgmDiagPluginAttr_v1 const *pluginAttr)
 {
-    GpuBurnPlugin *gbp = new GpuBurnPlugin(handle, gpuInfo);
+    GpuBurnPlugin *gbp = new GpuBurnPlugin(handle);
     *userData          = gbp;
 
+    gbp->SetPluginAttr(pluginAttr);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, gbp->GetDisplayName());
     return DCGM_ST_OK;
 }
 
-void RunTest(const char *testName,
-             unsigned int timeout,
+void RunTest(char const *testName,
+             unsigned int /* timeout */,
              unsigned int numParameters,
              const dcgmDiagPluginTestParameter_t *testParameters,
+             dcgmDiagPluginEntityList_v1 const *entityInfo,
              void *userData)
 {
-    GpuBurnPlugin *gbp = (GpuBurnPlugin *)userData;
-    gbp->Go(testName, numParameters, testParameters);
+    GpuBurnPlugin *gbp = static_cast<GpuBurnPlugin *>(userData);
+    gbp->Go(testName, entityInfo, numParameters, testParameters);
 }
 
 
 void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData)
 {
-    if (customStats != nullptr)
+    if (testName != nullptr && customStats != nullptr)
     {
-        auto gbp = (GpuBurnPlugin *)userData;
-        gbp->PopulateCustomStats(*customStats);
+        auto *gbp = static_cast<GpuBurnPlugin *>(userData);
+        gbp->PopulateCustomStats(testName, *customStats);
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
 {
-    GpuBurnPlugin *gbp = (GpuBurnPlugin *)userData;
-    gbp->GetResults(testName, results);
+    GpuBurnPlugin *gbp = static_cast<GpuBurnPlugin *>(userData);
+    gbp->GetResults(testName, entityResults);
 }
 
 } // END extern "C"

@@ -147,25 +147,25 @@ public:
     size_t &MaxGpcs()
     {
         return m_maxGpcs;
-    };
+    }
 
     /*****************************************************************************/
     size_t const &MaxGpcs() const
     {
         return m_maxGpcs;
-    };
+    }
 
     /*****************************************************************************/
     size_t &UsedGpcs()
     {
         return m_usedGpcs;
-    };
+    }
 
     /*****************************************************************************/
     size_t const &UsedGpcs() const
     {
         return m_usedGpcs;
-    };
+    }
 
     /*****************************************************************************/
     std::string const &GetProfileName() const

@@ -15,9 +15,12 @@
  */
 #include "DcgmPolicyManager.h"
 #include "DcgmLogging.h"
+#include "dcgm_structs.h"
+
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+
 
 /*****************************************************************************
  * ctor
@@ -178,15 +181,6 @@ void DcgmPolicyManager::SetViolation(DcgmViolationPolicyAlert_t alertType,
                   watcherIt->requestId,
                   (long long)timestamp);
 
-        notify.begin = 1;
-        mpCoreProxy.SendRawMessageToClient(
-            watcherIt->connectionId, DCGM_MSG_POLICY_NOTIFY, watcherIt->requestId, &notify, sizeof(notify), DCGM_ST_OK);
-
-        /* Note: we used to sometimes reset the GPU here or run a diagnostic, but that proved to just
-                 cause more problems than anything. Instead, we'll just call the callback twice to
-                 not regress behavior */
-
-        notify.begin = 0;
         mpCoreProxy.SendRawMessageToClient(
             watcherIt->connectionId, DCGM_MSG_POLICY_NOTIFY, watcherIt->requestId, &notify, sizeof(notify), DCGM_ST_OK);
 
@@ -244,6 +238,7 @@ dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.version   = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition = DCGM_POLICY_COND_DBE;
+        callbackResponse.gpuId     = fv->entityId;
         dbeResponse.timestamp      = fv->timestamp;
         dbeResponse.location       = dcgmPolicyConditionDbe_t::DEVICE;
         dbeResponse.numerrors      = errorCount;
@@ -283,6 +278,7 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.version   = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition = DCGM_POLICY_COND_PCI;
+        callbackResponse.gpuId     = fv->entityId;
         pciResponse.timestamp      = fv->timestamp;
         pciResponse.counter        = errorCount;
 
@@ -383,6 +379,7 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
 
         callbackResponse.version   = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition = DCGM_POLICY_COND_MAX_PAGES_RETIRED;
+        callbackResponse.gpuId     = fv->entityId;
         mprResponse.timestamp      = timestamp;
         mprResponse.sbepages       = pageCountSbe;
         mprResponse.dbepages       = pageCountDbe;
@@ -427,6 +424,7 @@ dcgmReturn_t DcgmPolicyManager::CheckThermalValues(dcgmBufferedFv_t *fv)
 
         callbackResponse.version         = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition       = DCGM_POLICY_COND_THERMAL;
+        callbackResponse.gpuId           = fv->entityId;
         thermalResponse.timestamp        = fv->timestamp;
         thermalResponse.thermalViolation = gpuTemp;
 
@@ -467,6 +465,7 @@ dcgmReturn_t DcgmPolicyManager::CheckPowerValues(dcgmBufferedFv_t *fv)
 
         callbackResponse.version     = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition   = DCGM_POLICY_COND_POWER;
+        callbackResponse.gpuId       = fv->entityId;
         powerResponse.timestamp      = fv->timestamp;
         powerResponse.powerViolation = gpuPower;
 
@@ -504,6 +503,7 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
 
         callbackResponse.version   = dcgmPolicyCallbackResponse_version;
         callbackResponse.condition = DCGM_POLICY_COND_NVLINK;
+        callbackResponse.gpuId     = fv->entityId;
         nvlinkResponse.timestamp   = fv->timestamp;
         nvlinkResponse.fieldId     = (unsigned short)fv->fieldId;
         nvlinkResponse.counter     = fv->value.i64;
@@ -542,6 +542,7 @@ dcgmReturn_t DcgmPolicyManager::CheckXIDErrors(dcgmBufferedFv_t *fv)
 
     callbackResponse.version   = dcgmPolicyCallbackResponse_version;
     callbackResponse.condition = DCGM_POLICY_COND_XID;
+    callbackResponse.gpuId     = fv->entityId;
     xidResponse.timestamp      = fv->timestamp;
     xidResponse.errnum         = fv->value.i64;
 
@@ -827,25 +828,25 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
     {
         DcgmLockGuard dlg(m_mutex);
 
-    for (i = 0; i < m_numGpus; i++)
-    {
-        std::vector<dpm_watcher_t>::iterator watcherIt;
-
-        for (watcherIt = m_gpus[i].watchers.begin(); watcherIt != m_gpus[i].watchers.end();)
+        for (i = 0; i < m_numGpus; i++)
         {
-            if (watcherIt->connectionId != connectionId)
-            {
-                /* Not a match. Keep going */
-                watcherIt++;
-                continue;
-            }
+            std::vector<dpm_watcher_t>::iterator watcherIt;
 
-            /* Matches connection ID. .erase will return our new iterator */
-            seenRequestIds.insert(watcherIt->requestId);
-            log_debug("Saw connectionId {} request Id {} on gpuId {}", connectionId, watcherIt->requestId, i);
-            watcherIt = m_gpus[i].watchers.erase(watcherIt);
+            for (watcherIt = m_gpus[i].watchers.begin(); watcherIt != m_gpus[i].watchers.end();)
+            {
+                if (watcherIt->connectionId != connectionId)
+                {
+                    /* Not a match. Keep going */
+                    watcherIt++;
+                    continue;
+                }
+
+                /* Matches connection ID. .erase will return our new iterator */
+                seenRequestIds.insert(watcherIt->requestId);
+                log_debug("Saw connectionId {} request Id {} on gpuId {}", connectionId, watcherIt->requestId, i);
+                watcherIt = m_gpus[i].watchers.erase(watcherIt);
+            }
         }
-    }
     }
 
     /* notify each seenRequestIds for connectionId that it's gone */

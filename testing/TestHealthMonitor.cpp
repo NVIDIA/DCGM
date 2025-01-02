@@ -20,6 +20,7 @@
 #include <ctime>
 #include <fmt/core.h>
 #include <iostream>
+#include <memory>
 #include <stddef.h>
 #include <string.h>
 
@@ -61,100 +62,45 @@ int TestHealthMonitor::Init(const TestDcgmModuleInitParams &initParams)
 
 int TestHealthMonitor::Run()
 {
-    int st;
-    int Nfailed = 0;
+    size_t nFailed = 0;
 
-    st = TestHMSet();
-    if (st)
+    constexpr struct
     {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM set FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
+        std::string_view name;
+        int (TestHealthMonitor::*method)();
+    } testCases[] = {
+        { "Test HM set", &TestHealthMonitor::TestHMSet },
+        { "Test HM check (PCIe)", &TestHealthMonitor::TestHMCheckPCIe },
+        { "Test HM check (Mem,Sbe)", &TestHealthMonitor::TestHMCheckMemSbe },
+        { "Test HM check (Mem,Dbe)", &TestHealthMonitor::TestHMCheckMemDbe },
+        { "Test HM check (InfoROM)", &TestHealthMonitor::TestHMCheckInforom },
+        { "Test HM check (Thermal)", &TestHealthMonitor::TestHMCheckThermal },
+        { "Test HM check (Power)", &TestHealthMonitor::TestHMCheckPower },
+        { "Test HM check (NVLink)", &TestHealthMonitor::TestHMCheckNVLink },
+    };
+
+    for (auto const &test : testCases)
+    {
+        int st = (this->*(test.method))();
+        if (st != 0)
+        {
+            nFailed++;
+            fmt::print(stderr, "TestHealthMonitor::{} FAILED with {}\n", test.name, st);
+        }
+        else
+        {
+            fmt::print("TestHealthMonitor::{} PASSED\n", test.name);
+        }
+    }
+
+    if (nFailed > 0)
+    {
+        fmt::print(stderr, "TestHealthMonitor: {} tests FAILED.\n", nFailed);
+        return -1;
     }
     else
-        printf("TestHealthMonitor::Test HM set PASSED\n");
-
-    st = TestHMCheckPCIe();
-    if (st)
     {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (PCIe) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (PCIe) PASSED\n");
-
-    st = TestHMCheckMemSbe();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (Mem,Sbe) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (Mem,Sbe) PASSED\n");
-
-    st = TestHMCheckMemDbe();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (Mem,Dbe) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (Mem,Dbe) PASSED\n");
-
-    st = TestHMCheckInforom();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (InfoROM) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (InfoROM) PASSED\n");
-    st = TestHMCheckThermal();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (Thermal) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (Thermal) PASSED\n");
-    st = TestHMCheckPower();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (Power) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (Power) PASSED\n");
-
-    st = TestHMCheckNVLink();
-    if (st)
-    {
-        Nfailed++;
-        fprintf(stderr, "TestHealthMonitor::Test HM check (NVLink) FAILED with %d\n", st);
-        if (st < 0)
-            return -1;
-    }
-    else
-        printf("TestHealthMonitor::Test HM check (NVLink) PASSED\n");
-
-
-    if (Nfailed > 0)
-    {
-        fprintf(stderr, "%d tests FAILED\n", Nfailed);
-        return 1;
+        fmt::print("TestHealthMonitor: All tests PASSED.\n");
     }
 
     return 0;
@@ -222,24 +168,25 @@ int TestHealthMonitor::TestHMSet()
 
 int TestHealthMonitor::TestHMCheckMemDbe()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result = DCGM_ST_OK;
     dcgmInjectFieldValue_t fv;
-    dcgmGroupInfo_t groupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
-    memset(&groupInfo, 0, sizeof(groupInfo));
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         return result;
     }
 
-    if (groupInfo.count < 1)
+    if (groupInfo->count < 1)
     {
         printf("Skipping TestHMCheckMemDbe due to no GPUs being present");
         result = DCGM_ST_OK; /* Don't fail */
@@ -262,14 +209,14 @@ int TestHealthMonitor::TestHMCheckMemDbe()
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(now - 50s);
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -280,33 +227,33 @@ int TestHealthMonitor::TestHMCheckMemDbe()
     fv.value.i64 = 5;
     fv.ts        = ToLegacyTimestamp(now);
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_FAIL)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_FAIL)
     {
-        fprintf(stderr, "response.overallHealth %d != DCGM_HEALTH_RESULT_FAIL\n", (int)response.overallHealth);
+        fprintf(stderr, "response->overallHealth %d != DCGM_HEALTH_RESULT_FAIL\n", (int)response->overallHealth);
         result = DCGM_ST_GENERIC_ERROR;
     }
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
@@ -314,26 +261,27 @@ int TestHealthMonitor::TestHMCheckMemDbe()
 
 int TestHealthMonitor::TestHMCheckMemSbe()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result = DCGM_ST_OK;
     dcgmInjectFieldValue_t fv;
-    dcgmGroupInfo_t groupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
-    memset(&groupInfo, 0, sizeof(groupInfo));
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         return result;
     }
 
-    if (groupInfo.count < 1)
+    if (groupInfo->count < 1)
     {
         printf("Skipping TestHMCheckMemSbe due to no GPUs being present");
         result = DCGM_ST_OK; /* Don't fail */
@@ -354,14 +302,14 @@ int TestHealthMonitor::TestHMCheckMemSbe()
     fv.fieldId   = DCGM_FI_DEV_ECC_SBE_VOL_TOTAL;
     fv.value.i64 = 0;
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -372,7 +320,7 @@ int TestHealthMonitor::TestHMCheckMemSbe()
     fv.value.i64 = 20;
     fv.ts        = ToLegacyTimestamp(now);
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
@@ -380,7 +328,7 @@ int TestHealthMonitor::TestHMCheckMemSbe()
     }
 
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "dcgmEngineHealthCheck failed with %d\n", (int)result);
@@ -388,35 +336,36 @@ int TestHealthMonitor::TestHMCheckMemSbe()
     }
 
     /* Health checks no longer look for SBEs. We should not fail */
-    if (response.overallHealth != DCGM_HEALTH_RESULT_PASS)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_PASS)
     {
-        fprintf(stderr, "response.overallHealth %d != DCGM_HEALTH_RESULT_PASS\n", (int)response.overallHealth);
+        fprintf(stderr, "response->overallHealth %d != DCGM_HEALTH_RESULT_PASS\n", (int)response->overallHealth);
         result = DCGM_ST_GENERIC_ERROR;
     }
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         /*
          * There will be no incidnets if we do not consider SBE as an issue.
          */
         return DCGM_ST_OK;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
 
 int TestHealthMonitor::TestHMCheckPCIe()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgmInjectFieldValue_t fv;
     unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_PCIE);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
@@ -457,7 +406,7 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         return result;
@@ -472,35 +421,35 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_WARN)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_WARN)
         result = DCGM_ST_GENERIC_ERROR;
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
 
 int TestHealthMonitor::TestHMCheckInforom()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
     dcgmInjectFieldValue_t fv;
     unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_INFOROM);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
@@ -521,35 +470,36 @@ int TestHealthMonitor::TestHMCheckInforom()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_WARN)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_WARN)
         result = DCGM_ST_GENERIC_ERROR;
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
 
 int TestHealthMonitor::TestHMCheckThermal()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgmInjectFieldValue_t fv;
     unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_THERMAL);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
@@ -572,7 +522,7 @@ int TestHealthMonitor::TestHMCheckThermal()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA && result != DCGM_ST_STALE_DATA)
     {
         return result;
@@ -587,35 +537,36 @@ int TestHealthMonitor::TestHMCheckThermal()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_WARN)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_WARN)
         result = DCGM_ST_GENERIC_ERROR;
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
 
 int TestHealthMonitor::TestHMCheckPower()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     dcgmInjectFieldValue_t fv;
     unsigned int gpuId = m_gpus[0];
 
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_POWER);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
@@ -638,7 +589,7 @@ int TestHealthMonitor::TestHMCheckPower()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA && result != DCGM_ST_STALE_DATA)
     {
         return result;
@@ -653,42 +604,43 @@ int TestHealthMonitor::TestHMCheckPower()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_WARN)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_WARN)
         result = DCGM_ST_GENERIC_ERROR;
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }
 
 int TestHealthMonitor::TestHMCheckNVLink()
 {
-    dcgmReturn_t result           = DCGM_ST_OK;
-    dcgmHealthResponse_t response = {};
+    dcgmReturn_t result = DCGM_ST_OK;
     dcgmInjectFieldValue_t fv;
-    dcgmGroupInfo_t groupInfo;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
     unsigned int gpuId;
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_NVLINK);
-    response.version               = dcgmHealthResponse_version;
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
     // Get the group Info
-    memset(&groupInfo, 0, sizeof(groupInfo));
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, &groupInfo);
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
@@ -696,7 +648,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     }
 
     // Skip the test if no GPU is found
-    if (groupInfo.count < 1)
+    if (groupInfo->count < 1)
     {
         printf("Skipping TestHMCheckNVLink due to no GPUs being present\n");
         result = DCGM_ST_OK; /* Don't fail */
@@ -704,7 +656,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     }
 
     // Save the first GPU Id in the list
-    gpuId = groupInfo.entityList[0].entityId;
+    gpuId = groupInfo->entityList[0].entityId;
 
     result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
@@ -727,7 +679,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
         fprintf(stderr, "Unable to check the health watches for this system: '%s'\n", errorString(result));
@@ -735,7 +687,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     }
 
     // Ensure the initial nvlink health is good otherwise report and skip test
-    if (response.overallHealth != DCGM_HEALTH_RESULT_PASS)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_PASS)
     {
         printf("Skipping TestHealthMonitor::Test HM check (NVLink). "
                "Test cannot run since NVLink health check did not pass.\n");
@@ -765,7 +717,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, &response);
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(
@@ -773,19 +725,19 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    if (response.overallHealth != DCGM_HEALTH_RESULT_WARN)
+    if (response->overallHealth != DCGM_HEALTH_RESULT_WARN)
     {
         result = DCGM_ST_GENERIC_ERROR;
         fprintf(stderr, "Did not get a health watch warning even though we injected errors.\n");
     }
 
-    if (response.incidentCount < 1)
+    if (response->incidentCount < 1)
     {
-        fmt::print(stderr, "response.incidentCount < 1\n");
+        fmt::print(stderr, "response->incidentCount < 1\n");
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    std::cout << response.incidents[0].error.msg << std::endl;
+    std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
 }

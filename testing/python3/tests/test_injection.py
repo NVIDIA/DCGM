@@ -100,7 +100,6 @@ def test_dcgm_injection_agent(handle, gpuIds):
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvBad)
 
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_remote(handle, gpuIds):
     """
@@ -260,7 +259,6 @@ def test_dcgm_injection_multi_fetch_agent(handle, gpuIds):
     helper_verify_multi_values(fvFetched, order, injectedValues)
 
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_multi_fetch_remote(handle, gpuIds):
     """

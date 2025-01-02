@@ -1,0 +1,62 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "Debug",
+      "toolchainFile": "${sourceDir}/cmake/x86_64-linux-gnu-toolchain.cmake",
+      "installDir": "_out/Linux-amd64-debug",
+      "generator": "Ninja",
+      "binaryDir": "_out/build/Linux-amd64-debug",
+      "description": "Debug",
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "Default"
+        }
+      },
+      "environment": {
+        "DCGM_BUILD_INSIDE_DOCKER": "1",
+        "DCGM_SKIP_RELINGO_CHECK": "1",
+        "DCGM_SKIP_PYTHON_LINTING": "1"
+      }
+    },
+    {
+      "name": "Release",
+      "toolchainFile": "${sourceDir}/cmake/x86_64-linux-gnu-toolchain.cmake",
+      "installDir": "_out/Linux-amd64-release",
+      "generator": "Ninja",
+      "binaryDir": "_out/build/Linux-amd64-release",
+      "description": "Release",
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "Default"
+        }
+      },
+      "environment": {
+        "DCGM_BUILD_INSIDE_DOCKER": "1",
+        "DCGM_SKIP_RELINGO_CHECK": "1",
+        "DCGM_SKIP_PYTHON_LINTING": "1"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "Debug",
+      "jobs": 12,
+      "inheritConfigureEnvironment": true,
+      "configuration": "Debug"
+    },
+    {
+      "name": "Release",
+      "configurePreset": "Release",
+      "jobs": 12,
+      "inheritConfigureEnvironment": true,
+      "configuration": "Release"
+    }
+  ]
+}

@@ -35,21 +35,23 @@ POLICY_CALLBACK_TIMEOUT_SECS = 15 #How long to wait for policy callbacks to occu
 # into "queue" when it is called.  This allows synchronization on the callback by
 # retrieving the args from the queue as well as checks of the args via asserts.
 def create_c_callback(queue=None):
-    @CFUNCTYPE(None, c_void_p)
-    def c_callback(data):
+    @CFUNCTYPE(None, POINTER(dcgm_structs.c_dcgmPolicyCallbackResponse_v2), c_uint64)
+    def c_callback(response, userData):
         if queue:
-            # copy data into a python struct so that it is the right format and is not lost when "data" var is lost
-            callbackData = dcgm_structs.c_dcgmPolicyCallbackResponse_v1()
-            memmove(addressof(callbackData), data, callbackData.FieldsSizeof())
-            queue.put(callbackData)
+            # copy data into a python struct so that it is the right format and is not lost when "response" var is lost
+            callbackResp = dcgm_structs.c_dcgmPolicyCallbackResponse_v2()
+            memmove(addressof(callbackResp), response, callbackResp.FieldsSizeof())
+            queue.put(callbackResp)
+
+            callbackUserData = cast(userData, py_object).value
+            queue.put(callbackUserData)
     return c_callback
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_reg_unreg_for_policy_update_standalone(handle, gpuIds):
     """
-    Verifies that the reg/unreg path for the         policy manager is working
+    Verifies that the reg/unreg path for the policy manager is working
     """
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -58,11 +60,10 @@ def test_dcgm_policy_reg_unreg_for_policy_update_standalone(handle, gpuIds):
     empty_c_callback = create_c_callback()  # must hold ref so func is not GC'ed before c api uses it
 
     # Register/Unregister will throw exceptions if they fail
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, None, empty_c_callback)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, empty_c_callback, None)
     group.policy.Unregister(dcgm_structs.DCGM_POLICY_COND_DBE)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_policy_negative_register_standalone(handle):
     """
     Verifies that the register function does not allow a bad groupId value
@@ -73,7 +74,6 @@ def test_dcgm_policy_negative_register_standalone(handle):
         policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, empty_c_callback)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_policy_negative_unregister_standalone(handle):
     """
     Verifies that the unregister function does not allow a bad groupId value
@@ -83,7 +83,6 @@ def test_dcgm_policy_negative_unregister_standalone(handle):
         policy.Unregister(dcgm_structs.DCGM_POLICY_COND_DBE)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 @test_utils.run_only_with_nvml()
 def test_dcgm_policy_set_get_violation_policy_standalone(handle, gpuIds):
@@ -131,7 +130,9 @@ def helper_dcgm_policy_inject_eccerror(handle, gpuIds):
     # the order of the callbacks will change once implementation is complete
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, c_callback, None)
+
+    # send newPolicy as user data for callback.
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, c_callback, newPolicy)
 
     # inject an error into ECC
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -148,30 +149,32 @@ def helper_dcgm_policy_inject_eccerror(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackUserData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_DBE == callbackData.condition), \
-            ("error callback was not for a DBE error, got: %s" % callbackData.condition)
-    assert(1 == callbackData.val.dbe.numerrors), 'Expected 1 DBE error but got %s' % callbackData.val.dbe.numerrors
-    assert(dcgm_structs.c_dcgmPolicyConditionDbe_t.LOCATIONS['DEVICE'] == callbackData.val.dbe.location), \
-        'got: %s' % callbackData.val.dbe.location
+    assert(dcgm_structs.DCGM_POLICY_COND_DBE == callbackResp.condition), \
+            ("error callback was not for a DBE error, got: %s" % callbackResp.condition)
+    assert(1 == callbackResp.val.dbe.numerrors), 'Expected 1 DBE error but got %s' % callbackResp.val.dbe.numerrors
+    assert(dcgm_structs.c_dcgmPolicyConditionDbe_t.LOCATIONS['DEVICE'] == callbackResp.val.dbe.location), \
+        'got: %s' % callbackResp.val.dbe.location
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_policy_inject_eccerror_embedded(handle, gpuIds):
-    helper_dcgm_policy_inject_eccerror(handle, gpuIds)
+    # check that callback occured with the correct user data
+    assert(callbackUserData.version == newPolicy.version), "User data at callback is incorrect. " \
+        "Received: [%d], Expected: [%d]." % (callbackUserData.version, newPolicy.version)
+
+    # check that callback response has correct gpuId for which error was injected.
+    assert(callbackResp.gpuId == gpuIds[0]), "GPU ID in callback response is incorrect. " \
+        "Received: [%d], Expected: [%d]." % (callbackResp.gpuId, gpuIds[0])
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_eccerror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_eccerror(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
     """
@@ -192,7 +195,7 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
 
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_NVLINK, finishCallback=c_callback)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_NVLINK, c_callback)
 
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
@@ -207,16 +210,16 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_NVLINK == callbackData.condition), \
-            ("NVLINK error callback was not for a NVLINK error, got: %s" % callbackData.condition)
-    assert(dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL == callbackData.val.nvlink.fieldId), \
-            ("Expected 130 fieldId but got %s" % callbackData.val.nvlink.fieldId)
-    assert(1 == callbackData.val.nvlink.counter), 'Expected 1 PCI error but got %s' % callbackData.val.nvlink.counter
+    assert(dcgm_structs.DCGM_POLICY_COND_NVLINK == callbackResp.condition), \
+            ("NVLINK error callback was not for a NVLINK error, got: %s" % callbackResp.condition)
+    assert(dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL == callbackResp.val.nvlink.fieldId), \
+            ("Expected 130 fieldId but got %s" % callbackResp.val.nvlink.fieldId)
+    assert(1 == callbackResp.val.nvlink.counter), 'Expected 1 PCI error but got %s' % callbackResp.val.nvlink.counter
 
 def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
     """
@@ -246,7 +249,7 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
 
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_XID, finishCallback=c_callback)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_XID, c_callback)
 
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
@@ -261,26 +264,19 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_XID == callbackData.condition), \
-            ("XID error callback was not for a XID error, got: %s" % callbackData.condition)
-    assert(16 == callbackData.val.xid.errnum), ('Expected XID error 16 but got %s' % callbackData.val.xid.errnum)
+    assert(dcgm_structs.DCGM_POLICY_COND_XID == callbackResp.condition), \
+            ("XID error callback was not for a XID error, got: %s" % callbackResp.condition)
+    assert(16 == callbackResp.val.xid.errnum), ('Expected XID error 16 but got %s' % callbackResp.val.xid.errnum)
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_xiderror_standalone(handle, gpuIds):
     helper_test_dcgm_policy_inject_xiderror(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_policy_inject_xiderror_embedded(handle, gpuIds):
-    helper_test_dcgm_policy_inject_xiderror(handle, gpuIds)
-
 
 def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
     """
@@ -301,7 +297,7 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
 
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_PCI, finishCallback=c_callback)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_PCI, c_callback)
 
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
@@ -316,29 +312,21 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_PCI == callbackData.condition), \
-            ("PCI error callback was not for a PCI error, got: %s" % callbackData.condition)
-    assert(1 == callbackData.val.pci.counter), 'Expected 1 PCI error but got %s' % callbackData.val.pci.counter
+    assert(dcgm_structs.DCGM_POLICY_COND_PCI == callbackResp.condition), \
+            ("PCI error callback was not for a PCI error, got: %s" % callbackResp.condition)
+    assert(1 == callbackResp.val.pci.counter), 'Expected 1 PCI error but got %s' % callbackResp.val.pci.counter
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_pcierror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_pcierror(handle, gpuIds)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_policy_inject_pcierror_embedded(handle, gpuIds):
-    helper_dcgm_policy_inject_pcierror(handle, gpuIds)
-
-
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
     """
@@ -360,7 +348,7 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
 
     callbackQueue = queue.Queue()
     c_callback = create_c_callback(callbackQueue)
-    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED, finishCallback=c_callback)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED, c_callback)
 
     # inject an error into ECC
     numPages = 10
@@ -383,19 +371,18 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED == callbackData.condition), \
-            ("error callback was not for a retired pages, got: %s" % callbackData.condition)
-    assert(numPages == callbackData.val.mpr.dbepages), \
-            'Expected %s errors but got %s' % (numPages, callbackData.val.mpr.dbepages)
+    assert(dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED == callbackResp.condition), \
+            ("error callback was not for a retired pages, got: %s" % callbackResp.condition)
+    assert(numPages == callbackResp.val.mpr.dbepages), \
+            'Expected %s errors but got %s' % (numPages, callbackResp.val.mpr.dbepages)
 
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 def test_dcgm_policy_get_with_no_gpus_standalone(handle):
     '''
     Test that getting the policies when no GPUs are in the group raises an exception
@@ -406,7 +393,6 @@ def test_dcgm_policy_get_with_no_gpus_standalone(handle):
         policies = group.policy.Get()
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
     '''
@@ -455,27 +441,20 @@ def helper_dcgm_policy_inject_powererror(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_POWER == callbackData.condition), \
-        ("error callback was not for a Power Violation error, got: %s" % callbackData.condition)
-    assert(210 == callbackData.val.power.powerViolation), \
-        'Expected Power Violation at 210 but got %s' % callbackData.val.power.powerViolation
+    assert(dcgm_structs.DCGM_POLICY_COND_POWER == callbackResp.condition), \
+        ("error callback was not for a Power Violation error, got: %s" % callbackResp.condition)
+    assert(210 == callbackResp.val.power.powerViolation), \
+        'Expected Power Violation at 210 but got %s' % callbackResp.val.power.powerViolation
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_powererror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_powererror(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_policy_inject_powererror_embedded(handle, gpuIds):
-    helper_dcgm_policy_inject_powererror(handle, gpuIds)
-
 
 def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
     """
@@ -513,23 +492,17 @@ def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
 
     # wait for the the policy manager to call back
     try:
-        callbackData = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
     except queue.Empty:
         assert False, "Callback never happened"
 
     # check that the callback occurred with the correct arguments
-    assert(dcgm_structs.DCGM_POLICY_COND_THERMAL == callbackData.condition), \
-        ("error callback was not for a Thermal Violation error, got: %s" % callbackData.condition)
-    assert(95 == callbackData.val.power.powerViolation), \
-        'Expected Thermal Violation at 95 but got %s' % callbackData.val.power.powerViolation
+    assert(dcgm_structs.DCGM_POLICY_COND_THERMAL == callbackResp.condition), \
+        ("error callback was not for a Thermal Violation error, got: %s" % callbackResp.condition)
+    assert(95 == callbackResp.val.power.powerViolation), \
+        'Expected Thermal Violation at 95 but got %s' % callbackResp.val.power.powerViolation
 
 @test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_thermalerror_standalone(handle, gpuIds):
-    helper_dcgm_policy_inject_thermalerror(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_with_injection_gpus()
-def test_dcgm_policy_inject_thermalerror_embedded(handle, gpuIds):
     helper_dcgm_policy_inject_thermalerror(handle, gpuIds)

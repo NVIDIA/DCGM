@@ -27,19 +27,22 @@
 class ContextCreatePlugin : public Plugin
 {
 public:
-    ContextCreatePlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    ContextCreatePlugin(dcgmHandle_t handle);
     ~ContextCreatePlugin()
     {}
 
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     dcgmHandle_t GetHandle();
 
+    std::string GetCtxCreateTestName() const;
+
 private:
     dcgmHandle_t m_handle;
-    dcgmDiagPluginGpuList_t m_gpuInfo;
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
 };
 
 #endif

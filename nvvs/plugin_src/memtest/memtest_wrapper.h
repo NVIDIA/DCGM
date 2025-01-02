@@ -32,26 +32,18 @@
 class MemtestPlugin : public Plugin
 {
 public:
-    MemtestPlugin(dcgmHandle_t handle, const dcgmDiagPluginGpuList_t *gpuInfo);
+    MemtestPlugin(dcgmHandle_t handle);
 
-    void Go(TestParameters *testParameters, const dcgmDiagGpuInfo_t &info);
-    void Go(TestParameters * /*testParameters*/, const dcgmDiagGpuList_t & /*gpuList*/)
-    {
-        throw std::runtime_error("Not implemented in this test.");
-    }
-    void Go(TestParameters * /*testParameters*/)
-    {
-        throw std::runtime_error("Not implemented in this test.");
-    }
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters) override;
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     dcgmHandle_t GetHandle() const;
+    std::string GetMmeTestTestName() const;
 
 private:
     dcgmHandle_t m_handle;
-    dcgmDiagPluginGpuList_t m_gpuInfo;
 };
 
 

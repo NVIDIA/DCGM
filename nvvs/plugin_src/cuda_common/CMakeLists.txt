@@ -11,23 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 declare_nvvs_plugin(cudaCommon .)
 
-find_package(fmt REQUIRED)
-
-add_library(cuda_common_interface INTERFACE)
-target_include_directories(cuda_common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(cuda_common_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 macro(cuda_common_plugin CUDA_VER)
-    add_library(pluginCudaCommon_${CUDA_VER} STATIC)
     nvvs_plugin_srcs(pluginCudaCommon_${CUDA_VER})
-    target_include_directories(pluginCudaCommon_${CUDA_VER} PUBLIC ${CUDA${CUDA_VER}_INCLUDE_DIR})
-    target_link_libraries(pluginCudaCommon_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
-    target_link_libraries(pluginCudaCommon_${CUDA_VER} PRIVATE ${CUDA${CUDA_VER}_LIBS})
-    target_link_libraries(pluginCudaCommon_${CUDA_VER} PUBLIC fmt::fmt)
+
+    target_include_directories(pluginCudaCommon_${CUDA_VER}
+        PUBLIC
+            "${CUDA${CUDA_VER}_INCLUDE_DIR}")
+
+    target_link_libraries(pluginCudaCommon_${CUDA_VER}
+        PRIVATE
+            ${CUDA${CUDA_VER}_STATIC_LIBS}
+            ${CUDA${CUDA_VER}_LIBS}
+        PUBLIC
+            fmt::fmt)
 endmacro()
 
 foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
     add_subdirectory(Cuda${CUDA_VER})
 endforeach()
+
 add_subdirectory(tests)

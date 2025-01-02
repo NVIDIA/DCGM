@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "MessageGuard.hpp"
 #include "TestAllocator.h"
 #include "TestCacheManager.h"
 #include "TestDcgmConnections.h"
 #include "TestDcgmModule.h"
 #include "TestDcgmValue.h"
 #include "TestDiagManager.h"
-#include "TestDiagResponseWrapper.h"
 #include "TestFieldGroups.h"
 #include "TestGroupManager.h"
 #include "TestHealthMonitor.h"
@@ -31,6 +31,7 @@
 
 #include "DcgmLogging.h"
 #include "DcgmSettings.h"
+#include "DcgmStringHelpers.h"
 #include "dcgm_agent.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
@@ -49,9 +50,12 @@ public:
         m_embeddedStarted  = false;
         m_runAllModules    = false;
         m_moduleInitParams = {};
+        m_excludeModules.clear();
         m_onlyModulesToRun.clear();
         m_dcgmHandle        = (dcgmHandle_t) nullptr;
         m_startRemoteServer = false;
+        m_listModules       = false;
+        m_showUsage         = false;
     }
 
     /*************************************************************************/
@@ -61,75 +65,40 @@ public:
     }
 
     /*************************************************************************/
+    /** Helper that loads new modules. */
+
+    template <typename T>
+    void LoadModule()
+    {
+        static_assert(std::is_base_of<TestDcgmModule, T>::value, "T must be derived from TestDcgmModule");
+        TestDcgmModule *module = new (T);
+        if (module != nullptr)
+        {
+            module->SetDcgmHandle(m_dcgmHandle);
+            m_modules[module->GetTag()] = module;
+            log_debug("LoadModule(): Successfully loaded module \"{}\".", module->GetTag());
+        }
+        else
+        {
+            log_error("LoadModule(): Failed to load module \"{}\".", DcgmNs::details::DemangleType<T>());
+        }
+    }
+
+    /*************************************************************************/
     int LoadModules()
     {
-        TestDcgmModule *module;
-        std::string moduleTag;
+        LoadModule<TestGroupManager>();
+        LoadModule<TestKeyedVector>();
+        LoadModule<TestCacheManager>();
+        LoadModule<TestFieldGroups>();
+        LoadModule<TestVersioning>();
+        LoadModule<TestDiagManager>();
+        LoadModule<TestDcgmValue>();
+        LoadModule<TestPolicyManager>();
+        LoadModule<TestHealthMonitor>();
+        LoadModule<TestTopology>();
+        LoadModule<TestDcgmConnections>();
 
-        module = (TestDcgmModule *)(new TestGroupManager());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestKeyedVector());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestCacheManager());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestFieldGroups());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestVersioning());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestDiagManager());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestDcgmValue());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestPolicyManager());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestHealthMonitor());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestTopology());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = (TestDcgmModule *)(new TestDcgmConnections());
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        module = new TestDiagResponseWrapper();
-        module->SetDcgmHandle(m_dcgmHandle);
-        moduleTag            = module->GetTag();
-        m_modules[moduleTag] = module;
-
-        /* Copy above 4 lines to add your own module */
         return 0;
     }
 
@@ -183,6 +152,27 @@ public:
         }
 
         return 0;
+    }
+
+    /*************************************************************************/
+    void ListModules()
+    {
+        if (m_modules.size() == 0)
+        {
+            fmt::print("\nERROR: No modules for you!\n");
+        }
+        else
+        {
+            fmt::print("\nList of module tags:\n");
+            for (auto const &[_, module] : m_modules)
+            {
+                if (module != nullptr)
+                {
+                    fmt::print("  {}\n", module->GetTag());
+                }
+            }
+            fmt::print("\n");
+        }
     }
 
     /*************************************************************************/
@@ -272,9 +262,12 @@ public:
                     return -1;
                 }
                 i++; /* Move to the actual argument */
-
-                printf("Adding %s to the list of modules to run\n", argv[i]);
-                m_onlyModulesToRun[argv[i]] = 0;
+                auto includeMods = DcgmNs::Split(std::string_view(argv[i]), ',');
+                for (auto mod : includeMods)
+                {
+                    fmt::print("Adding \"{}\" to the list of modules to run\n", mod);
+                    m_onlyModulesToRun[std::string(mod)] = 0;
+                }
                 continue;
             }
             else if (!strcmp(argv[i], "-r"))
@@ -287,11 +280,48 @@ public:
                 printf("Running all modules, including non-L0 ones.\n");
                 m_runAllModules = true;
             }
+            else if (!strcmp(argv[i], "-l"))
+            {
+                m_listModules = true;
+            }
+            else if (!strcmp(argv[i], "-h"))
+            {
+                m_showUsage = true;
+            }
+            else if (!strcmp(argv[i], "-x"))
+            {
+                if (argc - i < 2)
+                {
+                    fprintf(stderr, "-x requires a 2nd parameter\n");
+                    return -1;
+                }
+                ++i; /* Move to the actual argument */
+                auto excludeMods = DcgmNs::Split(std::string_view(argv[i]), ',');
+                for (auto mod : excludeMods)
+                {
+                    fmt::print("Adding \"{}\" to the list of modules to exclude\n", mod);
+                    m_excludeModules[std::string(mod)] = 0;
+                }
+                continue;
+            }
 
             m_moduleInitParams.moduleArgs.push_back(std::string(argv[i]));
         }
 
         return 0;
+    }
+
+    /*************************************************************************/
+    void Usage()
+    {
+        fmt::print("\n"
+                   "usage: testdcgmunittests [OPTIONS]\n"
+                   "Options are:\n"
+                   "-a: Run all modules, including non-L0 ones\n"
+                   "-h: Display this helpful message\n"
+                   "-l: List all modules\n"
+                   "-m <MODULE_TAG1,...>: Run module with specified MODULE_TAG\n"
+                   "-x <MODULE_TAG1,...>: Exclude module with specified MODULE_TAG\n");
     }
 
     /*************************************************************************/
@@ -333,7 +363,7 @@ public:
         dcgmCreateFakeEntities_t cfe {};
         cfe.version     = dcgmCreateFakeEntities_version;
         cfe.numToCreate = 2;
-        for (int i = 0; i < cfe.numToCreate; i++)
+        for (unsigned int i = 0; i < cfe.numToCreate; i++)
         {
             cfe.entityList[i].entity.entityGroupId = DCGM_FE_GPU;
         }
@@ -345,7 +375,7 @@ public:
             return -1;
         }
 
-        for (int i = 0; i < cfe.numToCreate; i++)
+        for (unsigned int i = 0; i < cfe.numToCreate; i++)
         {
             unsigned int gpuId = cfe.entityList[i].entity.entityId;
             printf("Using FAKE GpuId %u\n", gpuId);
@@ -404,7 +434,8 @@ public:
     int RunModules(void)
     {
         int st;
-        int Nfailed = 0;
+        int Nfailed  = 0;
+        int Nskipped = 0;
 
         /* Run all modules */
         TestDcgmModule *module;
@@ -453,6 +484,14 @@ public:
                 {
                     printf("Skipping module \"%s\" not included in default list. Pass -a to include all modules.\n",
                            moduleTag.c_str());
+                    Nskipped++;
+                    continue;
+                }
+
+                if (m_excludeModules.contains(moduleTag))
+                {
+                    fmt::print("Skipping module \"{}\" as it was excluded.\n", moduleTag.c_str());
+                    Nskipped++;
                     continue;
                 }
 
@@ -464,11 +503,14 @@ public:
             }
         }
 
-
         if (Nfailed > 0)
         {
             fprintf(stderr, "%d modules had test failures\n", Nfailed);
             return 1;
+        }
+        if (Nskipped > 0)
+        {
+            fmt::print("{} modules were skipped\n", Nskipped);
         }
 
         printf("All modules PASSED\n");
@@ -487,8 +529,24 @@ public:
          * the command line
          */
         st = ParseCommandLine(argc, argv);
-        if (st)
-            return -1;
+        if (st || m_showUsage)
+        {
+            Usage();
+            if (st)
+            {
+                return -1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        if (m_listModules)
+        {
+            ListModules();
+            return 0;
+        }
 
         /* Do we want to be remote to our DCGM? */
         if (m_startRemoteServer)
@@ -512,12 +570,16 @@ private:
     bool m_embeddedStarted;    /* Has an embedded host engine been started? 1=yes. 0=no */
     bool m_startRemoteServer;  /* Has a TCP/IP serverbeen started? 1=yes. 0=no (pass -r to the program) */
     bool m_runAllModules;      /* Should we run all modules discovered, even non-default modules? */
+    bool m_listModules;        /* List test modules*/
+    bool m_showUsage;          /* Show usage message */
 
     TestDcgmModuleInitParams m_moduleInitParams;       /* Parameters passed to each module's Init() method */
     std::map<std::string, TestDcgmModule *> m_modules; /* Test modules to run, indexed by each
                                                          module's GetTag() */
     std::map<std::string, int> m_onlyModulesToRun;     /* Map of 'moduletag'=>0 of modules we are supposed to run.
                                                     Empty = run all modules */
+    std::map<std::string, int>
+        m_excludeModules; /* Map of moduletag=>0 of modules to exclude. Empty = run all modules. */
 };
 
 

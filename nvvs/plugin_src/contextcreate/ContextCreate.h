@@ -16,6 +16,7 @@
 #ifndef CONTEXTCREATE_H
 #define CONTEXTCREATE_H
 
+#include "ContextCreatePlugin.h"
 #include "DcgmHandle.h"
 #include "DcgmRecorder.h"
 #include "Plugin.h"
@@ -25,7 +26,6 @@
 #include "timelib.h"
 #include <CudaCommon.h>
 #include <NvvsStructs.h>
-#include <PluginStrings.h>
 
 #define CTX_CREATED 0x0
 #define CTX_SKIP    0x1
@@ -37,8 +37,12 @@ public:
     CUdevice cuDevice {};
     CUcontext cuContext {};
 
-    ContextCreateDevice(unsigned int ndi, const char *pciBusId, Plugin *p, DcgmHandle &handle)
-        : PluginDevice(CTXCREATE_PLUGIN_NAME, ndi, pciBusId, p)
+    ContextCreateDevice(std::string const &testName,
+                        unsigned int ndi,
+                        const char *pciBusId,
+                        Plugin *p,
+                        DcgmHandle &handle)
+        : PluginDevice(testName, ndi, pciBusId, p)
         , cuContext(0)
     {
         char buf[256] = { 0 };
@@ -97,14 +101,14 @@ public:
 class ContextCreate
 {
 public:
-    ContextCreate(TestParameters *testParameters, Plugin *plugin, dcgmHandle_t handle);
+    ContextCreate(TestParameters *testParameters, ContextCreatePlugin *plugin, dcgmHandle_t handle);
     ~ContextCreate();
 
     /*************************************************************************/
     /*
      * Initialize devices and resources for this plugin.
      */
-    std::string Init(const dcgmDiagPluginGpuList_t &gpuList);
+    std::string Init(const dcgmDiagPluginEntityList_v1 &entityList);
 
     /*************************************************************************/
     /*
@@ -120,7 +124,7 @@ public:
      * Returns 0 on success
      *        <0 on failure or early exit
      */
-    int Run(const dcgmDiagPluginGpuList_t &gpuList);
+    int Run(const dcgmDiagPluginEntityList_v1 &entityList);
 
     /*************************************************************************/
     /*
@@ -142,7 +146,7 @@ private:
     bool GpusAreNonExclusive();
 
     /*************************************************************************/
-    Plugin *m_plugin;                            /* Which plugin we're a part of. This is a paramter to the instance */
+    ContextCreatePlugin *m_plugin;               /* Which plugin we're a part of. This is a paramter to the instance */
     TestParameters *m_testParameters;            /* The test parameters for this run of NVVS */
     std::vector<ContextCreateDevice *> m_device; /* Per-device data */
     DcgmRecorder *m_dcgmRecorder;
