@@ -32,7 +32,7 @@
 #include "Gpu.h"
 #include "NvvsCommon.h"
 #include "NvvsStructs.h"
-#include "Output.h"
+#include "PluginTest.h"
 #include "TestParameters.h"
 #include <NvvsStructs.h>
 
@@ -46,7 +46,7 @@ extern const double DUMMY_TEMPERATURE_VALUE;
 typedef struct
 {
     std::string shortDescription;
-    std::string testGroups;
+    std::string testCategories;
     dcgmPerGpuTestIndices_t testIndex; /* from dcgmPerGpuTestIndices_enum */
     void *customEntry;
     bool selfParallel;
@@ -62,27 +62,12 @@ class Plugin
 {
     /***************************PUBLIC***********************************/
 public:
-    class PluginResult
-    {
-    public:
-        std::vector<nvvsPluginResult_t> m_nonGpuResults; /* Results for non-GPU specific tests */
-        std::vector<DcgmError> m_errors;                 /* List of errors from the plugin */
-        std::vector<DcgmError>
-            m_optionalErrors; /* List of errors from the plugin that shouldn't be reported if others are present */
-        std::vector<std::string> m_warnings;    /* List of general warnings from the plugin */
-        std::vector<std::string> m_verboseInfo; /* List of general verbose output from the plugin */
-
-        nvvsPluginGpuResults_t m_resultsPerGPU;      /* Per GPU results: Pass | Fail | Skip | Warn */
-        nvvsPluginGpuErrors_t m_errorsPerGPU;        /* Per GPU list of errors from the plugin */
-        nvvsPluginGpuMessages_t m_warningsPerGPU;    /* Per GPU list of warnings from the plugin */
-        nvvsPluginGpuMessages_t m_verboseInfoPerGPU; /* Per GPU list of verbose output from the plugin */
-    };
-
     Plugin();
     virtual ~Plugin();
 
     /* Interface methods for running the plugin */
     virtual void Go(std::string const &testName,
+                    dcgmDiagPluginEntityList_v1 const *entityInfo,
                     unsigned int numParameters,
                     const dcgmDiagPluginTestParameter_t *testParameters)
         = 0;
@@ -92,12 +77,6 @@ public:
     infoStruct_t GetInfoStruct() const
     {
         return m_infoStruct;
-    }
-
-    /*************************************************************************/
-    void SetOutputObject(Output *obj)
-    {
-        progressOut = obj;
     }
 
     /* Plugin results */
@@ -123,7 +102,7 @@ public:
      *      - NVVS_RESULT_WARN if *any* GPU had result NVVS_RESULT_WARN
      *      - NVVS_RESULT_SKIP if all GPUs had result NVVS_RESULT_SKIP
      */
-    nvvsPluginResult_t GetResult(std::string const &testName);
+    nvvsPluginResult_t GetResult(std::string const &testName) const;
 
     /*************************************************************************/
     /*
@@ -132,14 +111,26 @@ public:
      * Returns:
      *      - nvvsPluginGpuResults_t (map from gpu id to results)
      */
-    const nvvsPluginGpuResults_t &GetGpuResults(std::string const &testName)
+    const nvvsPluginGpuResults_t &GetGpuResults(std::string const &testName) const
     {
-        return m_results[testName].m_resultsPerGPU;
+        return m_tests.at(testName).GetGpuResults();
     }
 
     /*************************************************************************/
     /*
-     * Sets the result for all GPUs to the result given by res.
+     * Get results for all entites.
+     *
+     * Returns:
+     *      - nvvsPluginEntityResults_t (map from entity to results)
+     */
+    const nvvsPluginEntityResults_t &GetEntityResults(std::string const &testName) const
+    {
+        return m_tests.at(testName).GetEntityResults();
+    }
+
+    /*************************************************************************/
+    /*
+     * Sets the result for all entities to the result given by res.
      *
      */
     void SetResult(std::string const &testName, nvvsPluginResult_t res);
@@ -151,88 +142,129 @@ public:
      */
     void SetResultForGpu(std::string const &testName, unsigned int gpuId, nvvsPluginResult_t res);
 
+    /*************************************************************************/
+    /*
+     * Sets the result for a specific entity to the result given by res.
+     *
+     */
+    void SetResultForEntity(std::string const &testName, dcgmGroupEntityPair_t const &entity, nvvsPluginResult_t res);
+
     void SetNonGpuResult(std::string const &testName, nvvsPluginResult_t res);
 
     /*************************************************************************/
-    const std::vector<std::string> &GetWarnings(std::string const &testName)
+    std::vector<std::string> const &GetWarnings(std::string const &testName) const
     {
-        return m_results[testName].m_warnings;
+        return m_tests.at(testName).GetWarnings();
     }
 
     /*************************************************************************/
-    const std::vector<DcgmError> &GetErrors(std::string const &testName)
+    std::vector<DcgmError> const &GetErrors(std::string const &testName) const
     {
-        return m_results[testName].m_errors;
+        return m_tests.at(testName).GetErrors();
     }
 
     /*************************************************************************/
-    const nvvsPluginGpuErrors_t &GetGpuErrors(std::string const &testName)
+    nvvsPluginEntityErrors_t const &GetEntityErrors(std::string const &testName) const
     {
-        return m_results[testName].m_errorsPerGPU;
+        return m_tests.at(testName).GetEntityErrors();
     }
 
     /*************************************************************************/
-    const nvvsPluginGpuMessages_t &GetGpuWarnings(std::string const &testName)
+    nvvsPluginGpuErrors_t const &GetGpuErrors(std::string const &testName) const
     {
-        return m_results[testName].m_warningsPerGPU;
+        return m_tests.at(testName).GetGpuErrors();
     }
 
     /*************************************************************************/
-    const std::vector<std::string> &GetVerboseInfo(std::string const &testName)
+    nvvsPluginGpuMessages_t const &GetGpuWarnings(std::string const &testName) const
     {
-        return m_results[testName].m_verboseInfo;
+        return m_tests.at(testName).GetGpuWarnings();
     }
 
     /*************************************************************************/
-    const nvvsPluginGpuMessages_t &GetGpuVerboseInfo(std::string const &testName)
+    /* Deprecated: Use GetEntityVerboseInfo() instead. */
+    std::vector<std::string> const &GetVerboseInfo(std::string const &testName) const
     {
-        return m_results[testName].m_verboseInfoPerGPU;
+        return m_tests.at(testName).GetVerboseInfo();
     }
 
     /*************************************************************************/
-    inline void RecordObservedMetric(unsigned int gpuId, const std::string &valueName, double value)
+    nvvsPluginEntityMsgs_t const &GetEntityVerboseInfo(std::string const &testName) const
     {
-        m_values[valueName][gpuId] = value;
+        return m_tests.at(testName).GetEntityVerboseInfo();
     }
 
     /*************************************************************************/
-    observedMetrics_t GetObservedMetrics() const
+    /* Deprecated: Use GetEnityVerboseInfo() instead. */
+    nvvsPluginGpuMessages_t const &GetGpuVerboseInfo(std::string const &testName) const
     {
-        return m_values;
+        return m_tests.at(testName).GetGpuVerboseInfo();
     }
 
-    bool UsingFakeGpus() const
-    {
-        return m_fakeGpus;
-    }
-
-    /* Methods */
     /*************************************************************************/
+    inline void RecordObservedMetric(std::string const &testName,
+                                     unsigned int gpuId,
+                                     const std::string &valueName,
+                                     double value)
+    {
+        m_tests.at(testName).RecordObservedMetric(gpuId, valueName, value);
+    }
+
+    /*************************************************************************/
+    observedMetrics_t GetObservedMetrics(std::string const &testName) const
+    {
+        return m_tests.at(testName).GetObservedMetrics();
+    }
+
+    bool UsingFakeGpus(std::string const &testName) const
+    {
+        return m_tests.at(testName).UsingFakeGpus();
+    }
+
     /*
-     * Initializes internal result and message structures for use with the gpus given by gpuList.
+     * Initializes internal structures for use with the entityInfo.
      * This method **MUST** be called before the plugin logs any messages or sets a result.
      *
      * This method clears any existing warnings, info messages, and results as a side effect.
-     * Sets m_gpuList to a copy of the given gpuInfo.
      *
      */
-    void InitializeForGpuList(std::string const &testName, const dcgmDiagPluginGpuList_t &gpuInfo);
+    void InitializeForEntityList(std::string const &testName, dcgmDiagPluginEntityList_v1 const &entityInfo);
 
     /*************************************************************************/
     /*
+     * Deprecated: Use AddInfo() or AddError() instead.
      * Adds a warning for this plugin
      *
      * Thread-safe.
      */
-    void AddWarning(std::string const &testName, const std::string &error);
+    [[deprecated("Use AddInfo() or AddError() instead")]] void AddWarning(std::string const &testName,
+                                                                          std::string const &error);
 
     /*************************************************************************/
     /*
+     * Adds an error for this plugin associated with the entity specified by entityPair.
+     *
+     * Thread-safe when lock holds m_dataMutex.
+     */
+    DcgmLockGuard AddError(DcgmLockGuard &&lock, std::string const &testName, dcgmDiagError_v1 const &error);
+
+    /*************************************************************************/
+    /*
+     * Adds an error for this plugin associated with the entity specified by entityPair.
+     *
+     * Thread-safe.
+     */
+
+    void AddError(std::string const &testName, dcgmDiagError_v1 const &error);
+
+    /*************************************************************************/
+    /*
+     * Deprecated: Use AddError(diagError) instead.
      * Adds an error for this plugin
      *
      * Thread-safe.
      */
-    void AddError(std::string const &testName, const DcgmError &error);
+    void AddError(std::string const &testName, DcgmError const &error);
 
     /*************************************************************************/
     /*
@@ -241,15 +273,7 @@ public:
      * These errors tend to be very generic; generally, they are accompanied by a more specific
      * error and can be ignored. However, if no other error is found they should be reported.
      */
-    void AddOptionalError(std::string const &testName, const DcgmError &error);
-
-    /*************************************************************************/
-    /*
-     * Adds an error for the GPU specified by gpuId
-     *
-     * Thread-safe.
-     */
-    void AddErrorForGpu(std::string const &testName, unsigned int gpuId, const DcgmError &error);
+    void AddOptionalError(std::string const &testName, DcgmError const &error);
 
     /*************************************************************************/
     /*
@@ -257,15 +281,27 @@ public:
      *
      * Thread-safe.
      */
-    void AddInfo(std::string const &testName, const std::string &info);
+    void AddInfo(std::string const &testName, std::string const &info);
 
     /*************************************************************************/
     /*
+     * Deprecated: Use AddInfoVerboseForEntity() instead.
      * Adds a non-GPU specific verbose message.
      *
      * Thread-safe.
      */
-    void AddInfoVerbose(std::string const &testName, const std::string &info);
+    void AddInfoVerbose(std::string const &testName, std::string const &info);
+
+    /*************************************************************************/
+    /*
+     * Adds a verbose message for the GPU given by gpuId.
+     *
+     * Thread-safe when lock holds m_dataMutex.
+     */
+    DcgmLockGuard AddInfoVerboseForEntity(DcgmLockGuard &&lock,
+                                          std::string const &testName,
+                                          dcgmGroupEntityPair_t entity,
+                                          std::string const &info);
 
     /*************************************************************************/
     /*
@@ -273,53 +309,71 @@ public:
      *
      * Thread-safe.
      */
-    void AddInfoVerboseForGpu(std::string const &testName, unsigned int gpuId, const std::string &info);
+    void AddInfoVerboseForEntity(std::string const &testName, dcgmGroupEntityPair_t entity, std::string const &info);
+
+
+    /*************************************************************************/
+    /*
+     * Deprecated: Use AddInfoVerboseForEntity() instead.
+     * Adds a verbose message for the GPU given by gpuId.
+     *
+     * Thread-safe.
+     */
+    void AddInfoVerboseForGpu(std::string const &testName, unsigned int gpuId, std::string const &info);
 
     /*************************************************************************/
     /*
      * Fills in the results struct for this plugin object
      *
-     * @param results - the struct in which results are stored
+     * @param entityResults - the struct in which results are stored
      */
-    virtual dcgmReturn_t GetResults(std::string const &testName, dcgmDiagResults_t *results);
+    virtual dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults);
 
     /*
      * Adds a custom timeseries statistic for GPU gpuId with the specified name and value
      */
-    void SetGpuStat(unsigned int gpuId, const std::string &name, double value);
+    void SetGpuStat(std::string const &testName, unsigned int gpuId, std::string const &name, double value);
 
     /*
      * Adds a custom timeseries statistic for GPU gpuId with the specified name and value
      */
-    void SetGpuStat(unsigned int gpuId, const std::string &name, long long value);
+    void SetGpuStat(std::string const &testName, unsigned int gpuId, std::string const &name, long long value);
 
     /*
      * Adds a custom field fo GPU gpuId
      */
-    void SetSingleGroupStat(const std::string &gpuId, const std::string &name, const std::string &value);
+    void SetSingleGroupStat(std::string const &testName,
+                            std::string const &gpuId,
+                            std::string const &name,
+                            std::string const &value);
 
     /*
      * Adds a custom statistic for group groupName with the specified name and value
      */
-    void SetGroupedStat(const std::string &groupName, const std::string &name, double value);
+    void SetGroupedStat(std::string const &testName,
+                        std::string const &groupName,
+                        std::string const &name,
+                        double value);
 
     /*
      * Adds a custom statistic for group groupName with the specified name and value
      */
-    void SetGroupedStat(const std::string &groupName, const std::string &name, long long value);
+    void SetGroupedStat(std::string const &testName,
+                        std::string const &groupName,
+                        std::string const &name,
+                        long long value);
 
     /*
      * Get the data associated with the custom gpu stat recorded
      */
-    std::vector<dcgmTimeseriesInfo_t> GetCustomGpuStat(unsigned int gpuId, const std::string &name);
+    std::vector<dcgmTimeseriesInfo_t> GetCustomGpuStat(std::string const &testName,
+                                                       unsigned int gpuId,
+                                                       std::string const &name);
 
     /*
      * Populate the struct with statistics from where we've left off in iteration. It could be from the beginning.
      */
-    void PopulateCustomStats(dcgmDiagCustomStats_t &customStats);
-
-    /* Variables */
-    Output *progressOut; // Output object passed in from the test framework for progress updates
+    void PopulateCustomStats(std::string const &testName, dcgmDiagCustomStats_t &customStats);
 
     /*
      * Initialize logging from within this plugin with the given severity and logging callback.
@@ -330,42 +384,27 @@ public:
     /* Returns the external display name for the specified test type */
     std::string GetDisplayName();
 
+    void SetPluginAttr(dcgmDiagPluginAttr_v1 const *pluginAttr);
+
+    int GetPluginId() const;
+
     /***************************PRIVATE**********************************/
 #ifndef DCGM_PLUGIN_TEST
 private:
 #endif
     /* Methods */
 
-    /*************************************************************************/
-    /*
-     * Clears all warnings, info messages, and results.
-     *
-     */
-    void ResetResultsAndMessages(std::string const &testName);
-
-    /*************************************************************************/
-    /*
-     * Records the specified error in the dcgmDiagResults_t struct with the specified gpuId
-     */
-    void AddErrorToResults(dcgmDiagResults_t &results, const DcgmError &error, int gpuId);
-
-    // test name to its results
-    std::unordered_map<std::string, PluginResult> m_results;
-
-    /* Variables */
-    observedMetrics_t m_values; /* Record the values found for pass/fail criteria */
-    bool m_fakeGpus;            /* Whether or not this plugin is using fake gpus */
+    dcgmDiagPluginAttr_v1 m_pluginAttr; /* The plugin attributes assigned from nvvs */
 
     /***************************PROTECTED********************************/
 protected:
     /* Variables */
     infoStruct_t m_infoStruct;
-    std::string m_logFile;
-    std::vector<unsigned int> m_gpuList; /* list of GPU ids for this plugin */
-    CustomStatHolder m_customStatHolder; /* hold stats that aren't DCGM fields */
+    std::unordered_map<std::string, PluginTest> m_tests; /* May test name to its PluginTest object */
+
     /* Mutexes */
-    DcgmMutex m_dataMutex; /* Mutex for plugin data */
-    DcgmMutex m_mutex;     /* mutex for locking the plugin (for use by subclasses). */
+    mutable DcgmMutex m_dataMutex; /* Mutex for plugin data */
+    mutable DcgmMutex m_mutex;     /* mutex for locking the plugin (for use by subclasses). */
 
     long long DetermineMaxTemp(unsigned int gpuId,
                                double parameterValue,
@@ -378,4 +417,5 @@ typedef Plugin *maker_t();
 extern "C" {
 extern std::map<std::string, maker_t *, std::less<std::string>> factory;
 }
+
 #endif //_NVVS_NVVS_Plugin_H_

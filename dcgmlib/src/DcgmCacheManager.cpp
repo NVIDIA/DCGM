@@ -18,9 +18,12 @@
 #include "DcgmGpuInstance.h"
 #include "DcgmHostEngineHandler.h"
 #include "DcgmMutex.h"
+#include "DcgmProfiles.h"
 #include "DcgmTopology.hpp"
 #include "DcgmVgpu.hpp"
 #include "MurmurHash3.h"
+#include "dcgm_structs_internal.h"
+#include "nvml.h"
 #include <DcgmException.hpp>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
@@ -42,7 +45,6 @@
 #include <string>
 #include <sys/types.h>
 #include <unistd.h>
-
 
 #define DRIVER_VERSION_510 510
 
@@ -76,7 +78,7 @@ static int dcgmcm_pidSeenCmpCB(void *L, void *R)
     return 0;
 }
 
-static int dcgmcm_pidSeenMergeCB(void *current, void *inserting, void *user)
+static int dcgmcm_pidSeenMergeCB(void * /* current */, void * /* inserting */, void * /* user */)
 {
     log_error("Unexpected dcgmcm_pidSeenMergeCB");
     return KV_ST_DUPLICATE;
@@ -884,6 +886,7 @@ DcgmCacheManager::DcgmCacheManager()
     , m_driverIsR520OrNewer(false)
     , m_driverMajorVersion(0)
     , m_numGpus(0)
+    , m_numFakeGpus(0)
     , m_numInstances(0)
     , m_numComputeInstances(0)
     , m_gpus {}
@@ -1454,7 +1457,7 @@ dcgmReturn_t DcgmCacheManager::AttachGpus()
 std::vector<dcgm_topology_helper_t> DcgmCacheManager::GetTopologyHelper(bool includeLinkStatus)
 {
     std::vector<dcgm_topology_helper_t> gpuInfo;
-    dcgmNvLinkStatus_v3 linkStatus;
+    dcgmNvLinkStatus_v4 linkStatus;
 
     memset(&linkStatus, 0, sizeof(linkStatus));
 
@@ -1463,7 +1466,7 @@ std::vector<dcgm_topology_helper_t> DcgmCacheManager::GetTopologyHelper(bool inc
         PopulateNvLinkLinkStatus(linkStatus);
     }
 
-    for (int i = 0; i < m_numGpus; i++)
+    for (unsigned int i = 0; i < m_numGpus; ++i)
     {
         dcgm_topology_helper_t gpu = {};
 
@@ -1535,11 +1538,15 @@ dcgmReturn_t DcgmCacheManager::HelperGetLiveChipArch(nvmlDevice_t nvmlDevice, dc
             break;
 
         case 8:
-            arch = DCGM_CHIP_ARCH_AMPERE;
+            arch = (minorCC < 9) ? DCGM_CHIP_ARCH_AMPERE : DCGM_CHIP_ARCH_ADA;
             break;
 
         case 9:
             arch = DCGM_CHIP_ARCH_HOPPER;
+            break;
+
+        case 10:
+            arch = DCGM_CHIP_ARCH_BLACKWELL;
             break;
 
         case 4:
@@ -1587,6 +1594,7 @@ unsigned int DcgmCacheManager::AddFakeGpu(unsigned int pciDeviceId, unsigned int
     }
 
     m_numGpus++;
+    m_numFakeGpus++;
     dcgm_mutex_unlock(m_mutex);
 
     log_info("DcgmCacheManager::AddFakeGpu {}", gpuId);
@@ -1674,7 +1682,9 @@ bool DcgmCacheManager::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupI
         }
 
         case DCGM_FE_LINK:
-            dcgm_link_t link;
+        {
+            // DCGM-4140 the use of parsed and raw below is undefined behaviour
+            dcgm_link_t link {};
 
             link.parsed.gpuId = 0;
 
@@ -1716,7 +1726,7 @@ bool DcgmCacheManager::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupI
             }
 
             return true;
-
+        }
         case DCGM_FE_CPU:
             return true;
         case DCGM_FE_CPU_CORE:
@@ -1765,10 +1775,10 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeInstance(dcgm_field_eid_t parentId)
         return entityId;
     }
 
-    entityId                    = parentId * DCGM_MAX_INSTANCES_PER_GPU + m_gpus[parentId].instances.size();
+    entityId = parentId * DCGM_MAX_INSTANCES_PER_GPU + m_gpus[parentId].instances.size();
     log_info("DcgmCacheManager::AddFakeInstance {} {}", parentId, entityId);
-    unsigned int nvmlInstanceId = m_gpus[parentId].instances.size();
-    nvmlGpuInstance_t instance  = {};
+    unsigned int nvmlInstanceId              = m_gpus[parentId].instances.size();
+    nvmlGpuInstance_t instance               = {};
     nvmlGpuInstanceProfileInfo_t profileInfo = {};
     nvmlGpuInstancePlacement_t placement     = {};
     auto gpuInstanceId                       = DcgmNs::Mig::GpuInstanceId { entityId };
@@ -1797,18 +1807,38 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeComputeInstance(dcgm_field_eid_t paren
     }
 
     auto parentGpuInstanceId = DcgmNs::Mig::GpuInstanceId { parentId };
+
     // Find the instance that should be the parent here
     for (unsigned int gpuIndex = 0; gpuIndex < m_numGpus; gpuIndex++)
     {
+        bool found { false };
+
+        DCGM_LOG_DEBUG << "AddFakeComputeInstance GPU " << gpuIndex;
+
         for (auto &gpuInstance : m_gpus[gpuIndex].instances)
         {
-            // If parentId is set to DCGM_MAX_COMPUTE_INSTANCES_PER_GPU it means this should be added anywhere
-            if (parentId == DCGM_MAX_COMPUTE_INSTANCES_PER_GPU || gpuInstance.GetInstanceId() == parentGpuInstanceId)
+            DCGM_LOG_DEBUG << "AddFakeComputeInstance GPU Instance " << gpuInstance.GetInstanceId();
+            if (gpuInstance.GetInstanceId() == parentGpuInstanceId)
             {
+                DCGM_LOG_DEBUG << "AddFakeComputeInstance " << parentId << " " << parentGpuInstanceId << " "
+                               << DCGM_MAX_COMPUTE_INSTANCES_PER_GPU << " " << gpuInstance.GetInstanceId(); //RSH
                 if (m_gpus[gpuIndex].maxGpcs < 1)
                 {
                     DCGM_LOG_ERROR << "Unable to add compute instances to gpuId " << gpuIndex
                                    << " that does not have maxGpcs > 0. "
+                                   << "Use an injected GPU or a MIG-enabled GPU";
+                    return DCGM_ENTITY_ID_BAD;
+                }
+
+                /*
+                 * This isn't perfect: We should really compare to gpu instance
+                 * slice count, but we don't do that anywhere else, so we just
+                 * compare to GPU limits.
+                 */
+                if ((DCGM_MAX_COMPUTE_INSTANCES_PER_GPU - m_gpus[gpuIndex].ciCount) < 1)
+                {
+                    DCGM_LOG_ERROR << "Unable to add compute instances to gpuId " << gpuIndex << " that has "
+                                   << m_gpus[gpuIndex].ciCount << " compute instances. "
                                    << "Use an injected GPU or a MIG-enabled GPU";
                     return DCGM_ENTITY_ID_BAD;
                 }
@@ -1828,14 +1858,22 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeComputeInstance(dcgm_field_eid_t paren
                 m_migManager.RecordGpuComputeInstance(gpuIndex, gpuInstance.GetInstanceId(), ci.dcgmComputeInstanceId);
                 m_numComputeInstances++;
                 m_gpus[gpuIndex].ciCount++;
+                found = true;
                 break;
             }
+        }
+
+        if (found)
+        {
+            break;
         }
     }
 
     if (entityId == DCGM_ENTITY_ID_BAD)
     {
-        log_error("Could not find GPU instance {} on any of the GPUs. No compute instance added.", parentId);
+        log_error(
+            "Could not find GPU instance {} on any of the GPUs or room for a compute instance. No compute instance added.",
+            parentId);
     }
 
     return entityId;
@@ -2474,7 +2512,8 @@ dcgmReturn_t DcgmCacheManager::UpdateAllFields(int waitForUpdate)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::ManageDeviceEvents(unsigned int addWatchOnGpuId, unsigned short addWatchOnFieldId)
+dcgmReturn_t DcgmCacheManager::ManageDeviceEvents(unsigned int /* addWatchOnGpuId */,
+                                                  unsigned short /* addWatchOnFieldId */)
 {
     unsigned long long desiredEvents[DCGM_MAX_NUM_DEVICES] = { 0 };
     unsigned long long eventsMap                           = nvmlEventTypeXidCriticalError;
@@ -2748,7 +2787,7 @@ dcgmReturn_t DcgmCacheManager::NvmlPreWatch(unsigned int gpuId, unsigned short d
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::NvmlPostWatch(unsigned int gpuId, unsigned short dcgmFieldId)
+dcgmReturn_t DcgmCacheManager::NvmlPostWatch(unsigned int /* gpuId */, unsigned short dcgmFieldId)
 {
     if (m_nvmlLoaded == false)
     {
@@ -2847,7 +2886,7 @@ dcgmReturn_t DcgmCacheManager::UpdateFieldWatch(dcgmcm_watch_info_p watchInfo,
                                                 timelib64_t monitorIntervalUsec,
                                                 double maxAgeSec,
                                                 int maxKeepSamples,
-                                                DcgmWatcher watcher)
+                                                DcgmWatcher /* watcher */)
 {
     using DcgmNs::Timelib::FromLegacyTimestamp;
     using DcgmNs::Timelib::ToLegacyTimestamp;
@@ -3078,19 +3117,14 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
         FromLegacyTimestamp<milliseconds>(monitorIntervalUsec), seconds(std::uint64_t(maxSampleAge)), maxKeepSamples));
     newWatcher.isSubscribed = subscribeForUpdates ? 1 : 0;
 
-    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK))
     {
-        dcgmReturn_t retSt
-            = helperNvSwitchAddFieldWatch(entityGroupId, entityId, dcgmFieldId, monitorIntervalUsec, watcher);
+        dcgm_entity_key_t entityKey;
+        entityKey.entityGroupId   = entityGroupId;
+        entityKey.entityId        = entityId;
+        entityKey.fieldId         = dcgmFieldId;
+        bool entityKeySupportsGpm = EntityKeySupportsGpm(entityKey);
 
-        if (retSt != DCGM_ST_OK)
-        {
-            DCGM_LOG_ERROR << "Got status " << errorString(retSt) << "(" << retSt << ")"
-                           << " when trying to set watches";
-        }
-    }
-
-    { /* Scoped lock */
+        /* Scoped lock */
         DcgmLockGuard dlg(m_mutex);
 
         watchInfo = GetEntityWatchInfo(watchEntityGroupId, watchEntityId, dcgmFieldId, 1);
@@ -3121,11 +3155,7 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
         watchInfo->isWatched      = 1;
         watchInfo->pushedByModule = false;
 
-        dcgm_entity_key_t entityKey;
-        entityKey.entityGroupId = entityGroupId;
-        entityKey.entityId      = entityId;
-        entityKey.fieldId       = dcgmFieldId;
-        if (EntitySupportsGpm(entityKey))
+        if (entityKeySupportsGpm)
         {
             timelib64_t maxSampleAgeUsec = std::uint64_t(maxSampleAge) * 1000000;
             dcgmReturn
@@ -3151,6 +3181,21 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
 
     } /* End scoped lock */
 
+    /* The NVSwitch/NVLink watch needs to be added after the cache manager adds the watch on its side to avoid the
+       race condition, that is, if NVSwitch module knows about the watch first, it might call CacheManager before
+       the watch has been added on the CacheManager side. */
+    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK))
+    {
+        dcgmReturn_t retSt
+            = helperNvSwitchAddFieldWatch(entityGroupId, entityId, dcgmFieldId, monitorIntervalUsec, watcher);
+
+        if (retSt != DCGM_ST_OK)
+        {
+            DCGM_LOG_ERROR << "Got status " << errorString(retSt) << "(" << retSt << ")"
+                           << " when trying to set watches";
+        }
+    }
+
     /* If our field has never been queried. Force an update to get the cache to start updating. Otherwise,
        this field may not update until the cache manager thread times out in 10 seconds */
     if (wereFirstWatcher && updateOnFirstWatch)
@@ -3166,20 +3211,15 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
 }
 
 /*****************************************************************************/
-bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
+bool DcgmCacheManager::EntityPairSupportsGpm(dcgmGroupEntityPair_t const &entityPair)
 {
-    if (!DCGM_FIELD_ID_IS_PROF_FIELD(entityKey.fieldId))
-    {
-        return false;
-    }
-
     if (!m_nvmlLoaded)
     {
         log_debug("GPM cannot be used: NVML is not loaded");
         return false;
     }
 
-    switch (entityKey.entityGroupId)
+    switch (entityPair.entityGroupId)
     {
         case DCGM_FE_GPU:
         case DCGM_FE_GPU_I:
@@ -3190,12 +3230,12 @@ bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
     }
 
     unsigned int gpuId = m_numGpus; // Initialize to an invalid value for check below
-    dcgmReturn_t ret   = GetGpuId(entityKey.entityGroupId, entityKey.entityId, gpuId);
+    dcgmReturn_t ret   = GetGpuId(entityPair.entityGroupId, entityPair.entityId, gpuId);
 
     if (ret != DCGM_ST_OK || gpuId >= m_numGpus)
     {
         log_error(
-            "Could not query eg {} eid {} gpu {}. ret {}", entityKey.entityGroupId, entityKey.entityId, gpuId, ret);
+            "Could not query eg {} eid {} gpu {}. ret {}", entityPair.entityGroupId, entityPair.entityId, gpuId, ret);
         return false;
     }
 
@@ -3204,12 +3244,19 @@ bool DcgmCacheManager::EntitySupportsGpm(const dcgm_entity_key_t &entityKey)
         return true;
     }
 
-    if (m_gpus[gpuId].arch != DCGM_CHIP_ARCH_HOPPER)
+    nvmlDevice_t nvmlDevice = m_gpus[gpuId].nvmlDevice;
+    return m_gpmManager.DoesNvmlDeviceSupportGpm(nvmlDevice);
+}
+/*****************************************************************************/
+bool DcgmCacheManager::EntityKeySupportsGpm(const dcgm_entity_key_t &entityKey)
+{
+    if (!DCGM_FIELD_ID_IS_PROF_FIELD(entityKey.fieldId))
     {
         return false;
     }
-
-    return true;
+    return EntityPairSupportsGpm(
+        dcgmGroupEntityPair_t { .entityGroupId = static_cast<dcgm_field_entity_group_t>(entityKey.entityGroupId),
+                                .entityId      = entityKey.entityId });
 }
 
 /*****************************************************************************/
@@ -3241,6 +3288,12 @@ dcgmReturn_t DcgmCacheManager::RemoveEntityFieldWatch(dcgm_field_entity_group_t 
         }
     }
 
+    dcgm_entity_key_t entityKey;
+    entityKey.entityGroupId   = entityGroupId;
+    entityKey.entityId        = entityId;
+    entityKey.fieldId         = dcgmFieldId;
+    bool entityKeySupportsGpm = EntityKeySupportsGpm(entityKey);
+
     DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
     watchInfo = GetEntityWatchInfo(entityGroupId, entityId, dcgmFieldId, 0);
@@ -3253,11 +3306,7 @@ dcgmReturn_t DcgmCacheManager::RemoveEntityFieldWatch(dcgm_field_entity_group_t 
 
     RemoveWatcher(watchInfo, &remWatcher);
 
-    dcgm_entity_key_t entityKey;
-    entityKey.entityGroupId = entityGroupId;
-    entityKey.entityId      = entityId;
-    entityKey.fieldId       = dcgmFieldId;
-    if (EntitySupportsGpm(entityKey))
+    if (entityKeySupportsGpm)
     {
         retSt = m_gpmManager.RemoveWatcher(entityKey, watcher);
         if (retSt != DCGM_ST_OK)
@@ -3809,12 +3858,6 @@ dcgmReturn_t DcgmCacheManager::GetUniquePidUtilLists(dcgm_field_entity_group_t e
 
     for (; entry; entry = (timeseries_entry_p)keyedvector_next(timeseries->keyedVector, &cursor))
     {
-        if (!entry)
-        {
-            log_error("Skipping invalid entry");
-            continue;
-        }
-
         /* Past our time range? */
         if (endTime && entry->usecSince1970 > endTime)
             break;
@@ -4886,6 +4929,54 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
             break;
         }
 
+        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+        {
+            bool isBlank = true; // User didn't specify any requested profile
+            bool isEmpty = true; // User specified requested profiles should be blank
+
+            nvmlWorkloadPowerProfileRequestedProfiles_t nvmlProfile = {};
+
+            nvmlProfile.version = nvmlWorkloadPowerProfileRequestedProfiles_v1;
+            memcpy(nvmlProfile.requestedProfilesMask.mask,
+                   value->val.blob,
+                   sizeof(nvmlProfile.requestedProfilesMask.mask));
+
+            for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+            {
+                if (!DCGM_INT32_IS_BLANK(nvmlProfile.requestedProfilesMask.mask[i]))
+                {
+                    isBlank = false;
+                }
+
+                if (nvmlProfile.requestedProfilesMask.mask[i] != 0)
+                {
+                    isEmpty = false;
+                }
+            }
+
+            if (isBlank == true)
+            {
+                /* nothing specified, do nothing */
+                break;
+            }
+            else if (isEmpty == true)
+            {
+                memset(nvmlProfile.requestedProfilesMask.mask, 0xff, sizeof(nvmlProfile.requestedProfilesMask.mask));
+                nvmlReturn = nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice, &nvmlProfile);
+            }
+            else
+            {
+                nvmlReturn = nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice, &nvmlProfile);
+            }
+
+            if (NVML_SUCCESS != nvmlReturn)
+            {
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            break;
+        }
+
         default:
             log_warning("Unimplemented fieldId: {}", (int)fieldMeta->fieldId);
             return DCGM_ST_GENERIC_ERROR;
@@ -5312,11 +5403,33 @@ void DcgmCacheManager::MarkReturnedFromDriver()
 /*****************************************************************************/
 bool DcgmCacheManager::IsModulePushedFieldId(unsigned int fieldId)
 {
-    /* NvLink and Profiling fields are the fields >= 700 */
-    if (fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID)
-        return true;
-    else
+    if (fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID)
+    {
         return false;
+    }
+
+    switch (fieldId)
+    {
+        case DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS:
+        case DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
+        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS:
+        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS:
+        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS:
+        case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
+            return false;
+        default:
+            return true;
+    }
 }
 
 /*****************************************************************************/
@@ -5388,14 +5501,18 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateAllFields(dcgmcm_update_thread_t *t
 
         if (watchInfo->practicalEntityGroupId == DCGM_FE_GPU)
         {
-            /* Don't cache GPU fields if the GPU is not available */
+            /*
+             * Don't cache GPU fields if the GPU is not available. Lost GPUs have blank
+             * field values inserted later.
+             */
             DcgmEntityStatus_t gpuStatus = GetGpuStatus(watchInfo->practicalEntityId);
-            if (gpuStatus != DcgmEntityStatusOk)
+            if (gpuStatus != DcgmEntityStatusOk && gpuStatus != DcgmEntityStatusLost)
             {
                 log_debug("Skipping gpuId {} in status {}", watchInfo->practicalEntityId, gpuStatus);
                 continue;
             }
         }
+
         /* Base when we sync again on before the driver call so we don't continuously
          * get behind by how long the driver call took
          */
@@ -5791,7 +5908,8 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
     }
 
     // Do not attempt to poll NVML for values of detached GPUs
-    if (m_gpus[gpuId].status != DcgmEntityStatusDetached && m_gpus[gpuId].status != DcgmEntityStatusFake)
+    if (m_gpus[gpuId].status != DcgmEntityStatusDetached && m_gpus[gpuId].status != DcgmEntityStatusFake
+        && m_gpus[gpuId].status != DcgmEntityStatusLost)
     {
         /* The fieldId field of fieldValueValues[] was already populated above. Make the NVML call */
         nvmlReturn = nvmlDeviceGetFieldValues(m_gpus[gpuId].nvmlDevice, numFields, &values[0]);
@@ -5816,7 +5934,8 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
         threadCtx->entityKey.fieldId = fieldMeta[i]->fieldId;
         threadCtx->watchInfo         = watchInfo[i];
 
-        if (m_gpus[gpuId].status == DcgmEntityStatusDetached || m_gpus[gpuId].status == DcgmEntityStatusFake)
+        if (m_gpus[gpuId].status == DcgmEntityStatusDetached || m_gpus[gpuId].status == DcgmEntityStatusFake
+            || m_gpus[gpuId].status == DcgmEntityStatusLost)
         {
             // Detached GPUs get an intentional NVML error and we're done
             // Treating Fake GPUs as lost GPUs too since NVML has no idea about them
@@ -6346,7 +6465,7 @@ dcgmReturn_t DcgmCacheManager::AllocWatchInfoTimeSeries(dcgmcm_watch_info_p watc
 
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::EnforceWatchInfoQuota(dcgmcm_watch_info_p watchInfo,
-                                                     timelib64_t timestamp,
+                                                     timelib64_t /* timestamp */,
                                                      timelib64_t oldestKeepTimestamp)
 {
     if (!watchInfo || !watchInfo->timeSeries)
@@ -6654,28 +6773,11 @@ void DcgmCacheManager::GetProfModuleServicedEntities(std::vector<dcgmGroupEntity
     }
 
     auto endIt = std::remove_if(entities.begin(), entities.end(), [this](dcgmGroupEntityPair_t const &ePair) {
-        auto gpuIdOpt = GetGpuIdForEntity(ePair.entityGroupId, ePair.entityId);
-        if (!gpuIdOpt.has_value())
-        {
-            return false; /* Don't mess with unknown values */
-        }
-
-        if (*gpuIdOpt >= m_numGpus)
-        {
-            DCGM_LOG_ERROR << "Removing bad gpuId " << *gpuIdOpt;
-            return true; /* Don't pass along garbage gpuIds */
-        }
-
-        if (m_gpus[*gpuIdOpt].arch == DCGM_CHIP_ARCH_HOPPER)
-        {
-            DCGM_LOG_DEBUG << "Filtering eg " << ePair.entityGroupId << ", eid " << ePair.entityId << ", gpuId "
-                           << *gpuIdOpt << " with GPU chip Hopper.";
-            return true;
-        }
-
-        return false;
+        return EntityPairSupportsGpm(ePair);
     });
+
     entities.erase(endIt, entities.end());
+    log_debug("Number of entities serviced by Profiling: {}", entities.size());
 }
 
 /*****************************************************************************/
@@ -6814,6 +6916,96 @@ std::unordered_set<uint32_t> ReadEnvForFatalXids()
 }
 
 /*****************************************************************************/
+void DcgmCacheManager::UpdateLostGpus()
+{
+    nvmlReturn_t nvmlReturn;
+    unsigned int nvmlDeviceCount = 0;
+
+    nvmlReturn = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        log_error("No update to GPU status. nvmlDeviceGetCount_v2 returned {}", (int)nvmlReturn);
+        return;
+    }
+
+    {
+        DcgmLockGuard dlg(m_mutex);
+        auto cachedDeviceCount = m_numGpus - m_numFakeGpus;
+        if (cachedDeviceCount == nvmlDeviceCount && m_lostGpus.size() == 0)
+        {
+            // Nothing to update given NVML detects the cached number of GPUs,
+            // and we do not need to check the status of any lost GPUs.
+            return;
+        }
+    }
+
+    // Get list of GPU UUIDs currently reported by NVML
+    struct nvml_updates_t
+    {
+        nvmlDevice_t nvmlDevice;
+        unsigned int nvmlIndex;
+    };
+    std::unordered_map<std::string, nvml_updates_t> detectedGpus;
+    log_debug("Device count returned by NVML is {}", nvmlDeviceCount);
+    for (unsigned int nvmlIndex = 0; nvmlIndex < nvmlDeviceCount; nvmlIndex++)
+    {
+        nvmlDevice_t nvmlDevice {};
+        char uuid[128];
+        nvmlReturn = nvmlDeviceGetHandleByIndex_v2(nvmlIndex, &nvmlDevice);
+
+        if (nvmlReturn != NVML_SUCCESS)
+        {
+            log_debug(
+                "Got nvml error {} from nvmlDeviceGetHandleByIndex_v2 of nvmlIndex {}", (int)nvmlReturn, nvmlIndex);
+            continue;
+        }
+
+        nvmlReturn = nvmlDeviceGetUUID(nvmlDevice, uuid, sizeof(uuid));
+        if (nvmlReturn != NVML_SUCCESS)
+        {
+            log_debug("Got nvml error {} from nvmlDeviceGetUUID of nvmlIndex {}", (int)nvmlReturn, nvmlIndex);
+            continue;
+        }
+        log_debug("UUID of detected GPU {} is : {}", nvmlIndex, uuid);
+        detectedGpus[uuid] = { nvmlDevice, nvmlIndex };
+    }
+
+    {
+        DcgmLockGuard dlg(m_mutex);
+        // Update status of GPUs missing from detectedGpus to DcgmEntityStatusLost (if
+        // not already tracked), and restore status of lost GPUs to DcgmEntityStatusOk.
+        // There is a possibility for a GPU to be injected after detectedGpus is
+        // populated. In this case, the status of that GPU will be momentarily set to
+        // DcgmEntityStatusLost, and the next update will reset it to DcgmEntityStatusOk.
+        for (unsigned int i = 0; i < m_numGpus; i++)
+        {
+            if (!detectedGpus.contains(m_gpus[i].uuid))
+            {
+                if (m_gpus[i].status == DcgmEntityStatusOk && !m_lostGpus.contains(m_gpus[i].uuid))
+                {
+                    m_gpus[i].status = DcgmEntityStatusLost;
+                    log_warning("GPU {} is lost. Updating status of GPU to: {}", m_gpus[i].gpuId, m_gpus[i].status);
+                    m_lostGpus.insert(m_gpus[i].uuid);
+                }
+            }
+            else
+            {
+                if (m_gpus[i].status == DcgmEntityStatusLost)
+                {
+                    m_gpus[i].status     = DcgmEntityStatusOk;
+                    m_gpus[i].nvmlIndex  = detectedGpus[m_gpus[i].uuid].nvmlIndex;
+                    m_gpus[i].nvmlDevice = detectedGpus[m_gpus[i].uuid].nvmlDevice;
+                    log_warning("A lost GPU {} has been redetected. Updating status of GPU to: {}",
+                                m_gpus[i].gpuId,
+                                m_gpus[i].status);
+                    m_lostGpus.erase(m_gpus[i].uuid);
+                }
+            }
+        }
+    }
+}
+
+/*****************************************************************************/
 void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
 {
     nvmlReturn_t nvmlReturn;
@@ -6886,6 +7078,10 @@ void DcgmCacheManager::EventThreadMain(DcgmCacheManagerEventThread *eventThread)
         if (!m_skipDriverCalls)
         {
             MarkEnteredDriver();
+
+            // Verify that all the GPUs being tracked by the CM are still detected by NVML.
+            // Update status of GPUs that may have fallen off the bus.
+            UpdateLostGpus();
 
             if (!m_nvmlEventSetInitialized)
             {
@@ -7041,6 +7237,45 @@ dcgmReturn_t DcgmCacheManager::CacheTopologyNvLink(dcgmcm_update_thread_t *threa
     return ret;
 }
 
+dcgmReturn_t DcgmCacheManager::GetFMStatusFromStruct(nvmlGpuFabricInfoV_t const &gpuFabricInfo,
+                                                     dcgmFabricManagerStatus_t &status,
+                                                     uint64_t &fmError)
+{
+    // Only set an fmError if the state is completed and an error was found
+    fmError = DCGM_INT64_BLANK;
+
+    switch (gpuFabricInfo.state)
+    {
+        case NVML_GPU_FABRIC_STATE_NOT_SUPPORTED:
+            status = DcgmFMStatusNotSupported;
+            break;
+        case NVML_GPU_FABRIC_STATE_NOT_STARTED:
+            status = DcgmFMStatusNotStarted;
+            break;
+        case NVML_GPU_FABRIC_STATE_IN_PROGRESS:
+            status = DcgmFMStatusInProgress;
+            break;
+        case NVML_GPU_FABRIC_STATE_COMPLETED:
+            if (gpuFabricInfo.status == NVML_SUCCESS)
+            {
+                status  = DcgmFMStatusSuccess;
+                fmError = DCGM_ST_OK;
+            }
+            else
+            {
+                status  = DcgmFMStatusFailure;
+                fmError = DcgmNs::Utils::NvmlReturnToDcgmReturn(gpuFabricInfo.status);
+            }
+            break;
+        default:
+            log_error("Unrecognized fabric manager state returned from NVML: {}", gpuFabricInfo.state);
+            status = DcgmFMStatusUnrecognized;
+            return DCGM_ST_BADPARAM;
+    }
+
+    return DCGM_ST_OK;
+}
+
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::GetGpuId(unsigned int entityGroupId, unsigned int entityId, unsigned int &gpuId)
 {
@@ -7163,9 +7398,111 @@ void DcgmCacheManager::GenerateCudaVisibleDevicesValue(unsigned int gpuId,
     }
 }
 
+dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread_t *threadCtx,
+                                                            nvmlDevice_t nvmlDevice,
+                                                            dcgm_field_meta_p fieldMeta,
+                                                            timelib64_t now,
+                                                            timelib64_t expireTime)
+{
+    nvmlGpuFabricInfoV_t gpuFabricInfo {};
+    gpuFabricInfo.version   = nvmlGpuFabricInfo_v2;
+    nvmlReturn_t nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                      : nvmlDeviceGetGpuFabricInfoV(nvmlDevice, &gpuFabricInfo);
+
+    if (threadCtx->watchInfo)
+    {
+        threadCtx->watchInfo->lastStatus = nvmlReturn;
+    }
+
+    if (nvmlReturn == NVML_SUCCESS)
+    {
+        if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_CLUSTER_UUID)
+        {
+            std::string uuid = fmt::format("{:02x}{:02x}{:02x}{:02x}-"
+                                           "{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-"
+                                           "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                                           gpuFabricInfo.clusterUuid[0],
+                                           gpuFabricInfo.clusterUuid[1],
+                                           gpuFabricInfo.clusterUuid[2],
+                                           gpuFabricInfo.clusterUuid[3],
+                                           gpuFabricInfo.clusterUuid[4],
+                                           gpuFabricInfo.clusterUuid[5],
+                                           gpuFabricInfo.clusterUuid[6],
+                                           gpuFabricInfo.clusterUuid[7],
+                                           gpuFabricInfo.clusterUuid[8],
+                                           gpuFabricInfo.clusterUuid[9],
+                                           gpuFabricInfo.clusterUuid[10],
+                                           gpuFabricInfo.clusterUuid[11],
+                                           gpuFabricInfo.clusterUuid[12],
+                                           gpuFabricInfo.clusterUuid[13],
+                                           gpuFabricInfo.clusterUuid[14],
+                                           gpuFabricInfo.clusterUuid[15]);
+            AppendEntityString(threadCtx, uuid.c_str(), now, expireTime);
+        }
+        else if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_CLIQUE_ID)
+        {
+            AppendEntityInt64(threadCtx, gpuFabricInfo.cliqueId, 0, now, expireTime);
+        }
+        else
+        {
+            dcgmFabricManagerStatus_t status;
+            uint64_t fmError;
+
+            // Either FM status or failure code
+            dcgmReturn_t ret = GetFMStatusFromStruct(gpuFabricInfo, status, fmError);
+
+            if (ret == DCGM_ST_OK)
+            {
+                if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_MANAGER_STATUS)
+                {
+                    AppendEntityInt64(threadCtx, (long long)status, 0, now, expireTime);
+                }
+                else
+                {
+                    AppendEntityInt64(threadCtx, (long long)fmError, 0, now, expireTime);
+                }
+            }
+            else
+            {
+                AppendEntityInt64(threadCtx, ret, 0, now, expireTime);
+                log_error("Couldn't read the fabric manager status from NVML: {}", errorString(ret));
+                return ret;
+            }
+        }
+    }
+    else if (nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)
+    {
+        log_debug("This version of NVML doesn't support querying the fabric manager status.");
+        if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_CLUSTER_UUID)
+        {
+            AppendEntityString(threadCtx, DCGM_STR_BLANK, now, expireTime);
+        }
+        else
+        {
+            if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_MANAGER_STATUS)
+            {
+                AppendEntityInt64(threadCtx, DcgmFMStatusNvmlTooOld, 0, now, expireTime);
+            }
+            else
+            {
+                AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+            }
+        }
+    }
+    else
+    {
+        log_debug("Couldn't read field {}; received NVML error {}", fieldMeta->tag, nvmlReturn);
+        InsertNvmlErrorValue(threadCtx, fieldMeta->fieldType, nvmlReturn, expireTime);
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+    }
+
+    return DCGM_ST_OK;
+}
+
+
 /*****************************************************************************/
 /* vGPU Index key space for gpuId */
-#define DCGMCM_START_VGPU_IDX_FOR_GPU(gpuId) ((gpuId)*DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
+#define DCGMCM_START_VGPU_IDX_FOR_GPU(gpuId) ((gpuId) * DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
 #define DCGMCM_END_VGPU_IDX_FOR_GPU(gpuId)   (((gpuId) + 1) * DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
 
 /*****************************************************************************/
@@ -7236,6 +7573,17 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         {
             LOG_VERBOSE << "Cannot retrieve GPU value for invalid GPU index: " << gpuId;
             return DCGM_ST_GENERIC_ERROR;
+        }
+
+        if (entityGroupId == DCGM_FE_GPU && (m_gpus[gpuId].status == DcgmEntityStatusLost))
+        {
+            InsertNvmlErrorValue(threadCtx,
+                                 fieldMeta->fieldType,
+                                 NVML_ERROR_GPU_IS_LOST,
+                                 threadCtx->watchInfo != nullptr ? threadCtx->watchInfo->maxAgeUsec : 0);
+            DCGM_LOG_WARNING << "Wrote blank value for fieldId " << fieldMeta->fieldId << ", gpuId " << gpuId
+                             << ", status " << m_gpus[gpuId].status;
+            return DCGM_ST_OK;
         }
 
         nvmlDevice = m_gpus[gpuId].nvmlDevice;
@@ -7870,7 +8218,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            for (int i = 0; i < licFeat.licensableFeaturesCount; i++)
+            for (unsigned int i = 0; i < licFeat.licensableFeaturesCount; ++i)
             {
                 if (licFeat.gridLicensableFeatures[i].featureCode == NVML_GRID_LICENSE_FEATURE_CODE_VGPU)
                 {
@@ -8408,12 +8756,14 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_CLOCK_THROTTLE_REASONS:
+        // case DCGM_FI_DEV_CLOCK_THROTTLE_REASONS: - deprecated
+        case DCGM_FI_DEV_CLOCKS_EVENT_REASONS:
         {
-            unsigned long long clockThrottleReasons = 0;
-            nvmlReturn                              = (nvmlDevice == nullptr)
-                                                          ? NVML_ERROR_INVALID_ARGUMENT
-                                                          : nvmlDeviceGetCurrentClocksThrottleReasons(nvmlDevice, &clockThrottleReasons);
+            unsigned long long clocksEventReasons = 0;
+
+            nvmlReturn = (nvmlDevice == nullptr)
+                             ? NVML_ERROR_INVALID_ARGUMENT
+                             : nvmlDeviceGetCurrentClocksEventReasons(nvmlDevice, &clocksEventReasons);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (nvmlReturn != NVML_SUCCESS)
@@ -8422,7 +8772,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            AppendEntityInt64(threadCtx, clockThrottleReasons, 0, now, expireTime);
+            AppendEntityInt64(threadCtx, clocksEventReasons, 0, now, expireTime);
             break;
         }
 
@@ -9170,7 +9520,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             nvmlReturn = (nvmlDevice == nullptr)
                              ? NVML_ERROR_INVALID_ARGUMENT
                              : nvmlDeviceGetVgpuUtilization(
-                                 nvmlDevice, lastSeenTimeStamp, &sampleValType, &vgpuSamplesCount, NULL);
+                                   nvmlDevice, lastSeenTimeStamp, &sampleValType, &vgpuSamplesCount, NULL);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
 
@@ -9234,7 +9584,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
                                                  : nvmlDeviceGetVgpuProcessUtilization(
-                                                     nvmlDevice, lastSeenTimeStamp, &vgpuProcessSamplesCount, NULL);
+                                                       nvmlDevice, lastSeenTimeStamp, &vgpuProcessSamplesCount, NULL);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
 
@@ -9300,9 +9650,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             {
                 vgpuProcessUtilInfo[i + 1].vgpuProcessUtilInfo.vgpuId = vgpuProcessUtilization[i].vgpuInstance;
                 vgpuProcessUtilInfo[i + 1].pid                        = vgpuProcessUtilization[i].pid;
-                dcgmStrncpy(vgpuProcessUtilInfo[i + 1].processName,
-                            vgpuProcessUtilization[i].processName,
-                            DCGM_VGPU_NAME_BUFFER_SIZE);
+                SafeCopyTo(vgpuProcessUtilInfo[i + 1].processName, vgpuProcessUtilization[i].processName);
                 vgpuProcessUtilInfo[i + 1].smUtil  = vgpuProcessUtilization[i].smUtil;
                 vgpuProcessUtilInfo[i + 1].memUtil = vgpuProcessUtilization[i].memUtil;
                 vgpuProcessUtilInfo[i + 1].encUtil = vgpuProcessUtilization[i].encUtil;
@@ -9323,11 +9671,11 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         {
             dcgmDeviceEncStats_t devEncStats;
 
-            nvmlReturn
-                = (nvmlDevice == nullptr)
-                      ? NVML_ERROR_INVALID_ARGUMENT
-                      : nvmlDeviceGetEncoderStats(
-                          nvmlDevice, &devEncStats.sessionCount, &devEncStats.averageFps, &devEncStats.averageLatency);
+            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                 : nvmlDeviceGetEncoderStats(nvmlDevice,
+                                                                             &devEncStats.sessionCount,
+                                                                             &devEncStats.averageFps,
+                                                                             &devEncStats.averageLatency);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (NVML_SUCCESS != nvmlReturn)
@@ -9579,6 +9927,14 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_CC_MODE:
         {
             AppendEntityInt64(threadCtx, m_gpus[gpuId].ccMode, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_GPM_SUPPORT:
+        {
+            bool gpmSupport = false;
+            gpmSupport      = m_gpmManager.DoesNvmlDeviceSupportGpm(nvmlDevice);
+            AppendEntityInt64(threadCtx, gpmSupport, 0, now, expireTime);
             break;
         }
 
@@ -9882,6 +10238,19 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             powerLimitDbl = powerLimitInt / 1000;
             AppendEntityDouble(threadCtx, powerLimitDbl, 0, now, expireTime);
 
+            break;
+        }
+        case DCGM_FI_DEV_FABRIC_MANAGER_STATUS:
+        case DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE:
+        case DCGM_FI_DEV_FABRIC_CLUSTER_UUID:
+            [[fallthrough]];
+        case DCGM_FI_DEV_FABRIC_CLIQUE_ID:
+        {
+            ret = ReadFabricManagerStatusField(threadCtx, nvmlDevice, fieldMeta, now, expireTime);
+            if (ret != DCGM_ST_OK)
+            {
+                return ret;
+            }
             break;
         }
 
@@ -10202,6 +10571,47 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_XID_ERRORS:
         case DCGM_FI_DEV_GPU_NVLINK_ERRORS:
             break; /* These are handled by the NVML event thread (m_eventThread) */
+
+        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+        case DCGM_FI_DEV_VALID_POWER_PROFILE_MASK:
+        case DCGM_FI_DEV_ENFORCED_POWER_PROFILE_MASK:
+        {
+            nvmlWorkloadPowerProfileCurrentProfiles_t profiles = {};
+            unsigned int mask[DCGM_POWER_PROFILE_ARRAY_SIZE]   = {};
+
+            profiles.version = nvmlWorkloadPowerProfileCurrentProfiles_v1;
+
+            nvmlReturn = (nvmlDevice == nullptr)
+                             ? NVML_ERROR_INVALID_ARGUMENT
+                             : nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice, &profiles);
+
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+                {
+                    mask[i] = DCGM_INT32_BLANK;
+                }
+                AppendEntityBlob(threadCtx, &mask, sizeof(mask), now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            if (fieldMeta->fieldId == DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK)
+            {
+                memcpy(&mask, profiles.requestedProfilesMask.mask, sizeof(mask));
+            }
+            else if (fieldMeta->fieldId == DCGM_FI_DEV_ENFORCED_POWER_PROFILE_MASK)
+            {
+                memcpy(&mask, profiles.enforcedProfilesMask.mask, sizeof(mask));
+            }
+            else
+            {
+                memcpy(&mask, profiles.perfProfilesMask.mask, sizeof(mask));
+            }
+
+            AppendEntityBlob(threadCtx, &mask, sizeof(mask), now, expireTime);
+
+            break;
+        }
 
         case DCGM_FI_GPU_TOPOLOGY_AFFINITY:
         {
@@ -10824,6 +11234,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_PROF_NVJPG6_ACTIVE:
         case DCGM_FI_PROF_NVJPG7_ACTIVE:
         case DCGM_FI_PROF_NVOFA0_ACTIVE:
+        case DCGM_FI_PROF_NVOFA1_ACTIVE:
         case DCGM_FI_PROF_NVLINK_L0_TX_BYTES:
         case DCGM_FI_PROF_NVLINK_L0_RX_BYTES:
         case DCGM_FI_PROF_NVLINK_L1_TX_BYTES:
@@ -10861,6 +11272,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_PROF_NVLINK_L17_TX_BYTES:
         case DCGM_FI_PROF_NVLINK_L17_RX_BYTES:
         {
+            bool entityKeySupportsGpm = EntityKeySupportsGpm(watchInfo->watchKey);
+
             DcgmLockGuard dlg(m_mutex);
 
             /* Need to add new prof fields to this case */
@@ -10875,7 +11288,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             watchInfo->lastQueriedUsec = now;
 
-            if (!EntitySupportsGpm(watchInfo->watchKey))
+            if (!entityKeySupportsGpm)
             {
                 /* Assume that DCP is updating this field. */
                 break;
@@ -11249,7 +11662,16 @@ void DcgmCacheManager::ReadAndCacheNvLinkData(dcgmcm_update_thread_t *threadCtx,
     nvmlReturn_t nvmlReturn = nvmlDeviceGetNvLinkErrorCounter(nvmlDevice, scopeId, fieldId, &value);
     if (nvmlReturn != NVML_SUCCESS)
     {
-        DCGM_LOG_ERROR << "Got nvmlSt " << (int)nvmlReturn << " from nvmlDeviceGetNvLinkErrorCounter";
+        if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED)
+        {
+            log_debug("Got NVML_ERROR_NOT_SUPPORTED from nvmlDeviceGetNvLinkErrorCounter for field [{}] and scope [{}]",
+                      fieldId,
+                      scopeId);
+        }
+        else
+        {
+            DCGM_LOG_ERROR << "Got nvmlSt " << (int)nvmlReturn << " from nvmlDeviceGetNvLinkErrorCounter";
+        }
         if (watchInfo)
         {
             watchInfo->lastStatus = nvmlReturn;
@@ -11554,6 +11976,44 @@ dcgmReturn_t DcgmCacheManager::AppendDeviceSupportedClocks(dcgmcm_update_thread_
         = (sizeof(supClocks) - sizeof(supClocks.clockSet)) + (supClocks.count * sizeof(supClocks.clockSet[0]));
 
     AppendEntityBlob(threadCtx, &supClocks, payloadSize, timestamp, oldestKeepTimestamp);
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::GetWorkloadPowerProfilesInfo(unsigned int gpuId,
+                                                            dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                                                            dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus)
+{
+    dcgmcm_gpu_info_p gpu;
+
+    if (gpuId >= m_numGpus)
+        return DCGM_ST_BADPARAM;
+
+    gpu = &m_gpus[gpuId];
+
+    if (gpu->status == DcgmEntityStatusFake)
+    {
+        log_debug("Skipping GetWorkloadPowerProfilesInfo for fake gpuId {}", gpuId);
+        return DCGM_ST_OK;
+    }
+
+    dcgm_power_profile_helper_t gpuInfo;
+
+    gpuInfo.gpuId      = gpuId;
+    gpuInfo.nvmlDevice = gpu->nvmlDevice;
+
+    dcgmReturn_t dcgmReturn = DcgmGetWorkloadPowerProfilesInfo(&gpuInfo, profilesInfo);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn;
+    }
+
+    dcgmReturn = DcgmGetWorkloadPowerProfilesStatus(&gpuInfo, profilesStatus);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn;
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -12185,11 +12645,11 @@ dcgmReturn_t DcgmCacheManager::SelectGpusByTopology(std::vector<unsigned int> &g
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v3 &nvLinkStatus)
+dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvLinkStatus)
 {
     int j;
 
-    nvLinkStatus.version = dcgmNvLinkStatus_version3;
+    nvLinkStatus.version = dcgmNvLinkStatus_version4;
 
     for (unsigned int i = 0; i < m_numGpus; i++)
     {
@@ -12801,6 +13261,16 @@ dcgmReturn_t DcgmCacheManager::GetNvmlInjectFuncCallCount(injectNvmlFuncCallCoun
     return m_nvmlInjectionManager.GetFuncCallCount(funcCallCounts);
 }
 
+dcgmReturn_t DcgmCacheManager::RemoveNvmlInjectedGpu(char const *uuid)
+{
+    return m_nvmlInjectionManager.RemoveGpu(uuid);
+}
+
+dcgmReturn_t DcgmCacheManager::RestoreNvmlInjectedGpu(char const *uuid)
+{
+    return m_nvmlInjectionManager.RestoreGpu(uuid);
+}
+
 dcgmReturn_t DcgmCacheManager::ResetNvmlInjectFuncCallCount()
 {
     return m_nvmlInjectionManager.ResetFuncCallCount();
@@ -12832,7 +13302,7 @@ dcgmReturn_t DcgmCacheManager::InjectNvmlFieldValue(dcgm_field_eid_t gpuId,
 /*****************************************************************************/
 /*****************************************************************************/
 DcgmCacheManagerEventThread::DcgmCacheManagerEventThread(DcgmCacheManager *cacheManager)
-    : DcgmThread(false, "cache_mgr_event")
+    : DcgmThread("cache_mgr_event")
 {
     m_cacheManager = cacheManager;
 }

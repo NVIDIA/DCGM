@@ -62,8 +62,8 @@ private:
     static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
     static unsigned int CheckGroupIdArgument(const std::string &groupId);
 
-    // Helper to validate the throttle mask parameter
-    static void ValidateThrottleMask(const std::string &throttleMask);
+    // Helper to validate the clocks event mask parameter
+    static void ValidateClocksEventMask(const std::string &clocksEventMask);
 
     static std::string ConcatenateParameters(std::vector<std::string> const &parameters);
 

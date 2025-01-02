@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <DcgmVariantHelper.hpp>
 #include <Query.h>
@@ -73,7 +73,7 @@ TEST_CASE("HelperGetCpuRangesFromBitmask")
               {} }
           };
 
-    for (int i = 0; i < (sizeof(testRanges) / sizeof(CpuRangeCase)); i++)
+    for (unsigned long i = 0; i < (sizeof(testRanges) / sizeof(CpuRangeCase)); i++)
     {
         CpuRangeCase tc = testRanges[i];
         auto ranges     = HelperGetCpuRangesFromBitmask(tc.bitmask, tc.bitmaskNumBits);

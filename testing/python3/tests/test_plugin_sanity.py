@@ -52,10 +52,10 @@ import logger
 import option_parser
 import test_utils
 
+from test_globals import DEV_MODE_MSG
 
 ### Constants
 OUTPUT_DIR = "./test_plugin_sanity_out"
-DEV_MODE_MSG = "Manual test for verifying plugin output. Use developer mode to enable."
 
 ### Helpers
 @test_utils.run_first()
@@ -106,7 +106,7 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
 
     # Note: Although using the dcgmActionValidate api (via DcgmDiag.Execute()) would allow for some automatic
     # verification, we use dcgmi diag and log output to a file for easier debugging when something goes wrong.
-    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "-d", "5", "--debugLogFile", "/tmp/nvvs.log"]
+    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
     if parms != None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
@@ -139,7 +139,7 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
     log_file = OUTPUT_DIR + "/nvvs_%s_with_err_%s.log" % (name, gpuIds[0])
     gpu_list = ",".join(map(str, gpuIds))
     
-    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "-d", "5", "--debugLogFile", "/tmp/nvvs.log"]
+    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
     if parms != None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
@@ -172,7 +172,6 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
 # busgrind
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_busgrind_no_errors(handle, gpuIds):
@@ -180,7 +179,6 @@ def test_busgrind_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_busgrind_with_error(handle, gpuIds):
@@ -190,7 +188,6 @@ def test_busgrind_with_error(handle, gpuIds):
 # constant perf / targeted stress
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_constant_perf_no_errors(handle, gpuIds):
@@ -198,7 +195,6 @@ def test_constant_perf_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_constant_perf_with_error(handle, gpuIds):
@@ -208,7 +204,6 @@ def test_constant_perf_with_error(handle, gpuIds):
 # constant power / targeted power
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_constant_power_no_errors(handle, gpuIds):
@@ -216,7 +211,6 @@ def test_constant_power_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_constant_power_with_error(handle, gpuIds):
@@ -226,7 +220,6 @@ def test_constant_power_with_error(handle, gpuIds):
 # context create
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_context_create_no_errors(handle, gpuIds):
@@ -236,7 +229,6 @@ def test_context_create_no_errors(handle, gpuIds):
 # gpuburn / diagnostic
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_gpuburn_no_errors(handle, gpuIds):
@@ -244,7 +236,6 @@ def test_gpuburn_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_gpuburn_with_error(handle, gpuIds):
@@ -254,7 +245,6 @@ def test_gpuburn_with_error(handle, gpuIds):
 # memory
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memory_no_errors(handle, gpuIds):
@@ -268,7 +258,6 @@ def test_memory_no_errors(handle, gpuIds):
 # memory bandwidth
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memory_bandwidth_no_errors(handle, gpuIds):
@@ -276,7 +265,6 @@ def test_memory_bandwidth_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memory_bandwidth_with_error(handle, gpuIds):
@@ -286,7 +274,6 @@ def test_memory_bandwidth_with_error(handle, gpuIds):
 # memtest
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memtest_no_errors(handle, gpuIds):
@@ -294,17 +281,29 @@ def test_memtest_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memtest_with_error(handle, gpuIds):
     with_error_run(handle, gpuIds, "memtest", "memtest")
 
+# nvbandwidth
+@test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
+@test_utils.run_with_standalone_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_nvbandwidth_no_errors(handle, gpuIds):
+    no_errors_run(handle, gpuIds, "nvbandwidth", "nvbandwidth", "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+
+@test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
+@test_utils.run_with_standalone_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_nvbandwidth_with_error(handle, gpuIds):
+    with_error_run(handle, gpuIds, "nvbandwidth", "nvbandwidth", "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
 
 # short
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_short_no_errors(handle, gpuIds):
@@ -312,7 +311,6 @@ def test_short_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_short_with_error(handle, gpuIds):
@@ -322,7 +320,6 @@ def test_short_with_error(handle, gpuIds):
 # medium
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_medium_no_errors(handle, gpuIds):
@@ -330,7 +327,6 @@ def test_medium_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_medium_with_error(handle, gpuIds):
@@ -340,7 +336,6 @@ def test_medium_with_error(handle, gpuIds):
 # long
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_long_no_errors(handle, gpuIds):
@@ -348,7 +343,6 @@ def test_long_no_errors(handle, gpuIds):
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_long_with_error(handle, gpuIds):

@@ -46,7 +46,6 @@ class Config:
         self.children = []
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_collectd_basic_integration(handle, gpuIds):
     """ 
@@ -150,7 +149,6 @@ def helper_collectd_config(gpuIds, config, verify_fields = True):
                 # assert gpuDict[fieldTag] == fieldValues[i]
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_collectd_config_integration(handle, gpuIds):
     """ 
@@ -163,7 +161,6 @@ def test_collectd_config_integration(handle, gpuIds):
     helper_collectd_config(gpuIds, config)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_collectd_config_bad_alpha_field(handle, gpuIds):
     """ 
@@ -177,7 +174,6 @@ def test_collectd_config_bad_alpha_field(handle, gpuIds):
     helper_collectd_config(gpuIds, config)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_collectd_config_bad_numeric_field(handle, gpuIds):
     """ 
@@ -191,7 +187,6 @@ def test_collectd_config_bad_numeric_field(handle, gpuIds):
     helper_collectd_config(gpuIds, config)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_collectd_config_no_fields(handle, gpuIds):
     """ 

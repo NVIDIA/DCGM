@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include <catch2/catch.hpp>
+#include <algorithm>
+#include <catch2/catch_all.hpp>
+#include <cstring>
+#include <tuple>
 
 #include <DcgmStringHelpers.h>
 
@@ -70,4 +73,60 @@ TEST_CASE("ParseRangeString")
         CHECK(indices[7 + i] == i + 12);
     }
     CHECK(indices[16] == 24);
+}
+
+TEST_CASE("TokenizeStringQuoted")
+{
+    REQUIRE(DcgmNs::TokenizeStringQuoted("", ' ').empty());
+    REQUIRE(DcgmNs::TokenizeStringQuoted(" ", ' ').empty());
+    REQUIRE(DcgmNs::TokenizeStringQuoted("  ", ' ').empty());
+    REQUIRE(DcgmNs::TokenizeStringQuoted("t1", ' ') == std::vector<std::string> { "t1" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("t1 ", ' ') == std::vector<std::string> { "t1" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted(" t1", ' ') == std::vector<std::string> { "t1" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("t1 t", ' ') == std::vector<std::string> { "t1", "t" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("t1 t2", ' ') == std::vector<std::string> { "t1", "t2" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("t1  t2", ' ') == std::vector<std::string> { "t1", "t2" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("'t1' t2", ' ') == std::vector<std::string> { "'t1'", "t2" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("'t1' t2", ' ', "'") == std::vector<std::string> { "t1", "t2" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("'t1' \"t2\"", ' ', "'") == std::vector<std::string> { "t1", "\"t2\"" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("'t1' \"t2\"", ' ', "'\"") == std::vector<std::string> { "t1", "t2" });
+    REQUIRE(DcgmNs::TokenizeStringQuoted("'t1=\"t3\"' t2", ' ', "'\"")
+            == std::vector<std::string> { "t1=\"t3\"", "t2" });
+}
+template <size_t N>
+struct Literal
+{
+    constexpr Literal(const char (&str)[N]) noexcept
+    {
+        std::copy_n(str, N, array);
+    }
+    char array[N];
+};
+
+template <std::size_t BufferSize, Literal Input, Literal Expected>
+struct SafeCopyToTest
+{
+    static constexpr auto input             = Input;
+    static constexpr auto expected          = Expected;
+    static constexpr std::size_t bufferSize = BufferSize;
+};
+
+using SafeCopyToTests = std::tuple<SafeCopyToTest<6, "1234", "1234\0">,
+                                   SafeCopyToTest<5, "1234", "1234">,
+                                   SafeCopyToTest<4, "1234", "123">,
+                                   SafeCopyToTest<3, "1234", "12">>;
+
+TEMPLATE_LIST_TEST_CASE("SafeCopyTo", "", SafeCopyToTests)
+{
+    char buffer[TestType::bufferSize] = {};
+    static_assert(sizeof(buffer) == sizeof(TestType::expected.array));
+    SECTION("SafeCopyTo with two arrays")
+    {
+        SafeCopyTo(buffer, TestType::input.array);
+    }
+    SECTION("SafeCopyTo with an array and a char*")
+    {
+        SafeCopyTo(buffer, static_cast<const char *>(TestType::input.array));
+    }
+    CHECK(std::memcmp(buffer, TestType::expected.array, TestType::bufferSize) == 0);
 }

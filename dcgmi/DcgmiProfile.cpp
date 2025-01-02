@@ -21,6 +21,7 @@
 #include "dcgm_structs.h"
 #include "dcgmi_common.h"
 #include <DcgmStringHelpers.h>
+#include <EntityListHelpers.h>
 
 #include <sstream>
 
@@ -133,20 +134,13 @@ DcgmiProfileList::DcgmiProfileList(std::string hostname,
 /*****************************************************************************/
 dcgmReturn_t DcgmiProfileList::SetGpuIdFromEntityList()
 {
-    auto [entityList, rejectedIds] = DcgmNs::TryParseEntityList(m_dcgmHandle, mGpuIdsStr);
-
-    // Fallback to old logic for rejected IDs
-
-    std::vector<dcgmGroupEntityPair_t> oldEntityList;
-
-    /* Convert the string to a list of entities */
-    auto dcgmReturn = dcgmi_parse_entity_list_string(rejectedIds, oldEntityList);
-    if (dcgmReturn != DCGM_ST_OK)
+    std::vector<dcgmGroupEntityPair_t> entityList;
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, mGpuIdsStr, entityList);
+    if (!err.empty())
     {
-        return dcgmReturn;
+        SHOW_AND_LOG_ERROR << err;
+        return DCGM_ST_BADPARAM;
     }
-
-    std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityList));
 
     /* Find the first GPU ID in our entity list */
     for (auto &entity : entityList)
@@ -218,10 +212,10 @@ dcgmReturn_t DcgmiProfileList::SetGpuId(void)
     }
 
     /* Try to get a handle to the group the user specified so we can get a GPU ID from it */
-    dcgmGroupInfo_t groupInfo;
-    groupInfo.version = dcgmGroupInfo_version;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
+    groupInfo->version                         = dcgmGroupInfo_version;
 
-    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    dcgmReturn = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
     if (DCGM_ST_OK != dcgmReturn)
     {
         std::string error = (dcgmReturn == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(dcgmReturn);
@@ -231,11 +225,11 @@ dcgmReturn_t DcgmiProfileList::SetGpuId(void)
         return dcgmReturn;
     }
 
-    for (size_t i = 0; i < groupInfo.count; i++)
+    for (size_t i = 0; i < groupInfo->count; i++)
     {
-        if (groupInfo.entityList[i].entityGroupId == DCGM_FE_GPU)
+        if (groupInfo->entityList[i].entityGroupId == DCGM_FE_GPU)
         {
-            mGpuId = groupInfo.entityList[i].entityId;
+            mGpuId = groupInfo->entityList[i].entityId;
             DCGM_LOG_DEBUG << "Using gpuId " << mGpuId;
             return DCGM_ST_OK;
         }

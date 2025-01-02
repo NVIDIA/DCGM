@@ -74,6 +74,7 @@ private:
      *****************************************************************************/
     std::string HelperDisplayBool(unsigned int val);
 
+
     /*****************************************************************************
      * Helper method returning true if all configurations have the same setting for
      * the member parameter
@@ -86,6 +87,7 @@ private:
     bool HelperCheckIfAllTheSameClock(dcgmConfig_t *configs, TMember member, unsigned int numGpus);
 
     bool HelperCheckIfAllTheSamePowerLim(dcgmConfig_t *configs, unsigned int numGpus);
+    bool HelperCheckIfAllTheSameWorkloadPowerProfile(dcgmConfig_t const *configs, unsigned int numGpus);
 
 private:
     dcgmGpuGrp_t mGroupId;

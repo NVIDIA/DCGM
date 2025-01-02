@@ -206,7 +206,7 @@ public:
 
     Argument_t(TCLAP::CmdLine &cmd,
                bool defaultValue,
-               bool required,
+               bool /* required */,
                const std::string &shortName,
                const std::string &longName,
                const std::string &description,
@@ -325,17 +325,18 @@ public:
     ArgumentSet_t(const std::string &message, const std::string &version)
         : m_cmd(message, ' ', version)
 
-        , m_waitToCheck(
-              m_cmd,
-              0.0,
-              false,
-              std::string("w"),
-              std::string("wait-to-check"),
-              std::string("percentage of run to wait before checking value"),
-              std::string("wait to check percentage"),
-              std::string("wait-to-check should be between 0 and 100"),
+        , m_waitToCheck(m_cmd,
+                        0.0,
+                        false,
+                        std::string("w"),
+                        std::string("wait-to-check"),
+                        std::string("percentage of run to wait before checking value"),
+                        std::string("wait to check percentage"),
+                        std::string("wait-to-check should be between 0 and 100"),
 
-              [](decltype(m_waitToCheck) &arg, const decltype(m_waitToCheck)::ArgType &value) { return value < 100; })
+                        [](decltype(m_waitToCheck) & /* arg */, const decltype(m_waitToCheck)::ArgType &value) {
+                            return value < 100;
+                        })
         ,
 
         m_maxGpusInParallel(m_cmd,
@@ -347,7 +348,7 @@ public:
                             std::string("maximum simultaneous GPUs tested"),
                             std::string("max-processes should be between 0 and 255"),
 
-                            [](decltype(m_maxGpusInParallel) &arg,
+                            [](decltype(m_maxGpusInParallel) & /* arg */,
                                const decltype(m_maxGpusInParallel)::ArgType &value) { return value <= 255; })
         ,
 
@@ -361,7 +362,7 @@ public:
             std::string("percentage tolerance"),
             std::string("percentage tolerance should be between 0 and 100"),
 
-            [this](decltype(m_percentTolerance) &arg, const decltype(m_percentTolerance)::ArgType &value) {
+            [this](decltype(m_percentTolerance) & /* arg */, const decltype(m_percentTolerance)::ArgType &value) {
                 if (value > 100)
                 {
                     return false;
@@ -383,7 +384,7 @@ public:
             std::string("absolute tolerance"),
             std::string("absolute match tolerance must be non-negative"),
 
-            [this](decltype(m_absoluteTolerance) &arg, const decltype(m_absoluteTolerance)::ArgType &value) {
+            [this](decltype(m_absoluteTolerance) & /* arg */, const decltype(m_absoluteTolerance)::ArgType &value) {
                 if (value < 0.0)
                 {
                     return false;
@@ -404,7 +405,7 @@ public:
                    std::string("minimum value for validation"),
                    std::string("minimum value must be less than or equal to maximum value"),
 
-                   [this](decltype(m_minValue) &arg, const decltype(m_minValue)::ArgType &value) {
+                   [this](decltype(m_minValue) & /* arg */, const decltype(m_minValue)::ArgType & /* value */) {
                        m_matchValue.Reset();
 
                        return true;
@@ -420,7 +421,7 @@ public:
                      std::string("mean value to match for validation"),
                      std::string("mean value should be midpoint of acceptable values"),
 
-                     [this](decltype(m_matchValue) &arg, const decltype(m_matchValue)::ArgType &value) {
+                     [this](decltype(m_matchValue) & /* arg */, const decltype(m_matchValue)::ArgType & /* value */) {
                          m_minValue.Reset();
                          m_maxValue.Reset();
 
@@ -437,23 +438,24 @@ public:
                    std::string("maximum value to match for validation"),
                    std::string("maximum value should be greater than or equal to minimum value"),
 
-                   [this](decltype(m_maxValue) &arg, const decltype(m_maxValue)::ArgType &value) {
+                   [this](decltype(m_maxValue) & /* arg */, const decltype(m_maxValue)::ArgType & /* value */) {
                        m_matchValue.Reset();
 
                        return true;
                    })
         ,
 
-        m_duration(m_cmd,
-                   30.0,
-                   false,
-                   std::string("d"),
-                   std::string("duration"),
-                   std::string("duration of test"),
-                   std::string("Duration in seconds"),
-                   std::string("Duration should be at least 1 second"),
+        m_duration(
+            m_cmd,
+            30.0,
+            false,
+            std::string("d"),
+            std::string("duration"),
+            std::string("duration of test"),
+            std::string("Duration in seconds"),
+            std::string("Duration should be at least 1 second"),
 
-                   [](decltype(m_duration) &arg, const decltype(m_duration)::ArgType &value) { return value >= 1.0; })
+            [](decltype(m_duration) & /* arg */, const decltype(m_duration)::ArgType &value) { return value >= 1.0; })
         ,
 
         m_reportInterval(m_cmd,
@@ -464,6 +466,7 @@ public:
                          std::string("report gathering rate"),
                          std::string("Rate of report gathering in seconds"),
                          std::string("Reporting interval should not be more than 10 seconds"),
+
                          [](decltype(m_reportInterval) & /* arg */, const decltype(m_reportInterval)::ArgType &value) {
                              return value <= 10.0;
                          })
@@ -477,7 +480,7 @@ public:
                          std::string("Run only at the target maximum value"),
                          m_shortMap,
                          m_longMap,
-                         [](decltype(m_targetMaxValue) &arg) { return; })
+                         [](decltype(m_targetMaxValue) & /* arg */) { return; })
         , m_noDcgmValidation(m_cmd,
                              false,
                              false,
@@ -486,7 +489,7 @@ public:
                              std::string("Do not do validation"),
                              m_shortMap,
                              m_longMap,
-                             [](decltype(m_noDcgmValidation) &arg) { return; })
+                             [](decltype(m_noDcgmValidation) & /* arg */) { return; })
         , m_dvsOutput(m_cmd,
                       false,
                       false,
@@ -495,7 +498,7 @@ public:
                       std::string("Do not collect dvs output"),
                       m_shortMap,
                       m_longMap,
-                      [](decltype(m_dvsOutput) &arg) { return; })
+                      [](decltype(m_dvsOutput) & /* arg */) { return; })
         , m_cublas(m_cmd,
                    false,
                    false,
@@ -504,7 +507,7 @@ public:
                    std::string("Use CUBLAS for FP16, FP32, FP64 tests"),
                    m_shortMap,
                    m_longMap,
-                   [](decltype(m_cublas) &arg) { return; })
+                   [](decltype(m_cublas) & /* arg */) { return; })
         ,
 
 #define xstr(s) str(s)
@@ -520,7 +523,7 @@ public:
                    std::string("integers between " xstr(DCGM_FI_PROF_FIRST_ID) " and " xstr(
                        DCGM_FI_PROF_LAST_ID) " or 'all' or 'nvlink' or 'nonvlink'"),
 
-                   [this](decltype(m_fieldIds) &arg, const decltype(m_fieldIds)::ArgType &value) {
+                   [this](decltype(m_fieldIds) & /* arg */, const decltype(m_fieldIds)::ArgType &value) {
                        if (!m_snapshotReady)
                        {
                            m_snapshotReady = true;
@@ -549,7 +552,9 @@ public:
                       std::string("List of GPU IDs to run on"),
                       std::string("GPU IDs to run on. Use dcgmi discovery -l to list valid gpuIds"),
 
-                      [](decltype(m_gpuIdString) &arg, const decltype(m_gpuIdString)::ArgType &value) { return true; })
+                      [](decltype(m_gpuIdString) & /* arg */, const decltype(m_gpuIdString)::ArgType & /* value */) {
+                          return true;
+                      })
         ,
 
         m_reset(m_cmd,
@@ -560,7 +565,7 @@ public:
                 std::string("Reset switch arguments"),
                 m_shortMap,
                 m_longMap,
-                [this](decltype(m_reset) &arg) {
+                [this](decltype(m_reset) & /* arg */) {
                     m_targetMaxValue.Reset();
                     m_noDcgmValidation.Reset();
                     m_dvsOutput.Reset();
@@ -576,45 +581,48 @@ public:
             std::string("operational mode"),
             std::string("operational mode: fast, generate load, report, validate"),
             std::string("operational mode must be one of [no]fast, [no]generateload, [no]report, [no]validate"),
-            [](decltype(m_modeString) &arg, const decltype(m_modeString)::ArgType &value) { return true; })
+            [](decltype(m_modeString) & /* arg */, const decltype(m_modeString)::ArgType & /* value */) {
+                return true;
+            })
         ,
 
-        m_syncCount(m_cmd,
-                    1,
-                    false,
-                    std::string(""),
-                    std::string("sync-count"),
-                    std::string("max synchronous measurement attempt count"),
-                    std::string("Number of attempts to reach target activity levels"),
-                    std::string("Sync count should not be more than 10"),
-
-                    [](decltype(m_syncCount) &arg, const decltype(m_syncCount)::ArgType &value) { return value <= 10; })
-        ,
-
-        m_logFileString(
+        m_syncCount(
             m_cmd,
-            std::string("dcgmproftester.log"),
+            1,
             false,
             std::string(""),
-            std::string("log-file"),
-            std::string("log file"),
-            std::string("Log file name"),
-            std::string("Log file must name a writable file"),
+            std::string("sync-count"),
+            std::string("max synchronous measurement attempt count"),
+            std::string("Number of attempts to reach target activity levels"),
+            std::string("Sync count should not be more than 10"),
 
-            [](decltype(m_logFileString) &arg, const decltype(m_logFileString)::ArgType &value) { return true; })
+            [](decltype(m_syncCount) & /* arg */, const decltype(m_syncCount)::ArgType &value) { return value <= 10; })
         ,
 
-        m_logLevelString(
-            m_cmd,
-            std::string("info"),
-            false,
-            std::string(""),
-            std::string("log-level"),
-            std::string("log level"),
-            std::string("Log severity level"),
-            std::string("Log severity level must be one of" DCGM_LOGGING_SEVERITY_OPTIONS),
+        m_logFileString(m_cmd,
+                        std::string("dcgmproftester.log"),
+                        false,
+                        std::string(""),
+                        std::string("log-file"),
+                        std::string("log file"),
+                        std::string("Log file name"),
+                        std::string("Log file must name a writable file"),
 
-            [](decltype(m_logLevelString) &arg, const decltype(m_logLevelString)::ArgType &value) { return true; })
+                        [](decltype(m_logFileString) & /* arg */,
+                           const decltype(m_logFileString)::ArgType & /* value */) { return true; })
+        ,
+
+        m_logLevelString(m_cmd,
+                         std::string("info"),
+                         false,
+                         std::string(""),
+                         std::string("log-level"),
+                         std::string("log level"),
+                         std::string("Log severity level"),
+                         std::string("Log severity level must be one of" DCGM_LOGGING_SEVERITY_OPTIONS),
+
+                         [](decltype(m_logLevelString) & /* arg */,
+                            const decltype(m_logLevelString)::ArgType & /* value */) { return true; })
         ,
 
         m_configFile(m_cmd,
@@ -626,9 +634,11 @@ public:
                      std::string("Configuration file (YAML or JSON) to include"),
                      std::string("Configuration file must be in YAML or JSON format"),
 
-                     [](decltype(m_configFile) &arg, const decltype(m_configFile)::ArgType &value) { return true; })
+                     [](decltype(m_configFile) & /* arg */, const decltype(m_configFile)::ArgType & /* value */) {
+                         return true;
+                     })
 
-            {};
+    {}
 
     void AddDefault(unsigned int fieldId, ValueRange_t valueRange);
 

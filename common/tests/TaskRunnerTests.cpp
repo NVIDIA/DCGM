@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <Task.hpp>
 #include <TaskRunner.hpp>
@@ -288,7 +288,8 @@ TEST_CASE("TaskRunner: Limited Queue")
 
     tr.Stop();
     fmt::print("Wait iterations elapsed: {}\n", cWaitIterations - waitIterations);
-    fmt::print("Iterations: {}\nExecutions: {}\nFailed to add: {}\n", iterations, executed, failedToAdd);
+    fmt::print(
+        "Iterations: {}\nExecutions: {}\nFailed to add: {}\n", iterations.load(), executed.load(), failedToAdd.load());
     REQUIRE(executed >= cTaskRunnerCapacity);
     REQUIRE((failedToAdd + executed) == iterations);
 }

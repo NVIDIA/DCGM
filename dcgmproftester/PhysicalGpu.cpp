@@ -13,20 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "PhysicalGpu.h"
+#include <DcgmLogging.h>
+#include <cuda.h>
+
 #include "Arguments.h"
 #include "DcgmCacheManager.h"
-#include "DcgmLogging.h"
 #include "DcgmProfTester.h"
 #include "DcgmSettings.h"
 #include "Entity.h"
+#include "PhysicalGpu.h"
 #include "Reporter.h"
 #include "dcgm_fields.h"
 #include "dcgm_fields_internal.hpp"
 #include "timelib.h"
 #include "vector_types.h"
 #include <cublas_proxy.hpp>
-#include <cuda.h>
 #include <dcgm_agent.h>
 
 #include <tclap/Arg.h>

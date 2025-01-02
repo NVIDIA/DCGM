@@ -16,6 +16,7 @@
 #include "DcgmUtilities.h"
 
 #include "DcgmLogging.h"
+#include "DcgmStringHelpers.h"
 
 #include <Defer.hpp>
 #include <cstdio>
@@ -35,6 +36,7 @@
 #include <string>
 #include <sys/epoll.h>
 #include <sys/prctl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 
@@ -420,7 +422,7 @@ void *LoadFunction(void *libHandle, const std::string &funcname, const std::stri
     return f;
 }
 
-void BindToNumaNodes(const std::array<unsigned long long, 4> &nodeSet)
+static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nodeSet)
 {
     void *libnumaHandle = LoadLibNuma();
 
@@ -444,17 +446,23 @@ void BindToNumaNodes(const std::array<unsigned long long, 4> &nodeSet)
             || numa_bitmask_setbit == nullptr || numa_bind == nullptr)
         {
             log_error("Cannot load symbols from libnuma; not binding to NUMA nodes!");
-            return;
+            return DCGM_ST_LIBRARY_NOT_FOUND;
         }
     }
     else
     {
         log_error("Cannot load libnuma.so: not binding to NUMA nodes!");
-        return;
+        return DCGM_ST_LIBRARY_NOT_FOUND;
     }
 
     /* Set the affinity for this forked child */
     struct bitmask *nodemask = numa_bitmask_alloc(numa_num_possible_nodes());
+    if (nodemask == nullptr)
+    {
+        log_error("Cannot allocate numa bitmask: not binding to NUMA nodes!");
+        return DCGM_ST_MEMORY;
+    }
+
     numa_bitmask_clearall(nodemask);
 
     for (size_t i = 0; i < nodeSet.size(); i++)
@@ -474,10 +482,10 @@ void BindToNumaNodes(const std::array<unsigned long long, 4> &nodeSet)
             j++;
             partialNodeSet = partialNodeSet >> 1;
         }
-        break;
     }
 
     numa_bind(nodemask);
+    return DCGM_ST_OK;
 }
 
 /***********************************************************************************************/
@@ -673,7 +681,12 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
 
         if (nodeSet != nullptr)
         {
-            BindToNumaNodes(*nodeSet);
+            if (auto result = BindToNumaNodes(*nodeSet); result != DCGM_ST_OK)
+            {
+                fmt::print(stderr, "Could not bind to NUMA nodes: {}\n", errorString(result));
+                fflush(stderr);
+                exit(EXIT_FAILURE);
+            }
         }
 
         // Convert args to argv style char** for execvp
@@ -796,6 +809,66 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
     return 0;
 }
 
+dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output)
+{
+    auto cmdArgs = dcgmTokenizeString(cmd, " ");
+    DcgmNs::Utils::FileHandle outputFd;
+
+    pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(cmdArgs, nullptr, &outputFd, nullptr, true, nullptr, nullptr);
+
+    fmt::memory_buffer stdoutStream;
+    std::string errmsg;
+    errmsg.reserve(1024);
+    char errbuf[1024] = { 0 };
+    int readOutputRet = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd));
+    if (readOutputRet)
+    {
+        strerror_r(readOutputRet, errbuf, sizeof(errbuf));
+        errmsg = fmt::format("Output of '{}' couldn't be read: '{}'. ", cmd, errbuf);
+    }
+
+    int childStatus;
+    if (waitpid(childPid, &childStatus, 0) == -1)
+    {
+        strerror_r(errno, errbuf, sizeof(errbuf));
+        errmsg += fmt::format("\nError while waiting for child process ({}) to exit: '{}'", childPid, errbuf);
+    }
+    else if (WIFEXITED(childStatus))
+    {
+        // Exited normally - check for non-zero exit code
+        childStatus = WEXITSTATUS(childStatus);
+        if (childStatus)
+        {
+            errmsg += fmt::format("\nA child process ({}) exited with non-zero status {}", childPid, childStatus);
+        }
+        log_debug("Child process ({}) terminated successfully.", childPid);
+    }
+    else if (WIFSIGNALED(childStatus))
+    {
+        // Child terminated due to signal
+        childStatus = WTERMSIG(childStatus);
+        errmsg += fmt::format("\nA child process ({}) terminated with signal {}", childPid, childStatus);
+    }
+    else
+    {
+        errmsg += fmt::format("\nA child process ({}) is being traced or otherwise can't exit", childPid);
+    }
+
+    output = fmt::to_string(stdoutStream);
+    if (!errmsg.empty())
+    {
+        log_error("Error running cmd '{}': {}. \nStderr from the cmd: {}", cmd, errmsg, output);
+        return DCGM_ST_INIT_ERROR;
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t RunCmdHelper::RunCmdAndGetOutput(std::string const &cmd, std::string &output) const
+{
+    return DcgmNs::Utils::RunCmdAndGetOutput(cmd, output);
+}
+
 FileHandle::FileHandle() noexcept
     : FileHandle(-1)
 {}
@@ -911,4 +984,48 @@ bool IsRunningAsRoot()
 {
     return geteuid() == 0;
 }
+
+bool RunningUserChecker::IsRoot() const
+{
+    return IsRunningAsRoot();
+}
+
+/****************************************************************************/
+std::string HelperDisplayPowerBitmask(unsigned int const *mask)
+{
+    std::stringstream ss;
+
+    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        if (DCGM_INT32_IS_BLANK(mask[i]))
+        {
+            continue;
+        }
+
+        for (unsigned int j = 0; j < DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM; j++)
+        {
+            if (mask[i] & (1 << j))
+            {
+                if (ss.str().empty())
+                {
+                    ss << j + (i * DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM);
+                }
+                else
+                {
+                    ss << "," << j + (i * DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM);
+                }
+            }
+        }
+    }
+
+    if (ss.str().empty())
+    {
+        ss << "Not Specified";
+        return ss.str();
+    }
+
+    return ss.str();
+}
+
+
 } // namespace DcgmNs::Utils

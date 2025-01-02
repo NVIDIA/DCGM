@@ -76,7 +76,6 @@ public:
      * @return true if the GPU is to be included, false otherwise.
      **/
     bool IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices);
-
     // not private so they can be called in tests
 protected:
     // methods
@@ -84,18 +83,19 @@ protected:
     void EnumerateAllVisibleGpus();
     void enumerateAllVisibleTests();
     void ValidateSubtestParameters();
-    void CheckGpuSetTests(std::vector<std::unique_ptr<GpuSet>> &gpuSets);
+    void DistributeTests(std::vector<std::unique_ptr<EntitySet>> &entitySets);
     void banner();
     void CheckDriverVersion();
     std::vector<Gpu *> decipherProperties(GpuSet *set);
-    std::vector<Test *>::iterator FindTestName(Test::testClasses_enum testClass, std::string testName);
-    void fillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, GpuSet *set);
+    std::vector<Test *>::iterator FindTestName(std::string testName);
+    bool FillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, EntitySet *set);
     void overrideParameters(TestParameters *tp, const std::string &lowerCaseTestName);
     void startTimer();
     void stopTimer();
     bool HasGenericSupport(const std::string &gpuBrand, uint64_t gpuArch);
-    void InitializeAndCheckGpuObjs(std::vector<std::unique_ptr<GpuSet>> &gpuSets);
+    void InitializeAndCheckGpuObjs(GpuSet *set);
     void InitializeParameters(const std::string &parms, const ParameterValidator &pv);
+    void ThrowTestNotFoundExecption() const;
 
     // vars
     bool logInit;

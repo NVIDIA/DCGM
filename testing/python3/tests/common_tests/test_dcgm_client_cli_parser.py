@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from _test_helpers import maybemock, skip_test_if_no_mock
+from _test_helpers import KeywordizeLastArgument
 from common.Struct import Struct
 import logging
 
@@ -67,6 +68,7 @@ def helper_check_mutually_exclusive_group_added():
 
 # autospec tells mock to return objects that have the same interface
 @maybemock.patch('argparse.ArgumentParser', autospec=True)
+@KeywordizeLastArgument("MockArgumentParser")
 def test_create_parser(MockArgumentParser):
     result = cli.create_parser()
     mock_calls = result.mock_calls # pylint: disable=no-member
@@ -84,13 +86,14 @@ def test_create_parser(MockArgumentParser):
     # TODO mutually-exclusive group tests
 
 @maybemock.patch('argparse.ArgumentParser', autospec=True)
+@KeywordizeLastArgument("MockArgumentParser")
 def test_add_target_host_argument(MockArgumentParser):
-        parser = MockArgumentParser()
-        cli.add_target_host_argument('name', parser)
-        mock_calls = parser.mock_calls # pylint: disable=no-member
+    parser = MockArgumentParser()
+    cli.add_target_host_argument('name', parser)
+    mock_calls = parser.mock_calls  # pylint: disable=no-member
 
-        assert helper_check_argument_added(mock_calls, '-t', '--publish-hostname',
-                                        dest='publish_hostname', type=str)
+    assert helper_check_argument_added(mock_calls, '-t', '--publish-hostname',
+                                    dest='publish_hostname', type=str)
 
 @skip_test_if_no_mock()
 def test_run_parser():
@@ -103,6 +106,7 @@ def test_get_field_ids():
     assert cli.get_field_ids(Struct(field_ids=[1,2,3])) == [1,2,3]
 
 @maybemock.patch('sys.exit')
+@KeywordizeLastArgument("mock_exit")
 def test_get_log_level(mock_exit):
     mock_help = maybemock.Mock()
     assert cli.get_log_level(Struct(loglevel='0')) == logging.CRITICAL

@@ -81,7 +81,7 @@ class DcgmSystemDiscovery:
     '''
     Get the status of all of the NvLink links in the system.
 
-    Returns a dcgm_structs.c_dcgmNvLinkStatus_v3 object.
+    Returns a dcgm_structs.c_dcgmNvLinkStatus_v4 object.
     '''
     def GetNvLinkLinkStatus(self):
         return dcgm_agent.dcgmGetNvLinkLinkStatus(self._dcgmHandle.handle)
@@ -96,18 +96,22 @@ class DcgmSystemDiscovery:
     def SelectGpusByTopology(self, inputGpuIds, numGpus, hintFlags):
         return dcgm_agent.dcgmSelectGpusByTopology(self._dcgmHandle.handle, inputGpuIds, numGpus, hintFlags)
 
+    '''
+    Get the status of the given GPU.
+
+    Returns a c_uint() representing the status of the GPU.
+    '''
+    def GetGpuStatus(self, gpuId):
+        return dcgm_agent.dcgmGetGpuStatus(self._dcgmHandle.handle, gpuId)
+
 class DcgmSystemIntrospect:
     '''
     Class to access the system-wide introspection modules of DCGM
     '''
-    
     def __init__(self, dcgmHandle):
         self._handle = dcgmHandle
         self.memory = DcgmSystemIntrospectMemory(dcgmHandle)
         self.cpuUtil = DcgmSystemIntrospectCpuUtil(dcgmHandle)
-        
-    def UpdateAll(self, waitForUpdate=True):
-        dcgm_agent.dcgmIntrospectUpdateAll(self._handle.handle, waitForUpdate)
 
 class DcgmSystemIntrospectMemory:
     '''

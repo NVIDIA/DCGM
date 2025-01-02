@@ -22,7 +22,7 @@
 #include <DcgmWatchTable.h>
 #include <dcgm_structs.h>
 
-#include "DcgmNvSwitchManager.h"
+#include "DcgmNscqManager.h"
 #include "FieldIds.h"
 
 namespace DcgmNs
@@ -38,8 +38,8 @@ namespace DcgmNs
 using phys_id_t      = uint32_t;
 using uuid_p         = nscq_uuid_t *;
 using label_t        = nscq_label_t;
-using link_id_t      = uint8_t;
-using lane_vc_id_t   = uint8_t;
+using link_id_t      = uint32_t;
+using lane_vc_id_t   = uint32_t;
 using nvlink_state_t = nscq_nvlink_state_t;
 
 /**
@@ -50,10 +50,10 @@ class UpdateNvSwitchScalarFieldType
 {
 public:
     static constexpr UpdateFuncType updateFunc
-        = &DcgmNvSwitchManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
-                                             FieldIdStorageType<fieldId>,
-                                             false,
-                                             uuid_p>;
+        = &DcgmNscqManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
+                                         FieldIdStorageType<fieldId>,
+                                         false,
+                                         uuid_p>;
 };
 
 /**
@@ -64,10 +64,10 @@ class UpdateNvSwitchVectorFieldType
 {
 public:
     static constexpr UpdateFuncType updateFunc
-        = &DcgmNvSwitchManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
-                                             FieldIdStorageType<fieldId>,
-                                             true,
-                                             uuid_p>;
+        = &DcgmNscqManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
+                                         FieldIdStorageType<fieldId>,
+                                         true,
+                                         uuid_p>;
 };
 
 /**
@@ -79,11 +79,11 @@ class UpdateLinkScalarFieldType
 {
 public:
     static constexpr UpdateFuncType updateFunc
-        = &DcgmNvSwitchManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
-                                             FieldIdStorageType<fieldId>,
-                                             false,
-                                             uuid_p,
-                                             link_id_t>;
+        = &DcgmNscqManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
+                                         FieldIdStorageType<fieldId>,
+                                         false,
+                                         uuid_p,
+                                         link_id_t>;
 };
 
 /**
@@ -95,11 +95,11 @@ class UpdateLinkVectorFieldType
 {
 public:
     static constexpr UpdateFuncType updateFunc
-        = &DcgmNvSwitchManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
-                                             FieldIdStorageType<fieldId>,
-                                             true,
-                                             uuid_p,
-                                             link_id_t>;
+        = &DcgmNscqManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
+                                         FieldIdStorageType<fieldId>,
+                                         true,
+                                         uuid_p,
+                                         link_id_t>;
 };
 
 /**
@@ -111,12 +111,12 @@ class UpdateLaneScalarFieldType
 {
 public:
     static constexpr UpdateFuncType updateFunc
-        = &DcgmNvSwitchManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
-                                             FieldIdStorageType<fieldId>,
-                                             false,
-                                             uuid_p,
-                                             link_id_t,
-                                             lane_vc_id_t>;
+        = &DcgmNscqManager::UpdateFields<typename FieldIdControlType<fieldId>::nscqFieldType,
+                                         FieldIdStorageType<fieldId>,
+                                         false,
+                                         uuid_p,
+                                         link_id_t,
+                                         lane_vc_id_t>;
 };
 
 } // namespace DcgmNs

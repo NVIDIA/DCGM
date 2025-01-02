@@ -19,6 +19,7 @@
 #include "timelib.h"
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <stddef.h>
 #include <string.h>
 #include <unistd.h>
@@ -28,26 +29,40 @@ TestPolicyManager::TestPolicyManager()
 TestPolicyManager::~TestPolicyManager()
 {}
 
-int TestPolicyManager::Init(const TestDcgmModuleInitParams &initParams)
+int TestPolicyManager::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }
 
-static bool g_cbackBegin = false;
-static bool g_cbackEnd   = false;
+static bool g_cback = false;
 
-int callback1(void *data)
+int callback([[maybe_unused]] dcgmPolicyCallbackResponse_t *response, [[maybe_unused]] uint64_t userData)
 {
-    g_cbackBegin = true;
+    g_cback = true;
     return 0;
 }
 
-int callback2(void *data)
+static uint8_t g_cbackCount              = 0;
+static const std::string testStrUserData = "test string user data";
+static int testIntUserData               = 10;
+
+int cbWithUserData([[maybe_unused]] dcgmPolicyCallbackResponse_t *response, uint64_t userData)
 {
-    g_cbackEnd = true;
+    testUserData_t cbUserData = *((testUserData_t *)userData);
+
+    std::visit(overloaded(
+                   [&](int cbIntUserData) {
+                       if (cbIntUserData == testIntUserData)
+                           ++g_cbackCount;
+                   },
+                   [&](std::string &cbStrUserData) {
+                       if (cbStrUserData == testStrUserData)
+                           ++g_cbackCount;
+                   }),
+               cbUserData);
+
     return 0;
 }
-
 
 int TestPolicyManager::Run()
 {
@@ -108,14 +123,16 @@ std::string TestPolicyManager::GetTag()
 
 int TestPolicyManager::TestPolicyRegUnreg()
 {
-    dcgmGpuGrp_t groupId = 0;
-    dcgmReturn_t result  = DCGM_ST_OK;
-    dcgmGroupInfo_t groupInfo;
-    dcgmPolicyCondition_t condition = (dcgmPolicyCondition_t)0;
-    dcgmStatus_t statusHandle       = 0;
+    dcgmGpuGrp_t groupId                       = 0;
+    dcgmReturn_t result                        = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmPolicyCondition_t condition            = (dcgmPolicyCondition_t)0;
+    dcgmStatus_t statusHandle                  = 0;
     dcgmInjectFieldValue_t fv;
     timelib64_t start;
     timelib64_t now;
+    testUserData_t myIntUserData;
+    testUserData_t myStrUserData;
 
     TestPolicySetGet();
 
@@ -127,15 +144,15 @@ int TestPolicyManager::TestPolicyRegUnreg()
         goto cleanup;
     }
 
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         goto cleanup;
     }
 
-    if (groupInfo.count < 1)
+    if (groupInfo->count < 1)
     {
         printf("Skipping TestPolicyRegUnreg due to no GPUs being present");
         result = DCGM_ST_OK; /* Don't fail */
@@ -169,17 +186,27 @@ int TestPolicyManager::TestPolicyRegUnreg()
         goto cleanup;
     }
 
-    condition = DCGM_POLICY_COND_DBE;
-    result    = dcgmPolicyRegister(m_dcgmHandle, groupId, condition, &callback1, &callback2);
+    condition     = DCGM_POLICY_COND_DBE;
+    myIntUserData = testIntUserData;
+    result        = dcgmPolicyRegister_v2(m_dcgmHandle, groupId, condition, &cbWithUserData, (uint64_t)&myIntUserData);
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
-        printf("dcgmPolicyRegister was not supported. This is expected for GeForce and Quadro hardware.\n");
+        printf("dcgmPolicyRegister_v2 was not supported. This is expected for GeForce and Quadro hardware.\n");
         result = DCGM_ST_OK;
         goto cleanup;
     }
     else if (result != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmPolicyRegister failed with %d\n", (int)result);
+        fprintf(stderr, "dcgmPolicyRegister_v2 failed with %d\n", (int)result);
+        goto cleanup;
+    }
+
+    /* Register same callback with different user data. */
+    myStrUserData = testStrUserData;
+    result        = dcgmPolicyRegister_v2(m_dcgmHandle, groupId, condition, &cbWithUserData, (uint64_t)&myStrUserData);
+    if (result != DCGM_ST_OK) /* No need to check DCGM_ST_NOT_SUPPORTED again for 2nd register call. */
+    {
+        fprintf(stderr, "dcgmPolicyRegister_v2 failed with %d\n", (int)result);
         goto cleanup;
     }
 
@@ -190,7 +217,7 @@ int TestPolicyManager::TestPolicyRegUnreg()
     fv.value.i64 = 1;
     fv.ts        = (std::time(0) * 1000000) + 60000000;
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
@@ -199,7 +226,7 @@ int TestPolicyManager::TestPolicyRegUnreg()
 
     fv.fieldId   = DCGM_FI_DEV_ECC_DBE_VOL_DEV;
     fv.value.i64 = policy.parms[0].val.llval + 1;
-    result       = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result       = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
@@ -214,19 +241,19 @@ int TestPolicyManager::TestPolicyRegUnreg()
         goto cleanup;
     }
 
-    // wait for the callbacks for up to 15 seconds
+    // wait for the callback for up to 15 seconds
     start = timelib_usecSince1970();
     now   = start;
-    while ((!g_cbackBegin || !g_cbackEnd) && (now - start < 15 * 1000000))
+    while ((g_cbackCount < 2) && (now - start < 15 * 1000000))
     {
         usleep(10000); // 10ms
         now = timelib_usecSince1970();
     }
 
-    if (!g_cbackBegin || !g_cbackEnd)
+    if (g_cbackCount != 2)
     {
         result = DCGM_ST_GENERIC_ERROR;
-        fprintf(stderr, "cbackBegin %d, cbackEnd %d\n", g_cbackBegin, g_cbackEnd);
+        fprintf(stderr, "cbackCount %d\n", g_cbackCount);
         goto cleanup;
     }
 
@@ -247,9 +274,9 @@ cleanup:
 
 int TestPolicyManager::TestPolicySetGet()
 {
-    dcgmGpuGrp_t groupId = 0;
-    dcgmReturn_t result  = DCGM_ST_OK;
-    dcgmGroupInfo_t groupInfo;
+    dcgmGpuGrp_t groupId                       = 0;
+    dcgmReturn_t result                        = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
     dcgmPolicy_t *policy;
     dcgmPolicy_t *newPolicy;
     dcgmStatus_t statusHandle = 0;
@@ -259,8 +286,8 @@ int TestPolicyManager::TestPolicySetGet()
     if (result != DCGM_ST_OK)
         return -1;
 
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
     if (result != DCGM_ST_OK)
         return -1;
 
@@ -268,8 +295,8 @@ int TestPolicyManager::TestPolicySetGet()
     if (result != DCGM_ST_OK)
         return -1;
 
-    policy    = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * groupInfo.count);
-    newPolicy = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * groupInfo.count);
+    policy    = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * groupInfo->count);
+    newPolicy = (dcgmPolicy_t *)malloc(sizeof(dcgmPolicy_t) * groupInfo->count);
     if (!policy || !newPolicy)
     {
         if (policy)
@@ -284,13 +311,13 @@ int TestPolicyManager::TestPolicySetGet()
     }
 
     // need to free policy from here on
-    for (unsigned int i = 0; i < groupInfo.count; i++)
+    for (unsigned int i = 0; i < groupInfo->count; i++)
     {
         policy[i].version    = dcgmPolicy_version;
         newPolicy[i].version = dcgmPolicy_version;
     }
 
-    result = dcgmPolicyGet(m_dcgmHandle, groupId, groupInfo.count, policy, statusHandle);
+    result = dcgmPolicyGet(m_dcgmHandle, groupId, groupInfo->count, policy, statusHandle);
     if (result != DCGM_ST_OK)
         goto cleanup;
 
@@ -318,7 +345,7 @@ int TestPolicyManager::TestPolicySetGet()
         goto cleanup;
     }
 
-    result = dcgmPolicyGet(m_dcgmHandle, groupId, groupInfo.count, newPolicy, statusHandle);
+    result = dcgmPolicyGet(m_dcgmHandle, groupId, groupInfo->count, newPolicy, statusHandle);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmPolicyGet returned %d\n", (int)result);
@@ -345,19 +372,18 @@ cleanup:
 
 int TestPolicyManager::TestPolicyRegUnregXID()
 {
-    dcgmGpuGrp_t groupId = 0;
-    dcgmReturn_t result  = DCGM_ST_OK;
-    dcgmGroupInfo_t groupInfo;
-    dcgmPolicyCondition_t condition = (dcgmPolicyCondition_t)0;
-    dcgmStatus_t statusHandle       = 0;
+    dcgmGpuGrp_t groupId                       = 0;
+    dcgmReturn_t result                        = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmPolicyCondition_t condition            = (dcgmPolicyCondition_t)0;
+    dcgmStatus_t statusHandle                  = 0;
     dcgmInjectFieldValue_t fv;
     timelib64_t start;
     timelib64_t now;
     dcgmPolicy_t policy;
 
     // clear global variables
-    g_cbackBegin = false;
-    g_cbackEnd   = false;
+    g_cback = false;
 
     TestPolicySetGet();
 
@@ -369,15 +395,15 @@ int TestPolicyManager::TestPolicyRegUnregXID()
         goto cleanup;
     }
 
-    groupInfo.version = dcgmGroupInfo_version;
-    result            = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupInfo);
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupInfo.get());
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineGroupGetInfo failed with %d\n", (int)result);
         goto cleanup;
     }
 
-    if (groupInfo.count < 1)
+    if (groupInfo->count < 1)
     {
         printf("Skipping TestPolicyRegUnregXID due to no GPUs present.");
         result = DCGM_ST_OK;
@@ -411,16 +437,16 @@ int TestPolicyManager::TestPolicyRegUnregXID()
     }
 
     condition = DCGM_POLICY_COND_XID;
-    result    = dcgmPolicyRegister(m_dcgmHandle, groupId, condition, &callback1, &callback2);
+    result    = dcgmPolicyRegister_v2(m_dcgmHandle, groupId, condition, &callback, 0);
     if (result == DCGM_ST_NOT_SUPPORTED)
     {
-        printf("dcgmPolicyRegister was not supported. This is expected for GeForce and Quadro GPUs.");
+        printf("dcgmPolicyRegister_v2 was not supported. This is expected for GeForce and Quadro GPUs.");
         result = DCGM_ST_OK;
         goto cleanup;
     }
     else if (result != DCGM_ST_OK)
     {
-        fprintf(stderr, "dcgmEnginePolicyRegister failed with %d\n", (int)result);
+        fprintf(stderr, "dcgmPolicyRegister_v2 failed with %d\n", (int)result);
         goto cleanup;
     }
 
@@ -431,7 +457,7 @@ int TestPolicyManager::TestPolicyRegUnregXID()
     fv.value.i64 = 1;
     fv.ts        = (std::time(0) * 1000000) + 60000000;
 
-    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo.entityList[0].entityId, &fv);
+    result = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
         fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
@@ -445,19 +471,19 @@ int TestPolicyManager::TestPolicyRegUnregXID()
         goto cleanup;
     }
 
-    // wait for the callbacks for up to 15 seconds
+    // wait for the callback for up to 15 seconds
     start = timelib_usecSince1970();
     now   = start;
-    while ((!g_cbackBegin || !g_cbackEnd) && (now - start < 15 * 1000000))
+    while (!g_cback && (now - start < 15 * 1000000))
     {
         usleep(10000); // 10ms
         now = timelib_usecSince1970();
     }
 
-    if (!g_cbackBegin || !g_cbackEnd)
+    if (!g_cback)
     {
         result = DCGM_ST_GENERIC_ERROR;
-        fprintf(stderr, "cbackBegin %d, cbackEnd %d\n", g_cbackBegin, g_cbackEnd);
+        fprintf(stderr, "cback %d\n", g_cback);
         goto cleanup;
     }
 

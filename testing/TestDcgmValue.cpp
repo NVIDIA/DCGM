@@ -32,7 +32,7 @@ std::string TestDcgmValue::GetTag()
 }
 
 /*****************************************************************************/
-int TestDcgmValue::Init(const TestDcgmModuleInitParams &initParams)
+int TestDcgmValue::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }

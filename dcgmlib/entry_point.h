@@ -139,7 +139,7 @@ DCGM_ENTRY_POINT(dcgmDeleteMigEntity,
 
 DCGM_ENTRY_POINT(dcgmGetNvLinkLinkStatus,
                  tsapiGetNvLinkLinkStatus,
-                 (dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v3 *linkStatus),
+                 (dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v4 *linkStatus),
                  "({} {})",
                  dcgmHandle,
                  linkStatus)
@@ -147,6 +147,13 @@ DCGM_ENTRY_POINT(dcgmGetNvLinkLinkStatus,
 DCGM_ENTRY_POINT(dcgmGetCpuHierarchy,
                  tsapiGetCpuHierarchy,
                  (dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy),
+                 "({} {})",
+                 dcgmHandle,
+                 cpuHierarchy)
+
+DCGM_ENTRY_POINT(dcgmGetCpuHierarchy_v2,
+                 tsapiGetCpuHierarchy_v2,
+                 (dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v2 *cpuHierarchy),
                  "({} {})",
                  dcgmHandle,
                  cpuHierarchy)
@@ -428,19 +435,19 @@ DCGM_ENTRY_POINT(
 
 DCGM_ENTRY_POINT(dcgmPolicyTrigger, tsapiEnginePolicyTrigger, (dcgmHandle_t pDcgmHandle), "{}", pDcgmHandle)
 
-DCGM_ENTRY_POINT(dcgmPolicyRegister,
+DCGM_ENTRY_POINT(dcgmPolicyRegister_v2,
                  tsapiEnginePolicyRegister,
                  (dcgmHandle_t pDcgmHandle,
                   dcgmGpuGrp_t groupId,
                   dcgmPolicyCondition_t condition,
-                  fpRecvUpdates beginCallback,
-                  fpRecvUpdates finishCallback),
+                  fpRecvUpdates callback,
+                  uint64_t userData),
                  "({} {}, {}, {}, {})",
                  pDcgmHandle,
                  groupId,
                  condition,
-                 beginCallback,
-                 finishCallback)
+                 callback,
+                 userData)
 
 DCGM_ENTRY_POINT(dcgmPolicyUnregister,
                  tsapiEnginePolicyUnregister,
@@ -644,7 +651,7 @@ DCGM_ENTRY_POINT(dcgmHealthCheck,
 
 DCGM_ENTRY_POINT(dcgmActionValidate_v2,
                  tsapiEngineActionValidate_v2,
-                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v8 *drd, dcgmDiagResponse_v10 *response),
+                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v9 *drd, dcgmDiagResponse_v11 *response),
                  "({}, {}, {})",
                  pDcgmHandle,
                  drd,
@@ -653,7 +660,7 @@ DCGM_ENTRY_POINT(dcgmActionValidate_v2,
 DCGM_ENTRY_POINT(
     dcgmActionValidate,
     tsapiEngineActionValidate,
-    (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmPolicyValidation_t validate, dcgmDiagResponse_v10 *response),
+    (dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmPolicyValidation_t validate, dcgmDiagResponse_v11 *response),
     "({} {}, {}, {})",
     pDcgmHandle,
     groupId,
@@ -661,16 +668,16 @@ DCGM_ENTRY_POINT(
     response)
 
 DCGM_ENTRY_POINT(dcgmRunDiagnostic,
-    tsapiEngineRunDiagnostic,
+                 tsapiEngineRunDiagnostic,
                  (dcgmHandle_t pDcgmHandle,
                   dcgmGpuGrp_t groupId,
                   dcgmDiagnosticLevel_t diagLevel,
-                  dcgmDiagResponse_v10 *diagResponse),
-    "({} {}, {}, {})",
-    pDcgmHandle,
-    groupId,
-    diagLevel,
-    diagResponse)
+                  dcgmDiagResponse_v11 *diagResponse),
+                 "({} {}, {}, {})",
+                 pDcgmHandle,
+                 groupId,
+                 diagLevel,
+                 diagResponse)
 
 DCGM_ENTRY_POINT(dcgmStopDiagnostic, tsapiEngineStopDiagnostic, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
 
@@ -692,6 +699,18 @@ DCGM_ENTRY_POINT(dcgmGetPidInfo,
                  pDcgmHandle,
                  groupId,
                  pidInfo)
+
+DCGM_ENTRY_POINT(dcgmGetDeviceWorkloadPowerProfileInfo,
+                 tsapiEngineGetWorkloadPowerProfileInfo,
+                 (dcgmHandle_t pDcgmHandle,
+                  unsigned int gpuId,
+                  dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                  dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus),
+                 "({} {} {} {})",
+                 pDcgmHandle,
+                 gpuId,
+                 profilesInfo,
+                 profilesStatus)
 
 DCGM_ENTRY_POINT(dcgmGetDeviceTopology,
                  tsapiEngineGetDeviceTopology,
@@ -753,81 +772,12 @@ DCGM_ENTRY_POINT(dcgmJobRemove,
 
 DCGM_ENTRY_POINT(dcgmJobRemoveAll, tsapiEngineJobRemoveAll, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
 
-DCGM_ENTRY_POINT(dcgmIntrospectToggleState,
-                 tsapiMetadataToggleState,
-                 (dcgmHandle_t pDcgmHandle, /* dcgmIntrospectState_t */ unsigned int enabledState),
-                 "({} {})",
-                 pDcgmHandle,
-                 enabledState)
-
-DCGM_ENTRY_POINT(dcgmMetadataStateSetRunInterval,
-                 tsapiMetadataStateSetRunInterval,
-                 (dcgmHandle_t pDcgmHandle, unsigned int runIntervalMs),
-                 "({} {})",
-                 pDcgmHandle,
-                 runIntervalMs)
-
-DCGM_ENTRY_POINT(dcgmIntrospectUpdateAll,
-                 tsapiMetadataUpdateAll,
-                 (dcgmHandle_t pDcgmHandle, int waitForUpdate),
-                 "({} {})",
-                 pDcgmHandle,
-                 waitForUpdate)
-
-DCGM_ENTRY_POINT(dcgmIntrospectGetFieldExecTime,
-                 tsapiIntrospectGetFieldExecTime,
-                 (dcgmHandle_t pDcgmHandle,
-                  unsigned short fieldId,
-                  /* dcgmIntrospectFullFieldsExecTime_t */ void *execTime,
-                  int waitIfNoData),
-                 "({} {} {} {})",
-                 pDcgmHandle,
-                 fieldId,
-                 execTime,
-                 waitIfNoData)
-
-DCGM_ENTRY_POINT(dcgmIntrospectGetFieldsExecTime,
-                 tsapiIntrospectGetFieldsExecTime,
-                 (dcgmHandle_t pDcgmHandle,
-                  /* dcgmIntrospectContext_t */ void *context,
-                  /* dcgmIntrospectFullFieldsExecTime_t */ void *execTime,
-                  int waitIfNoData),
-                 "({} {} {} {})",
-                 pDcgmHandle,
-                 context,
-                 execTime,
-                 waitIfNoData)
-
 DCGM_ENTRY_POINT(dcgmIntrospectGetHostengineCpuUtilization,
                  tsapiIntrospectGetHostengineCpuUtilization,
                  (dcgmHandle_t pDcgmHandle, dcgmIntrospectCpuUtil_t *cpuUtil, int waitIfNoData),
                  "({} {} {})",
                  pDcgmHandle,
                  cpuUtil,
-                 waitIfNoData)
-
-DCGM_ENTRY_POINT(dcgmIntrospectGetFieldsMemoryUsage,
-                 tsapiIntrospectGetFieldsMemoryUsage,
-                 (dcgmHandle_t pDcgmHandle,
-                  /* dcgmIntrospectContext_t */ void *context,
-                  /* dcgmIntrospectFullMemory_t */ void *memoryInfo,
-                  int waitIfNoData),
-                 "({} {} {} {})",
-                 pDcgmHandle,
-                 context,
-                 memoryInfo,
-                 waitIfNoData)
-
-DCGM_ENTRY_POINT(dcgmIntrospectGetFieldMemoryUsage,
-                 tsapiIntrospectGetFieldMemoryUsage,
-                 (dcgmHandle_t pDcgmHandle,
-                  unsigned short fieldId,
-                  /* dcgmIntrospectFullMemory_t */ void *memoryInfo,
-                  int waitIfNoData),
-                 "({} {} {} {})",
-                 pDcgmHandle,
-                 fieldId,
-                 memoryInfo,
                  waitIfNoData)
 
 DCGM_ENTRY_POINT(dcgmIntrospectGetHostengineMemoryUsage,
@@ -876,20 +826,6 @@ DCGM_ENTRY_POINT(dcgmProfGetSupportedMetricGroups,
                  "({}, {})",
                  pDcgmHandle,
                  metricGroups)
-
-DCGM_ENTRY_POINT(dcgmProfWatchFields,
-                 tsapiProfWatchFields,
-                 (dcgmHandle_t pDcgmHandle, dcgmProfWatchFields_t *watchMetricGroup),
-                 "({}, {})",
-                 pDcgmHandle,
-                 watchMetricGroup)
-
-DCGM_ENTRY_POINT(dcgmProfUnwatchFields,
-                 tsapiProfUnwatchFields,
-                 (dcgmHandle_t pDcgmHandle, dcgmProfUnwatchFields_t *unwatchMetricGroup),
-                 "({}, {})",
-                 pDcgmHandle,
-                 unwatchMetricGroup)
 
 DCGM_ENTRY_POINT(dcgmProfPause, tsapiProfPause, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
 
@@ -999,10 +935,32 @@ DCGM_ENTRY_POINT(dcgmResetNvmlInjectFuncCallCount,
                  "({})",
                  dcgmHandle)
 
+DCGM_ENTRY_POINT(dcgmRemoveNvmlInjectedGpu,
+                 tsapiRemoveNvmlInjectedGpu,
+                 (dcgmHandle_t dcgmHandle, char const *uuid),
+                 "({}, {})",
+                 dcgmHandle,
+                 uuid)
+
+DCGM_ENTRY_POINT(dcgmRestoreNvmlInjectedGpu,
+                 tsapiRestoreNvmlInjectedGpu,
+                 (dcgmHandle_t dcgmHandle, char const *uuid),
+                 "({}, {})",
+                 dcgmHandle,
+                 uuid)
 #endif
 
 DCGM_ENTRY_POINT(dcgmPauseTelemetryForDiag, tsapiPause, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
 
 DCGM_ENTRY_POINT(dcgmResumeTelemetryForDiag, tsapiResume, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmNvswitchGetBackend,
+                 tsapiNvswitchGetBackend,
+                 (dcgmHandle_t pDcgmHandle, bool *active, char *backendName, unsigned int backendNameLength),
+                 "({}, {}, {}, {})",
+                 pDcgmHandle,
+                 active,
+                 backendName,
+                 backendNameLength)
 
 /*****************************************************************************/

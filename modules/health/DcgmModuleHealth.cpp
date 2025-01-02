@@ -16,8 +16,8 @@
 #include "DcgmModuleHealth.h"
 #include "DcgmHealthResponse.h"
 #include "DcgmLogging.h"
-#include "dcgm_structs.h"
 #include <dcgm_api_export.h>
+#include <dcgm_structs.h>
 
 /*****************************************************************************/
 DcgmModuleHealth::DcgmModuleHealth(dcgmCoreCallbacks_t &dcc)
@@ -93,12 +93,12 @@ dcgmReturn_t DcgmModuleHealth::ProcessGetSystems(dcgm_health_msg_get_systems_t *
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmModuleHealth::ProcessCheckV4(dcgm_health_msg_check_v4 *msg)
+dcgmReturn_t DcgmModuleHealth::ProcessCheckV5(dcgm_health_msg_check_v5 *msg)
 {
     unsigned int groupId;
     dcgmReturn_t dcgmReturn;
 
-    dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_check_version4);
+    dcgmReturn = CheckVersion(&msg->header, dcgm_health_msg_check_version5);
     if (DCGM_ST_OK != dcgmReturn)
         return dcgmReturn; /* Logging handled by helper method */
 
@@ -114,7 +114,7 @@ dcgmReturn_t DcgmModuleHealth::ProcessCheckV4(dcgm_health_msg_check_v4 *msg)
 
     /* MonitorWatches is expecting a zeroed struct */
     memset(&msg->response, 0, sizeof(msg->response));
-    msg->response.version = dcgmHealthResponse_version4;
+    msg->response.version = dcgmHealthResponse_version5;
 
     DcgmHealthResponse response;
     dcgmReturn = mpHealthWatch->MonitorWatches(groupId, msg->startTime, msg->endTime, response);
@@ -147,7 +147,7 @@ dcgmReturn_t DcgmModuleHealth::ProcessCheckGpus(dcgm_health_msg_check_gpus_t *ms
 
     /* MonitorWatches is expecting a zeroed struct, except the version */
     msg->response         = {};
-    msg->response.version = dcgmHealthResponse_version4;
+    msg->response.version = dcgmHealthResponse_version5;
     DcgmHealthResponse response;
 
     for (gpuIdIndex = 0; gpuIdIndex < msg->numGpuIds; gpuIdIndex++)
@@ -241,8 +241,8 @@ dcgmReturn_t DcgmModuleHealth::ProcessMessage(dcgm_module_command_header_t *modu
                 retSt = ProcessSetSystems((dcgm_health_msg_set_systems_t *)moduleCommand);
                 break;
 
-            case DCGM_HEALTH_SR_CHECK_V4:
-                retSt = ProcessCheckV4(reinterpret_cast<dcgm_health_msg_check_v4 *>(moduleCommand));
+            case DCGM_HEALTH_SR_CHECK_V5:
+                retSt = ProcessCheckV5(reinterpret_cast<dcgm_health_msg_check_v5 *>(moduleCommand));
                 break;
 
             case DCGM_HEALTH_SR_CHECK_GPUS:

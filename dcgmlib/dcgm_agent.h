@@ -403,13 +403,14 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuInstanceHierarchy(dcgmHandle_t dcgmHandle
  *        - \ref DCGM_ST_NOT_SUPPORTED     if the given entityGroup does not support enumeration.
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v3 *linkStatus);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v4 *linkStatus);
 
 
 /**
  * List supported CPUs and their cores present on the system
  *
- * This and other CPU APIs only support datacenter NVIDIA CPUs
+ * This and other CPU APIs only support datacenter NVIDIA CPUs.  Use \ref dcgmGetCpuHierarchy_v2 to
+ * get additional CPU information.
  *
  * @param dcgmHandle   IN: DCGM Handle
  * @param cpuHierarchy OUT: Structure where the CPUs and their associated cores will be enumerated
@@ -421,6 +422,22 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dc
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy);
+
+/**
+ * List supported CPUs and their cores present on the system
+ *
+ * This and other CPU APIs only support datacenter NVIDIA CPUs.
+ *
+ * @param dcgmHandle   IN: DCGM Handle
+ * @param cpuHierarchy OUT: Structure where the CPUs and their associated cores will be enumerated
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                if the call was successful.
+ *        - \ref DCGM_ST_NOT_SUPPORTED     if the device is unsupported
+ *        - \ref DCGM_ST_MODULE_NOT_LOADED if the sysmon module could not be loaded
+ *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetCpuHierarchy_v2(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v2 *cpuHierarchy);
 
 /** @} */
 
@@ -1544,23 +1561,21 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyGet(dcgmHandle_t pDcgmHandle,
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param condition          IN: The set of conditions specified as an OR'd list (see \ref dcgmPolicyCondition_t) for
  *                               which to register a callback function
- * @param beginCallback      IN: A reference to a function that should be called should a violation occur.
+ * @param callback           IN: A reference to a function that should be called should a violation occur.
  *                               This function will be called prior to any actions specified by the policy are taken.
- * @param finishCallback     IN: A reference to a function that should be called should a violation occur.
- *                           This function will be called after any action specified by the policy are completed.
+ * @param userData           IN: User data pointer to pass to the userData field of callback
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             if \a groupId, \a condition, is invalid, \a beginCallback, or
- *                                            \a finishCallback is NULL
+ *        - \ref DCGM_ST_BADPARAM             if \a groupId, \a condition, is invalid, \a callback, is NULL
  *        - \ref DCGM_ST_NOT_SUPPORTED        if any unsupported GPUs are part of the GPU group specified in groupId
  *
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyRegister(dcgmHandle_t pDcgmHandle,
-                                                dcgmGpuGrp_t groupId,
-                                                dcgmPolicyCondition_t condition,
-                                                fpRecvUpdates beginCallback,
-                                                fpRecvUpdates finishCallback);
+dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyRegister_v2(dcgmHandle_t pDcgmHandle,
+                                                   dcgmGpuGrp_t groupId,
+                                                   dcgmPolicyCondition_t condition,
+                                                   fpRecvUpdates callback,
+                                                   uint64_t userData);
 
 /**
  * Unregister a function to be called for a specific policy condition (see \ref dcgmPolicyCondition_t).
@@ -1575,7 +1590,8 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyRegister(dcgmHandle_t pDcgmHandle,
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             if \a groupId, \a condition, is invalid or \a callback is NULL
+ *        - \ref DCGM_ST_BADPARAM             if \a groupId, \a condition, is invalid
+ *        - \ref DCGM_ST_IN_USE               if callback from policy registeration is in progress
  *
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
@@ -1602,9 +1618,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
  *                               details on creating the group. Alternatively, pass in the group id as
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param validate           IN: The validation to perform after the action.
- * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
- *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
- *                                     except for the version field.
+ * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_t for details.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1619,7 +1633,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
                                                 dcgmGpuGrp_t groupId,
                                                 dcgmPolicyValidation_t validate,
-                                                dcgmDiagResponse_v10 *response);
+                                                dcgmDiagResponse_v11 *response);
 
 /**
  * Inform the action manager to perform a manual validation of a group of GPUs on the system
@@ -1629,7 +1643,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                               that should be performed. Look at \ref dcgmGroupCreate for details on creating the
  *                               group. Alternatively, pass in the group id as \a DCGM_GROUP_ALL_GPUS to perform
  *                               operation on all the GPUs.
- * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_v10 for details.
+ * @param response          OUT: Result of the validation process. Refer to \ref dcgmDiagResponse_t for details.
  *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
  *                                     except for the version field.
  *
@@ -1643,8 +1657,9 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                                            currently not allowed.
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
-                                                   dcgmRunDiag_v8 *drd,
-                                                   dcgmDiagResponse_v10 *response);
+                                                   dcgmRunDiag_v9 *drd,
+                                                   dcgmDiagResponse_v11 *response);
+
 
 /**
  * Run a diagnostic on a group of GPUs
@@ -1655,9 +1670,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
  *                               \a DCGM_GROUP_ALL_GPUS to perform operation on all the GPUs.
  * @param diagLevel          IN: Diagnostic level to run
  * @param diagResponse   IN/OUT: Result of running the DCGM diagnostic.<br>
- *                               .version should be set to \ref dcgmDiagResponse_version10 before this call.
- *                               Note: It's a caller's responsibility to make sure the response is zero-initialized,
- *                                     except for the version field.
+ *                               .version should be set to \ref dcgmDiagResponse_version before this call.
  *
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful
@@ -1673,7 +1686,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                                dcgmGpuGrp_t groupId,
                                                dcgmDiagnosticLevel_t diagLevel,
-                                               dcgmDiagResponse_v10 *diagResponse);
+                                               dcgmDiagResponse_v11 *diagResponse);
 
 /** @} */ // Closing for DCGMAPI_PO_MI
 
@@ -1702,6 +1715,27 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyTrigger(dcgmHandle_t pDcgmHandle);
 
 /** @} */ // Closing for DCGMAPI_Admin_ExecCtrl
+
+/**
+ * Gets device workload power profile information and status.
+ *
+ * @param pDcgmHandle             IN: DCGM Handle
+ * @param gpuId                   IN: GPU Id corresponding to which topology information should be fetched
+ * @param profilesInfo           OUT: Information about each of the supported workload power profiles available on this
+ *                                    device
+ * @param profilesStatus         OUT: Currently active, requested, and enforced workload power profiles on this device
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful.
+ *        - \ref DCGM_ST_BADPARAM             if \a gpuId, \a profileInfo, or \a profileStatus were not valid.
+ *        - \ref DCGM_ST_VER_MISMATCH         if profileInfo or profileStatus were not set to the correct versions.
+ *
+ */
+dcgmReturn_t DCGM_PUBLIC_API
+dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHandle,
+                                      unsigned int gpuId,
+                                      dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                                      dcgmDeviceWorkloadPowerProfilesStatus_v1 *profileStatus);
 
 /***************************************************************************************************/
 /** @defgroup DCGMAPI_Topo Topology
@@ -1899,7 +1933,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmModuleGetStatuses(dcgmHandle_t pDcgmHandle, dcg
  * Metrics that can be watched concurrently will have different .majorId fields in their dcgmProfMetricGroupInfo_t
  *
  * See \ref dcgmGroupCreate for details on creating a GPU group
- * See \ref dcgmProfWatchFields to actually watch a metric group
+ * See \ref dcgmWatchFields to actually watch the underlying profiling fields
  *
  * @param pDcgmHandle        IN: DCGM Handle
  * @param metricGroups   IN/OUT: Metric groups supported for metricGroups->groupId.<br>
@@ -1914,46 +1948,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmModuleGetStatuses(dcgmHandle_t pDcgmHandle, dcg
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmProfGetSupportedMetricGroups(dcgmHandle_t pDcgmHandle,
                                                               dcgmProfGetMetricGroups_t *metricGroups);
-
-/**
- * Request that DCGM start recording updates for a given list of profiling field IDs.
- *
- * Once metrics have been watched by this API, any of the normal DCGM field-value retrieval APIs can be used on
- * the underlying fieldIds of this metric group. See \ref dcgmGetLatestValues_v2, \ref dcgmGetLatestValuesForFields,
- * \ref dcgmEntityGetLatestValues, and \ref dcgmEntitiesGetLatestValues.
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param watchFields        IN: Details of which metric groups to watch for which GPUs. See \ref dcgmProfWatchFields_v1
- *                               for details of what should be put in each struct member. watchFields->version should be
- *                               set to dcgmProfWatchFields_version upon calling.
- *
- * @return
- *        - \ref DCGM_ST_OK                     if the call was successful
- *        - \ref DCGM_ST_BADPARAM               if a parameter is invalid
- *        - \ref DCGM_ST_NOT_SUPPORTED          if profiling metric group metricGroupTag is not supported for the given
- *                                              GPU group.
- *        - \ref DCGM_ST_GROUP_INCOMPATIBLE     if groupId's GPUs are not identical GPUs. Profiling metrics are only
- *                                              support for homogenous groups of GPUs.
- *        - \ref DCGM_ST_PROFILING_MULTI_PASS   if any of the metric groups could not be watched concurrently due to
- *                                              requiring the hardware to gather them with multiple passes
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmProfWatchFields(dcgmHandle_t pDcgmHandle, dcgmProfWatchFields_t *watchFields);
-
-/**
- * Request that DCGM stop recording updates for all profiling field IDs for all GPUs
- *
- * @param pDcgmHandle        IN: DCGM Handle
- * @param unwatchFields      IN: Details of which metric groups to unwatch for which GPUs. See \ref
- *                               dcgmProfUnwatchFields_v1 for details of what should be put in each struct member.
- *                               unwatchFields->version should be set to dcgmProfUnwatchFields_version upon calling.
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             if a parameter is invalid
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmProfUnwatchFields(dcgmHandle_t pDcgmHandle, dcgmProfUnwatchFields_t *unwatchFields);
 
 /**
  * Pause profiling activities in DCGM. This should be used when you are monitoring profiling fields

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
+
 add_subdirectory(DcgmThread)
 add_subdirectory(serialize)
 add_subdirectory(CudaWorker)
@@ -19,34 +19,39 @@ add_subdirectory(CudaWorker)
 add_subdirectory(transport)
 add_subdirectory(tests)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DcgmBuildInfo.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/DcgmBuildInfo.cpp @ONLY)
+configure_file(DcgmBuildInfo.cpp.in DcgmBuildInfo.cpp @ONLY)
 
-add_library(buildinfo_objects STATIC)
-target_include_directories(buildinfo_objects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(buildinfo_objects PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+
 target_sources(buildinfo_objects PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}/DcgmBuildInfo.cpp)
+    "${CMAKE_CURRENT_BINARY_DIR}/DcgmBuildInfo.cpp")
 
-add_library(common_interface INTERFACE)
-target_include_directories(common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(common_interface INTERFACE sdk_nvml_interface dcgm_interface nvmli_interface)
+target_include_directories(common_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(common_interface INTERFACE
+    dcgm_interface
+    nvmli_interface
+    sdk_nvml_interface)
 
-add_library(dcgm_logging STATIC)
-target_sources(dcgm_logging PRIVATE 
+target_sources(dcgm_logging PRIVATE
     DcgmLogging.cpp
     DcgmLogging.h
-    DcgmLoggingImpl.h
-)
-target_link_libraries(dcgm_logging PUBLIC common_interface fmt::fmt nvmli_interface)
+    DcgmLoggingImpl.h)
 
-add_library(dcgm_mutex STATIC)
+target_link_libraries(dcgm_logging PUBLIC
+    common_interface
+    fmt::fmt
+    nvmli_interface)
+
 target_sources(dcgm_mutex PRIVATE
     DcgmMutex.cpp
-    DcgmMutex.h
-)
+    DcgmMutex.h)
+
 target_link_libraries(dcgm_mutex PUBLIC common_interface)
 
-add_library(dcgm_common STATIC)
+add_subdirectory(ChildProcess)
+
 target_sources(dcgm_common PRIVATE
+    CpuHelpers.cpp
     DcgmError.h
     DcgmFvBuffer.cpp
     DcgmFvBuffer.h
@@ -68,32 +73,41 @@ target_sources(dcgm_common PRIVATE
     DcgmTaskRunner.h
     DcgmUtilities.cpp
     DcgmUtilities.h
-    DcgmWatcher.cpp
-    DcgmWatcher.h
     DcgmWatchTable.cpp
     DcgmWatchTable.h
+    DcgmWatcher.cpp
+    DcgmWatcher.h
+    EntityListHelpers.cpp
+    EntityListHelpers.h
+    FastPimpl.hpp
+    FileSystemOperator.cpp
+    LsHw.cpp
+    LsHw.h
+    MigIdParser.cpp
+    MigIdParser.hpp
     Semaphore.hpp
     Task.hpp
     TaskRunner.hpp
     ThreadSafeQueue.hpp
     TimeLib.cpp
+    LsHw.cpp
+    LsHw.h
 )
 
 target_link_libraries(dcgm_common PUBLIC
-    common_interface
-    transport_objects
+    ${JSONCPP_STATIC_LIBS}
     buildinfo_objects
-    sdk_nvml_essentials_objects
-    fmt::fmt
+    common_interface
     dl
-)
+    fmt::fmt
+    sdk_nvml_essentials_objects
+    transport_objects)
 
-add_library(common_watch_objects STATIC)
 target_sources(common_watch_objects PRIVATE
     DcgmError.h
     DcgmWatcher.cpp
     DcgmWatcher.h
     DcgmWatchTable.cpp
-    DcgmWatchTable.h
-)
+    DcgmWatchTable.h)
+
 target_link_libraries(common_watch_objects PUBLIC common_interface)

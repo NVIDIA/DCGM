@@ -13,29 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <string.h>
-
 #include "DcgmGroup.h"
-#include "DcgmLogging.h"
-#include "dcgm_agent.h"
+
+#include <DcgmLogging.h>
+#include <dcgm_agent.h>
+
+#include <cstring>
 
 DcgmGroup::DcgmGroup()
     : m_groupId(0)
     , m_handle(0)
+    , m_info(std::make_unique<dcgmGroupInfo_t>())
     , m_fieldGroup(nullptr)
 {
-    memset(&m_info, 0, sizeof(m_info));
+    memset(m_info.get(), 0, sizeof(*m_info));
 }
 
 DcgmGroup::DcgmGroup(DcgmGroup &&other) noexcept
     : m_groupId(other.m_groupId)
     , m_handle(other.m_handle)
+    , m_info(std::make_unique<dcgmGroupInfo_t>())
     , m_fieldGroup(other.m_fieldGroup)
 {
     other.m_handle     = 0;
     other.m_groupId    = 0;
     other.m_fieldGroup = nullptr;
-    memset(&m_info, 0, sizeof(m_info));
+    memset(m_info.get(), 0, sizeof(*m_info));
 }
 
 DcgmGroup::~DcgmGroup()
@@ -114,7 +117,7 @@ dcgmReturn_t DcgmGroup::AddGpu(unsigned int gpuId)
     }
 
     // Mark that we need to refresh group information
-    m_info.version = 0;
+    m_info->version = 0;
 
     return dcgmGroupAddDevice(m_handle, m_groupId, gpuId);
 }
@@ -132,8 +135,8 @@ dcgmReturn_t DcgmGroup::Cleanup()
     tmp = dcgmGroupDestroy(m_handle, m_groupId);
     if (tmp == DCGM_ST_OK)
     {
-        m_groupId      = 0;
-        m_info.version = 0;
+        m_groupId       = 0;
+        m_info->version = 0;
     }
     else if (ret == DCGM_ST_OK)
         ret = tmp;
@@ -144,7 +147,7 @@ dcgmReturn_t DcgmGroup::Cleanup()
 dcgmReturn_t DcgmGroup::RefreshGroupInfo()
 {
     // If the version is set then we have good info
-    if (m_info.version != 0)
+    if (m_info->version != 0)
         return DCGM_ST_OK;
     else if (m_handle == 0)
     {
@@ -152,10 +155,10 @@ dcgmReturn_t DcgmGroup::RefreshGroupInfo()
         return DCGM_ST_BADPARAM;
     }
 
-    m_info.version   = dcgmGroupInfo_version2;
-    dcgmReturn_t ret = dcgmGroupGetInfo(m_handle, m_groupId, &m_info);
+    m_info->version  = dcgmGroupInfo_version;
+    dcgmReturn_t ret = dcgmGroupGetInfo(m_handle, m_groupId, m_info.get());
     if (ret != DCGM_ST_OK)
-        m_info.version = 0;
+        m_info->version = 0;
 
     return ret;
 }
@@ -169,10 +172,10 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
         return ret;
 
     // Return an error if there aren't enough slots for the status
-    if (m_info.count > maxSize)
+    if (m_info->count > maxSize)
     {
         log_info("We cannot save the config status because we received {} and have a max count of {}",
-                 m_info.count,
+                 m_info->count,
                  maxSize);
         return DCGM_ST_INSUFFICIENT_SIZE;
     }
@@ -185,7 +188,7 @@ dcgmReturn_t DcgmGroup::GetConfig(dcgmConfig_t current[], unsigned int maxSize, 
         return ret;
     }
 
-    actualSize = m_info.count;
+    actualSize = m_info->count;
     for (unsigned int i = 0; i < actualSize; i++)
         current[i].version = dcgmConfig_version1;
 

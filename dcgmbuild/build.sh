@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+
+# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,66 +14,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-set -euxo pipefail
-DIR=$(dirname $(realpath $0))
 
-BASE_DOCKERFILE=base.dockerfile
-DCGMBUILD_IMAGE_NAME=${DCGMBUILD_IMAGE_NAME:-dcgmbuild}
+set -o errexit -o pipefail -o nounset
+
+if [[ ${DEBUG_BUILD_SCRIPT:-} -eq 1 ]]; then
+    PS4='$LINENO: ' # to see line numbers
+    set -x          # to enable debugging
+    set -v          # to see actual lines and not just side effects
+fi
+
+###################
+#### Arguments ####
+###################
+
+ARCHITECTURES=("x86_64" "aarch64")
+if [[ $# -gt 0 ]]; then
+    ARCHITECTURES=("$@")
+fi
 
 ####################
 #### Versioning ####
 ####################
 
-DCGMBUILD_BASE_VERSION=gcc11-$(sha256sum ${BASE_DOCKERFILE} | head -c6)
-DCGMBUILD_BASE_TAG="${DCGMBUILD_IMAGE_NAME}:base-${DCGMBUILD_BASE_VERSION}"
+if [[ ! -v TAG ]]
+then
+  TAG=${DCGM_VERSION:-4.0.0}-gcc14-$(scripts/toolchain-sha256sum | head -c6)
+fi
 
 ###############
 #### Logic ####
 ###############
 
-DOCKER_BUILD_OPTIONS="--compress --platform=linux/amd64 --load --network=host"
+export BASE_IMAGE=${BASE_IMAGE:-ubuntu:24.04}
+export TAG
 
-function docker_build() {
-    docker buildx build ${DOCKER_BUILD_OPTIONS} "$@"
-}
-
-function image_exists() {
-    docker inspect --type=image --format="ignore" "$1" >/dev/null 2>&1
-    return $?
-}
-
-function get_image_sha256() {
-    docker inspect --type=image --format="{{.Id}}" "$1" 2>/dev/null
-}
-
-default_targets=("x86_64" "aarch64" "powerpc64le")
-
-if [[ $# -gt 0 ]]; then
-    targets=("$@")
-else
-    targets=("${default_targets[@]}")
-fi
-
-echo "Building for targets: ${targets[@]}"
-
-for target in "${targets[@]}"; do
-    CURRENT_BASE_TAG=${DCGMBUILD_BASE_TAG}-${target}
-    CURRENT_CHILD_TAG=${DCGMBUILD_IMAGE_NAME}-${target}
-
-    if ! image_exists ${CURRENT_BASE_TAG}; then
-        echo Unable to find ${CURRENT_BASE_TAG}. Building ...
-        docker_build -t ${CURRENT_BASE_TAG} \
-            --build-arg TARGET=${target} \
-            -f ${BASE_DOCKERFILE} \
-            ${DIR}
-    else
-        echo ${CURRENT_BASE_TAG} already exists locally: $(get_image_sha256 ${CURRENT_BASE_TAG})
-    fi
-
-    BASE_IMAGE=${CURRENT_BASE_TAG}
-
-    docker_build -t ${CURRENT_CHILD_TAG} \
-        --build-arg BASE_IMAGE=${BASE_IMAGE} \
-        --build-arg BASE_IMAGE_TARGET=${target} \
-        ${DIR}
+for ARCHITECTURE in "${ARCHITECTURES[@]}"
+do
+  docker compose build --with-dependencies dcgmbuild-$ARCHITECTURE
+  docker tag ${REGISTRY:-dcgm}/dcgmbuild:$TAG-$ARCHITECTURE dcgmbuild:$TAG-$ARCHITECTURE
 done
+
+docker image rm dcgm/common-host-software:$TAG

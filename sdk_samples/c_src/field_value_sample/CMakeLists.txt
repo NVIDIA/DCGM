@@ -14,4 +14,4 @@
 
 add_executable(field_value_sample)
 target_sources(field_value_sample PRIVATE field_value_sample.cpp)
-target_link_libraries(field_value_sample PRIVATE $<BUILD_INTERFACE:dcgm> $<INSTALL_INTERFACE:Dcgm::dcgm>)
+target_link_libraries(field_value_sample PRIVATE DCGM::dcgm)

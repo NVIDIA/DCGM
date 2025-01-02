@@ -72,8 +72,6 @@ def get_dcgmi_bin_directory():
     elif platform.machine() == 'aarch64' and platform.system() == 'Linux':
         path = "apps/aarch64"
 
-    elif platform.machine() == 'ppc64le' and platform.system() == 'Linux':
-        path = "apps/ppc64le"
     else:
         print("Unsupported platform. Please modify get_dcgmi_bin_directory()")
         sys.exit(1)
@@ -1492,12 +1490,12 @@ class RunDcgmi():
                                 if dd.failed_list:
                                     """
                                     Diag may have passed if all errors are
-                                    DCGM_FI_DEV_CLOCK_THROTTLE_REASONS
+                                    DCGM_FI_DEV_CLOCKS_EVENT_REASONS
                                     """
                                     diagPassed = True
                                     logCooling = False
                                     for failure in dd.failed_list:
-                                        if failure.m_fieldId == dcgm_fields.DCGM_FI_DEV_CLOCK_THROTTLE_REASONS:
+                                        if failure.m_fieldId == dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS:
                                             logCooling = True;
                                         else:
                                             diagPassed = False
@@ -1507,11 +1505,11 @@ class RunDcgmi():
 
                                 nsc.m_shutdownFlag.set()
                                 nsc.join()
-                                throttleReasons = nsc.GetAnyThermalThrottlingReasons()
-                                if len(throttleReasons):
-                                    self.log.write("Ignoring diagnostic failure due to thermal throttling.")
-                                    for throttleReason in throttleReasons:
-                                        self.log.write("Found thermal throttling: %s" % str(throttleReasons))
+                                reasons = nsc.GetAnyThermalClocksEventReasons()
+                                if len(reasons):
+                                    self.log.write("Ignoring diagnostic failure due to thermal clocks event.")
+                                    for reason in reasons:
+                                        self.log.write("Found thermal clocks event: %s" % str(reason))
                                     diagPassed = True
 
                                 fout.write(str(dd.lastStdout))

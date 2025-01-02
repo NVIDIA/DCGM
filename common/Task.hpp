@@ -322,6 +322,7 @@ auto make_task(Fn &&func) -> std::unique_ptr<typename Task<OptionalNestedType_t<
  * @param[in] taskName  Name of the crated task. @sa See `NamedBasicTask::NamedBasicTask()` for the name definition.
  * @param[in] func      A function that will perform main task work. Can be a lambda with `void` return type
  */
+// clang-format off
 template <std::invocable Fn>
 auto make_task(std::string taskName, Fn &&func)
     -> std::unique_ptr<typename Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>::BaseType>
@@ -329,6 +330,7 @@ auto make_task(std::string taskName, Fn &&func)
     return std::make_unique<Task<OptionalNestedType_t<std::invoke_result_t<Fn>>>>(std::move(taskName),
                                                                                   std::forward<Fn>(func));
 }
+// clang-format on
 
 /**
  * Helper function to create a Task with specified number of \a attempts

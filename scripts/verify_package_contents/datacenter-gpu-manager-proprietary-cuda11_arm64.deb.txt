@@ -1,0 +1,11 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libMemoryBandwidth.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libMemoryBandwidth.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda11/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda11/copyright

@@ -19,7 +19,6 @@ class XidApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/xid/xid_32bit",
             "Linux_64bit": "./apps/xid/xid_64bit",
-            "Linux_ppc64le": "./apps/xid/xid_ppc64le",
             "Windows_64bit": "./apps/xid/xid_64bit.exe"
             }
     def __init__(self, device):

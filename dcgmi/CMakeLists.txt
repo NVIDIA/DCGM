@@ -13,69 +13,58 @@
 # limitations under the License.
 add_subdirectory(testing)
 
-find_package(Jsoncpp REQUIRED)
-find_package(fmt REQUIRED)
-
-add_library(dcgmi_interface INTERFACE)
 target_include_directories(dcgmi_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(dcgmi_interface INTERFACE dcgm_interface)
 
-add_library(dcgmi_objects STATIC)
-target_link_libraries(dcgmi_objects
-    PUBLIC
-        dcgmi_interface
-        dcgm_thread_interface
-        common_interface
-        diag_interface
-        nvmli_interface
-)
-target_sources(dcgmi_objects
-    PRIVATE
-        Command.cpp
-        CommandLineParser.cpp
-        CommandOutputController.cpp
-        Config.cpp
-        dcgmi_common.cpp
-        DcgmiOutput.cpp
-        DcgmiProfile.cpp
-        DcgmiSettings.cpp
-        DcgmiTest.cpp
-        DeviceMonitor.cpp
-        Diag.cpp
-        FieldGroup.cpp
-        Group.cpp
-        Health.cpp
-        Introspect.cpp
-        main_dcgmi.cpp
-        MigIdParser.cpp
-        Module.cpp
-        Nvlink.cpp
-        Policy.cpp
-        ProcessStats.cpp
-        Query.cpp
-        Topo.cpp
-        Version.cpp
-)
+target_link_libraries(dcgmi_objects_without_main PUBLIC
+    common_interface
+    dcgm_common
+    dcgm_logging
+    dcgm_thread_interface
+    dcgmi_interface
+    dcgmmodulediag_common
+    diag_interface
+    ${JSONCPP_STATIC_LIBS}
+    nvmli_interface)
 
-add_executable(dcgmi)
+target_sources(dcgmi_objects_without_main PRIVATE
+    Command.cpp
+    CommandLineParser.cpp
+    CommandOutputController.cpp
+    Config.cpp
+    dcgmi_common.cpp
+    DcgmiOutput.cpp
+    DcgmiProfile.cpp
+    DcgmiSettings.cpp
+    DcgmiTest.cpp
+    DeviceMonitor.cpp
+    Diag.cpp
+    FieldGroup.cpp
+    Group.cpp
+    Health.cpp
+    Introspect.cpp
+    Module.cpp
+    Nvlink.cpp
+    Policy.cpp
+    ProcessStats.cpp
+    Query.cpp
+    Topo.cpp
+    Version.cpp)
+
+target_link_libraries(dcgmi_objects PUBLIC dcgmi_objects_without_main)
+target_sources(dcgmi_objects PRIVATE main_dcgmi.cpp)
+
 target_link_libraries(dcgmi
     PRIVATE
-        dcgm_interface
+        buildinfo_objects
         common_interface
-        diag_interface
+        dcgm
+        dcgm_interface
+        dcgm_mutex
         dcgm_thread
         dcgmi_objects
-        dcgmmodulediag_common
-        buildinfo_objects
-        dcgm
-        dcgm_logging
-        dcgm_mutex
-        dcgm_common
-        nvvs_interface
-        diag_interface
-        ${JSONCPP_STATIC_LIBS}
         fmt::fmt
-)
+        nvvs_interface)
 
 target_link_options(dcgmi PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/dcgmi.linux_def)
 

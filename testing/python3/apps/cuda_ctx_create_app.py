@@ -23,7 +23,6 @@ class CudaCtxCreateApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
             "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
-            "Linux_ppc64le": "./apps/cuda_ctx_create/cuda_ctx_create_ppc64le",
             "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
             "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
             }
@@ -59,7 +58,6 @@ class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
             "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
-            "Linux_ppc64le": "./apps/cuda_ctx_create/cuda_ctx_create_ppc64le",
             "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
             "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
             }

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import argparse
 import sys
 import logging
@@ -27,13 +28,14 @@ try:
 except:
     # If we don't find the bindings, add the default path and try again
     if 'PYTHONPATH' in os.environ:
-        os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ":/usr/local/dcgm/bindings"
+        os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ":/usr/share/datacenter-gpu-manager-4/bindings/python3"
     else:
-        os.environ['PYTHONPATH'] = '/usr/local/dcgm/bindings'
+        os.environ['PYTHONPATH'] = '/usr/share/datacenter-gpu-manager-4/bindings/python3'
 
     import pydcgm
     import dcgm_agent
     import dcgm_structs
+    import dcgm_errors
     import dcgm_fields
     import DcgmSystem
 
@@ -124,8 +126,8 @@ def setTestDurations(runDiagInfo, timePercentage):
     addParamString(runDiagInfo, 3, powerParam)
 
 def initialize_run_diag_info(settings):
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
     runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
     testNamesStr = settings['testNames']
     if testNamesStr == '1':
@@ -170,11 +172,11 @@ def initialize_run_diag_info(settings):
         if gpuObj.IsHealthy():
             activeGpuIds.append(gpuObj.GetEntityId())
             if first:
-                runDiagInfo.gpuList = str(gpuObj.GetEntityId())
+                runDiagInfo.entityIds = str(gpuObj.GetEntityId())
                 first = False
             else:
                 to_append = ',%s' % (str(gpuObj.GetEntityId()))
-                runDiagInfo.gpuList = runDiagInfo.gpuList + to_append
+                runDiagInfo.entityIds = runDiagInfo.entityIds + to_append
 
     return runDiagInfo, activeGpuIds
 
@@ -195,12 +197,34 @@ def result_to_str(result):
         return 'NOT RUN'
 
 def check_passive_health_checks(response, activeGpuIds):
+    # Returns `True` when any tests report failure results and marks all activeGpuIds as unhealthy.
+    # Returns `False` otherwise, without marking any entities unhealthy.
+
+    assert response.numTests == 1
     unhealthy = False
-    for i in range(0, dcgm_structs.DCGM_SWTEST_COUNT):
-        if response.levelOneResults[i].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
-            mark_all_unhealthy(activeGpuIds, response.levelOneResults[i].error[0].msg)
-            unhealthy = True
-            break
+    testId = None
+    maxTestIdx = min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)
+    maxResIdx =  min(response.numResults, dcgm_structs.DCGM_DIAG_RESPONSE_RESULTS_MAX)
+
+    for idx in range(max(maxTestIdx, maxResIdx)):
+        if idx < maxTestIdx:
+            if response.tests[idx].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
+                unhealthy = True
+                testId = idx
+                break
+        if idx < maxResIdx:
+            if response.results[idx].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
+                unhealthy = True
+                testId = response.results[idx].testId
+                break
+
+    if unhealthy:
+        for gpuErr in response.errors[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]:
+            if gpuErr.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and gpuErr.entity.entityId in activeGpuIds and gpuErr.testId == testId:
+                mark_all_unhealthy(activeGpuIds, gpuErr.msg)
+                return True
+        mark_all_unhealthy(activeGpuIds, "One or more tests failed")
+        return True
 
     return unhealthy
 
@@ -211,21 +235,30 @@ def check_gpu_diagnostic(handleObj, settings):
 
     response = dcgm_agent.dcgmActionValidate_v2(handleObj.handle, runDiagInfo)
 
-    sysError = response.systemError
-    if (sysError.code != dcgm_errors.DCGM_FR_OK):
-        raise ValueError(sysError)
+    for sysError in filter(lambda cur: cur.testId == dcgm_structs.DCGM_DIAG_RESPONSE_SYSTEM_ERROR,
+                           response[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]):
+        if (sysError.code != dcgm_errors.DCGM_FR_OK):
+            raise ValueError(sysError)
 
     if check_passive_health_checks(response, activeGpuIds) == False:
-        for gpuIndex in range(response.gpuCount):
-            for testIndex in range(dcgm_structs.DCGM_PER_GPU_TEST_COUNT_V8):
-                if response.perGpuResponses[gpuIndex].results[testIndex].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
-                    gpuId = response.perGpuResponses[gpuIndex].gpuId
-                    mark_entity_unhealthy(g_gpus, gpuId, BR_ST_FAILED_ACTIVE_HEALTH,
-                                              response.perGpuResponses[gpuIndex].results[testIndex].result.error[0].msg)
-
-                    # NVVS marks all subsequent tests as failed so there's no point in continuing
-                    break 
-
+        # Walk through non-software result, find any result associated with the specified GpuIds that's failure
+        # Mark the specified gpu as unhealthy and then stop
+        for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+            if response.categories[test.categoryIndex] in { "Deployment", "software" }:
+                continue
+            fail = next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL and
+                               cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId in activeGpuIds,
+                               map(lambda resIdx: response.results[resIdx], test.results[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None)
+            if fail:
+                error = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == fail.entity.entityId,
+                               map(lambda errIdx: response.errors[errIdx], test.errorIndices[:min(test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)])), None)
+                if error:
+                    errmsg = error.msg
+                else:
+                    errmsg = "GPU %d failed test %s" % (fail.entity.entityId, test.name)
+                mark_entity_unhealthy(g_gpus, fail.entity.entityId, BR_ST_FAILED_ACTIVE_HEALTH, errmsg)
+                # NVVS marks all subsequent tests as failed so there's no point in continuing
+                break
 
 def query_passive_health(handleObj, desired_watches):
     dcgmGroup = handleObj.GetSystem().GetDefaultGroup()

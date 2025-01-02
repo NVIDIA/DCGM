@@ -30,7 +30,7 @@ public:
     EarlyFailChecker(TestParameters *tp,
                      bool failEarly,
                      unsigned long failCheckInterval,
-                     const dcgmDiagPluginGpuList_t &gpuInfos);
+                     const dcgmDiagPluginEntityList_v1 &entityInfos);
 
     /*************************************************************************/
     nvvsPluginResult_t CheckCommonErrors(unsigned long checkTime, unsigned long startTime, DcgmRecorder &dcgmRecorder);
@@ -44,5 +44,5 @@ protected:
     unsigned long m_failCheckInterval = 0;
     unsigned long m_lastCheckTime     = ULONG_MAX;
     std::vector<DcgmError> m_errors;
-    std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfos;
+    std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfos;
 };

@@ -11,23 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_library(dcgm_interface INTERFACE)
 
 target_include_directories(dcgm_interface INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
-    )
-target_link_libraries(dcgm_interface INTERFACE sdk_nvml_interface)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>)
 
-install(FILES
+target_link_libraries(dcgm_interface INTERFACE $<BUILD_INTERFACE:sdk_nvml_interface>)
+
+install(
+    FILES
         dcgm_agent.h
         dcgm_structs.h
         dcgm_fields.h
         dcgm_errors.h
         dcgm_helpers.h
         dcgm_api_export.h
-    DESTINATION
-        ${DCGM_INCLUDE_INSTALL_PREFIX}
-    COMPONENT DCGM
-)
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
+    COMPONENT Development)
+
+add_subdirectory(src)

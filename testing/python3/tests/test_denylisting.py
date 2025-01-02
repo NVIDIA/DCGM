@@ -52,7 +52,6 @@ def helper_test_denylist_briefly():
         assert False, "Couldn't parse the json output by the denylist. Got exception: %s\noutput\n:%s" % (str(e), output)
 
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_basic_denylisting_script(handle, gpuIds):
     helper_test_denylist_briefly()

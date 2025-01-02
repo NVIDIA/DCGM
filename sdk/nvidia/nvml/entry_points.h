@@ -539,14 +539,22 @@ NVML_ENTRY_POINT(nvmlDeviceSetPowerManagementLimit, tsapiDeviceSetPowerManagemen
         (nvmlDevice_t device, unsigned int limit),
         "(%p, %u)",
         device, limit)
+NVML_ENTRY_POINT(nvmlDeviceGetCurrentClocksEventReasons, tsapiDeviceGetCurrentClocksEventReasons,
+        (nvmlDevice_t device, unsigned long long *clocksEventReasons),
+        "(%p, %p)",
+        device, clocksEventReasons)
 NVML_ENTRY_POINT(nvmlDeviceGetCurrentClocksThrottleReasons, tsapiDeviceGetCurrentClocksThrottleReasons,
         (nvmlDevice_t device, unsigned long long *clocksThrottleReasons),
         "(%p, %p)",
         device, clocksThrottleReasons)
+NVML_ENTRY_POINT(nvmlDeviceGetSupportedClocksEventReasons, tsapiDeviceGetSupportedClocksEventReasons,
+        (nvmlDevice_t device, unsigned long long *supportedClocksEventReasons),
+        "(%p, %p)",
+        device, supportedClocksEventReasons);
 NVML_ENTRY_POINT(nvmlDeviceGetSupportedClocksThrottleReasons, tsapiDeviceGetSupportedClocksThrottleReasons,
         (nvmlDevice_t device, unsigned long long *supportedClocksThrottleReasons),
         "(%p, %p)",
-        device, supportedClocksThrottleReasons);   
+        device, supportedClocksThrottleReasons);
 NVML_ENTRY_POINT(nvmlDeviceGetIndex, tsapiDeviceGetIndex,
         (nvmlDevice_t device, unsigned int *index),
         "(%p, %p)",
@@ -1365,6 +1373,16 @@ NVML_ENTRY_POINT(nvmlGpmQueryDeviceSupport, tsapiGpmQueryDeviceSupport,
         "(%p, %p)",
         device, gpmSupport)
 
+NVML_ENTRY_POINT(nvmlDeviceGetGpuFabricInfo,
+                 tsapiDeviceGetGpuFabricInfo,
+                 (nvmlDevice_t device, nvmlGpuFabricInfo_t *gpuFabricInfo),
+                 "(%p, %p)",
+                 device, gpuFabricInfo);
+
+NVML_ENTRY_POINT(nvmlDeviceGetGpuFabricInfoV, tsapiDeviceGetGpuFabricInfoV,
+                 (nvmlDevice_t device, nvmlGpuFabricInfoV_t *gpuFabricInfo),
+                 "(%p, %p)",
+                 device, gpuFabricInfo);
 
 NVML_ENTRY_POINT(nvmlDeviceGetCount_v2, tsapiDeviceGetCount_v2,
         (unsigned int *deviceCount),
@@ -1378,3 +1396,24 @@ NVML_ENTRY_POINT(nvmlDeviceGetArchitecture, tsapiDeviceGetArchitecture,
         (nvmlDevice_t device, nvmlDeviceArchitecture_t *arch),
         "(%p, %p)",
         device, arch)
+
+NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileGetProfilesInfo,
+                 tsapiDeviceWorkloadPowerProfileGetProfilesInfo,
+                 (nvmlDevice_t device, nvmlWorkloadPowerProfileProfilesInfo_t *profilesInfo),
+                 "(%p, %p)",
+                 device, profilesInfo);
+NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileGetCurrentProfiles,
+                 tsapiDeviceWorkloadPowerProfileGetCurrentProfiles,
+                 (nvmlDevice_t device, nvmlWorkloadPowerProfileCurrentProfiles_t *currentProfiles),
+                 "(%p, %p)",
+                 device, currentProfiles);
+NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileSetRequestedProfiles,
+                 tsapiDeviceWorkloadPowerProfileSetRequestedProfiles,
+                 (nvmlDevice_t device, nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles),
+                 "(%p, %p)",
+                 device, requestedProfiles);
+NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileClearRequestedProfiles,
+                 tsapiDeviceWorkloadPowerProfileClearRequestedProfiles,
+                 (nvmlDevice_t device, nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles),
+                 "(%p, %p)",
+                 device, requestedProfiles);

@@ -56,20 +56,6 @@ typedef struct
 } injectNvmlFuncCallCounts_t;
 
 /*
- * Must be called before using the library to initialize it correctly
- *
- * @return NVML_SUCCESS or NVML_* to indicate an error
- */
-nvmlReturn_t injectionNvmlInit();
-
-/*
- * Must be called to release memory held by the injection library
- *
- * @return NVML_SUCCESS or NVML_* to indicate an error
- */
-nvmlReturn_t injectionNvmlShutdown();
-
-/*
  *
  */
 nvmlReturn_t nvmlCreateDevice(unsigned int index);
@@ -139,6 +125,29 @@ nvmlReturn_t nvmlDeviceReset(nvmlDevice_t nvmlDevice);
  * @param value      - the field value being stored
  */
 nvmlReturn_t nvmlDeviceInjectFieldValue(nvmlDevice_t nvmlDevice, const nvmlFieldValue_t *value);
+
+/*
+ * Removes the GPU identified by the UUID from NVML enumeration.
+ * nvmlDeviceGetCount will return the original count less one.
+ *
+ * @param uuid - the uuid of the device to be removed
+ * @return NVML_SUCCESS or NVML_ERROR_INVALID_ARGUMENT if uuid
+ *         cannot be found
+ */
+nvmlReturn_t nvmlRemoveGpu(const char *uuid);
+
+/*
+ * Restores the GPU identified by the UUID to NVML. This will
+ * work only if the device was previously removed using the
+ * nvmlRemoveGPU API.
+ * nvmlDeviceGetCount will return the original count plus one.
+ *
+ * @param uuid - the uuid of the device to be restored
+ * @return NVML_SUCCESS or NVML_ERROR_INVALID_ARGUMENT if uuid
+ *         cannot be found
+ */
+nvmlReturn_t nvmlRestoreGpu(const char *uuid);
+
 #ifdef __cplusplus
 }
 #endif

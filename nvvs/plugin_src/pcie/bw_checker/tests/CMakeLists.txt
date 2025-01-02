@@ -11,33 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(CTEST_USE_LAUNCHERS 1)
 
-find_package(Catch2 REQUIRED)
-find_package(Yaml REQUIRED)
-find_package(Jsoncpp REQUIRED)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-if (BUILD_TESTING)
-    add_compile_definitions(__BW_CHECKER_TESTS__=1)
+add_compile_definitions(__BW_CHECKER_TESTS__=1)
 
-    add_executable(bw_checkertests)
-    target_sources(bw_checkertests
-        PRIVATE
-            ../BwCheckerMain.cpp
-            BwCheckerTests.cpp
-            BwCheckerTestsMain.cpp
-    )
-    
-    target_link_libraries(bw_checkertests PRIVATE ${JSONCPP_STATIC_LIBS} rt dl Catch2::Catch2)
+add_executable(bw_checkertests)
+target_sources(bw_checkertests
+    PRIVATE
+        ../BwCheckerMain.cpp
+        BwCheckerTests.cpp
+)
 
-    target_include_directories(bw_checkertests PRIVATE ${JSONCPP_INCLUDE_DIR})
-    target_include_directories(bw_checkertests PRIVATE ..) # include the bw_checker dir
-    target_link_libraries(bw_checkertests PRIVATE common_interface)
-    target_link_libraries(bw_checkertests PRIVATE dcgm_thread dcgm_common)
-    target_link_libraries(bw_checkertests PUBLIC dcgmi_interface)
-    
-    target_link_options(bw_checkertests PRIVATE -rdynamic)
-    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-        catch_discover_tests(bw_checkertests EXTRA_ARGS --use-colour yes)
-    endif()
+target_link_libraries(bw_checkertests PRIVATE ${JSONCPP_STATIC_LIBS} rt dl Catch2::Catch2WithMain)
+
+target_include_directories(bw_checkertests PRIVATE ${JSONCPP_INCLUDE_DIR})
+target_include_directories(bw_checkertests PRIVATE ..) # include the bw_checker dir
+target_link_libraries(bw_checkertests PRIVATE common_interface)
+target_link_libraries(bw_checkertests PRIVATE dcgm_thread dcgm_common dcgm)
+target_link_libraries(bw_checkertests PUBLIC dcgmi_interface)
+
+target_link_options(bw_checkertests PRIVATE -rdynamic)
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(bw_checkertests EXTRA_ARGS --colour-mode ansi)
 endif()

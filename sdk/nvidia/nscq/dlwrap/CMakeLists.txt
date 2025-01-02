@@ -11,13 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-add_library(sdk_nscq_loader_interface INTERFACE)
 target_include_directories(sdk_nscq_loader_interface
   INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sdk_nscq_loader_interface INTERFACE sdk_nscq_interface)
 
-add_library(sdk_nscq_loader dlwrap.c posix.c)
+target_sources(sdk_nscq_loader PRIVATE dlwrap.c posix.c)
 target_include_directories(sdk_nscq_loader
   PRIVATE
     ${NSCQ_INCLUDE_DIRS})

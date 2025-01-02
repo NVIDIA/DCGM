@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*** DCGM-3816: The tests in this file do not currently get built or executed. ***/
 #include <fstream>
 #include <iostream>
 #include <stddef.h>
@@ -35,14 +36,14 @@ int TestDiag::Run()
     int st;
     int Nfailed = 0;
 
-    st = TestHelperGetTestName();
+    st = TestHelperGetPluginName();
     if (st)
     {
         Nfailed++;
-        fprintf(stderr, "TestDiag::TestHelperGetTestName FAILED with %d.\n", st);
+        fprintf(stderr, "TestDiag::TestHelperGetPluginName FAILED with %d.\n", st);
     }
     else
-        fprintf(stdout, "TestDiag::TestHelperGetTestName PASSED.\n");
+        fprintf(stdout, "TestDiag::TestHelperGetPluginName PASSED.\n");
 
     st = TestHelperJsonAddResult();
     if (st)
@@ -106,38 +107,38 @@ int TestDiag::Run()
 int TestDiag::TestPopulateGpuList()
 {
     std::vector<unsigned int> gpuVec;
-    dcgmDiagResponse_v10 diagResult;
+    std::unique_ptr<dcgmDiagResponse_v11> response = std::make_unique<dcgmDiagResponse_v11>();
 
     int ret = 0;
     Diag d;
-    d.InitializeDiagResponse(diagResult);
+    d.InitializeDiagResponse(response.get());
 
     // Test initial conditions
     for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
     {
-        if (diagResult.perGpuResponses[i].gpuId != DCGM_MAX_NUM_DEVICES)
+        if (response->perGpuResponses[i].gpuId != DCGM_MAX_NUM_DEVICES)
         {
             fprintf(stderr, "Gpu Id wasn't initialized correctly for the %dth position", i);
             ret = -1;
         }
     }
 
-    if (diagResult.gpuCount != 0)
+    if (response->gpuCount != 0)
     {
-        fprintf(stderr, "Gpu count should be 0 but was %d.\n", diagResult.gpuCount);
+        fprintf(stderr, "Gpu count should be 0 but was %d.\n", response->gpuCount);
         ret = -1;
     }
 
-    if (diagResult.version != dcgmDiagResponse_version10)
+    if (response->version != dcgmDiagResponse_version11)
     {
-        fprintf(stderr, "Version should be %u but was %u.\n", dcgmDiagResponse_version10, diagResult.version);
+        fprintf(stderr, "Version should be %u but was %u.\n", dcgmDiagResponse_version11, response->version);
         ret = -1;
     }
 
-    d.PopulateGpuList(diagResult, gpuVec);
+    d.PopulateGpuList(response, gpuVec);
     if (gpuVec.size() != 0)
     {
-        fprintf(stderr, "Shouldn't have added gpus to the list from an empty diagResult, but we did.\n");
+        fprintf(stderr, "Shouldn't have added gpus to the list from an empty response, but we did.\n");
         ret = -1;
     }
 
@@ -145,18 +146,18 @@ int TestDiag::TestPopulateGpuList()
     // it'll initialize the tests to not have run, so let's set up ours that way
     for (unsigned int i = 0; i < DCGM_PER_GPU_TEST_COUNT_V8; i++)
     {
-        diagResult.perGpuResponses[0].results[i].status = DCGM_DIAG_RESULT_NOT_RUN;
-        diagResult.perGpuResponses[1].results[i].status = DCGM_DIAG_RESULT_PASS;
+        response->perGpuResponses[0].results[i].status = DCGM_DIAG_RESULT_NOT_RUN;
+        response->perGpuResponses[1].results[i].status = DCGM_DIAG_RESULT_PASS;
     }
-    diagResult.perGpuResponses[0].gpuId = 0;
-    diagResult.perGpuResponses[1].gpuId = 1;
-    diagResult.gpuCount                 = 1;
+    response->perGpuResponses[0].gpuId = 0;
+    response->perGpuResponses[1].gpuId = 1;
+    response->gpuCount                 = 1;
 
-    d.PopulateGpuList(diagResult, gpuVec);
+    d.PopulateGpuList(response.get(), gpuVec);
 
-    if (gpuVec.size() != diagResult.gpuCount)
+    if (gpuVec.size() != response->gpuCount)
     {
-        fprintf(stderr, "Expected %u GPUs in the list, but found %u.\n", diagResult.gpuCount, (unsigned)gpuVec.size());
+        fprintf(stderr, "Expected %u GPUs in the list, but found %u.\n", response->gpuCount, (unsigned)gpuVec.size());
         ret = -1;
     }
 
@@ -167,18 +168,19 @@ int TestDiag::TestGetFailureResult()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_v10 diagResult = {};
-    diagResult.levelOneTestCount  = DCGM_SWTEST_COUNT;
+    std::unique_ptr<dcgmDiagResponse_v11> response = std::make_unique<dcgmDiagResponse_v11>();
+    response->levelOneTestCount                    = DCGM_SWTEST_COUNT;
 
-    dcgmReturn_t drt = d.GetFailureResult(diagResult);
+    memset(response.get(), 0, sizeof(*response));
+    dcgmReturn_t drt = d.GetFailureResult(response.get());
     if (drt != DCGM_ST_OK)
     {
-        fprintf(stderr, "Expected a zero initialized diagResult to return success, but got '%s'.\n", errorString(drt));
+        fprintf(stderr, "Expected a zero initialized response to return success, but got '%s'.\n", errorString(drt));
         ret = -1;
     }
 
-    diagResult.levelOneResults[DCGM_SWTEST_INFOROM].status = DCGM_DIAG_RESULT_FAIL;
-    drt                                                    = d.GetFailureResult(diagResult);
+    response->levelOneResults[DCGM_SWTEST_INFOROM].status = DCGM_DIAG_RESULT_FAIL;
+    drt                                                   = d.GetFailureResult(response.get());
 
     if (drt != DCGM_ST_NVVS_ERROR)
     {
@@ -187,18 +189,17 @@ int TestDiag::TestGetFailureResult()
     }
 
     // Clear this failure
-    diagResult.levelOneResults[DCGM_SWTEST_INFOROM].status = DCGM_DIAG_RESULT_WARN;
-    drt                                                    = d.GetFailureResult(diagResult);
+    response->levelOneResults[DCGM_SWTEST_INFOROM].status = DCGM_DIAG_RESULT_WARN;
+    drt                                                   = d.GetFailureResult(response.get());
     if (drt != DCGM_ST_OK)
     {
-        fprintf(
-            stderr, "Expected a diagResult with only a warning to return success, but got '%s'.\n", errorString(drt));
+        fprintf(stderr, "Expected a response with only a warning to return success, but got '%s'.\n", errorString(drt));
         ret = -1;
     }
 
-    diagResult.gpuCount                                          = 1;
-    diagResult.perGpuResponses[3].results[DCGM_PCI_INDEX].status = DCGM_DIAG_RESULT_FAIL;
-    drt                                                          = d.GetFailureResult(diagResult);
+    response->gpuCount                                          = 1;
+    response->perGpuResponses[3].results[DCGM_PCI_INDEX].status = DCGM_DIAG_RESULT_FAIL;
+    drt                                                         = d.GetFailureResult(response.get());
 
     if (drt != DCGM_ST_OK)
     {
@@ -206,8 +207,8 @@ int TestDiag::TestGetFailureResult()
         ret = -1;
     }
 
-    diagResult.gpuCount = 4;
-    drt                 = d.GetFailureResult(diagResult);
+    response->gpuCount = 4;
+    drt                = d.GetFailureResult(response.get());
     if (drt != DCGM_ST_NVVS_ERROR)
     {
         ret = -1;
@@ -222,13 +223,13 @@ std::string TestDiag::GetTag()
     return std::string("diag");
 }
 
-int TestDiag::TestHelperGetTestName()
+int TestDiag::TestHelperGetPluginName()
 {
     int ret = 0;
 
     Diag d;
 
-    std::string name = d.HelperGetTestName(DCGM_MEMORY_INDEX);
+    std::string name = d.HelperGetPluginName(DCGM_MEMORY_INDEX);
     if (name != "GPU Memory")
     {
         fprintf(stderr,
@@ -238,7 +239,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_DIAGNOSTIC_INDEX);
+    name = d.HelperGetPluginName(DCGM_DIAGNOSTIC_INDEX);
     if (name != DIAGNOSTIC_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -249,7 +250,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_PCI_INDEX);
+    name = d.HelperGetPluginName(DCGM_PCI_INDEX);
     if (name != PCIE_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -260,7 +261,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_SM_STRESS_INDEX);
+    name = d.HelperGetPluginName(DCGM_SM_STRESS_INDEX);
     if (name != SMSTRESS_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -271,7 +272,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_TARGETED_STRESS_INDEX);
+    name = d.HelperGetPluginName(DCGM_TARGETED_STRESS_INDEX);
     if (name != TS_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -282,7 +283,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_TARGETED_POWER_INDEX);
+    name = d.HelperGetPluginName(DCGM_TARGETED_POWER_INDEX);
     if (name != TP_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -293,7 +294,7 @@ int TestDiag::TestHelperGetTestName()
         ret = -1;
     }
 
-    name = d.HelperGetTestName(DCGM_MEMORY_BANDWIDTH_INDEX);
+    name = d.HelperGetPluginName(DCGM_MEMORY_BANDWIDTH_INDEX);
     if (name != MEMBW_PLUGIN_NAME)
     {
         fprintf(stderr,
@@ -349,7 +350,7 @@ int TestDiag::TestHelperJsonAddResult()
     std::string warning("Stormlight usage of 100 broams exceeded expected usage of 80 broams.\n");
     std::string info("Stormlight was used at a rate of 10 broams / second.");
     snprintf(
-        gpuResponse.results[testIndex].error.msg, sizeof(gpuResponse.results[testIndex].error.msg), warning.c_str());
+        gpuResponse.results[testIndex].error->msg, sizeof(gpuResponse.results[testIndex].error->msg), warning.c_str());
     snprintf(gpuResponse.results[testIndex].info, sizeof(gpuResponse.results[testIndex].info), info.c_str());
     if (d.HelperJsonAddResult(gpuResponse, testEntry, gpuIndex, testIndex, i) == false)
     {
@@ -401,15 +402,16 @@ int TestDiag::TestHelperJsonAddBasicTests()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_v10 r = {};
+    std::unique_ptr<dcgmDiagResponse_v11> r = std::make_unique<dcgmDiagResponse_v11>();
+    memset(r.get(), 0, sizeof(*r));
     Json::Value output;
     int categoryIndex = 0;
 
-    r.levelOneTestCount = DCGM_SWTEST_COUNT;
+    r->levelOneTestCount = DCGM_SWTEST_COUNT;
     for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
-        r.levelOneResults[i].status = DCGM_DIAG_RESULT_PASS;
+        r->levelOneResults[i].status = DCGM_DIAG_RESULT_PASS;
 
-    d.HelperJsonAddBasicTests(output, categoryIndex, r);
+    d.HelperJsonAddBasicTests(output, categoryIndex, r.get());
 
     if (output[NVVS_NAME].empty() == true)
     {
@@ -492,7 +494,8 @@ int TestDiag::TestHelperJsonBuildOutput()
 {
     int ret = 0;
     Diag d;
-    dcgmDiagResponse_v10 r = {};
+    std::unique_ptr<dcgmDiagResponse_v11> r = std::make_unique<dcgmDiagResponse_v11>();
+    memset(r.get(), 0, sizeof(*r));
     Json::Value output;
     std::vector<unsigned int> gpuIndices;
     const char *warnings[] = { "Voidspren are dangerous.",
@@ -504,7 +507,7 @@ int TestDiag::TestHelperJsonBuildOutput()
                                "Amaram is a jerk." };
 
     for (int i = 0; i < DCGM_SWTEST_COUNT; i++)
-        r.levelOneResults[i].status = DCGM_DIAG_RESULT_PASS;
+        r->levelOneResults[i].status = DCGM_DIAG_RESULT_PASS;
 
     gpuIndices.push_back(0);
     gpuIndices.push_back(1);
@@ -515,16 +518,16 @@ int TestDiag::TestHelperJsonBuildOutput()
         {
             for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
             {
-                r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_PASS;
+                r->perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_PASS;
             }
         }
         else if (i == 1)
         {
             for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
             {
-                r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_FAIL;
-                snprintf(r.perGpuResponses[i].results[j].error.msg,
-                         sizeof(r.perGpuResponses[i].results[j].error.msg),
+                r->perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_FAIL;
+                snprintf(r->perGpuResponses[i].results[j].error->msg,
+                         sizeof(r->perGpuResponses[i].results[j].error->msg),
                          "%s",
                          warnings[j]);
             }
@@ -533,12 +536,12 @@ int TestDiag::TestHelperJsonBuildOutput()
         {
             for (int j = 0; j < DCGM_PER_GPU_TEST_COUNT_V8; j++)
             {
-                r.perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_NOT_RUN;
+                r->perGpuResponses[i].results[j].status = DCGM_DIAG_RESULT_NOT_RUN;
             }
         }
     }
 
-    d.HelperJsonBuildOutput(output, r, gpuIndices);
+    d.HelperJsonBuildOutput(output, r.get(), gpuIndices);
 
     if (output[NVVS_NAME].empty() == true || output[NVVS_NAME][NVVS_HEADERS].empty() == true
         || output[NVVS_NAME][NVVS_HEADERS].isArray() == false)

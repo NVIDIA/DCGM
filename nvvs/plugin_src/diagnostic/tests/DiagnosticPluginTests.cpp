@@ -13,21 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include "dcgm_fields.h"
+#include <catch2/catch_all.hpp>
 
 #include <DiagnosticPlugin.h>
 #include <PluginInterface.h>
 
 TEST_CASE("Diagnostic: SetPrecisionFromString")
 {
-    dcgmDiagPluginGpuList_t gpuList = {};
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
-    gpuList.numGpus        = 1;
-    gpuList.gpus[0].gpuId  = 0;
-    gpuList.gpus[0].status = DcgmEntityStatusOk;
+    entityList->numEntities                      = 1;
+    entityList->entities[0].entity.entityId      = 0;
+    entityList->entities[0].entity.entityGroupId = DCGM_FE_GPU;
+    entityList->entities[0].auxField.gpu.status  = DcgmEntityStatusOk;
 
 
-    GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+    GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
     // Make sure the correct defaults are set - it has no test parameters so far
     int32_t precision = gbp.SetPrecisionFromString(true);
     CHECK(USE_HALF_PRECISION(precision) != 0);
@@ -46,7 +48,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
     snprintf(params[1].parameterName, sizeof(params[1].parameterName), "%s", DIAGNOSTIC_STR_IS_ALLOWED);
     snprintf(params[1].parameterValue, sizeof(params[1].parameterValue), "false");
     params[1].type = DcgmPluginParamBool;
-    gbp.Go("test", 2, params); // Set the parameters
+    gbp.Go(gbp.GetDiagnosticTestName(), entityList.get(), 2, params); // Set the parameters
 
     // Make sure we get only half precision
     precision = gbp.SetPrecisionFromString(false);
@@ -61,7 +63,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
 
     // Make sure we get the default value if it's an empty string
     memset(params[0].parameterValue, 0, sizeof(params[0].parameterValue));
-    gbp.Go("test", 2, params); // Set the parameters
+    gbp.Go(gbp.GetDiagnosticTestName(), entityList.get(), 2, params); // Set the parameters
     precision = gbp.SetPrecisionFromString(true);
     CHECK(USE_HALF_PRECISION(precision) != 0);
     CHECK(USE_SINGLE_PRECISION(precision) != 0);
@@ -69,7 +71,7 @@ TEST_CASE("Diagnostic: SetPrecisionFromString")
 
     // Make sure an invalid string also results in the default settings
     snprintf(params[0].parameterValue, sizeof(params[0].parameterValue), "bobby");
-    gbp.Go("test", 2, params); // Set the parameters
+    gbp.Go(gbp.GetDiagnosticTestName(), entityList.get(), 2, params); // Set the parameters
     precision = gbp.SetPrecisionFromString(true);
     CHECK(USE_HALF_PRECISION(precision) != 0);
     CHECK(USE_SINGLE_PRECISION(precision) != 0);
@@ -80,12 +82,7 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
 {
     SECTION("Only one GPU")
     {
-        // Test with one GPU ...
-        dcgmDiagPluginGpuList_t gpuList = {};
-        gpuList.numGpus                 = 1;
-        gpuList.gpus[0].gpuId           = 0;
-        gpuList.gpus[0].status          = DcgmEntityStatusOk;
-        GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+        GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
 
         std::vector<double> gflops = { 600.0 };
         double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.05);
@@ -93,16 +90,7 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
         CHECK(indicesBelowThreshold.size() == 0);
     }
 
-    // Populate the gpuList to be passed
-    dcgmDiagPluginGpuList_t gpuList = {};
-    gpuList.numGpus                 = 4;
-
-    for (size_t i = 0; i < gpuList.numGpus; i++)
-    {
-        gpuList.gpus[i].gpuId  = i;
-        gpuList.gpus[i].status = DcgmEntityStatusOk;
-    }
-    GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+    GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
 
     SECTION("Value below threshold")
     {
@@ -133,12 +121,16 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
 
 TEST_CASE("Diagnostic: GpuBurnDevice parameters")
 {
-    // Test with one GPU ...
-    dcgmDiagPluginGpuList_t gpuList = {};
-    gpuList.numGpus                 = 1;
-    gpuList.gpus[0].gpuId           = 0;
-    gpuList.gpus[0].status          = DcgmEntityStatusOk;
-    GpuBurnPlugin gbp((dcgmHandle_t)0, &gpuList); // we don't need real values for these
+    GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
+    auto pEntityInfo                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    dcgmDiagPluginEntityList_v1 &entityInfo = *(pEntityInfo.get());
+
+    entityInfo.numEntities                      = 1;
+    entityInfo.entities[0].entity.entityId      = 0;
+    entityInfo.entities[0].entity.entityGroupId = DCGM_FE_GPU;
+
+    gbp.InitializeForEntityList(gbp.GetDiagnosticTestName(), entityInfo);
+
     GpuBurnDevice gbd;
     DcgmRecorder dr;
     GpuBurnWorker gbw(&gbd, gbp, DIAG_SINGLE_PRECISION, 15.0, 2048, dr, false, 1001);

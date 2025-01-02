@@ -37,6 +37,7 @@ _summary_file = None
 log_archive_filename = "all_results.zip"
 dcgm_trace_log_filename = None
 nvml_trace_log_filename = None
+nvvs_trace_log_filename = None
 _indent_lvl = 0
 _coloring_enabled = True #coloring is applied even there is no file descriptor connected to tty like device
 _message_levels = (FATAL, ERROR, INFO, WARNING, DEBUG) = list(range(5))
@@ -98,6 +99,7 @@ def setup_environment():
     global log_dir
     global dcgm_trace_log_filename
     global nvml_trace_log_filename
+    global nvvs_trace_log_filename
     global have_recreated_log_dir
     curr_log_dir = None
 
@@ -146,12 +148,16 @@ def setup_environment():
         os.environ['__NVML_DBG_LVL'] = test_utils.loggingLevel
         os.environ['__NVML_DBG_APPEND'] = '1'
         os.environ['__DCGM_DBG_LVL'] = test_utils.loggingLevel
+        nvvs_trace_log_filename = os.path.join(log_dir, "nvvs_trace.log")
     
         # create the file upfront ant set proper chmod
         # so that non-root tests could dcgmInit and write to this log
         with open(nvml_trace_log_filename, "a"):
             pass
         os.chmod(nvml_trace_log_filename, 0o777)
+        import pathlib
+        p = pathlib.Path(nvvs_trace_log_filename)
+        p.touch(mode=0o644, exist_ok=True)
 
         addtrace_logging(dcgm_structs, 
                 # Don't attach trace logging to some functions
@@ -163,6 +169,7 @@ def setup_environment():
         for envVar in envVars:
             if envVar in os.environ:
                 del(os.environ[envVar])
+        nvvs_trace_log_filename = None
 
     global _coloring_enabled
     if sys.stdout.isatty():

@@ -50,7 +50,7 @@ bool CudaCallLogIfError(const std::string &callName, cudaError_t cuSt, unsigned 
         return false;
     }
 
-    if (gpuId == -1)
+    if (gpuId == std::numeric_limits<unsigned int>::max())
     {
         root[BWC_JSON_ERRORS][0] = fmt::format("CUDA call {} failed: '{}'", callName, cudaGetErrorString(cuSt));
     }
@@ -127,7 +127,10 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
 
     if (pinned)
     {
-        if (CudaCallLogIfError("cudaMallocHost", cudaMallocHost(&h_buffer, intsPerCopy * sizeof(int)), -1, root))
+        if (CudaCallLogIfError("cudaMallocHost",
+                               cudaMallocHost(&h_buffer, intsPerCopy * sizeof(int)),
+                               std::numeric_limits<unsigned int>::max(),
+                               root))
         {
             return;
         }
@@ -152,7 +155,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         }
         cudaEventRecord(start[i]);
 
-        for (int r = 0; r < iterations; r++)
+        for (unsigned int r = 0; r < iterations; r++)
         {
             cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost);
         }
@@ -176,7 +179,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         }
         cudaEventRecord(start[i]);
 
-        for (int r = 0; r < iterations; r++)
+        for (unsigned int r = 0; r < iterations; r++)
         {
             cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice);
         }
@@ -199,7 +202,7 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
         }
         cudaEventRecord(start[i]);
 
-        for (int r = 0; r < iterations; r++)
+        for (unsigned int r = 0; r < iterations; r++)
         {
             cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice, stream1[i]);
             cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost, stream2[i]);

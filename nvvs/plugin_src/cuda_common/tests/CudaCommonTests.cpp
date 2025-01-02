@@ -14,81 +14,116 @@
  * limitations under the License.
  */
 
+#include "dcgm_fields.h"
 #include <CudaCommon.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <Plugin.h>
 #include <PluginInterface.h>
+#include <UniquePtrUtil.h>
 
 class TestPlugin : public Plugin
 {
 public:
-    void Go(std::string const &testName,
-            unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters)
+    void Go(std::string const & /* testName */,
+            dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
+            unsigned int /* numParameters */,
+            const dcgmDiagPluginTestParameter_t * /* testParameters */) override
     {}
 
     ~TestPlugin()
     {}
 };
 
-void initializePluginWithGpus(Plugin &p, unsigned int count)
+void initializePluginWithGpus(Plugin &p, std::string const &testName, unsigned int count)
 {
-    dcgmDiagPluginGpuList_t gpuInfo = {};
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
-    gpuInfo.numGpus = count;
+    entityInfo->numEntities = count;
     for (unsigned int i = 0; i < count; i++)
     {
-        gpuInfo.gpus[i].gpuId  = i;
-        gpuInfo.gpus[i].status = DcgmEntityStatusOk;
+        entityInfo->entities[i].entity.entityId      = i;
+        entityInfo->entities[i].entity.entityGroupId = DCGM_FE_GPU;
+        entityInfo->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
 
-    p.InitializeForGpuList("CUDA_COMMON_TEST", gpuInfo);
+    p.InitializeForEntityList(testName, *entityInfo);
 }
 
 TEST_CASE("Logging GPU Specific Errors")
 {
     TestPlugin p;
-    initializePluginWithGpus(p, 3);
+    std::string const testName = "capoo";
+    initializePluginWithGpus(p, testName, 3);
 
-    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 0);
-    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
-    AddCudaError(&p, "CUDA_COMMON_TEST", "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
+    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 0);
+    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
+    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
 
-    dcgmDiagResults_t results = {};
-    dcgmReturn_t ret          = p.GetResults("CUDA_COMMON_TEST", &results);
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
+    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+
+    dcgmReturn_t ret = p.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
-    REQUIRE(results.numErrors == 3);
-    for (unsigned int i = 0; i < results.numErrors; i++)
+    REQUIRE(entityResults.numErrors == 3);
+    for (unsigned int i = 0; i < entityResults.numErrors; i++)
     {
-        CHECK(results.perGpuResults[i].gpuId == i);
+        CHECK(entityResults.errors[i].entity.entityId == i);
+        CHECK(entityResults.errors[i].entity.entityGroupId == DCGM_FE_GPU);
     }
 
-    LOG_CUDA_ERROR_FOR_PLUGIN(&p, "CUDA_COMMON_TEST", "cudaFake", cudaErrorMemoryAllocation, 1);
+    LOG_CUDA_ERROR_FOR_PLUGIN(&p, testName, "cudaFake", cudaErrorMemoryAllocation, 1);
     cublasStatus_t cubSt = (cublasStatus_t)1;
-    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, "CUDA_COMMON_TEST", "cublasFake", cubSt, 0);
-    memset(&results, 0, sizeof(results));
-    ret = p.GetResults("CUDA_COMMON_TEST", &results);
+    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, testName, "cublasFake", cubSt, 0);
+    memset(&entityResults, 0, sizeof(entityResults));
+    ret = p.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
-    REQUIRE(results.numErrors == 5);
-    for (unsigned int i = 0; i < results.numErrors; i++)
+    REQUIRE(entityResults.numErrors == 5);
+    for (unsigned int i = 0; i < entityResults.numErrors; i++)
     {
         // The errors should have GPU ids 0, 0, 1, 1, 2
-        CHECK(results.errors[i].gpuId == i / 2);
+        CHECK(entityResults.errors[i].entity.entityGroupId == DCGM_FE_GPU);
+        CHECK(entityResults.errors[i].entity.entityId == i / 2);
+    }
+}
+
+TEST_CASE("Verify entityResults when logging generic errors")
+{
+    TestPlugin p;
+    std::string const testName = "capoo";
+    cublasStatus_t cubSt       = (cublasStatus_t)1;
+
+    initializePluginWithGpus(p, testName, 3);
+
+    AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, false);
+    LOG_CUDA_ERROR_FOR_PLUGIN(&p, testName, "cudaFake", cudaErrorMemoryAllocation, 1, 0, false);
+    LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, testName, "cublasFake", cubSt, 0, 0, false);
+
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
+    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+
+    dcgmReturn_t ret = p.GetResults(testName, &entityResults);
+    CHECK(ret == DCGM_ST_OK);
+    REQUIRE(entityResults.numErrors == 3);
+    for (unsigned int i = 0; i < entityResults.numErrors; i++)
+    {
+        CHECK(entityResults.errors[i].entity.entityGroupId == DCGM_FE_NONE);
+        CHECK(entityResults.errors[i].entity.entityId == 0);
     }
 }
 
 TEST_CASE("AddAPIError Details")
 {
     TestPlugin p;
-    initializePluginWithGpus(p, 2);
+    std::string const testName = "capoo";
+    initializePluginWithGpus(p, testName, 2);
 
     // Should append the GPU index since it's a GPU specific failure
-    std::string errText = AddAPIError(&p, "test_name", "bridgeFour", "rock not found", 0, 0, true);
+    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, true);
     std::string gpuSpecficErrorPiece("failed for GPU 0");
     CHECK(errText.find(gpuSpecficErrorPiece) != std::string::npos);
 
     // Shouldn't append the GPU index since it isn't a GPU specific failure
-    errText = AddAPIError(&p, "test_name", "bridgeFour", "rock not found", 0, 0, false);
+    errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, false);
     CHECK(errText.find(gpuSpecficErrorPiece) == std::string::npos);
 }

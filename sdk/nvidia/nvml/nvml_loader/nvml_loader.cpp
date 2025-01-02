@@ -17,6 +17,7 @@
 #include "nvml_error_strings.h"
 #include "nvml_loader_hook.h"
 #include <dlfcn.h>
+#include <cstdlib>
 
 #include <atomic>
 #include <mutex>
@@ -60,7 +61,7 @@ static bool g_injectionLibraryLoaded = false;
     }                                                                                                    \
     nvmlReturn_t newName argtypes                                                                        \
     {                                                                                                    \
-        static volatile int isLookupDone = 0;                                                            \
+        static volatile uint32_t isLookupDone = 0;                                                       \
         NVML_API_HOOK(libFunctionName, ##__VA_ARGS__);                                                   \
                                                                                                          \
         if (!g_nvmlLib)                                                                                  \
@@ -226,26 +227,6 @@ nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
 
     return localNvmlInitWithFlags(flags);
 }
-
-#ifdef INJECTION_LIBRARY_AVAILABLE
-static nvmlReturn_t localInjectionNvmlInit();
-NVML_DYNAMIC_WRAP(localInjectionNvmlInit, injectionNvmlInit, ())
-nvmlReturn_t injectionNvmlInit()
-{
-    NVML_API_HOOK(injectionNvmlInit);
-
-    if (!g_nvmlLib)
-    {
-        nvmlReturn_t result = nvmlLoadDefaultSharedLibrary();
-        if (result != NVML_SUCCESS)
-        {
-            return result;
-        }
-    }
-    
-    return localInjectionNvmlInit();
-}
-#endif
 
 NVML_DYNAMIC_WRAP(nvmlShutdown, nvmlShutdown, ())
 

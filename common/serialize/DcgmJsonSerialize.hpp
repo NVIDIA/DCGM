@@ -72,15 +72,11 @@ struct To
  */
 template <class T>
 concept IsJsonDeserializable = requires(T, Json::Value const &root) {
-    {
-        ParseJson(root, To<T> {})
-    } -> std::same_as<std::optional<T>>;
+    { ParseJson(root, To<T> {}) } -> std::same_as<std::optional<T>>;
 };
 template <class T>
 concept IsJsonSerializable = requires(T object) {
-    {
-        ToJson(object)
-    } -> std::same_as<Json::Value>;
+    { ToJson(object) } -> std::same_as<Json::Value>;
 };
 
 template <IsJsonSerializable T>

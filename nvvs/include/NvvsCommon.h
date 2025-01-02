@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <sysexits.h>
@@ -70,14 +71,9 @@ typedef std::map<unsigned int, nvvsPluginResult_t> nvvsPluginGpuResults_t;
 // nvvsPluginGpuMessages: map GPU IDs to vector of (string) messages for that GPU
 typedef std::map<unsigned int, std::vector<std::string>> nvvsPluginGpuMessages_t;
 typedef std::map<unsigned int, std::vector<DcgmError>> nvvsPluginGpuErrors_t;
-
-/* Internal function return codes */
-typedef enum nvvsReturn_enum : unsigned char
-{
-    NVVS_ST_SUCCESS        = 0,
-    NVVS_ST_GENERIC_ERROR  = 1,
-    NVVS_ST_TEST_NOT_FOUND = 2,
-} nvvsReturn_t;
+using nvvsPluginEntityMsgs_t    = std::map<dcgmGroupEntityPair_t, std::vector<std::string>>;
+using nvvsPluginEntityErrors_t  = std::map<dcgmGroupEntityPair_t, std::vector<dcgmDiagError_v1>>;
+using nvvsPluginEntityResults_t = std::map<dcgmGroupEntityPair_t, nvvsPluginResult_t>;
 
 class NvvsCommon
 {
@@ -109,51 +105,27 @@ public:
     std::string fakegpusString;        /* run diagnostics on fake gpus only */
     std::string parmsString;           /* unparsed subtest parameters */
     std::map<std::string, std::map<std::string, std::string>> parms; /* test parameters to set from the command line */
-    bool jsonOutput;                                                 /* Produce json output as documented below */
-    bool fromDcgm;               // Note that this run was initiated by DCGM to avoid the deprecation warning
-    std::string dcgmHostname;    /* Host name where DCGM is running */
-    uint64_t throttleIgnoreMask; // Mask of throttling reasons to ignore.
-    bool failEarly;              // enable failure checks throughout test rather than at the end so we stop test sooner
-    uint64_t failCheckInterval;  /* how often failure checks should occur when running tests (in seconds). Only
-                                        applies if failEarly is enabled. */
-    unsigned int currentIteration;     /* the current iteration of the diagnostic being executed.
-                                          See dcgmi/CommandLineParser.h */
-    unsigned int totalIterations;      /* the total number of iterations of the diagnostic that will run. */
-    Gpu *m_gpus[DCGM_MAX_NUM_DEVICES]; // Pointers to the gpu objects that are active for this run
+    std::string dcgmHostname;                                        /* Host name where DCGM is running */
+    uint64_t clocksEventIgnoreMask;                                  // Mask of clocks event reasons to ignore.
+    bool failEarly;             // enable failure checks throughout test rather than at the end so we stop test sooner
+    uint64_t failCheckInterval; /* how often failure checks should occur when running tests (in seconds). Only
+                                       applies if failEarly is enabled. */
+    unsigned int currentIteration;    /* the current iteration of the diagnostic being executed.
+                                         See dcgmi/CommandLineParser.h */
+    unsigned int totalIterations;     /* the total number of iterations of the diagnostic that will run. */
+    std::string entityIds;            // Comma-separated list of entity ids.
+    int channelFd;                    // A file description used to send back response to caller.
+    unsigned int diagResponseVersion; // The version of diag response to be returned via channel-fd.
+    bool rerunAsRoot;                 // Flag indicating if this round is the second attemping or not.
+    unsigned int watchFrequency;      // The watch frequency for fields being watched
+
+private:
+    static unsigned int constexpr DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS { 5000000 };
 };
 
 extern NvvsCommon nvvsCommon;
 
-/* When jsonOutput is set to true, NVVS writes output in the format:
- * {
- *   "DCGM GPU Diagnostic" : {
- *     "test_categories" : [
- *       {
- *         "category" : "<header>",    # One of Deployment|Hardware|Integration|Performance|Custom
- *         "tests" : [
- *           {
- *             "name" : <name>,
- *             "results" : [
- *               {
- *                 "gpu_ids" : <gpu_ids>, # GPU ID - field name is left as "gpu_ids" to maintain backwards compatibility
- *                 "status : "<status>",  # One of PASS|FAIL|WARN|SKIPPED
- *                 "warnings" : [         # Optional, depends on test output and result
- *                   "<warning_text>", ...
- *                 ],
- *                 "info" : [             # Optional, depends on test output and result
- *                    "<info_text>", ...
- *                 ]
- *               }, ...
- *             ]
- *           }, ...
- *         ]
- *       }, ...
- *     ],
- *     "version" : "<version_str>" # 1.7
- *   }
- * }
- */
-
-
 std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex);
 dcgmPerGpuTestIndices_t GetTestIndex(const std::string testName);
+dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult);
+nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result);

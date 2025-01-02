@@ -16,58 +16,46 @@
 #include "GpuSet.h"
 #include "PluginStrings.h"
 #include "Test.h"
-
-const int CUSTOM_TEST_OBJS      = 0;
-const int SOFTWARE_TEST_OBJS    = 1;
-const int HARDWARE_TEST_OBJS    = 2;
-const int INTEGRATION_TEST_OBJS = 3;
-const int PERFORMANCE_TEST_OBJS = 4;
+#include "dcgm_fields.h"
+#include <memory>
 
 GpuSet::GpuSet()
-    : name()
-    , properties()
-    , testsRequested()
-    , gpuObjs()
-    , m_customTestObjs()
-    , m_softwareTestObjs()
-    , m_hardwareTestObjs()
-    , m_integrationTestObjs()
-    , m_performanceTestObjs()
+    : EntitySet(DCGM_FE_GPU)
+    , m_properties()
 {
-    properties.present = false;
+    m_properties.present = false;
 }
 
-int GpuSet::AddTestObject(int testClass, Test *test)
+GpuSet::Props &GpuSet::GetProperties()
 {
-    if (!test)
-        return -1;
+    return m_properties;
+}
 
-    switch (testClass)
+void GpuSet::AddGpuObj(Gpu *gpu)
+{
+    m_gpuObjs.push_back(gpu);
+}
+
+void GpuSet::SetGpuObjs(std::vector<Gpu *> gpuObjs)
+{
+    ClearEntityIds();
+    for (const auto gpu : gpuObjs)
     {
-        case CUSTOM_TEST_OBJS:
-            m_customTestObjs.push_back(test);
-            break;
-
-        case SOFTWARE_TEST_OBJS:
-            m_softwareTestObjs.push_back(test);
-            break;
-
-        case HARDWARE_TEST_OBJS:
-            m_hardwareTestObjs.push_back(test);
-            break;
-
-        case INTEGRATION_TEST_OBJS:
-            m_integrationTestObjs.push_back(test);
-            break;
-
-        case PERFORMANCE_TEST_OBJS:
-            m_performanceTestObjs.push_back(test);
-            break;
-
-        default:
-            return -1;
-            break;
+        AddEntityId(gpu->GetGpuId());
     }
+    m_gpuObjs = std::move(gpuObjs);
+}
 
-    return 0;
+std::vector<Gpu *> const &GpuSet::GetGpuObjs() const
+{
+    return m_gpuObjs;
+}
+
+GpuSet *ToGpuSet(EntitySet *entitySet)
+{
+    assert(entitySet != nullptr);
+    assert(entitySet->GetEntityGroup() == DCGM_FE_GPU);
+    auto *gpuSet = dynamic_cast<GpuSet *>(entitySet);
+    assert(gpuSet);
+    return gpuSet;
 }

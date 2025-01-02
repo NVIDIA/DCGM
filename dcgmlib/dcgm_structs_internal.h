@@ -149,27 +149,27 @@ typedef dcgmInjectFieldValue_v1 dcgmInjectFieldValue_t;
 /* Underlying structure for the GET_MULTIPLE_LATEST_VALUES request */
 typedef struct
 {
-    unsigned int version;                                    /* Set this to dcgmGetMultipleLatestValues_version1 */
-    dcgmGpuGrp_t groupId;                                    /* Entity group to retrieve values for. This is only
-                                            looked at if entitiesCount is 0 */
-    unsigned int entitiesCount;                              /* Number of entities provided in entities[]. This
-                                            should only be provided if you aren't also setting
-                                            entityGroupId */
-    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES]; /* Entities to retrieve values for.
+    unsigned int version;                                       /* Set this to dcgmGetMultipleLatestValues_version2 */
+    dcgmGpuGrp_t groupId;                                       /* Entity group to retrieve values for. This is only
+                                               looked at if entitiesCount is 0 */
+    unsigned int entitiesCount;                                 /* Number of entities provided in entities[]. This
+                                               should only be provided if you aren't also setting
+                                               entityGroupId */
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V2]; /* Entities to retrieve values for.
                                             Only looked at if entitiesCount > 0 */
-    dcgmFieldGrp_t fieldGroupId;                             /* Field group to retrive values for. This is onlu looked
-                                                                        at if fieldIdCount is 0 */
-    unsigned int fieldIdCount;                               /* Number of field IDs in fieldIds[] that are valid. This
-                                                                        should only be set if fieldGroupId is not set */
+    dcgmFieldGrp_t fieldGroupId; /* Field group to retrive values for. This is onlu looked
+                                            at if fieldIdCount is 0 */
+    unsigned int fieldIdCount;   /* Number of field IDs in fieldIds[] that are valid. This
+                                            should only be set if fieldGroupId is not set */
     unsigned short fieldIds[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; /* Field IDs for which values should
                                             be retrieved. only looked at if fieldIdCount is > 0 */
     unsigned int flags;                                          /* Mask of DCGM_FV_FLAG_? #defines that affect this
                                             request */
 
-} dcgmGetMultipleLatestValues_v1, dcgmGetMultipleLatestValues_t;
+} dcgmGetMultipleLatestValues_v2, dcgmGetMultipleLatestValues_t;
 
-#define dcgmGetMultipleLatestValues_version1 MAKE_DCGM_VERSION(dcgmGetMultipleLatestValues_v1, 1)
-#define dcgmGetMultipleLatestValues_version  dcgmGetMultipleLatestValues_version1
+#define dcgmGetMultipleLatestValues_version2 MAKE_DCGM_VERSION(dcgmGetMultipleLatestValues_v2, 2)
+#define dcgmGetMultipleLatestValues_version  dcgmGetMultipleLatestValues_version2
 
 /* Represents cached record metadata */
 
@@ -432,12 +432,12 @@ typedef enum dcgmEntityStatusType_enum
 /**
  * Typedef for \ref dcgmRunDiag_t
  */
-typedef dcgmRunDiag_v8 dcgmRunDiag_t;
+typedef dcgmRunDiag_v9 dcgmRunDiag_t;
 
 /**
  * Latest version for \ref dcgmRunDiag_t
  */
-#define dcgmRunDiag_version dcgmRunDiag_version7
+#define dcgmRunDiag_version dcgmRunDiag_version9
 
 /**
  * Version 1 of dcgmCreateGroup_t
@@ -479,16 +479,33 @@ typedef struct
 
 typedef struct
 {
-    unsigned int entityGroup;                       //!< IN: Entity of group to list entities
-    unsigned int entities[DCGM_GROUP_MAX_ENTITIES]; //!< OUT: Array of entities for entityGroup
-    unsigned int numEntities;                       //!< IN/OUT: Upon calling, this should be the number of
-                                                    //           entities that entityList[] can hold. Upon
-                                                    //           return, this will contain the number of
-                                                    //           entities actually saved to entityList.
-    unsigned int flags;                             //!< IN: Flags to modify the behavior of this request.
-                                                    //       See DCGM_GEGE_FLAG_*
-    unsigned int cmdRet;                            //!< OUT: Error code generated
+    unsigned int entityGroup;                          //!< IN: Entity of group to list entities
+    unsigned int entities[DCGM_GROUP_MAX_ENTITIES_V1]; //!< OUT: Array of entities for entityGroup
+    unsigned int numEntities;                          //!< IN/OUT: Upon calling, this should be the number of
+                                                       //           entities that entityList[] can hold. Upon
+                                                       //           return, this will contain the number of
+                                                       //           entities actually saved to entityList.
+    unsigned int flags;                                //!< IN: Flags to modify the behavior of this request.
+                                                       //       See DCGM_GEGE_FLAG_*
+    unsigned int cmdRet;                               //!< OUT: Error code generated
 } dcgmGetEntityGroupEntities_v1;
+
+/**
+ * Version 2 of dcgmGetEntityGroupEntities_t
+ */
+
+typedef struct
+{
+    unsigned int entityGroup;                          //!< IN: Entity of group to list entities
+    unsigned int entities[DCGM_GROUP_MAX_ENTITIES_V2]; //!< OUT: Array of entities for entityGroup
+    unsigned int numEntities;                          //!< IN/OUT: Upon calling, this should be the number of
+                                                       //           entities that entityList[] can hold. Upon
+                                                       //           return, this will contain the number of
+                                                       //           entities actually saved to entityList.
+    unsigned int flags;                                //!< IN: Flags to modify the behavior of this request.
+                                                       //       See DCGM_GEGE_FLAG_*
+    unsigned int cmdRet;                               //!< OUT: Error code generated
+} dcgmGetEntityGroupEntities_v2;
 
 /**
  * Version 1 of dcgmGroupGetAllIds_t
@@ -507,11 +524,23 @@ typedef struct
 
 typedef struct
 {
+    unsigned int groupId;       //!< IN: Group ID for which information to be fetched
+    dcgmGroupInfo_v2 groupInfo; //!< OUT: Group Information
+    long long timestamp;        //!< OUT: Timestamp of information
+    unsigned int cmdRet;        //!< OUT: Error code generated
+} dcgmGroupGetInfo_v1;
+
+/**
+ * Version 2 of dcgmGroupGetInfo_t
+ */
+
+typedef struct
+{
     unsigned int groupId;      //!< IN: Group ID for which information to be fetched
     dcgmGroupInfo_t groupInfo; //!< OUT: Group Information
     long long timestamp;       //!< OUT: Timestamp of information
     unsigned int cmdRet;       //!< OUT: Error code generated
-} dcgmGroupGetInfo_v1;
+} dcgmGroupGetInfo_v2;
 
 #define SAMPLES_BUFFER_SIZE_V1 16384
 
@@ -520,9 +549,9 @@ typedef struct
  */
 typedef struct
 {
-    unsigned int groupId;                                    //!< IN: Optional group id for information to be fetched
-    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES]; //!< IN: List of entities to get values for
-    unsigned int entitiesCount;                              //!< IN: Number of entries in entities[]
+    unsigned int groupId;                                       //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V1]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                                 //!< IN: Number of entries in entities[]
     unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
                                //!<     This is ignored if fieldIdList[] is provided
     unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
@@ -540,9 +569,9 @@ typedef struct
  */
 typedef struct
 {
-    unsigned int groupId;                                    //!< IN: Optional group id for information to be fetched
-    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES]; //!< IN: List of entities to get values for
-    unsigned int entitiesCount;                              //!< IN: Number of entries in entities[]
+    unsigned int groupId;                                       //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V1]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                                 //!< IN: Number of entries in entities[]
     unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
                                //!<     This is ignored if fieldIdList[] is provided
     unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
@@ -552,6 +581,25 @@ typedef struct
     unsigned int bufferSize;             //!< OUT: Length of populated buffer
     char buffer[SAMPLES_BUFFER_SIZE_V2]; //!< OUT: this field is last, and can be truncated for speed */
 } dcgmEntitiesGetLatestValues_v2;
+
+/**
+ * Version 3 of dcgmEntitiesGetLatestValues_t
+ */
+
+typedef struct
+{
+    unsigned int groupId;                                       //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V2]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                                 //!< IN: Number of entries in entities[]
+    unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
+                               //!<     This is ignored if fieldIdList[] is provided
+    unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
+    unsigned int fieldIdCount;                                      //!< IN: Number of field IDs in fieldIdList[] array.
+    unsigned int flags;                  //!< IN: Optional flags that affect how this request is processed.
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V2]; //!< OUT: this field is last, and can be truncated for speed */
+} dcgmEntitiesGetLatestValues_v3;
 
 /**
  * Version 1 of dcgmGetMultipleValuesForField
@@ -761,9 +809,9 @@ typedef struct
 
 typedef struct
 {
-    dcgmNvLinkStatus_v3 ls; //!< IN/OUT: nvlink status populated on success
+    dcgmNvLinkStatus_v4 ls; //!< IN/OUT: nvlink status populated on success
     unsigned int cmdRet;    //!< OUT: Error code generated
-} dcgmGetNvLinkStatus_v2;
+} dcgmGetNvLinkStatus_v3;
 
 typedef struct
 {
@@ -818,12 +866,12 @@ typedef struct
 
 typedef struct
 {
-    unsigned int gpuId;                             //!< IN: the DCGM gpu id of the device being injected
-    char key[DCGM_MAX_STR_LENGTH];                  //!< IN: The key for the NVML injected value
+    unsigned int gpuId;                                           //!< IN: the DCGM gpu id of the device being injected
+    char key[DCGM_MAX_STR_LENGTH];                                //!< IN: The key for the NVML injected value
     injectNvmlVal_t extraKeys[NVML_INJECTION_MAX_EXTRA_KEYS + 1]; //!< IN: extra keys, optional
-    unsigned int extraKeyCount;                     //!< IN: the number of extra keys
+    unsigned int extraKeyCount;                                   //!< IN: the number of extra keys
     injectNvmlRet_t injectNvmlRet;                                //!< IN: the return to the associate keys
-    unsigned int cmdRet;                            //!< OUT: Error code generated
+    unsigned int cmdRet;                                          //!< OUT: Error code generated
 } dcgmMsgNvmlInjectDevice_v1;
 
 typedef struct
@@ -848,6 +896,13 @@ typedef struct
     injectNvmlFuncCallCounts_t funcCallCounts; //!< OUT: the NVML function call count info
     unsigned int cmdRet;                       //!< OUT: Error code generated
 } dcgmMsgGetNvmlInjectFuncCallCount_v1;
+
+typedef struct
+{
+    char uuid[DCGM_MAX_STR_LENGTH]; //!<IN: UUID of device to be removed/restored
+    unsigned int cmdRet;            //!< OUT: Error code generated
+} dcgmMsgRemoveRestoreNvmlInjectedGpu_v1;
+
 #endif
 
 /**
@@ -875,29 +930,40 @@ DCGM_CASSERT((int)DCGM_GPU_VIRTUALIZATION_MODE_HOST_VSGA == (int)NVML_GPU_VIRTUA
  */
 
 DCGM_CASSERT(dcgmPidInfo_version == (long)0x02004528, 1);
-DCGM_CASSERT(dcgmConfig_version == (long)16777256, 1);
+DCGM_CASSERT(dcgmConfig_version2 == (long)0x2000048, 2);
+DCGM_CASSERT(dcgmConfig_version == (long)0x2000048, 2);
+DCGM_CASSERT(dcgmWorkloadPowerProfileInfo_version1 == (long)0x100002c, 1);
+DCGM_CASSERT(dcgmWorkloadPowerProfileInfo_version1 == (long)0x100002c, 1);
+DCGM_CASSERT(dcgmWorkloadPowerProfileProfilesInfo_version1 == (long)0x1002bdc, 1);
+DCGM_CASSERT(dcgmWorkloadPowerProfileProfilesInfo_version == (long)0x1002bdc, 1);
+DCGM_CASSERT(dcgmDeviceWorkloadPowerProfilesStatus_version1 == (long)0x1000064, 1);
+DCGM_CASSERT(dcgmDeviceWorkloadPowerProfilesStatus_version == (long)0x1000064, 1);
 DCGM_CASSERT(dcgmConnectV2Params_version1 == (long)16777224, 1);
 DCGM_CASSERT(dcgmConnectV2Params_version == (long)0x02000010, 1);
 DCGM_CASSERT(dcgmCpuHierarchyOwnedCores_version1 == (long)0x1000088, 1);
 DCGM_CASSERT(dcgmCpuHierarchy_version1 == (long)0x1000488, 1);
+DCGM_CASSERT(dcgmCpuHierarchy_version2 == (long)0x2000C88, 1);
 DCGM_CASSERT(dcgmFieldGroupInfo_version == (long)16777744, 1);
 DCGM_CASSERT(dcgmAllFieldGroup_version == (long)16811016, 1);
 DCGM_CASSERT(dcgmDeviceAttributes_version3 == (long)0x3001464, 1);
 DCGM_CASSERT(dcgmDeviceAttributes_version == (long)0x3001464, 1);
-DCGM_CASSERT(dcgmHealthResponse_version4 == (long)0x0401050C, 1);
+DCGM_CASSERT(dcgmHealthResponse_version5 == (long)0x510500c, 5);
 DCGM_CASSERT(dcgmIntrospectMemory_version == (long)16777232, 1);
 DCGM_CASSERT(dcgmIntrospectCpuUtil_version == (long)16777248, 1);
 DCGM_CASSERT(dcgmJobInfo_version == (long)0x030098A8, 1);
 DCGM_CASSERT(dcgmPolicy_version == (long)16777360, 1);
-DCGM_CASSERT(dcgmPolicyCallbackResponse_version == (long)16777240, 1);
+DCGM_CASSERT(dcgmPolicyCallbackResponse_version == (long)33554464, 2);
 DCGM_CASSERT(dcgmDiagResponse_version7 == (long)0x07099290, 1);
 DCGM_CASSERT(dcgmDiagResponse_version8 == (long)0x80d9690, 8);
 DCGM_CASSERT(dcgmDiagResponse_version9 == (long)0x914f4dc, 9);
 DCGM_CASSERT(dcgmDiagResponse_version10 == (long)0xa155abc, 10);
+DCGM_CASSERT(dcgmDiagResponse_version11 == (long)0xb155abc, 11);
+DCGM_CASSERT(dcgmDiagResponse_version == (long)0xb155abc, 11);
 DCGM_CASSERT(dcgmDiagTestAuxData_version1 == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmDiagTestAuxData_version == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmRunDiag_version7 == (long)0x70054D0, 1);
 DCGM_CASSERT(dcgmRunDiag_version8 == (long)0x801C818, 1);
+DCGM_CASSERT(dcgmRunDiag_version9 == (long)0x901CFE8, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version6 == (long)16787744, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version7 == (long)117451168, 1);
 DCGM_CASSERT(dcgmVgpuDeviceAttributes_version == (long)117451168, 1);
@@ -911,7 +977,8 @@ DCGM_CASSERT(dcgmStartEmbeddedV2Params_version1 == (long)0x01000048, 1);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version2 == (long)0x02000050, 2);
 DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
-DCGM_CASSERT(dcgmNvLinkStatus_version3 == (long)0x30015bc, 3);
+DCGM_CASSERT(dcgmNvLinkStatus_version4 == (long)0x40039BC, 4);
+DCGM_CASSERT(dcgmDiagStatus_version1 == (long)0x1000090, 1);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

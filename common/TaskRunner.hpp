@@ -131,8 +131,8 @@ public:
      *         exhaustion.
      */
     template <class T, class P>
-    [[nodiscard]] auto Enqueue(std::unique_ptr<NamedBasicTask<T, P>> task, bool isContinuation = false)
-        -> std::optional<std::shared_future<P>>
+    [[nodiscard]] auto Enqueue(std::unique_ptr<NamedBasicTask<T, P>> task,
+                               bool isContinuation = false) -> std::optional<std::shared_future<P>>
     {
         if (m_debugLogging.load(std::memory_order_relaxed))
         {

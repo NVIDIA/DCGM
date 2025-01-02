@@ -35,7 +35,7 @@ public:
      * Process a DCGM module message that was sent to this module
      * (inherited from DcgmModule)
      */
-    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand);
+    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand) override;
 
     /*************************************************************************/
 private:
@@ -44,7 +44,7 @@ private:
      */
     dcgmReturn_t ProcessGetSystems(dcgm_health_msg_get_systems_t *msg);
     dcgmReturn_t ProcessSetSystems(dcgm_health_msg_set_systems_t *msg);
-    dcgmReturn_t ProcessCheckV4(dcgm_health_msg_check_v4 *msg);
+    dcgmReturn_t ProcessCheckV5(dcgm_health_msg_check_v5 *msg);
     dcgmReturn_t ProcessCheckGpus(dcgm_health_msg_check_gpus_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
     dcgmReturn_t ProcessFieldValuesUpdated(dcgm_core_msg_field_values_updated_t *msg);

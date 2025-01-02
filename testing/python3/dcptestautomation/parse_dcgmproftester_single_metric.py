@@ -62,7 +62,7 @@ class ParseDcgmProftesterSingleMetric:
             writer.writeheader()
 
             i = 0
-            pattern = re.compile('\d+(\.\d+)?')
+            pattern = re.compile(r'\d+(\.\d+)?')
             while i < len(lines):
                 try:
                     line = lines[i]

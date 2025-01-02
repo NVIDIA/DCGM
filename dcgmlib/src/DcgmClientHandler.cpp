@@ -82,6 +82,8 @@ DcgmClientHandler::~DcgmClientHandler()
         m_connectionRequests.clear();
         m_connectionAttributes.clear();
     }
+    // The lock guard above will obey RAII. m_mutex will be destructed with this instance.
+    // coverity[missing_unlock: FALSE]
 }
 
 /*****************************************************************************/
@@ -432,15 +434,15 @@ dcgmReturn_t DcgmClientHandler::ExchangeModuleCommandAsync(dcgmHandle_t dcgmHand
     }
     else
     {
-    auto futStatus = requestFut.wait_for(std::chrono::milliseconds(timeoutMs));
-    if (futStatus != std::future_status::ready)
-    {
-        DCGM_LOG_ERROR << "connectionId " << connectionId << " requestId " << requestId << " timed out after "
-                       << timeoutMs << " ms.";
-        RemoveBlockingRequest(connectionId, requestId, std::nullopt);
-        RemovePersistentRequest(connectionId, requestId);
-        return DCGM_ST_TIMEOUT;
-    }
+        auto futStatus = requestFut.wait_for(std::chrono::milliseconds(timeoutMs));
+        if (futStatus != std::future_status::ready)
+        {
+            DCGM_LOG_ERROR << "connectionId " << connectionId << " requestId " << requestId << " timed out after "
+                           << timeoutMs << " ms.";
+            RemoveBlockingRequest(connectionId, requestId, std::nullopt);
+            RemovePersistentRequest(connectionId, requestId);
+            return DCGM_ST_TIMEOUT;
+        }
     }
 
     auto response = requestFut.get();
@@ -463,7 +465,7 @@ dcgmReturn_t DcgmClientHandler::ExchangeModuleCommandAsync(dcgmHandle_t dcgmHand
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    if (recvHeader->length > maxResponseSize)
+    if (static_cast<size_t>(recvHeader->length) > maxResponseSize)
     {
         DCGM_LOG_ERROR << "Module command response size " << recvHeader->length << " was bigger than max allowed of "
                        << maxResponseSize;
@@ -507,7 +509,7 @@ dcgmReturn_t DcgmClientHandler::PopulateConnectionAttributes(dcgmHandle_t dcgmHa
 
     /* Returns pair of {iterator, wasInsertedBool} */
     auto [attributesIt, wasInserted]
-        = m_connectionAttributes.emplace(connectionId, DCHConnectionAttributes(false, msg.version.rawBuildInfoString));
+        = m_connectionAttributes.emplace(connectionId, DCHConnectionAttributes(msg.version.rawBuildInfoString));
 
     DCGM_LOG_DEBUG << "connectionId " << connectionId << " returned version "
                    << attributesIt->second.m_buildInfo.GetVersion();

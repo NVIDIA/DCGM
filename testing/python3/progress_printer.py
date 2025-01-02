@@ -32,7 +32,7 @@ class DefaultProgressPrinter(ProgressPrinter):
         # but print right away all non quiet tests
 
         if option_parser.options.eris:
-            if subtest.depth == 3:
+            if subtest.dvssc_log:
                 self.childrenTest = ""
                 _erisTestNumber += 1
                 subtest._DefaultProgressPrinter_header_log_id = logger.info("\n&&&& RUNNING %s - %d\n" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
@@ -68,12 +68,7 @@ class DefaultProgressPrinter(ProgressPrinter):
             logger.info("<< %s" % (subtest))
 
         if option_parser.options.eris:
-            # Validating results of subtest with depth bigger than 3 
-            if subtest.depth > 3 and not subtest.name.endswith("restore state"):
-                 if subtest.result == test_utils.SubTest.FAILED:
-                    self.childrenTest = "F"
-
-            if subtest.depth == 3 and subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
+            if subtest.dvssc_log and subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
                 if subtest.result == test_utils.SubTest.SKIPPED:
                     logger.info("\n&&&& WAIVED %s - %d\n" % (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.SUCCESS and not self.childrenTest == "F":

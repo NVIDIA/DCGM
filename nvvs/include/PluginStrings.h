@@ -25,11 +25,20 @@
 /*****************************************************************************/
 /* Parameters common for all tests */
 #define PS_PLUGIN_NAME  "name"
+#define PS_TEST_NAME    "test_name"
 #define PS_LOGFILE      "logfile"
 #define PS_LOGFILE_TYPE "logfile_type"
 #define PS_SUITE_LEVEL  "suite_level"
 
 #define PS_RUN_IF_GOM_ENABLED "run_if_gom_enabled" /* Should this plugin run if GOM mode is enabled */
+
+/*****************************************************************************/
+/* Categories */
+
+#define PLUGIN_CATEGORY_DEPLOYMENT  "Deployment"
+#define PLUGIN_CATEGORY_HW          "Hardware"
+#define PLUGIN_CATEGORY_STRESS      "Stress"
+#define PLUGIN_CATEGORY_INTEGRATION "Integration"
 
 /******************************************************************************
  * SOFTWARE PLUGIN
@@ -37,13 +46,15 @@
 #define SW_STR_DO_TEST             "do_test"
 #define SW_STR_REQUIRE_PERSISTENCE "require_persistence_mode"
 #define SW_PLUGIN_NAME             "software"
+#define SW_PLUGIN_CATEGORY         PLUGIN_CATEGORY_DEPLOYMENT
 #define SW_STR_CHECK_FILE_CREATION "check_file_creation"
 #define SW_STR_SKIP_DEVICE_TEST    "skip_device_test"
 
 /******************************************************************************
  * PCIE PLUGIN
  *****************************************************************************/
-#define PCIE_PLUGIN_NAME "pcie"
+#define PCIE_PLUGIN_NAME     "pcie"
+#define PCIE_PLUGIN_CATEGORY PLUGIN_CATEGORY_INTEGRATION
 
 /* Public parameters - we expect users to change these */
 #define PCIE_STR_TEST_PINNED              "test_pinned"
@@ -139,7 +150,8 @@
 /******************************************************************************
  * TARGETED POWER PLUGIN
  *****************************************************************************/
-#define TP_PLUGIN_NAME "targeted_power"
+#define TP_PLUGIN_NAME     "targeted_power"
+#define TP_PLUGIN_CATEGORY PLUGIN_CATEGORY_STRESS
 
 /* Public parameters - we expect users to change these */
 #define TP_STR_TEST_DURATION      "test_duration"
@@ -180,11 +192,13 @@
                                                             our power target. */
 #define TP_STR_IS_ALLOWED          "is_allowed"     /* Is the targeted power plugin allowed to run? */
 #define TP_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
-
+#define TP_STR_USE_DGEMV           "use_dgemv"      /* Use cuBLAS level-2 DGEMV instead of level-3 DEMM */
+#define TP_STR_MAX_MATRIX_DIM      "max_matrix_dim" /* Maximum single dimension */
 /******************************************************************************
  * TARGETED STRESS PLUGIN
  *****************************************************************************/
-#define TS_PLUGIN_NAME "targeted_stress"
+#define TS_PLUGIN_NAME     "targeted_stress"
+#define TS_PLUGIN_CATEGORY PLUGIN_CATEGORY_STRESS
 
 /* Public parameters - we expect users to change these */
 #define TS_STR_TEST_DURATION         "test_duration"
@@ -229,7 +243,8 @@
 /******************************************************************************
  * MEMORY PLUGIN
  *****************************************************************************/
-#define MEMORY_PLUGIN_NAME "memory"
+#define MEMORY_PLUGIN_NAME     "memory"
+#define MEMORY_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
 
 #define MEMORY_STR_IS_ALLOWED                "is_allowed" /* Is the memory plugin allowed to run? */
 #define MEMORY_STR_MIN_ALLOCATION_PERCENTAGE "minimum_allocation_percentage"
@@ -247,7 +262,8 @@
 /******************************************************************************
  * MEMTEST PLUGIN
  *****************************************************************************/
-#define MEMTEST_PLUGIN_NAME "memtest"
+#define MEMTEST_PLUGIN_NAME     "memtest"
+#define MEMTEST_PLUGIN_CATEGORY PLUGIN_CATEGORY_STRESS
 
 #define MEMTEST_STR_IS_ALLOWED     "is_allowed"     /* Is the memory plugin allowed to run? */
 #define MEMTEST_STR_PATTERN        "pattern"        /* test pattern for test4/test8/test10 */
@@ -273,7 +289,8 @@
 /******************************************************************************
  * SM STRESS PLUGIN - included as part of PCIe
  *****************************************************************************/
-#define SMSTRESS_PLUGIN_NAME "sm_stress"
+#define SMSTRESS_PLUGIN_NAME     "sm_stress"
+#define SMSTRESS_PLUGIN_CATEGORY PCIE_PLUGIN_CATEGORY
 
 /* Public parameters - we expect users to change these */
 #define SMSTRESS_STR_TEST_DURATION   "test_duration"
@@ -289,7 +306,8 @@
 /****************************************************************************
  * GPU BURN PLUGIN
  ***************************************************************************/
-#define DIAGNOSTIC_PLUGIN_NAME "diagnostic"
+#define DIAGNOSTIC_PLUGIN_NAME     "diagnostic"
+#define DIAGNOSTIC_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
 
 /* Public parameters - we expect users to change these */
 #define DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD "max_sbe_errors"  /* Threshold beyond which sbe's are treated as errors */
@@ -305,7 +323,8 @@
 /****************************************************************************
  * CONTEXT CREATE PLUGIN
  ***************************************************************************/
-#define CTXCREATE_PLUGIN_NAME "context_create"
+#define CTXCREATE_PLUGIN_NAME     "context_create"
+#define CTXCREATE_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
 
 /* Private parameters */
 #define CTXCREATE_IS_ALLOWED       "is_allowed"       /* Is this plugin allowed to run */
@@ -314,7 +333,8 @@
 /****************************************************************************
  * MEMORY BANDWIDTH PLUGIN
  ***************************************************************************/
-#define MEMBW_PLUGIN_NAME "memory_bandwidth"
+#define MEMBW_PLUGIN_NAME     "memory_bandwidth"
+#define MEMBW_PLUGIN_CATEGORY PLUGIN_CATEGORY_STRESS
 
 #define MEMBW_STR_MINIMUM_BANDWIDTH "minimum_bandwidth" /* minimum bandwidth in MB / s */
 
@@ -324,7 +344,8 @@
 /****************************************************************************
  * PULSE TEST PLUGIN
  ***************************************************************************/
-#define PULSE_TEST_PLUGIN_NAME "pulse_test"
+#define PULSE_TEST_PLUGIN_NAME     "pulse_test"
+#define PULSE_TEST_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
 
 #define PULSE_TEST_STR_IS_ALLOWED        "is_allowed" /* Is the plugin allowed to run */
 #define PULSE_TEST_STR_CURRENT_ITERATION "current_iteration"
@@ -337,11 +358,20 @@
  * EUD PLUGIN
  ***************************************************************************/
 #define EUD_PLUGIN_NAME      "eud"
+#define EUD_PLUGIN_CATEGORY  PLUGIN_CATEGORY_STRESS
 #define EUD_FULL_PROFILE     "full_profile"     /*!< Run the full MODS profile or not */
 #define EUD_PASSTHROUGH_ARGS "passthrough_args" /*!< Arguments to pass to the EUD binary */
-#define EUD_TMP_DIR          "tmp_dir"          /*!< Temporary directory to use for EUD */
 #define EUD_MLE_PARSE        "parse_mle"        /*!< Parse the MLE or not */
-#define EUD_CPU_EUD_TEST_NAME "cpu_eud"
+#define CPU_EUD_TEST_NAME    "cpu_eud"
+
+/****************************************************************************
+ * NVBandwidth PLUGIN
+ ***************************************************************************/
+#define NVBANDWIDTH_PLUGIN_NAME     "nvbandwidth"
+#define NVBANDWIDTH_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
+
+#define NVBANDWIDTH_STR_IS_ALLOWED "is_allowed" /* Is the plugin allowed to run */
+#define NVBANDWIDTH_STR_TESTCASES  "testcases"  /* test case separated by , e.g, 0,1,2 */
 
 /*****************************************************************************
  * PER PLUGIN ERROR DEFINITIONS AND THEIR BITMASKS

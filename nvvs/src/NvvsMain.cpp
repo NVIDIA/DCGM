@@ -13,12 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "JsonOutput.h"
+
 #include "NvidiaValidationSuite.h"
 #include "NvvsCommon.h"
 #include "Plugin.h"
 #include <DcgmBuildInfo.hpp>
+#include <DcgmNvvsResponseWrapper.h>
+#include <FdChannelClient.h>
 #include <NvvsException.hpp>
+#include <NvvsExitCode.h>
+#include <dcgm_structs.h>
 
 #include <memory>
 #include <string>
@@ -33,6 +37,7 @@ const size_t ERROR_UNHANDLED_EXCEPTION = 2;
 using namespace DcgmNs::Nvvs;
 
 /*****************************************************************************/
+/* DCGM-3723, DCGM-4026: Do not perform logging in signal handlers. */
 static void main_sig_handler(int signo)
 {
     switch (signo)
@@ -41,46 +46,52 @@ static void main_sig_handler(int signo)
         case SIGQUIT:
         case SIGKILL:
         case SIGTERM:
-            log_error("Received signal {}. Requesting stop.", signo);
-            main_should_stop          = 1;
+            main_should_stop.store(1);
             nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Still counts as an error */
             break;
 
 
         case SIGUSR1:
         case SIGUSR2:
-            log_error("Ignoring SIGUSRn ({})", signo);
             break;
 
         case SIGHUP:
             /* This one is usually used to tell a process to reread its config.
              * Treating this as a no-op for now
              */
-            log_error("Ignoring SIGHUP");
             break;
 
         default:
-            log_error("Received unknown signal {}. Ignoring", signo);
             break;
     }
 }
 
 void OutputMainError(const std::string &error, nvvsReturn_t errorCode = NVVS_ST_GENERIC_ERROR)
 {
-    if (!nvvsCommon.jsonOutput)
+    DcgmNvvsResponseWrapper diagResponse;
+    if (auto ret = diagResponse.SetVersion(nvvsCommon.diagResponseVersion); ret != DCGM_ST_OK)
     {
-        std::cerr << error << std::endl;
+        std::string const errMsg
+            = fmt::format("failed to set version [{}], err: [{}].", nvvsCommon.diagResponseVersion, ret);
+        log_error(errMsg);
+        std::cerr << errMsg << std::endl;
+        return;
+    }
+    diagResponse.SetSystemError(error, DCGM_FR_INTERNAL);
+
+    if (nvvsCommon.channelFd == -1)
+    {
+        fmt::print(stderr, "Got runtime_error: {}. Error code: {}\n", error, errorCode);
     }
     else
     {
-        ::Json::Value jv;
-        jv[NVVS_NAME][NVVS_VERSION_STR]   = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
-        jv[NVVS_NAME][NVVS_RUNTIME_ERROR] = error;
-        jv[NVVS_NAME][NVVS_ERROR_CODE]    = errorCode;
-        std::cout << jv.toStyledString() << std::endl;
+        if (!FdChannelClient(nvvsCommon.channelFd).Write(diagResponse.RawBinaryBlob()))
+        {
+            log_error("failed to write diag response to caller.");
+        }
     }
 
-    log_error("Got runtime_error: {}. Error code: ", error, errorCode);
+    log_error("Got runtime_error: {}. Error code: {}", error, errorCode);
     log_error("Global error mask is: {:#064x}", nvvsCommon.errorMask);
 }
 

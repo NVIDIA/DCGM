@@ -19,9 +19,9 @@ import dcgm_agent
 import dcgmvalue
 from ctypes import *
 
-C_FUNC = CFUNCTYPE(None, c_void_p)
+C_FUNC = CFUNCTYPE(None, POINTER(dcgm_structs.c_dcgmPolicyCallbackResponse_v2), c_uint64)
 
-def callback_function(data):
+def callback_function(response, userData):
     print("Received a callback from the policy manager")
 
 c_callback = C_FUNC(callback_function)
@@ -50,8 +50,8 @@ if __name__ == "__main__":
     with RunDCGM('127.0.0.1', dcgm_structs.DCGM_OPERATION_MODE_MANUAL) as handle:
        
         # The validate information should be packed in the dcgmRunDiag object 
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version8
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
     
         ## Create a default group. (Default group is comprised of all the GPUs on the node)
         ## Let's call the group as "all_gpus_group". The method returns an opaque handle (groupId) to
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         ## if a callback occurs the function above is called. Currently the data returned
         ## corresponds to the error that occurred (PCI, DBE, etc.) but in the future it will be a 
         ## dcgmPolicyViolation_t or similar
-        ret = dcgm_agent.dcgmPolicyRegister(handle, runDiagInfo.groupId, dcgm_structs.DCGM_POLICY_COND_PCI | dcgm_structs.DCGM_POLICY_COND_DBE, None, c_callback)
+        ret = dcgm_agent.dcgmPolicyRegister_v2(handle, runDiagInfo.groupId, dcgm_structs.DCGM_POLICY_COND_PCI | dcgm_structs.DCGM_POLICY_COND_DBE, c_callback, 0)
     
         ## trigger the policy loop
         ## typically this would be looped in a separate thread or called on demand

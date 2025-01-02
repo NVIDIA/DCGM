@@ -58,19 +58,7 @@ def helper_investigate_status(statusHandle):
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 '''
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_nvml()
-def test_dcgm_config_embedded_get_devices(handle):
-    """
-    Verifies that DCGM Engine returns list of devices
-    """
-    handleObj = pydcgm.DcgmHandle(handle=handle)
-    systemObj = handleObj.GetSystem()
-    gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_nvml()
 def test_dcgm_config_standalone_get_devices(handle):
     """
@@ -105,15 +93,7 @@ def helper_dcgm_config_get_attributes(handle):
             assert memClock > 0 and memClock < 20000, "gpuId %d got memClock out of range 0 - 20000: %d" % (gpuId, memClock)
             assert smClock > 0 and smClock < 10000, "gpuId %d got smClock out of range 0 - 10000: %d" % (gpuId, smClock)
 
-@test_utils.run_with_embedded_host_engine()
-def test_dcgm_config_embedded_get_attributes(handle):
-    """
-    Get Device attributes for each GPU ID
-    """
-    helper_dcgm_config_get_attributes(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 def test_dcgm_config_standalone_get_attributes(handle):
     """
 	Get Device attributes for each GPU ID
@@ -125,27 +105,20 @@ def helper_dcgm_config_set(handle):
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetDefaultGroup()
 
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode =    dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.smClock =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     #Will throw an exception on error
     groupObj.config.Set(config_values)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_as_root()
-def test_dcgm_config_set_embedded(handle):
-    """
-    Verifies that the configuration can be set for a group
-    """
-    helper_dcgm_config_set(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_as_root()
 def test_dcgm_config_set_standalone(handle):
     """
@@ -160,13 +133,15 @@ def helper_dcgm_config_get(handle):
     groupObj = systemObj.GetDefaultGroup()
 
     ## Set the configuration first
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode =    dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.smClock =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     #Will throw exception on error
     groupObj.config.Set(config_values)
@@ -185,17 +160,7 @@ def helper_dcgm_config_get(handle):
         assert config_values[x].mComputeMode == dcgmvalue.DCGM_INT32_BLANK, "Failed to get matching value for power limit. Expected: %d Received: %d" % (dcgmvalue.DCGM_INT32_BLANK, config_values[x].mComputeMode)
         pass
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_config_get_embedded(handle, gpuIds):
-    """
-    Verifies "Get Configuration" Basic functionality
-    """
-    helper_dcgm_config_get(handle)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_config_get_standalone(handle, gpuIds):
@@ -209,31 +174,41 @@ def helper_dcgm_config_enforce(handle):
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetDefaultGroup()
 
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode    =  dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock  =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.smClock =   dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val =  dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     #Will throw exception on error
     groupObj.config.Set(config_values)
 
     groupObj.config.Enforce()
 
-
-@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
-def test_dcgm_config_enforce_embedded(handle, gpuIds):
-    """
-    Verifies that the configuration can be enforced for a group
-    """
-    helper_dcgm_config_enforce(handle)
+def test_dcgm_gpu_workload_power_profiles(handle, gpuIds):
+    test_utils.skip_test("Only supported on >=570 blackwell skus. Skipping for now.")
+
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test1")
+    ## Add first GPU to the group
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds() #Only reference GPUs we are testing against
+
+    # this test expects a failure for now because Cuda 12.7 + Blackwell are required
+    # but we can at least verify that the function, versions, structs are all valid
+    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
+        _, _ = dcgm_agent.dcgmGetDeviceWorkloadPowerProfileInfo(handle, gpuIds[0], )
+
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_config_enforce_standalone(handle, gpuIds):
@@ -259,7 +234,7 @@ def helper_dcgm_config_powerbudget(handle, gpuIds):
 
     powerLimit = int((attributes.powerLimits.maxPowerLimit + attributes.powerLimits.minPowerLimit)/2)
 
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost =  dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock =  dcgmvalue.DCGM_INT32_BLANK
@@ -267,6 +242,8 @@ def helper_dcgm_config_powerbudget(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_BUDGET_GROUP
     config_values.mPowerLimit.val = powerLimit * len(gpuIds) #Assumes homogenous GPUs
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
 
@@ -279,17 +256,7 @@ def helper_dcgm_config_powerbudget(handle, gpuIds):
             assert config_values[x].mPowerLimit.val == powerLimit, "The power limit value for gpuID %d is incorrect. Returned: %d Expected: %s" % (x, config_values[x].mPowerLimit.val, powerLimit)
         pass
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_config_powerbudget_embedded(handle, gpuIds):
-    """
-    This method verfies setting power budget for a group of GPUs
-    """
-    helper_dcgm_config_powerbudget(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_config_powerbudget_standalone(handle, gpuIds):
@@ -337,7 +304,7 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
     powerLimit_set_dcgmi = int((attributes.powerLimits.maxPowerLimit + attributes.powerLimits.minPowerLimit)/2)
     powerLimit_set_nvsmi = attributes.powerLimits.maxPowerLimit
 
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock =  dcgmvalue.DCGM_INT32_BLANK
@@ -345,6 +312,8 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
     config_values.mPowerLimit.val = powerLimit_set_dcgmi
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
 
@@ -363,21 +332,13 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
     logger.info("Verify if dcgmi enforced value has taken effect")
     helper_verify_power_value(groupObj, powerLimit_set_dcgmi)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_config_power_enforce_embedded(handle, gpuIds):
-    helper_test_config_config_power_enforce(handle, gpuIds)
-
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_config_power_enforce_standalone(handle, gpuIds):
     helper_test_config_config_power_enforce(handle, gpuIds)
     
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_default_status_handler(handle, gpuIds):
@@ -388,7 +349,7 @@ def test_dcgm_default_status_handler(handle, gpuIds):
     groupObj.AddGpu(gpuIds[0])
     gpuIds = groupObj.GetGpuIds() #Only reference GPUs we are testing against
     
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode =    dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost =  dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock =  dcgmvalue.DCGM_INT32_BLANK
@@ -396,6 +357,8 @@ def test_dcgm_default_status_handler(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
 
@@ -447,7 +410,7 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
     #print eccmodeOnGroupToSet
 
     ## Toggle the ECC mode on the group
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode = eccmodeOnGroupToSet
     config_values.mPerfState.syncBoost =  dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.targetClocks.memClock =  dcgmvalue.DCGM_INT32_BLANK
@@ -455,6 +418,8 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK        
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     #Clear the status handle to log the errors while setting the config
     ret = dcgm_agent.dcgmStatusClear(status_handle)
@@ -492,8 +457,7 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
         assert config_values[0].mEccMode == (eccmodeOnGroupToSet), "ECC mode %d different from the set value %d" % \
                                                                    (config_values[0].mEccMode, eccmodeOnGroupToSet)
         
-@test_utils.run_with_standalone_host_engine(20, ["--port", "5545"])
-@test_utils.run_with_initialized_client("127.0.0.1:5545")
+@test_utils.run_with_standalone_host_engine(20, "127.0.0.1:5545", ["--port", "5545"])
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_port_standalone(handle, gpuIds):
     """
@@ -512,7 +476,7 @@ def helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds):
     gpuIds = groupObj.GetGpuIds() #Only reference GPUs we are testing against
         
     ## Set the sync boost for the group
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost = 1
     config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK
@@ -520,6 +484,8 @@ def helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     #Config Set must return DCGM_ST_BADPARAM since we only have a single GPU
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
@@ -528,17 +494,9 @@ def helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds):
     groupObj.Delete()
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_verify_sync_boost_single_gpu_standalone(handle, gpuIds):
-    helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds)
-
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_verify_sync_boost_single_gpu_embedded(handle, gpuIds):
     helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds)
 
 
@@ -557,7 +515,7 @@ def helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds):
     gpuIds = groupObj.GetGpuIds() #Only reference GPUs we are testing against
     
     ## Set the sync boost for the group
-    config_values = dcgm_structs.c_dcgmDeviceConfig_v1()
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPerfState.syncBoost = 1
     config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK
@@ -565,6 +523,8 @@ def helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
+    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+        config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
     
     #Enable sync boost - Will throw an exception on error
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED)):
@@ -579,16 +539,8 @@ def helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds):
     groupObj.Delete()
 
 @test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_verify_sync_boost_multi_gpu_standalone(handle, gpuIds):
-    helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds)
-
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_verify_sync_boost_multi_gpu_embedded(handle, gpuIds):
     helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds)

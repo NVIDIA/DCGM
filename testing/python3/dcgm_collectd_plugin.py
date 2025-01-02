@@ -114,12 +114,12 @@ g_fieldRegEx = None
 # (and the colon in entirely unnecessary, but not illegal).
 
 field_regex = r"[0-9a-zA-Z_]+"
-g_fieldRegEx = re.compile("((" + field_regex + "),?)")
+g_fieldRegEx = re.compile(r"((" + field_regex + r"),?)")
 
 # We now generate a list of field regular expressions, separated by a
 # comma, and enclosed with parenthesis, for grouping.
 
-fields_regex = r"\(" + field_regex + "(," + field_regex + ")*" + r"\)"
+fields_regex = r"\(" + field_regex + r"(," + field_regex + r")*" + r"\)"
 
 # This is an optional interval specification, allowing an optional :,
 # followed by an optional floating point dcgm sampling interval. If any
@@ -130,7 +130,7 @@ interval_regex = r"(:[0-9]*(\.[0-9]+)?)?,?"
 # Here, we combine a field regex or field list regex with an optional
 # interval regex. Multiple of these may appear in succession.
 
-g_parseRegEx = re.compile("((" + field_regex + "|(" + fields_regex + "))" + interval_regex + ")")
+g_parseRegEx = re.compile(r"((" + field_regex + r"|(" + fields_regex + r"))" + interval_regex + r")")
 
 class DcgmCollectdPlugin(DcgmReader):
     ###########################################################################
@@ -292,7 +292,7 @@ def config_dcgm(config = None):
     </Plugin>
 
     ModulePath indicates where the plugin and supporting files are installed
-    (generally copied from /usr/local/dcgm/bindings/python3).
+    (generally copied from /usr/share/datacenter-gpu-manager-4/bindings/python3).
 
     Interval is the default collectd sampling interval in seconds.
 

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <dcgm_agent.h>
 #include <sstream>
 
@@ -275,4 +275,55 @@ TEST_CASE("CacheManager: CUDA_VISIBLE_DEVICES")
     tmp.str("");
     tmp << "Unsupported";
     CHECK(buf.str() == tmp.str());
+}
+
+typedef struct
+{
+    unsigned int nvmlFabricState;
+    nvmlReturn_t nvmlRet;
+    dcgmReturn_t callReturn;
+    dcgmFabricManagerStatus_t resultFMStatus;
+    bool errorShouldBeBlank;
+    dcgmReturn_t resultFMError;
+} cacheResultCheck_t;
+
+TEST_CASE("CacheManger::GetFMStatusFromStruct")
+{
+    nvmlGpuFabricInfoV_t gpuFabricInfo {};
+    dcgmFabricManagerStatus_t status;
+    uint64_t fmError;
+
+    constexpr unsigned int END_OF_SERIES = 100;
+
+    cacheResultCheck_t const series[] = {
+        { NVML_GPU_FABRIC_STATE_NOT_SUPPORTED, NVML_SUCCESS, DCGM_ST_OK, DcgmFMStatusNotSupported, true, DCGM_ST_OK },
+        { NVML_GPU_FABRIC_STATE_NOT_STARTED, NVML_SUCCESS, DCGM_ST_OK, DcgmFMStatusNotStarted, true, DCGM_ST_OK },
+        { NVML_GPU_FABRIC_STATE_IN_PROGRESS, NVML_SUCCESS, DCGM_ST_OK, DcgmFMStatusInProgress, true, DCGM_ST_OK },
+        { NVML_GPU_FABRIC_STATE_COMPLETED, NVML_SUCCESS, DCGM_ST_OK, DcgmFMStatusSuccess, false, DCGM_ST_OK },
+        { NVML_GPU_FABRIC_STATE_COMPLETED,
+          NVML_ERROR_TIMEOUT,
+          DCGM_ST_OK,
+          DcgmFMStatusFailure,
+          false,
+          DCGM_ST_TIMEOUT },
+        { 27, NVML_ERROR_TIMEOUT, DCGM_ST_BADPARAM, DcgmFMStatusUnrecognized, true, DCGM_ST_TIMEOUT },
+        { END_OF_SERIES, NVML_SUCCESS, DCGM_ST_BADPARAM, DcgmFMStatusSuccess, false, DCGM_ST_OK },
+    };
+
+    for (unsigned int i = 0; series[i].nvmlFabricState != END_OF_SERIES; i++)
+    {
+        gpuFabricInfo.state  = series[i].nvmlFabricState;
+        gpuFabricInfo.status = series[i].nvmlRet;
+        CHECK(series[i].callReturn == DcgmCacheManager::GetFMStatusFromStruct(gpuFabricInfo, status, fmError));
+
+        CHECK(status == series[i].resultFMStatus);
+        if (series[i].errorShouldBeBlank)
+        {
+            CHECK(DCGM_INT64_IS_BLANK(fmError));
+        }
+        else
+        {
+            CHECK(fmError == (uint64_t)series[i].resultFMError);
+        }
+    }
 }

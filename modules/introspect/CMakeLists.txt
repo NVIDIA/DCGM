@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
 
-add_library(introspect_interface INTERFACE)
 target_include_directories(introspect_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(introspect_interface INTERFACE common_interface modules_interface)
 
-add_library(dcgmmoduleintrospect SHARED)
 define_dcgm_module(dcgmmoduleintrospect)
 target_link_libraries(dcgmmoduleintrospect
     PRIVATE
@@ -33,4 +30,3 @@ target_sources(dcgmmoduleintrospect
     dcgm_introspect_structs.h
     DcgmMetadataMgr.h
 )
-update_lib_ver(dcgmmoduleintrospect)

@@ -356,7 +356,7 @@ void daemonCloseConsoleOutput(pid_t parentPid)
 }
 
 /*****************************************************************************/
-void sig_handler(int signum)
+void sig_handler(int /* signum */)
 {
     g_stopLoop = 1;
 }
@@ -399,6 +399,26 @@ int cleanup(dcgmHandle_t dcgmHandle, int status, int parentPid)
     (void)dcgmShutdown();
 
     return status;
+}
+
+static void TryCreateDcgmHomeDir()
+{
+    auto const *dcgmHomeDir = getenv(DCGM_HOME_DIR_VAR_NAME);
+    if (dcgmHomeDir == nullptr)
+    {
+        return;
+    }
+
+    std::error_code ec;
+    if (std::filesystem::exists(dcgmHomeDir, ec) || ec)
+    {
+        return;
+    }
+
+    if (!std::filesystem::create_directory(dcgmHomeDir, ec))
+    {
+        syslog(LOG_ERR, "failed to create folder: [%s] with error: [%s].", dcgmHomeDir, ec.message().c_str());
+    }
 }
 
 int main(int argc, char **argv)
@@ -487,6 +507,7 @@ int main(int argc, char **argv)
         setenv(DCGM_HOME_DIR_VAR_NAME, diagHomeDir.c_str(), 1);
     }
 
+    TryCreateDcgmHomeDir();
     ret = dcgmStartEmbedded_v2((dcgmStartEmbeddedV2Params_v1 *)&params);
 
     dcgmHandle = params.dcgmHandle;

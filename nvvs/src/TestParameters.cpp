@@ -150,17 +150,17 @@ TestParameters::~TestParameters()
 }
 
 /*****************************************************************************/
-TestParameters::TestParameters(TestParameters &copyMe)
+TestParameters::TestParameters(TestParameters const &copyMe)
 {
     /* do a deep copy of the source object */
-    std::map<std::string, TestParameterValue *>::iterator it;
+    std::map<std::string, TestParameterValue *>::const_iterator it;
 
     for (it = copyMe.m_globalParameters.begin(); it != copyMe.m_globalParameters.end(); it++)
     {
         m_globalParameters[std::string(it->first)] = new TestParameterValue(*(it->second));
     }
 
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
+    std::map<std::string, std::map<std::string, TestParameterValue *>>::const_iterator outerIt;
 
     for (outerIt = copyMe.m_subTestParameters.begin(); outerIt != copyMe.m_subTestParameters.end(); outerIt++)
     {

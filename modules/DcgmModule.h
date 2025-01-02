@@ -63,7 +63,7 @@ public:
      * Virtual method that instructs module to update its severity form
      * Hostengine
      */
-    virtual void OnLoggingSeverityChange(dcgm_core_msg_logging_changed_t *msg)
+    virtual void OnLoggingSeverityChange(dcgm_core_msg_logging_changed_t * /* msg */)
     {}
 };
 
@@ -80,7 +80,7 @@ public:
         : m_coreCallbacks(dcc)
         , m_coreProxy(dcc)
     {
-        InitLogToHostengine(m_coreProxy.GetLoggerSeverity(0));
+        InitLogToHostengine(m_coreProxy.GetLoggerSeverity(BASE_LOGGER));
         LoggingSetHostEngineCallback((hostEngineAppenderCallbackFp_t)m_coreCallbacks.loggerfunc);
         char const *moduleName;
         if (DCGM_ST_OK == dcgmModuleIdToName(static_cast<dcgmModuleId_t>(moduleId), &moduleName))
@@ -98,14 +98,14 @@ public:
             return;
         }
 
-        DcgmLoggingSeverity_t severity = m_coreProxy.GetLoggerSeverity(0, static_cast<loggerCategory_t>(BASE_LOGGER));
+        DcgmLoggingSeverity_t severity = m_coreProxy.GetLoggerSeverity(BASE_LOGGER);
         if (severity == DcgmLoggingSeverityUnspecified)
         {
             DCGM_LOG_ERROR << "Encountered error while fetching severity for BASE_LOGGER";
         }
         SetLoggerSeverity(BASE_LOGGER, severity);
 
-        severity = m_coreProxy.GetLoggerSeverity(0, SYSLOG_LOGGER);
+        severity = m_coreProxy.GetLoggerSeverity(SYSLOG_LOGGER);
         if (severity == DcgmLoggingSeverityUnspecified)
         {
             DCGM_LOG_ERROR << "Encountered error while fetching severity for SYSLOG_LOGGER";

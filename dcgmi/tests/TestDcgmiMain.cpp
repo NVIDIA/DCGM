@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*** DCGM-3816: The tests in this file do not currently get built or executed. ***/
 #include <iostream>
 #include <set>
 

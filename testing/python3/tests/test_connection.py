@@ -41,7 +41,6 @@ def test_connection_disconnect_error_after_shutdown():
         gpuIds = group.GetGpuIds()
         
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
-@test_utils.run_with_initialized_client()
 def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(handle, hostengineApp):
     '''
     Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
@@ -65,7 +64,6 @@ def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(
 # test. (It is possible that there is a race condition once SIGKILL is sent which causes subprocess.poll() 
 # to return None - I did not get a chance to investigate it further).
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
-@test_utils.run_with_initialized_client()
 def test_dcgm_standalone_connection_disconnect_error_after_hostengine_murder(handle, hostengineApp):
     '''
     Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
@@ -95,7 +93,6 @@ def test_dcgm_connection_error_when_no_hostengine_exists():
         handle = pydcgm.DcgmHandle(ipAddress='192.0.2.0', timeoutMs=100)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_connection_client_cleanup(handle, gpuIds):
     '''
@@ -130,7 +127,6 @@ def test_dcgm_connection_client_cleanup(handle, gpuIds):
 
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_nvml()
 def test_dcgm_connection_versions(handle):
     '''
@@ -182,11 +178,12 @@ def _test_connection_helper(domainSocketName):
 
 # Add a date-based extension to the path to prevent having trouble when the framework is run as root
 # and then again as non-root
-domainSocketFilename = '/tmp/dcgm_test%s' % (datetime.datetime.now().strftime("%j%f"))
+#domainSocketFilename = '/tmp/dcgm_test%s' % (datetime.datetime.now().strftime("%j%f"))
 
-@test_utils.run_with_standalone_host_engine(20, heArgs=['-d', domainSocketFilename])
+@test_utils.get_domainSocketFilename_and_heArgs()
+@test_utils.run_with_standalone_host_engine(20, heArgs=[], initializedClient=False)
 @test_utils.run_only_with_nvml()
-def test_dcgm_connection_domain_socket():
+def test_dcgm_connection_domain_socket(domainSocketFilename):
     '''
     Test that DCGM can listen on a unix domain socket, you can connect to it,
     and you can do basic queries against it
@@ -197,7 +194,7 @@ def test_dcgm_connection_domain_socket():
 defaultSocketFilename = '/tmp/nv-hostengine'
 
 @test_utils.run_only_as_root()
-@test_utils.run_with_standalone_host_engine(20, heArgs=['-d'])
+@test_utils.run_with_standalone_host_engine(20, heArgs=['-d'], initializedClient=False)
 @test_utils.run_only_with_nvml()
 def test_dcgm_connection_domain_socket_default():
     '''
@@ -207,7 +204,6 @@ def test_dcgm_connection_domain_socket_default():
     _test_connection_helper(defaultSocketFilename)
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_with_injection_gpus(1)
 @test_utils.run_only_with_nvml()
 def test_multiple_hostengine_connections(handle, gpuIds):

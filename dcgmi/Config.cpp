@@ -22,6 +22,7 @@
 #include "DcgmiOutput.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
+#include "dcgmi_common.h"
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -35,22 +36,23 @@
 #define TARGET         "Target"
 #define NOT_APPLICABLE std::string("****")
 
-#define CONFIG_SYNC_BOOST_TAG   "Sync Boost"
-#define CONFIG_SM_APP_CLK_TAG   "SM Application Clock"
-#define CONFIG_MEM_APP_CLK_TAG  "Memory Application Clock"
-#define CONFIG_ECC_MODE_TAG     "ECC Mode"
-#define CONFIG_PWR_LIM_TAG      "Power Limit"
-#define CONFIG_COMPUTE_MODE_TAG "Compute Mode"
+#define CONFIG_SYNC_BOOST_TAG    "Sync Boost"
+#define CONFIG_SM_APP_CLK_TAG    "SM Application Clock"
+#define CONFIG_MEM_APP_CLK_TAG   "Memory Application Clock"
+#define CONFIG_ECC_MODE_TAG      "ECC Mode"
+#define CONFIG_PWR_LIM_TAG       "Power Limit"
+#define CONFIG_COMPUTE_MODE_TAG  "Compute Mode"
+#define CONFIG_POWER_PROFILE_TAG "Power Profile"
 
 
 /*****************************************************************************/
 dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool json)
 {
-    dcgmGroupInfo_t stNvcmGroupInfo;
-    dcgmStatus_t stHandle            = 0;
-    dcgmConfig_t *pNvcmCurrentConfig = NULL;
-    dcgmConfig_t *pNvcmTargetConfig  = NULL;
-    dcgmReturn_t ret                 = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmStatus_t stHandle                            = 0;
+    dcgmConfig_t *pNvcmCurrentConfig                 = NULL;
+    dcgmConfig_t *pNvcmTargetConfig                  = NULL;
+    dcgmReturn_t ret                                 = DCGM_ST_OK;
     dcgmReturn_t result;
     dcgmReturn_t targetResult;
     dcgmDeviceAttributes_t stDeviceAttributes;
@@ -72,8 +74,8 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         return result;
     }
 
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(pNvcmHandle, mGroupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -91,27 +93,27 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         goto cleanup_local;
     }
 
-    pNvcmCurrentConfig = new dcgmConfig_t[stNvcmGroupInfo.count];
-    for (i = 0; i < stNvcmGroupInfo.count; i++)
+    pNvcmCurrentConfig = new dcgmConfig_t[stNvcmGroupInfo->count];
+    for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
         pNvcmCurrentConfig[i].version = dcgmConfig_version;
     }
 
-    pNvcmTargetConfig = new dcgmConfig_t[stNvcmGroupInfo.count];
-    for (i = 0; i < stNvcmGroupInfo.count; i++)
+    pNvcmTargetConfig = new dcgmConfig_t[stNvcmGroupInfo->count];
+    for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
         pNvcmTargetConfig[i].version = dcgmConfig_version;
     }
 
     result = dcgmConfigGet(
-        pNvcmHandle, mGroupId, DCGM_CONFIG_CURRENT_STATE, stNvcmGroupInfo.count, pNvcmCurrentConfig, stHandle);
+        pNvcmHandle, mGroupId, DCGM_CONFIG_CURRENT_STATE, stNvcmGroupInfo->count, pNvcmCurrentConfig, stHandle);
 
     targetResult = dcgmConfigGet(
-        pNvcmHandle, mGroupId, DCGM_CONFIG_TARGET_STATE, stNvcmGroupInfo.count, pNvcmTargetConfig, stHandle);
+        pNvcmHandle, mGroupId, DCGM_CONFIG_TARGET_STATE, stNvcmGroupInfo->count, pNvcmTargetConfig, stHandle);
 
     // Populate information in displayInfo for each GPU and print
 
-    for (i = 0; i < stNvcmGroupInfo.count; i++)
+    for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
         DcgmiOutputColumns outColumns;
         DcgmiOutputJson outJson;
@@ -121,12 +123,13 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         out.addColumn(30, TARGET, targetSelector);
         out.addColumn(30, CURRENT, currentSelector);
 
-        out[CONFIG_COMPUTE_MODE_TAG][FIELD] = CONFIG_COMPUTE_MODE_TAG;
-        out[CONFIG_ECC_MODE_TAG][FIELD]     = CONFIG_ECC_MODE_TAG;
-        out[CONFIG_SYNC_BOOST_TAG][FIELD]   = CONFIG_SYNC_BOOST_TAG;
-        out[CONFIG_MEM_APP_CLK_TAG][FIELD]  = CONFIG_MEM_APP_CLK_TAG;
-        out[CONFIG_SM_APP_CLK_TAG][FIELD]   = CONFIG_SM_APP_CLK_TAG;
-        out[CONFIG_PWR_LIM_TAG][FIELD]      = CONFIG_PWR_LIM_TAG;
+        out[CONFIG_COMPUTE_MODE_TAG][FIELD]  = CONFIG_COMPUTE_MODE_TAG;
+        out[CONFIG_ECC_MODE_TAG][FIELD]      = CONFIG_ECC_MODE_TAG;
+        out[CONFIG_SYNC_BOOST_TAG][FIELD]    = CONFIG_SYNC_BOOST_TAG;
+        out[CONFIG_MEM_APP_CLK_TAG][FIELD]   = CONFIG_MEM_APP_CLK_TAG;
+        out[CONFIG_SM_APP_CLK_TAG][FIELD]    = CONFIG_SM_APP_CLK_TAG;
+        out[CONFIG_PWR_LIM_TAG][FIELD]       = CONFIG_PWR_LIM_TAG;
+        out[CONFIG_POWER_PROFILE_TAG][FIELD] = CONFIG_POWER_PROFILE_TAG;
 
         ss.str("");
         if (verbose)
@@ -139,14 +142,14 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         }
         else
         {
-            out.addHeader(stNvcmGroupInfo.groupName);
-            ss << "Group of " << stNvcmGroupInfo.count << " GPUs";
+            out.addHeader(stNvcmGroupInfo->groupName);
+            ss << "Group of " << stNvcmGroupInfo->count << " GPUs";
             out.addHeader(ss.str());
         }
 
         // Current Configurations
         if (!verbose
-            && !HelperCheckIfAllTheSameMode(pNvcmCurrentConfig, &dcgmConfig_t::computeMode, stNvcmGroupInfo.count))
+            && !HelperCheckIfAllTheSameMode(pNvcmCurrentConfig, &dcgmConfig_t::computeMode, stNvcmGroupInfo->count))
         {
             out[CONFIG_COMPUTE_MODE_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -155,7 +158,8 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_COMPUTE_MODE_TAG][CURRENT] = HelperDisplayComputeMode(pNvcmCurrentConfig[i].computeMode);
         }
 
-        if (!verbose && !HelperCheckIfAllTheSameMode(pNvcmCurrentConfig, &dcgmConfig_t::eccMode, stNvcmGroupInfo.count))
+        if (!verbose
+            && !HelperCheckIfAllTheSameMode(pNvcmCurrentConfig, &dcgmConfig_t::eccMode, stNvcmGroupInfo->count))
         {
             out[CONFIG_ECC_MODE_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -166,7 +170,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
 
         if (!verbose
             && !HelperCheckIfAllTheSameBoost(
-                pNvcmCurrentConfig, &dcgmConfigPerfStateSettings_t::syncBoost, stNvcmGroupInfo.count))
+                pNvcmCurrentConfig, &dcgmConfigPerfStateSettings_t::syncBoost, stNvcmGroupInfo->count))
         {
             out[CONFIG_SYNC_BOOST_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -176,7 +180,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         }
 
         if (!verbose
-            && !HelperCheckIfAllTheSameClock(pNvcmCurrentConfig, &dcgmClockSet_t::memClock, stNvcmGroupInfo.count))
+            && !HelperCheckIfAllTheSameClock(pNvcmCurrentConfig, &dcgmClockSet_t::memClock, stNvcmGroupInfo->count))
         {
             out[CONFIG_MEM_APP_CLK_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -186,7 +190,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         }
 
         if (!verbose
-            && !HelperCheckIfAllTheSameClock(pNvcmCurrentConfig, &dcgmClockSet_t::smClock, stNvcmGroupInfo.count))
+            && !HelperCheckIfAllTheSameClock(pNvcmCurrentConfig, &dcgmClockSet_t::smClock, stNvcmGroupInfo->count))
         {
             out[CONFIG_SM_APP_CLK_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -195,7 +199,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_SM_APP_CLK_TAG][CURRENT] = pNvcmCurrentConfig[i].perfState.targetClocks.smClock;
         }
 
-        if (!verbose && !HelperCheckIfAllTheSamePowerLim(pNvcmCurrentConfig, stNvcmGroupInfo.count))
+        if (!verbose && !HelperCheckIfAllTheSamePowerLim(pNvcmCurrentConfig, stNvcmGroupInfo->count))
         {
             out[CONFIG_PWR_LIM_TAG][CURRENT] = NOT_APPLICABLE;
         }
@@ -204,6 +208,15 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_PWR_LIM_TAG][CURRENT] = pNvcmCurrentConfig[i].powerLimit.val;
         }
 
+        if (!verbose && !HelperCheckIfAllTheSameWorkloadPowerProfile(pNvcmCurrentConfig, stNvcmGroupInfo->count))
+        {
+            out[CONFIG_POWER_PROFILE_TAG][CURRENT] = NOT_APPLICABLE;
+        }
+        else
+        {
+            out[CONFIG_POWER_PROFILE_TAG][CURRENT]
+                = DcgmNs::Utils::HelperDisplayPowerBitmask(pNvcmCurrentConfig[i].workloadPowerProfiles);
+        }
 
         // Target Configurations
         if (targetResult != DCGM_ST_OK)
@@ -211,7 +224,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_COMPUTE_MODE_TAG][TARGET] = HelperDisplayComputeMode(targetResult);
         }
         else if (!verbose
-                 && !HelperCheckIfAllTheSameMode(pNvcmTargetConfig, &dcgmConfig_t::computeMode, stNvcmGroupInfo.count))
+                 && !HelperCheckIfAllTheSameMode(pNvcmTargetConfig, &dcgmConfig_t::computeMode, stNvcmGroupInfo->count))
         {
             out[CONFIG_COMPUTE_MODE_TAG][TARGET] = NOT_APPLICABLE;
         }
@@ -225,7 +238,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_ECC_MODE_TAG][TARGET] = HelperDisplayComputeMode(targetResult);
         }
         else if (!verbose
-                 && !HelperCheckIfAllTheSameMode(pNvcmTargetConfig, &dcgmConfig_t::eccMode, stNvcmGroupInfo.count))
+                 && !HelperCheckIfAllTheSameMode(pNvcmTargetConfig, &dcgmConfig_t::eccMode, stNvcmGroupInfo->count))
         {
             out[CONFIG_ECC_MODE_TAG][TARGET] = NOT_APPLICABLE;
         }
@@ -240,7 +253,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         }
         else if (!verbose
                  && !HelperCheckIfAllTheSameBoost(
-                     pNvcmTargetConfig, &dcgmConfigPerfStateSettings_t::syncBoost, stNvcmGroupInfo.count))
+                     pNvcmTargetConfig, &dcgmConfigPerfStateSettings_t::syncBoost, stNvcmGroupInfo->count))
         {
             out[CONFIG_SYNC_BOOST_TAG][TARGET] = NOT_APPLICABLE;
         }
@@ -254,7 +267,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_MEM_APP_CLK_TAG][TARGET] = HelperDisplayComputeMode(targetResult);
         }
         else if (!verbose
-                 && !HelperCheckIfAllTheSameClock(pNvcmTargetConfig, &dcgmClockSet_t::memClock, stNvcmGroupInfo.count))
+                 && !HelperCheckIfAllTheSameClock(pNvcmTargetConfig, &dcgmClockSet_t::memClock, stNvcmGroupInfo->count))
         {
             out[CONFIG_MEM_APP_CLK_TAG][TARGET] = NOT_APPLICABLE;
         }
@@ -268,7 +281,7 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
             out[CONFIG_SM_APP_CLK_TAG][TARGET] = HelperDisplayComputeMode(targetResult);
         }
         else if (!verbose
-                 && !HelperCheckIfAllTheSameClock(pNvcmTargetConfig, &dcgmClockSet_t::smClock, stNvcmGroupInfo.count))
+                 && !HelperCheckIfAllTheSameClock(pNvcmTargetConfig, &dcgmClockSet_t::smClock, stNvcmGroupInfo->count))
         {
             out[CONFIG_SM_APP_CLK_TAG][TARGET] = NOT_APPLICABLE;
         }
@@ -281,13 +294,28 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
         {
             out[CONFIG_PWR_LIM_TAG][TARGET] = HelperDisplayComputeMode(targetResult);
         }
-        else if (!verbose && !HelperCheckIfAllTheSamePowerLim(pNvcmTargetConfig, stNvcmGroupInfo.count))
+        else if (!verbose && !HelperCheckIfAllTheSamePowerLim(pNvcmTargetConfig, stNvcmGroupInfo->count))
         {
             out[CONFIG_PWR_LIM_TAG][TARGET] = NOT_APPLICABLE;
         }
         else
         {
             out[CONFIG_PWR_LIM_TAG][TARGET] = pNvcmTargetConfig[i].powerLimit.val;
+        }
+
+        if (targetResult != DCGM_ST_OK)
+        {
+            out[CONFIG_POWER_PROFILE_TAG][TARGET]
+                = DcgmNs::Utils::HelperDisplayPowerBitmask(pNvcmTargetConfig[i].workloadPowerProfiles);
+        }
+        else if (!verbose && !HelperCheckIfAllTheSameWorkloadPowerProfile(pNvcmTargetConfig, stNvcmGroupInfo->count))
+        {
+            out[CONFIG_POWER_PROFILE_TAG][TARGET] = NOT_APPLICABLE;
+        }
+        else
+        {
+            out[CONFIG_POWER_PROFILE_TAG][TARGET]
+                = DcgmNs::Utils::HelperDisplayPowerBitmask(pNvcmTargetConfig[i].workloadPowerProfiles);
         }
 
         std::cout << out.str();
@@ -322,7 +350,7 @@ cleanup_local:
         result = dcgmStatusDestroy(stHandle);
         if (DCGM_ST_OK != result)
         {
-            std::cout << "Unable to destroy status handler. Return: " << result << std::endl;
+            std::cout << "Unable to destroy status handler. Return: " << std::to_underlying(result) << std::endl;
         }
     }
 
@@ -415,9 +443,9 @@ cleanup_local:
 /*****************************************************************************/
 dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
 {
-    dcgmGroupInfo_t stNvcmGroupInfo;
-    dcgmStatus_t stHandle = 0;
-    dcgmReturn_t ret      = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
+    dcgmStatus_t stHandle                            = 0;
+    dcgmReturn_t ret                                 = DCGM_ST_OK;
     dcgmReturn_t result;
     GPUErrorOutputController gpuErrView;
     /* Add config watches for the newly created group */
@@ -429,8 +457,8 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
         return result;
     }
 
-    stNvcmGroupInfo.version = dcgmGroupInfo_version;
-    result                  = dcgmGroupGetInfo(pNvcmHandle, mGroupId, &stNvcmGroupInfo);
+    stNvcmGroupInfo->version = dcgmGroupInfo_version;
+    result                   = dcgmGroupGetInfo(pNvcmHandle, mGroupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -524,6 +552,21 @@ bool Config::HelperCheckIfAllTheSameClock(dcgmConfig_t *configs, TMember member,
         if (configs[0].perfState.targetClocks.*member != configs[i].perfState.targetClocks.*member)
         {
             return false;
+        }
+    }
+    return true;
+}
+
+bool Config::HelperCheckIfAllTheSameWorkloadPowerProfile(dcgmConfig_t const *configs, unsigned int numGpus)
+{
+    for (unsigned int i = 1; i < numGpus; i++)
+    {
+        for (unsigned int j = 0; j < DCGM_POWER_PROFILE_ARRAY_SIZE; j++)
+        {
+            if (configs[0].workloadPowerProfiles[j] != configs[i].workloadPowerProfiles[j])
+            {
+                return false;
+            }
         }
     }
     return true;
@@ -643,7 +686,6 @@ std::string Config::HelperDisplayCurrentSyncBoost(unsigned int val)
 
     return ss.str();
 }
-
 
 /****************************************************************************/
 std::string Config::HelperDisplayBool(unsigned int val)

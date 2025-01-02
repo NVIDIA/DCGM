@@ -49,7 +49,7 @@ unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
                                         DCGM_FI_DEV_SM_CLOCK,
                                         DCGM_FI_DEV_MEM_CLOCK,
                                         DCGM_FI_DEV_POWER_VIOLATION,
-                                        DCGM_FI_DEV_CLOCK_THROTTLE_REASONS,
+                                        DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
                                         DCGM_FI_DEV_MEMORY_TEMP,
                                         0 };
 
@@ -62,6 +62,7 @@ DcgmRecorder::DcgmRecorder()
     , m_dcgmSystem()
     , m_valuesHolder()
     , m_nextValuesSinceTs(0)
+    , m_watchFrequency(defaultFrequency)
 
 {}
 
@@ -74,6 +75,7 @@ DcgmRecorder::DcgmRecorder(dcgmHandle_t handle)
     , m_dcgmSystem()
     , m_valuesHolder()
     , m_nextValuesSinceTs(0)
+    , m_watchFrequency(defaultFrequency)
 
 {
     m_dcgmSystem.Init(handle);
@@ -88,6 +90,7 @@ DcgmRecorder::DcgmRecorder(DcgmRecorder &&other) noexcept
     , m_dcgmSystem(other.m_dcgmSystem)
     , m_valuesHolder(other.m_valuesHolder)
     , m_nextValuesSinceTs(other.m_nextValuesSinceTs)
+    , m_watchFrequency(other.m_watchFrequency)
 {}
 
 DcgmRecorder::~DcgmRecorder()
@@ -143,21 +146,14 @@ dcgmReturn_t DcgmRecorder::AddWatches(const std::vector<unsigned short> &fieldId
         return ret;
     }
 
-    return m_dcgmGroup.WatchFields(defaultFrequency, testDuration + 30);
+    return m_dcgmGroup.WatchFields(m_watchFrequency, testDuration + 30);
 }
 
 void DcgmRecorder::GetErrorString(dcgmReturn_t ret, std::string &err)
 {
-    std::stringstream err_stream;
     const char *tmp = errorString(ret);
 
-    if (tmp == NULL)
-    {
-        err_stream << "Unknown error from DCGM: " << ret;
-        err = err_stream.str();
-    }
-    else
-        err = tmp;
+    err = (tmp == nullptr) ? fmt::format("Unknown error from DCGM: {}", ret) : tmp;
 }
 
 dcgmReturn_t DcgmRecorder::Init(const std::string &hostname)
@@ -507,7 +503,7 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
 
             if (ret == DCGM_ST_OK)
             {
-                m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dfv, 0);
+                m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCKS_EVENT_REASONS, dfv, 0);
             }
 
             if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
@@ -586,12 +582,9 @@ void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
 
 void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
                                                    unsigned int gpuId,
-                                                   timelib64_t startTime,
                                                    int64_t intValue,
                                                    int64_t thresholdValue,
-                                                   double dblValue,
-                                                   const std::string &fieldName,
-                                                   std::vector<DcgmError> &errorList)
+                                                   const std::string &fieldName)
 {
     DcgmError d { gpuId };
     switch (fieldId)
@@ -715,7 +708,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
         // Check for failure detection
         if (fm->fieldType == DCGM_FT_INT64)
         {
-            if (failureThresholds == 0 && fsr.response.values[valueIndex].i64 > 0
+            if (failureThresholds == nullptr && fsr.response.values[valueIndex].i64 > 0
                 && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
                 AddFieldViolationError(fieldIds[i],
@@ -727,23 +720,18 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                                        errorList);
                 st = DR_VIOLATION;
             }
-            else if (failureThresholds != 0 && fsr.response.values[valueIndex].i64 > (*failureThresholds)[i].val.i64
+            else if (failureThresholds != nullptr
+                     && fsr.response.values[valueIndex].i64 > static_cast<int64_t>((*failureThresholds)[i].val.i64)
                      && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
-                AddFieldThresholdViolationError(fieldIds[i],
-                                                gpuId,
-                                                startTime,
-                                                fsr.response.values[valueIndex].i64,
-                                                (*failureThresholds)[i].val.i64,
-                                                DCGM_FP64_BLANK,
-                                                fm->tag,
-                                                errorList);
+                AddFieldThresholdViolationError(
+                    fieldIds[i], gpuId, fsr.response.values[valueIndex].i64, (*failureThresholds)[i].val.i64, fm->tag);
                 st = DR_VIOLATION;
             }
         }
         else if (fm->fieldType == DCGM_FT_DOUBLE)
         {
-            if (failureThresholds == 0 && fsr.response.values[valueIndex].fp64 > 0.0
+            if (failureThresholds == nullptr && fsr.response.values[valueIndex].fp64 > 0.0
                 && DCGM_FP64_IS_BLANK(fsr.response.values[valueIndex].fp64) == 0)
             {
                 AddFieldViolationError(fieldIds[i],
@@ -755,7 +743,8 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                                        errorList);
                 st = DR_VIOLATION;
             }
-            else if (failureThresholds != 0 && fsr.response.values[valueIndex].fp64 > (*failureThresholds)[i].val.fp64
+            else if (failureThresholds != nullptr
+                     && fsr.response.values[valueIndex].fp64 > (*failureThresholds)[i].val.fp64
                      && DCGM_FP64_IS_BLANK(fsr.response.values[valueIndex].fp64) == 0)
             {
                 DcgmError d { gpuId };
@@ -857,61 +846,6 @@ std::vector<dcgmTimeseriesInfo_t> DcgmRecorder::GetCustomGpuStat(unsigned int gp
     return m_customStatHolder.GetCustomGpuStat(gpuId, name);
 }
 
-int DcgmRecorder::CheckThermalViolations(unsigned int gpuId, std::vector<DcgmError> &errorList, timelib64_t startTime)
-{
-    int st = DR_SUCCESS;
-    dcgmFieldSummaryRequest_t fsr;
-    memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_THERMAL_VIOLATION;
-    fsr.entityGroupId   = DCGM_FE_GPU;
-    fsr.entityId        = gpuId;
-    fsr.summaryTypeMask = DCGM_SUMMARY_SUM;
-    fsr.startTime       = startTime;
-    fsr.endTime         = 0;
-
-    dcgmReturn_t ret = GetFieldSummary(fsr);
-
-    if (ret != DCGM_ST_OK)
-    {
-        // This may be null since we only expose thermal violations with the setting of an environmental variable
-        return ret;
-    }
-
-    if (fsr.response.values[0].i64 > 0 && !DCGM_INT64_IS_BLANK(fsr.response.values[0].i64))
-    {
-        dcgmReturn_t ret = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_THERMAL_VIOLATION, startTime, true);
-        dcgmFieldValue_v1 dfv;
-        memset(&dfv, 0, sizeof(dfv));
-
-        if (ret == DCGM_ST_OK)
-        {
-            m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dfv, 0);
-        }
-
-        // The field value returns nanoseconds, so convert to seconds.
-        double violationSeconds = fsr.response.values[0].i64 / 1000000000.0;
-
-        if (dfv.ts != 0) // the field value timestamp will be 0 if we couldn't find one
-        {
-            double timeDiff = (dfv.ts - startTime) / 1000000.0;
-            DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS_TS, d, violationSeconds, timeDiff, gpuId);
-            errorList.push_back(d);
-        }
-        else
-        {
-            DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THERMAL_VIOLATIONS, d, violationSeconds, gpuId);
-            errorList.push_back(d);
-        }
-
-        // Thermal violations were found so, make the return indicate we found a violation
-        st = DR_VIOLATION;
-    }
-
-    return st;
-}
-
 int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
                                       std::vector<DcgmError> &errorList,
                                       long long maxTemp,
@@ -950,7 +884,8 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
     if (highTemp > maxTemp)
     {
         DcgmError d { gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, highTemp, gpuId, maxTemp);
+        char const *tempViolationSrc = "GPU";
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, highTemp, tempViolationSrc, gpuId, maxTemp);
         errorList.push_back(d);
         st = DR_VIOLATION;
     }
@@ -966,41 +901,40 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
 }
 
 
-int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
 {
     // mask for the failures we're evaluating
-    static const uint64_t failureMask = DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN | DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL
-                                        | DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL
-                                        | DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE;
+    static const uint64_t failureMask = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL
+                                        | DCGM_CLOCKS_EVENT_REASON_HW_THERMAL | DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE;
     uint64_t mask = failureMask;
 
-    // Update mask to ignore throttle reasons given by the ignoreMask
-    if (nvvsCommon.throttleIgnoreMask != DCGM_INT64_BLANK && nvvsCommon.throttleIgnoreMask > 0)
+    // Update mask to ignore clocks event reasons given by the ignoreMask
+    if (nvvsCommon.clocksEventIgnoreMask != DCGM_INT64_BLANK && nvvsCommon.clocksEventIgnoreMask > 0)
     {
-        mask &= ~nvvsCommon.throttleIgnoreMask;
+        mask &= ~nvvsCommon.clocksEventIgnoreMask;
     }
 
     dcgmFieldValue_v1 dfv;
-    dcgmReturn_t st = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, startTime, true);
+    dcgmReturn_t st = GetFieldValuesSince(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCKS_EVENT_REASONS, startTime, true);
     int rc          = DR_SUCCESS;
 
     std::stringstream buf;
 
     if (st == DCGM_ST_NOT_SUPPORTED)
     {
-        DCGM_LOG_DEBUG << "Skipping throttling check because it is unsupported.";
+        DCGM_LOG_DEBUG << "Skipping clocks event check because it is unsupported.";
         return DR_SUCCESS;
     }
 
     if (st != DCGM_ST_OK)
     {
         DcgmError d { gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, st, "clock throttling", gpuId);
+        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, st, "clocks event", gpuId);
         errorList.push_back(d);
         return DR_COMM_ERROR;
     }
 
-    m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, dfv, mask);
+    m_valuesHolder.GetFirstNonZero(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_CLOCKS_EVENT_REASONS, dfv, mask);
     int64_t maskedResult = dfv.value.i64 & mask;
 
     if (maskedResult)
@@ -1008,24 +942,24 @@ int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, 
         const char *detail = NULL;
         double timeDiff    = (dfv.ts - startTime) / 1000000.0;
 
-        if ((maskedResult & DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN))
+        if ((maskedResult & DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN))
         {
-            detail = "clocks_throttle_reason_hw_slowdown: either the temperature is too high or there is a "
+            detail = "clocks_event_reason_hw_slowdown: either the temperature is too high or there is a "
                      "power supply problem (the power brake assertion has been tripped).";
         }
-        else if ((maskedResult & DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL))
+        else if ((maskedResult & DCGM_CLOCKS_EVENT_REASON_SW_THERMAL))
         {
-            detail = "clocks_throttle_reason_sw_thermal_slowdown: the GPU or its memory have reached unsafe "
+            detail = "clocks_event_reason_sw_thermal_slowdown: the GPU or its memory have reached unsafe "
                      "temperatures.";
         }
-        else if ((maskedResult & DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL))
+        else if ((maskedResult & DCGM_CLOCKS_EVENT_REASON_HW_THERMAL))
         {
-            detail = "clocks_throttle_reason_hw_thermal_slowdown: the GPU or its memory have reached unsafe "
+            detail = "clocks_event_reason_hw_thermal_slowdown: the GPU or its memory have reached unsafe "
                      "temperatures.";
         }
-        else if ((maskedResult & DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE))
+        else if ((maskedResult & DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE))
         {
-            detail = "clocks_throttle_reason_hw_power_brake_slowdown: the power brake assertion has triggered. "
+            detail = "clocks_event_reason_hw_power_brake_slowdown: the power brake assertion has triggered. "
                      "Please check the power supply.";
         }
 
@@ -1033,12 +967,17 @@ int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, 
         {
             rc = DR_VIOLATION;
             DcgmError d { gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_THROTTLING_VIOLATION, d, gpuId, timeDiff, detail);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCKS_EVENT_VIOLATION, d, gpuId, timeDiff, detail);
             errorList.push_back(d);
         }
     }
 
     return rc;
+}
+
+int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+{
+    return CheckForClocksEvent(gpuId, startTime, errorList);
 }
 
 dcgmReturn_t DcgmRecorder::GetCurrentFieldValue(unsigned int gpuId,
@@ -1111,25 +1050,33 @@ void DcgmRecorder::AddDiagStats(const std::vector<dcgmDiagCustomStats_t> &custom
     m_customStatHolder.AddDiagStats(customStats);
 }
 
-long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp)
+long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginEntityInfo_v1 &entityInfo)
 {
+    long long const fakeMaxTemp  = 85;
     unsigned int flags           = DCGM_FV_FLAG_LIVE_DATA;
     dcgmFieldValue_v2 maxTempVal = {};
-    dcgmReturn_t ret             = GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
+
+    if (entityInfo.entity.entityGroupId != DCGM_FE_GPU)
+    {
+        log_debug("Function called with non-GPU entityInfo.");
+        return fakeMaxTemp;
+    }
+
+    dcgmReturn_t ret = GetCurrentFieldValue(entityInfo.entity.entityId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
 
     if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
     {
-        DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuInfo.gpuId << ": "
+        DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << entityInfo.entity.entityId << ": "
                          << errorString(ret) << ", defaulting to the slowdown temperature";
 
-        if (gpuInfo.status == DcgmEntityStatusFake)
+        if (entityInfo.auxField.gpu.status == DcgmEntityStatusFake)
         {
             /* fake gpus don't report max temp */
-            return 85;
+            return fakeMaxTemp;
         }
         else
         {
-            return gpuInfo.attributes.thermalSettings.slowdownTemp;
+            return entityInfo.auxField.gpu.attributes.thermalSettings.slowdownTemp;
         }
     }
     else
@@ -1141,7 +1088,7 @@ long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo,
 std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
                                                        timelib64_t startTime,
                                                        nvvsPluginResult_t &result,
-                                                       std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfos)
+                                                       std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos)
 {
     std::vector<DcgmError> errors;
     std::vector<unsigned short> fieldIds;
@@ -1174,11 +1121,15 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
     }
 
     dcgmUpdateAllFields(m_dcgmHandle.GetHandle(), 1);
-    for (auto &&gpuInfo : gpuInfos)
+    for (auto &&entityInfo : entityInfos)
     {
-        long long maxTemp = DetermineMaxTemp(gpuInfo, tp);
-        int ret           = CheckErrorFields(fieldIds, thresholdsPtr, gpuInfo.gpuId, maxTemp, errors, startTime);
-        int retHBMErrorFields = CheckHBMErrorFields(gpuInfo, errors, startTime);
+        if (entityInfo.entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        long long maxTemp = DetermineMaxTemp(entityInfo);
+        int ret = CheckErrorFields(fieldIds, thresholdsPtr, entityInfo.entity.entityId, maxTemp, errors, startTime);
+        int retHBMErrorFields = CheckHBMErrorFields(entityInfo, errors, startTime);
 
         // ret - violation, retHBMErrorFields - violation --> ret = violation
         // ret - success, retHBMErrorFields - violation --> ret = violation
@@ -1198,11 +1149,11 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
         else if (ret == DR_VIOLATION || result == NVVS_RESULT_FAIL)
         {
             result = NVVS_RESULT_FAIL;
-            // Check for throttling errors
-            ret = CheckForThrottling(gpuInfo.gpuId, startTime, errors);
+            // Check for clocks event
+            ret = CheckForClocksEvent(entityInfo.entity.entityId, startTime, errors);
             if (ret == DR_COMM_ERROR)
             {
-                DCGM_LOG_ERROR << "Unable to read the throttling information from the hostengine";
+                DCGM_LOG_ERROR << "Unable to read the clocks event information from the hostengine";
                 result = NVVS_RESULT_FAIL;
             }
         }
@@ -1227,7 +1178,7 @@ unsigned int DcgmRecorder::GetCudaMajorVersion()
     return m_dcgmSystem.GetCudaMajorVersion();
 }
 
-int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginGpuInfo_t gpuInfo,
+int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginEntityInfo_v1 const &entityInfo,
                                       std::vector<DcgmError> &errors,
                                       timelib64_t startTime)
 {
@@ -1238,16 +1189,33 @@ int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginGpuInfo_t gpuInfo,
     dcgmFieldValue_v2 maxTempVal = {};
     int ret                      = DR_SUCCESS;
 
+    if (entityInfo.entity.entityGroupId != DCGM_FE_GPU)
+    {
+        log_debug("Function called with non-GPU entityInfo.");
+        return ret;
+    }
+
     // get the max temperature
-    dcgmReturn_t returnValue
-        = GetCurrentFieldValue(gpuInfo.gpuId, DCGM_FI_DEV_MEM_MAX_OP_TEMP, maxTempVal, DCGM_FV_FLAG_LIVE_DATA);
+    dcgmReturn_t returnValue = GetCurrentFieldValue(
+        entityInfo.entity.entityId, DCGM_FI_DEV_MEM_MAX_OP_TEMP, maxTempVal, DCGM_FV_FLAG_LIVE_DATA);
 
     if (returnValue != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
     {
         // logging the error
-        DCGM_LOG_WARNING << "Cannot read the max HBM operating temperature " << gpuInfo.gpuId << ": ";
+        if (DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
+        {
+            log_debug("Cannot read the max HBM operating temperature for gpuId {}: {}: INT64 value is blank.",
+                      entityInfo.entity.entityId,
+                      errorString(returnValue));
+        }
+        else
+        {
+            log_debug("Cannot read the max HBM operating temperature for gpuId {}: {}",
+                      entityInfo.entity.entityId,
+                      errorString(returnValue));
+        }
 
-        if (gpuInfo.status == DcgmEntityStatusFake)
+        if (entityInfo.auxField.gpu.status == DcgmEntityStatusFake)
         {
             // fake gpu - hardcoding value
             maxHBMTemp = 100;
@@ -1267,7 +1235,7 @@ int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginGpuInfo_t gpuInfo,
     if (skipCheck == 0)
     {
         // checking if current HBM temperature is greater than max
-        ret = VerifyHBMTemperature(gpuInfo.gpuId, errors, maxHBMTemp, startTime);
+        ret = VerifyHBMTemperature(entityInfo.entity.entityId, errors, maxHBMTemp, startTime);
     }
 
     return ret;
@@ -1322,10 +1290,16 @@ int DcgmRecorder::VerifyHBMTemperature(unsigned int gpuId,
     if (currHighTemp > maxTemp)
     {
         DcgmError d { gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, currHighTemp, gpuId, maxTemp);
+        char const *tempViolationSrc = "HBM Memory on GPU";
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, currHighTemp, tempViolationSrc, gpuId, maxTemp);
         errorList.push_back(d);
         st = DR_VIOLATION;
     }
 
     return st;
+}
+
+void DcgmRecorder::SetWatchFrequency(long long watchFrequency)
+{
+    m_watchFrequency = watchFrequency;
 }

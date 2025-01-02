@@ -13,17 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "DcgmStringHelpers.h"
+#include "EntitySet.h"
+#include "PluginInterface.h"
+#include "dcgm_fields.h"
 #include "dcgm_structs.h"
 #include <DcgmHandle.h>
 #include <DcgmRecorder.h>
 #include <DcgmSystem.h>
+#include <FdChannelClient.h>
 #include <Gpu.h>
-#include <JsonOutput.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
 #include <TestFramework.h>
 
+#include <DcgmBuildInfo.hpp>
 #include <atomic>
 #include <cerrno>
 #include <cstdio>
@@ -31,8 +36,11 @@
 #include <cstring>
 #include <dirent.h>
 #include <dlfcn.h>
+#include <filesystem>
 #include <iostream>
 #include <list>
+#include <memory>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -53,52 +61,83 @@ extern "C" {
 std::map<std::string, maker_t *, std::less<std::string>> factory;
 }
 
+namespace
+{
+
+void FillGpuEntityAuxData(EntitySet *entitySet, std::vector<dcgmDiagPluginEntityInfo_v1> &entityInfos)
+{
+    assert(entitySet->GetEntityGroup() == DCGM_FE_GPU);
+    GpuSet *gpuSet = ToGpuSet(entitySet);
+    assert(gpuSet);
+    assert(gpuSet->GetGpuObjs().size() == entityInfos.size());
+    for (unsigned idx = 0; idx < entityInfos.size(); ++idx)
+    {
+        entityInfos[idx].auxField.gpu.attributes = gpuSet->GetGpuObjs()[idx]->GetAttributes();
+        entityInfos[idx].auxField.gpu.status     = gpuSet->GetGpuObjs()[idx]->GetDeviceEntityStatus();
+    }
+}
+
+std::unordered_set<unsigned int> GetGpuIds(EntitySet *entitySet)
+{
+    if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+    {
+        return {};
+    }
+
+    std::unordered_set<unsigned int> res;
+    for (const auto gpuId : entitySet->GetEntityIds())
+    {
+        res.insert(gpuId);
+    }
+
+    return res;
+}
+
+} //namespace
+
+
 /*****************************************************************************/
 TestFramework::TestFramework()
     : m_testList()
-    , testGroup()
+    , m_testCategories()
     , dlList()
     , skipRest(false)
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
     , m_validGpuId(0)
+    , m_completedTests(0)
+    , m_numTestsToRun(0)
     , m_skipLibraryList()
 {
-    m_output = new Output();
-
     InitSkippedLibraries();
 }
 
 /*****************************************************************************/
-TestFramework::TestFramework(bool jsonOutput, GpuSet *gpuSet)
+TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets)
     : m_testList()
-    , testGroup()
+    , m_testCategories()
     , dlList()
-    , m_output(0)
     , skipRest(false)
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
     , m_plugins()
-    , m_gpuInfo()
 {
-    std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
     std::vector<unsigned int> gpuIndices;
-    for (auto &&gpu : gpuList)
+    for (auto const &entitySet : entitySets)
     {
-        gpuIndices.push_back(gpu->GetGpuId());
-    }
+        if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+        {
+            continue;
+        }
 
-    PopulateGpuInfoForPlugins(gpuList, m_gpuInfo);
-
-    if (jsonOutput)
-    {
-        m_output = new JsonOutput(gpuIndices);
-    }
-    else
-    {
-        m_output = new Output();
+        GpuSet *gpuSet                    = ToGpuSet(entitySet.get());
+        std::vector<Gpu *> const &gpuList = gpuSet->GetGpuObjs();
+        for (auto &&gpu : gpuList)
+        {
+            gpuIndices.push_back(gpu->GetGpuId());
+        }
     }
 
     if (!gpuIndices.empty())
@@ -133,8 +172,6 @@ TestFramework::~TestFramework()
     for (std::list<void *>::iterator itr = dlList.begin(); itr != dlList.end(); itr++)
         if (*itr)
             dlclose(*itr);
-
-    delete m_output;
 }
 
 std::string TestFramework::GetPluginBaseDir()
@@ -179,7 +216,7 @@ std::string TestFramework::GetPluginBaseDir()
         binaryPath = binaryPath.substr(0, binaryPath.find_last_of("/"));
 
         searchPaths.push_back("/plugins");
-        searchPaths.push_back("/../share/nvidia-validation-suite/plugins");
+        searchPaths.push_back("/../libexec/datacenter-gpu-manager-4/plugins");
 
         for (pathIt = searchPaths.begin(); pathIt != searchPaths.end(); pathIt++)
         {
@@ -200,7 +237,13 @@ std::string TestFramework::GetPluginBaseDir()
             throw std::runtime_error("Plugins directory was not found.  Please check paths or use -p to set it.");
     }
     else
+    {
         pluginsPath = nvvsCommon.pluginPath;
+        if (!std::filesystem::exists(pluginsPath) || !std::filesystem::is_directory(pluginsPath))
+        {
+            throw std::runtime_error("Plugins directory was not found.  Please check paths or use -p to set it.");
+        }
+    }
 
     return pluginsPath;
 }
@@ -273,7 +316,8 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
         dcgmReturn_t ret = pl->LoadPlugin(libraryPath, libraryName);
         if (ret == DCGM_ST_OK)
         {
-            ret = pl->InitializePlugin(dcgmHandle.GetHandle(), m_gpuInfo);
+            int pluginId = m_plugins.size();
+            ret          = pl->InitializePlugin(dcgmHandle.GetHandle(), pluginId);
             if (ret == DCGM_ST_OK)
             {
                 ret = pl->GetPluginInfo();
@@ -363,47 +407,99 @@ std::optional<std::string> TestFramework::GetPluginUsingDriverDir()
 void TestFramework::LoadPluginWithDir(std::string const &pluginDir)
 {
     // plugin discovery
-    char oldPath[2048]    = { 0 };
-    struct dirent *dirent = nullptr;
-    DIR *dir;
-    std::string dotSo(".so");
-    std::map<std::string, maker_t *, std::less<std::string>>::iterator fitr;
-    std::stringstream errbuf;
+    char oldPath[2048] = { 0 };
 
     if (getcwd(oldPath, sizeof(oldPath)) == 0)
     {
-        errbuf << "Cannot load plugins: unable to get current dir: '" << strerror(errno) << "'";
-        log_error(errbuf.str());
-        throw std::runtime_error(errbuf.str());
+        std::string errorMessage = std::format("Cannot load plugins: unable to get current dir: '{}'", strerror(errno));
+        log_error(errorMessage);
+        throw std::runtime_error(std::move(errorMessage));
     }
 
     if (chdir(pluginDir.c_str()))
     {
-        errbuf << "Error: Cannot load plugins. Unable to change to the plugin dir '" << pluginDir << "': '"
-               << strerror(errno) << "'";
-        log_error(errbuf.str());
-        throw std::runtime_error(errbuf.str());
+        std::string errorMessage = std::format(
+            "Error: Cannot load plugins. Unable to change to the plugin dir '{}': '{}'", pluginDir, strerror(errno));
+
+        log_error(errorMessage);
+        throw std::runtime_error(std::move(errorMessage));
     }
 
-    if ((dir = opendir(".")) == 0)
+    const struct ResetWorkingDirectory
     {
-        errbuf << "Cannot load plugins: unable to open the current dir '" << pluginDir << "': '" << strerror(errno)
-               << "'";
-        log_error(errbuf.str());
-        throw std::runtime_error(errbuf.str());
+        char const *path;
+        ~ResetWorkingDirectory()
+        {
+            // Previous implementation did not account for possible failure. Deferring error handling
+            chdir(path);
+        }
+    } resetWorkingDirectory { oldPath };
+
+    DIR *const dir = opendir(".");
+    if (dir == 0)
+    {
+        std::string errorMessage = std::format(
+            "Error: Cannot load plugins: unable to open the current dir '{}': '{}'", pluginDir, strerror(errno));
+
+        log_error(errorMessage);
+        throw std::runtime_error(std::move(errorMessage));
     }
 
-    // Read the entire directory and get the .sos
-    while ((dirent = readdir(dir)) != NULL)
+    const struct CloseDirectory
     {
-        // Skip files that don't end in .so
-        char *dot = strrchr(dirent->d_name, '.');
-        if (dot == NULL || dotSo != dot)
+        DIR *directory;
+        ~CloseDirectory()
+        {
+            // Previous implementation did not account for possible failure. Deferring error handling
+            closedir(directory);
+        }
+    } closeDirectory { dir };
+
+    // Read the entire directory and get the shared library files (.*\.so\.[0-9]+)
+    for (dirent *entry; (entry = readdir(dir)) != NULL;)
+    {
+        char const *const begin   = entry->d_name;
+        char const *const lastDot = strrchr(begin, '.');
+
+        if (lastDot == NULL || lastDot == begin)
+        {
             continue;
+        }
+
+        {
+            char const *it = lastDot + 1;
+
+            /* d_name is garaunteed to be NULL terminated.
+             * https://man7.org/linux/man-pages/man3/readdir.3.html
+             *
+             * No need to compare against a bounding end iterator
+             */
+            while (std::isdigit(*it))
+            {
+                ++it;
+            }
+
+            if ((*it != '\0') || (it == lastDot + 1))
+            {
+                continue;
+            }
+        }
+
+        {
+            static constexpr std::string_view reference("os.");
+            const std::string_view stem(begin, lastDot);
+
+            const auto mismatch = std::ranges::mismatch(std::views::reverse(stem), reference);
+
+            if (mismatch.in2 != reference.end())
+            {
+                continue;
+            }
+        }
 
         // Tell dlopen to look in this directory
-        char buf[2048];
-        snprintf(buf, sizeof(buf), "./%s", dirent->d_name);
+        thread_local char buf[sizeof(entry->d_name) + 2];
+        snprintf(buf, sizeof(buf), "./%s", entry->d_name);
 
         // Do not load any plugins with different permissions / owner than the diagnostic binary
         if (!PluginPermissionsMatch(pluginDir, buf))
@@ -411,11 +507,8 @@ void TestFramework::LoadPluginWithDir(std::string const &pluginDir)
             continue;
         }
 
-        LoadLibrary(buf, dirent->d_name);
+        LoadLibrary(buf, entry->d_name);
     }
-
-    closedir(dir);
-    chdir(oldPath);
 }
 
 std::string TestFramework::GetPluginCudalessDir()
@@ -427,11 +520,11 @@ std::string TestFramework::GetPluginCudalessDir()
 void TestFramework::loadPlugins()
 {
     std::string cudalessPluginDir                   = GetPluginCudalessDir();
-    std::string pluginCommonPath                    = cudalessPluginDir + "/libpluginCommon.so";
+    std::string pluginCommonPath                    = cudalessPluginDir + "/libpluginCommon.so.4";
     std::optional<std::string> usingDriverPluginDir = GetPluginUsingDriverDir();
 
     // Load the pluginCommon library first so that those libraries can find the appropriate symbols
-    LoadLibrary(pluginCommonPath.c_str(), "libpluginCommon.so");
+    LoadLibrary(pluginCommonPath.c_str(), "libpluginCommon.so.4");
     LoadPluginWithDir(cudalessPluginDir);
 
     if (usingDriverPluginDir)
@@ -444,25 +537,30 @@ void TestFramework::loadPlugins()
             "failed to get path of plugin using driver, it may lack of driver. Skip loading plugins that need driver.");
     }
 
-    for (size_t i = 0; i < m_plugins.size(); i++)
+    for (size_t pluginIdx = 0; pluginIdx < m_plugins.size(); pluginIdx++)
     {
-        auto pluginTests = m_plugins[i]->GetPluginTests();
-        for (const auto &[testName, pluginTest] : pluginTests)
+        auto const &supportedTest = m_plugins[pluginIdx]->GetSupportedTests();
+        for (auto const &[testName, pluginTest] : supportedTest)
         {
-            log_debug("test [{}] in plugin [{}] oberseved", testName, m_plugins[i]->GetName());
-            auto *temp = new Test(GetTestIndex(testName),
+            auto *temp = new Test(pluginIdx,
+                                  m_plugins[pluginIdx]->GetName(),
+                                  pluginTest.GetTestName(),
                                   pluginTest.GetDescription(),
-                                  pluginTest.GetTestGroup(),
-                                  m_plugins[i]->GetName());
+                                  pluginTest.GetTargetEntityGroup(),
+                                  pluginTest.GetTestCategory());
+            if (temp == nullptr)
+            {
+                log_error("failed to allocate structure for holding test: {}", testName);
+                continue;
+            }
             m_testList.insert(m_testList.end(), temp);
-            insertIntoTestGroup(pluginTest.GetTestGroup(), temp);
-            m_testNameToPluginName[testName] = m_plugins[i]->GetName();
+            InsertIntoTestCategory(pluginTest.GetTestCategory(), temp);
         }
     }
 }
 
 /*****************************************************************************/
-void TestFramework::insertIntoTestGroup(std::string groupName, Test *testObject)
+void TestFramework::InsertIntoTestCategory(std::string groupName, Test *testObject)
 {
     // groupName may be a CSV list
     std::istringstream ss(groupName);
@@ -474,138 +572,141 @@ void TestFramework::insertIntoTestGroup(std::string groupName, Test *testObject)
         {
             token.erase(token.begin());
         }
-        testGroup[token].push_back(testObject);
+        m_testCategories[token].push_back(testObject);
     }
 }
 
+dcgmReturn_t TestFramework::SetDiagResponseVersion(unsigned int version)
+{
+    return m_diagResponse.SetVersion(version);
+}
+
 /*****************************************************************************/
-void TestFramework::go(std::vector<std::unique_ptr<GpuSet>> &gpuSets)
+void TestFramework::Go(std::vector<std::unique_ptr<EntitySet>> &entitySets)
 {
     bool pulseTestWillExecute = false;
+    m_numTestsToRun           = 0;
+    m_completedTests          = 0;
 
+    m_diagResponse.PopulateDefault(entitySets);
     // Check if the pulse test will execute
-    for (auto &gpuSet : gpuSets)
+    for (auto &entitySet : entitySets)
     {
-        std::vector<Test *> testList;
-        std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
-
-        testList = gpuSet->m_hardwareTestObjs;
-        if (testList.size() > 0)
+        if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
         {
-            pulseTestWillExecute = WillExecutePulseTest(testList);
+            continue;
+        }
+
+        GpuSet *gpuSet = ToGpuSet(entitySet.get());
+        std::optional<std::vector<Test *>> testList;
+        std::vector<Gpu *> gpuList = gpuSet->GetGpuObjs();
+
+        testList = gpuSet->GetTestObjList(HARDWARE_TEST_OBJS);
+        if (testList && testList->size() > 0)
+        {
+            pulseTestWillExecute = WillExecutePulseTest(*testList);
             if (pulseTestWillExecute)
             {
                 break;
             }
         }
 
-        testList = gpuSet->m_customTestObjs;
-        if (testList.size() > 0)
+        testList = gpuSet->GetTestObjList(CUSTOM_TEST_OBJS);
+        if (testList && testList->size() > 0)
         {
-            pulseTestWillExecute = WillExecutePulseTest(testList);
+            pulseTestWillExecute = WillExecutePulseTest(*testList);
             if (pulseTestWillExecute)
             {
                 break;
             }
         }
     }
-
-    // iterate through all GPU sets
-    for (auto &gpuSet : gpuSets)
+    // Iterate over all the entitySets and get the total number of tests
+    // that will be run.
+    for (auto const &entitySet : entitySets)
     {
-        std::vector<Test *> testList;
-        std::vector<Gpu *> gpuList = gpuSet->gpuObjs;
+        m_numTestsToRun += entitySet->GetNumTests();
+    }
+    m_numTestsToRun++; // include the software test in the test count
 
-        m_output->AddGpusAndDriverVersion(gpuList);
+    // software is a special plugin, which is not included in the m_plugins.
+    // we use the size of m_plugins to represent its index.
+    int const softwarePluginId = m_plugins.size();
+    dcgmDiagPluginAttr_v1 pluginAttr { .pluginId = softwarePluginId };
+    // run software External plugin
+    runSoftwarePlugin(entitySets, &pluginAttr);
 
-        testList = gpuSet->m_softwareTestObjs;
-        if (testList.size() > 0)
+    // iterate through all entity sets
+    for (auto &entitySet : entitySets)
+    {
+        std::optional<std::vector<Test *>> testList;
+
+        testList = entitySet->GetTestObjList(HARDWARE_TEST_OBJS);
+        if (testList && testList->size() > 0)
         {
-            goList(Test::NVVS_CLASS_SOFTWARE, testList, gpuList, pulseTestWillExecute);
+            GoList(Test::NVVS_CLASS_HARDWARE, *testList, entitySet.get(), pulseTestWillExecute);
         }
 
-        testList = gpuSet->m_hardwareTestObjs;
-        if (testList.size() > 0)
+        testList = entitySet->GetTestObjList(INTEGRATION_TEST_OBJS);
+        if (testList && testList->size() > 0)
         {
-            goList(Test::NVVS_CLASS_HARDWARE, testList, gpuList, pulseTestWillExecute);
+            GoList(Test::NVVS_CLASS_INTEGRATION, *testList, entitySet.get(), pulseTestWillExecute);
         }
 
-        testList = gpuSet->m_integrationTestObjs;
-        if (testList.size() > 0)
+        testList = entitySet->GetTestObjList(PERFORMANCE_TEST_OBJS);
+        if (testList && testList->size() > 0)
         {
-            goList(Test::NVVS_CLASS_INTEGRATION, testList, gpuList, pulseTestWillExecute);
+            GoList(Test::NVVS_CLASS_PERFORMANCE, *testList, entitySet.get(), pulseTestWillExecute);
         }
 
-        testList = gpuSet->m_performanceTestObjs;
-        if (testList.size() > 0)
+        testList = entitySet->GetTestObjList(CUSTOM_TEST_OBJS);
+        if (testList && testList->size() > 0)
         {
-            goList(Test::NVVS_CLASS_PERFORMANCE, testList, gpuList, pulseTestWillExecute);
-        }
-
-        testList = gpuSet->m_customTestObjs;
-        if (testList.size() > 0)
-        {
-            goList(Test::NVVS_CLASS_CUSTOM, testList, gpuList, pulseTestWillExecute);
+            GoList(Test::NVVS_CLASS_CUSTOM, *testList, entitySet.get(), pulseTestWillExecute);
         }
     }
 
-    m_output->print();
+    if (nvvsCommon.channelFd == -1)
+    {
+        m_diagResponse.Print();
+    }
+    else
+    {
+        if (!FdChannelClient(nvvsCommon.channelFd).Write(m_diagResponse.RawBinaryBlob()))
+        {
+            log_error("failed to write diag response to caller.");
+        }
+    }
 }
 
 /*****************************************************************************/
-void TestFramework::GetAndOutputHeader(Test::testClasses_enum classNum)
+std::vector<dcgmDiagPluginEntityInfo_v1> TestFramework::PopulateEntityInfoForPlugins(EntitySet *entitySet)
 {
-    // Don't do anything if we're in the legacy parse mode
-    if (nvvsCommon.parse)
-        return;
+    std::vector<dcgmDiagPluginEntityInfo_v1> entityInfo;
+    auto const &entityIds = entitySet->GetEntityIds();
 
-    std::string header;
-    switch (classNum)
+    for (size_t i = 0; i < entityIds.size(); i++)
     {
-        case Test::NVVS_CLASS_SOFTWARE:
-            header = "Deployment";
-            break;
-        case Test::NVVS_CLASS_HARDWARE:
-            header = "Hardware";
-            break;
-        case Test::NVVS_CLASS_INTEGRATION:
-            header = "Integration";
-            break;
-        case Test::NVVS_CLASS_PERFORMANCE:
-            header = "Stress";
-            break;
-        case Test::NVVS_CLASS_CUSTOM:
-        default:
-            header = "Custom";
-            break;
+        dcgmDiagPluginEntityInfo_v1 ei = {};
+        ei.entity.entityId             = entityIds[i];
+        ei.entity.entityGroupId        = entitySet->GetEntityGroup();
+        entityInfo.push_back(ei);
     }
-    m_output->header(header);
+
+    if (entitySet->GetEntityGroup() == DCGM_FE_GPU)
+    {
+        FillGpuEntityAuxData(entitySet, entityInfo);
+    }
+
+    return entityInfo;
 }
 
-/*****************************************************************************/
-void TestFramework::PopulateGpuInfoForPlugins(std::vector<Gpu *> &gpuList,
-                                              std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo)
-{
-    for (size_t i = 0; i < gpuList.size(); i++)
-    {
-        dcgmDiagPluginGpuInfo_t gi = {};
-        gi.gpuId                   = gpuList[i]->GetGpuId();
-        gi.attributes              = gpuList[i]->GetAttributes();
-        gi.status                  = gpuList[i]->GetDeviceEntityStatus();
-        gpuInfo.push_back(gi);
-    }
-}
-
-std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const std::string &testName, bool reverse)
+std::string TestFramework::GetCompareName(const std::string &pluginName, bool reverse)
 {
     std::string compareName;
-    if (classNum == Test::NVVS_CLASS_SOFTWARE)
+    if (!reverse)
     {
-        compareName = "software";
-    }
-    else if (!reverse)
-    {
-        compareName = testName;
+        compareName = pluginName;
         std::transform(compareName.begin(), compareName.end(), compareName.begin(), [](unsigned char c) {
             if (c == ' ')
             {
@@ -616,7 +717,7 @@ std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const
     }
     else
     {
-        compareName = testName;
+        compareName = pluginName;
         std::transform(compareName.begin(), compareName.end(), compareName.begin(), [](unsigned char c) {
             if (c == '_')
             {
@@ -627,21 +728,6 @@ std::string TestFramework::GetCompareName(Test::testClasses_enum classNum, const
     }
 
     return compareName;
-}
-
-int TestFramework::GetPluginIndex(Test::testClasses_enum classNum, const std::string &pluginName)
-{
-    std::string compareName = GetCompareName(classNum, pluginName);
-
-    for (unsigned int i = 0; i < m_plugins.size(); i++)
-    {
-        if (m_plugins[i]->GetName() == compareName)
-        {
-            return i;
-        }
-    }
-
-    return -1;
 }
 
 std::string TestFramework::GetTestDisplayName(dcgmPerGpuTestIndices_t index)
@@ -679,7 +765,7 @@ bool TestFramework::WillExecutePulseTest(std::vector<Test *> &testsList) const
 {
     for (auto const &test : testsList)
     {
-        if (test->GetTestIndex() == DCGM_PULSE_TEST_INDEX)
+        if (test->GetTestName() == PULSE_TEST_PLUGIN_NAME)
         {
             return true;
         }
@@ -688,13 +774,49 @@ bool TestFramework::WillExecutePulseTest(std::vector<Test *> &testsList) const
     return false;
 }
 
-/*****************************************************************************/
-void TestFramework::goList(Test::testClasses_enum classNum,
-                           std::vector<Test *> testsList,
-                           std::vector<Gpu *> gpuList,
-                           bool checkFileCreation)
+void TestFramework::WriteDiagStatusToChannel(std::string_view testName, unsigned int errorCode) const
 {
-    GetAndOutputHeader(classNum);
+    dcgmDiagStatus_v1 diagInfo = {};
+    diagInfo.version           = dcgmDiagStatus_version1;
+    diagInfo.totalTests        = m_numTestsToRun;
+    diagInfo.completedTests    = m_completedTests;
+
+    if (m_completedTests > m_numTestsToRun)
+    {
+        // Something is wrong with this run, do not write to the channel
+        log_error("Completed test count {} greater than total test count {}", m_completedTests, m_numTestsToRun);
+        return;
+    }
+
+    SafeCopyTo(diagInfo.testName, testName.data());
+    diagInfo.errorCode = errorCode;
+    std::span<char const> infoBinary(reinterpret_cast<char const *>(&diagInfo), sizeof(diagInfo));
+    log_debug("Writing diag info for test {}", testName);
+    if (!FdChannelClient(nvvsCommon.channelFd).Write(infoBinary))
+    {
+        log_error("Failed to write diag info to caller.");
+    }
+}
+
+template <class T>
+static unsigned int GetFirstError(std::vector<T> const &errors)
+    requires(std::is_same_v<T, dcgmDiagErrorDetail_v2> || std::is_same_v<T, dcgmDiagError_v1>)
+{
+    unsigned int firstError = DCGM_FR_OK;
+    if (errors.size() > 0)
+    {
+        firstError = errors[0].code;
+    }
+    return firstError;
+}
+
+/*****************************************************************************/
+void TestFramework::GoList(Test::testClasses_enum classNum,
+                           std::vector<Test *> testsList,
+                           EntitySet *entitySet,
+                           bool /* checkFileCreation */)
+{
+    auto const gpuIds = GetGpuIds(entitySet);
 
     // iterate through all tests giving them the GPU objects needed
     for (std::vector<Test *>::iterator testItr = testsList.begin(); testItr != testsList.end(); testItr++)
@@ -704,130 +826,85 @@ void TestFramework::goList(Test::testClasses_enum classNum,
         unsigned int vecSize = test->getArgVectorSize(classNum);
         for (unsigned int i = 0; i < vecSize; i++)
         {
+            bool testSkipped       = false;
             TestParameters *tp     = test->popArgVectorElement(classNum);
             std::string pluginName = tp->GetString(PS_PLUGIN_NAME);
-            std::string testName   = test->GetTestName();
 
-            int pluginIndex = GetPluginIndex(classNum, pluginName);
+            unsigned int pluginIndex    = test->GetPluginIndex();
+            std::string const &testName = test->GetTestName();
 
-            if (test->GetTestIndex() == DCGM_PULSE_TEST_INDEX)
+            if (pluginIndex >= m_plugins.size() || m_diagResponse.TestSlotsFull())
             {
-                // Add the iterations parameters
-                tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, nvvsCommon.currentIteration);
-                tp->AddDouble(PULSE_TEST_STR_TOTAL_ITERATIONS, nvvsCommon.totalIterations);
-            }
-
-            if (pluginIndex == -1)
-            {
-                // Error! Didn't find the named plugin. Report fake results for it
-                DCGM_LOG_ERROR << "Couldn't find the plugin '" << pluginName << "'";
+                std::string errMsg = fmt::format("Invalid index {} or too many tests", pluginIndex);
+                log_error(errMsg);
                 std::vector<dcgmDiagSimpleResult_t> perGpuResults;
                 std::vector<dcgmDiagErrorDetail_v2> errors;
                 std::vector<dcgmDiagErrorDetail_v2> info;
                 dcgmDiagErrorDetail_v2 error = {};
                 error.code                   = -1;
                 error.gpuId                  = -1;
-                snprintf(error.msg, sizeof(error.msg), "Unable to find plugin '%s'", pluginName.c_str());
+                SafeCopyTo(error.msg, errMsg.c_str());
                 errors.push_back(error);
 
-                m_output->Result(NVVS_RESULT_FAIL, perGpuResults, errors, info);
+                m_diagResponse.SetSystemError(errMsg, DCGM_ST_GENERIC_ERROR);
                 continue;
             }
 
-            // software hardcoded its plugin name to specific test name (e.g. Denylist)
-            if (classNum == Test::NVVS_CLASS_SOFTWARE)
+            if (testName == std::string(PULSE_TEST_PLUGIN_NAME))
             {
-                m_output->prep(pluginName);
+                // Add the iterations parameters
+                tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, nvvsCommon.currentIteration);
+                tp->AddDouble(PULSE_TEST_STR_TOTAL_ITERATIONS, nvvsCommon.totalIterations);
             }
-            else
-            {
-                m_output->prep(testName);
-            }
+
             if (!skipRest && !main_should_stop)
             {
-                if (classNum == Test::NVVS_CLASS_SOFTWARE)
-                {
-                    if (!nvvsCommon.requirePersistenceMode)
-                        tp->AddString(SW_STR_REQUIRE_PERSISTENCE, "False");
-                    if (pluginName == "Denylist")
-                        tp->AddString(SW_STR_DO_TEST, "denylist");
-                    else if (pluginName == "NVML Library")
-                        tp->AddString(SW_STR_DO_TEST, "libraries_nvml");
-                    else if (pluginName == "CUDA Main Library")
-                        tp->AddString(SW_STR_DO_TEST, "libraries_cuda");
-                    else if (pluginName == "CUDA Toolkit Libraries")
-                        tp->AddString(SW_STR_DO_TEST, "libraries_cudatk");
-                    else if (pluginName == "Permissions and OS-related Blocks")
-                    {
-                        tp->AddString(SW_STR_DO_TEST, "permissions");
-                        if (checkFileCreation)
-                        {
-                            tp->AddString(SW_STR_CHECK_FILE_CREATION, "True");
-                        }
-                        else
-                        {
-                            tp->AddString(SW_STR_CHECK_FILE_CREATION, "False");
-                        }
-                    }
-                    else if (pluginName == "Persistence Mode")
-                        tp->AddString(SW_STR_DO_TEST, "persistence_mode");
-                    else if (pluginName == "Environmental Variables")
-                        tp->AddString(SW_STR_DO_TEST, "env_variables");
-                    else if (pluginName == "Page Retirement/Row Remap")
-                        tp->AddString(SW_STR_DO_TEST, "page_retirement");
-                    else if (pluginName == "Graphics Processes")
-                        tp->AddString(SW_STR_DO_TEST, "graphics_processes");
-                    else if (pluginName == "Inforom")
-                        tp->AddString(SW_STR_DO_TEST, "inforom");
-                }
-
+                dcgmDiagEntityResults_v1 const &entityResults = m_plugins[pluginIndex]->GetEntityResults(testName);
                 DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
+                std::vector<dcgmDiagPluginEntityInfo_v1> entityInfos = PopulateEntityInfoForPlugins(entitySet);
 
-                m_plugins[pluginIndex]->RunTest(test->GetTestName(), 600, tp);
+                m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Running);
+                m_plugins[pluginIndex]->RunTest(testName, entityInfos, 600, tp);
+                m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Done);
 
-                m_output->Result(m_plugins[pluginIndex]->GetResult(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetResults(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetErrors(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetInfo(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetAuxData(test->GetTestName()));
-
-                if (classNum == Test::NVVS_CLASS_SOFTWARE)
+                if (auto ret = m_diagResponse.SetTestResult(
+                        pluginName, testName, entityResults, m_plugins[pluginIndex]->GetAuxData(testName));
+                    ret != DCGM_ST_OK)
                 {
-                    /* reinitialize plugin, reset errors between software runs */
-                    m_plugins[pluginIndex]->InitializePlugin(dcgmHandle.GetHandle(), m_gpuInfo);
+                    log_error("failed to set test result to test [{}], ret: [{}].", testName, ret);
                 }
             }
             else
             {
-                /* If the test hasn't been run (test->go() was not called), test->GetResults() returns
-                 * empty results, which is treated as the test being skipped.
-                 */
-                m_output->Result(m_plugins[pluginIndex]->GetResult(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetResults(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetErrors(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetInfo(test->GetTestName()),
-                                 m_plugins[pluginIndex]->GetAuxData(test->GetTestName()));
+                if (auto ret = m_diagResponse.SetTestSkipped(pluginName, testName); ret != DCGM_ST_OK)
+                {
+                    log_error("failed to set skipped result to test [{}], ret: [{}].", testName, ret);
+                }
+                testSkipped = true;
             }
 
-            DCGM_LOG_DEBUG << "Test " << testName << " had over result "
-                           << m_plugins[pluginIndex]->GetResult(test->GetTestName()) << ". Configless is "
-                           << nvvsCommon.configless;
+            m_diagResponse.AddTestCategory(testName, test->GetCategory());
 
-            if (m_plugins[pluginIndex]->GetResult(test->GetTestName()) == NVVS_RESULT_FAIL
+            DCGM_LOG_DEBUG << "Test " << testName << " had result " << m_plugins[pluginIndex]->GetResult(testName)
+                           << ". Configless is " << nvvsCommon.configless;
+
+            if (m_plugins[pluginIndex]->GetResult(testName) == NVVS_RESULT_FAIL
                 && ((!nvvsCommon.configless) || nvvsCommon.failEarly))
 
             {
                 skipRest = true;
             }
+
+            unsigned int firstError = DCGM_FR_TEST_SKIPPED;
+            if (!testSkipped && !(m_plugins[pluginIndex]->GetResult(testName) == NVVS_RESULT_SKIP))
+            {
+                firstError = GetFirstError(m_plugins[pluginIndex]->GetErrors(testName));
+            }
+            m_completedTests++;
+            WriteDiagStatusToChannel(testName, firstError);
         }
     }
 }
-
-void TestFramework::addInfoStatement(const std::string &info)
-{
-    m_output->addInfoStatement(info);
-}
-
 
 std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework::GetSubtestParameters()
 {
@@ -835,9 +912,10 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
 
     for (unsigned int i = 0; i < m_plugins.size(); i++)
     {
-        for (const auto &[testName, pluginTest] : m_plugins[i]->GetPluginTests())
+        auto const &supportedTests = m_plugins[i]->GetSupportedTests();
+        for (auto const &[testName, _] : supportedTests)
         {
-            std::string Name = GetCompareName(Test::NVVS_CLASS_CUSTOM, pluginTest.GetName(), true);
+            std::string Name = GetCompareName(testName, true);
             auto &p          = parms[Name];
             p                = m_plugins[i]->GetParameterInfo(testName);
             //
@@ -853,13 +931,34 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
     return parms;
 }
 
-std::string TestFramework::GetPluginNameFromTestName(std::string const &testName) const
+
+void TestFramework::runSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
+                                      dcgmDiagPluginAttr_v1 const *pluginAttr)
 {
-    auto it = m_testNameToPluginName.find(testName);
-    if (it == m_testNameToPluginName.end())
+    bool gpuSetFound = false;
+
+    for (const auto &entitySet : entitySets)
     {
-        log_error("Cannot find plugin name from test name [{}]", testName);
-        return "";
+        if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+        {
+            continue;
+        }
+
+        GpuSet *gpuSet = ToGpuSet(entitySet.get());
+        // init SoftwarePlugin
+        m_softwarePluginFramework = std::make_unique<SoftwarePluginFramework>(gpuSet->GetGpuObjs());
+
+        // run softwarePlugin
+        m_softwarePluginFramework->Run(m_diagResponse, pluginAttr);
+        gpuSetFound = true;
     }
-    return it->second;
+
+    unsigned int firstError = DCGM_FR_TEST_SKIPPED;
+    if (gpuSetFound)
+    {
+        m_diagResponse.AddTestCategory(SW_PLUGIN_NAME, SW_PLUGIN_CATEGORY);
+        firstError = GetFirstError(m_softwarePluginFramework->GetErrors());
+    }
+    m_completedTests++;
+    WriteDiagStatusToChannel(SW_PLUGIN_NAME, firstError);
 }

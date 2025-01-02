@@ -36,9 +36,8 @@ void *dcgmthread_starter(void *parm)
 }
 
 /*****************************************************************************/
-DcgmThread::DcgmThread(bool sendSignalOnStop, std::string threadName)
+DcgmThread::DcgmThread(std::string threadName)
 {
-    m_sendSignalOnStop = sendSignalOnStop;
     SetThreadName(std::move(threadName));
     resetStatusFlags();
 
@@ -126,10 +125,6 @@ void DcgmThread::Stop()
     m_shouldStop = true;
     m_stopCond.notify_all();
     m_mutex.unlock();
-
-    /* Wake this thread up */
-    if (m_hasStarted && m_hasRun && !m_hasExited && m_sendSignalOnStop)
-        SendSignal(DCGM_THREAD_SIGNUM);
 
     OnStop();
 }
@@ -369,43 +364,6 @@ int DcgmThread::HasRun()
 int DcgmThread::HasExited()
 {
     return m_hasExited;
-}
-
-/*****************************************************************************/
-static void dcgm_thread_signal_handler(int /*signum*/)
-{
-    /* Do nothing, especially not IO */
-}
-
-/*****************************************************************************/
-void DcgmThread::InstallSignalHandler(void)
-{
-    struct sigaction currentSigHandler;
-
-    /* See if this process already has a signal handler */
-    int ret = sigaction(DCGM_THREAD_SIGNUM, NULL, &currentSigHandler);
-    if (ret < 0)
-    {
-        log_error("Got st {} from sigaction", ret);
-        return;
-    }
-    if (currentSigHandler.sa_handler != SIG_DFL && currentSigHandler.sa_handler != SIG_IGN)
-    {
-        log_info("Signal {} is already handled. Nothing to do.", DCGM_THREAD_SIGNUM);
-        return;
-    }
-
-    /* Install our handler */
-    struct sigaction newSigHandler;
-    sigemptyset(&newSigHandler.sa_mask);
-    newSigHandler.sa_flags   = 0;
-    newSigHandler.sa_handler = dcgm_thread_signal_handler;
-
-    ret = sigaction(DCGM_THREAD_SIGNUM, &newSigHandler, NULL);
-    if (ret < 0)
-    {
-        log_error("Got error {} from sigaction while adding our signal handler.", ret);
-    }
 }
 
 /*****************************************************************************/

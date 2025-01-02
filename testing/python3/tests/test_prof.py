@@ -39,6 +39,8 @@ DLG_MAX_METRIC_GROUPS = 5 #This is taken from modules/profiling/DcgmLopConfig.h.
 def helper_check_profiling_environment(dcgmGroup):
     try:
         dcgmGroup.profiling.GetSupportedMetricGroups()
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_IS_EMPTY) as e:
+        test_utils.skip_test(g_profGroupIsEmpty)
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED) as e:
         test_utils.skip_test(g_profNotSupportedErrorStr)
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED) as e:
@@ -166,6 +168,7 @@ def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_gpus_available()
 @test_utils.run_only_as_root()
+@test_utils.run_clearing_gpus() # Remove real GPUs.
 @test_utils.run_with_injection_gpus(gpuCount=2)  # Injecting fake GPUs to simulate not supported SKUs
 @test_utils.run_for_each_gpu_individually()
 def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
@@ -281,7 +284,6 @@ def test_dcgm_prof_watch_multipass(handle, gpuIds):
         fieldGroup.Delete()
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_gpus_available()
@@ -332,7 +334,6 @@ def test_dcgm_prof_watch_fields_multi_user(handle, gpuIds):
 
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_initialized_client()
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_gpus_available()
@@ -799,8 +800,8 @@ def test_dcgmproftester_sm_occupancy(handle, gpuIds):
 @test_utils.run_only_if_gpus_available()
 @test_utils.exclude_non_compute_gpus()
 @test_utils.for_all_same_sku_gpus()
+@test_utils.filter_sku("2329 2328 26B7 26B8 26BA 27B6 2322 1FB2 1FF2") # poor or no Tensor math
 @test_utils.run_only_as_root()
-@test_utils.skip_denylisted_gpus(["NVIDIA T400", "NVIDIA T400 4GB"]) # TEMPORARY CHANGE : If DCGM-3744 has been satisfactorily resolved, remove this line
 def test_dcgmproftester_tensor_active(handle, gpuIds):
     helper_test_dpt_field_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, True)
 

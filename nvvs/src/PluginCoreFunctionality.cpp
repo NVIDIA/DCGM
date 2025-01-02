@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "dcgm_fields.h"
 #include <unordered_set>
 
 #include <NvvsCommon.h>
@@ -24,20 +25,20 @@ const double DUMMY_TEMPERATURE_VALUE = 30.0;
 
 PluginCoreFunctionality::PluginCoreFunctionality()
     : m_dcgmRecorder()
-    , m_gpuInfos()
+    , m_entityInfos()
     , m_initialized(false)
     , m_errors()
     , m_startTime()
-    , m_pluginIndex(DCGM_UNKNOWN_INDEX)
+    , m_pluginName("Unknown")
 {}
 
 PluginCoreFunctionality::PluginCoreFunctionality(PluginCoreFunctionality &&other) noexcept
     : m_dcgmRecorder(std::move(other.m_dcgmRecorder))
-    , m_gpuInfos(other.m_gpuInfos)
+    , m_entityInfos(other.m_entityInfos)
     , m_initialized(other.m_initialized)
     , m_errors(other.m_errors)
     , m_startTime(other.m_startTime)
-    , m_pluginIndex(other.m_pluginIndex)
+    , m_pluginName(other.m_pluginName)
 {}
 
 void PluginCoreFunctionality::Init(dcgmHandle_t handle)
@@ -79,7 +80,7 @@ void PluginCoreFunctionality::PopulateFieldIds(const std::vector<unsigned short>
 }
 
 dcgmReturn_t PluginCoreFunctionality::PluginPreStart(const std::vector<unsigned short> &additionalFields,
-                                                     const std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo,
+                                                     const std::vector<dcgmDiagPluginEntityInfo_v1> &entityInfo,
                                                      const std::string &pluginName)
 {
     if (!m_initialized)
@@ -88,21 +89,27 @@ dcgmReturn_t PluginCoreFunctionality::PluginPreStart(const std::vector<unsigned 
         return DCGM_ST_UNINITIALIZED;
     }
 
-    m_gpuInfos = gpuInfo;
+    m_entityInfos = entityInfo;
     std::vector<unsigned short> fieldIds;
     std::vector<unsigned int> gpuIds;
     PopulateFieldIds(additionalFields, fieldIds);
 
-    for (auto &&gi : m_gpuInfos)
+    for (auto &&ei : m_entityInfos)
     {
-        gpuIds.push_back(gi.gpuId);
+        if (ei.entity.entityGroupId != DCGM_FE_GPU)
+        {
+            log_debug("Unexpected entity group: {}, entity id: {}", ei.entity.entityGroupId, ei.entity.entityId);
+            continue;
+        }
+        gpuIds.push_back(ei.entity.entityId);
     }
 
     std::string fieldGroupName("nvvs-fieldGroup-");
     fieldGroupName += pluginName;
     std::string groupName("nvvs-group-");
     groupName += pluginName;
-    m_pluginIndex        = GetTestIndex(pluginName);
+    m_pluginName = pluginName;
+    m_dcgmRecorder.SetWatchFrequency(static_cast<long long>(nvvsCommon.watchFrequency));
     dcgmReturn_t dcgmRet = m_dcgmRecorder.AddWatches(fieldIds, gpuIds, false, fieldGroupName, groupName, 600);
     m_startTime          = timelib_usecSince1970();
 
@@ -117,7 +124,7 @@ dcgmReturn_t PluginCoreFunctionality::PluginPreStart(const std::vector<unsigned 
 void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int logFileType, nvvsPluginResult_t result)
 {
     // We don't write a stats file for the memory plugin because it runs for such a short time.
-    if (m_pluginIndex == DCGM_MEMORY_INDEX)
+    if (m_pluginName == MEMORY_PLUGIN_NAME)
     {
         return;
     }
@@ -132,7 +139,7 @@ void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int l
 
 nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp, nvvsPluginResult_t &result)
 {
-    m_errors = m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_gpuInfos);
+    m_errors = m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_entityInfos);
 
     return result;
 }

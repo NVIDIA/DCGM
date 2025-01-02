@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DistributedCudaContext.h"
-#include "PhysicalGpu.h"
 #include <DcgmLogging.h>
 #include <cuda.h>
+
+#include "DistributedCudaContext.h"
+#include "PhysicalGpu.h"
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
 

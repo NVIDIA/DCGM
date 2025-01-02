@@ -71,7 +71,7 @@ class ProcessStatsStress:
         Populate self.gpus
         """
         self.groupId = dcgm_agent.dcgmGroupCreate(self.heHandle, dcgm_structs.DCGM_GROUP_DEFAULT, self.groupName)
-        groupInfo = dcgm_agent.dcgmGroupGetInfo(self.heHandle, self.groupId, dcgm_structs.c_dcgmGroupInfo_version2)
+        groupInfo = dcgm_agent.dcgmGroupGetInfo(self.heHandle, self.groupId, dcgm_structs.c_dcgmGroupInfo_version3)
 
         gpuIds = groupInfo.gpuIdList[0:groupInfo.count]
 

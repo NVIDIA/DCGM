@@ -28,7 +28,6 @@ class NvidiaSmiApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "nvidia-smi", # it should be in the path
             "Linux_64bit": "nvidia-smi", # it should be in the path
-            "Linux_ppc64le": "nvidia-smi", # it should be in the path
             "Linux_aarch64": "nvidia-smi", # it should be in the path
             "Windows_64bit": os.path.join(os.getenv("ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/nvidia-smi.exe")
             }

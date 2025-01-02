@@ -35,10 +35,12 @@
 
 #define VALUE "value"
 
-#define DR_SUCCESS    0
-#define DR_COMM_ERROR -1
-#define DR_VIOLATION  -2
-#define DR_THROTTLING -3
+#define DR_SUCCESS      0
+#define DR_COMM_ERROR   -1
+#define DR_VIOLATION    -2
+#define DR_CLOCKS_EVENT -3
+// Deprecated: Use DR_CLOCKS_EVENT instead
+#define DR_THROTTLING DR_CLOCKS_EVENT
 
 typedef struct
 {
@@ -217,18 +219,6 @@ public:
     int GetValueIndex(unsigned short fieldId);
 
     /*
-     * Checks for any thermal violations in the specified time period, and adds an error message if they are
-     * present.
-     *
-     * @return:
-     *
-     * DR_SUCCESS     : on success
-     * DR_COMM_ERROR  : if we couldn't get the information from DCGM
-     * DR_VIOLATION   : if a there was a thermal violation
-     */
-    int CheckThermalViolations(unsigned int gpuId, std::vector<DcgmError> &errorList, timelib64_t startTime);
-
-    /*
      * Checks if the GPU temperature was about the maxTemp at any point in the specified time period, and adds
      * an error message if the temperature was too high.
      * Populates infoMsg with the average temperature
@@ -250,13 +240,18 @@ public:
     dcgmHandle_t GetHandle();
 
     /*
-     * Checks if the specified GPU has throttling and sets an appropriate error message if so.
+     * Checks if the specified GPU reported clocks event and sets an appropriate error message if so.
      *
      * @return:
      *
-     * DR_SUCCESS     : No throttling is happening
+     * DR_SUCCESS     : No clocks event is happening
      * DR_COMM_ERROR  : if we couldn't get the information from DCGM
-     * DR_VIOLATION   : throttling is happening
+     * DR_VIOLATION   : Clocks event is happening
+     */
+    int CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
+
+    /*
+     * Deprecated: Use CheckForClocksEvent instead.
      */
     int CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
 
@@ -317,11 +312,11 @@ public:
     std::vector<DcgmError> CheckCommonErrors(TestParameters &tp,
                                              timelib64_t startTime,
                                              nvvsPluginResult_t &result,
-                                             std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfos);
+                                             std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos);
 
     /*
      */
-    long long DetermineMaxTemp(const dcgmDiagPluginGpuInfo_t &gpuInfo, TestParameters &tp);
+    long long DetermineMaxTemp(const dcgmDiagPluginEntityInfo_v1 &entityInfo);
 
     /*
      * Convert the dcgm return code to a string
@@ -340,7 +335,9 @@ public:
      * DR_COMM_ERROR  : if we couldn't get the information from DCGM
      * DR_VIOLATION   : if the temperature was ever too high
      */
-    int CheckHBMErrorFields(dcgmDiagPluginGpuInfo_t gpuInfo, std::vector<DcgmError> &errors, timelib64_t startTime);
+    int CheckHBMErrorFields(dcgmDiagPluginEntityInfo_v1 const &entityInfo,
+                            std::vector<DcgmError> &errors,
+                            timelib64_t startTime);
 
     /*
      * Checks if the HBM temperature set by user is less than the max HBM temperature in the specified time period, and
@@ -357,6 +354,13 @@ public:
                              long long maxTemp,
                              timelib64_t startTime);
 
+    /*
+     * Set a custom frequency to watch fields
+     *
+     * @param watchFrequency - the watch frequency in microseconds
+     */
+    void SetWatchFrequency(long long watchFrequency);
+
 private:
     std::vector<unsigned short> m_fieldIds;
     std::vector<unsigned int> m_gpuIds;
@@ -370,6 +374,7 @@ private:
     DcgmValuesSinceHolder m_valuesHolder;
 
     long long m_nextValuesSinceTs;
+    long long m_watchFrequency;
 
     CustomStatHolder m_customStatHolder;
 
@@ -391,12 +396,9 @@ private:
 
     void AddFieldThresholdViolationError(unsigned short fieldId,
                                          unsigned int gpuId,
-                                         timelib64_t startTime,
                                          int64_t intValue,
                                          int64_t thresholdValue,
-                                         double dblValue,
-                                         const std::string &fieldName,
-                                         std::vector<DcgmError> &errorList);
+                                         const std::string &fieldName);
 
     /*
      * Helper method to get the watched fields as a json object

@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include <concepts>
 #include <dcgm_structs.h>
 #include <fmt/format.h>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 
@@ -44,20 +46,6 @@ std::vector<std::string> dcgmTokenizeString(const std::string &src, const std::s
 
 /*****************************************************************************/
 /*
- * Copy a NULL-terminated string from source to dest like strncpy().
- *
- * Unlike strncpy(), This version actually NULL-terminates destionation
- * if source is >= (destinationSize+1) in length.
- *
- * destination    OUT: Destination buffer
- * source          IN: Source NULL-terminated c string.
- * destinationSize IN: Actual buffer size of destination[].
- *                     Pass sizeof(destination) here for fixed size char arrays.
- */
-void dcgmStrncpy(char *destination, const char *source, size_t destinationSize);
-
-/*****************************************************************************/
-/*
  * Template to null-terminate a string buffer
  */
 template <typename T, size_t N>
@@ -73,10 +61,11 @@ void SafeCopyTo(char (&dst)[N], char const (&src)[Z])
     *result.out = '\0';
 }
 
-template <std::size_t N>
-void SafeCopyTo(char (&dst)[N], char const *src)
+template <std::size_t N, class T>
+void SafeCopyTo(char (&dst)[N], T src)
+    requires std::convertible_to<T, char const *>
 {
-    auto result = fmt::format_to_n(dst, N - 1, "{}\0", src);
+    auto result = fmt::format_to_n(dst, N - 1, "{}", src);
     *result.out = '\0';
 }
 
@@ -133,4 +122,7 @@ std::string Join(std::vector<TValue> const &values, std::string_view separator =
 {
     return Join(begin(values), end(values), separator);
 }
+
+std::vector<std::string> TokenizeStringQuoted(std::string_view str, char delimiter, std::string_view quotes = {});
+
 } // namespace DcgmNs

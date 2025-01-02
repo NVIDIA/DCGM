@@ -25,6 +25,7 @@
 #include <plog/Log.h>
 
 #include <fmt/core.h>
+#include <fmt/format.h>
 #include <source_location>
 #include <type_traits>
 
@@ -399,3 +400,5 @@ int RouteLogToBaseLogger(loggerCategory_t category);
 void InitLogToHostengine(const DcgmLoggingSeverity_t severity);
 void LoggingSetHostEngineComponentName(const std::string &componentName);
 int RouteLogToConsoleLogger(loggerCategory_t category);
+
+using fmt::v10::enums::format_as;

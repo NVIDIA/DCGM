@@ -15,7 +15,6 @@
 #
 [Unit]
 Description=NVIDIA DCGM service
-Conflicts=dcgm.service
 After=nvidia-gpu-reset.target
 Wants=nvidia-gpu-reset.target
 
@@ -25,9 +24,13 @@ PrivateTmp=false
 
 Environment="DCGM_HOME_DIR=/var/log/nvidia-dcgm"
 
-ExecStart=@DCGM_HOSTENGINE_LOCATION@/nv-hostengine -n --service-account nvidia-dcgm
+# systemd version 251 or later
+# ExecStart=%Y/../../../@CMAKE_INSTALL_BINDIR@/nv-hostengine -n --service-account nvidia-dcgm
+
+ExecStart=/usr/@CMAKE_INSTALL_BINDIR@/nv-hostengine -n --service-account nvidia-dcgm
 
 Restart=on-abort
 
 [Install]
+Alias=dcgm.service
 WantedBy=multi-user.target

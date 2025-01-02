@@ -1,0 +1,17 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libMemoryBandwidth.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libMemoryBandwidth.so.<SOFTWAREVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libPulseTest.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libPulseTest.so.<SOFTWAREVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/libcurand.so.10
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/libcurand.so.10.3.7.77
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/ubergemm
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda12/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-proprietary-cuda12/copyright

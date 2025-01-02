@@ -1,2 +1,0 @@
-/usr/share/nvidia-validation-suite
-/usr/share/nvidia-validation-suite/diag-skus.yaml

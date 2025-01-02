@@ -78,6 +78,12 @@ extern const std::string PER_GPU_JSON = R""(
                         "results": [
                             { "gpu_ids": "0,1,2,3", "status": "PASS" }
                         ]
+                    },
+                    {
+                        "name": "Fabric Manager",
+                        "results": [
+                            { "gpu_ids": "0,1,2,3", "status": "PASS" }
+                        ]
                     }
                 ]
             },

@@ -7,27 +7,26 @@
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
+# distributed under the License is distributed1 on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import getpass
 import os
 import re
-import string
-import apps
-import shlex
 import dcgm_structs
 import dcgm_agent
-import dcgm_agent_internal
 import utils
 import test_utils
+import initialDiag
 import logger
 import option_parser
 import time
 import subprocess
 import nvidia_smi_utils
 from sys import version as python_version
+from TestData import TestData
+from test_utils import TestSkipped
 
 from tests.nvswitch_tests import test_nvswitch_utils
         
@@ -90,12 +89,21 @@ def kill_hostengine_if_needed():
         pids = test_utils.check_for_running_hostengine_and_log_details(False)
         assert not pids, msg
 
+def runInitialDiag(handle):
+    with test_utils.SubTest("Initial Diagnostic"):
+        initialDiag.runInitialDiag(handle)
+
 def run_tests():
     '''
     testDir: Subdirectory to look for tests in. For example: "tests" for NVML
 
     '''
-    with test_utils.SubTest("Main"):
+    with test_utils.SubTest("Main", count = False, dvssc_log = False):
+        #----------------------------------------------
+        #init the test data stats map
+        testDataObj = TestData()
+        #----------------------------------------------
+
         log_environment_info()
 
         test_utils.RestoreDefaultEnvironment.restore_env()
@@ -111,45 +119,122 @@ def run_tests():
             raise
 
         dcgmGpuCount = 0
-        try:
-            if option_parser.options.use_running_hostengine:
-                with test_utils.RunStandaloneHostEngine() as handle:
-                    dcgmGpuCount = test_utils.log_gpu_information(handle)
-            else:
-                with test_utils.RunEmbeddedHostEngine() as handle:
-                    dcgmGpuCount = test_utils.log_gpu_information(handle)
-        except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
-            test_utils.nvmlNotLoaded = True
+        if option_parser.options.use_running_hostengine:
+            handleFn = test_utils.RunStandaloneHostEngine
+        else:
+            handleFn = test_utils.RunEmbeddedHostEngine
 
-        if test_utils.nvmlNotLoaded == False:
-            # Persistence mode is required
-            if dcgmGpuCount > 0:
-                (_, error) = nvidia_smi_utils.enable_persistence_mode()
-                if error:
-                    logger.error(error)
-                    return
+        with handleFn() as handle:
+            try:
+                dcgmGpuCount = test_utils.log_gpu_information(handle)
+            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                logger.debug('NVML not loaded')
+                test_utils.nvmlNotLoaded = True
+
+            if test_utils.nvmlNotLoaded == False:
+                # Persistence mode is required
+                if dcgmGpuCount > 0:
+                    (_, error) = nvidia_smi_utils.enable_persistence_mode()
+                    if error:
+                        logger.error(error)
+                        return
 
             test_utils.save_gpu_count(dcgmGpuCount)
-        
+
+            try:
+                runInitialDiag(handle)
+            except TestSkipped as tse:
+                logger.info(str(tse))
+
         with test_utils.SubTest("restore state", quiet=True):
             test_utils.RestoreDefaultEnvironment.restore() # restore the nvml settings
 
-        test_content = test_utils.get_test_content()
-        nvswitchModuleCounter = 0
+        run_compiled_flag = option_parser.options.fast_run
+
+        if run_compiled_flag:
+            test_content = test_utils.get_test_content(run_compiled_flag)
+            if len(test_content) == 0 and option_parser.options.filter_tests:
+                logger.info("Filtered test is not be present in compiled file (--fast-run). Please run without --fast-run for filtered tests")
+        else:
+            test_content = test_utils.get_test_content()
+
         try:
+            #----------------------------------------------
+            testDataObj.addTestSuiteStartTime()
+            #----------------------------------------------
+
             for module in test_content:
+                #----------------------------------------------
+                # Parse the func names and add to a list.
+                # Add module and its functions to map (this is done in the
+                # called amortized decorated functions for compiled tests).
+                if run_compiled_flag:
+                    testDataObj.addModuleName(module[0].__name__)
+                else:
+                    nameList = []
+                    for f in module[1]:
+                        nameList.append(f.__name__)
+
+                    testDataObj.addModule(module[0].__name__, nameList)
+
+                #----------------------------------------------
+
                 # Attempt to clean up stranded processes instead of aborting
                 kill_hostengine_if_needed()
 
-                with test_utils.SubTest("module %s" % module[0].__name__):
-                    for function in module[1]:
-                        try:
-                            test_utils.run_subtest(function)
-                        except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
-                            logger.info("Test %s cannot run since NVML isn't present on this machine" % str(function))
-                            pass
-                        with test_utils.SubTest("%s - restore state" % (function.__name__), quiet=True):
-                            test_utils.RestoreDefaultEnvironment.restore()
+                with test_utils.SubTest("module %s" % module[0].__name__, count =False, dvssc_log = False):
+                    if run_compiled_flag:
+                        for f in module[1]:
+                            testDataObj.addName(f.__name__)
+                            testDataObj.addStartTime()
+                            
+                            """
+                                We can have a failure in the decorators around
+                                function f (which calls back to the actual
+                                function which runs the tests under the common
+                                amortized decorator, or in the test function
+                                itself. If we have an error in the decorators,
+                                then we catch it here before ANY test function
+                                is actually called.
+                                
+                                We count the individual tests as skipped or
+                                failed in that case, as that is what happens
+                                with non-amortized decorator testing.
+                                
+                            """
+                                            
+                            try:
+                                f(testDataObj, test_utils.with_amortized_decorators)
+                            except Exception as ex:
+                                test_utils.unwrap(f)(testDataObj, test_utils.with_amortized_exception_decorators, exception=ex)
+                    else:
+                        for function in module[1]:
+                            try:                            
+                                # run test
+                                test_utils.run_subtest(function, testDataObj)
+                            except AssertionError as e:
+                                # capture the assert, if any
+                                testDataObj.addMessage("Assertion Error: %s" % str(e))
+                                testDataObj.addTestStatus("FAILED")
+                            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                                testDataObj.addMessage("Test %s cannot run since NVML isn't present on this machine" % str(function))
+                                testDataObj.addTestStatus("FAILED")
+                                logger.info("Test %s cannot run since NVML isn't present on this machine" % str(function))
+
+                                with test_utils.SubTest("%s - restore state" % (function.__name__), quiet=True):
+                                    test_utils.RestoreDefaultEnvironment.restore()
+
+                #----------------------------------------------
+                # save the json after every module of tests run
+                testDataObj.saveMapToJson(intermediate=1)
+                #----------------------------------------------
+            
+            #----------------------------------------------
+            testDataObj.addTestSuiteEndTime()
+            testDataObj.addSummary()
+            testDataObj.saveMapToJson()
+            #----------------------------------------------
+                            
         finally:
             # SubTest might return KeyboardInterrupt exception. We should try to restore
             # state before closing
@@ -157,9 +242,15 @@ def run_tests():
                 test_utils.RestoreDefaultEnvironment.restore()
             #dcgm_structs.dcgmShutdown()
 
-_test_info_split_non_verbose = re.compile("\n *\n") # Matches empty line that separates short from long version of function_doc
-_test_info_split_verbose_first_newlines = re.compile("^[\n ]*\n") # Matches empty lines at the beginning of string
-_test_info_split_verbose_last_newlines = re.compile("[\n ]*$") # Matches empty lines at the end of the string
+            if option_parser.options.sort_by_time:
+                #----------------------------------------------
+                # sort the json in desc order with maximum time of run
+                testDataObj.sortDataMap()
+                #----------------------------------------------
+
+_test_info_split_non_verbose = re.compile(r"\n *\n") # Matches empty line that separates short from long version of function_doc
+_test_info_split_verbose_first_newlines = re.compile(r"^[\n ]*\n") # Matches empty lines at the beginning of string
+_test_info_split_verbose_last_newlines = re.compile(r"[\n ]*$") # Matches empty lines at the end of the string
 def print_test_info():
     """
     testDir: Subdirectory to look for tests in
@@ -187,5 +278,5 @@ def print_test_info():
                 # It's non verbose output so just take the first part of the description (up to first double empty line) 
                 function_doc = _test_info_split_non_verbose.split(function_doc)[0]
                 # remove spaces at beginning of each line (map strip), remove empty lines (filter bool) and make it one line (string join)
-                function_doc = " ".join(list(filter(bool, list(map(string.strip, function_doc.split("\n"))))))
+                function_doc = " ".join(list(filter(bool, list(map(str.strip, function_doc.split("\n"))))))
                 print("%s.%s:\n\t%s" % (module_name, function_name, function_doc))

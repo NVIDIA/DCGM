@@ -16,23 +16,43 @@
 #include "DcgmModuleNvSwitch.h"
 
 #include <DcgmLogging.h>
+#include <cstdlib>
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
 
 namespace DcgmNs
 {
+static std::unique_ptr<DcgmNvSwitchManagerBase> createSwitchManager(dcgmCoreCallbacks_t *dcc)
+{
+    std::unique_ptr<DcgmNvSwitchManagerBase> nvswitchMgr;
+
+    log_debug("Loading NVSDM");
+    nvswitchMgr      = std::make_unique<DcgmNvsdmManager>(dcc);
+    dcgmReturn_t ret = nvswitchMgr->Init();
+    if (ret == DCGM_ST_OK)
+    {
+        return nvswitchMgr;
+    }
+
+    log_debug("Loading NSCQ");
+    nvswitchMgr = std::make_unique<DcgmNscqManager>(dcc);
+    ret         = nvswitchMgr->Init();
+    if (ret == DCGM_ST_OK)
+    {
+        return nvswitchMgr;
+    }
+
+    log_warning("Could not initialize NSCQ. Ret: {}", errorString(ret));
+    return nvswitchMgr;
+}
+
 DcgmModuleNvSwitch::DcgmModuleNvSwitch(dcgmCoreCallbacks_t &dcc)
     : DcgmModuleWithCoreProxy(dcc)
-    , m_switchMgr(&dcc)
+    , m_nvswitchMgrPtr(createSwitchManager(&dcc))
+    , m_nvswitchMgr(*m_nvswitchMgrPtr)
     , m_lastLinkStatusUpdateUsec(0)
 {
     DCGM_LOG_DEBUG << "Constructing NvSwitch Module";
-    dcgmReturn_t ret = m_switchMgr.Init();
-
-    if (ret != DCGM_ST_OK)
-    {
-        DCGM_LOG_ERROR << "Could not initialize switch manager. Ret: " << errorString(ret);
-    }
 
     /* Start our TaskRunner now that we've survived initialization
      *
@@ -97,6 +117,8 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessage(dcgm_module_command_header_t *mo
             case DCGM_NVSWITCH_SR_GET_ALL_LINK_STATES:
             case DCGM_NVSWITCH_SR_SET_LINK_STATE:
             case DCGM_NVSWITCH_SR_GET_ENTITY_STATUS:
+            case DCGM_NVSWITCH_SR_GET_LINK_IDS:
+            case DCGM_NVSWITCH_SR_GET_BACKEND:
             {
                 processInTaskRunner = true;
             }
@@ -172,7 +194,7 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
 
                 dcgm_nvswitch_msg_create_fake_switch_v1 *cfs = (dcgm_nvswitch_msg_create_fake_switch_v1 *)moduleCommand;
                 cfs->numCreated                              = cfs->numToCreate;
-                retSt = m_switchMgr.CreateFakeSwitches(cfs->numCreated, cfs->switchIds);
+                retSt = m_nvswitchMgr.CreateFakeSwitches(cfs->numCreated, cfs->switchIds);
                 break;
             }
 
@@ -258,6 +280,33 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
                 retSt = ProcessGetEntityStatus((dcgm_nvswitch_msg_get_entity_status_t *)moduleCommand);
                 break;
             }
+            case DCGM_NVSWITCH_SR_GET_LINK_IDS:
+            {
+                retSt = CheckVersion(moduleCommand, dcgm_nvswitch_msg_get_links_version);
+                if (retSt != DCGM_ST_OK)
+                {
+                    DCGM_LOG_ERROR << "Version mismatch " << moduleCommand->version
+                                   << " != " << dcgm_nvswitch_msg_get_links_version;
+                    return retSt;
+                }
+
+                retSt = ProcessGetLinkIds((dcgm_nvswitch_msg_get_links_v1 *)moduleCommand);
+                break;
+            }
+
+            case DCGM_NVSWITCH_SR_GET_BACKEND:
+            {
+                retSt = CheckVersion(moduleCommand, dcgm_nvswitch_msg_get_backend_version);
+                if (retSt != DCGM_ST_OK)
+                {
+                    DCGM_LOG_ERROR << "Version mismatch " << moduleCommand->version
+                                   << " != " << dcgm_nvswitch_msg_get_backend_version;
+                    return retSt;
+                }
+
+                retSt = ProcessGetBackend((dcgm_nvswitch_msg_get_backend_t *)moduleCommand);
+                break;
+            }
 
             default:
                 DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
@@ -281,7 +330,20 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetSwitchIds(dcgm_nvswitch_msg_get_switches_v1 *msg)
 {
     msg->switchCount = DCGM_MAX_NUM_SWITCHES;
-    return m_switchMgr.GetNvSwitchList(msg->switchCount, msg->switchIds, msg->flags);
+    return m_nvswitchMgr.GetNvSwitchList(msg->switchCount, msg->switchIds, msg->flags);
+}
+
+/*************************************************************************/
+dcgmReturn_t DcgmModuleNvSwitch::ProcessGetLinkIds(dcgm_nvswitch_msg_get_links_v1 *msg)
+{
+    msg->linkCount = DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH;
+    return m_nvswitchMgr.GetNvLinkList(msg->linkCount, msg->linkIds, msg->flags);
+}
+
+/*************************************************************************/
+dcgmReturn_t DcgmModuleNvSwitch::ProcessGetBackend(dcgm_nvswitch_msg_get_backend_t *msg)
+{
+    return m_nvswitchMgr.GetBackend(msg);
 }
 
 /*****************************************************************************/
@@ -293,57 +355,57 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessWatchField(WatchFieldMessage msg)
         return DCGM_ST_BADPARAM;
     }
 
-    return m_switchMgr.WatchField(msg->entityGroupId,
-                                  msg->entityId,
-                                  msg->numFieldIds,
-                                  msg->fieldIds,
-                                  msg->updateIntervalUsec,
-                                  msg->watcherType,
-                                  msg->connectionId,
-                                  false);
+    return m_nvswitchMgr.WatchField(msg->entityGroupId,
+                                    msg->entityId,
+                                    msg->numFieldIds,
+                                    msg->fieldIds,
+                                    msg->updateIntervalUsec,
+                                    msg->watcherType,
+                                    msg->connectionId,
+                                    false);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessUnwatchField(UnwatchFieldMessage msg)
 {
-    return m_switchMgr.UnwatchField(msg->watcherType, msg->connectionId);
+    return m_nvswitchMgr.UnwatchField(msg->watcherType, msg->connectionId);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetLinkStates(dcgm_nvswitch_msg_get_link_states_t *msg)
 {
-    return m_switchMgr.GetLinkStates(msg);
+    return m_nvswitchMgr.GetLinkStates(msg);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetAllLinkStates(dcgm_nvswitch_msg_get_all_link_states_t *msg)
 {
-    return m_switchMgr.GetAllLinkStates(msg);
+    return m_nvswitchMgr.GetAllLinkStates(msg);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::SetEntityNvLinkLinkState(dcgm_nvswitch_msg_set_link_state_t *msg)
 {
-    return m_switchMgr.SetEntityNvLinkLinkState(msg);
+    return m_nvswitchMgr.SetEntityNvLinkLinkState(msg);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetEntityStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
 {
-    return m_switchMgr.GetEntityStatus(msg);
+    return m_nvswitchMgr.GetEntityStatus(msg);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessSetEntityNvLinkLinkState(dcgm_nvswitch_msg_set_link_state_t *msg)
 {
-    return m_switchMgr.SetEntityNvLinkLinkState(msg);
+    return m_nvswitchMgr.SetEntityNvLinkLinkState(msg);
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessClientDisconnect(dcgm_core_msg_client_disconnect_t *msg)
 {
     DCGM_LOG_INFO << "Unwatching fields watched by connection " << msg->connectionId;
-    return m_switchMgr.UnwatchField(DcgmWatcherTypeClient, msg->connectionId);
+    return m_nvswitchMgr.UnwatchField(DcgmWatcherTypeClient, msg->connectionId);
 }
 
 /*****************************************************************************/
@@ -387,7 +449,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     if (untilNextLinkStatusUsec <= 0)
     {
         DCGM_LOG_DEBUG << "Rescanning switch states";
-        dcgmReturn = m_switchMgr.ReadNvSwitchStatusAllSwitches();
+        dcgmReturn = m_nvswitchMgr.ReadNvSwitchStatusAllSwitches();
         if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED)
         {
             DCGM_LOG_WARNING << "ReadNvSwitchStatusAllSwitches() returned " << errorString(dcgmReturn);
@@ -397,7 +459,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
         untilNextLinkStatusUsec    = linkStatusRescanIntervalUsec;
     }
 
-    m_switchMgr.UpdateFields(nextUpdateTimeUsec);
+    m_nvswitchMgr.UpdateFields(nextUpdateTimeUsec);
     if (nextUpdateTimeUsec == 0)
     {
         nextUpdateTimeUsec = linkStatusRescanIntervalUsec;
@@ -441,7 +503,7 @@ void DcgmModuleNvSwitch::run()
 dcgmReturn_t DcgmModuleNvSwitch::ProcessPauseResumeMessage(PauseResumeMessage msg)
 {
     log_debug("Got {} message", (msg->pause ? "pause" : "resume"));
-    return msg->pause ? m_switchMgr.Pause() : m_switchMgr.Resume();
+    return msg->pause ? m_nvswitchMgr.Pause() : m_nvswitchMgr.Resume();
 }
 
 extern "C" {

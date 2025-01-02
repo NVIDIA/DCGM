@@ -434,7 +434,7 @@ std::string DcgmiOutputColumns::str()
         }
 
         isFirstSection = false;
-        result += sectionStr(*cur, *sections[*cur]);
+        result += sectionStr(*sections[*cur]);
     }
 
     // Footer
@@ -520,7 +520,7 @@ std::string DcgmiOutputColumns::rowStr(const std::vector<std::string> &strs) con
     return ss.str();
 }
 
-std::string DcgmiOutputColumns::sectionStr(const std::string &sectionName, DcgmiOutputBoxer &boxer) const
+std::string DcgmiOutputColumns::sectionStr(DcgmiOutputBoxer &boxer) const
 {
     std::string result;
     std::vector<std::string> strs;

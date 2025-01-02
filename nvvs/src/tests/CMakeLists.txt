@@ -11,69 +11,73 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(CTEST_USE_LAUNCHERS 1)
 
-find_package(Catch2 REQUIRED)
-find_package(Yaml REQUIRED)
-find_package(Jsoncpp REQUIRED)
-find_package(fmt REQUIRED)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-include(CTest)
-include(Catch)
+add_executable(nvvscoretests)
+target_sources(nvvscoretests
+    PRIVATE
+        NvvsTestsMain.cpp
+        NvidiaValidationSuiteTests.cpp
+        TestParametersTests.cpp
+        DcgmRecorderTests.cpp
+        DcgmDiagUnitTestCommon.cpp
+        ConfigFileParser_v2Tests.cpp
+        DcgmValuesSinceHolderTests.cpp
+        AllowlistTests.cpp
+        ParsingUtilityTests.cpp
+        TestFrameworkTests.cpp
+        PluginTests.cpp
+        PluginTestTests.cpp
+        PluginLibTests.cpp
+        PluginLibTestTests.cpp
+        PluginCoreFunctionalityTests.cpp
+        CustomDataHolderTests.cpp
+        SoftwarePluginFrameworkTests.cpp
+        SoftwareTests.cpp
+        CpuSetTests.cpp
+        DcgmNvvsResponseWrapperTests.cpp)
 
-if (BUILD_TESTING)
+target_include_directories(nvvscoretests
+    PRIVATE
+        ${JSONCPP_INCLUDE_DIR}
+        ${YAML_INCLUDE_DIR})
 
-    add_executable(nvvscoretests)
-    target_sources(nvvscoretests
-        PRIVATE
-            NvvsTestsMain.cpp
-            NvidiaValidationSuiteTests.cpp
-            TestParametersTests.cpp
-            DcgmRecorderTests.cpp
-            DcgmDiagUnitTestCommon.cpp
-            ConfigFileParser_v2Tests.cpp
-            DcgmValuesSinceHolderTests.cpp
-            AllowlistTests.cpp
-            ParsingUtilityTests.cpp
-            TestFrameworkTests.cpp
-            PluginTests.cpp
-            PluginLibTests.cpp
-            PluginCoreFunctionalityTests.cpp
-            CustomDataHolderTests.cpp
-            JsonResultTests.cpp
-    )
+# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
+#       for any libdcgm function that is needed.
+target_link_libraries(nvvscoretests
+    PRIVATE
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${JSONCPP_STATIC_LIBS}
+        ${YAML_STATIC_LIBS}
+        Catch2::Catch2
+        dcgm_logging
+        dl
+        fmt::fmt
+        nvvs_without_main_objects
+        rt
+        sdk_nvml_loader
+        serialize)
 
-    target_include_directories(nvvscoretests PRIVATE ${YAML_INCLUDE_DIR})
-    target_include_directories(nvvscoretests PRIVATE ${JSONCPP_INCLUDE_DIR})
+target_link_options(nvvscoretests PRIVATE -rdynamic)
 
-    # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-    #       for any libdcgm function that is needed.    
-    target_link_libraries(nvvscoretests
-        PRIVATE
-            serialize
-            nvvs_without_main_objects
-            dcgm_logging
-            Catch2::Catch2
-            fmt::fmt
-    )
-    target_link_libraries(nvvscoretests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
-    target_link_libraries(nvvscoretests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-    target_link_options(nvvscoretests PRIVATE -rdynamic)
+add_dependencies(nvvscoretests testplugin)
 
-    add_dependencies(nvvscoretests testplugin)
+add_library(testplugin SHARED)
+set_target_properties(testplugin PROPERTIES
+    CXX_VISIBILITY_PRESET default
+    SOVERSION ${PROJECT_VERSION_MAJOR})
 
-    add_library(testplugin SHARED)
+target_link_libraries(testplugin
+    PUBLIC
+        nvvs_interface
+    PRIVATE
+        fmt::fmt)
 
-    target_link_libraries(testplugin PUBLIC nvvs_interface)
-    target_link_libraries(testplugin PRIVATE fmt::fmt)
+target_sources(testplugin PRIVATE fake_plugin.cpp)
 
-    target_sources(
-        testplugin
-        PRIVATE
-        fake_plugin.cpp
-    )
-
-    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-        catch_discover_tests(nvvscoretests EXTRA_ARGS --use-colour yes)
-    endif()
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(nvvscoretests EXTRA_ARGS --colour-mode ansi)
 endif()

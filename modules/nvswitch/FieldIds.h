@@ -18,7 +18,7 @@
 
 #include <dcgm_structs.h>
 
-#include "DcgmNvSwitchManager.h"
+#include "DcgmNscqManager.h"
 
 namespace DcgmNs
 {
@@ -33,10 +33,10 @@ namespace DcgmNs
  * and these are assigned in the fully specialized FieldIdInteralType
  * definition.
  */
-using UpdateFuncType = dcgmReturn_t (DcgmNvSwitchManager::*)(unsigned short fieldId,
-                                                             DcgmFvBuffer &buf,
-                                                             const std::vector<dcgm_field_update_info_t> &entities,
-                                                             timelib64_t now);
+using UpdateFuncType = dcgmReturn_t (DcgmNscqManager::*)(unsigned short fieldId,
+                                                         DcgmFvBuffer &buf,
+                                                         const std::vector<dcgm_field_update_info_t> &entities,
+                                                         timelib64_t now);
 
 /**
  * We template the data storage type for holding retrieved data from the NSCQ
@@ -120,7 +120,7 @@ public:
  * Here, we define a base class for all fully specialized FieldIdControlType
  * classes (one for each Field Id). This provides for virtual NscqPath and
  * UpdateFunc functions to return the NSCQ path to query the field data and
- * a pointer to a DcgmNvSwitchManager member function to Find NSCQ
+ * a pointer to a DcgmNscqManager member function to Find NSCQ
  * callback indicies among supplied entities.
  */
 template <>
@@ -165,7 +165,8 @@ public:
     {}
 
     FieldIdStorageType(const FieldIdControlType<fieldId>::nscqFieldType &data)
-        : FieldIdControlType<fieldId>::dcgmFieldType(data) {};
+        : FieldIdControlType<fieldId>::dcgmFieldType(data)
+    {}
 
     ~FieldIdStorageType() = default;
 };

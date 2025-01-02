@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 #include "nvml.h"
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 #include <fmt/format.h>
 #include <vector>
 
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
-#include <nvml_generated_declarations.h>
 #include <nvml_injection.h>
 
 namespace
@@ -132,17 +131,27 @@ TEST_CASE("InjectedNvml: Basic Injection")
             == NVML_SUCCESS);
 
     InjectionArgument arg(devices[0]);
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) == name1.AsString());
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) != name2.AsString());
-    arg = InjectionArgument(devices[1]);
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) == name1.AsString());
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) != name2.AsString());
-    arg = InjectionArgument(devices[2]);
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) == name2.AsString());
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) != name1.AsString());
-    arg = InjectionArgument(devices[3]);
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) == name2.AsString());
-    REQUIRE(injectedNvml->GetString(arg, INJECTION_NAME_KEY) != name1.AsString());
+    nvmlReturn_t nvmlRet;
+    std::string tmpName;
+    std::tie(nvmlRet, tmpName) = injectedNvml->GetString(arg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(tmpName == name1.AsString());
+    REQUIRE(tmpName != name2.AsString());
+    arg                        = InjectionArgument(devices[1]);
+    std::tie(nvmlRet, tmpName) = injectedNvml->GetString(arg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(tmpName == name1.AsString());
+    REQUIRE(tmpName != name2.AsString());
+    arg                        = InjectionArgument(devices[2]);
+    std::tie(nvmlRet, tmpName) = injectedNvml->GetString(arg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(tmpName != name1.AsString());
+    REQUIRE(tmpName == name2.AsString());
+    arg                        = InjectionArgument(devices[3]);
+    std::tie(nvmlRet, tmpName) = injectedNvml->GetString(arg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(tmpName != name1.AsString());
+    REQUIRE(tmpName == name2.AsString());
 
     std::vector<InjectionArgument> args { devices[0] };
     unsigned int power;
@@ -156,6 +165,167 @@ TEST_CASE("InjectedNvml: Basic Injection")
     REQUIRE(power == powerValue2.AsUInt());
 
     Teardown();
+}
+
+TEST_CASE("InjectedNvml: Load From YAML File")
+{
+    struct test_parameters_t
+    {
+        std::string uuid, serial, pciBusId;
+    };
+    std::vector<test_parameters_t> params
+        = { { "GPU-216b54b3-c72b-47af-448c-f23342290604", "1560921106778", "00000000:01:00.0" },
+            { "GPU-cc5c009d-f3b3-cb8e-63b0-81b15a48b328", "1560921106578", "00000000:02:0D.0" },
+            { "GPU-eefb0a65-ac26-e489-d16a-30372d57ddf8", "1560921103778", "00000000:03:10.0" } };
+
+    auto genDeviceYaml = [params](auto i) {
+        return "  " + params[i].uuid
+               + ":\n"
+                 "    Index:\n"
+                 "      FunctionReturn: 0\n"
+                 "      ReturnValue: "
+               + std::to_string(i)
+               + "\n"
+                 "    Serial:\n"
+                 "      FunctionReturn: 0\n"
+                 "      ReturnValue: "
+               + params[i].serial
+               + "\n"
+                 "    PciInfo:\n"
+                 "      FunctionReturn: 0\n"
+                 "      ReturnValue:\n"
+                 "        bus: 129\n"
+                 "        busId: "
+               + params[i].pciBusId
+               + "\n"
+                 "        busIdLegacy: "
+               + params[i].pciBusId.substr(3)
+               + "\n"
+                 "        device: 0\n"
+                 "        domain: 0\n"
+                 "        pciDeviceId: 548540638\n"
+                 "        pciSubSystemId: 343871710\n";
+    };
+
+    std::string const multiGpuYamlString = "Device:\n" + genDeviceYaml(0) + genDeviceYaml(1) + genDeviceYaml(2)
+                                           + "Global:\n"
+                                             "  Count:\n"
+                                             "    FunctionReturn: 0\n"
+                                             "    ReturnValue: "
+                                           + std::to_string(params.size())
+                                           + "\n"
+                                             "  DeviceOrder:\n"
+                                             "  - "
+                                           + params[0].uuid
+                                           + "\n"
+                                             "  - "
+                                           + params[1].uuid
+                                           + "\n"
+                                             "  - "
+                                           + params[2].uuid + "\n";
+    nvmlDevice_t device(0);
+    auto *injectedNvml = InjectedNvml::Init();
+
+    auto GetDeviceFrom = [&](auto arg, auto key) {
+        InjectionArgument injectionArg(arg);
+        return injectedNvml->GetNvmlDevice(injectionArg, key);
+    };
+
+    REQUIRE(injectedNvml->LoadFromString(multiGpuYamlString));
+
+    REQUIRE(injectedNvml->GetGpuCount() == 3);
+
+    SECTION("Yaml parameters processed correctly")
+    {
+        for (size_t i = 0; i < params.size(); i++)
+        {
+            device = GetDeviceFrom(params[i].uuid, INJECTION_UUID_KEY);
+            REQUIRE(device != nullptr);
+            InjectionArgument firstDevArg(device);
+            auto [nvmlRet, buf] = injectedNvml->GetString(firstDevArg, INJECTION_SERIAL_KEY);
+            REQUIRE(nvmlRet == NVML_SUCCESS);
+            CHECK(buf == params[i].serial);
+        }
+        Teardown();
+    }
+
+    SECTION("Non-existent UUID")
+    {
+        std::string nonExistentUuid = "GPU-807c370e-8d7a-b666-584d-d5b0196b201e";
+        nvmlReturn_t ret            = injectedNvml->RemoveGpu(nonExistentUuid);
+        CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+        ret = injectedNvml->RestoreGpu(nonExistentUuid);
+        CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+        REQUIRE(injectedNvml->GetGpuCount() == 3);
+
+        Teardown();
+    }
+
+    auto verifyDeviceHandle = [&](auto paramIndex, auto nvmlIndex) {
+        auto deviceFromUuid = GetDeviceFrom(params[paramIndex].uuid, INJECTION_UUID_KEY);
+        REQUIRE(deviceFromUuid != nullptr);
+        auto deviceFromIndex = GetDeviceFrom(nvmlIndex, INJECTION_INDEX_KEY);
+        REQUIRE(deviceFromIndex != nullptr);
+        auto deviceFromSerial = GetDeviceFrom(params[paramIndex].serial, INJECTION_SERIAL_KEY);
+        REQUIRE(deviceFromSerial != nullptr);
+        auto deviceFromPciBusId = GetDeviceFrom(params[paramIndex].pciBusId, INJECTION_PCIBUSID_KEY);
+        REQUIRE(deviceFromPciBusId != nullptr);
+
+        CHECK(deviceFromUuid == deviceFromSerial);
+        CHECK(deviceFromUuid == deviceFromIndex);
+        CHECK(deviceFromUuid == deviceFromPciBusId);
+    };
+
+    SECTION("Get device handle using different key")
+    {
+        verifyDeviceHandle(0, 0U);
+        Teardown();
+    }
+
+    SECTION("Remove, Get Handle, Restore GPU")
+    {
+        // Remove first device, verify remaining device handles can be retrieved
+        auto origDevice = GetDeviceFrom(params[0].uuid, INJECTION_UUID_KEY);
+
+        auto removedUuid = params[0].uuid;
+        nvmlReturn_t ret = injectedNvml->RemoveGpu(removedUuid);
+        CHECK(ret == NVML_SUCCESS);
+        verifyDeviceHandle(1, 0U);
+        verifyDeviceHandle(2, 1U);
+        auto deviceFromIndex = GetDeviceFrom(2, INJECTION_INDEX_KEY);
+        REQUIRE(deviceFromIndex == nullptr);
+
+        // Ensure the original device handle is no longer valid
+        nvmlFieldValue_t tempFieldValue {};
+        ret = injectedNvml->InjectFieldValue(origDevice, tempFieldValue);
+        CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+
+        // Removing the device again should fail
+        ret = injectedNvml->RemoveGpu(removedUuid);
+        CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+
+        REQUIRE(injectedNvml->GetGpuCount() == 2);
+        auto countArg = injectedNvml->ObjectlessGet("Count");
+        REQUIRE(countArg.AsUInt() == 2);
+
+        // Restore the device, and verify that it is added to the end,
+        // and remaining device handles
+        ret = injectedNvml->RestoreGpu(removedUuid);
+        CHECK(ret == NVML_SUCCESS);
+        verifyDeviceHandle(1, 0U);
+        verifyDeviceHandle(2, 1U);
+        verifyDeviceHandle(0, 2U);
+
+        // Restoring the device again should fail
+        ret = injectedNvml->RestoreGpu(removedUuid);
+        CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+
+        REQUIRE(injectedNvml->GetGpuCount() == 3);
+        countArg = injectedNvml->ObjectlessGet("Count");
+        REQUIRE(countArg.AsUInt() == 3);
+
+        Teardown();
+    }
 }
 
 TEST_CASE("InjectedNvml: Extra Key Injection")
@@ -264,12 +434,15 @@ TEST_CASE("InjectedNvml: Device Creation")
     GetDevices(devices, COUNT);
 
     InjectionArgument firstDevArg(devices[0]);
-    std::string name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    auto [nvmlRet, name] = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     for (unsigned int i = 0; i < COUNT; i++)
     {
         // Check the default name
         InjectionArgument devArg(devices[i]);
-        REQUIRE(name == injectedNvml->GetString(devArg, "Name"));
+        auto [tmpNvmlRet, tmpName] = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+        REQUIRE(tmpNvmlRet == NVML_SUCCESS);
+        REQUIRE(name == tmpName);
     }
 
     Teardown();
@@ -309,9 +482,13 @@ TEST_CASE("InjectedNvml: Load Multiple Devices")
     REQUIRE(device2 != nullptr);
 
     InjectionArgument deviceArg { device1 };
-    REQUIRE(injectedNvml->GetString(deviceArg, INJECTION_UUID_KEY) == uuids[0]);
-    deviceArg = { device2 };
-    REQUIRE(injectedNvml->GetString(deviceArg, INJECTION_UUID_KEY) == uuids[1]);
+    auto [nvmlRet, uuid] = injectedNvml->GetString(deviceArg, INJECTION_UUID_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(uuid == uuids[0]);
+    deviceArg               = { device2 };
+    std::tie(nvmlRet, uuid) = injectedNvml->GetString(deviceArg, INJECTION_UUID_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    REQUIRE(uuid == uuids[1]);
 
     Teardown();
 }
@@ -382,16 +559,34 @@ TEST_CASE("InjectedNvml: Device Injection")
     REQUIRE(injectedNvml->DeviceInject(devices[0], INJECTION_NAME_KEY, {}, NvmlFuncReturn(NVML_SUCCESS, injectedName))
             == NVML_SUCCESS);
     InjectionArgument firstDevArg(devices[0]);
-    std::string name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    auto [nvmlRet, name] = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(name == injectedName);
     // Get second time will not affect the result
-    name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    std::tie(nvmlRet, name) = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(name == injectedName);
 
     // After reset, injection will return back
     REQUIRE(injectedNvml->DeviceReset(devices[0]) == NVML_SUCCESS);
-    name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    std::tie(nvmlRet, name) = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(originalName == name);
+
+    Teardown();
+}
+
+TEST_CASE("InjectedNvml: GetString with failed NVML return")
+{
+    auto *injectedNvml = InjectedNvml::Init();
+    std::vector<nvmlDevice_t> devices;
+    GetDevices(devices, 1);
+
+    REQUIRE(injectedNvml->DeviceInject(devices[0], INJECTION_NAME_KEY, {}, NvmlFuncReturn(NVML_ERROR_NOT_SUPPORTED, ""))
+            == NVML_SUCCESS);
+    InjectionArgument firstDevArg(devices[0]);
+    auto [nvmlRet, name] = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_ERROR_NOT_SUPPORTED);
 
     Teardown();
 }
@@ -415,12 +610,15 @@ TEST_CASE("InjectedNvml: Device Injection For Following Calls")
 
     REQUIRE(injectedNvml->DeviceInjectForFollowingCalls(devices[0], INJECTION_NAME_KEY, {}, rets) == NVML_SUCCESS);
     InjectionArgument firstDevArg(devices[0]);
-    std::string name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    auto [nvmlRet, name] = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(name == injectedName1);
-    name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    std::tie(nvmlRet, name) = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(name == injectedName2);
 
-    name = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    std::tie(nvmlRet, name) = injectedNvml->GetString(firstDevArg, INJECTION_NAME_KEY);
+    REQUIRE(nvmlRet == NVML_SUCCESS);
     REQUIRE(originalName == name);
 
     Teardown();
@@ -477,7 +675,9 @@ TEST_CASE("InjectedNvml: Nvml Func Call Counts")
         REQUIRE(nvmlGetFuncCallCount(&funcCallCounts) == NVML_SUCCESS);
         CHECK(funcCallCounts.numFuncs == 0);
 
-        Teardown();
+        nvmlShutdown();
+        nvmlShutdown();
+        nvmlShutdown();
     }
 }
 
@@ -485,12 +685,12 @@ TEST_CASE("nvml Error String")
 {
     nvmlInit_v2();
     nvmlReturn_t errorCode        = NVML_ERROR_UNKNOWN;
-    auto const &expectedErrString = fmt::format("NVML Injection Stub, Code: {}", errorCode);
+    auto const &expectedErrString = fmt::format("NVML Injection Stub, Code: {}", std::to_underlying(errorCode));
     std::string_view retString    = nvmlErrorString(errorCode);
     CHECK(retString == expectedErrString);
 
     retString = nvmlErrorString(errorCode);
     CHECK(retString == expectedErrString);
 
-    Teardown();
+    nvmlShutdown();
 }

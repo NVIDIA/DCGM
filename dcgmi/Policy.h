@@ -37,7 +37,7 @@ public:
     dcgmReturn_t UnregisterPolicyUpdates(dcgmHandle_t mNvcmHandle, unsigned int groupId, unsigned int condition);
 
 private:
-    static int ListenForViolations(void *data);
+    static int ListenForViolations(dcgmPolicyCallbackResponse_t *callbackResponse, uint64_t userData);
     static std::string HelperFormatTimestamp(long long timestamp);
 };
 

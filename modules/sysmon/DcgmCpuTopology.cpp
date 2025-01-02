@@ -51,37 +51,45 @@ dcgmReturn_t DcgmCpuTopology::GetValuesFromLscpuJson(Json::Value &root)
                   root.toStyledString());
         return DCGM_ST_INIT_ERROR;
     }
-
-    for (auto &jv : root[LJ_LSCPU])
+    try
     {
-        if (jv[LJ_LSCPU_FIELD].asString() == LJ_CPUS)
+        for (auto &jv : root[LJ_LSCPU])
         {
-            m_coreCount = std::stoi(jv[LJ_LSCPU_DATA].asString());
-        }
-        else if (jv[LJ_LSCPU_FIELD].asString() == LJ_CORES_PER_SOCKET)
-        {
-            m_coresPerSocket = std::stoi(jv[LJ_LSCPU_DATA].asString());
-        }
-        else if (jv[LJ_LSCPU_FIELD].asString() == LJ_SOCKETS)
-        {
-            m_socketCount = std::stoi(jv[LJ_LSCPU_DATA].asString());
-        }
-        else if (jv[LJ_LSCPU_FIELD].asString() == LJ_NUMA_NODES)
-        {
-            // skip this one - the value includes NUMA nodes that have no CPUs
-            continue;
-        }
-        else if (jv[LJ_LSCPU_FIELD].asString().starts_with(LJ_NUMA_NODE_CPUS_PREFIX))
-        {
-            std::string numaNodeStr = jv[LJ_LSCPU_FIELD].asString();
-            unsigned int numaIndex  = std::stoi(numaNodeStr.substr(strlen(LJ_NUMA_NODE_CPUS_PREFIX)));
-            std::string data        = jv[LJ_LSCPU_DATA].asString();
-            // Not all NUMA nodes have CPUs; ignore those without
-            if (data.empty() == false)
+            if (jv[LJ_LSCPU_FIELD].asString() == LJ_CPUS)
             {
-                m_numaNodeToCoreRange[numaIndex] = data;
+                m_coreCount = std::stoi(jv[LJ_LSCPU_DATA].asString());
+            }
+            else if (jv[LJ_LSCPU_FIELD].asString() == LJ_CORES_PER_SOCKET)
+            {
+                m_coresPerSocket = std::stoi(jv[LJ_LSCPU_DATA].asString());
+            }
+            else if (jv[LJ_LSCPU_FIELD].asString() == LJ_SOCKETS)
+            {
+                m_socketCount = std::stoi(jv[LJ_LSCPU_DATA].asString());
+            }
+            else if (jv[LJ_LSCPU_FIELD].asString() == LJ_NUMA_NODES)
+            {
+                // skip this one - the value includes NUMA nodes that have no CPUs
+                continue;
+            }
+            else if (jv[LJ_LSCPU_FIELD].asString().starts_with(LJ_NUMA_NODE_CPUS_PREFIX))
+            {
+                std::string numaNodeStr = jv[LJ_LSCPU_FIELD].asString();
+                unsigned int numaIndex  = std::stoi(numaNodeStr.substr(strlen(LJ_NUMA_NODE_CPUS_PREFIX)));
+                std::string data        = jv[LJ_LSCPU_DATA].asString();
+                // Not all NUMA nodes have CPUs; ignore those without
+                if (data.empty() == false)
+                {
+                    m_numaNodeToCoreRange[numaIndex] = data;
+                }
             }
         }
+    }
+    catch (const std::exception &e)
+    {
+        log_error("Unexpected lscpu json format: {}", e.what());
+        log_debug("lscpu json string is: {}", root.toStyledString());
+        return DCGM_ST_INIT_ERROR;
     }
 
     if (m_coresPerSocket == 0)
@@ -108,54 +116,7 @@ dcgmReturn_t DcgmCpuTopology::GetValuesFromLscpuJson(Json::Value &root)
     return DCGM_ST_OK;
 }
 
-std::string DcgmCpuTopology::RunLscpuAndGetOutput(std::string &output)
-{
-    std::vector<std::string> argv = { "lscpu", "--json" };
-    DcgmNs::Utils::FileHandle outputFd;
-
-    pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(argv, nullptr, &outputFd, nullptr, true, nullptr, nullptr);
-
-    fmt::memory_buffer stdoutStream;
-    std::string errmsg;
-    char errbuf[1024] = { 0 };
-    int readOutputRet = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd));
-    if (readOutputRet)
-    {
-        strerror_r(readOutputRet, errbuf, sizeof(errbuf));
-        errmsg = fmt::format("Output of lscpu --json couldn't be read: '{}'. ", errbuf);
-    }
-    output = fmt::to_string(stdoutStream);
-
-    int childStatus;
-    if (waitpid(childPid, &childStatus, 0) == -1)
-    {
-        strerror_r(errno, errbuf, sizeof(errbuf));
-        errmsg += fmt::format("Error while waiting for child process ({}) to exit: '{}'", childPid, errbuf);
-    }
-    else if (WIFEXITED(childStatus))
-    {
-        // Exited normally - check for non-zero exit code
-        childStatus = WEXITSTATUS(childStatus);
-        if (childStatus)
-        {
-            errmsg += fmt::format("A child process ({}) exited with non-zero status {}", childPid, childStatus);
-        }
-    }
-    else if (WIFSIGNALED(childStatus))
-    {
-        // Child terminated due to signal
-        childStatus = WTERMSIG(childStatus);
-        errmsg += fmt::format("A child process ({}) terminated with signal {}", childPid, childStatus);
-    }
-    else
-    {
-        errmsg += fmt::format("A child process ({}) is being traced or otherwise can't exit", childPid);
-    }
-
-    return errmsg;
-}
-
-dcgmReturn_t DcgmCpuTopology::ParseLscpuOutputAndReadValues(const std::string &output, const std::string &errmsg)
+dcgmReturn_t DcgmCpuTopology::ParseLscpuOutputAndReadValues(const std::string &output)
 {
     Json::Reader reader;
     Json::Value root;
@@ -164,15 +125,7 @@ dcgmReturn_t DcgmCpuTopology::ParseLscpuOutputAndReadValues(const std::string &o
 
     if (successfulParse == false)
     {
-        if (errmsg.empty() == false)
-        {
-            log_error("Output of lscpu --json couldn't be read: '{}'", errmsg);
-        }
-        else
-        {
-            log_error("Couldn't parse output of lscpu --json: '{}'", output);
-        }
-
+        log_error("Couldn't parse output of json: '{}'", output);
         return DCGM_ST_INIT_ERROR;
     }
 
@@ -181,11 +134,27 @@ dcgmReturn_t DcgmCpuTopology::ParseLscpuOutputAndReadValues(const std::string &o
 
 dcgmReturn_t DcgmCpuTopology::GetLscpuData()
 {
-    std::string output;
-    std::string errmsg = RunLscpuAndGetOutput(output);
+    static std::string cmd = "lscpu --json";
+    std::string cmdOutput;
+    static std::array<std::string, 2> cmdPathPrefix = { "/usr/bin/", "/usr/sbin/" };
 
-    return ParseLscpuOutputAndReadValues(output, errmsg);
+    dcgmReturn_t result = DCGM_ST_OK;
+    for (auto const &prefix : cmdPathPrefix)
+    {
+        result = DcgmNs::Utils::RunCmdAndGetOutput(prefix + cmd, cmdOutput);
+        if (result == DCGM_ST_OK)
+        {
+            break;
+        }
+    }
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    return ParseLscpuOutputAndReadValues(cmdOutput);
 }
+
 
 dcgmReturn_t DcgmCpuTopology::ReadCoresPhysicalLocation(unsigned int coreId, unsigned int numaNode)
 {
@@ -296,7 +265,7 @@ dcgmReturn_t DcgmCpuTopology::Initialize(const std::vector<dcgm_sysmon_cpu_t> &c
             return ret;
         }
 
-        dcgm_sysmon_cpu_t cpuNode;
+        dcgm_sysmon_cpu_t cpuNode {};
         cpuNode.cpuId = numaToCoreRange.first;
         ret = DcgmNs::DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString(cpuNode, numaToCoreRange.second);
         if (ret == DCGM_ST_OK)

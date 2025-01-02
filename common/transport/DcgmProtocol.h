@@ -47,7 +47,7 @@ typedef unsigned int dcgm_request_id_t;
  */
 typedef struct
 {
-    int msgId;                   /* Identifier to represent DCGM protocol (DCGM_PROTO_MAGIC) */
+    unsigned int msgId;          /* Identifier to represent DCGM protocol (DCGM_PROTO_MAGIC) */
     dcgm_request_id_t requestId; /* Represent Message by a request ID */
     int length;                  /* Length of message body (not including this header). The full size of this
                                     message on the wire is sizeof(*header) + header->length */
@@ -70,8 +70,6 @@ typedef struct
 /* DCGM_MSG_POLICY_NOTIFY - Signal a client that a policy has been violated */
 typedef struct
 {
-    int begin;                             /* Whether this is the first response (1) or the second (0).
-                                     This will determine if beginCB or finishCB is called. */
     dcgmPolicyCallbackResponse_t response; /* Policy response to pass to client callbacks */
 } dcgm_msg_policy_notify_t;
 
@@ -131,7 +129,7 @@ public:
     unsigned int GetMsgType()
     {
         return m_messageHdr.msgType;
-    };
+    }
 
     /**
      * This method is used to set request id corresponding to the message

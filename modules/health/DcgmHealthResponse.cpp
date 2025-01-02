@@ -34,12 +34,12 @@ void DcgmHealthResponse::AddIncident(dcgmHealthSystems_t system,
 }
 
 /*****************************************************************************/
-void DcgmHealthResponse::PopulateHealthResponse(dcgmHealthResponse_v4 &response) const
+void DcgmHealthResponse::PopulateHealthResponse(dcgmHealthResponse_v5 &response) const
 {
-    response.version = dcgmHealthResponse_version4;
-    if (m_incidents.size() > DCGM_HEALTH_WATCH_MAX_INCIDENTS)
+    response.version = dcgmHealthResponse_version5;
+    if (m_incidents.size() > DCGM_HEALTH_WATCH_MAX_INCIDENTS_V2)
     {
-        response.incidentCount = DCGM_HEALTH_WATCH_MAX_INCIDENTS;
+        response.incidentCount = DCGM_HEALTH_WATCH_MAX_INCIDENTS_V2;
     }
     else
     {

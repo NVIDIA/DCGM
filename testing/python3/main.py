@@ -72,17 +72,6 @@ def _summarize_tests():
     tests_waived_count = test_root.stats[test_utils.SubTest.SKIPPED]
     tests_count = tests_ok_count + tests_fail_count
 
-    # Dump all log output in Eris
-    if tests_fail_count > 0 and option_parser.options.eris:
-        logPath = os.path.join(logger.default_log_dir, logger.log_dir)
-        logFiles = os.listdir(logPath)
-        for logFile in logFiles:
-            logFilePath = os.path.join(logPath,logFile)
-            if not is_file_binary(logFilePath) and not os.path.isdir(logFilePath):
-                print("\n=========================== " + logFile + " ===========================\n")
-                with open(logFilePath, "r", encoding="utf-8-sig") as f:
-                    print(f.read())
-
     logger.info("\n========== TEST SUMMARY ==========\n")
     logger.info("Passed: {}".format(tests_ok_count))
     logger.info("Failed: {}".format(tests_fail_count))
@@ -162,6 +151,7 @@ class TestFrameworkSetup(object):
             print('Either run `chmod o+rx <directory>` or move the DCGM Testing framework to another location')
             sys.exit(1)
         utils.verify_nvidia_fabricmanager_service_active_if_needed()
+        utils.verifyEcosystem()
 
         # Setup logging regardless of if we're going to be logging or not in order to clear out old logs
         # and initialize logger classes.
@@ -178,8 +168,8 @@ class TestFrameworkSetup(object):
 
         # Verify that package architecture matches python architecture
         if utils.is_64bit():
-            # ignore this check on ppc64le and armv8 for now
-            if not (platform.machine() == "ppc64le" or platform.machine() == "aarch64"):
+            # ignore this check on armv8 for now
+            if not (platform.machine() == "aarch64"):
                 if not os.path.exists(os.path.join(utils.script_dir, "apps/amd64")):
                     print("Testing package is missing 64bit binaries, are you sure you're using package of correct architecture?")
                     sys.exit(1)
@@ -211,7 +201,6 @@ class TestFrameworkSetup(object):
         pass
 
 def main():
-
     with TestFrameworkSetup():    
         if not option_parser.options.no_env_check:
             if not test_utils.is_test_environment_sane():

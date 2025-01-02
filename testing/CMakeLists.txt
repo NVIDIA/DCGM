@@ -12,34 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_package(Jsoncpp REQUIRED)
-find_package(Threads REQUIRED)
-find_package(fmt REQUIRED)
-
 add_executable(testdcgmunittests)
+
 target_link_libraries(testdcgmunittests
     PRIVATE
-        module_common_interface
-        diag_interface
-
-        module_common_objects
-        dcgm_static_private
-        modules_objects
-        transport_objects
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${JSONCPP_STATIC_LIBS}
+        dcgm
         dcgm_common
         dcgm_logging
         dcgm_mutex
+        dcgm_static_private
+        dcgmmodulediag_private_static
+        diag_interface
+        dl
+        fmt::fmt
+        module_common_interface
+        module_common_objects
+        modules_objects
+        rt
         sdk_nvml_essentials_objects
         sdk_nvml_loader
-        dcgm
-        dcgmmodulediag_private_static
         serialize
-        ${JSONCPP_STATIC_LIBS}
-        ${CMAKE_THREAD_LIBS_INIT}
-        fmt::fmt
-        rt
-        dl
-)
+        transport_objects)
 
 target_sources(testdcgmunittests
     PRIVATE
@@ -55,8 +50,6 @@ target_sources(testdcgmunittests
         TestDiagManager.cpp
         TestDiagManager.h
         TestDiagManagerStrings.h
-        TestDiagResponseWrapper.cpp
-        TestDiagResponseWrapper.h
         TestFieldGroups.cpp
         TestFieldGroups.h
         TestGroupManager.cpp
@@ -73,38 +66,92 @@ target_sources(testdcgmunittests
         TestTopology.cpp
         TestTopology.h
         TestVersioning.cpp
-        TestVersioning.h
-)
+        TestVersioning.h)
 
-target_link_options(testdcgmunittests PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/unittests.linux_def)
+target_link_options(testdcgmunittests PRIVATE
+    "-Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/unittests.linux_def")
 
 add_subdirectory(stub)
 
-install(DIRECTORY ${PYTHON_VER}/ DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests USE_SOURCE_PERMISSIONS)
-
-set(BUILD_ID $ENV{BUILD_ID})
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${PYTHON_VER}/version.py.in ${CMAKE_CURRENT_BINARY_DIR}/version.py ESCAPE_QUOTES @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/version.py DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
-
-install(TARGETS testdcgmunittests stub_library_test RUNTIME DESTINATION ${DCGM_TESTS_APP_DIR} COMPONENT Tests)
-
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/generate_coverage_report.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.sh DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/process_coverage_report.awk DESTINATION ${DCGM_TESTS_INSTALL_DIR} COMPONENT Tests)
-
-# Install python bindings
-set(DCGM_BINDINGS_PYTHON3_INSTALL_DIR ${DCGM_BINDINGS_INSTALL_DIR}/python3)
+configure_file(python3/version.py.in version.py ESCAPE_QUOTES @ONLY)
 
 install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/__init__.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/dcgm_client_cli_parser.py
-        ${CMAKE_CURRENT_SOURCE_DIR}/python3/common/dcgm_client_main.py
-    DESTINATION
-        ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}/common
-    COMPONENT DCGM)
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/version.py"
+    DESTINATION "${DCGM_TESTS_INSTALL_DIR}"
+    COMPONENT Tests)
 
+install(
+    DIRECTORY python3/
+    DESTINATION "${DCGM_TESTS_INSTALL_DIR}"
+    COMPONENT Tests
+    FILES_MATCHING
+        PATTERN "*.conf"
+        PATTERN "*.json"
+        PATTERN "*.py"
+        PATTERN ".coveragerc"
+        PATTERN "LICENSE.txt"
+        PATTERN "pylintrc")
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    install(
+        FILES
+            "python3/apps/cuda_ctx_create/busy_gpu64.ptx"
+            "python3/apps/cuda_ctx_create/cuda_assert.ptx"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/cuda_ctx_create/"
+        COMPONENT Tests)
+
+    install(
+        PROGRAMS
+            "python3/apps/cuda_ctx_create/cuda_assert_64bit"
+            "python3/apps/cuda_ctx_create/cuda_ctx_create_64bit"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/cuda_ctx_create/"
+        COMPONENT Tests)
+
+    install(PROGRAMS "python3/apps/nvswitch-audit/nvswitch-audit"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/nvswitch-audit/"
+        COMPONENT Tests)
+
+    install(PROGRAMS "python3/apps/p2p_bandwidth/p2p_bandwidth"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/p2p_bandwidth"
+        COMPONENT Tests)
+
+    install(PROGRAMS "python3/apps/nvpex2/nvpex2"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/nvpex2"
+        COMPONENT Tests)
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    install(
+        FILES
+            "python3/apps/cuda_ctx_create/busy_gpu_aarch64.ptx"
+            "python3/apps/cuda_ctx_create/cuda_assert.ptx"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/cuda_ctx_create/"
+        COMPONENT Tests)
+
+    install(
+        PROGRAMS
+            "python3/apps/cuda_ctx_create/cuda_assert_aarch64"
+            "python3/apps/cuda_ctx_create/cuda_ctx_create_aarch64"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/apps/cuda_ctx_create/"
+        COMPONENT Tests)
+endif()
+
+install(
+    TARGETS testdcgmunittests
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        COMPONENT Tests)
+
+install(
+    PROGRAMS
+        run_tests.sh
+        generate_coverage_report.sh
+        process_coverage_report.sh
+        process_coverage_report.awk
+        gen_validation.sh
+        test_validation.sh
+    DESTINATION "${DCGM_TESTS_INSTALL_DIR}"
+    COMPONENT Tests)
+
+# Install python bindings
 install(
     FILES
         python3/dcgm_agent.py
@@ -126,33 +173,40 @@ install(
         python3/dcgm_errors.py
         python3/dcgm_collectd_plugin.py
         python3/dcgm_fluentd.py
-        python3/dcgm_prometheus.py
         python3/dcgm_telegraf.py
         python3/denylist_recommendations.py
-    DESTINATION
-        ${DCGM_BINDINGS_PYTHON3_INSTALL_DIR}
-    COMPONENT DCGM)
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/bindings/python3"
+    COMPONENT Core)
 
-set(DCGM_COLLECTD_INSTALL_DIR "${CMAKE_INSTALL_DATAROOTDIR}/dcgm/collectd")
+install(
+    FILES
+        python3/common/__init__.py
+        python3/common/dcgm_client_cli_parser.py
+        python3/common/dcgm_client_main.py
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/bindings/python3/common"
+    COMPONENT Core)
+
 set(COLLECTD_TYPES_DB_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/python3/dcgm_fields_collectd.py")
-set(COLLECTD_TYPES_DB_FILE "${DCGM_COLLECTD_INSTALL_DIR}/types.db")
 
 # For collectd types.db
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/types.db
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/types.db"
   DEPENDS ${COLLECTD_TYPES_DB_GENERATOR}
   # -B to prevent caching bytecode
-  COMMAND ${PYTHON_VER} -B ${COLLECTD_TYPES_DB_GENERATOR} >${CMAKE_CURRENT_BINARY_DIR}/types.db)
+  COMMAND Python3::Interpreter -B "${COLLECTD_TYPES_DB_GENERATOR}" > "${CMAKE_CURRENT_BINARY_DIR}/types.db")
 
 # For collectd types.db
 add_custom_target(
   db_types ALL
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/types.db)
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/types.db")
 
 # For collectd types.db
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/types.db DESTINATION ${DCGM_COLLECTD_INSTALL_DIR} COMPONENT DCGM)
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/types.db"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/collectd"
+    COMPONENT Core)
 
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/python3/dcgm-collectd-example.conf DESTINATION ${DCGM_COLLECTD_INSTALL_DIR} COMPONENT DCGM)
-
-
-
+install(
+    FILES python3/dcgm-collectd-example.conf
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}/examples/"
+    COMPONENT Core)

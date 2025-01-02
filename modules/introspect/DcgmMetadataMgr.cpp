@@ -35,7 +35,7 @@ DcgmMetadataManager::DcgmMetadataManager(dcgmCoreCallbacks_t &dcc)
 DcgmMetadataManager::~DcgmMetadataManager()
 {}
 
-dcgmReturn_t DcgmMetadataManager::GetHostEngineBytesUsed(long long &bytesUsed, bool waitIfNoData)
+dcgmReturn_t DcgmMetadataManager::GetHostEngineBytesUsed(long long &bytesUsed, bool /* waitIfNoData */)
 {
     RetrieveProcessMemoryUsage(bytesUsed);
     bytesUsed = bytesUsed * 1024;
@@ -124,8 +124,8 @@ void DcgmMetadataManager::RetrieveProcessMemoryUsage(long long &totalKB)
     }
     statusStream.close();
 
-    DCGM_LOG_DEBUG << "Read rssKB " << rssKB << ", swpKB " << swpKB << ", totalKB " << totalKB;
     totalKB = rssKB + swpKB;
+    DCGM_LOG_DEBUG << "Read rssKB " << rssKB << ", swpKB " << swpKB << ", totalKB " << totalKB;
 }
 
 void DcgmMetadataManager::RetrieveProcessCpuTime(long long &userTime, long long &systemTime)

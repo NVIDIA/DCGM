@@ -110,7 +110,7 @@ ErrorData::ErrorData(const nscq_error_t &in)
 void ErrorData::BufferAdd(dcgm_field_entity_group_t entityGroupId,
                           dcgm_field_eid_t entityId,
                           unsigned short fieldId,
-                          timelib64_t now,
+                          timelib64_t /* now */,
                           DcgmFvBuffer &buf) const
 {
     buf.AddInt64Value(entityGroupId, entityId, fieldId, value, time, DCGM_ST_OK);

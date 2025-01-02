@@ -434,7 +434,7 @@ private:
     dcgmReturn_t HelperHealthCheck(unsigned int groupId,
                                    long long startTime,
                                    long long endTime,
-                                   dcgmHealthResponse_v4 &response);
+                                   dcgmHealthResponse_v5 &response);
 
     /*****************************************************************************
      Helper method for watching the fields that the host engine cares about

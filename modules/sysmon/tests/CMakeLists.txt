@@ -11,47 +11,38 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(CTEST_USE_LAUNCHERS 1)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-find_package(Catch2 REQUIRED)
-find_package(Threads REQUIRED)
-find_package(fmt REQUIRED)
+add_executable(sysmontests)
+target_sources(sysmontests
+    PRIVATE
+        DcgmModuleSysmonTests.cpp
+        DcgmCpuManagerTests.cpp
+        DcgmCpuTopologyTests.cpp
+        DcgmSystemMonitorTests.cpp
+)
 
-include(CTest)
-include(Catch)
+target_link_libraries(sysmontests
+    PRIVATE
+        sysmon_interface
+        sysmon_objects
+        common_watch_objects
+        module_common_objects
+        modules_objects
+        dcgm_common
+        dcgm_entity_types
+        dcgm_logging
+        dcgm_mutex
+        dcgm
+        Catch2::Catch2WithMain
+        ${CMAKE_THREAD_LIBS_INIT}
+        fmt::fmt
+        rt
+        dl
+)
 
-if (BUILD_TESTING)
-
-    add_executable(sysmontests)
-    target_sources(sysmontests
-        PRIVATE
-            SysmonTestsMain.cpp
-            DcgmModuleSysmonTests.cpp
-            DcgmCpuManagerTests.cpp
-            DcgmCpuTopologyTests.cpp
-            DcgmSystemMonitorTests.cpp
-    )
-
-    target_link_libraries(sysmontests
-        PRIVATE
-            sysmon_interface
-            sysmon_objects
-            common_watch_objects
-            module_common_objects
-            modules_objects
-            dcgm_common
-            dcgm_entity_types
-            dcgm_logging
-            dcgm_mutex
-            dcgm
-            Catch2::Catch2
-            ${CMAKE_THREAD_LIBS_INIT}
-            fmt::fmt
-            rt
-            dl
-    )
-
-    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-        catch_discover_tests(sysmontests EXTRA_ARGS --use-colour yes)
-    endif()
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(sysmontests EXTRA_ARGS --colour-mode ansi)
 endif()

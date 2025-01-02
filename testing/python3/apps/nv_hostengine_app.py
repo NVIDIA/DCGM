@@ -32,7 +32,6 @@ class NvHostEngineApp(app_runner.AppRunner):
     paths = {
             "Linux_32bit": "./apps/x86/nv-hostengine",
             "Linux_64bit": "./apps/amd64/nv-hostengine",
-            "Linux_ppc64le": "./apps/ppc64le/nv-hostengine",
             "Linux_aarch64": "./apps/aarch64/nv-hostengine",
             "Windows_64bit": "./apps/amd64/nv-hostengine.exe"
             }
@@ -97,8 +96,10 @@ class NvHostEngineApp(app_runner.AppRunner):
             self.dcgm_trace_fname = os.path.join(logger.log_dir, "app_%03d_dcgm_trace.log" % (self.process_nb))
             self.env["__DCGM_DBG_FILE"] = self.dcgm_trace_fname
             self.env["__DCGM_DBG_LVL"] = test_utils.loggingLevel
+            logger.nvvs_trace_log_filename = os.path.join(logger.log_dir, "app_%03d_nvvs_trace.log" % (self.process_nb))
         else:
             self.dcgm_trace_fname = None
+            logger.nvvs_trace_log_filename = None
 
         #logger.error("env: %s; heEnv: %s" % (str(self.env), str(heEnv)))
 

@@ -27,7 +27,7 @@ DCGM_EMBEDDED_HANDLE = c_void_p(0x7fffffff)
 
 # Utils
 _dcgmIntCheckReturn = dcgm_structs._dcgmCheckReturn
-dcgmDeviceConfig_t  = dcgm_structs.c_dcgmDeviceConfig_v1
+dcgmDeviceConfig_t  = dcgm_structs.c_dcgmDeviceConfig_v2
 dcgmRecvUpdates_t = dcgm_structs._dcgmRecvUpdates_t
 dcgmStatsFileType_t = dcgm_structs_internal._dcgmStatsFileType_t
 dcgmInjectFieldValue_t = dcgm_structs_internal.c_dcgmInjectFieldValue_v1
@@ -137,6 +137,20 @@ def dcgmGetNvmlInjectFuncCallCount(dcgmHandle, funcCallInfo):
 def dcgmResetNvmlInjectFuncCallCount(dcgmHandle):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmResetNvmlInjectFuncCallCount")
     ret = fn(dcgmHandle)
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmRemoveNvmlInjectedGpu(dcgmHandle, uuid):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmRemoveNvmlInjectedGpu")
+    ret = fn(dcgmHandle, uuid)
+    _dcgmIntCheckReturn(ret)
+    return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmRestoreNvmlInjectedGpu(dcgmHandle, uuid):
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmRestoreNvmlInjectedGpu")
+    ret = fn(dcgmHandle, uuid)
     _dcgmIntCheckReturn(ret)
     return ret
 
@@ -256,3 +270,17 @@ def dcgmResumeTelemetryForDiag(dcgmHandle):
     ret = fn(dcgmHandle)
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
+
+@dcgm_agent.ensure_byte_strings()
+def dcgmNvswitchGetBackend(dcgmHandle):
+    BACKEND_NAME_LENGTH = 10
+    fn = dcgm_structs._dcgmGetFunctionPointer("dcgmNvswitchGetBackend")
+    active = c_bool()
+    backendName = (c_char * BACKEND_NAME_LENGTH)()
+    backendNameLength = c_uint(BACKEND_NAME_LENGTH)
+
+    ret = fn(dcgmHandle, byref(active), backendName, backendNameLength)
+    dcgm_structs._dcgmCheckReturn(ret)
+
+    backendNameStr = cast(backendName, c_char_p)
+    return backendNameStr.value.decode('utf-8')

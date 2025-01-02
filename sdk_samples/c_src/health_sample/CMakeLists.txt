@@ -14,4 +14,4 @@
 
 add_executable(health_sample)
 target_sources(health_sample PRIVATE health_sample.cpp)
-target_link_libraries(health_sample PRIVATE $<BUILD_INTERFACE:dcgm> $<INSTALL_INTERFACE:Dcgm::dcgm>)
+target_link_libraries(health_sample PRIVATE DCGM::dcgm)

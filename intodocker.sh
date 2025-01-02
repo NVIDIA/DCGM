@@ -14,21 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e -o pipefail -o nounset
+set -o errexit -o pipefail -o noclobber -o nounset
 
+if [[ ${DEBUG_BUILD_SCRIPT:-0} -eq 1 ]]; then
+    PS4='$LINENO: ' # to see line numbers
+    set -xv
+fi
+
+# Architecture suffix will be appended to the image name
+# -x86_64 for x86_64
+# -aarch64 for aarch64
 DCGM_DOCKER_IMAGE=${DCGM_DOCKER_IMAGE:-dcgmbuild}
-
-ABSPATH=`realpath ${0}`
-DIR=$(dirname ${ABSPATH})
-PROJECT=$(basename ${DIR})
-REMOTE_DIR=/workspaces/${PROJECT}
-MOUNT_OPTIONS=""
 
 function usage() {
     echo "Handling DCGM docker build image
 Usage: ${0} [options] [command]
     Where options are:
-        -a | --arch            : Architecture to build for (amd64|x86_64, aarch64|arm64, ppc64le|powerpc64le|ppc)
+        -a | --arch NAME       : Architecture to build for (amd64|x86_64, aarch64|arm64)
+        -e | --env VAR=VALUE   : Environment variables for the launched container
         -n | --name            : Print docker image name and exit
         -h | --help            : Print this help and exit
 
@@ -36,78 +39,98 @@ Usage: ${0} [options] [command]
 "
 }
 
-LONG_OPTS=name,arch:
-SHORT_OPTS=n,a:
+LONG_OPTS=name,arch:,env:,help
+SHORT_OPTS=n,a:,e:,h
 
 ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-    echo "Failed to parse arguments"
+    >&2 echo "Failed to parse arguments"
     exit 1
 fi
 
 eval set -- "${PARSED}"
 
-TARGET_ARCH=$(uname -m) # Default to host architecture
 PRINT_NAME_ONLY=0
+TARGET_ARCH=$(uname -m) # Default to host architecture
+
+declare -a docker_args
+
 while true; do
-    case "${1}" in
-        -h | --help)
-            usage
-            exit 0
-            ;;
-        -n | --name)
-            PRINT_NAME_ONLY=1
-            shift
-            ;;
-        -a | --arch)
-            TARGET_ARCH="${2}"
-            shift 2
-            ;;
-        --)
-            shift
-            break
-            ;;
+    case $1 in
+    -a | --arch)
+        TARGET_ARCH=$2
+        shift 2
+        ;;
+    -e | --env)
+        docker_args+=(--env "$2")
+        shift 2
+        ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    -n | --name)
+        PRINT_NAME_ONLY=1
+        shift
+        ;;
+    --)
+        shift
+        break
+        ;;
+    *) ;;
     esac
 done
 
-if [[ -t 0 ]]; then
-    DOCKER_ARGS=-it
-fi
-
-case "${TARGET_ARCH}" in
-    amd64|x86_64|x64)
-        TARGET_ARCH="x86_64"
-        ;;
-    aarch64|arm64|arm)
-        TARGET_ARCH="aarch64"
-        ;;
-    ppc64le|powerpc64le|ppc)
-        TARGET_ARCH="powerpc64le"
-        ;;
-    *)
-        echo "Unknown architecture ${TARGET_ARCH}"
-        exit 1
-        ;;
-
-esac
-
-DCGM_DOCKER_IMAGE=${DCGM_DOCKER_IMAGE}-${TARGET_ARCH}
-
-if [[ ${PRINT_NAME_ONLY} -eq 1 ]]; then
-    echo ${DCGM_DOCKER_IMAGE}
+if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -ne 0 ]]; then
     exit
 fi
 
-if [[ ${DCGM_BUILD_INSIDE_DOCKER:-} -ne 1 ]]; then
-    docker run --rm -u "$(id -u)":"$(id -g)" ${DOCKER_ARGS:-} \
-        --group-add $(stat -c '%g' /var/run/docker.sock) \
-        -v "${DIR}":"${REMOTE_DIR}" \
-        -v /run/docker.sock:/run/docker.sock:rw \
-        -w "${REMOTE_DIR}" \
-        ${MOUNT_OPTIONS} \
-        -e "DCGM_BUILD_INSIDE_DOCKER=1" \
-        -e "NPROC=$(nproc)" \
-        ${DCGM_DOCKER_IMAGE} "$@"
-else
-    eval "$@"
+image=${DCGM_DOCKER_IMAGE}
+
+case "${TARGET_ARCH,,}" in
+amd64 | x86_64 | x64)
+    TARGET_ARCH="x86_64"
+    image="${image}-x86_64"
+    ;;
+aarch64 | arm64 | arm)
+    TARGET_ARCH="aarch64"
+    image="${image}-aarch64"
+    ;;
+*)
+    >&2 echo "Unknown architecture $TARGET_ARCH"
+
+    exit 1
+    ;;
+esac
+
+
+if [[ -z "$image" ]]; then
+    >&2 echo "Error: Cannot find a proper docker image to use"
+    exit 1
 fi
+
+if [[ $PRINT_NAME_ONLY -eq 1 ]]; then
+    echo $image
+    exit
+fi
+
+SCRIPTPATH="$(realpath "$(cat /proc/$$/cmdline | cut --delimiter="" --fields=2)")"
+DIR="$(dirname "$SCRIPTPATH")"
+PROJECT="$(basename "$DIR")"
+REMOTE_DIR="/workspaces/$PROJECT"
+
+docker_args+=(
+    --net=host
+    --rm
+    --volume "$DIR:$REMOTE_DIR"
+    --workdir "$REMOTE_DIR")
+
+if [[ -t 0 ]]; then
+    docker_args+=(--interactive --tty)
+fi
+
+if ! (docker info -f '{{println .SecurityOptions}}' | grep rootless); then
+    docker_args+=(--user $(id -u):$(id -g))
+fi
+
+docker run "${docker_args[@]}" $image "$@"

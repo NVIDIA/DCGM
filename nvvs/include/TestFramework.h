@@ -31,21 +31,23 @@
 #include "GoldenValueCalculator.h"
 #include "GpuSet.h"
 #include "NvvsStructs.h"
-#include "Output.h"
 #include "PluginLib.h"
+#include "SoftwarePluginFramework.h"
 #include "Test.h"
+
+#include <DcgmNvvsResponseWrapper.h>
+#include <dcgm_structs.h>
 
 class TestFramework
 {
 public:
     TestFramework();
-    TestFramework(bool jsonOutput, GpuSet *gpuSet);
+    TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet);
     ~TestFramework();
 
     // methods
-    void go(std::vector<std::unique_ptr<GpuSet>> &gpuSet);
+    void Go(std::vector<std::unique_ptr<EntitySet>> &entitySets);
     void loadPlugins();
-    void addInfoStatement(const std::string &info);
 
     // Getters
     std::vector<Test *> getTests()
@@ -53,14 +55,18 @@ public:
         return m_testList;
     }
 
-    std::map<std::string, std::vector<Test *>> getTestGroups()
+    std::map<std::string, std::vector<Test *>> GetTestCategories()
     {
-        return testGroup;
+        return m_testCategories;
     }
 
     void LoadPlugins();
 
-    int GetPluginIndex(Test::testClasses_enum classNum, const std::string &pluginName);
+    /*
+     * Runs the software plugin as a seperate entity
+     */
+    void runSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
+                           dcgmDiagPluginAttr_v1 const *pluginAttr);
 
     /********************************************************************/
     /*
@@ -68,7 +74,7 @@ public:
      *
      * Transforms ' ' and '_' depending on the value of "reverse"
      */
-    std::string GetCompareName(Test::testClasses_enum classNum, const std::string &testName, bool reverse = false);
+    std::string GetCompareName(const std::string &pluginName, bool reverse = false);
 
     /********************************************************************/
     /*
@@ -76,35 +82,35 @@ public:
      */
     std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> GetSubtestParameters();
 
-    std::string GetPluginNameFromTestName(std::string const &testName) const;
+    dcgmReturn_t SetDiagResponseVersion(unsigned int version);
 
 protected:
     std::vector<Test *> m_testList;
-    std::map<std::string, std::vector<Test *>> testGroup;
+    std::map<std::string, std::vector<Test *>> m_testCategories;
     std::list<void *> dlList;
-    Output *m_output;
     bool skipRest;
     mode_t m_nvvsBinaryMode;
     uid_t m_nvvsOwnerUid;
     gid_t m_nvvsOwnerGid;
     unsigned int m_validGpuId;
+    std::unique_ptr<SoftwarePluginFramework> m_softwarePluginFramework;
+    DcgmNvvsResponseWrapper m_diagResponse;
+    unsigned int m_completedTests;
+    unsigned int m_numTestsToRun;
 
     // new plugin loading
     std::vector<std::unique_ptr<PluginLib>> m_plugins;
-    std::vector<dcgmDiagPluginGpuInfo_t> m_gpuInfo;
+    std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfo;
     std::vector<std::string> m_skipLibraryList;
-    // As one plugin can provide more than one test, this map holds the test name to the name of its belonging.
-    std::unordered_map<std::string, std::string> m_testNameToPluginName;
 
     // methods
     std::string GetTestDisplayName(dcgmPerGpuTestIndices_t index);
-    void insertIntoTestGroup(std::string, Test *);
-    void goList(Test::testClasses_enum suite,
+    void InsertIntoTestCategory(std::string, Test *);
+    void GoList(Test::testClasses_enum suite,
                 std::vector<Test *> testsList,
-                std::vector<Gpu *> gpuList,
+                EntitySet *entitySet,
                 bool checkFileCreation);
     void LoadLibrary(const char *libPath, const char *libName);
-    void GetAndOutputHeader(Test::testClasses_enum classNum);
     void StartStatWatches(DcgmRecorder &dcgmRecorder, int pluginIndex, std::vector<Gpu *> gpuList);
     void EndStatWatches(DcgmRecorder &dcgmRecorder,
                         int pluginIndex,
@@ -121,7 +127,7 @@ protected:
     std::string GetPluginCudalessDir();
 
     /********************************************************************/
-    void PopulateGpuInfoForPlugins(std::vector<Gpu *> &gpuList, std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfo);
+    std::vector<dcgmDiagPluginEntityInfo_v1> PopulateEntityInfoForPlugins(EntitySet *entitySet);
 
     /********************************************************************/
     /*
@@ -155,8 +161,11 @@ protected:
      */
     bool WillExecutePulseTest(std::vector<Test *> &testsList) const;
 
-    /***************************PROTECTED********************************/
-protected:
+    /********************************************************************/
+    /*
+     * Writes dcgmDiagStatus_t to the NVVS channel
+     */
+    void WriteDiagStatusToChannel(std::string_view pluginName, unsigned int errorCode) const;
 };
 
 #endif //  _NVVS_NVVS_TestFramework_H

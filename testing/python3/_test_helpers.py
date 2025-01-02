@@ -50,6 +50,22 @@ class _MaybeMock:
             return getattr(mock, attr)
         return self
 
+def KeywordizeLastArgument(keywordName):
+    '''
+    This takes the last passed positional argument and calls the decorated
+    function with it as a keyword parameter of the name specified. This helps
+    with the positional arguments inserted by mock.patch (and, by extension,
+    maybemock.patch) to work with amortized decorators.
+    '''
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            kwargs[keywordName] = args[-1]
+            args = args[:-1]
+            fn(*args, **kwargs)
+        return wrapper
+    return decorator
+    
 maybemock = _MaybeMock()
 
 DCGM_NVML_NOT_EXIST_MSG = "dcgm_nvml not presented."

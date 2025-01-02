@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #include "TestTopology.h"
+#include <cstring>
 #include <ctime>
 #include <iostream>
+#include <memory>
 #include <stddef.h>
 
 TestTopology::TestTopology()
@@ -80,17 +82,18 @@ int TestTopology::TestTopologyDevice()
 {
     dcgmReturn_t result = DCGM_ST_OK;
     dcgmDeviceTopology_t topologyInfo;
-    dcgmGroupInfo_t groupIdInfo = {};
+    std::unique_ptr<dcgmGroupInfo_t> groupIdInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(groupIdInfo.get(), 0, sizeof(*groupIdInfo));
 
-    groupIdInfo.version = dcgmGroupInfo_version;
-    result              = dcgmGroupGetInfo(m_dcgmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, &groupIdInfo);
+    groupIdInfo->version = dcgmGroupInfo_version;
+    result               = dcgmGroupGetInfo(m_dcgmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, groupIdInfo.get());
     if (result != DCGM_ST_OK)
         return -1;
 
     result = dcgmGetDeviceTopology(m_dcgmHandle, m_gpus[0], &topologyInfo);
     if (result == DCGM_ST_NOT_SUPPORTED && m_gpus.size() < 2)
     {
-        printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo.count);
+        printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo->count);
         return 0;
     }
     else if (result != DCGM_ST_OK)
@@ -100,7 +103,20 @@ int TestTopology::TestTopologyDevice()
     }
 
     // the GPU should have *some* affinity
-    if (topologyInfo.cpuAffinityMask[0] == 0)
+
+    bool affinity = false;
+
+    for (unsigned int index = 0; index < sizeof(topologyInfo.cpuAffinityMask) / sizeof(topologyInfo.cpuAffinityMask[0]);
+         index++)
+    {
+        if (topologyInfo.cpuAffinityMask[index] != 0)
+        {
+            affinity = true;
+            break;
+        }
+    }
+
+    if (!affinity)
     {
         fprintf(stderr, "CPU affinity mask of gpuId %u == 0\n", m_gpus[0]);
         return 1;
@@ -124,16 +140,17 @@ int TestTopology::TestTopologyGroup()
 {
     dcgmReturn_t result = DCGM_ST_OK;
     dcgmGroupTopology_t groupInfo;
-    dcgmGpuGrp_t groupId        = 0;
-    dcgmGroupInfo_t groupIdInfo = {};
+    dcgmGpuGrp_t groupId                         = 0;
+    std::unique_ptr<dcgmGroupInfo_t> groupIdInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(groupIdInfo.get(), 0, sizeof(*groupIdInfo));
 
     // Create a group that consists of all GPUs
     result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
     if (result != DCGM_ST_OK)
         return -1;
 
-    groupIdInfo.version = dcgmGroupInfo_version;
-    result              = dcgmGroupGetInfo(m_dcgmHandle, groupId, &groupIdInfo);
+    groupIdInfo->version = dcgmGroupInfo_version;
+    result               = dcgmGroupGetInfo(m_dcgmHandle, groupId, groupIdInfo.get());
     if (result != DCGM_ST_OK)
         return -1;
 
@@ -142,7 +159,7 @@ int TestTopology::TestTopologyGroup()
     result = dcgmGetGroupTopology(m_dcgmHandle, groupId, &groupInfo);
     if (result == DCGM_ST_NOT_SUPPORTED && m_gpus.size() < 2)
     {
-        printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo.count);
+        printf("Ignoring NOT_SUPPORTED with only %u GPU(s)", groupIdInfo->count);
         return 0;
     }
     else if (result != DCGM_ST_OK)

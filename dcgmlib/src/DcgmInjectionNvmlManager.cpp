@@ -63,6 +63,16 @@ dcgmReturn_t DcgmInjectionNvmlManager::ResetFuncCallCount()
     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlResetFuncCallCount());
 }
 
+dcgmReturn_t DcgmInjectionNvmlManager::RemoveGpu(char const *uuid)
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlRemoveGpu(uuid));
+}
+
+dcgmReturn_t DcgmInjectionNvmlManager::RestoreGpu(char const *uuid)
+{
+    return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlRestoreGpu(uuid));
+}
+
 #endif
 
 dcgmReturn_t DcgmInjectionNvmlManager::CreateDevice(unsigned int index)

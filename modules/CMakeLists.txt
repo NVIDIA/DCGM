@@ -11,47 +11,49 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
-
-add_library(modules_interface INTERFACE)
 
 target_link_libraries(modules_interface
-  INTERFACE
-    dcgm_interface
-    module_common_interface
-    module_common_interface
-)
+    INTERFACE
+        dcgm_interface
+        module_common_interface
+        module_common_interface)
+
 target_include_directories(modules_interface
-  INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+    INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_library(modules_objects STATIC)
 target_link_libraries(modules_objects
-  PUBLIC
-    modules_interface
-    module_common_objects
-)
-target_sources(modules_objects
-  PRIVATE
-    DcgmModuleApi.cpp
-    DcgmModule.cpp
-    core/DcgmModuleCore.cpp
-)
+    PUBLIC
+        modules_interface
+        module_common_objects)
 
-set(LOCAL_CURRENT_LIST_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "")
+target_sources(modules_objects
+    PRIVATE
+        DcgmModuleApi.cpp
+        DcgmModule.cpp
+        core/DcgmModuleCore.cpp)
 
 function(define_dcgm_module lib_name)
-  target_link_libraries(${lib_name}
-    PRIVATE
-      modules_objects
-      dcgm_common
-      dcgm_logging
-      dcgm_mutex
-      dcgm
-      fmt::fmt
-  )
-  target_compile_definitions(${lib_name} PRIVATE DCGM_API_EXPORT=1)
-  target_link_options(${lib_name} PRIVATE -Wl,--version-script,${LOCAL_CURRENT_LIST_DIR}/dcgm_modules.linux_def
-  )
+    target_link_libraries(${lib_name}
+      PRIVATE
+        dcgm
+        dcgm_common
+        dcgm_logging
+        dcgm_mutex
+        fmt::fmt
+        modules_objects)
+
+    target_compile_definitions(${lib_name} PRIVATE DCGM_API_EXPORT=1)
+    target_link_options(${lib_name} PRIVATE -Wl,--version-script,${PROJECT_SOURCE_DIR}/modules/dcgm_modules.linux_def)
 endfunction()
+
+add_subdirectory(common)
+add_subdirectory(config)
+add_subdirectory(diag)
+add_subdirectory(health)
+add_subdirectory(introspect)
+add_subdirectory(nvswitch)
+add_subdirectory(policy)
+add_subdirectory(profiling)
+add_subdirectory(sysmon)
+add_subdirectory(vgpu)

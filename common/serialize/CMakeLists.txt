@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_package(Jsoncpp REQUIRED)
-
-add_library(serialize_interface INTERFACE)
 target_include_directories(serialize_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(serialize_interface INTERFACE JsonCpp::JsonCpp)
 
-add_library(serialize STATIC DcgmJsonSerialize.cpp DcgmJsonSerialize.hpp)
+target_sources(serialize PRIVATE DcgmJsonSerialize.cpp DcgmJsonSerialize.hpp)
 target_link_libraries(serialize PUBLIC serialize_interface dcgm_logging)

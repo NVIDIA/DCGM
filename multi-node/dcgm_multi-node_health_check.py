@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,10 +18,13 @@ import argparse
 import json
 import os
 import multiprocessing
-import sys
+import psutil
+import socket
 import subprocess
+import sys
 import time
 
+import dcgm_fields
 import dcgm_structs
 import pydcgm
 import DcgmDiag
@@ -239,24 +244,24 @@ def parse_nccl_output(raw_output, minBandwidthRequired, minAlgBandwidthRequired)
     maxBusBW = [0, 0]
     numWrong = [0, 0]
 
-'''
+    '''
     Each line in the output will have 13 tokens; Here's what each token / position is:
-size  = 0
-count = 1
-type  = 2
-redop = 3
-root = 4
-out of place
-time = 5
-algbw = 6
-busbw = 7
-Number wrong = 8
-in place
-time = 9
-algbw = 10
-busbw = 11
-Number wrong = 12
-'''
+    size  = 0
+    count = 1
+    type  = 2
+    redop = 3
+    root = 4
+    out of place
+    time = 5
+    algbw = 6
+    busbw = 7
+    Number wrong = 8
+    in place
+    time = 9
+    algbw = 10
+    busbw = 11
+    Number wrong = 12
+    '''
     
     for line in output_lines:
         tokens = line.split() # split on whitespace
@@ -325,6 +330,15 @@ def get_binary_name(args, operation):
 
     raise ValueError('Invalid operation: %s' % str(operation))
 
+def get_network_interface_name():
+    # Bash command to get interface: `$(ip route get 8.8.8.8 | sed -E 's/.*?dev (\S+) .*/\1/;t;d')`
+    dummyIpAddr = '8.8.8.8'
+    raw_output = subprocess.check_output(['ip', '-o', 'route', 'get', dummyIpAddr], universal_newlines=True)
+    output = raw_output.split()
+    if len(output) < 10 or output[0] != dummyIpAddr:
+        raise ValueError("Couldn't find the IP address! ip -o route get %s returned '%s'. Please set the network interface name for MPI communications using --network-interface." % (dummyIpAddr, raw_output))
+    return output[4]
+
 def create_nccl_command(args, node_list, operation):
     node_counts = get_node_counts(node_list)
 
@@ -340,8 +354,8 @@ def create_nccl_command(args, node_list, operation):
                 nodes_str = tmp
             total_np = total_np + node_counts[node]
 
-        cmd = "mpirun -np %d --oversubscribe --bind-to numa -H %s -x NCCL_DEBUG=WARN --mca btl tcp,self %s %s -g1" % \
-               (total_np, nodes_str, get_binary_name(args, operation), NCCL_ARGS)
+        cmd = "mpirun -np %d --oversubscribe --bind-to numa -H %s -x NCCL_DEBUG=WARN --mca btl_tcp_if_include %s %s %s -g1" % \
+               (total_np, nodes_str, args.networkInterface, get_binary_name(args, operation), NCCL_ARGS)
         return cmd
     else:
         # Single-node job
@@ -400,49 +414,53 @@ def launch_nccl_tests(args, node_list):
     return errors, False
 
 def get_test_name(index):
+    # This is valid only for diagResponse_v10 and earlier
     if index == dcgm_structs.DCGM_MEMORY_INDEX:
         return "Memory"
-    elif index == DCGM_DIAGNOSTIC_INDEX:
+    elif index == dcgm_structs.DCGM_DIAGNOSTIC_INDEX:
         return "Diagnostic"
-    elif index == DCGM_PCI_INDEX:
+    elif index == dcgm_structs.DCGM_PCI_INDEX:
         return "PCIe"
-    elif index == DCGM_SM_STRESS_INDEX:
+    elif index == dcgm_structs.DCGM_SM_STRESS_INDEX:
         return "SM Stress"
-    elif index == DCGM_TARGETED_STRESS_INDEX:
+    elif index == dcgm_structs.DCGM_TARGETED_STRESS_INDEX:
         return "Targeted Stress"
-    elif index == DCGM_TARGETED_POWER_INDEX:
+    elif index == dcgm_structs.DCGM_TARGETED_POWER_INDEX:
         return "Targeted Power"
-    elif index == DCGM_MEMORY_BANDWIDTH_INDEX:
+    elif index == dcgm_structs.DCGM_MEMORY_BANDWIDTH_INDEX:
         return "Memory Bandwidth"
-    elif index == DCGM_MEMTEST_INDEX:
+    elif index == dcgm_structs.DCGM_MEMTEST_INDEX:
         return "Memtest"
-    elif index == DCGM_PULSE_TEST_INDEX:
+    elif index == dcgm_structs.DCGM_PULSE_TEST_INDEX:
         return "Pulse Test"
-    elif index == DCGM_EUD_TEST_INDEX:
+    elif index == dcgm_structs.DCGM_EUD_TEST_INDEX:
         return "EUD"
     else:
         return "Unknown %d" % index
 
 def inspect_response_for_errors(response, errors, hostname):
-    if len(response.systemError.msg):
-        errors.append(HCError(HC_TEST_TYPE_DIAG, response.systemError.msg, hostname=hostname, testname="System"))
-
-    for i in range(0, dcgm_structs.LEVEL_ONE_MAX_RESULTS):
-        if response.levelOneResults[i].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
+    """Collect any errors from all plugins, including system errors"""
+    for errIdx in range(response.numErrors):
+        curErr = response.errors[errIdx]
+        if curErr.testId == dcgm_structs.DCGM_DIAG_RESPONSE_SYSTEM_ERROR:
+            testName = "System"
             errors.append(HCError(HC_TEST_TYPE_DIAG,
-                                  response.levelOneResults[i].error[0].msg,
+                                  curErr.msg,
                                   hostname=hostname,
-                                  testName="Software"))
-
-    for i in range(0, response.gpuCount):
-        for j in range(0, dcgm_structs.DCGM_PER_GPU_TEST_COUNT_V8):
-            if response.perGpuResponses[i].results[j].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
-                errors.append(HCError(HC_TEST_TYPE_DIAG,
-                                      response.perGpuResponses[i].results[j].error[0].msg,
-                                      hostname=hostname,
-                                      gpuId=i,
-                                      testName=get_test_name(j)))
-
+                                  testName=testName))
+        elif curErr.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU:
+            testName = response.tests[curErr.testId].name
+            errors.append(HCError(HC_TEST_TYPE_DIAG,
+                                  curErr.msg,
+                                  hostname=hostname,
+                                  gpuId=curErr.entity.entityId,
+                                  testName=testName))
+        else:
+            testName = response.tests[curErr.testId].name
+            errors.append(HCError(HC_TEST_TYPE_DIAG,
+                                  curErr.msg,
+                                  hostname=hostname,
+                                  testName=testName))
     return
 
 def run_diagnostic_on_host(args, hostname, gpuIds, queue):
@@ -606,6 +624,7 @@ def process_command_line():
     general_group.add_argument('-t', '--timeout', dest='timeout', type=int)
     general_group.add_argument('--nccl-bin-path', dest='ncclPath', type=str)
     general_group.add_argument('-j', '--json', dest='json', type=bool, default=True)
+    general_group.add_argument('--network-interface', dest='networkInterface', default=get_network_interface_name())
 
     me_group = parser.add_mutually_exclusive_group(required=True)
     # Specify the hostname for the nv-hostengine connection. Default is None, resulting in an embedded hostengine.

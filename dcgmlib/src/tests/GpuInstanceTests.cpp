@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <DcgmGpuInstance.h>
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 TEST_CASE("GpuInstance: DriveGpuInstanceName")
 {
@@ -54,7 +54,7 @@ TEST_CASE("GpuInstance: ProfileType Check")
 
         // The NVML GPU instance profiles start at 0 and count up. The DCGM profiles need to subtract their offset
         // in order to match.
-        REQUIRE(dgi.GetMigProfileType() - DcgmMigProfileGpuInstanceSlice1 == i);
+        REQUIRE(dgi.GetMigProfileType() - DcgmMigProfileGpuInstanceSlice1 == static_cast<int>(i));
     }
 
     DcgmGpuInstance dgi(DcgmNs::Mig::GpuInstanceId { 0 },

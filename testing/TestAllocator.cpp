@@ -31,7 +31,7 @@ TestAllocator::TestAllocator()
 TestAllocator::~TestAllocator()
 {}
 
-int TestAllocator::Init(const TestDcgmModuleInitParams &initParams)
+int TestAllocator::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }

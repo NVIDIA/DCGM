@@ -31,8 +31,18 @@ extern const std::string_view envName;
 extern const std::string_view pageRetirementName;
 extern const std::string_view graphicsName;
 extern const std::string_view inforomName;
+extern const std::string_view fabricManagerName;
 
 extern const std::string_view swTestNames[];
+
+/**
+ * Used to differentiate different response message types.
+ */
+enum class MsgType
+{
+    Info, //!< Informational message
+    Error //!< Error message
+};
 
 /*****************************************************************************/
 /*
@@ -45,77 +55,45 @@ public:
     DcgmDiagResponseWrapper();
 
     /*****************************************************************************/
-    void InitializeResponseStruct(unsigned int numGpus);
+    void RecordSystemError(std::string const &errorStr) const;
 
     /*****************************************************************************/
-    void SetPerGpuResponseState(unsigned int testIndex,
-                                dcgmDiagResult_t result,
-                                unsigned int gpuIndex,
-                                unsigned int rc = 0);
-
-    /*****************************************************************************/
-    void AddPerGpuMessage(unsigned int testIndex, const std::string &msg, unsigned int gpuIndex, bool warning);
-
-    /*****************************************************************************/
-    void SetGpuIndex(unsigned int gpuIndex);
-
-    /*****************************************************************************/
-    void RecordSystemError(const std::string &errorStr) const;
-
-    /*****************************************************************************/
-    void SetGpuCount(unsigned int gpuCount) const;
-
-    /*****************************************************************************/
-    void RecordDcgmVersion(const std::string &version);
-
-    /*****************************************************************************/
-    void RecordDevIds(const std::vector<std::string> &devIds);
-
-    /*****************************************************************************/
-    void RecordGpuSerials(const std::vector<std::pair<unsigned int, std::string>> &devSerials);
-
-    /*****************************************************************************/
-    void RecordDriverVersion(const std::string &driverVersion);
-
-    /*****************************************************************************/
-    static unsigned int GetBasicTestResultIndex(std::string_view const &testname);
-
-    /*****************************************************************************/
+    dcgmReturn_t SetVersion11(dcgmDiagResponse_v11 *response);
     dcgmReturn_t SetVersion10(dcgmDiagResponse_v10 *response);
     dcgmReturn_t SetVersion9(dcgmDiagResponse_v9 *response);
     dcgmReturn_t SetVersion8(dcgmDiagResponse_v8 *response);
     dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
 
     /*****************************************************************************/
-    dcgmReturn_t AddErrorDetail(unsigned int gpuIndex,
-                                unsigned int testIndex,
-                                const std::string &testname,
-                                dcgmDiagErrorDetail_v2 &ed,
-                                unsigned int edIndex,
-                                dcgmDiagResult_t result);
+    dcgmReturn_t SetResult(std::string_view data) const;
 
     /*****************************************************************************/
-    dcgmReturn_t AddInfoDetail(unsigned int gpuIndex,
-                               unsigned int testIndex,
-                               const std::string &testname,
-                               dcgmDiagErrorDetail_v2 &ed,
-                               dcgmDiagResult_t result);
+    bool HasTest(const std::string &pluginName) const;
 
     /*****************************************************************************/
-    void AddAuxData(unsigned int testIndex, const std::string &auxData);
+    dcgmReturn_t MergeEudResponse(DcgmDiagResponseWrapper &eudResponse);
 
-    /*****************************************************************************/
-    bool IsValidGpuIndex(unsigned int gpuIndex);
+    dcgmReturn_t AdoptEudResponse(DcgmDiagResponseWrapper &eudResponse);
 
+    bool AddCpuSerials();
+
+    std::string GetSystemErr() const;
+
+    unsigned int GetVersion() const;
+
+#ifndef __DIAG_UNIT_TESTING__
 private:
+#endif
     union
     {
-        dcgmDiagResponse_v10 *v10ptr; // A pointer to the version10 struct
-        dcgmDiagResponse_v9 *v9ptr;   // A pointer to the version9 struct
-        dcgmDiagResponse_v8 *v8ptr; // A pointer to the version8 struct
-        dcgmDiagResponse_v7 *v7ptr; // A pointer to the version7 struct
+        dcgmDiagResponse_v11 *v11ptr; // A pointer to the version11 struct
+        dcgmDiagResponse_v10 *v10ptr; //!< Deprecated. A pointer to the version10 struct
+        dcgmDiagResponse_v9 *v9ptr;   //!< Deprecated. A pointer to the version9 struct
+        dcgmDiagResponse_v8 *v8ptr;   //!< Deprecated. A pointer to the version8 struct
+        dcgmDiagResponse_v7 *v7ptr;   //!< Deprecated. A pointer to the version7 struct
     } m_response;
-    unsigned int m_version; // records the version of our dcgmDiagResponse_t
+
+    unsigned int m_version; //!< records the version of our dcgmDiagResponse_t
 
     /*****************************************************************************/
     bool StateIsValid() const;

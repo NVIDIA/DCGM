@@ -11,40 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-set(CTEST_USE_LAUNCHERS 1)
 
-find_package(Jsoncpp REQUIRED)
-find_package(Catch2 REQUIRED)
-find_package(fmt REQUIRED)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-include(CTest)
-include(Catch)
+add_executable(dcgmi_tests)
+target_link_libraries(
+    dcgmi_tests
+    PRIVATE
+        dcgmi_objects_without_main
+        dcgm
+        dcgm_common
+        Catch2::Catch2WithMain
+        ${JSONCPP_STATIC_LIBS}
+        fmt::fmt
+)
 
-if (BUILD_TESTING)
-    add_executable(dcgmi_tests)
-    target_link_libraries(
-        dcgmi_tests
-        PRIVATE
-            dcgmi_objects
-            dcgm
-            dcgm_common
-            dcgm_logging
-            dcgmmodulediag_common
-            Catch2::Catch2
-            ${JSONCPP_STATIC_LIBS}
-            fmt::fmt
-    )
+target_sources(
+    dcgmi_tests
+    PRIVATE
+        CommandLineParserTests.cpp
+        TopoTests.cpp
+)
 
-    target_sources(
-        dcgmi_tests
-        PRIVATE
-            DcgmiUnitTestsMain.cpp
-            TopoTests.cpp
-            CommandLineParserTests.cpp
-    )
-
-    if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-        catch_discover_tests(dcgmi_tests EXTRA_ARGS --use-colour yes)
-    endif()
-
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(dcgmi_tests EXTRA_ARGS --colour-mode ansi)
 endif()

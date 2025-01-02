@@ -267,8 +267,7 @@ public:
      */
     dcgmReturn_t VerifyAndUpdateGroupId(unsigned int *groupId) const;
 
-    DcgmLoggingSeverity_t GetLoggerSeverity(dcgm_connection_id_t connectionId,
-                                            loggerCategory_t logger = BASE_LOGGER) const;
+    DcgmLoggingSeverity_t GetLoggerSeverity(loggerCategory_t logger = BASE_LOGGER) const;
 
     /**
      * Returns DCGM entity id for the compute instance with given NVML indices.
@@ -367,6 +366,14 @@ public:
                                                  DcgmNs::Mig::Nvml::ComputeInstanceId const &computeInstanceId,
                                                  size_t *capacityGpcs,
                                                  size_t *usedGpcs);
+    /**
+     * Returns GPU instance hierarchy.
+     * @param migHierarchy[out]     hierarchy
+     * @return
+     *      \ref DCGM_ST_OK         Values were set successfully<br>
+     *      \ref DCGM_ST_*          Other generic errors<br>
+     */
+    dcgmReturn_t GetGpuInstanceHierarchy(dcgmMigHierarchy_v2 &migHierarchy);
 
     dcgmReturn_t GetServiceAccount(std::string &serviceAccount) const;
 

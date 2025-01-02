@@ -11,10 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(fmt REQUIRED)
-find_package(Jsoncpp REQUIRED)
 
-add_library(sysmon_interface INTERFACE)
 target_include_directories(sysmon_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sysmon_interface
     INTERFACE
@@ -26,7 +23,6 @@ target_link_libraries(sysmon_interface
         transport_interface
 )
 
-add_library(sysmon_objects STATIC)
 target_link_libraries(sysmon_objects
     PRIVATE
         sysmon_interface
@@ -45,7 +41,6 @@ target_sources(sysmon_objects
         ${SRCS}
 )
 
-add_library(dcgmmodulesysmon SHARED)
 define_dcgm_module(dcgmmodulesysmon)
 target_link_libraries(dcgmmodulesysmon
     PRIVATE
@@ -60,6 +55,5 @@ target_sources(dcgmmodulesysmon
     PRIVATE
         ${SRCS}
 )
-update_lib_ver(dcgmmodulesysmon)
 
 add_subdirectory(tests)

@@ -18,35 +18,41 @@
  */
 
 #include "DcgmHostEngineHandler.h"
-#include "DcgmLogging.h"
-#include "DcgmMetadataMgr.h"
-#include "DcgmModule.h"
-#include "DcgmModuleHealth.h"
-#include "DcgmModuleIntrospect.h"
-#include "DcgmModulePolicy.h"
-#include "DcgmSettings.h"
-#include "DcgmStatus.h"
-#include "dcgm_health_structs.h"
-#include "dcgm_helpers.h"
-#include "dcgm_nvswitch_structs.h"
-#include "dcgm_profiling_structs.h"
-#include "dcgm_sysmon_structs.h"
-#include "dcgm_util.h"
-#include "dlfcn.h" //dlopen, dlsym..etc
-#include "nvcmvalue.h"
+
+#include "DcgmCoreCommunication.h"
+#include "DcgmGroupManager.h"
+
+#include <DcgmLogging.h>
+#include <DcgmMetadataMgr.h>
+#include <DcgmModule.h>
+#include <DcgmModuleHealth.h>
+#include <DcgmModuleIntrospect.h>
+#include <DcgmModulePolicy.h>
+#include <DcgmSettings.h>
+#include <DcgmStatus.h>
+#include <dcgm_health_structs.h>
+#include <dcgm_helpers.h>
+#include <dcgm_nvswitch_structs.h>
+#include <dcgm_profiling_structs.h>
+#include <dcgm_structs.h>
+#include <dcgm_sysmon_structs.h>
+#include <dcgm_util.h>
+
+#include <dcgm_nvml.h>
+#include <nvcmvalue.h>
+
 #include <algorithm>
+#include <dlfcn.h> //dlopen, dlsym..etc
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 
-#include "DcgmCoreCommunication.h"
-#include "DcgmGroupManager.h"
-#include <dcgm_nvml.h>
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #include <nvml_injection.h>
 #include <ranges>
 #endif
+
 
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
 DcgmModuleCore DcgmHostEngineHandler::mModuleCoreObj;
@@ -92,34 +98,34 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
     std::vector<unsigned int> healthyGpus;
     std::set<unsigned int> unhealthyGpus;
     dcgmReturn_t dcgmReturn;
-    dcgm_health_msg_check_gpus_t msg;
+    std::unique_ptr<dcgm_health_msg_check_gpus_t> msg = std::make_unique<dcgm_health_msg_check_gpus_t>();
 
     /* Prepare a health check RPC to the health module */
-    memset(&msg, 0, sizeof(msg));
+    memset(msg.get(), 0, sizeof(*msg));
 
     if (gpuIds.size() > DCGM_MAX_NUM_DEVICES)
     {
         log_error("Too many GPU ids: {}. Truncating.", (int)gpuIds.size());
     }
 
-    msg.header.length     = sizeof(msg);
-    msg.header.moduleId   = DcgmModuleIdHealth;
-    msg.header.subCommand = DCGM_HEALTH_SR_CHECK_GPUS;
-    msg.header.version    = dcgm_health_msg_check_gpus_version;
+    msg->header.length     = sizeof(*msg);
+    msg->header.moduleId   = DcgmModuleIdHealth;
+    msg->header.subCommand = DCGM_HEALTH_SR_CHECK_GPUS;
+    msg->header.version    = dcgm_health_msg_check_gpus_version;
 
-    msg.systems          = DCGM_HEALTH_WATCH_ALL;
-    msg.startTime        = 0;
-    msg.endTime          = 0;
-    msg.response.version = dcgmHealthResponse_version4;
-    msg.numGpuIds        = std::min(gpuIds.size(), (size_t)DCGM_MAX_NUM_DEVICES);
+    msg->systems          = DCGM_HEALTH_WATCH_ALL;
+    msg->startTime        = 0;
+    msg->endTime          = 0;
+    msg->response.version = dcgmHealthResponse_version5;
+    msg->numGpuIds        = std::min(gpuIds.size(), (size_t)DCGM_MAX_NUM_DEVICES);
 
 
-    for (size_t i = 0; i < msg.numGpuIds; i++)
+    for (size_t i = 0; i < msg->numGpuIds; i++)
     {
-        msg.gpuIds[i] = gpuIds[i];
+        msg->gpuIds[i] = gpuIds[i];
     }
 
-    dcgmReturn = ProcessModuleCommand(&msg.header);
+    dcgmReturn = ProcessModuleCommand(&msg->header);
     if (dcgmReturn == DCGM_ST_MODULE_NOT_LOADED)
     {
         log_debug("RemoveUnhealthyGpus not filtering due to health module not being loaded.");
@@ -131,12 +137,12 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
         return;
     }
 
-    for (unsigned int i = 0; i < msg.response.incidentCount; i++)
+    for (unsigned int i = 0; i < msg->response.incidentCount; i++)
     {
-        if (msg.response.incidents[i].entityInfo.entityGroupId == DCGM_FE_GPU
-            && msg.response.incidents[i].health == DCGM_HEALTH_RESULT_FAIL)
+        if (msg->response.incidents[i].entityInfo.entityGroupId == DCGM_FE_GPU
+            && msg->response.incidents[i].health == DCGM_HEALTH_RESULT_FAIL)
         {
-            unhealthyGpus.insert(msg.response.incidents[i].entityInfo.entityId);
+            unhealthyGpus.insert(msg->response.incidents[i].entityInfo.entityId);
         }
     }
 
@@ -155,7 +161,7 @@ void DcgmHostEngineHandler::RemoveUnhealthyGpus(std::vector<unsigned int> &gpuId
     }
 
     gpuIds.clear();
-    gpuIds = healthyGpus;
+    gpuIds = std::move(healthyGpus);
 }
 
 /*****************************************************************************/
@@ -216,6 +222,32 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
             for (unsigned int i = 0; i < nvsMsg.switchCount; i++)
             {
                 entityPair.entityId = nvsMsg.switchIds[i];
+                entities.push_back(entityPair);
+            }
+            return DCGM_ST_OK;
+        }
+        case DCGM_FE_LINK:
+        {
+            dcgm_nvswitch_msg_get_links_t nvsMsg {};
+            nvsMsg.header.length     = sizeof(nvsMsg);
+            nvsMsg.header.version    = dcgm_nvswitch_msg_get_links_version;
+            nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
+            nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_LINK_IDS;
+
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                DCGM_LOG_ERROR << "ProcessModuleCommand of DCGM_NVSWITCH_SR_GET_LINK_IDS returned "
+                               << errorString(dcgmReturn);
+                return dcgmReturn;
+            }
+
+            dcgmGroupEntityPair_t entityPair;
+            entityPair.entityGroupId = DCGM_FE_LINK;
+
+            for (unsigned int i = 0; i < nvsMsg.linkCount; i++)
+            {
+                entityPair.entityId = nvsMsg.linkIds[i];
                 entities.push_back(entityPair);
             }
             return DCGM_ST_OK;
@@ -308,7 +340,8 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
             return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
 
         case DCGM_FE_LINK:
-            dcgm_link_t link;
+        {
+            dcgm_link_t link {};
 
             link.parsed.switchId = 0;
             link.raw             = entityId;
@@ -319,9 +352,6 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
                     return mpCacheManager->GetIsValidEntityId(entityGroupId, entityId);
 
                 case DCGM_FE_SWITCH:
-                    /**
-                     * Should probably compare against actual count
-                     */
                     if (link.parsed.index >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
                     {
                         return false;
@@ -337,7 +367,7 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
             }
 
             break;
-
+        }
         case DCGM_FE_SWITCH:
             break; /* Handle below */
 
@@ -486,12 +516,20 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
         if (std::find(dcgmGpuIds.begin(), dcgmGpuIds.end(), affinity_p->affinityMasks[elNum].dcgmGpuId)
             != dcgmGpuIds.end())
         {
-            memcpy(gpuAffinity.affinityMasks[gpuAffinity.numGpus].bitmask,
-                   affinity_p->affinityMasks[elNum].bitmask,
-                   sizeof(unsigned long) * DCGM_AFFINITY_BITMASK_ARRAY_SIZE);
-            gpuAffinity.affinityMasks[gpuAffinity.numGpus].dcgmGpuId = affinity_p->affinityMasks[elNum].dcgmGpuId;
-
-            gpuAffinity.numGpus++;
+            DCGM_CASSERT(DCGM_MAX_NUM_DEVICES <= DCGM_ARRAY_CAPACITY(gpuAffinity.affinityMasks), 1);
+            if (gpuAffinity.numGpus < DCGM_MAX_NUM_DEVICES)
+            {
+                memcpy(gpuAffinity.affinityMasks[gpuAffinity.numGpus].bitmask,
+                       affinity_p->affinityMasks[elNum].bitmask,
+                       sizeof(unsigned long) * DCGM_AFFINITY_BITMASK_ARRAY_SIZE);
+                gpuAffinity.affinityMasks[gpuAffinity.numGpus].dcgmGpuId = affinity_p->affinityMasks[elNum].dcgmGpuId;
+                gpuAffinity.numGpus++;
+            }
+            else
+            {
+                log_error("Maximum number of gpuAffinity masks {} reached", DCGM_MAX_NUM_DEVICES);
+                return DCGM_ST_MAX_LIMIT;
+            }
         }
     }
 
@@ -1115,6 +1153,11 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
     {
         switch (moduleCommand->subCommand)
         {
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3:
+                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v3));
+                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
+                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v3);
+                break;
             case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2:
                 msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v2));
                 moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
@@ -1429,7 +1472,7 @@ void DcgmHostEngineHandler::ShutdownNvml()
     if (m_usingInjectionNvml)
     {
 #ifdef INJECTION_LIBRARY_AVAILABLE
-        if (NVML_SUCCESS != injectionNvmlShutdown())
+        if (NVML_SUCCESS != nvmlShutdown())
         {
             log_error("Error: Failed to shutdown injection NVML");
         }
@@ -1454,7 +1497,7 @@ void DcgmHostEngineHandler::LoadNvml()
     if (injectionMode != nullptr)
     {
         m_usingInjectionNvml = true;
-        if (NVML_SUCCESS != injectionNvmlInit())
+        if (NVML_SUCCESS != nvmlInit_v2())
         {
             throw std::runtime_error("Error: Failed to initialize injected NVML");
         }
@@ -1512,15 +1555,15 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     m_modules[DcgmModuleIdCore].ptr    = &mModuleCoreObj;
     m_modules[DcgmModuleIdCore].msgCB  = mModuleCoreObj.GetMessageProcessingCallback();
     /* Set module filenames */
-    m_modules[DcgmModuleIdNvSwitch].filename   = "libdcgmmodulenvswitch.so.3";
-    m_modules[DcgmModuleIdVGPU].filename       = "libdcgmmodulevgpu.so.3";
-    m_modules[DcgmModuleIdIntrospect].filename = "libdcgmmoduleintrospect.so.3";
-    m_modules[DcgmModuleIdHealth].filename     = "libdcgmmodulehealth.so.3";
-    m_modules[DcgmModuleIdPolicy].filename     = "libdcgmmodulepolicy.so.3";
-    m_modules[DcgmModuleIdConfig].filename     = "libdcgmmoduleconfig.so.3";
-    m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.3";
-    m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.3";
-    m_modules[DcgmModuleIdSysmon].filename     = "libdcgmmodulesysmon.so.3";
+    m_modules[DcgmModuleIdNvSwitch].filename   = "libdcgmmodulenvswitch.so.4";
+    m_modules[DcgmModuleIdVGPU].filename       = "libdcgmmodulevgpu.so.4";
+    m_modules[DcgmModuleIdIntrospect].filename = "libdcgmmoduleintrospect.so.4";
+    m_modules[DcgmModuleIdHealth].filename     = "libdcgmmodulehealth.so.4";
+    m_modules[DcgmModuleIdPolicy].filename     = "libdcgmmodulepolicy.so.4";
+    m_modules[DcgmModuleIdConfig].filename     = "libdcgmmoduleconfig.so.4";
+    m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.4";
+    m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.4";
+    m_modules[DcgmModuleIdSysmon].filename     = "libdcgmmodulesysmon.so.4";
 
     /* Apply the denylist that was requested before we possibly load any modules */
     for (unsigned int i = 0; i < params.denyListCount; i++)
@@ -1540,20 +1583,17 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
         m_modules[params.denyList[i]].status = DcgmModuleStatusDenylisted;
     }
 
-    /* Make sure we can catch any signal sent to threads by DcgmThread */
-    DcgmThread::InstallSignalHandler();
-
     LoadNvml();
 
     if (m_nvmlLoaded)
     {
-    char driverVersion[80];
-    nvmlSystemGetDriverVersion(driverVersion, 80);
-    if (strcmp(driverVersion, DCGM_MIN_DRIVER_VERSION) < 0)
-    {
-        throw std::runtime_error("Driver " + std::string(driverVersion) + " is unsupported. Must be at least "
-                                 + std::string(DCGM_MIN_DRIVER_VERSION) + ".");
-    }
+        char driverVersion[80];
+        nvmlSystemGetDriverVersion(driverVersion, 80);
+        if (strcmp(driverVersion, DCGM_MIN_DRIVER_VERSION) < 0)
+        {
+            throw std::runtime_error("Driver " + std::string(driverVersion) + " is unsupported. Must be at least "
+                                     + std::string(DCGM_MIN_DRIVER_VERSION) + ".");
+        }
     }
 
     ret = DcgmFieldsInit();
@@ -1567,21 +1607,18 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     unsigned int nvmlDeviceCount = 0;
     if (m_nvmlLoaded)
     {
-    nvmlReturn_t nvmlSt          = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
-    if (nvmlSt != NVML_SUCCESS)
-    {
-        std::stringstream ss;
-        ss << "Unable to get the NVML device count. NVML Error: " << nvmlSt;
-        throw std::runtime_error(ss.str());
-    }
+        nvmlReturn_t nvmlSt = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
+        if (nvmlSt != NVML_SUCCESS)
+        {
+            throw std::runtime_error(fmt::format("Unable to get the NVML device count. NVML Error: {}", nvmlSt));
+        }
 
-    if (nvmlDeviceCount > DCGM_MAX_NUM_DEVICES)
-    {
-        std::stringstream ss;
-        ss << "DCGM only supports up to " << DCGM_MAX_NUM_DEVICES << " GPUs. " << nvmlDeviceCount
-           << " GPUs were found in the system.";
-        throw std::runtime_error(ss.str());
-    }
+        if (nvmlDeviceCount > DCGM_MAX_NUM_DEVICES)
+        {
+            throw std::runtime_error(fmt::format("DCGM only supports up to {} GPUs. {} GPUs were found in the system.",
+                                                 DCGM_MAX_NUM_DEVICES,
+                                                 nvmlDeviceCount));
+        }
     }
 
     mpCacheManager = new DcgmCacheManager();
@@ -2265,7 +2302,8 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     }
 
     /* Prepare a health response to be populated once we have startTime and endTime */
-    dcgmHealthResponse_v4 response {};
+    std::unique_ptr<dcgmHealthResponse_v5> response = std::make_unique<dcgmHealthResponse_v5>();
+    memset(response.get(), 0, sizeof(*response));
 
     /* Zero the structures */
     memset(&pidInfo->gpus[0], 0, sizeof(pidInfo->gpus));
@@ -2682,30 +2720,30 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         }
 
         /* Update the Health Response if we haven't retrieved it yet */
-        if (response.version == 0)
+        if (response->version == 0)
         {
-            HelperHealthCheck(groupId, startTime, endTime, response);
+            HelperHealthCheck(groupId, startTime, endTime, *(response));
         }
 
         /* Update the overallHealth of the system */
-        pidInfo->summary.overallHealth = response.overallHealth;
+        pidInfo->summary.overallHealth = response->overallHealth;
 
         unsigned int incidentCount = 0;
 
         singleInfo->overallHealth = DCGM_HEALTH_RESULT_PASS;
 
-        for (unsigned int incidentIndex = 0; incidentIndex < response.incidentCount; incidentIndex++)
+        for (unsigned int incidentIndex = 0; incidentIndex < response->incidentCount; incidentIndex++)
         {
-            if (response.incidents[incidentIndex].entityInfo.entityId == singleInfo->gpuId
-                && response.incidents[incidentIndex].entityInfo.entityGroupId == DCGM_FE_GPU)
+            if (response->incidents[incidentIndex].entityInfo.entityId == singleInfo->gpuId
+                && response->incidents[incidentIndex].entityInfo.entityGroupId == DCGM_FE_GPU)
             {
-                if (response.incidents[incidentIndex].health > singleInfo->overallHealth)
+                if (response->incidents[incidentIndex].health > singleInfo->overallHealth)
                 {
-                    singleInfo->overallHealth = response.incidents[incidentIndex].health;
+                    singleInfo->overallHealth = response->incidents[incidentIndex].health;
                 }
 
-                singleInfo->systems[incidentCount].system = response.incidents[incidentIndex].system;
-                singleInfo->systems[incidentCount].health = response.incidents[incidentIndex].health;
+                singleInfo->systems[incidentCount].system = response->incidents[incidentIndex].system;
+                singleInfo->systems[incidentCount].health = response->incidents[incidentIndex].health;
 
                 incidentCount++;
             }
@@ -2785,21 +2823,21 @@ dcgmReturn_t DcgmHostEngineHandler::JobStopStats(std::string const &jobId)
 dcgmReturn_t DcgmHostEngineHandler::HelperHealthCheck(unsigned int groupId,
                                                       long long startTime,
                                                       long long endTime,
-                                                      dcgmHealthResponse_v4 &response)
+                                                      dcgmHealthResponse_t &response)
 {
-    dcgm_health_msg_check_v4 msg;
+    std::unique_ptr<dcgm_health_msg_check_v5> msg = std::make_unique<dcgm_health_msg_check_v5>();
 
-    memset(&msg, 0, sizeof(msg));
-    msg.header.length     = sizeof(msg);
-    msg.header.moduleId   = DcgmModuleIdHealth;
-    msg.header.subCommand = DCGM_HEALTH_SR_CHECK_V4;
-    msg.header.version    = dcgm_health_msg_check_version4;
+    memset(msg.get(), 0, sizeof(*msg));
+    msg->header.length     = sizeof(*msg);
+    msg->header.moduleId   = DcgmModuleIdHealth;
+    msg->header.subCommand = DCGM_HEALTH_SR_CHECK_V5;
+    msg->header.version    = dcgm_health_msg_check_version5;
 
-    msg.groupId   = (dcgmGpuGrp_t)(uintptr_t)groupId;
-    msg.startTime = startTime;
-    msg.endTime   = endTime;
+    msg->groupId   = (dcgmGpuGrp_t)(uintptr_t)groupId;
+    msg->startTime = startTime;
+    msg->endTime   = endTime;
 
-    dcgmReturn_t dcgmReturn = ProcessModuleCommand(&msg.header);
+    dcgmReturn_t dcgmReturn = ProcessModuleCommand(&msg->header);
     if (dcgmReturn != DCGM_ST_OK)
     {
         if (dcgmReturn == DCGM_ST_MODULE_NOT_LOADED)
@@ -2813,7 +2851,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperHealthCheck(unsigned int groupId,
         return dcgmReturn;
     }
 
-    memcpy(&response, &msg.response, sizeof(response));
+    memcpy(&response, &msg->response, sizeof(response));
     return DCGM_ST_OK;
 }
 
@@ -2899,7 +2937,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     }
 
     /* Initialize a health response to be populated later */
-    dcgmHealthResponse_v4 response = {};
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
 
     /* Zero the structures */
     pJobInfo->numGpus = 0;
@@ -3467,30 +3505,30 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         }
 
         /* Update the Health Response if we haven't retrieved it yet */
-        if (response.version == 0)
+        if (response->version == 0)
         {
-            HelperHealthCheck(groupId, startTime, endTime, response);
+            HelperHealthCheck(groupId, startTime, endTime, *(response));
         }
 
         /* Update the overallHealth of the system */
-        pJobInfo->summary.overallHealth = response.overallHealth;
+        pJobInfo->summary.overallHealth = response->overallHealth;
 
         unsigned int incidentCount = 0;
 
         singleInfo->overallHealth = DCGM_HEALTH_RESULT_PASS;
 
-        for (unsigned int incidentIndex = 0; incidentIndex < response.incidentCount; incidentIndex++)
+        for (unsigned int incidentIndex = 0; incidentIndex < response->incidentCount; incidentIndex++)
         {
-            if (response.incidents[incidentIndex].entityInfo.entityId == singleInfo->gpuId
-                && response.incidents[incidentIndex].entityInfo.entityGroupId == DCGM_FE_GPU)
+            if (response->incidents[incidentIndex].entityInfo.entityId == singleInfo->gpuId
+                && response->incidents[incidentIndex].entityInfo.entityGroupId == DCGM_FE_GPU)
             {
-                if (response.incidents[incidentIndex].health > singleInfo->overallHealth)
+                if (response->incidents[incidentIndex].health > singleInfo->overallHealth)
                 {
-                    singleInfo->overallHealth = response.incidents[incidentIndex].health;
+                    singleInfo->overallHealth = response->incidents[incidentIndex].health;
                 }
 
-                singleInfo->systems[incidentCount].system = response.incidents[incidentIndex].system;
-                singleInfo->systems[incidentCount].health = response.incidents[incidentIndex].health;
+                singleInfo->systems[incidentCount].system = response->incidents[incidentIndex].system;
+                singleInfo->systems[incidentCount].health = response->incidents[incidentIndex].health;
 
                 incidentCount++;
             }

@@ -35,36 +35,47 @@ extern "C" {
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1 1
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_2 2 /* 2.4.0 -> 3.1.7 */
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* 3.1.8 -> 3.2.3 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* 3.2.5 -> 3.3.5 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5 5 /* Current version - 3.3.5 and later */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* 3.2.5 -> 3.3.6 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5 5 /* 3.3.7 -> 3.3.8 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6 6 /* Current version - 4.0 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6
 
 /* IMPORTANT:
  *
  * If you change any of the following struct or callback definitions, you need to increment
  * DCGM_DIAG_PLUGIN_INTERFACE_VERSION
  */
-
-
 typedef struct
 {
-    unsigned int gpuId                = 0;
     DcgmEntityStatus_t status         = {};
     dcgmDeviceAttributes_t attributes = {};
-} dcgmDiagPluginGpuInfo_t;
+} dcgmDiagPluginEntityGpuAux_v1;
+
+union dcgmDiagPluginEntityAux_v1
+{
+    dcgmDiagPluginEntityGpuAux_v1 gpu;
+};
 
 typedef struct
 {
-    unsigned int numGpus                               = 0;
-    dcgmDiagPluginGpuInfo_t gpus[DCGM_MAX_NUM_DEVICES] = {};
-} dcgmDiagPluginGpuList_t;
+    dcgmGroupEntityPair_t entity;
+    dcgmDiagPluginEntityAux_v1 auxField;
+} dcgmDiagPluginEntityInfo_v1;
+
+typedef struct
+{
+    unsigned int numEntities                                         = 0;
+    dcgmDiagPluginEntityInfo_v1 entities[DCGM_GROUP_MAX_ENTITIES_V2] = {};
+} dcgmDiagPluginEntityList_v1;
 
 #define DCGM_MAX_PLUGIN_DESC_LEN       128
 #define DCGM_MAX_PLUGIN_NAME_LEN       20
-#define DCGM_MAX_PLUGIN_TEST_NUM       6
 #define DCGM_MAX_PARAMETERS_PER_PLUGIN 64
 #define DCGM_MAX_PARAMETER_NAME_LEN    50
 #define DCGM_DIAG_MAX_VALUE_LEN        50
+static_assert(DCGM_MAX_PLUGIN_NAME_LEN <= std::min({ sizeof(dcgmDiagTestRun_v1().name),
+                                                     sizeof(dcgmDiagTestRun_v1().pluginName),
+                                                     sizeof(dcgmDiagResponse_v11().categories[0]) }));
 
 typedef enum
 {
@@ -85,19 +96,23 @@ typedef struct
 
 typedef struct
 {
-    char testeName[DCGM_MAX_PLUGIN_NAME_LEN];                                      //!< the test name
+    char testName[DCGM_MAX_PLUGIN_NAME_LEN];                                       //!< Test name
     char description[DCGM_MAX_PLUGIN_DESC_LEN];                                    //!< A short description of the test
     unsigned int numValidParameters;                                               //!< the number of valid parameters
     dcgmDiagPluginParameterInfo_t validParameters[DCGM_MAX_PARAMETERS_PER_PLUGIN]; //!< an array of valid parameters
-    char testGroup[DCGM_MAX_PLUGIN_NAME_LEN];                                      //!< the name of the test group
+    char testCategory[DCGM_MAX_PLUGIN_NAME_LEN];                                   //!< the name of the test category
+    dcgm_field_entity_group_t targetEntityGroup;                                   //!< Target audience for this test
 } dcgmDiagPluginTest_t;
+
+#define DCGM_MAX_PLUGIN_TEST_NUM 20
+static_assert(DCGM_MAX_PLUGIN_TEST_NUM <= std::size(dcgmDiagResponse_v11().tests));
 
 typedef struct
 {
     char pluginName[DCGM_MAX_PLUGIN_NAME_LEN];            //!< the plugin name
     char description[DCGM_MAX_PLUGIN_DESC_LEN];           //!< A short description of the plugin
     dcgmDiagPluginTest_t tests[DCGM_MAX_PLUGIN_TEST_NUM]; //!< Tests supported by this plugin
-    unsigned int numValidTests;                           //!< The number of valid tests
+    unsigned int numTests;                                //!< The number of valid tests
 } dcgmDiagPluginInfo_t;
 
 typedef struct
@@ -156,7 +171,6 @@ typedef struct
 /* NOTE: dcgmi condenses discreet entries into per-gpu output */
 #define DCGM_DIAG_MAX_ERRORS 128
 #define DCGM_DIAG_MAX_INFO   128
-#define DCGM_DIAG_MAX_SKIP   128
 
 #define DCGM_DIAG_ALL_GPUS -1
 
@@ -188,16 +202,27 @@ typedef struct dcgmDiagAuxData_tag
 #define dcgmDiagAuxData_version1 MAKE_DCGM_VERSION(dcgmDiagAuxData_t, 1)
 #define dcgmDiagAuxData_version  = dcgmDiagAuxData_version1
 
+/**
+ * @brief Plugin attributes which provided by NVVS. Plugins can use attributes to align its view with NVVS.
+ */
 typedef struct
 {
-    unsigned int numResults;
-    dcgmDiagSimpleResult_t perGpuResults[DCGM_MAX_NUM_DEVICES];
-    unsigned int numErrors;
-    dcgmDiagErrorDetail_v2 errors[DCGM_DIAG_MAX_ERRORS];
-    unsigned int numInfo;
-    dcgmDiagErrorDetail_v2 info[DCGM_DIAG_MAX_INFO];
-    dcgmDiagAuxData_t auxData; //!< Auxiliary data for this result
-} dcgmDiagResults_t;
+    int pluginId; //!< Plugin index. Plugin uses this value to correctly return its results.
+} dcgmDiagPluginAttr_v1;
+
+/**
+ * @brief Test results.
+ */
+typedef struct
+{
+    unsigned char numErrors;                                         //!< Number of errors included in this response.
+    unsigned char numInfo;                                           //!< Number of info msgs included in this response.
+    unsigned short numResults;                                       //!< Number of results included in this response.
+    dcgmDiagError_v1 errors[DCGM_DIAG_RESPONSE_ERRORS_MAX];          //!< Per-entity errors.
+    dcgmDiagInfo_v1 info[DCGM_DIAG_RESPONSE_INFO_MAX];               //!< Per-entity info messages.
+    dcgmDiagEntityResult_v1 results[DCGM_DIAG_TEST_RUN_RESULTS_MAX]; //!< Per-entity result for this test.
+    dcgmDiagAuxData_t auxData;                                       //!< Auxiliary data for this test.
+} dcgmDiagEntityResults_v1;
 
 /**
  * Get the version of this plugin.
@@ -230,13 +255,13 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  * This function will have a user controllable timeout which defaults to 10 seconds in order to complete successfully.
  *
  * @param handle[in]                 - the DCGM handle that the plugin should use
- * @param gpuInfo[in]                - information about each GPU the plugin should use for its test
  * @param statFieldIds[out]          - information to specify additional fields ids to watch and append to the stats
  * @param userData[out]              - data the plugin would like passed back to the RunTest(), RetrieveCustomStats(),
  *                                     and RetrieveResults() functions. It can be ignored if the plugin wishes.
  * @param loggingSeverity[in]        - Severity at which this plugin should log. See DcgmLoggingSeverity_t
  * @param loggingCallback[in]        - Callback to use to log. The nvvs process will log on each plugin's behalf
  *file
+ * @param pluginAttr[in]             - Plugin attributes which provided by NVVS.
  *
  * @return DCGM_ST_OK                - if the plugin has been set up sufficiently to run.
  *         DCGM_ST_*                   if an error condition matching a DCGM error code has caused the plugin to not be
@@ -244,18 +269,18 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  *                                     (error details can be provided to the diagnostic through RetrieveResults.)
  **/
 DCGM_PUBLIC_API dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
-                                              dcgmDiagPluginGpuList_t *gpuInfo,
                                               dcgmDiagPluginStatFieldIds_t *statFieldIds,
                                               void **userData,
                                               DcgmLoggingSeverity_t loggingSeverity,
-                                              hostEngineAppenderCallbackFp_t loggingCallback);
+                                              hostEngineAppenderCallbackFp_t loggingCallback,
+                                              dcgmDiagPluginAttr_v1 const *pluginAttr);
 
 typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
-                                                   dcgmDiagPluginGpuList_t *gpuInfo,
                                                    dcgmDiagPluginStatFieldIds_t *statFieldIds,
                                                    void **userData,
                                                    DcgmLoggingSeverity_t loggingSeverity,
-                                                   hostEngineAppenderCallbackFp_t loggingCallback);
+                                                   hostEngineAppenderCallbackFp_t loggingCallback,
+                                                   dcgmDiagPluginAttr_v1 const *pluginAttr);
 
 /**
  * @brief Shuts down the plugin.
@@ -276,40 +301,48 @@ typedef dcgmReturn_t (*dcgmDiagShutdownPlugin_f)(void *userData);
 /*
  * Function called to run the test.
  *
+ * @param testName[in]        - target test
  * @param timeout[in]         - the maximum time allowed for running this test.
  * @param numParameters[in]   - the number of parameters populated in testParameters
  * @param testParameters[in]  - an array of parameters to control different functions for the
+ * @param entityInfo[in]      - information about each entity which should be used for this test
  * @param userData[in]        - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RunTest(const char *testName,
+DCGM_PUBLIC_API void RunTest(char const *testName,
                              unsigned int timeout,
                              unsigned int numParameters,
                              const dcgmDiagPluginTestParameter_t *testParameters,
+                             dcgmDiagPluginEntityList_v1 const *entityInfo,
                              void *userData);
-typedef void (*dcgmDiagRunTest_f)(const char *testName,
+typedef void (*dcgmDiagRunTest_f)(char const *testName,
                                   unsigned int timeout,
                                   unsigned int numParameters,
                                   const dcgmDiagPluginTestParameter_t *testParameters,
+                                  dcgmDiagPluginEntityList_v1 const *entityInfo,
                                   void *userData);
 
 /**
  * Pass custom stats (not covered by field ids) to the DCGM diagnostic
  *
+ * @param testName[in]      - target test
  * @param customStats[out]  - the plugin should write any custom stats to be added to the stats file here
  * @param userData[in]      - the user data set in InitializePlugin()
  */
 DCGM_PUBLIC_API void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData);
-typedef void (*dcgmDiagRetrieveCustomStats_f)(const char *testName, dcgmDiagCustomStats_t *customStats, void *userData);
+typedef void (*dcgmDiagRetrieveCustomStats_f)(char const *testName, dcgmDiagCustomStats_t *customStats, void *userData);
 
 /**
  * Pass results from the plugin to the diagnostic.
  * Also, perform any shutdown and cleanup required by the plugin
  *
- * @param results[out] - detailed results for the plugin
+ * @param testName[in] - target test
+ * @param entityResults[out] - detailed results of entity for the test
  * @param userData[in] - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RetrieveResults(char const *testName, dcgmDiagResults_t *results, void *userData);
-typedef void (*dcgmDiagRetrieveResults_f)(const char *testName, dcgmDiagResults_t *results, void *userData);
+DCGM_PUBLIC_API void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData);
+typedef void (*dcgmDiagRetrieveResults_f)(char const *testName,
+                                          dcgmDiagEntityResults_v1 *entityResults,
+                                          void *userData);
 
 #ifdef __cplusplus
 } // END extern "C"

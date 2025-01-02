@@ -93,24 +93,24 @@ extern "C" {
  * DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY is 16 bits of major version followed by
  * 16 bits of the minor version. These macros separate the two.
  */
-#define DCGM_CUDA_COMPUTE_CAPABILITY_MAJOR(x) ((uint64_t)(x)&0xFFFF0000)
-#define DCGM_CUDA_COMPUTE_CAPABILITY_MINOR(x) ((uint64_t)(x)&0x0000FFFF)
+#define DCGM_CUDA_COMPUTE_CAPABILITY_MAJOR(x) ((uint64_t)(x) & 0xFFFF0000)
+#define DCGM_CUDA_COMPUTE_CAPABILITY_MINOR(x) ((uint64_t)(x) & 0x0000FFFF)
 
 /**
- * DCGM_FI_DEV_CLOCK_THROTTLE_REASONS is a bitmap of why the clock is throttled.
- * These macros are masks for relevant throttling, and are a 1:1 map to the NVML
+ * DCGM_FI_DEV_CLOCKS_EVENT_REASONS is a bitmap of reported clock events
+ * These macros are masks for relevant clocks events, and are a 1:1 map to the NVML
  * reasons documented in nvml.h. The notes for the header are copied blow:
  */
 /** Nothing is running on the GPU and the clocks are dropping to Idle state
  * \note This limiter may be removed in a later release
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_GPU_IDLE 0x0000000000000001LL
+#define DCGM_CLOCKS_EVENT_REASON_GPU_IDLE 0x0000000000000001LL
 /** GPU clocks are limited by current setting of applications clocks
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_CLOCKS_SETTING 0x0000000000000002LL
-/** SW Power Scaling algorithm is reducing the clocks below requested clocks
+#define DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING 0x0000000000000002LL
+/** The clocks have been optimized to ensure not to exceed currently set power limits
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP 0x0000000000000004LL
+#define DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP 0x0000000000000004LL
 /** HW Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
  *
  * This is an indicator of:
@@ -118,9 +118,9 @@ extern "C" {
  *  - External Power Brake Assertion is triggered (e.g. by the system power supply)
  *  - Power draw is too high and Fast Trigger protection is reducing the clocks
  *  - May be also reported during PState or clock change
- *  - This behavior may be removed in a later release.
+ *    - This behavior may be removed in a later release.
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN 0x0000000000000008LL
+#define DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN 0x0000000000000008LL
 /** Sync Boost
  *
  * This GPU has been added to a Sync boost group with nvidia-smi or DCGM in
@@ -129,29 +129,74 @@ extern "C" {
  * the throttle reasons for other GPUs in the system to see why those GPUs are
  * holding this one at lower clocks.
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_SYNC_BOOST 0x0000000000000010LL
+#define DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST 0x0000000000000010LL
 /** SW Thermal Slowdown
  *
- * This is an indicator of one or more of the following:
- *  - Current GPU temperature above the GPU Max Operating Temperature
- *  - Current memory temperature above the Memory Max Operating Temperature
+ * The current clocks have been optimized to ensure the the following is true:
+ *  - Current GPU temperature does not exceed GPU Max Operating Temperature
+ *  - Current memory temperature does not exceed  Memory Max Operating Temperature
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL 0x0000000000000020LL
+#define DCGM_CLOCKS_EVENT_REASON_SW_THERMAL 0x0000000000000020LL
 /** HW Thermal Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
  *
  * This is an indicator of:
  *  - temperature being too high
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL 0x0000000000000040LL
+#define DCGM_CLOCKS_EVENT_REASON_HW_THERMAL 0x0000000000000040LL
 /** HW Power Brake Slowdown (reducing the core clocks by a factor of 2 or more) is engaged
  *
  * This is an indicator of:
  *  - External Power Brake Assertion being triggered (e.g. by the system power supply)
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE 0x0000000000000080LL
+#define DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE 0x0000000000000080LL
 /** GPU clocks are limited by current setting of Display clocks
  */
-#define DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS 0x0000000000000100LL
+#define DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS 0x0000000000000100LL
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_GPU_IDLE instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_GPU_IDLE DCGM_CLOCKS_EVENT_REASON_GPU_IDLE
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_CLOCKS_SETTING DCGM_CLOCKS_EVENT_REASON_CLOCKS_SETTING
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_SW_POWER_CAP DCGM_CLOCKS_EVENT_REASON_SW_POWER_CAP
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_HW_SLOWDOWN DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_SYNC_BOOST DCGM_CLOCKS_EVENT_REASON_SYNC_BOOST
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_SW_THERMAL instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_SW_THERMAL DCGM_CLOCKS_EVENT_REASON_SW_THERMAL
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_THERMAL instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_HW_THERMAL DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_HW_POWER_BRAKE DCGM_CLOCKS_EVENT_REASON_HW_POWER_BRAKE
+
+/**
+ * Deprecated: Use DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS instead
+ */
+#define DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS
+
 
 /**
  * GPU virtualization mode types for DCGM_FI_DEV_VIRTUAL_MODE
@@ -237,7 +282,6 @@ typedef unsigned int dcgm_field_eid_t;
  * CUDA 11.1 = 11100
  */
 #define DCGM_FI_CUDA_DRIVER_VERSION 5
-
 
 /**
  * Name of the GPU device
@@ -452,6 +496,11 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_BAR1_FREE 93
 
 /**
+ *  * GPM support for the device
+ *   */
+#define DCGM_FI_DEV_GPM_SUPPORT 94
+
+/**
  * SM clock for the device
  */
 #define DCGM_FI_DEV_SM_CLOCK 100
@@ -477,9 +526,14 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_APP_MEM_CLOCK 111
 
 /**
- * Current clock throttle reasons (bitmask of DCGM_CLOCKS_THROTTLE_REASON_*)
+ * Current clock event reasons (bitmask of DCGM_CLOCKS_EVENT_REASON_*)
  */
-#define DCGM_FI_DEV_CLOCK_THROTTLE_REASONS 112
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASONS 112
+
+/**
+ * Deprecated: Use DCGM_FI_DEV_CLOCKS_EVENT_REASONS instead
+ */
+#define DCGM_FI_DEV_CLOCK_THROTTLE_REASONS DCGM_FI_DEV_CLOCKS_EVENT_REASONS
 
 /**
  * Maximum supported SM clock for the device
@@ -576,6 +630,45 @@ typedef unsigned int dcgm_field_eid_t;
  * Effective power limit that the driver enforces after taking into account all limiters
  */
 #define DCGM_FI_DEV_ENFORCED_POWER_LIMIT 164
+
+/**
+ * Requested workload power profile mask(Blackwell and newer)
+ *
+ */
+#define DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK 165
+
+/**
+ * Enforced workload power profile mask(Blackwell and newer)
+ *
+ */
+#define DCGM_FI_DEV_ENFORCED_POWER_PROFILE_MASK 166
+
+/**
+ * Requested workload power profile mask(Blackwell and newer)
+ *
+ */
+#define DCGM_FI_DEV_VALID_POWER_PROFILE_MASK 167
+
+/**
+ * The status of the fabric manager - a value from dcgmFabricManagerStatus_t.
+ */
+#define DCGM_FI_DEV_FABRIC_MANAGER_STATUS 170
+
+/**
+ * The failure that happened while starting the Fabric Manager, if any
+ * NOTE: this is not populated unless the fabric manager completed startup
+ */
+#define DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE 171
+
+/**
+ * The uuid of the cluster to which this GPU belongs
+ */
+#define DCGM_FI_DEV_FABRIC_CLUSTER_UUID 172
+
+/**
+ * The ID of the fabric clique to which this GPU belongs
+ */
+#define DCGM_FI_DEV_FABRIC_CLIQUE_ID 173
 
 /**
  * Performance state (P-State) 0-15. 0=highest
@@ -886,6 +979,87 @@ typedef unsigned int dcgm_field_eid_t;
  * Note: monotonically increasing
  */
 #define DCGM_FI_DEV_ECC_DBE_AGG_TEX 333
+
+/**
+ * Result of the GPU Memory test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_MEMORY_RESULT 350
+
+/**
+ * Result of the Diagnostics test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT 351
+
+/**
+ * Result of the PCIe + NVLink test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_PCIE_RESULT 352
+
+/**
+ * Result of the Targeted Stress test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_TARGETED_STRESS_RESULT 353
+
+/**
+ * Result of the Targeted Power test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_TARGETED_POWER_RESULT 354
+
+/**
+ * Result of the Memory Bandwidth test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_MEMORY_BANDWIDTH_RESULT 355
+
+/**
+ * Result of the Memory Stress test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_MEMTEST_RESULT 356
+
+/**
+ * Result of the Input Energy Delayed Product power (EDPp) test (a.k.a. the
+ * pulse test)
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_PULSE_TEST_RESULT 357
+
+/**
+ * Result of the Extended Utility Diagnostics (EUD) test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_EUD_RESULT 358
+
+/**
+ * Result of the CPU Extended Utility Diagnostics (CPU EUD) test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_CPU_EUD_RESULT 359
+
+/**
+ * Result of the Software test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_SOFTWARE_RESULT 360
+
+/**
+ * Result of the NVBandwidth test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT 361
+
+/*
+ * Status of the current diag run
+ * Refers to a binary blob of a `dcgmDiagStatus_t` struct
+ */
+#define DCGM_FI_DEV_DIAG_STATUS 362
+
+/* Values from 363-380 reserved for future use */
 
 /**
  * Historical max available spare memory rows per memory bank
@@ -1314,6 +1488,21 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVLINK_BANDWIDTH_L16 495
 #define DCGM_FI_DEV_NVLINK_BANDWIDTH_L17 496
 
+/*
+ * NVLink CRC Error Counter
+ */
+#define DCGM_FI_DEV_NVLINK_ERROR_DL_CRC 497
+
+/*
+ * NVLink Recovery Error Counter
+ */
+#define DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY 498
+
+/*
+ * NVLink Replay Error Counter
+ */
+#define DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY 499
+
 /**
  * Virtualization Mode corresponding to the GPU.
  *
@@ -1418,6 +1607,10 @@ typedef unsigned int dcgm_field_eid_t;
 
 /**
  * License status of the vGPU
+ *
+ * 0 = vgpu is not licensed
+ *
+ * 1 = vgpu is licensed
  */
 #define DCGM_FI_DEV_VGPU_LICENSE_STATUS 526
 
@@ -1723,6 +1916,46 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3 816
 
 /**
+ * NvLink lane crc_err_count for lane 4 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE4 817
+
+/**
+ * NvLink lane crc_err_count for lane 5 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE5 818
+
+/**
+ * NvLink lane crc_err_count for lane 6 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE6 819
+
+/**
+ * NvLink lane crc_err_count for lane 7 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE7 820
+
+/**
+ * NvLink lane ecc_err_count for lane 4 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE4 821
+
+/**
+ * NvLink lane ecc_err_count for lane 5 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE5 822
+
+/**
+ * NvLink lane ecc_err_count for lane 6 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE6 823
+
+/**
+ * NvLink lane ecc_err_count for lane 7 on ports 0-17
+ */
+#define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE7 824
+
+/**
  * NVSwitch fatal error information.
  * Note: value field indicates the specific SXid reported
  */
@@ -1834,9 +2067,9 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID 877
 
 /**
- * NvLink device link uid.
+ * NvLink device switch/link uid.
  */
-#define DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_UUID 878
+#define DCGM_FI_DEV_NVSWITCH_DEVICE_UUID 878
 
 /**
  * Last field ID of the NVSwitch instance
@@ -1976,6 +2209,7 @@ typedef unsigned int dcgm_field_eid_t;
  * Ratio of cycles each of the NVOFA engines are active.
  */
 #define DCGM_FI_PROF_NVOFA0_ACTIVE 1033
+#define DCGM_FI_PROF_NVOFA1_ACTIVE 1034
 
 /**
  * The per-link number of bytes of active NvLink TX (transmit) or RX (transmit) data including both header and payload.
@@ -2106,9 +2340,89 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_CPU_MODEL 1141
 
 /**
+ * Total Tx packets on the link in NVLink5
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS 1200
+
+/**
+ * Total Tx bytes on the link in NVLink5
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES 1201
+
+/**
+ * Total Rx packets on the link in NVLink5
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS 1202
+
+/**
+ * Total Rx bytes on the link in NVLink5
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES 1203
+
+/**
+ * Number of packets Rx on a link where packets are malformed
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS 1204
+
+/**
+ * Number of packets that were discarded on Rx due to buffer overrun
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS 1205
+
+/**
+ * Total number of packets with errors Rx on a link
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS 1206
+
+/**
+ * Total number of packets Rx - stomp/EBP marker
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS 1207
+
+/**
+ * Total number of packets Rx with header mismatch
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS 1208
+
+/**
+ * Total number of times that the count of local errors exceeded a threshold
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS 1209
+
+/**
+ * Total number of tx error packets that were discarded
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS 1210
+
+/**
+ * Number of times link went from Up to recovery, succeeded and link came back up
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS 1211
+
+/**
+ * Number of times link went from Up to recovery, failed and link was declared down
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS 1212
+
+/**
+ * Number of times link went from Up to recovery, irrespective of the result
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS 1213
+
+/**
+ * Number of errors in rx symbols
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS 1214
+
+/**
+ * BER for symbol errors
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER 1215
+
+/**
  * 1 greater than maximum fields above. This is the 1 greater than the maximum field id that could be allocated
  */
-#define DCGM_FI_MAX_FIELDS 1142
+#define DCGM_FI_MAX_FIELDS 1216
 
 
 /** @} */

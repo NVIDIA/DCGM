@@ -13,8 +13,9 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.14.0)
-project(dcgm_sdk_samples)
-find_package(dcgm)
+project(dcgm_sdk_samples LANGUAGES C)
+
+find_package(DCGM 4.0.0 REQUIRED)
 
 add_subdirectory(configuration_sample)
 add_subdirectory(field_value_sample)

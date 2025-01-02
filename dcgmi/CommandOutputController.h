@@ -126,7 +126,7 @@ public:
 
     /* Display a preset error display containing all the error codes and error
      * strings given by the error previously added */
-    void display();
+    void display() override;
 
     /* A handle used to get all of the errors and fill display parameters with
      *  their corresponding information */

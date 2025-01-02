@@ -93,7 +93,7 @@ const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_ID),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_UUID),
+            map_entry(DCGM_FI_DEV_NVSWITCH_DEVICE_UUID),
             map_entry(DCGM_FI_DEV_UUID),
             map_entry(DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ),
@@ -114,10 +114,10 @@ const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
  * This has to be defined in the file that includes FieldDefinitions.h
  */
 template <typename nscqFieldType, typename storageType, bool is_vector, typename... indexTypes>
-dcgmReturn_t DcgmNvSwitchManager::UpdateFields(unsigned short fieldId,
-                                               DcgmFvBuffer &buf,
-                                               const std::vector<dcgm_field_update_info_t> &entities,
-                                               timelib64_t now)
+dcgmReturn_t DcgmNscqManager::UpdateFields(unsigned short fieldId,
+                                           DcgmFvBuffer &buf,
+                                           const std::vector<dcgm_field_update_info_t> &entities,
+                                           timelib64_t now)
 {
     const FieldIdControlType<DCGM_FI_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
 

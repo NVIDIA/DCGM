@@ -13,13 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmStringHelpers.h"
+#include "PluginInterface.h"
 #include <DcgmLogging.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
+#include <UniquePtrUtil.h>
 
 #include <dlfcn.h>
 
+
+namespace
+{
+
+std::unique_ptr<dcgmDiagPluginEntityList_v1> PopulateEntityList(
+    std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos)
+{
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfoList = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    entityInfoList->numEntities                                 = entityInfos.size();
+    if (entityInfoList->numEntities > DCGM_GROUP_MAX_ENTITIES_V2)
+    {
+        DCGM_LOG_ERROR << "Cannot initialize a plugin with " << entityInfoList->numEntities
+                       << " which is more than the allowed limit of " << DCGM_GROUP_MAX_ENTITIES_V2;
+        return nullptr;
+    }
+
+    for (unsigned int i = 0; i < entityInfoList->numEntities; i++)
+    {
+        entityInfoList->entities[i] = entityInfos[i];
+    }
+
+    return entityInfoList;
+}
+
+} //namespace
 
 /*****************************************************************************/
 PluginLib::PluginLib()
@@ -34,10 +60,7 @@ PluginLib::PluginLib()
     , m_shutdownPluginCB(nullptr)
     , m_userData(nullptr)
     , m_pluginName()
-    , m_pluginTests()
-    , m_statFieldIds()
     , m_description()
-    , m_gpuInfo()
     , m_coreFunctionality()
 {}
 
@@ -54,10 +77,7 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     , m_shutdownPluginCB(other.m_shutdownPluginCB)
     , m_userData(other.m_userData)
     , m_pluginName(other.m_pluginName)
-    , m_pluginTests(other.m_pluginTests)
-    , m_statFieldIds(other.m_statFieldIds)
     , m_description(other.m_description)
-    , m_gpuInfo(other.m_gpuInfo)
     , m_coreFunctionality(std::move(other.m_coreFunctionality))
 {
     other.m_pluginPtr                   = nullptr;
@@ -86,8 +106,6 @@ PluginLib &PluginLib::operator=(PluginLib &&other) noexcept
         m_shutdownPluginCB            = other.m_shutdownPluginCB;
         m_userData                    = other.m_userData;
         m_pluginName                  = other.m_pluginName;
-        m_pluginTests                 = other.m_pluginTests;
-        m_statFieldIds                = std::move(other.m_statFieldIds);
         m_description                 = other.m_description;
 
         other.m_pluginPtr                   = nullptr;
@@ -188,6 +206,38 @@ dcgmReturn_t PluginLib::LoadPlugin(const std::string &path, const std::string &n
     return DCGM_ST_OK;
 }
 
+void PluginLib::RegisterCallbacks(PluginCallbacks_v1 const &cb)
+{
+    if (cb.getPluginInterfaceVersionCB != nullptr)
+    {
+        m_getPluginInterfaceVersionCB = cb.getPluginInterfaceVersionCB;
+    }
+    if (cb.getPluginInfoCB != nullptr)
+    {
+        m_getPluginInfoCB = cb.getPluginInfoCB;
+    }
+    if (cb.initializeCB != nullptr)
+    {
+        m_initializeCB = cb.initializeCB;
+    }
+    if (cb.runTestCB != nullptr)
+    {
+        m_runTestCB = cb.runTestCB;
+    }
+    if (cb.retrieveStatsCB != nullptr)
+    {
+        m_retrieveStatsCB = cb.retrieveStatsCB;
+    }
+    if (cb.retrieveResultsCB != nullptr)
+    {
+        m_retrieveResultsCB = cb.retrieveResultsCB;
+    }
+    if (cb.shutdownPluginCB != nullptr)
+    {
+        m_shutdownPluginCB = cb.shutdownPluginCB;
+    }
+}
+
 /*****************************************************************************/
 PluginLib::~PluginLib() noexcept
 {
@@ -266,27 +316,18 @@ dcgmReturn_t PluginLib::GetPluginInfo()
             m_pluginName  = pluginInfo.pluginName;
             m_description = pluginInfo.description;
 
-            if (pluginInfo.numValidTests >= DCGM_MAX_PLUGIN_TEST_NUM)
+            if (pluginInfo.numTests >= DCGM_MAX_PLUGIN_TEST_NUM)
             {
-                log_error("Plugin attempted to specify {} tests which is more than the allowed limit of {}",
-                          pluginInfo.numValidTests,
+                log_error("Plugin attempted to specify {} tests which is more than the allowed limit of {}.",
+                          pluginInfo.numTests,
                           DCGM_MAX_PLUGIN_TEST_NUM);
                 return DCGM_ST_BADPARAM;
             }
 
-            for (unsigned i = 0; i < pluginInfo.numValidTests; ++i)
+            for (unsigned i = 0; i < pluginInfo.numTests; ++i)
             {
-                std::vector<dcgmDiagPluginParameterInfo_t> parameterInfo;
-                for (unsigned int j = 0; j < pluginInfo.tests[i].numValidParameters; ++j)
-                {
-                    parameterInfo.push_back(pluginInfo.tests[i].validParameters[j]);
-                }
-                m_pluginTests.emplace(std::piecewise_construct,
-                                      std::forward_as_tuple(std::string(pluginInfo.tests[i].testeName)),
-                                      std::forward_as_tuple(pluginInfo.tests[i].testeName,
-                                                            pluginInfo.tests[i].testGroup,
-                                                            pluginInfo.tests[i].description,
-                                                            parameterInfo));
+                m_tests.emplace(pluginInfo.tests[i].testName, pluginInfo.tests[i]);
+                log_debug("Added info for test {}:{}", i, pluginInfo.tests[i].testName);
             }
         }
     }
@@ -306,36 +347,24 @@ dcgmReturn_t PluginLib::GetPluginInfo()
     return ret;
 }
 
-/*****************************************************************************/
-dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, std::vector<dcgmDiagPluginGpuInfo_t> &gpuInfoVec)
+dcgm_field_entity_group_t PluginLib::GetTargetEntityGroup(std::string const &testName) const
 {
-    dcgmDiagPluginGpuList_t gpuInfo           = {};
+    return m_tests.at(testName).GetTargetEntityGroup();
+}
+
+/*****************************************************************************/
+dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, int pluginId)
+{
     dcgmDiagPluginStatFieldIds_t statFieldIds = {};
-    gpuInfo.numGpus                           = gpuInfoVec.size();
-    if (gpuInfo.numGpus > DCGM_MAX_NUM_DEVICES)
-    {
-        DCGM_LOG_ERROR << "Cannot initialize a plugin with " << gpuInfo.numGpus
-                       << " which is more than the allowed limit of " << DCGM_MAX_NUM_DEVICES;
-        return DCGM_ST_BADPARAM;
-    }
+    dcgmDiagPluginAttr_v1 pluginAttr          = {};
 
-    for (auto &[testName, pluginTest] : m_pluginTests)
-    {
-        pluginTest.Clear();
-    }
-
-    m_gpuInfo = gpuInfoVec;
-
-    for (unsigned int i = 0; i < gpuInfo.numGpus; i++)
-    {
-        gpuInfo.gpus[i] = gpuInfoVec[i];
-    }
+    pluginAttr.pluginId = pluginId;
 
     dcgmReturn_t ret;
     try
     {
         ret = m_initializeCB(
-            handle, &gpuInfo, &statFieldIds, &m_userData, GetLoggerSeverity(BASE_LOGGER), DcgmLoggingGetCallback());
+            handle, &statFieldIds, &m_userData, GetLoggerSeverity(BASE_LOGGER), DcgmLoggingGetCallback(), &pluginAttr);
 
         if (ret == DCGM_ST_OK)
         {
@@ -380,20 +409,42 @@ std::string PluginLib::GetName() const
     return m_pluginName;
 }
 
-/*****************************************************************************/
-void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestParameters *tp)
+const dcgmDiagEntityResults_v1 &PluginLib::GetEntityResults(std::string const &testName) const
 {
-    if (!m_pluginTests.contains(testName))
-    {
-        log_error("failed to run test {} due to it does not exist in plugin {}", testName, m_pluginName);
-        return;
-    }
+    return m_tests.at(testName).GetEntityResults();
+}
 
+/*****************************************************************************/
+void PluginLib::RunTest(std::string const &testName,
+                        std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos,
+                        unsigned int timeout,
+                        TestParameters *tp)
+{
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> pEntityList = PopulateEntityList(entityInfos);
     std::vector<dcgmDiagPluginTestParameter_t> parameters;
     if (tp != nullptr)
     {
-        parameters       = tp->GetParametersAsStruct();
-        m_testParameters = *tp;
+        parameters = tp->GetParametersAsStruct();
+        m_tests.at(testName).SetTestParameters(*tp);
+    }
+
+    if (!pEntityList)
+    {
+        DcgmError de { DcgmError::GpuIdTag::Unknown };
+        de.SetCode(DCGM_FR_DCGM_API);
+
+        dcgmDiagErrorDetail_v2 error;
+        error.gpuId    = de.GetGpuId();
+        error.code     = de.GetCode();
+        error.category = de.GetCategory();
+        error.severity = de.GetSeverity();
+
+        log_error("failed to prepare entity list for testing");
+        std::string errorMsg("DCGM error during entity list preparation");
+        snprintf(error.msg, sizeof(error.msg), "%s", errorMsg.c_str());
+        log_error(errorMsg);
+        m_tests.at(testName).AddError(error);
+        return;
     }
 
     dcgmDiagPluginTestParameter_t failEarly;
@@ -424,17 +475,22 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
     // We don't need to set this up for the software or eud plugin
     if (m_pluginName != "software" && m_pluginName != "eud")
     {
-        dcgmReturn_t dcgmRet = m_coreFunctionality.PluginPreStart(m_statFieldIds, m_gpuInfo, m_pluginName);
+        dcgmReturn_t dcgmRet = m_coreFunctionality.PluginPreStart(m_statFieldIds, entityInfos, m_pluginName);
         if (dcgmRet != DCGM_ST_OK)
         {
+            DcgmError de { DcgmError::GpuIdTag::Unknown };
+            de.SetCode(DCGM_FR_DCGM_API);
+
             dcgmDiagErrorDetail_v2 error;
-            error.code  = DCGM_FR_DCGM_API;
-            error.gpuId = -1;
+            error.gpuId    = de.GetGpuId();
+            error.code     = de.GetCode();
+            error.category = de.GetCategory();
+            error.severity = de.GetSeverity();
 
             std::string errorMsg(fmt::format("DCGM error during plugin setup: ({}) {}", dcgmRet, errorString(dcgmRet)));
             snprintf(error.msg, sizeof(error.msg), "%s", errorMsg.c_str());
             log_error(errorMsg);
-            m_pluginTests[testName].AddError(error);
+            m_tests.at(testName).AddError(error);
             return;
         }
     }
@@ -445,7 +501,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
      */
     try
     {
-        m_runTestCB(testName.c_str(), timeout, numParameters, parms, m_userData);
+        m_runTestCB(testName.c_str(), timeout, numParameters, parms, pEntityList.get(), m_userData);
     }
     catch (std::runtime_error &e)
     {
@@ -453,7 +509,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.code  = 1;
         error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an exception while trying to execute the test: %s", e.what());
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught exception from plugin " << GetName()
                        << " while attempting to execute the test: " << e.what();
         return;
@@ -464,7 +520,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.code  = 1;
         error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to execute the test");
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to execute the test";
         return;
@@ -477,7 +533,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         do
         {
             m_retrieveStatsCB(testName.c_str(), &customStats, m_userData);
-            m_pluginTests[testName].AddCustomStats(customStats);
+            m_tests.at(testName).AddCustomStats(customStats);
         } while (customStats.moreStats != 0);
     }
     catch (std::runtime_error &e)
@@ -487,7 +543,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.gpuId = -1;
         snprintf(
             error.msg, sizeof(error.msg), "Caught an exception while trying to retrieve custom stats: %s", e.what());
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught exception from plugin " << GetName()
                        << " while attempting to retrieve custom stats: " << e.what();
         return;
@@ -500,15 +556,18 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.code  = 1;
         error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve custom stats.");
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         return;
     }
 
     try
     {
-        dcgmDiagResults_t results = {};
-        m_retrieveResultsCB(testName.c_str(), &results, m_userData);
-        m_pluginTests[testName].SetResults(results);
+        auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
+        dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+
+        m_retrieveResultsCB(testName.c_str(), &entityResults, m_userData);
+
+        m_tests.at(testName).PopulateEntityResults(entityResults);
     }
     catch (std::runtime_error &e)
     {
@@ -517,7 +576,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.gpuId = -1;
         snprintf(
             error.msg, sizeof(error.msg), "Caught an exception while trying to retrieve the results: %s", e.what());
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught exception from plugin " << GetName()
                        << " while attempting to retrieve the results: " << e.what();
         return;
@@ -528,7 +587,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
         error.code  = 1;
         error.gpuId = -1;
         snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to retrieve the results.");
-        m_pluginTests[testName].AddError(error);
+        m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to retrieve the results";
         return;
@@ -537,9 +596,9 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
     // We don't write a stats file or perform these checks for the software or eud plugin
     if (m_pluginName != "software" && m_pluginName != "eud")
     {
-        auto customeStats = m_pluginTests[testName].GetCustomStats();
-        m_coreFunctionality.PluginEnded(
-            GetFullLogFileName(), m_testParameters, m_pluginTests[testName].GetResult(), customeStats);
+        auto customStats    = m_tests.at(testName).GetCustomStats();
+        auto testParameters = m_tests.at(testName).GetTestParameters();
+        m_coreFunctionality.PluginEnded(GetFullLogFileName(), testParameters, GetResult(testName), customStats);
         std::vector<DcgmError> coreErrors = m_coreFunctionality.GetErrors();
         for (auto &&error : coreErrors)
         {
@@ -549,7 +608,7 @@ void PluginLib::RunTest(std::string const &testName, unsigned int timeout, TestP
             errStruct.severity = error.GetSeverity();
             errStruct.gpuId    = error.GetGpuId();
             snprintf(errStruct.msg, sizeof(errStruct.msg), "%s", error.GetMessage().c_str());
-            m_pluginTests[testName].AddError(errStruct);
+            m_tests.at(testName).AddError(errStruct);
         }
     }
 }
@@ -592,33 +651,27 @@ std::string PluginLib::GetFullLogFileName() const
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagCustomStats_t> &PluginLib::GetCustomStats(std::string const &testName)
+const std::vector<dcgmDiagCustomStats_t> &PluginLib::GetCustomStats(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetCustomStats();
+    return m_tests.at(testName).GetCustomStats();
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetErrors(std::string const &testName)
+const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetErrors(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetErrors();
+    return m_tests.at(testName).GetErrors();
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetInfo(std::string const &testName)
+const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetInfo(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetInfo();
+    return m_tests.at(testName).GetInfo();
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagSimpleResult_t> &PluginLib::GetResults(std::string const &testName)
+const std::vector<dcgmDiagSimpleResult_t> &PluginLib::GetResults(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetResults();
-}
-
-/*****************************************************************************/
-const std::string &PluginLib::GetTestGroup(std::string const &testName)
-{
-    return m_pluginTests[testName].GetTestGroup();
+    return m_tests.at(testName).GetResults();
 }
 
 /*****************************************************************************/
@@ -627,23 +680,27 @@ const std::string &PluginLib::GetDescription() const
     return m_description;
 }
 
-std::vector<dcgmDiagPluginParameterInfo_t> PluginLib::GetParameterInfo(std::string const &testName)
+std::vector<dcgmDiagPluginParameterInfo_t> PluginLib::GetParameterInfo(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetParameterInfo();
+    return m_tests.at(testName).GetParameterInfo();
 }
 
 /*****************************************************************************/
-nvvsPluginResult_t PluginLib::GetResult(std::string const &testName)
+nvvsPluginResult_t PluginLib::GetResult(std::string const &testName) const
 {
-    return m_pluginTests[testName].GetResult();
+    return m_tests.at(testName).GetResult();
+}
+const std::optional<std::any> &PluginLib::GetAuxData(std::string const &testName) const
+{
+    return m_tests.at(testName).GetAuxData();
 }
 
-const std::optional<std::any> &PluginLib::GetAuxData(std::string const &testName)
+std::unordered_map<std::string, PluginLibTest> const &PluginLib::GetSupportedTests() const
 {
-    return m_pluginTests[testName].GetAuxData();
+    return m_tests;
 }
 
-const std::unordered_map<std::string, PluginTest> &PluginLib::GetPluginTests() const
+void PluginLib::SetTestRunningState(std::string const &testName, TestRuningState state)
 {
-    return m_pluginTests;
+    m_tests.at(testName).SetTestRunningState(state);
 }

@@ -36,9 +36,9 @@
 #define DIAG_SINGLE_PRECISION 0x0002
 #define DIAG_DOUBLE_PRECISION 0x0004
 
-#define USE_HALF_PRECISION(x)   (((x)&DIAG_HALF_PRECISION) != 0)
-#define USE_SINGLE_PRECISION(x) (((x)&DIAG_SINGLE_PRECISION) != 0)
-#define USE_DOUBLE_PRECISION(x) (((x)&DIAG_DOUBLE_PRECISION) != 0)
+#define USE_HALF_PRECISION(x)   (((x) & DIAG_HALF_PRECISION) != 0)
+#define USE_SINGLE_PRECISION(x) (((x) & DIAG_SINGLE_PRECISION) != 0)
+#define USE_DOUBLE_PRECISION(x) (((x) & DIAG_DOUBLE_PRECISION) != 0)
 
 /*****************************************************************************/
 /* Class for a single gpuburn device */
@@ -49,8 +49,8 @@ public:
 
     GpuBurnDevice() = default;
 
-    GpuBurnDevice(unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(DIAGNOSTIC_PLUGIN_NAME, ndi, pciBusId, p)
+    GpuBurnDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
+        : PluginDevice(testName, ndi, pciBusId, p)
     {
         char buf[256]           = { 0 };
         const char *errorString = NULL;
@@ -156,7 +156,7 @@ class GpuBurnPluginTester; // forward
 class GpuBurnPlugin : public Plugin
 {
 public:
-    GpuBurnPlugin(dcgmHandle_t handle, dcgmDiagPluginGpuList_t *gpuInfo);
+    GpuBurnPlugin(dcgmHandle_t handle);
     ~GpuBurnPlugin();
 
     /*************************************************************************/
@@ -165,8 +165,9 @@ public:
      *
      */
     void Go(std::string const &testName,
+            dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
-            const dcgmDiagPluginTestParameter_t *testParameters);
+            dcgmDiagPluginTestParameter_t const *testParameters) override;
 
     /*************************************************************************/
     /*
@@ -176,6 +177,8 @@ public:
      */
     int32_t SetPrecisionFromString(bool supportsDoubles);
 
+    std::string GetDiagnosticTestName() const;
+
 private:
     /*************************************************************************/
     /*
@@ -184,7 +187,7 @@ private:
      * Returns: true on success
      *          false on error
      */
-    bool Init(dcgmDiagPluginGpuList_t &gpuInfo);
+    bool Init(dcgmDiagPluginEntityList_v1 const &entityInfo);
 
     /*************************************************************************/
     /*
@@ -193,7 +196,7 @@ private:
      *
      * Returns: true if the test passed for all gpus, false otherwise.
      */
-    bool CheckPassFail(const std::vector<int> &errorCount, const std::vector<int> &nanCount);
+    bool CheckPassFail(const std::vector<long long> &errorCount, const std::vector<long long> &nanCount);
 
     /*************************************************************************/
     /*
@@ -216,7 +219,7 @@ private:
      *      false if there were issues running the test (test failures are not considered issues),
      *      true otherwise.
      */
-    bool RunTest();
+    bool RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo);
 
     /*************************************************************************/
     /*
@@ -265,12 +268,11 @@ private:
     bool m_explicitTests;           /* Were explicit tests requested via parameters? */
 
     /* Cached parameters read from testParameters */
-    double m_testDuration;             /* test length, in seconds */
-    double m_sbeFailureThreshold;      /* Failure threshold for SBEs. Below this it's a warning */
-    double m_gflopsTolerancePcnt;      /* % of mean gflops below which an error is reported */
-    int32_t m_precision;               /* bitmap for what precision we should use (half, single, double) */
-    unsigned int m_matrixDim;          /* The dimension size of the matrix */
-    dcgmDiagPluginGpuList_t m_gpuInfo; // The information about each GPU
+    double m_testDuration;        /* test length, in seconds */
+    double m_sbeFailureThreshold; /* Failure threshold for SBEs. Below this it's a warning */
+    double m_gflopsTolerancePcnt; /* % of mean gflops below which an error is reported */
+    int32_t m_precision;          /* bitmap for what precision we should use (half, single, double) */
+    unsigned int m_matrixDim;     /* The dimension size of the matrix */
 
     friend GpuBurnPluginTester;
 };
@@ -424,55 +426,55 @@ public:
     /*
      * Worker thread main
      */
-    void run();
+    void run() override;
 
 private:
-    GpuBurnDevice *m_device;
+    GpuBurnDevice *m_device {};
     GpuBurnPlugin &m_plugin;
-    int32_t m_precision;
+    int32_t m_precision {};
     std::vector<int32_t> m_precisions;
-    double m_testDuration;
-    cublasHandle_t m_cublas;
-    long long int m_error;
-    long long int m_nan;
-    size_t m_iters;
-    size_t m_resultSize;
-    unsigned int m_matrixDim;
-    size_t m_nElemsPerIter;
+    double m_testDuration {};
+    cublasHandle_t m_cublas {};
+    long long int m_error {};
+    long long int m_nan {};
+    size_t m_iters {};
+    size_t m_resultSize {};
+    unsigned int m_matrixDim {};
+    size_t m_nElemsPerIter {};
 
     static const int g_blockSize = 16;
 
-    CUmodule m_module;
-    CUfunction m_f16CompareFunc;
-    CUfunction m_f32CompareFunc;
-    CUfunction m_f64CompareFunc;
-    dim3 m_gridDim;
-    dim3 m_blockDim;
-    void *m_params[5]; /* Size needs to be the number of parameters to compareFP64() in compare.cu */
+    CUmodule m_module {};
+    CUfunction m_f16CompareFunc {};
+    CUfunction m_f32CompareFunc {};
+    CUfunction m_f64CompareFunc {};
+    dim3 m_gridDim {};
+    dim3 m_blockDim {};
+    void *m_params[5] = {}; /* Size needs to be the number of parameters to compareFP64() in compare.cu */
 
     /* C can be (and is) reused for each datatype. it's also the remainder of DRAM on the GPU after
        As and Bs have been allocated. A and B need to be provided per-datatype */
-    CUdeviceptr m_Cdata;
-    CUdeviceptr m_AdataFP64;
-    CUdeviceptr m_BdataFP64;
-    CUdeviceptr m_AdataFP32;
-    CUdeviceptr m_BdataFP32;
-    CUdeviceptr m_AdataFP16;
-    CUdeviceptr m_BdataFP16;
-    CUdeviceptr m_faultyElemData;
-    CUdeviceptr m_nanElemData;
+    CUdeviceptr m_Cdata {};
+    CUdeviceptr m_AdataFP64 {};
+    CUdeviceptr m_BdataFP64 {};
+    CUdeviceptr m_AdataFP32 {};
+    CUdeviceptr m_BdataFP32 {};
+    CUdeviceptr m_AdataFP16 {};
+    CUdeviceptr m_BdataFP16 {};
+    CUdeviceptr m_faultyElemData {};
+    CUdeviceptr m_nanElemData {};
     std::unique_ptr<double[]> m_A_FP64;
     std::unique_ptr<double[]> m_B_FP64;
     std::unique_ptr<float[]> m_A_FP32;
     std::unique_ptr<float[]> m_B_FP32;
     std::unique_ptr<__half[]> m_A_FP16;
     std::unique_ptr<__half[]> m_B_FP16;
-    timelib64_t m_stopTime;
-    long long m_totalOperations;
-    long long m_totalErrors;
-    long long m_totalNaNs;
+    timelib64_t m_stopTime {};
+    long long m_totalOperations {};
+    long long m_totalErrors {};
+    long long m_totalNaNs {};
     DcgmRecorder &m_dcgmRecorder;
-    bool m_failEarly;
+    bool m_failEarly {};
     friend GpuBurnWorkerTester;
 };
 /*****************************************************************************/

@@ -18,10 +18,6 @@ declare_nvvs_plugin(gpuburn .)
 
 add_compile_options(-Wno-deprecated-declarations)
 
-set(LOCAL_NVVS_PLUGINS "")
-
 foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
     add_subdirectory(Cuda${CUDA_VER})
 endforeach()
-
-set(NVVS_PLUGINS "${NVVS_PLUGINS};${LOCAL_NVVS_PLUGINS}" PARENT_SCOPE)

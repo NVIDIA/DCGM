@@ -29,7 +29,7 @@
 
 // Actually, there are no rounding errors due to results being accumulated in an arbitrary order..
 // Therefore EPSILON = 0.0f is OK
-#define EPSILON 0.001f
+#define EPSILON  0.001f
 #define EPSILOND 0.0000001
 
 #include <cuda_fp16.h>
@@ -61,20 +61,20 @@ extern "C" __global__ void compareFP32(float *C, int *faultyElems, int *nanElems
 		gridDim.x*blockDim.x + // W
 		blockIdx.x*blockDim.x + threadIdx.x; // X
 
-	int myFaulty = 0;
+    int myFaulty = 0;
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
         float C_ref = C[myIndex];
         if (__isnanf(C_ref))
             myNan++;
-	for (size_t i = 1; i < iters; ++i)
+        for (size_t i = 1; i < iters; ++i)
         {
             float C_val = C[myIndex + i * nElemsPerIter];
             if (__isnanf(C_val))
                 myNan++;
             if (fabsf(C_ref - C_val) > EPSILON)
-			myFaulty++;
+                myFaulty++;
         }
     }
     reduceThenAtomicAdd(faultyElems, nanElems, myFaulty, myNan);
@@ -89,20 +89,20 @@ extern "C" __global__ void compareFP64(double *C, int *faultyElems, int *nanElem
 		blockIdx.x*blockDim.x + threadIdx.x; // X
 
 
-	int myFaulty = 0;
+    int myFaulty = 0;
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
         double C_ref = C[myIndex];
         if (__isnan(C_ref))
             myNan++;
-	for (size_t i = 1; i < iters; ++i)
+        for (size_t i = 1; i < iters; ++i)
         {
             double C_val = C[myIndex + i * nElemsPerIter];
             if (__isnan(C_val))
                 myNan++;
             if (fabs(C_ref - C_val) > EPSILOND)
-			myFaulty++;
+                myFaulty++;
         }
     }
     reduceThenAtomicAdd(faultyElems, nanElems, myFaulty, myNan);
@@ -116,20 +116,20 @@ extern "C" __global__ void compareFP16(__half *C, int *faultyElems, int *nanElem
 		gridDim.x*blockDim.x + // W
 		blockIdx.x*blockDim.x + threadIdx.x; // X
     
-	int myFaulty = 0;
+    int myFaulty = 0;
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
         __half C_ref = C[myIndex];
         if (__isnanf(__half2float(C_ref)))
             myNan++;
-	for (size_t i = 1; i < iters; ++i)
+        for (size_t i = 1; i < iters; ++i)
         {
             __half C_val = C[myIndex + i * nElemsPerIter];
             if (__isnanf(__half2float(C_val)))
                 myNan++;
             if (fabsf(__half2float(C_ref) - __half2float(C_val)) > EPSILON)
-			myFaulty++;
+                myFaulty++;
         }
     }
     reduceThenAtomicAdd(faultyElems, nanElems, myFaulty, myNan);

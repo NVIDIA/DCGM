@@ -57,9 +57,9 @@ void DcgmEntityTimeSeries::AddValue(dcgm_field_entity_group_t entityGroupId,
         IF_PLOG(plog::debug)
         {
             log_debug("Skipping duplicate value for field {}", fieldId);
-            auto const valString = val.fieldType == DCGM_FT_DOUBLE  ? fmt::format("{}", val.value.dbl)
-                                   : val.fieldType == DCGM_FT_INT64 ? fmt::format("{}", val.value.i64)
-                                                                    : "Non-numeric field type";
+            const auto &valString = val.fieldType == DCGM_FT_DOUBLE  ? fmt::format("{}", val.value.dbl)
+                                    : val.fieldType == DCGM_FT_INT64 ? fmt::format("{}", val.value.i64)
+                                                                     : "Non-numeric field type";
             log_debug("Value: {{ ts: {}, val: {} }}", val.ts, valString);
         }
         return;
@@ -258,6 +258,7 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
         {
             case DCGM_FT_DOUBLE:
             {
+                // coverity[dereference] - if prevFv is nullptr, fv should be nullptr and the loop shouldn't be entered
                 double delta = fv->value.dbl - prevFv->value.dbl;
                 if (delta >= dfv.value.dbl)
                 {
@@ -273,6 +274,7 @@ bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned short field
 
             case DCGM_FT_INT64:
             {
+                // coverity[dereference] - if prevFv is nullptr, fv should be nullptr and the loop shouldn't be entered
                 int64_t delta = fv->value.i64 - prevFv->value.i64;
                 if (delta >= dfv.value.i64)
                 {

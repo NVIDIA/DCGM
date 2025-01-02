@@ -26,9 +26,10 @@
 //#define DCGM_HEALTH_SR_CHECK_V2    4 - Retired
 #define DCGM_HEALTH_SR_CHECK_GPUS 5
 //#define DCGM_HEALTH_SR_CHECK_V3    6 - Retired
-#define DCGM_HEALTH_SR_CHECK_V4       7
+//#define DCGM_HEALTH_SR_CHECK_V4       7 - Retired
 #define DCGM_HEALTH_SR_SET_SYSTEMS_V2 8
-#define DCGM_HEALTH_SR_COUNT          9 /* Keep as last entry and 1 greater */
+#define DCGM_HEALTH_SR_CHECK_V5       9
+#define DCGM_HEALTH_SR_COUNT          10 /* Keep as last entry and 1 greater */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -68,19 +69,19 @@ typedef dcgm_health_msg_set_systems_v2 dcgm_health_msg_set_systems_t;
 
 /*****************************************************************************/
 /**
- * Subrequest DCGM_HEALTH_SR_CHECK_V4
+ * Subrequest DCGM_HEALTH_SR_CHECK_V5
  */
-typedef struct dcgm_health_msg_check_v4
+typedef struct dcgm_health_msg_check_v5
 {
     dcgm_module_command_header_t header; /* Command header */
 
     dcgmGpuGrp_t groupId;           /*  IN: Group ID to check the health systems of */
     long long startTime;            /*  IN: Earliest timestamp to health check in usec since 1970. 0=for all time */
     long long endTime;              /*  IN: Latest timestamp to health check in usec since 1970. 0=for all time */
-    dcgmHealthResponse_v4 response; /* OUT: Health of the entities of group groupId */
-} dcgm_health_msg_check_v4;
+    dcgmHealthResponse_v5 response; /* OUT: Health of the entities of group groupId */
+} dcgm_health_msg_check_v5;
 
-#define dcgm_health_msg_check_version4 MAKE_DCGM_VERSION(dcgm_health_msg_check_v4, 4)
+#define dcgm_health_msg_check_version5 MAKE_DCGM_VERSION(dcgm_health_msg_check_v5, 5)
 
 /*****************************************************************************/
 /**
@@ -95,10 +96,12 @@ typedef struct dcgm_health_msg_check_gpus_t
     unsigned int gpuIds[DCGM_MAX_NUM_DEVICES]; /*  IN: GPU ID to check the health systems of */
     long long startTime;            /*  IN: Earliest timestamp to health check in usec since 1970. 0=for all time */
     long long endTime;              /*  IN: Latest timestamp to health check in usec since 1970. 0=for all time */
-    dcgmHealthResponse_v4 response; /* OUT: Health of gpuId */
-} dcgm_health_msg_check_gpus_t;
+    dcgmHealthResponse_v5 response; /* OUT: Health of gpuId */
+} dcgm_health_msg_check_gpus_v2;
 
-#define dcgm_health_msg_check_gpus_version MAKE_DCGM_VERSION(dcgm_health_msg_check_gpus_t, 1)
+#define dcgm_health_msg_check_gpus_version2 MAKE_DCGM_VERSION(dcgm_health_msg_check_gpus_v2, 2)
+#define dcgm_health_msg_check_gpus_version  dcgm_health_msg_check_gpus_version2
+typedef dcgm_health_msg_check_gpus_v2 dcgm_health_msg_check_gpus_t;
 
 /*****************************************************************************/
 

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include <unordered_set>
 #include <yaml-cpp/yaml.h>

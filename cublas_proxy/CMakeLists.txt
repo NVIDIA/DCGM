@@ -11,38 +11,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-find_package(Cuda REQUIRED)
+
 include(utils)
 
 macro(define_proxy_lib CUDA_VER)
     set(lib_name dcgm_cublas_proxy${CUDA_VER})
-    add_library(${lib_name} SHARED)
 
     target_compile_definitions(${lib_name} PRIVATE CUDA_VERSION_USED=${CUDA_VER})
-    target_compile_options(${lib_name} PRIVATE -fvisibility=hidden -fvisibility-inlines-hidden)
-    target_link_options(${lib_name} PRIVATE -Wl,--no-undefined)
-    target_link_options(${lib_name} PRIVATE -Wl,--exclude-libs,ALL)
-    target_link_options(${lib_name} PRIVATE -Xlinker --version-script=${CMAKE_CURRENT_SOURCE_DIR}/../cublas_proxy.linux_def)
+    target_link_options(${lib_name} PRIVATE
+        -Wl,--no-undefined
+        -Wl,--exclude-libs,ALL
+        -Xlinker "--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../cublas_proxy.linux_def")
 
-    target_sources(${lib_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../cublas_proxy.cpp)
-    set(cublas_proxy_include_dir "${CMAKE_CURRENT_SOURCE_DIR}/..")
-    get_absolute_path(${cublas_proxy_include_dir} cublas_proxy_include_dir)
-    target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${cublas_proxy_include_dir}>)
-    target_include_directories(${lib_name} PUBLIC $<BUILD_INTERFACE:${CUDA${CUDA_VER}_INCLUDE_DIR}>)
-    target_link_libraries(${lib_name} PRIVATE dl rt)
-    target_link_libraries(${lib_name} PRIVATE dcgm dcgm_common dcgm_logging dcgm_mutex)
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_CUBLAS_LIBS})
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_STATIC_LIBS})
-    target_link_libraries(${lib_name} PRIVATE ${CUDA${CUDA_VER}_LIBS})
+    target_sources(${lib_name} PRIVATE ../cublas_proxy.cpp)
 
-    set(LOCAL_CUBLAS_PROXY "${LOCAL_CUBLAS_PROXY};${lib_name}" PARENT_SCOPE)
+    target_include_directories(${lib_name} PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
+        $<BUILD_INTERFACE:${CUDA${CUDA_VER}_INCLUDE_DIR}>)
 
+    target_link_libraries(${lib_name} PRIVATE
+        ${CUDA${CUDA_VER}_LIBS}
+        ${CUDA${CUDA_VER}_STATIC_CUBLAS_LIBS}
+        ${CUDA${CUDA_VER}_STATIC_LIBS}
+        dcgm dcgm_common dcgm_logging dcgm_mutex
+        dl
+        rt)
 endmacro()
 
-set(LOCAL_CUBLAS_PROXY "")
-
-add_subdirectory(Cuda12)
 add_subdirectory(Cuda11)
-
-set(DCGM_CUBLAS_PROXY ${LOCAL_CUBLAS_PROXY} PARENT_SCOPE)
-
+add_subdirectory(Cuda12)

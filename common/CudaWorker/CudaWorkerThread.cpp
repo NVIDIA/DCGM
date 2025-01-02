@@ -23,8 +23,11 @@
 
 #include <libgen.h> // for dirname
 
+#include <DcgmLogging.h>
+
 #include "CudaWorkerThread.hpp"
 #include "FieldWorkers.hpp"
+
 
 /*****************************************************************************/
 /**
@@ -63,7 +66,7 @@ static std::string BuildFullPathToPtx()
         std::string retValue;
         retValue.reserve(PATH_MAX);
         retValue.assign(dirname(absolutePath));
-        retValue.append("/DcgmProfTesterKernels.ptx"s);
+        retValue.append("/../libexec/datacenter-gpu-manager-4/DcgmProfTesterKernels.ptx");
 
         return retValue;
     }

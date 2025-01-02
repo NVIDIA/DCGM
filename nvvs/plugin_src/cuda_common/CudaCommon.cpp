@@ -67,10 +67,11 @@ std::string AddAPIError(Plugin *p,
                         size_t bytes,
                         bool isGpuSpecific)
 {
-    DcgmError d { gpuId };
+    DcgmError d { DcgmError::GpuIdTag::Unknown };
 
     if (isGpuSpecific)
     {
+        d.SetEntity(dcgmGroupEntityPair_t({ DCGM_FE_GPU, gpuId }));
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL_GPU, d, callName, gpuId, errorText);
     }
     else
@@ -87,15 +88,7 @@ std::string AddAPIError(Plugin *p,
         d.AddDetail(fmt::format("(for {} bytes", bytes));
     }
 
-    if (isGpuSpecific)
-    {
-        p->AddErrorForGpu(testName, gpuId, d);
-    }
-    else
-    {
-        p->AddError(testName, d);
-    }
-
+    p->AddError(testName, d);
     return d.GetMessage();
 }
 

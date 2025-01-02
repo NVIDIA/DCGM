@@ -33,7 +33,7 @@ typedef struct
 class DCHConnectionAttributes
 {
 public:
-    DCHConnectionAttributes(bool requiresModuleCommands, const char *buildInfoString)
+    DCHConnectionAttributes(const char *buildInfoString)
         : m_buildInfo(DcgmNs::DcgmBuildInfo(buildInfoString))
     {}
 

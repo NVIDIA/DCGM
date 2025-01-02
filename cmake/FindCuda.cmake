@@ -17,7 +17,7 @@
 include(utils)
 
 set(Cuda11_prefix usr/local/cuda-11.8)
-set(Cuda12_prefix usr/local/cuda-12.0)
+set(Cuda12_prefix usr/local/cuda-12.6)
 
 macro (load_cuda cuda_version)
     foreach (prefix ${Cuda${cuda_version}_prefix})
@@ -93,7 +93,6 @@ macro (load_cuda cuda_version)
     mark_as_advanced(CUDA${cuda_version}_INCLUDE_DIR CUDA${cuda_version}_STATIC_LIBS CUDA${cuda_version}_LIBS CUDA${cuda_version}_STATIC_CUBLAS_LIBS)
 
 endmacro()
-
 
 if (NOT DEFINED CUDA11_INCLUDE_DIR)
     load_cuda(11)

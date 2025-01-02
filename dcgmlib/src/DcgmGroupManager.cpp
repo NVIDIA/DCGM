@@ -167,7 +167,7 @@ dcgmReturn_t DcgmGroupManager::AddAllEntitiesToGroup(DcgmGroupInfo *pDcgmGrp, dc
         if (dcgmReturn != DCGM_ST_OK)
         {
             log_error("Error {} from AddEntityToGroup(gid {}, eg {}, eid {}",
-                      (int)dcgmReturn,
+                      dcgmReturn,
                       pDcgmGrp->GetGroupId(),
                       (*entityIt).entityGroupId,
                       (*entityIt).entityId);
@@ -275,7 +275,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::RemoveGroup(dcgm_connection_id_t connectionId, unsigned int groupId)
+dcgmReturn_t DcgmGroupManager::RemoveGroup(unsigned int groupId)
 {
     DcgmGroupInfo *pDcgmGrp;
     GroupIdMap::iterator itGroup;
@@ -351,7 +351,7 @@ dcgmReturn_t DcgmGroupManager::RemoveAllGroupsForConnection(dcgm_connection_id_t
 
     for (removeIt = removeGroupIds.begin(); removeIt != removeGroupIds.end(); ++removeIt)
     {
-        dcgmReturn_t ret = RemoveGroup(connectionId, *removeIt);
+        dcgmReturn_t ret = RemoveGroup(*removeIt);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "RemoveGroup returned " << errorString(ret) << " for connection " << connectionId
@@ -428,7 +428,7 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vecto
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::GetGroupGpuIds(dcgm_connection_id_t connectionId,
+dcgmReturn_t DcgmGroupManager::GetGroupGpuIds(dcgm_connection_id_t /* connectionId */,
                                               unsigned int groupId,
                                               std::vector<unsigned int> &gpuIds)
 {
@@ -511,8 +511,7 @@ dcgmReturn_t DcgmGroupManager::RemoveEntityFromGroup(dcgm_connection_id_t connec
     ret = groupObj->RemoveEntityFromGroup(entityGroupId, entityId);
     Unlock();
 
-    log_debug(
-        "conn {}, groupId {} removed eg {}, eid {}. ret {}", connectionId, groupId, entityGroupId, entityId, (int)ret);
+    log_debug("conn {}, groupId {} removed eg {}, eid {}. ret {}", connectionId, groupId, entityGroupId, entityId, ret);
     return ret;
 }
 
@@ -566,7 +565,7 @@ dcgmReturn_t DcgmGroupManager::verifyAndUpdateGroupId(unsigned int *groupId)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::GetAllGroupIds(dcgm_connection_id_t connectionId,
+dcgmReturn_t DcgmGroupManager::GetAllGroupIds(dcgm_connection_id_t /* connectionId */,
                                               unsigned int groupIdList[],
                                               unsigned int *pCount)
 {
@@ -670,10 +669,11 @@ dcgmReturn_t DcgmGroupInfo::AddEntityToGroup(dcgm_field_entity_group_t entityGro
         }
     }
 
-    if (mEntityList.size() >= DCGM_GROUP_MAX_ENTITIES)
+    if (mEntityList.size() >= DCGM_GROUP_MAX_ENTITIES_V2)
     {
         /*
-         * This is a safeguard for public API that has hardcoded array of DCGM_GROUP_MAX_ENTITIES elements in a group.
+         * This is a safeguard for public API that has hardcoded array of DCGM_GROUP_MAX_ENTITIES_V2 elements in a
+         * group.
          */
         DCGM_LOG_DEBUG << fmt::format("Too many items in the groupId {}", mGroupId);
         return DCGM_ST_MAX_LIMIT;

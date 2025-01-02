@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(transport_interface INTERFACE)
 target_include_directories(transport_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(transport_objects STATIC)
 target_link_libraries(transport_objects PUBLIC
     transport_interface
     dcgm_interface
@@ -24,7 +22,6 @@ target_link_libraries(transport_objects PUBLIC
     sdk_nvml_interface
     )
 
-find_package(Libevent REQUIRED)
 target_include_directories(transport_objects SYSTEM PUBLIC ${LIBEVENT_INCLUDE_DIR})
 target_link_libraries(transport_objects PUBLIC ${LIBEVENT_STATIC_LIBS})
 target_link_libraries(transport_objects PRIVATE dcgm_thread)

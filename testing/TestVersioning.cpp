@@ -22,7 +22,7 @@ TestVersioning::TestVersioning()
 TestVersioning::~TestVersioning()
 {}
 
-int TestVersioning::Init(const TestDcgmModuleInitParams &initParams)
+int TestVersioning::Init(const TestDcgmModuleInitParams & /* initParams */)
 {
     return 0;
 }

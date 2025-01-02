@@ -14,8 +14,6 @@
 # limitations under the License.
 #
 install(
-    FILES
-        third-party-notices.txt
-    DESTINATION ${DCGM_DOCS_INSTALL_DIR}
-    COMPONENT DCGM
-)
+    FILES third-party-notices.txt
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+    COMPONENT Core)

@@ -15,8 +15,7 @@ set(
   NSCQ_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(sdk_nscq_interface INTERFACE)
 target_link_libraries(sdk_nscq_interface INTERFACE sdk_nvidia sdk_nscq_loader)
 target_include_directories(sdk_nscq_interface INTERFACE ${NSCQ_INCLUDE_DIRS})
 
- add_subdirectory(dlwrap)
+add_subdirectory(dlwrap)

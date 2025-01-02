@@ -33,7 +33,7 @@ public:
 
     void SetGroupManager(DcgmGroupManager *gm);
 
-    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand);
+    dcgmReturn_t ProcessMessage(dcgm_module_command_header_t *moduleCommand) override;
     dcgmReturn_t ProcessSetLoggingSeverity(dcgm_core_msg_set_severity_t &moduleCommand);
     dcgmReturn_t ProcessCreateMigEntity(dcgm_core_msg_create_mig_entity_t &msg);
     dcgmReturn_t ProcessDeleteMigEntity(dcgm_core_msg_delete_mig_entity_t &msg);
@@ -52,6 +52,7 @@ public:
     dcgmReturn_t ProcessJobRemoveAll(dcgm_core_msg_job_cmd_t &msg);
     dcgmReturn_t ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_entities_get_latest_values_v1 &msg);
     dcgmReturn_t ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_entities_get_latest_values_v2 &msg);
+    dcgmReturn_t ProcessEntitiesGetLatestValuesV3(dcgm_core_msg_entities_get_latest_values_v3 &msg);
     dcgmReturn_t ProcessGetMultipleValuesForFieldV1(dcgm_core_msg_get_multiple_values_for_field_v1 &msg);
     dcgmReturn_t ProcessGetMultipleValuesForFieldV2(dcgm_core_msg_get_multiple_values_for_field_v2 &msg);
     dcgmReturn_t ProcessWatchFieldValueV1(dcgm_core_msg_watch_field_value_v1 &msg);
@@ -69,6 +70,7 @@ public:
     dcgmReturn_t ProcessClientLogin(dcgm_core_msg_client_login_t &msg);
     dcgmReturn_t ProcessSetEntityNvLinkState(dcgm_core_msg_set_entity_nvlink_state_t &msg);
     dcgmReturn_t ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_t &msg);
+    dcgmReturn_t ProcessGetDeviceWorkloadPowerProfilesInfo(dcgm_core_msg_get_workload_power_profiles_status_v1 &msg);
     dcgmReturn_t ProcessFieldgroupOp(dcgm_core_msg_fieldgroup_op_t &msg);
     dcgmReturn_t ProcessPidGetInfo(dcgm_core_msg_pid_get_info_t &msg);
     dcgmReturn_t ProcessGetFieldSummary(dcgm_core_msg_get_field_summary_t &msg);
@@ -88,8 +90,11 @@ public:
     dcgmReturn_t ProcessNvmlInjectedDeviceReset(dcgm_core_msg_nvml_injected_device_reset_t &msg);
     dcgmReturn_t ProcessGetNvmlInjectFuncCallCount(dcgm_core_msg_get_nvml_inject_func_call_count_t &msg);
     dcgmReturn_t ProcessResetNvmlInjectFuncCallCount(dcgm_core_msg_reset_nvml_inject_func_call_count_t &msg);
+    dcgmReturn_t ProcessRemoveNvmlInjectedGpu(dcgm_core_msg_remove_restore_nvml_injected_gpu_t &msg);
+    dcgmReturn_t ProcessRestoreNvmlInjectedGpu(dcgm_core_msg_remove_restore_nvml_injected_gpu_t &msg);
 #endif
     dcgmReturn_t ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg);
+    dcgmReturn_t ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_get_backend_v1 &msg);
 
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 

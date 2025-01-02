@@ -25,10 +25,10 @@
 class PluginDevice
 {
 public:
-    int cudaDeviceIdx;
-    unsigned int gpuId;
-    cudaDeviceProp cudaDevProp;
-    NvvsDevice *nvvsDevice;
+    int cudaDeviceIdx {};
+    unsigned int gpuId {};
+    cudaDeviceProp cudaDevProp {};
+    std::unique_ptr<NvvsDevice> nvvsDevice;
     std::string warning;
     std::string m_pciBusId;
     std::string m_testName;
@@ -38,7 +38,6 @@ public:
     PluginDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
         : cudaDeviceIdx(0)
         , gpuId(ndi)
-        , nvvsDevice(0)
         , warning()
         , m_testName(testName)
     {
@@ -48,8 +47,8 @@ public:
 
         memset(&this->cudaDevProp, 0, sizeof(this->cudaDevProp));
 
-        this->nvvsDevice = new NvvsDevice(p);
-        st               = this->nvvsDevice->Init(m_testName, this->gpuId);
+        this->nvvsDevice = std::make_unique<NvvsDevice>(p);
+        st               = this->nvvsDevice->Init(testName, this->gpuId);
         if (st)
         {
             snprintf(buf, sizeof(buf), "Couldn't initialize NvvsDevice for GPU %u", this->gpuId);
@@ -107,8 +106,7 @@ public:
             {
                 DCGM_LOG_ERROR << "Caught exception in destructor. Swallowing " << e.what();
             }
-            delete nvvsDevice;
-            this->nvvsDevice = 0;
+            this->nvvsDevice.reset();
         }
     }
 };

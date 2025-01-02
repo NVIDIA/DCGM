@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
 #include "dcgm_util.h"
 #include "nvcmvalue.h"
@@ -116,6 +117,8 @@ static std::mutex g_dcgmGlobalsMutex;     /* Lock to control access to g_dcgmGlo
                                          is declared outside of g_dcgmGlobals so g_dcgmGlobals
                                          can be memset to 0 in dcgmShutdown() */
 static dcgm_globals_t g_dcgmGlobals = {}; /* Declared static so we don't export it */
+static std::mutex g_dcgmPolicyCbMutex;    /* Lock to prevent users from unregistering policy callbacks while we
+                                             are in the process of handling them. */
 
 /*****************************************************************************
  * Functions used for locking/unlocking the globals of DCGM within a process
@@ -541,7 +544,7 @@ dcgmReturn_t tsapiGroupGetAllIds(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t *pGroupI
 
     *pCount = msg.groups.numGroups;
 
-    for (int i = 0; i < msg.groups.numGroups; i++)
+    for (unsigned int i = 0; i < msg.groups.numGroups; ++i)
     {
         pGroupIdList[i] = msg.groups.groupIds[i];
     }
@@ -561,7 +564,7 @@ dcgmReturn_t helperGroupGetInfo(dcgmHandle_t pDcgmHandle,
     }
 
     /* Check for version */
-    if ((pDcgmGroupInfo->version < dcgmGroupInfo_version2) || (pDcgmGroupInfo->version > dcgmGroupInfo_version))
+    if ((pDcgmGroupInfo->version < dcgmGroupInfo_version3) || (pDcgmGroupInfo->version > dcgmGroupInfo_version))
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
         return DCGM_ST_VER_MISMATCH;
@@ -569,17 +572,17 @@ dcgmReturn_t helperGroupGetInfo(dcgmHandle_t pDcgmHandle,
 
     dcgmReturn_t ret;
 
-    dcgm_core_msg_group_get_info_t msg = {};
+    std::unique_ptr<dcgm_core_msg_group_get_info_t> msg = std::make_unique<dcgm_core_msg_group_get_info_t>();
+    memset(msg.get(), 0, sizeof(*msg));
+    msg->header.length     = sizeof(*msg);
+    msg->header.moduleId   = DcgmModuleIdCore;
+    msg->header.subCommand = DCGM_CORE_SR_GROUP_GET_INFO;
+    msg->header.version    = dcgm_core_msg_group_get_info_version;
 
-    msg.header.length     = sizeof(msg);
-    msg.header.moduleId   = DcgmModuleIdCore;
-    msg.header.subCommand = DCGM_CORE_SR_GROUP_GET_INFO;
-    msg.header.version    = dcgm_core_msg_group_get_info_version;
-
-    msg.gi.groupId = groupId;
+    msg->gi.groupId = groupId;
 
     // coverity[overrun-buffer-arg]
-    ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+    ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg->header, sizeof(*msg));
 
     if (DCGM_ST_OK != ret)
     {
@@ -587,30 +590,30 @@ dcgmReturn_t helperGroupGetInfo(dcgmHandle_t pDcgmHandle,
     }
 
     /* Check the status of the DCGM command */
-    if (msg.gi.cmdRet != DCGM_ST_OK)
+    if (msg->gi.cmdRet != DCGM_ST_OK)
     {
-        return (dcgmReturn_t)msg.gi.cmdRet;
+        return (dcgmReturn_t)msg->gi.cmdRet;
     }
 
-    dcgmStrncpy(pDcgmGroupInfo->groupName, msg.gi.groupInfo.groupName, sizeof(pDcgmGroupInfo->groupName));
+    SafeCopyTo(pDcgmGroupInfo->groupName, msg->gi.groupInfo.groupName);
 
     if (hostEngineTimestamp)
     {
-        *hostEngineTimestamp = msg.gi.timestamp;
+        *hostEngineTimestamp = msg->gi.timestamp;
     }
 
-    pDcgmGroupInfo->count = msg.gi.groupInfo.count;
+    pDcgmGroupInfo->count = msg->gi.groupInfo.count;
 
-    if (pDcgmGroupInfo->count > DCGM_GROUP_MAX_ENTITIES)
+    if (pDcgmGroupInfo->count > DCGM_GROUP_MAX_ENTITIES_V2)
     {
         DCGM_LOG_ERROR << "Invalid number of GPU Ids returned from the hostengine";
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    for (int index = 0; index < msg.gi.groupInfo.count; index++)
+    for (unsigned int index = 0; index < msg->gi.groupInfo.count; ++index)
     {
-        pDcgmGroupInfo->entityList[index].entityGroupId = msg.gi.groupInfo.entityList[index].entityGroupId;
-        pDcgmGroupInfo->entityList[index].entityId      = msg.gi.groupInfo.entityList[index].entityId;
+        pDcgmGroupInfo->entityList[index].entityGroupId = msg->gi.groupInfo.entityList[index].entityGroupId;
+        pDcgmGroupInfo->entityList[index].entityId      = msg->gi.groupInfo.entityList[index].entityId;
     }
 
     return DCGM_ST_OK;
@@ -651,17 +654,17 @@ dcgmReturn_t helperGetLatestValuesForFields(dcgmHandle_t dcgmHandle,
     dcgmReturn_t ret;
 
     // Don't put a 4 MB object on the stack
-    std::unique_ptr<dcgm_core_msg_entities_get_latest_values_v2> msg
-        = std::make_unique<dcgm_core_msg_entities_get_latest_values_v2>();
+    std::unique_ptr<dcgm_core_msg_entities_get_latest_values_v3> msg
+        = std::make_unique<dcgm_core_msg_entities_get_latest_values_v3>();
 
     msg->header.length
         = sizeof(*msg) - SAMPLES_BUFFER_SIZE_V2; /* avoid transferring the large buffer when making request */
     msg->header.moduleId   = DcgmModuleIdCore;
-    msg->header.subCommand = DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2;
-    msg->header.version    = dcgm_core_msg_entities_get_latest_values_version2;
+    msg->header.subCommand = DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3;
+    msg->header.version    = dcgm_core_msg_entities_get_latest_values_version3;
 
     if ((entityList && !entityListCount) || (fieldIdList && !fieldIdListCount) || !fvBuffer
-        || entityListCount > DCGM_GROUP_MAX_ENTITIES || fieldIdListCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+        || entityListCount > DCGM_GROUP_MAX_ENTITIES_V2 || fieldIdListCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
     {
         DCGM_LOG_ERROR << "Bad parameter";
         return DCGM_ST_BADPARAM;
@@ -924,13 +927,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.uuid))
                 {
                     log_error("String overflow error for the requested UUID field");
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.uuid, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.uuid));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.uuid, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.uuid, fv->value.str, sizeof(pDcgmDeviceAttr->identifiers.uuid));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.uuid, fv->value.str);
                 }
 
                 break;
@@ -943,13 +944,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.vbios))
                 {
                     log_error("String overflow error for the requested VBIOS field");
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.vbios, DCGM_STR_BLANK, sizeof(pDcgmDeviceAttr->identifiers.vbios));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.vbios, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(
-                        pDcgmDeviceAttr->identifiers.vbios, fv->value.str, sizeof(pDcgmDeviceAttr->identifiers.vbios));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.vbios, fv->value.str);
                 }
 
                 break;
@@ -962,15 +961,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion))
                 {
                     log_error("String overflow error for the requested Inforom field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.inforomImageVersion, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.inforomImageVersion,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.inforomImageVersion));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.inforomImageVersion, fv->value.str);
                 }
 
                 break;
@@ -983,15 +978,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.brandName))
                 {
                     log_error("String overflow error for the requested brand name field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.brandName,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.brandName));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.brandName, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.brandName,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.brandName));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.brandName, fv->value.str);
                 }
 
                 break;
@@ -1004,15 +995,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.deviceName))
                 {
                     log_error("String overflow error for the requested device name field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.deviceName));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.deviceName, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.deviceName,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.deviceName));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.deviceName, fv->value.str);
                 }
 
                 break;
@@ -1025,15 +1012,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.serial))
                 {
                     log_error("String overflow error for the requested serial field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.serial));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.serial, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.serial,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.serial));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.serial, fv->value.str);
                 }
 
                 break;
@@ -1046,15 +1029,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.pciBusId))
                 {
                     log_error("String overflow error for the requested serial field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.pciBusId));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.pciBusId, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.pciBusId,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.pciBusId));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.pciBusId, fv->value.str);
                 }
 
                 break;
@@ -1127,15 +1106,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 if (length + 1 > sizeof(pDcgmDeviceAttr->identifiers.driverVersion))
                 {
                     log_error("String overflow error for the requested driver version field");
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmDeviceAttr->identifiers.driverVersion));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.driverVersion, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmDeviceAttr->identifiers.driverVersion,
-                                fv->value.str,
-                                sizeof(pDcgmDeviceAttr->identifiers.driverVersion));
+                    SafeCopyTo(pDcgmDeviceAttr->identifiers.driverVersion, fv->value.str);
                 }
 
                 break;
@@ -1256,8 +1231,6 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                                            int gpuId,
                                            dcgmVgpuDeviceAttributes_t *pDcgmVgpuDeviceAttr)
 {
-    unsigned short fieldIds[32];
-    unsigned int count = 0;
     dcgmReturn_t ret;
     long long updateFreq = 30000000;
     double maxKeepAge    = 14400.0;
@@ -1273,20 +1246,16 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_VER_MISMATCH;
     }
 
-    fieldIds[count++] = DCGM_FI_DEV_SUPPORTED_TYPE_INFO;
-    fieldIds[count++] = DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_INSTANCE_IDS;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_UTILIZATIONS;
-    fieldIds[count++] = DCGM_FI_DEV_GPU_UTIL;
-    fieldIds[count++] = DCGM_FI_DEV_MEM_COPY_UTIL;
-    fieldIds[count++] = DCGM_FI_DEV_ENC_UTIL;
-    fieldIds[count++] = DCGM_FI_DEV_DEC_UTIL;
-
-    if (count >= 32)
-    {
-        log_error("Update DeviceGetAttributes to accommodate more fields");
-        return DCGM_ST_GENERIC_ERROR;
-    }
+    unsigned short fieldIds[] = { DCGM_FI_DEV_SUPPORTED_TYPE_INFO,
+                                  DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS,
+                                  DCGM_FI_DEV_VGPU_INSTANCE_IDS,
+                                  DCGM_FI_DEV_VGPU_UTILIZATIONS,
+                                  DCGM_FI_DEV_GPU_UTIL,
+                                  DCGM_FI_DEV_MEM_COPY_UTIL,
+                                  DCGM_FI_DEV_ENC_UTIL,
+                                  DCGM_FI_DEV_DEC_UTIL };
+    const unsigned int count  = sizeof(fieldIds) / sizeof(fieldIds[0]);
+    DCGM_CASSERT(count <= 32, 0);
 
     dcgmGroupEntityPair_t entityPair;
     entityPair.entityGroupId = DCGM_FE_GPU;
@@ -1531,8 +1500,6 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                                              int vgpuId,
                                              dcgmVgpuInstanceAttributes_t *pDcgmVgpuInstanceAttr)
 {
-    unsigned short fieldIds[32];
-    unsigned int count = 0;
     dcgmReturn_t ret;
 
     if (NULL == pDcgmVgpuInstanceAttr)
@@ -1546,20 +1513,16 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_VER_MISMATCH;
     }
 
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_VM_ID;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_VM_NAME;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_TYPE;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_UUID;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_DRIVER_VERSION;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_MEMORY_USAGE;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE;
-    fieldIds[count++] = DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT;
-
-    if (count >= 32)
-    {
-        log_error("Update DeviceGetAttributes to accommodate more fields");
-        return DCGM_ST_GENERIC_ERROR;
-    }
+    unsigned short fieldIds[] = { DCGM_FI_DEV_VGPU_VM_ID,
+                                  DCGM_FI_DEV_VGPU_VM_NAME,
+                                  DCGM_FI_DEV_VGPU_TYPE,
+                                  DCGM_FI_DEV_VGPU_UUID,
+                                  DCGM_FI_DEV_VGPU_DRIVER_VERSION,
+                                  DCGM_FI_DEV_VGPU_MEMORY_USAGE,
+                                  DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
+                                  DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT };
+    const unsigned int count  = sizeof(fieldIds) / sizeof(fieldIds[0]);
+    DCGM_CASSERT(count <= 32, 0);
 
     dcgmGroupEntityPair_t entityPair;
     entityPair.entityGroupId = DCGM_FE_VGPU;
@@ -1587,11 +1550,11 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                 if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vmId))
                 {
                     log_error("String overflow error for the requested vGPU instance VM ID field");
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmId, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vmId));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vmId, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmId, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vmId));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vmId, fv->value.str);
                 }
                 break;
             }
@@ -1603,11 +1566,11 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                 if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vmName))
                 {
                     log_error("String overflow error for the requested vGPU instance VM name field");
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmName, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vmName));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vmName, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vmName, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vmName));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vmName, fv->value.str);
                 }
                 break;
             }
@@ -1623,13 +1586,11 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                 if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vgpuUuid))
                 {
                     log_error("String overflow error for the requested vGPU instance UUID field");
-                    dcgmStrncpy(
-                        pDcgmVgpuInstanceAttr->vgpuUuid, DCGM_STR_BLANK, sizeof(pDcgmVgpuInstanceAttr->vgpuUuid));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vgpuUuid, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(
-                        pDcgmVgpuInstanceAttr->vgpuUuid, fv->value.str, sizeof(pDcgmVgpuInstanceAttr->vgpuUuid));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vgpuUuid, fv->value.str);
                 }
                 break;
             }
@@ -1641,15 +1602,11 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                 if (length + 1 > sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion))
                 {
                     log_error("String overflow error for the requested vGPU instance driver version field");
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion,
-                                DCGM_STR_BLANK,
-                                sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vgpuDriverVersion, DCGM_STR_BLANK);
                 }
                 else
                 {
-                    dcgmStrncpy(pDcgmVgpuInstanceAttr->vgpuDriverVersion,
-                                fv->value.str,
-                                sizeof(pDcgmVgpuInstanceAttr->vgpuDriverVersion));
+                    SafeCopyTo(pDcgmVgpuInstanceAttr->vgpuDriverVersion, fv->value.str);
                 }
                 break;
             }
@@ -1722,10 +1679,10 @@ dcgmReturn_t helperConfigSet(dcgmHandle_t dcgmHandle,
 /*****************************************************************************
  * Helper method to set the vGPU configuration for a group
  *****************************************************************************/
-dcgmReturn_t helperVgpuConfigSet(dcgmHandle_t pDcgmHandle,
-                                 dcgmGpuGrp_t groupId,
+dcgmReturn_t helperVgpuConfigSet(dcgmHandle_t /* pDcgmHandle */,
+                                 dcgmGpuGrp_t /* groupId */,
                                  dcgmVgpuConfig_t *pDeviceConfig,
-                                 dcgmStatus_t pDcgmStatusList)
+                                 dcgmStatus_t /* pDcgmStatusList */)
 {
     if (!pDeviceConfig)
     {
@@ -1813,12 +1770,12 @@ dcgmReturn_t helperConfigGet(dcgmHandle_t dcgmHandle,
 }
 
 /*****************************************************************************/
-dcgmReturn_t helperVgpuConfigGet(dcgmHandle_t pDcgmHandle,
-                                 dcgmGpuGrp_t groupId,
-                                 dcgmConfigType_t reqType,
+dcgmReturn_t helperVgpuConfigGet(dcgmHandle_t /* pDcgmHandle */,
+                                 dcgmGpuGrp_t /* groupId */,
+                                 dcgmConfigType_t /* reqType */,
                                  int count,
                                  dcgmVgpuConfig_t *pDeviceConfigList,
-                                 dcgmStatus_t pDcgmStatusList)
+                                 dcgmStatus_t /* pDcgmStatusList */)
 {
     if (!pDeviceConfigList || count < 1)
         return DCGM_ST_BADPARAM;
@@ -1873,7 +1830,9 @@ dcgmReturn_t helperConfigEnforce(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, 
 }
 
 /*****************************************************************************/
-dcgmReturn_t helperVgpuConfigEnforce(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmStatus_t pDcgmStatusList)
+dcgmReturn_t helperVgpuConfigEnforce(dcgmHandle_t /* pDcgmHandle */,
+                                     dcgmGpuGrp_t /* groupId */,
+                                     dcgmStatus_t /* pDcgmStatusList */)
 {
     /* This code never worked, this API is private, and the tests in test_vgpu.py are disabled.
        Returning NOT_SUPPORTED for now */
@@ -2112,6 +2071,7 @@ dcgmReturn_t tsapiEngineUnwatchFieldValue(dcgmHandle_t pDcgmHandle, int gpuId, u
     msg.uf.fieldId       = fieldId;
     msg.uf.clearCache    = clearCache;
     msg.uf.entityGroupId = DCGM_FE_GPU;
+    msg.uf.gpuId         = gpuId;
     if (fieldMeta->scope == DCGM_FS_GLOBAL)
         msg.uf.entityGroupId = DCGM_FE_NONE;
 
@@ -2130,7 +2090,7 @@ dcgmReturn_t helperPolicyGet(dcgmHandle_t dcgmHandle,
                              dcgmGpuGrp_t groupId,
                              int count,
                              dcgmPolicy_t dcgmPolicy[],
-                             dcgmStatus_t dcgmStatusList)
+                             dcgmStatus_t /* dcgmStatusList */)
 {
     dcgm_policy_msg_get_policies_t msg;
     dcgmReturn_t dcgmReturn;
@@ -2182,7 +2142,7 @@ dcgmReturn_t helperPolicyGet(dcgmHandle_t dcgmHandle,
 dcgmReturn_t helperPolicySet(dcgmHandle_t dcgmHandle,
                              dcgmGpuGrp_t groupId,
                              dcgmPolicy_t *dcgmPolicy,
-                             dcgmStatus_t dcgmStatusList)
+                             dcgmStatus_t /* dcgmStatusList */)
 {
     dcgm_policy_msg_set_policy_t msg;
     dcgmReturn_t dcgmReturn;
@@ -2216,15 +2176,15 @@ dcgmReturn_t helperPolicySet(dcgmHandle_t dcgmHandle,
 dcgmReturn_t helperPolicyRegister(dcgmHandle_t dcgmHandle,
                                   dcgmGpuGrp_t groupId,
                                   dcgmPolicyCondition_t condition,
-                                  fpRecvUpdates beginCallback,
-                                  fpRecvUpdates finishCallback)
+                                  fpRecvUpdates callback,
+                                  uint64_t userData)
 {
     dcgmReturn_t dcgmReturn;
     dcgm_policy_msg_register_t msg;
 
     /* Make an ansync object. We're going to pass ownership off, so we won't have to free it */
     std::unique_ptr<DcgmPolicyRequest> policyRequest
-        = std::make_unique<DcgmPolicyRequest>(beginCallback, finishCallback);
+        = std::make_unique<DcgmPolicyRequest>(callback, userData, g_dcgmPolicyCbMutex);
 
     memset(&msg, 0, sizeof(msg));
     msg.header.length     = sizeof(msg);
@@ -2252,8 +2212,18 @@ dcgmReturn_t helperPolicyUnregister(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupI
     msg.groupId           = groupId;
     msg.condition         = condition;
 
-    // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+    /* Prevent users from unregistering callbacks while we are in the process of handling them. */
+    if (g_dcgmPolicyCbMutex.try_lock())
+    {
+        // coverity[overrun-buffer-arg]
+        dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+        g_dcgmPolicyCbMutex.unlock();
+    }
+    else
+    {
+        dcgmReturn = DCGM_ST_IN_USE;
+    }
+
     return dcgmReturn;
 }
 
@@ -2291,7 +2261,8 @@ static dcgmReturn_t helperGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
                                               void *userData)
 {
     dcgmReturn_t dcgmSt, retDcgmSt;
-    dcgmGroupInfo_t groupInfo = {};
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
     unsigned int i;
     int j;
     unsigned int gpuId, fieldId;
@@ -2318,29 +2289,29 @@ static dcgmReturn_t helperGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
 
     *nextSinceTimestamp = sinceTimestamp;
 
-    groupInfo.version = dcgmGroupInfo_version;
+    groupInfo->version = dcgmGroupInfo_version;
 
     /* Convert groupId to list of GPUs. Note that this is an extra round trip to the server
      * in the remote case, but it keeps the code much simpler */
-    dcgmSt = helperGroupGetInfo(pDcgmHandle, groupId, &groupInfo, &endQueryTimestamp);
+    dcgmSt = helperGroupGetInfo(pDcgmHandle, groupId, groupInfo.get(), &endQueryTimestamp);
     if (dcgmSt != DCGM_ST_OK)
     {
         log_error("helperGroupGetInfo groupId {} returned {}", (void *)groupId, (int)dcgmSt);
         return dcgmSt;
     }
 
-    log_debug("Got group {} with {} entities", groupInfo.groupName, groupInfo.count);
+    log_debug("Got group {} with {} entities", groupInfo->groupName, groupInfo->count);
 
     /* Pre-check the group for non-GPU/non-global entities */
-    for (i = 0; i < groupInfo.count; i++)
+    for (i = 0; i < groupInfo->count; i++)
     {
-        if (groupInfo.entityList[i].entityGroupId != DCGM_FE_GPU
-            && groupInfo.entityList[i].entityGroupId != DCGM_FE_NONE)
+        if (groupInfo->entityList[i].entityGroupId != DCGM_FE_GPU
+            && groupInfo->entityList[i].entityGroupId != DCGM_FE_NONE)
         {
             log_error("helperGetFieldValuesSince called on groupId {} with non-GPU eg {}, eid {}.",
                       (void *)groupId,
-                      groupInfo.entityList[i].entityGroupId,
-                      groupInfo.entityList[i].entityId);
+                      groupInfo->entityList[i].entityGroupId,
+                      groupInfo->entityList[i].entityId);
             return DCGM_ST_NOT_SUPPORTED;
         }
     }
@@ -2352,9 +2323,9 @@ static dcgmReturn_t helperGetFieldValuesSince(dcgmHandle_t pDcgmHandle,
 
     dcgmFieldValue_v1 fv1;
 
-    for (i = 0; i < groupInfo.count; i++)
+    for (i = 0; i < groupInfo->count; i++)
     {
-        gpuId = groupInfo.entityList[i].entityId;
+        gpuId = groupInfo->entityList[i].entityId;
 
         for (j = 0; j < numFieldIds; j++)
         {
@@ -2419,7 +2390,8 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
                                          void *userData)
 {
     dcgmReturn_t dcgmSt, retDcgmSt;
-    dcgmGroupInfo_t groupInfo           = {};
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
     dcgmFieldGroupInfo_t fieldGroupInfo = {};
     unsigned int i;
     int j;
@@ -2458,8 +2430,8 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
 
     /* Convert groupId to list of GPUs. Note that this is an extra round trip to the server
      * in the remote case, but it keeps the code much simpler */
-    groupInfo.version = dcgmGroupInfo_version;
-    dcgmSt            = helperGroupGetInfo(pDcgmHandle, groupId, &groupInfo, &endQueryTimestamp);
+    groupInfo->version = dcgmGroupInfo_version;
+    dcgmSt             = helperGroupGetInfo(pDcgmHandle, groupId, groupInfo.get(), &endQueryTimestamp);
     if (dcgmSt != DCGM_ST_OK)
     {
         log_error("helperGroupGetInfo groupId {} returned {}", (void *)groupId, (int)dcgmSt);
@@ -2467,20 +2439,20 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
     }
 
     log_debug(
-        "Got group {} with {} GPUs, endQueryTimestamp {}", groupInfo.groupName, groupInfo.count, endQueryTimestamp);
+        "Got group {} with {} GPUs, endQueryTimestamp {}", groupInfo->groupName, groupInfo->count, endQueryTimestamp);
 
     /* Pre-check the group for non-GPU/non-global entities */
     if (!enumCBv2)
     {
-        for (i = 0; i < groupInfo.count; i++)
+        for (i = 0; i < groupInfo->count; i++)
         {
-            if (groupInfo.entityList[i].entityGroupId != DCGM_FE_GPU
-                && groupInfo.entityList[i].entityGroupId != DCGM_FE_NONE)
+            if (groupInfo->entityList[i].entityGroupId != DCGM_FE_GPU
+                && groupInfo->entityList[i].entityGroupId != DCGM_FE_NONE)
             {
                 log_error("helperGetValuesSince called on groupId {} with non-GPU eg {}, eid {}.",
                           (void *)groupId,
-                          groupInfo.entityList[i].entityGroupId,
-                          groupInfo.entityList[i].entityId);
+                          groupInfo->entityList[i].entityGroupId,
+                          groupInfo->entityList[i].entityId);
                 return DCGM_ST_NOT_SUPPORTED;
             }
         }
@@ -2493,7 +2465,7 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
 
     dcgmFieldValue_v1 fv1;
 
-    for (i = 0; i < groupInfo.count; i++)
+    for (i = 0; i < groupInfo->count; i++)
     {
         for (j = 0; j < (int)fieldGroupInfo.numFieldIds; j++)
         {
@@ -2505,8 +2477,8 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
                nextSinceTimestamp we're returning to the client */
             retNumFieldValues = valuesAtATime;
             dcgmSt            = helperGetMultipleValuesForFieldFvBuffer(pDcgmHandle,
-                                                             groupInfo.entityList[i].entityGroupId,
-                                                             groupInfo.entityList[i].entityId,
+                                                             groupInfo->entityList[i].entityGroupId,
+                                                             groupInfo->entityList[i].entityId,
                                                              fieldId,
                                                              &retNumFieldValues,
                                                              sinceTimestamp,
@@ -2516,8 +2488,8 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
             if (dcgmSt == DCGM_ST_NO_DATA)
             {
                 log_debug("DCGM_ST_NO_DATA for eg {}, eid {}, fieldId {}, sinceTs {}",
-                          groupInfo.entityList[i].entityGroupId,
-                          groupInfo.entityList[i].entityId,
+                          groupInfo->entityList[i].entityGroupId,
+                          groupInfo->entityList[i].entityId,
                           fieldId,
                           sinceTimestamp);
                 continue;
@@ -2526,16 +2498,16 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
             {
                 log_error("Got st {} from helperGetMultipleValuesForField eg {}, eid {}, fieldId {}",
                           (int)dcgmSt,
-                          groupInfo.entityList[i].entityGroupId,
-                          groupInfo.entityList[i].entityId,
+                          groupInfo->entityList[i].entityGroupId,
+                          groupInfo->entityList[i].entityId,
                           fieldId);
                 return dcgmSt;
             }
 
             log_debug("Got {} values for eg {}, eid {}, fieldId {}",
                       retNumFieldValues,
-                      groupInfo.entityList[i].entityGroupId,
-                      groupInfo.entityList[i].entityId,
+                      groupInfo->entityList[i].entityGroupId,
+                      groupInfo->entityList[i].entityId,
                       fieldId);
 
             dcgmBufferedFvCursor_t cursor = 0;
@@ -2546,7 +2518,7 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
                 fvBuffer.ConvertBufferedFvToFv1(fv, &fv1);
                 if (enumCB)
                 {
-                    callbackSt = enumCB(groupInfo.entityList[i].entityId, &fv1, 1, userData);
+                    callbackSt = enumCB(groupInfo->entityList[i].entityId, &fv1, 1, userData);
                     if (callbackSt != 0)
                     {
                         log_debug("User requested callback exit");
@@ -2557,7 +2529,7 @@ static dcgmReturn_t helperGetValuesSince(dcgmHandle_t pDcgmHandle,
                 if (enumCBv2)
                 {
                     callbackSt = enumCBv2(
-                        groupInfo.entityList[i].entityGroupId, groupInfo.entityList[i].entityId, &fv1, 1, userData);
+                        groupInfo->entityList[i].entityGroupId, groupInfo->entityList[i].entityId, &fv1, 1, userData);
                     if (callbackSt != 0)
                     {
                         log_debug("User requested callback exit");
@@ -2735,7 +2707,7 @@ dcgmReturn_t tsapiFieldGroupCreate(dcgmHandle_t pDcgmHandle,
     msg.header.version    = dcgm_core_msg_fieldgroup_op_version;
 
     msg.info.fg.version = dcgmFieldGroupInfo_version;
-    dcgmStrncpy(msg.info.fg.fieldGroupName, fieldGroupName, sizeof(msg.info.fg.fieldGroupName) - 1);
+    SafeCopyTo(msg.info.fg.fieldGroupName, fieldGroupName);
     msg.info.fg.numFieldIds = numFieldIds;
     memcpy(msg.info.fg.fieldIds, fieldIds, sizeof(fieldIds[0]) * numFieldIds);
 
@@ -2902,9 +2874,6 @@ dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgm
     return dcgmReturn;
 }
 
-#define EIGHT_HOURS_IN_MS    28800000
-#define SEC_TO_MS_MULTIPLIER 1000
-
 template <typename MsgType>
 static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
                                                                  unsigned int const msgVersion,
@@ -2928,8 +2897,11 @@ static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
             break;
         case dcgm_diag_msg_run_version8:
         case dcgm_diag_msg_run_version9:
-        default:
             msg->diagResponse.version = dcgmDiagResponse_version10;
+            break;
+        case dcgm_diag_msg_run_version10:
+        default:
+            msg->diagResponse.version = dcgmDiagResponse_version11;
             break;
     }
 
@@ -2937,10 +2909,18 @@ static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
 }
 
 dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
-                                 dcgmRunDiag_v8 *drd,
+                                 dcgmRunDiag_v9 *drd,
                                  dcgmPolicyAction_t action,
-                                 dcgmDiagResponse_v10 *response)
+                                 dcgmDiagResponse_v11 *response)
 {
+    std::unique_ptr<dcgm_diag_msg_run_v10> msg10 = std::make_unique<dcgm_diag_msg_run_v10>();
+    std::unique_ptr<dcgm_diag_msg_run_v9> msg9   = std::make_unique<dcgm_diag_msg_run_v9>();
+    std::unique_ptr<dcgm_diag_msg_run_v8> msg8   = std::make_unique<dcgm_diag_msg_run_v8>();
+    std::unique_ptr<dcgm_diag_msg_run_v7> msg7   = std::make_unique<dcgm_diag_msg_run_v7>();
+    std::unique_ptr<dcgm_diag_msg_run_v6> msg6   = std::make_unique<dcgm_diag_msg_run_v6>();
+    std::unique_ptr<dcgm_diag_msg_run_v5> msg5   = std::make_unique<dcgm_diag_msg_run_v5>();
+    dcgmReturn_t dcgmReturn;
+
     if (!drd || !response)
     {
         log_error("drd {} or response {} was NULL.", (void *)drd, (void *)response);
@@ -2949,28 +2929,33 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
 
     switch (drd->version)
     {
-        case dcgmRunDiag_version7:
+        case dcgmRunDiag_version9:
         case dcgmRunDiag_version8:
+        case dcgmRunDiag_version7:
             break;
         default:
             // unknown drd version
             log_error("dcgmRunDiag version mismatch {:X} != {:X} and isn't in accepted list",
                       drd->version,
-                      dcgmRunDiag_version7);
+                      dcgmRunDiag_version9);
             return DCGM_ST_VER_MISMATCH;
     }
 
-    std::unique_ptr<dcgm_diag_msg_run_v9> msg9 = std::make_unique<dcgm_diag_msg_run_v9>();
-    std::unique_ptr<dcgm_diag_msg_run_v8> msg8 = std::make_unique<dcgm_diag_msg_run_v8>();
-    std::unique_ptr<dcgm_diag_msg_run_v7> msg7 = std::make_unique<dcgm_diag_msg_run_v7>();
-    std::unique_ptr<dcgm_diag_msg_run_v6> msg6 = std::make_unique<dcgm_diag_msg_run_v6>();
-    std::unique_ptr<dcgm_diag_msg_run_v5> msg5 = std::make_unique<dcgm_diag_msg_run_v5>();
-
-    dcgmReturn_t dcgmReturn;
     dcgm_module_command_header_t *header;
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version11:
+            header = helperInitDiagMsgRun(msg10.get(), dcgm_diag_msg_run_version10, action);
+            if (drd->version != dcgmRunDiag_version9)
+            {
+                log_error(
+                    "Unexpected run diag version: [{}], expected version: [{}].", drd->version, dcgmRunDiag_version9);
+                return DCGM_ST_VER_MISMATCH;
+            }
+            memcpy(&msg10->runDiag, drd, sizeof(dcgmRunDiag_v9));
+            break;
+
         case dcgmDiagResponse_version10:
             if (drd->version == dcgmRunDiag_version8)
             {
@@ -2991,7 +2976,6 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                 return DCGM_ST_VER_MISMATCH;
             }
             break;
-
         case dcgmDiagResponse_version9:
             header = helperInitDiagMsgRun(msg7.get(), dcgm_diag_msg_run_version7, action);
             if (drd->version != dcgmRunDiag_version7)
@@ -3025,7 +3009,6 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             memcpy(&msg5->runDiag, drd, sizeof(dcgmRunDiag_v7));
             break;
 
-
         default:
             DCGM_LOG_ERROR << "response->version 0x" << std::hex << response->version
                            << " doesn't match a valid version";
@@ -3036,25 +3019,38 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     header->subCommand = DCGM_DIAG_SR_RUN;
 
     // Compatibility requirement
+    static_assert(sizeof(msg9->diagResponse) <= sizeof(msg10->diagResponse));
     static_assert(sizeof(msg8->diagResponse) <= sizeof(msg9->diagResponse));
     static_assert(sizeof(msg7->diagResponse) <= sizeof(msg8->diagResponse));
     static_assert(sizeof(msg6->diagResponse) <= sizeof(msg7->diagResponse));
     static_assert(sizeof(msg5->diagResponse) <= sizeof(msg6->diagResponse));
 
-    unsigned int timeoutSeconds = 0;
-    if (drd->version == dcgmRunDiag_version8)
+    unsigned int timeoutSeconds              = 0;
+    constexpr unsigned int secToMsMultiplier = 1000;
+
+    if (drd->version == dcgmRunDiag_version9)
     {
         timeoutSeconds = drd->timeoutSeconds;
+    }
+    else if (drd->version == dcgmRunDiag_version8)
+    {
+        timeoutSeconds = (reinterpret_cast<dcgmRunDiag_v8 *>(drd))->timeoutSeconds;
     }
     else if (drd->version == dcgmRunDiag_version7)
     {
         timeoutSeconds = (reinterpret_cast<dcgmRunDiag_v7 *>(drd))->timeoutSeconds;
     }
+
     // coverity[overrun-buffer-arg]
     dcgmReturn = dcgmModuleSendBlockingFixedRequest(
-        dcgmHandle, header, sizeof(*msg9), nullptr, timeoutSeconds * SEC_TO_MS_MULTIPLIER);
+        dcgmHandle, header, sizeof(*msg10), nullptr, timeoutSeconds * secToMsMultiplier);
+
     switch (response->version)
     {
+        case dcgmDiagResponse_version11:
+            memcpy(response, &msg10->diagResponse, sizeof(msg10->diagResponse));
+            break;
+
         case dcgmDiagResponse_version10:
             if (drd->version == dcgmRunDiag_version8)
             {
@@ -3105,25 +3101,25 @@ dcgmReturn_t helperStopDiag(dcgmHandle_t dcgmHandle)
 }
 
 /*****************************************************************************/
-static dcgmReturn_t helperHealthCheckV4(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_v4 *response)
+static dcgmReturn_t helperHealthCheckV5(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_v5 *response)
 {
-    dcgm_health_msg_check_v4 msg;
+    std::unique_ptr<dcgm_health_msg_check_v5> msg = std::make_unique<dcgm_health_msg_check_v5>();
     dcgmReturn_t dcgmReturn;
 
-    memset(&msg, 0, sizeof(msg));
-    msg.header.length     = sizeof(msg);
-    msg.header.moduleId   = DcgmModuleIdHealth;
-    msg.header.subCommand = DCGM_HEALTH_SR_CHECK_V4;
-    msg.header.version    = dcgm_health_msg_check_version4;
+    memset(msg.get(), 0, sizeof(*msg));
+    msg->header.length     = sizeof(*msg);
+    msg->header.moduleId   = DcgmModuleIdHealth;
+    msg->header.subCommand = DCGM_HEALTH_SR_CHECK_V5;
+    msg->header.version    = dcgm_health_msg_check_version5;
 
-    msg.groupId   = groupId;
-    msg.startTime = 0;
-    msg.endTime   = 0;
+    msg->groupId   = groupId;
+    msg->startTime = 0;
+    msg->endTime   = 0;
 
-    memcpy(&msg.response, response, sizeof(msg.response));
+    memcpy(&msg->response, response, sizeof(msg->response));
     // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
-    memcpy(response, &msg.response, sizeof(msg.response));
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg->header, sizeof(*msg));
+    memcpy(response, &msg->response, sizeof(msg->response));
     return dcgmReturn;
 }
 
@@ -3428,18 +3424,20 @@ dcgmReturn_t tsapiGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
 
     dcgmReturn_t ret;
 
-    dcgm_core_msg_get_entity_group_entities_t msg = {};
+    std::unique_ptr<dcgm_core_msg_get_entity_group_entities_t> msg
+        = std::make_unique<dcgm_core_msg_get_entity_group_entities_t>();
+    memset(msg.get(), 0, sizeof(*msg));
 
-    msg.header.length     = sizeof(msg);
-    msg.header.moduleId   = DcgmModuleIdCore;
-    msg.header.subCommand = DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES;
-    msg.header.version    = dcgm_core_msg_get_entity_group_entities_version;
+    msg->header.length     = sizeof(*msg);
+    msg->header.moduleId   = DcgmModuleIdCore;
+    msg->header.subCommand = DCGM_CORE_SR_GET_ENTITY_GROUP_ENTITIES;
+    msg->header.version    = dcgm_core_msg_get_entity_group_entities_version;
 
-    msg.entities.flags       = flags;
-    msg.entities.entityGroup = entityGroup;
+    msg->entities.flags       = flags;
+    msg->entities.entityGroup = entityGroup;
 
     // coverity[overrun-buffer-arg]
-    ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+    ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg->header, sizeof(*msg));
 
     if (DCGM_ST_OK != ret)
     {
@@ -3447,21 +3445,21 @@ dcgmReturn_t tsapiGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
     }
 
     /* Check the status of the DCGM command */
-    if (msg.entities.cmdRet != DCGM_ST_OK)
+    if (msg->entities.cmdRet != DCGM_ST_OK)
     {
-        return (dcgmReturn_t)msg.entities.cmdRet;
+        return (dcgmReturn_t)msg->entities.cmdRet;
     }
 
-    *numEntities = msg.entities.numEntities;
+    *numEntities = msg->entities.numEntities;
 
-    if (msg.entities.numEntities > entitiesCapacity)
+    if (msg->entities.numEntities > static_cast<unsigned int>(entitiesCapacity))
     {
         return DCGM_ST_INSUFFICIENT_SIZE;
     }
 
-    for (int i = 0; i < msg.entities.numEntities; i++)
+    for (unsigned int i = 0; i < msg->entities.numEntities; ++i)
     {
-        entities[i] = msg.entities.entities[i];
+        entities[i] = msg->entities.entities[i];
     }
 
     return DCGM_ST_OK;
@@ -3602,12 +3600,12 @@ dcgmReturn_t tsapiDeleteMigEntity(dcgmHandle_t dcgmHandle, dcgmDeleteMigEntity_t
     return dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
 }
 
-dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v3 *linkStatus)
+dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v4 *linkStatus)
 {
     if (!linkStatus)
         return DCGM_ST_BADPARAM;
 
-    if (linkStatus->version != dcgmNvLinkStatus_version3)
+    if (linkStatus->version != dcgmNvLinkStatus_version4)
         return DCGM_ST_VER_MISMATCH;
 
     dcgm_core_msg_get_nvlink_status_t msg = {};
@@ -3642,15 +3640,8 @@ dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_
     return (dcgmReturn_t)msg.info.cmdRet;
 }
 
-dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy)
+dcgmReturn_t helperGetCpuHierarchySysmonMsg(dcgmHandle_t dcgmHandle, dcgm_sysmon_msg_get_cpus_t &sysmonMsg)
 {
-    if (!cpuHierarchy)
-        return DCGM_ST_BADPARAM;
-
-    if (cpuHierarchy->version != dcgmCpuHierarchy_version1)
-        return DCGM_ST_VER_MISMATCH;
-
-    dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
     sysmonMsg.header.length     = sizeof(sysmonMsg);
     sysmonMsg.header.version    = dcgm_sysmon_msg_get_cpus_version;
     sysmonMsg.header.moduleId   = DcgmModuleIdSysmon;
@@ -3665,6 +3656,24 @@ dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *
         return dcgmReturn;
     }
 
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy)
+{
+    if (!cpuHierarchy)
+        return DCGM_ST_BADPARAM;
+
+    if (cpuHierarchy->version != dcgmCpuHierarchy_version1)
+        return DCGM_ST_VER_MISMATCH;
+
+    dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
+    dcgmReturn_t dcgmReturn = helperGetCpuHierarchySysmonMsg(dcgmHandle, sysmonMsg);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        return dcgmReturn;
+    }
+
     for (unsigned int node = 0; node < sysmonMsg.cpuCount; node++)
     {
         const auto &nodeObject = sysmonMsg.cpus[node];
@@ -3674,7 +3683,39 @@ dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *
         cpuHierarchy->numCpus++;
     }
 
-    return dcgmReturn;
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t tsapiGetCpuHierarchy_v2(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v2 *cpuHierarchy)
+{
+    if (!cpuHierarchy)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (cpuHierarchy->version != dcgmCpuHierarchy_version2)
+    {
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
+    dcgmReturn_t dcgmReturn = helperGetCpuHierarchySysmonMsg(dcgmHandle, sysmonMsg);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        return dcgmReturn;
+    }
+
+    for (unsigned int node = 0; node < sysmonMsg.cpuCount; node++)
+    {
+        const auto &nodeObject = sysmonMsg.cpus[node];
+
+        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
+        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
+        cpuHierarchy->numCpus++;
+        SafeCopyTo(cpuHierarchy->cpus[node].serial, (char *)nodeObject.serial);
+    }
+
+    return DCGM_ST_OK;
 }
 
 static dcgmReturn_t tsapiEngineGetDeviceAttributes(dcgmHandle_t pDcgmHandle,
@@ -3904,7 +3945,7 @@ static dcgmReturn_t tsapiEnginePolicySet(dcgmHandle_t pDcgmHandle,
     return helperPolicySet(pDcgmHandle, groupId, policy, statusHandle);
 }
 
-static dcgmReturn_t tsapiEnginePolicyTrigger(dcgmHandle_t pDcgmHandle)
+static dcgmReturn_t tsapiEnginePolicyTrigger(dcgmHandle_t /* pDcgmHandle */)
 {
     /* Policy management is now edge-triggered, so this function has no reason
        to exist anymore. Also, it only ever worked in the embedded case.
@@ -3915,10 +3956,10 @@ static dcgmReturn_t tsapiEnginePolicyTrigger(dcgmHandle_t pDcgmHandle)
 static dcgmReturn_t tsapiEnginePolicyRegister(dcgmHandle_t pDcgmHandle,
                                               dcgmGpuGrp_t groupId,
                                               dcgmPolicyCondition_t condition,
-                                              fpRecvUpdates beginCallback,
-                                              fpRecvUpdates finishCallback)
+                                              fpRecvUpdates callback,
+                                              uint64_t userData)
 {
-    return helperPolicyRegister(pDcgmHandle, groupId, condition, beginCallback, finishCallback);
+    return helperPolicyRegister(pDcgmHandle, groupId, condition, callback, userData);
 }
 
 static dcgmReturn_t tsapiEnginePolicyUnregister(dcgmHandle_t pDcgmHandle,
@@ -4023,12 +4064,12 @@ static dcgmReturn_t tsapiEngineHealthCheck(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_VER_MISMATCH;
     }
 
-    return helperHealthCheckV4(pDcgmHandle, groupId, reinterpret_cast<dcgmHealthResponse_v4 *>(response));
+    return helperHealthCheckV5(pDcgmHandle, groupId, reinterpret_cast<dcgmHealthResponse_v5 *>(response));
 }
 
 static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
-                                                 dcgmRunDiag_v8 *drd,
-                                                 dcgmDiagResponse_v10 *response)
+                                                 dcgmRunDiag_v9 *drd,
+                                                 dcgmDiagResponse_v11 *response)
 {
     return helperActionManager(pDcgmHandle, drd, DCGM_POLICY_ACTION_NONE, response);
 }
@@ -4036,21 +4077,21 @@ static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
 static dcgmReturn_t tsapiEngineActionValidate(dcgmHandle_t pDcgmHandle,
                                               dcgmGpuGrp_t groupId,
                                               dcgmPolicyValidation_t validate,
-                                              dcgmDiagResponse_v10 *response)
+                                              dcgmDiagResponse_v11 *response)
 {
-    dcgmRunDiag_v8 drd8 = {};
+    dcgmRunDiag_v9 drd9 = {};
 
-    drd8.version  = dcgmRunDiag_version8;
-    drd8.validate = validate;
-    drd8.groupId  = groupId;
+    drd9.version  = dcgmRunDiag_version9;
+    drd9.validate = validate;
+    drd9.groupId  = groupId;
 
-    return helperActionManager(pDcgmHandle, &drd8, DCGM_POLICY_ACTION_NONE, response);
+    return helperActionManager(pDcgmHandle, &drd9, DCGM_POLICY_ACTION_NONE, response);
 }
 
 static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                              dcgmGpuGrp_t groupId,
                                              dcgmDiagnosticLevel_t diagLevel,
-                                             dcgmDiagResponse_v10 *diagResponse)
+                                             dcgmDiagResponse_v11 *diagResponse)
 {
     dcgmPolicyValidation_t validation = DCGM_POLICY_VALID_NONE;
 
@@ -4088,10 +4129,10 @@ static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
             return DCGM_ST_BADPARAM;
     }
 
-    if (diagResponse->version == dcgmDiagResponse_version10)
+    if (diagResponse->version == dcgmDiagResponse_version11)
     {
-        dcgmRunDiag_v8 drd = {};
-        drd.version        = dcgmRunDiag_version8;
+        dcgmRunDiag_v9 drd = {};
+        drd.version        = dcgmRunDiag_version9;
         drd.groupId        = groupId;
         drd.validate       = validation;
 
@@ -4105,7 +4146,7 @@ static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
         drd.validate       = validation;
 
         return helperActionManager(
-            pDcgmHandle, reinterpret_cast<dcgmRunDiag_v8 *>(&drd), DCGM_POLICY_ACTION_NONE, diagResponse);
+            pDcgmHandle, reinterpret_cast<dcgmRunDiag_v9 *>(&drd), DCGM_POLICY_ACTION_NONE, diagResponse);
     }
 }
 
@@ -4305,6 +4346,45 @@ dcgmReturn_t tsapiEngineJobRemoveAll(dcgmHandle_t pDcgmHandle)
     return helperJobStatCmd(pDcgmHandle, 0, "", DCGM_CORE_SR_JOB_REMOVE_ALL);
 }
 
+static dcgmReturn_t tsapiEngineGetWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHandle,
+                                                           unsigned int gpuId,
+                                                           dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                                                           dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus)
+{
+    dcgmReturn_t dcgmReturn;
+
+    if (profilesInfo == nullptr || profilesStatus == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (profilesInfo->version != dcgmWorkloadPowerProfileProfilesInfo_version
+        || profilesStatus->version != dcgmDeviceWorkloadPowerProfilesStatus_version)
+    {
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_core_msg_get_workload_power_profiles_status_v1 msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_GET_WORKLOAD_POWER_PROFILES_STATUS;
+    msg.header.version    = dcgm_core_msg_get_workload_power_profiles_status_version;
+
+    msg.pp.gpuId = gpuId;
+
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK == dcgmReturn)
+    {
+        /* Copy the response back over the request */
+        memcpy(profilesInfo, &msg.pp.profilesInfo, sizeof(dcgmWorkloadPowerProfileProfilesInfo_v1));
+        memcpy(profilesStatus, &msg.pp.profilesStatus, sizeof(dcgmDeviceWorkloadPowerProfilesStatus_v1));
+    }
+
+    return (dcgmReturn_t)msg.cmdRet;
+}
+
 static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
                                                  unsigned int gpuId,
                                                  dcgmDeviceTopology_t *deviceTopology)
@@ -4487,61 +4567,6 @@ static dcgmReturn_t tsapiEngineGroupTopology(dcgmHandle_t pDcgmHandle,
 
     groupTopology->numaOptimalFlag = (foundDifference) ? 0 : 1;
     return ret;
-}
-
-static dcgmReturn_t tsapiMetadataToggleState(dcgmHandle_t dcgmHandle,
-                                             /* dcgmIntrospectState_t */ unsigned int enabledStatus)
-{
-    DCGM_LOG_WARNING << "dcgmMetadataToggleState is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiMetadataStateSetRunInterval(dcgmHandle_t dcgmHandle, unsigned int runIntervalMs)
-{
-    DCGM_LOG_WARNING << "dcgmMetadataStateSetRunInterval is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiMetadataUpdateAll(dcgmHandle_t dcgmHandle, int waitForUpdate)
-{
-    DCGM_LOG_WARNING << "dcgmMetadataUpdateAll is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiIntrospectGetFieldsMemoryUsage(dcgmHandle_t dcgmHandle,
-                                                        /* dcgmIntrospectContext_t */ void *context,
-                                                        /* dcgmIntrospectFullMemory_t */ void *memoryInfo,
-                                                        int waitIfNoData)
-{
-    DCGM_LOG_WARNING << "dcgmIntrospectGetFieldsMemoryUsage is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiIntrospectGetFieldMemoryUsage(dcgmHandle_t dcgmHandle,
-                                                       unsigned short fieldId,
-                                                       /* dcgmIntrospectFullMemory_t */ void *memoryInfo,
-                                                       int waitIfNoData)
-{
-    DCGM_LOG_WARNING << "dcgmIntrospectGetFieldMemoryUsage is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiIntrospectGetFieldsExecTime(dcgmHandle_t dcgmHandle,
-                                                     /* dcgmIntrospectContext_t */ void *context,
-                                                     /* dcgmIntrospectFullFieldsExecTime_t */ void *execTime,
-                                                     int waitIfNoData)
-{
-    DCGM_LOG_WARNING << "dcgmIntrospectGetFieldsExecTime is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-static dcgmReturn_t tsapiIntrospectGetFieldExecTime(dcgmHandle_t dcgmHandle,
-                                                    unsigned short fieldId,
-                                                    /* dcgmIntrospectFullFieldsExecTime_t */ void *execTime,
-                                                    int waitIfNoData)
-{
-    DCGM_LOG_WARNING << "dcgmIntrospectGetFieldExecTime is no longer supported.";
-    return DCGM_ST_NOT_SUPPORTED;
 }
 
 static dcgmReturn_t tsapiIntrospectGetHostengineMemoryUsage(dcgmHandle_t dcgmHandle,
@@ -4727,44 +4752,6 @@ dcgmReturn_t tsapiProfGetSupportedMetricGroups(dcgmHandle_t dcgmHandle, dcgmProf
     memcpy(metricGroups, &msg.metricGroups, sizeof(*metricGroups));
 
     return dcgmReturn;
-}
-
-/*****************************************************************************/
-dcgmReturn_t tsapiProfWatchFields(dcgmHandle_t dcgmHandle, dcgmProfWatchFields_t *watchFields)
-{
-    if (!watchFields)
-    {
-        DCGM_LOG_ERROR << "Bad param";
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (watchFields->version != dcgmProfWatchFields_version)
-    {
-        DCGM_LOG_ERROR << "Version mismatch";
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    DCGM_LOG_ERROR << "dcgmProfWatchFields() is no longer supported in DCGM 3.0. Use dcgmWatchFields().";
-    return DCGM_ST_NOT_SUPPORTED;
-}
-
-/*****************************************************************************/
-dcgmReturn_t tsapiProfUnwatchFields(dcgmHandle_t dcgmHandle, dcgmProfUnwatchFields_t *unwatchFields)
-{
-    if (!unwatchFields)
-    {
-        DCGM_LOG_ERROR << "Bad param";
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (unwatchFields->version != dcgmProfUnwatchFields_version)
-    {
-        DCGM_LOG_ERROR << "Version mismatch";
-        return DCGM_ST_VER_MISMATCH;
-    }
-
-    DCGM_LOG_ERROR << "dcgmProfUnwatchFields() is no longer supported in DCGM 3.0. Use dcgmUnwatchFields().";
-    return DCGM_ST_NOT_SUPPORTED;
 }
 
 /*****************************************************************************/
@@ -5163,6 +5150,49 @@ dcgmReturn_t tsapiInjectedNvmlDeviceReset(dcgmHandle_t dcgmHandle, unsigned int 
     }
     return (dcgmReturn_t)msg.info.cmdRet;
 }
+
+dcgmReturn_t tsapiRemoveNvmlInjectedGpu(dcgmHandle_t dcgmHandle, char const *uuid)
+{
+    dcgm_core_msg_remove_restore_nvml_injected_gpu_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_REMOVE_NVML_INJECTED_GPU;
+    msg.header.version    = dcgm_core_msg_remove_restore_nvml_injected_gpu_version;
+    SafeCopyTo(msg.info.uuid, uuid);
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiRestoreNvmlInjectedGpu(dcgmHandle_t dcgmHandle, char const *uuid)
+{
+    dcgm_core_msg_remove_restore_nvml_injected_gpu_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_RESTORE_NVML_INJECTED_GPU;
+    msg.header.version    = dcgm_core_msg_remove_restore_nvml_injected_gpu_version;
+    SafeCopyTo(msg.info.uuid, uuid);
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_DEBUG << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
 #endif
 
 /*****************************************************************************/
@@ -5779,6 +5809,33 @@ dcgmReturn_t DCGM_PUBLIC_API tsapiPause(dcgmHandle_t pDcgmHandle)
 dcgmReturn_t DCGM_PUBLIC_API tsapiResume(dcgmHandle_t pDcgmHandle)
 {
     return HelperDcgmPauseResume(pDcgmHandle, false);
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiNvswitchGetBackend(dcgmHandle_t pDcgmHandle,
+                                                     bool *active,
+                                                     char *backendName,
+                                                     unsigned int backendNameLength)
+{
+    dcgm_core_msg_nvswitch_get_backend_t msg {};
+
+    if (sizeof(msg.backendName) > backendNameLength)
+    {
+        return DCGM_ST_INSUFFICIENT_SIZE;
+    }
+
+    backendNameLength = std::min(backendNameLength, (unsigned int)sizeof(msg.backendName));
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_NVSWITCH_GET_BACKEND;
+    msg.header.version    = dcgm_core_msg_nvswitch_get_backend_version;
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+
+    *active = msg.active;
+    snprintf(backendName, backendNameLength, "%s", msg.backendName);
+
+    return ret;
 }
 
 /*****************************************************************************/

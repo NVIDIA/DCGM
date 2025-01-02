@@ -49,6 +49,10 @@ public:
     dcgmReturn_t GetFuncCallCount(injectNvmlFuncCallCounts_t *funcCallCounts);
 
     dcgmReturn_t ResetFuncCallCount();
+
+    dcgmReturn_t RemoveGpu(char const *uuid);
+
+    dcgmReturn_t RestoreGpu(char const *uuid);
 #endif
 
     dcgmReturn_t CreateDevice(unsigned int index);
