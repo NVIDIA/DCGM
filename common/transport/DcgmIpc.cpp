@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,10 +107,10 @@ dcgmReturn_t DcgmIpc::Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters
     m_tcpParameters    = tcpParameters;
     m_domainParameters = domainParameters;
 
-    m_processMessageFunc = processMessageFunc;
+    m_processMessageFunc = std::move(processMessageFunc);
     m_processMessageData = processMessageData;
 
-    m_processDisconnectFunc = processDisconnectFunc;
+    m_processDisconnectFunc = std::move(processDisconnectFunc);
     m_processDisconnectData = processDisconnectData;
 
     m_initPromise = {};
@@ -275,8 +275,9 @@ static int SetNonBlocking(int fd)
 /*****************************************************************************/
 dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
 {
-    struct sockaddr_in listenAddr;
-    int reuseAddrOn;
+    struct sockaddr_in listenAddr4;
+    struct sockaddr_in6 listenAddr6;
+    struct sockaddr_storage listenAddr;
 
     ASSERT_IS_IPC_THREAD;
 
@@ -286,15 +287,63 @@ dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
         return DCGM_ST_OK;
     }
 
+    memset(&listenAddr4, 0, sizeof(listenAddr4));
+    listenAddr4.sin_family = AF_INET;
+    listenAddr4.sin_port   = htons(m_tcpParameters.value().port);
+
+    memset(&listenAddr6, 0, sizeof(listenAddr6));
+    listenAddr6.sin6_family = AF_INET6;
+    listenAddr6.sin6_port   = htons(m_tcpParameters.value().port);
+
+    if (m_tcpParameters.value().bindIPAddress.size() > 0)
+    {
+        if (inet_aton(m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr4.sin_addr) == 1)
+        {
+            memset(&listenAddr, 0, sizeof(listenAddr));
+            memcpy(&listenAddr, &listenAddr4, std::min(sizeof(listenAddr4), sizeof(listenAddr)));
+        }
+        else if (inet_pton(AF_INET6, m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr6.sin6_addr) == 1)
+        {
+            memset(&listenAddr, 0, sizeof(listenAddr));
+            memcpy(&listenAddr, &listenAddr6, std::min(sizeof(listenAddr6), sizeof(listenAddr)));
+        }
+        else
+        {
+            log_error("Unable to convert \"{}\" to a network address.", m_tcpParameters.value().bindIPAddress);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+    }
+    else
+    {
+        /* Bind to all interfaces (IPv4 and IPv6) */
+        listenAddr6.sin6_addr = in6addr_any;
+
+        memset(&listenAddr, 0, sizeof(listenAddr));
+        memcpy(&listenAddr, &listenAddr6, std::min(sizeof(listenAddr6), sizeof(listenAddr)));
+    }
+
     /* Create our listening socket. */
-    m_tcpListenSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+    m_tcpListenSocketFd = socket(listenAddr.ss_family, SOCK_STREAM, 0);
     if (m_tcpListenSocketFd < 0)
     {
         DCGM_LOG_ERROR << "ERROR: socket creation failed";
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    reuseAddrOn = 1;
+    if (listenAddr.ss_family == AF_INET6
+        && memcmp(listenAddr6.sin6_addr.s6_addr, in6addr_any.s6_addr, sizeof(listenAddr6.sin6_addr.s6_addr)) == 0)
+    {
+        int const ipv6Only = 0;
+        if (setsockopt(m_tcpListenSocketFd, IPPROTO_IPV6, IPV6_V6ONLY, &ipv6Only, sizeof(ipv6Only)))
+        {
+            DCGM_LOG_ERROR << "ERROR: setsockopt(IPV6_V6ONLY) failed. errno " << errno;
+            close(m_tcpListenSocketFd);
+            m_tcpListenSocketFd = -1;
+            return DCGM_ST_GENERIC_ERROR;
+        }
+    }
+
+    int const reuseAddrOn = 1;
     if (setsockopt(m_tcpListenSocketFd, SOL_SOCKET, SO_REUSEADDR, &reuseAddrOn, sizeof(reuseAddrOn)))
     {
         DCGM_LOG_ERROR << "ERROR: setsockopt(SO_REUSEADDR) failed. errno " << errno;
@@ -303,24 +352,6 @@ dcgmReturn_t DcgmIpc::InitTCPListenerSocket()
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    memset(&listenAddr, 0, sizeof(listenAddr));
-    listenAddr.sin_family      = AF_INET;
-    listenAddr.sin_addr.s_addr = INADDR_ANY;
-
-    if (m_tcpParameters.value().bindIPAddress.size() > 0)
-    {
-        /* Convert mSocketPath to a number in network byte order */
-        if (!inet_aton(m_tcpParameters.value().bindIPAddress.c_str(), &listenAddr.sin_addr))
-        {
-            DCGM_LOG_ERROR << "Unable to convert \"" << m_tcpParameters.value().bindIPAddress
-                           << "\" to a network address.";
-            close(m_tcpListenSocketFd);
-            m_tcpListenSocketFd = -1;
-            return DCGM_ST_GENERIC_ERROR;
-        }
-    }
-
-    listenAddr.sin_port = htons(m_tcpParameters.value().port);
     if (bind(m_tcpListenSocketFd, (struct sockaddr *)&listenAddr, sizeof(listenAddr)) < 0)
     {
         DCGM_LOG_ERROR << "bind failed. port " << m_tcpParameters.value().port << ", address "
@@ -544,7 +575,8 @@ dcgmReturn_t DcgmIpc::RemoveConnectionByBev(struct bufferevent *bev)
     pd.processDisconnect = m_processDisconnectFunc;
     pd.userData          = m_processDisconnectData;
 
-    m_workersPool.Enqueue([pd]() mutable { DcgmIpc::ProcessDisconnectInPool(pd); });
+    m_workersPool.Enqueue([thisPd = std::move(pd)]() mutable { DcgmIpc::ProcessDisconnectInPool(thisPd); });
+
     return DCGM_ST_OK;
 }
 
@@ -579,8 +611,21 @@ void DcgmIpc::ConnectTcpAsyncImpl(DcgmIpcConnectTcp &tcpConnect)
     bufferevent_setcb(bev, DcgmIpc::StaticReadCB, NULL, DcgmIpc::StaticEventCB, this);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
-    int ret = bufferevent_socket_connect_hostname(
-        bev, m_dnsBase, AF_INET, tcpConnect.m_hostname.c_str(), tcpConnect.m_port);
+    /* Allow IPv6 IPs to override family */
+    sa_family_t family    = AF_INET;
+    std::string &hostname = tcpConnect.m_hostname;
+    if (hostname.size() >= 3 && hostname[0] == '[' && hostname[hostname.size() - 1] == ']')
+    {
+        hostname = hostname.substr(1, hostname.size() - 2);
+    }
+    char buf[16];
+    memset(buf, 0, sizeof(buf));
+    if (inet_pton(AF_INET6, hostname.c_str(), buf) > 0)
+    {
+        family = AF_INET6;
+    }
+
+    int ret = bufferevent_socket_connect_hostname(bev, m_dnsBase, family, hostname.c_str(), tcpConnect.m_port);
     if (0 != ret)
     {
         RemoveConnectionByBev(bev);
@@ -612,7 +657,7 @@ dcgmReturn_t DcgmIpc::ConnectTcp(std::string hostname,
 
     /* Using new here because we're transferring it through a C callback. The callback will
        assign this to a unique_ptr and then free it automatically */
-    DcgmIpcConnectTcp *connectTcp = new DcgmIpcConnectTcp(this, hostname, port, connectionId);
+    DcgmIpcConnectTcp *connectTcp = new DcgmIpcConnectTcp(this, std::move(hostname), port, connectionId);
 
     std::future<dcgmReturn_t> connectReturn = connectTcp->m_promise.get_future();
 
@@ -717,7 +762,7 @@ dcgmReturn_t DcgmIpc::ConnectDomain(std::string path, dcgm_connection_id_t &conn
 
     /* Using new here because we're transferring it through a C callback. The callback will
        assign this to a unique_ptr and then free it automatically */
-    DcgmIpcConnectDomain *connectDomain = new DcgmIpcConnectDomain(this, path, connectionId);
+    DcgmIpcConnectDomain *connectDomain = new DcgmIpcConnectDomain(this, std::move(path), connectionId);
 
     std::future<dcgmReturn_t> connectReturn = connectDomain->m_promise.get_future();
 
@@ -1122,8 +1167,8 @@ dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
         /* Read the message body. Do we have enough input data? */
         if (inputBufRemaining < static_cast<size_t>(m_readHeader.length))
         {
-            DCGM_LOG_DEBUG << "Have " << inputBufRemaining << "/" << m_readHeader.length << " bytes of msgType 0x"
-                           << std::hex << m_readHeader.msgType;
+            DCGM_LOG_VERBOSE << "Have " << inputBufRemaining << "/" << m_readHeader.length << " bytes of msgType 0x"
+                             << std::hex << m_readHeader.msgType;
             return retSt;
         }
 
@@ -1221,7 +1266,7 @@ void DcgmIpc::SendMessageImpl(DcgmIpcSendMessage &sendMessage)
     ASSERT_IS_IPC_THREAD;
 
     /* TCP/IP */
-    DCGM_LOG_DEBUG << "Sending message to " << sendMessage.m_connectionId;
+    DCGM_LOG_VERBOSE << "Sending message to " << sendMessage.m_connectionId;
 
     DcgmIpcConnection *connection = ConnectionIdToPtr(sendMessage.m_connectionId);
     if (connection == nullptr)

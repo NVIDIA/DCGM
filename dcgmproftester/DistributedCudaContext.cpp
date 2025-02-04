@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,14 +83,13 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
     m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
 
-    cuSt = cuInit(0);
-    if (cuSt)
+    if (cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
     {
         const char *errorString { nullptr };
-
         cuGetErrorString(cuSt, &errorString);
 
-        m_error << "cuInit returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
+        m_error << "cuInit returned " << static_cast<unsigned int>(cuSt) << " - " << errorString << " for "
+                << (GetPhysicalGpu()->IsMIG() ? m_cudaVisibleDevices.c_str() : std::to_string(m_device)) << '\n';
 
         return DCGM_ST_GENERIC_ERROR;
     }
@@ -103,12 +102,12 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
 
         std::string busId = GetPhysicalGpu()->GetGpuBusId().c_str();
 
-        cuSt = cuDeviceGetByPCIBusId(&m_device, busId.c_str());
-        if (cuSt)
+        if (cuSt = cuDeviceGetByPCIBusId(&m_device, busId.c_str()); cuSt != CUDA_SUCCESS)
         {
             const char *errorString { nullptr };
             cuGetErrorString(cuSt, &errorString);
-            m_error << "cuDeviceGetByPCIBusId returned " << errorString << " for " << busId.c_str() << '\n';
+            m_error << "cuDeviceGetByPCIBusId returned " << static_cast<unsigned int>(cuSt) << " - " << errorString
+                    << " for " << busId.c_str() << '\n';
             return DCGM_ST_GENERIC_ERROR;
         }
 
@@ -119,99 +118,33 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
         m_device = 0;
     }
 
-    /* Get Device Attributes */
-    cuSt = cuDeviceGetAttribute(
-        &m_attributes.m_maxThreadsPerMultiProcessor, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, m_device);
-    if (cuSt)
+    std::pair<int *, CUdevice_attribute const> const attributes[] = {
+        { &m_attributes.m_maxThreadsPerMultiProcessor, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR },
+        { &m_attributes.m_multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT },
+        { &m_attributes.m_sharedMemPerMultiprocessor, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR },
+        { &m_attributes.m_computeCapabilityMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR },
+        { &m_attributes.m_computeCapabilityMinor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR },
+        { &m_attributes.m_memoryBusWidth, CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH },
+        { &m_attributes.m_maxMemoryClockMhz, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE },
+        { &m_attributes.m_eccSupport, CU_DEVICE_ATTRIBUTE_ECC_ENABLED },
+    };
+
+    for (auto [value, cuDevAttr] : attributes)
     {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt
-        = cuDeviceGetAttribute(&m_attributes.m_multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, m_device);
-
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_attributes.m_sharedMemPerMultiprocessor, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_attributes.m_computeCapabilityMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_attributes.m_computeCapabilityMinor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
+        bool const isMIG = GetPhysicalGpu()->IsMIG();
+        if (cuSt = cuDeviceGetAttribute(value, cuDevAttr, m_device); cuSt != CUDA_SUCCESS)
+        {
+            const char *errorString { nullptr };
+            cuGetErrorString(cuSt, &errorString);
+            m_error << "cuDeviceGetAttribute(" << static_cast<unsigned int>(cuDevAttr) << ") returned "
+                    << static_cast<unsigned int>(cuSt) << " - " << errorString << " for "
+                    << (isMIG ? m_cudaVisibleDevices.c_str() : std::to_string(m_device)) << "\n";
+            return DCGM_ST_GENERIC_ERROR;
+        }
     }
 
     m_attributes.m_computeCapability
         = (double)m_attributes.m_computeCapabilityMajor + ((double)m_attributes.m_computeCapabilityMinor / 10.0);
-
-    cuSt = cuDeviceGetAttribute(&m_attributes.m_memoryBusWidth, CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(&m_attributes.m_maxMemoryClockMhz, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
 
     /* Convert to MHz */
     m_attributes.m_maxMemoryClockMhz /= 1000;
@@ -222,18 +155,6 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
      */
     m_attributes.m_maxMemBandwidth
         = (double)m_attributes.m_maxMemoryClockMhz * 1000000.0 * 2.0 * (double)m_attributes.m_memoryBusWidth / 8.0;
-
-    cuSt = cuDeviceGetAttribute(&m_attributes.m_eccSupport, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, m_device);
-    if (cuSt)
-    {
-        const char *errorString { nullptr };
-
-        cuGetErrorString(cuSt, &errorString);
-
-        m_error << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaVisibleDevices.c_str() << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
 
     m_message << "DCGM CudaContext Init completed successfully." << '\n' << '\n';
 
@@ -1166,6 +1087,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
 /*****************************************************************************/
 int DistributedCudaContext::RunSubtestPcieBandwidth(void)
 {
+    constexpr int HOPPER_COMPAT = 9;
     int retSt { 0 };
 
     /* Setting target to 1.0 since it's ignored anyway. We can update
@@ -1192,7 +1114,7 @@ int DistributedCudaContext::RunSubtestPcieBandwidth(void)
         perSecond /= 1000000.0; /* Bytes -> MiB */
 
         /* Adjust for PCIe protocol overhead per chip generation */
-        if (m_attributes.m_computeCapabilityMajor == 9)
+        if (m_attributes.m_computeCapabilityMajor >= HOPPER_COMPAT)
         {
             perSecond *= 1.08; /* Consistently saw an 8% difference in testing */
         }

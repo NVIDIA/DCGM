@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ const long long defaultFrequency = 5000000; // update each field every 5 seconds
 
 errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SBE_ERROR_THRESHOLD },
                                       { DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, nullptr },
-                                      { DCGM_FI_DEV_THERMAL_VIOLATION, nullptr },
                                       { DCGM_FI_DEV_XID_ERRORS, nullptr },
                                       { DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PCIE_STR_MAX_PCIE_REPLAYS },
                                       { DCGM_FI_DEV_ROW_REMAP_PENDING, nullptr },
@@ -43,15 +42,16 @@ errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SB
                                       { DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS, nullptr },
                                       { 0, nullptr } };
 
-unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,
-                                        DCGM_FI_DEV_GPU_UTIL,
-                                        DCGM_FI_DEV_POWER_USAGE,
-                                        DCGM_FI_DEV_SM_CLOCK,
-                                        DCGM_FI_DEV_MEM_CLOCK,
-                                        DCGM_FI_DEV_POWER_VIOLATION,
-                                        DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
-                                        DCGM_FI_DEV_MEMORY_TEMP,
-                                        0 };
+unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,          DCGM_FI_DEV_GPU_UTIL,
+                                        DCGM_FI_DEV_POWER_USAGE,       DCGM_FI_DEV_SM_CLOCK,
+                                        DCGM_FI_DEV_MEM_CLOCK,         DCGM_FI_DEV_POWER_VIOLATION,
+                                        DCGM_FI_DEV_THERMAL_VIOLATION, DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
+                                        DCGM_FI_DEV_MEMORY_TEMP,       0 };
+
+dcgmReturn_t DcgmRecorderBase::GetCurrentFieldValue(unsigned int, unsigned short, dcgmFieldValue_v2 &, unsigned int)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
 
 DcgmRecorder::DcgmRecorder()
     : m_fieldIds()
@@ -91,6 +91,7 @@ DcgmRecorder::DcgmRecorder(DcgmRecorder &&other) noexcept
     , m_valuesHolder(other.m_valuesHolder)
     , m_nextValuesSinceTs(other.m_nextValuesSinceTs)
     , m_watchFrequency(other.m_watchFrequency)
+    , m_ignoreErrorCodes(other.m_ignoreErrorCodes)
 {}
 
 DcgmRecorder::~DcgmRecorder()
@@ -571,20 +572,25 @@ void DcgmRecorder::AddFieldViolationError(unsigned short fieldId,
                                           int64_t intValue,
                                           double dblValue,
                                           const std::string &fieldName,
-                                          std::vector<DcgmError> &errorList)
+                                          std::vector<DcgmError> &fatalErrorList,
+                                          std::vector<DcgmError> &ignoredErrorList,
+                                          int &st)
 {
     DcgmError d { gpuId };
 
     FormatFieldViolationError(d, fieldId, gpuId, startTime, intValue, dblValue, fieldName);
 
-    errorList.push_back(d);
+    AddOrClearError(d, fatalErrorList, ignoredErrorList, st);
 }
 
 void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
                                                    unsigned int gpuId,
                                                    int64_t intValue,
                                                    int64_t thresholdValue,
-                                                   const std::string &fieldName)
+                                                   const std::string &fieldName,
+                                                   std::vector<DcgmError> &fatalErrorList,
+                                                   std::vector<DcgmError> &ignoredErrorList,
+                                                   int &st)
 {
     DcgmError d { gpuId };
     switch (fieldId)
@@ -614,9 +620,13 @@ void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
 
             break;
     }
+    AddOrClearError(d, fatalErrorList, ignoredErrorList, st);
 }
 
-int DcgmRecorder::CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+int DcgmRecorder::CheckXIDs(unsigned int gpuId,
+                            timelib64_t startTime,
+                            std::vector<DcgmError> &fatalErrorList,
+                            std::vector<DcgmError> &ignoredErrorList)
 {
     int count = DCGM_MAX_XID_INFO;
     dcgmFieldValue_v1 values[DCGM_MAX_XID_INFO];
@@ -643,8 +653,8 @@ int DcgmRecorder::CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vect
     {
         DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_XID_ERROR, d, error, gpuId);
-        errorList.push_back(d);
         st = DR_VIOLATION;
+        AddOrClearError(d, fatalErrorList, ignoredErrorList, st);
     }
 
     return st;
@@ -653,8 +663,8 @@ int DcgmRecorder::CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vect
 int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                                    const std::vector<dcgmTimeseriesInfo_t> *failureThresholds,
                                    unsigned int gpuId,
-                                   long long maxTemp,
-                                   std::vector<DcgmError> &errorList,
+                                   std::vector<DcgmError> &fatalErrorList,
+                                   std::vector<DcgmError> &ignoredErrorList,
                                    timelib64_t startTime)
 {
     int st = DR_SUCCESS;
@@ -681,7 +691,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CANNOT_GET_FIELD_TAG, d, fieldIds[i]);
-            errorList.push_back(d);
+            fatalErrorList.push_back(d);
             return DR_COMM_ERROR;
         }
 
@@ -699,7 +709,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, fm->tag, gpuId);
-            errorList.push_back(d);
+            fatalErrorList.push_back(d);
             return DR_COMM_ERROR;
         }
 
@@ -711,22 +721,30 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
             if (failureThresholds == nullptr && fsr.response.values[valueIndex].i64 > 0
                 && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
+                st = DR_VIOLATION;
                 AddFieldViolationError(fieldIds[i],
                                        gpuId,
                                        startTime,
                                        fsr.response.values[valueIndex].i64,
                                        DCGM_FP64_BLANK,
                                        fm->tag,
-                                       errorList);
-                st = DR_VIOLATION;
+                                       fatalErrorList,
+                                       ignoredErrorList,
+                                       st);
             }
             else if (failureThresholds != nullptr
                      && fsr.response.values[valueIndex].i64 > static_cast<int64_t>((*failureThresholds)[i].val.i64)
                      && DCGM_INT64_IS_BLANK(fsr.response.values[valueIndex].i64) == 0)
             {
-                AddFieldThresholdViolationError(
-                    fieldIds[i], gpuId, fsr.response.values[valueIndex].i64, (*failureThresholds)[i].val.i64, fm->tag);
                 st = DR_VIOLATION;
+                AddFieldThresholdViolationError(fieldIds[i],
+                                                gpuId,
+                                                fsr.response.values[valueIndex].i64,
+                                                (*failureThresholds)[i].val.i64,
+                                                fm->tag,
+                                                fatalErrorList,
+                                                ignoredErrorList,
+                                                st);
             }
         }
         else if (fm->fieldType == DCGM_FT_DOUBLE)
@@ -734,14 +752,16 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
             if (failureThresholds == nullptr && fsr.response.values[valueIndex].fp64 > 0.0
                 && DCGM_FP64_IS_BLANK(fsr.response.values[valueIndex].fp64) == 0)
             {
+                st = DR_VIOLATION;
                 AddFieldViolationError(fieldIds[i],
                                        gpuId,
                                        startTime,
                                        DCGM_INT64_BLANK,
                                        fsr.response.values[valueIndex].fp64,
                                        fm->tag,
-                                       errorList);
-                st = DR_VIOLATION;
+                                       fatalErrorList,
+                                       ignoredErrorList,
+                                       st);
             }
             else if (failureThresholds != nullptr
                      && fsr.response.values[valueIndex].fp64 > (*failureThresholds)[i].val.fp64
@@ -754,28 +774,40 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                                           fm->tag,
                                           gpuId,
                                           (*failureThresholds)[i].val.fp64);
-                errorList.push_back(d);
                 st = DR_VIOLATION;
+                AddOrClearError(d, fatalErrorList, ignoredErrorList, st);
             }
         }
         else
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNSUPPORTED_FIELD_TYPE, d, fm->tag);
-            errorList.push_back(d);
+            fatalErrorList.push_back(d);
             st = DR_VIOLATION;
         }
     }
+    return st;
+}
+
+int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
+                                   const std::vector<dcgmTimeseriesInfo_t> *failureThresholds,
+                                   unsigned int gpuId,
+                                   long long maxTemp,
+                                   std::vector<DcgmError> &fatalErrorList,
+                                   std::vector<DcgmError> &ignoredErrorList,
+                                   timelib64_t startTime)
+{
+    int st = CheckErrorFields(fieldIds, failureThresholds, gpuId, fatalErrorList, ignoredErrorList, startTime);
 
     std::string infoMsg;
     long long highTemp;
-    int tmpSt = CheckGpuTemperature(gpuId, errorList, maxTemp, infoMsg, startTime, highTemp);
+    int tmpSt = CheckGpuTemperature(gpuId, fatalErrorList, maxTemp, infoMsg, startTime, highTemp);
     if (tmpSt == DR_VIOLATION || (st == DR_SUCCESS && st != tmpSt))
     {
         st = tmpSt;
     }
 
-    tmpSt = CheckXIDs(gpuId, startTime, errorList);
+    tmpSt = CheckXIDs(gpuId, startTime, fatalErrorList, ignoredErrorList);
     if (tmpSt == DR_VIOLATION || (st == DR_SUCCESS && st != tmpSt))
     {
         st = tmpSt;
@@ -901,7 +933,10 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
 }
 
 
-int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
+                                      timelib64_t startTime,
+                                      std::vector<DcgmError> &fatalErrorList,
+                                      std::vector<DcgmError> &ignoredErrorList)
 {
     // mask for the failures we're evaluating
     static const uint64_t failureMask = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL
@@ -930,7 +965,7 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime,
     {
         DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, st, "clocks event", gpuId);
-        errorList.push_back(d);
+        fatalErrorList.push_back(d);
         return DR_COMM_ERROR;
     }
 
@@ -968,16 +1003,19 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime,
             rc = DR_VIOLATION;
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCKS_EVENT_VIOLATION, d, gpuId, timeDiff, detail);
-            errorList.push_back(d);
+            AddOrClearError(d, fatalErrorList, ignoredErrorList, rc);
         }
     }
 
     return rc;
 }
 
-int DcgmRecorder::CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList)
+int DcgmRecorder::CheckForThrottling(unsigned int gpuId,
+                                     timelib64_t startTime,
+                                     std::vector<DcgmError> &fatalErrorList,
+                                     std::vector<DcgmError> &ignoredErrorList)
 {
-    return CheckForClocksEvent(gpuId, startTime, errorList);
+    return CheckForClocksEvent(gpuId, startTime, fatalErrorList, ignoredErrorList);
 }
 
 dcgmReturn_t DcgmRecorder::GetCurrentFieldValue(unsigned int gpuId,
@@ -990,7 +1028,7 @@ dcgmReturn_t DcgmRecorder::GetCurrentFieldValue(unsigned int gpuId,
     return m_dcgmSystem.GetGpuLatestValue(gpuId, fieldId, flags, value);
 }
 
-int DcgmRecorder::GetLatestValuesForWatchedFields(unsigned int flags, std::vector<DcgmError> &errorList)
+int DcgmRecorder::GetLatestValuesForWatchedFields(unsigned int flags, std::vector<DcgmError> &fatalErrorList)
 {
     dcgmReturn_t ret = m_dcgmSystem.GetLatestValuesForGpus(m_gpuIds, m_fieldIds, flags, storeValues, &m_valuesHolder);
 
@@ -998,7 +1036,7 @@ int DcgmRecorder::GetLatestValuesForWatchedFields(unsigned int flags, std::vecto
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "all watched fields", DcgmError::GpuIdTag::Unknown);
-        errorList.push_back(d);
+        fatalErrorList.push_back(d);
         return DR_COMM_ERROR;
     }
 
@@ -1085,12 +1123,29 @@ long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginEntityInfo_v1 &enti
     }
 }
 
-std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
-                                                       timelib64_t startTime,
-                                                       nvvsPluginResult_t &result,
-                                                       std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos)
+void DcgmRecorder::CheckNonFatalErrors(timelib64_t startTime,
+                                       dcgmGroupEntityPair_t const entity,
+                                       std::vector<DcgmError> &fatalErrors,
+                                       std::vector<DcgmError> &ignoredErrors)
 {
-    std::vector<DcgmError> errors;
+    if (CheckForClocksEvent(entity.entityId, startTime, fatalErrors, ignoredErrors) == DR_COMM_ERROR)
+    {
+        DCGM_LOG_ERROR << "Unable to read the clocks event information from the hostengine";
+    }
+
+    std::vector<unsigned short> nfFieldIds = { DCGM_FI_DEV_THERMAL_VIOLATION };
+    // error checking and reporting handled in CheckErrorFields()
+    (void)CheckErrorFields(nfFieldIds, nullptr, entity.entityId, fatalErrors, ignoredErrors, startTime);
+}
+
+
+void DcgmRecorder::CheckCommonErrors(TestParameters &tp,
+                                     timelib64_t startTime,
+                                     nvvsPluginResult_t &result,
+                                     std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos,
+                                     std::vector<DcgmError> &fatalErrors,
+                                     std::vector<DcgmError> &ignoredErrors)
+{
     std::vector<unsigned short> fieldIds;
     std::vector<dcgmTimeseriesInfo_t> thresholds;
     std::vector<dcgmTimeseriesInfo_t> *thresholdsPtr = nullptr;
@@ -1128,8 +1183,9 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
             continue;
         }
         long long maxTemp = DetermineMaxTemp(entityInfo);
-        int ret = CheckErrorFields(fieldIds, thresholdsPtr, entityInfo.entity.entityId, maxTemp, errors, startTime);
-        int retHBMErrorFields = CheckHBMErrorFields(entityInfo, errors, startTime);
+        int ret           = CheckErrorFields(
+            fieldIds, thresholdsPtr, entityInfo.entity.entityId, maxTemp, fatalErrors, ignoredErrors, startTime);
+        int retHBMErrorFields = CheckHBMErrorFields(entityInfo, fatalErrors, startTime);
 
         // ret - violation, retHBMErrorFields - violation --> ret = violation
         // ret - success, retHBMErrorFields - violation --> ret = violation
@@ -1149,17 +1205,9 @@ std::vector<DcgmError> DcgmRecorder::CheckCommonErrors(TestParameters &tp,
         else if (ret == DR_VIOLATION || result == NVVS_RESULT_FAIL)
         {
             result = NVVS_RESULT_FAIL;
-            // Check for clocks event
-            ret = CheckForClocksEvent(entityInfo.entity.entityId, startTime, errors);
-            if (ret == DR_COMM_ERROR)
-            {
-                DCGM_LOG_ERROR << "Unable to read the clocks event information from the hostengine";
-                result = NVVS_RESULT_FAIL;
-            }
+            CheckNonFatalErrors(startTime, entityInfo.entity, fatalErrors, ignoredErrors);
         }
     }
-
-    return errors;
 }
 
 std::string DcgmRecorder::ErrorAsString(dcgmReturn_t ret)
@@ -1302,4 +1350,26 @@ int DcgmRecorder::VerifyHBMTemperature(unsigned int gpuId,
 void DcgmRecorder::SetWatchFrequency(long long watchFrequency)
 {
     m_watchFrequency = watchFrequency;
+}
+
+void DcgmRecorder::SetIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &ignoreErrorCodes)
+{
+    m_ignoreErrorCodes = ignoreErrorCodes;
+}
+
+void DcgmRecorder::AddOrClearError(DcgmError const &d,
+                                   std::vector<DcgmError> &fatalErrorList,
+                                   std::vector<DcgmError> &ignoredErrorList,
+                                   int &retCode)
+{
+    auto const &entity  = d.GetEntity();
+    auto const &errCode = d.GetCode();
+    if (m_ignoreErrorCodes.contains(entity) && m_ignoreErrorCodes[entity].contains(errCode))
+    {
+        log_debug("Error code {} ignored: {}.", errCode, d.GetMessage());
+        retCode = DR_SUCCESS;
+        ignoredErrorList.push_back(d);
+        return;
+    }
+    fatalErrorList.push_back(d);
 }

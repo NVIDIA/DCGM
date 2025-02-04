@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -374,13 +374,10 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
                                                         unsigned int flags);
 
 /**
- * Gets the hierarchy of GPUs, GPU Instances, and Compute Instances by populating a list of each entity with
- * a reference to their parent
+ * Gets the hierarchy of GPUs, GPU Instances, and Compute Instances.
  *
  * @param dcgmHandle       IN: DCGM Handle
- * @param entities        OUT: array of entities in the hierarchy
- * @param numEntities  IN/OUT: Upon calling, this should be the capacity of entities.
- *                             Upon return, this will contain the number of entities actually saved to entities.
+ * @param hierarchy       OUT: Hierarchy of GPUs, GPU Instances, and Compute Instances
  *
  * @return
  *        - \ref DCGM_ST_OK                if the call was successful.
@@ -1657,7 +1654,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  *                                            currently not allowed.
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
-                                                   dcgmRunDiag_v9 *drd,
+                                                   dcgmRunDiag_v10 *drd,
                                                    dcgmDiagResponse_v11 *response);
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -207,14 +207,6 @@ def parse_options():
             )
 
     parser.add_option(
-            "--fast-run",
-            dest="fast_run",
-            action="store_true",
-            default=False,
-            help="Runs test modules as compiled into single file with common decorators (faster run)"
-            )
-
-    parser.add_option(
             "--ignore-dmesg-checks",
             dest="ignore_dmesg_checks",
             action="store_true",
@@ -247,9 +239,16 @@ def parse_options():
             )
 
     parser.add_option(
+            "--fast-run",
+            dest="fast_run",
+            action="store_true",
+            default=False,
+            help="Runs test modules under shared decorators.)"
+            )
+
+    parser.add_option(
             "--slow-run",
-            dest="slow_run",
-            default=True,
+            dest="fast_run",
             action="store_false",
             help="Runs test modules individually. (Legacy mode.)"
             )

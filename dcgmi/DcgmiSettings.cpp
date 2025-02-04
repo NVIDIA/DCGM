@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ dcgmReturn_t DcgmiSettingsSetLoggingSeverity::DoExecuteConnected()
         return DCGM_ST_BADPARAM;
     }
 
+    logging.version      = dcgmSettingsSetLoggingSeverity_version;
     logging.targetLogger = LoggerFromString(mTargetLogger, BASE_LOGGER);
     logging.targetSeverity
         = (DcgmLoggingSeverity_t)LoggingSeverityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);

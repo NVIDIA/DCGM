@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle)
     tp->AddString(CTXCREATE_IS_ALLOWED, "True");
     tp->AddString(PS_LOGFILE, "stats_context.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    tp->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = tp;
 }
 
@@ -72,19 +73,12 @@ void ContextCreatePlugin::Go(std::string const &testName,
         return;
     }
 
-    int numGpus                = 0;
-    unsigned const numEntities = std::min(
-        entityInfo->numEntities, static_cast<unsigned>(sizeof(entityInfo->entities) / sizeof(entityInfo->entities[0])));
-    for (unsigned idx = 0; idx < numEntities; ++idx)
-    {
-        if (entityInfo->entities[idx].entity.entityGroupId == DCGM_FE_GPU)
-        {
-            numGpus += 1;
-        }
-    }
 
-    if (numGpus)
+    auto const &gpuList = m_tests.at(testName).GetGpuList();
+    if (!gpuList.empty())
     {
+        ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));
+
         ContextCreate cc(&testParameters, this, GetHandle());
 
         int st = cc.Run(*entityInfo);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ public:
     const std::vector<dcgmDiagErrorDetail_v2> &GetErrors(std::string const &testName) const;
 
     /*****************************************************************************/
-    const std::vector<dcgmDiagErrorDetail_v2> &GetInfo(std::string const &testName) const;
+    const std::vector<dcgmDiagInfo_v1> &GetInfo(std::string const &testName) const;
 
     /*****************************************************************************/
     const std::vector<dcgmDiagSimpleResult_t> &GetResults(std::string const &testName) const;
@@ -119,6 +119,11 @@ public:
     std::unordered_map<std::string, PluginLibTest> const &GetSupportedTests() const;
 
     void SetTestRunningState(std::string const &testName, TestRuningState state);
+
+    std::string SetIgnoreErrorCodesParam(std::vector<dcgmDiagPluginTestParameter_t> &parameters,
+                                         std::string const &ignoreErrorCodesString,
+                                         gpuIgnoreErrorCodeMap_t &parsedIgnoreErrorCodeMap,
+                                         std::vector<unsigned int> const &gpuIds);
 
 private:
     void *m_pluginPtr;

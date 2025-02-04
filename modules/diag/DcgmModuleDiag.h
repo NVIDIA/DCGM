@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ private:
     /*************************************************************************/
     /* Subrequest helpers
      */
+    dcgmReturn_t ProcessRun_v11(dcgm_diag_msg_run_v11 *msg);
     dcgmReturn_t ProcessRun_v10(dcgm_diag_msg_run_v10 *msg);
     dcgmReturn_t ProcessRun_v9(dcgm_diag_msg_run_v9 *msg);
     dcgmReturn_t ProcessRun_v8(dcgm_diag_msg_run_v8 *msg);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "DcgmMutex.h"
 #include "DcgmSystem.h"
 #include "DcgmValuesSinceHolder.h"
+#include "IgnoreErrorCodesHelper.h"
 #include "TestParameters.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
@@ -51,7 +52,18 @@ typedef struct
 extern errorType_t standardErrorFields[];
 extern unsigned short standardInfoFields[];
 
-class DcgmRecorder
+class DcgmRecorderBase
+{
+public:
+    virtual ~DcgmRecorderBase() = default;
+
+    virtual dcgmReturn_t GetCurrentFieldValue(unsigned int gpuId,
+                                              unsigned short fieldId,
+                                              dcgmFieldValue_v2 &value,
+                                              unsigned int flags);
+};
+
+class DcgmRecorder : public DcgmRecorderBase
 {
 public:
     DcgmRecorder();
@@ -186,7 +198,8 @@ public:
                          const std::vector<dcgmTimeseriesInfo_t> *failureThreshold,
                          unsigned int gpuId,
                          long long maxTemp,
-                         std::vector<DcgmError> &errorList,
+                         std::vector<DcgmError> &fatalErrorList,
+                         std::vector<DcgmError> &ignoredErrorList,
                          timelib64_t startTime);
 
     /*
@@ -248,12 +261,18 @@ public:
      * DR_COMM_ERROR  : if we couldn't get the information from DCGM
      * DR_VIOLATION   : Clocks event is happening
      */
-    int CheckForClocksEvent(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
+    int CheckForClocksEvent(unsigned int gpuId,
+                            timelib64_t startTime,
+                            std::vector<DcgmError> &fatalErorList,
+                            std::vector<DcgmError> &ignoredErrorList);
 
     /*
      * Deprecated: Use CheckForClocksEvent instead.
      */
-    int CheckForThrottling(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
+    int CheckForThrottling(unsigned int gpuId,
+                           timelib64_t startTime,
+                           std::vector<DcgmError> &fatalErrorList,
+                           std::vector<DcgmError> &ignoredErrorList);
 
     /*
      * Populates dcgmTimeseriesInfo with the current value of the specified field for the specified GPU
@@ -267,7 +286,7 @@ public:
     dcgmReturn_t GetCurrentFieldValue(unsigned int gpuId,
                                       unsigned short fieldId,
                                       dcgmFieldValue_v2 &value,
-                                      unsigned int flags);
+                                      unsigned int flags) override;
 
     /*
      * Retrieves the latest values for the watched fields (added via AddWatches).
@@ -309,10 +328,12 @@ public:
      *
      * @return a vector filled with each detected error
      */
-    std::vector<DcgmError> CheckCommonErrors(TestParameters &tp,
-                                             timelib64_t startTime,
-                                             nvvsPluginResult_t &result,
-                                             std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos);
+    void CheckCommonErrors(TestParameters &tp,
+                           timelib64_t startTime,
+                           nvvsPluginResult_t &result,
+                           std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos,
+                           std::vector<DcgmError> &fatalErrors,
+                           std::vector<DcgmError> &ignoredErrors);
 
     /*
      */
@@ -361,6 +382,27 @@ public:
      */
     void SetWatchFrequency(long long watchFrequency);
 
+    /*
+     * Set ignore error codes; to be used when checking for errors
+     *
+     * @param ignoreErrorCodes - Per entity set of ignore error codes
+     */
+    void SetIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &ignoreErrorCodes);
+
+    /*
+     * Add the given error to the error list vector if the error code is not part of
+     * the ignoreErrorCode list. Otherwise, discard the error and set retCode to
+     * DR_SUCCESS.
+     *
+     * @param[in] d - error to be added
+     * @param[out] errorList - list to which error is added
+     * @param[out] retCode - return code set to success if error is ignored
+     */
+    void AddOrClearError(DcgmError const &d,
+                         std::vector<DcgmError> &fatalErrorList,
+                         std::vector<DcgmError> &ignoredErrorList,
+                         int &retCode);
+
 private:
     std::vector<unsigned short> m_fieldIds;
     std::vector<unsigned int> m_gpuIds;
@@ -377,6 +419,7 @@ private:
     long long m_watchFrequency;
 
     CustomStatHolder m_customStatHolder;
+    gpuIgnoreErrorCodeMap_t m_ignoreErrorCodes;
 
     /*
      * Helper method to get the watched fields as a string
@@ -392,13 +435,18 @@ private:
                                 int64_t intValue,
                                 double dblValue,
                                 const std::string &fieldName,
-                                std::vector<DcgmError> &errorList);
+                                std::vector<DcgmError> &fatalErrorList,
+                                std::vector<DcgmError> &ignoredErrorList,
+                                int &st);
 
     void AddFieldThresholdViolationError(unsigned short fieldId,
                                          unsigned int gpuId,
                                          int64_t intValue,
                                          int64_t thresholdValue,
-                                         const std::string &fieldName);
+                                         const std::string &fieldName,
+                                         std::vector<DcgmError> &fatalErrorList,
+                                         std::vector<DcgmError> &ignoredErrorList,
+                                         int &st);
 
     /*
      * Helper method to get the watched fields as a json object
@@ -415,7 +463,34 @@ private:
      */
     void GetErrorString(dcgmReturn_t ret, std::string &err);
 
-    int CheckXIDs(unsigned int gpuId, timelib64_t startTime, std::vector<DcgmError> &errorList);
+    int CheckXIDs(unsigned int gpuId,
+                  timelib64_t startTime,
+                  std::vector<DcgmError> &errorList,
+                  std::vector<DcgmError> &ignoredErrorList);
+
+    /**
+     * Check only the fields specified in `fieldIds`. See other overloads for additional checks.
+     *
+     * @return:
+     *
+     * DR_SUCCESS      : on success
+     * DR_COMM_ERROR   : if we couldn't get the information from DCGM
+     * DR_VIOLATION    : if a value was found above a failure threshold
+     */
+    int CheckErrorFields(std::vector<unsigned short> &fieldIds,
+                         const std::vector<dcgmTimeseriesInfo_t> *failureThresholds,
+                         unsigned int gpuId,
+                         std::vector<DcgmError> &fatalErrorList,
+                         std::vector<DcgmError> &ignoredErrorList,
+                         timelib64_t startTime);
+
+    /**
+     * Check and report on non-fatal conditions.
+     */
+    void CheckNonFatalErrors(timelib64_t startTime,
+                             dcgmGroupEntityPair_t const entityInfo,
+                             std::vector<DcgmError> &fatalErrors,
+                             std::vector<DcgmError> &ignoredErrors);
 
 protected:
     /**

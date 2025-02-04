@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,7 +183,9 @@ bool DcgmWatchTable::IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t current
             /* Ignore NvSwitch fields but keep the rest, including profiling fields */
             return fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
         case DcgmModuleIdNvSwitch:
-            return fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID || fieldId >= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
+            return ((fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID) || (fieldId > DCGM_FI_LAST_NVSWITCH_FIELD_ID))
+                   && ((fieldId < DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID)
+                       || (fieldId > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID));
         case DcgmModuleIdProfiling:
             return fieldId < DCGM_FI_PROF_FIRST_ID || fieldId > DCGM_FI_PROF_LAST_ID;
         case DcgmModuleIdSysmon:

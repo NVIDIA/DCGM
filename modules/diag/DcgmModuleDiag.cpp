@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,48 +28,94 @@
 namespace
 {
 
-template <typename T>
-dcgmRunDiag_v9 ProduceLatestDcgmRunDiag(const T &legacyDrd)
-    requires std::is_same_v<T, dcgmRunDiag_v8> || std::is_same_v<T, dcgmRunDiag_v7>
+void CustomRunDiagSettings(void const *legacyDrd, unsigned int legacyDrdVersion, dcgmRunDiag_v10 &newDrd)
 {
-    dcgmRunDiag_v9 drdV9;
+    auto setGroupAndEntityIds = [&](auto legacyDrdPtr) {
+        // In drd7 and drd8, gpuList takes precedence over groupId. Conversely, in drd9 and drd10,
+        // groupId has higher priority than entityId. To maintain legacy drd's prioritization scheme,
+        // we set groupId to DCGM_GROUP_NULL unless the gpuList is empty.
+        newDrd.groupId = DCGM_GROUP_NULL;
+        if (legacyDrdPtr->gpuList[0] == '\0')
+        {
+            newDrd.groupId = legacyDrdPtr->groupId;
+        }
+        SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrdPtr->gpuList)>(newDrd.entityIds, legacyDrdPtr->gpuList);
+    };
+    auto setExpectedNumEntities = [&](auto legacyDrdPtr) {
+        // expectedNumEntities exists in runDiag_v8, runDiag_v9, and runDiag_v10 only.
+        SafeCopyTo<sizeof(newDrd.expectedNumEntities), sizeof(legacyDrdPtr->expectedNumEntities)>(
+            newDrd.expectedNumEntities, legacyDrdPtr->expectedNumEntities);
+    };
+    auto setEntityIds = [&](auto legacyDrdPtr) {
+        SafeCopyTo<sizeof(newDrd.entityIds), sizeof(legacyDrdPtr->entityIds)>(newDrd.entityIds,
+                                                                              legacyDrdPtr->entityIds);
+    };
+    auto setWatchFrequency = [&](auto legacyDrdPtr) {
+        newDrd.watchFrequency = legacyDrdPtr->watchFrequency;
+    };
 
-    std::memset(&drdV9, 0, sizeof(drdV9));
-    drdV9.version    = dcgmRunDiag_version9;
-    drdV9.flags      = legacyDrd.flags;
-    drdV9.debugLevel = legacyDrd.debugLevel;
-    // In drd7 and drd8, gpuList takes precedence over groupId. Conversely, in drd9, groupId has higher priority than
-    // entityId. To maintain legacy drd's prioritization scheme, we set groupId to DCGM_GROUP_NULL when the gpuList has
-    // value.
-    if (legacyDrd.gpuList[0] == '\0')
+    switch (legacyDrdVersion)
     {
-        drdV9.groupId = legacyDrd.groupId;
+        case dcgmRunDiag_version7:
+        {
+            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v7 *>(legacyDrd);
+            setGroupAndEntityIds(legacyDrdPtr);
+            break;
+        }
+        break;
+        case dcgmRunDiag_version8:
+        {
+            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v8 *>(legacyDrd);
+            setGroupAndEntityIds(legacyDrdPtr);
+            setExpectedNumEntities(legacyDrdPtr);
+        }
+        break;
+        case dcgmRunDiag_version9:
+        {
+            auto legacyDrdPtr = static_cast<const dcgmRunDiag_v9 *>(legacyDrd);
+            setExpectedNumEntities(legacyDrdPtr);
+            setEntityIds(legacyDrdPtr);
+            setWatchFrequency(legacyDrdPtr);
+        }
+        break;
+        default:
+            log_debug("RunDiag version {} not supported in this function.", legacyDrdVersion);
     }
-    else
-    {
-        drdV9.groupId = DCGM_GROUP_NULL;
-    }
-    drdV9.validate = legacyDrd.validate;
-    std::memcpy(&drdV9.testNames, &legacyDrd.testNames, sizeof(drdV9.testNames));
+}
+
+template <typename T>
+dcgmRunDiag_v10 ProduceLatestDcgmRunDiag(const T &legacyDrd)
+    requires std::is_same_v<T, dcgmRunDiag_v9> || std::is_same_v<T, dcgmRunDiag_v8> || std::is_same_v<T, dcgmRunDiag_v7>
+{
+    dcgmRunDiag_v10 newDrd {};
+
+    newDrd.version    = dcgmRunDiag_version10;
+    newDrd.flags      = legacyDrd.flags;
+    newDrd.debugLevel = legacyDrd.debugLevel;
+    newDrd.groupId    = legacyDrd.groupId;
+    newDrd.validate   = legacyDrd.validate;
+    std::memcpy(&newDrd.testNames, &legacyDrd.testNames, sizeof(newDrd.testNames));
     for (unsigned int i = 0; i < DCGM_MAX_TEST_PARMS; ++i)
     {
-        SafeCopyTo(drdV9.testParms[i], legacyDrd.testParms[i]);
+        SafeCopyTo(newDrd.testParms[i], legacyDrd.testParms[i]);
     }
-    SafeCopyTo<sizeof(drdV9.fakeGpuList), sizeof(legacyDrd.fakeGpuList)>(drdV9.fakeGpuList, legacyDrd.fakeGpuList);
-    SafeCopyTo<sizeof(drdV9.entityIds), sizeof(legacyDrd.gpuList)>(drdV9.entityIds, legacyDrd.gpuList);
-    SafeCopyTo<sizeof(drdV9.debugLogFile), sizeof(legacyDrd.debugLogFile)>(drdV9.debugLogFile, legacyDrd.debugLogFile);
-    SafeCopyTo<sizeof(drdV9.statsPath), sizeof(legacyDrd.statsPath)>(drdV9.statsPath, legacyDrd.statsPath);
-    SafeCopyTo<sizeof(drdV9.configFileContents), sizeof(legacyDrd.configFileContents)>(drdV9.configFileContents,
-                                                                                       legacyDrd.configFileContents);
-    std::memcpy(&drdV9.clocksEventMask,
+    SafeCopyTo<sizeof(newDrd.fakeGpuList), sizeof(legacyDrd.fakeGpuList)>(newDrd.fakeGpuList, legacyDrd.fakeGpuList);
+    SafeCopyTo<sizeof(newDrd.debugLogFile), sizeof(legacyDrd.debugLogFile)>(newDrd.debugLogFile,
+                                                                            legacyDrd.debugLogFile);
+    SafeCopyTo<sizeof(newDrd.statsPath), sizeof(legacyDrd.statsPath)>(newDrd.statsPath, legacyDrd.statsPath);
+    SafeCopyTo<sizeof(newDrd.configFileContents), sizeof(legacyDrd.configFileContents)>(newDrd.configFileContents,
+                                                                                        legacyDrd.configFileContents);
+    std::memcpy(&newDrd.clocksEventMask,
                 &legacyDrd.clocksEventMask,
-                std::min(sizeof(drdV9.clocksEventMask), sizeof(legacyDrd.clocksEventMask)));
-    SafeCopyTo<sizeof(drdV9.pluginPath), sizeof(legacyDrd.pluginPath)>(drdV9.pluginPath, legacyDrd.pluginPath);
-    drdV9.currentIteration  = legacyDrd.currentIteration;
-    drdV9.totalIterations   = legacyDrd.totalIterations;
-    drdV9.timeoutSeconds    = legacyDrd.timeoutSeconds;
-    drdV9.failCheckInterval = legacyDrd.failCheckInterval;
-    return drdV9;
+                std::min(sizeof(newDrd.clocksEventMask), sizeof(legacyDrd.clocksEventMask)));
+    SafeCopyTo<sizeof(newDrd.pluginPath), sizeof(legacyDrd.pluginPath)>(newDrd.pluginPath, legacyDrd.pluginPath);
+    newDrd.currentIteration  = legacyDrd.currentIteration;
+    newDrd.totalIterations   = legacyDrd.totalIterations;
+    newDrd.timeoutSeconds    = legacyDrd.timeoutSeconds;
+    newDrd.failCheckInterval = legacyDrd.failCheckInterval;
+
+    CustomRunDiagSettings(&legacyDrd, legacyDrd.version, newDrd);
+    return newDrd;
 }
 
 } //namespace
@@ -89,7 +135,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v9 drd9 = ProduceLatestDcgmRunDiag(msg->runDiag);
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version5);
     if (DCGM_ST_OK != dcgmReturn)
@@ -102,27 +148,29 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v5(dcgm_diag_msg_run_v5 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(drd9.fakeGpuList);
-    dcgmTerminateCharBuffer(drd9.debugLogFile);
-    dcgmTerminateCharBuffer(drd9.statsPath);
-    dcgmTerminateCharBuffer(drd9.configFileContents);
-    dcgmTerminateCharBuffer(drd9.clocksEventMask);
-    dcgmTerminateCharBuffer(drd9.pluginPath);
-    dcgmTerminateCharBuffer(drd9._unusedBuf);
-    dcgmTerminateCharBuffer(drd9.entityIds);
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testNames[i]);
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testParms[i]);
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd9, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         DCGM_LOG_ERROR << "RunDiagAndAction returned " << dcgmReturn;
@@ -135,7 +183,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v9 drd9 = ProduceLatestDcgmRunDiag(msg->runDiag);
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version7);
     if (DCGM_ST_OK != dcgmReturn)
@@ -148,27 +196,29 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v7(dcgm_diag_msg_run_v7 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(drd9.fakeGpuList);
-    dcgmTerminateCharBuffer(drd9.debugLogFile);
-    dcgmTerminateCharBuffer(drd9.statsPath);
-    dcgmTerminateCharBuffer(drd9.configFileContents);
-    dcgmTerminateCharBuffer(drd9.clocksEventMask);
-    dcgmTerminateCharBuffer(drd9.pluginPath);
-    dcgmTerminateCharBuffer(drd9._unusedBuf);
-    dcgmTerminateCharBuffer(drd9.entityIds);
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testNames[i]);
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testParms[i]);
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd9, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         log_error("RunDiagAndAction returned {}", dcgmReturn);
@@ -181,7 +231,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v8(dcgm_diag_msg_run_v8 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v9 drd9 = ProduceLatestDcgmRunDiag(msg->runDiag);
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version8);
     if (DCGM_ST_OK != dcgmReturn)
@@ -194,27 +244,29 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v8(dcgm_diag_msg_run_v8 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(drd9.fakeGpuList);
-    dcgmTerminateCharBuffer(drd9.debugLogFile);
-    dcgmTerminateCharBuffer(drd9.statsPath);
-    dcgmTerminateCharBuffer(drd9.configFileContents);
-    dcgmTerminateCharBuffer(drd9.clocksEventMask);
-    dcgmTerminateCharBuffer(drd9.pluginPath);
-    dcgmTerminateCharBuffer(drd9._unusedBuf);
-    dcgmTerminateCharBuffer(drd9.entityIds);
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testNames[i]);
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testParms[i]);
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd9, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         log_error("RunDiagAndAction returned {}", dcgmReturn);
@@ -227,7 +279,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v9 drd9 = ProduceLatestDcgmRunDiag(msg->runDiag);
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version6);
     if (DCGM_ST_OK != dcgmReturn)
@@ -240,27 +292,29 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v6(dcgm_diag_msg_run_v6 *msg)
     }
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(drd9.fakeGpuList);
-    dcgmTerminateCharBuffer(drd9.debugLogFile);
-    dcgmTerminateCharBuffer(drd9.statsPath);
-    dcgmTerminateCharBuffer(drd9.configFileContents);
-    dcgmTerminateCharBuffer(drd9.clocksEventMask);
-    dcgmTerminateCharBuffer(drd9.pluginPath);
-    dcgmTerminateCharBuffer(drd9._unusedBuf);
-    dcgmTerminateCharBuffer(drd9.entityIds);
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testNames[i]);
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testParms[i]);
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd9, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         log_error("RunDiagAndAction returned {}", dcgmReturn);
@@ -273,11 +327,7 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v9(dcgm_diag_msg_run_v9 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
-    dcgmRunDiag_v9 drd9 = ProduceLatestDcgmRunDiag(msg->runDiag);
-
-    // Copy expectedNumEntities separately, which exists in runDiag_v8 and runDiag_v9 only.
-    SafeCopyTo<sizeof(drd9.expectedNumEntities), sizeof(msg->runDiag.expectedNumEntities)>(
-        drd9.expectedNumEntities, msg->runDiag.expectedNumEntities);
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version9);
     if (DCGM_ST_OK != dcgmReturn)
@@ -288,27 +338,29 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v9(dcgm_diag_msg_run_v9 *msg)
     drw.SetVersion10(&msg->diagResponse);
 
     /* Sanitize the inputs */
-    dcgmTerminateCharBuffer(drd9.fakeGpuList);
-    dcgmTerminateCharBuffer(drd9.debugLogFile);
-    dcgmTerminateCharBuffer(drd9.statsPath);
-    dcgmTerminateCharBuffer(drd9.configFileContents);
-    dcgmTerminateCharBuffer(drd9.clocksEventMask);
-    dcgmTerminateCharBuffer(drd9.pluginPath);
-    dcgmTerminateCharBuffer(drd9._unusedBuf);
-    dcgmTerminateCharBuffer(drd9.entityIds);
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
 
     size_t i;
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testNames); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testNames[i]);
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
     }
-    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd9.testParms); i++)
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
     {
-        dcgmTerminateCharBuffer(drd9.testParms[i]);
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
     }
 
     /* Run the diag */
-    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd9, msg->action, drw, msg->header.connectionId);
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
     if (DCGM_ST_OK != dcgmReturn)
     {
         log_error("RunDiagAndAction returned {}", dcgmReturn);
@@ -321,8 +373,54 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v10(dcgm_diag_msg_run_v10 *msg)
 {
     dcgmReturn_t dcgmReturn;
     DcgmDiagResponseWrapper drw;
+    dcgmRunDiag_v10 drd10 = ProduceLatestDcgmRunDiag(msg->runDiag);
 
     dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version10);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    drw.SetVersion11(&msg->diagResponse);
+
+    /* Sanitize the inputs */
+    dcgmTerminateCharBuffer(drd10.fakeGpuList);
+    dcgmTerminateCharBuffer(drd10.debugLogFile);
+    dcgmTerminateCharBuffer(drd10.statsPath);
+    dcgmTerminateCharBuffer(drd10.configFileContents);
+    dcgmTerminateCharBuffer(drd10.clocksEventMask);
+    dcgmTerminateCharBuffer(drd10.pluginPath);
+    dcgmTerminateCharBuffer(drd10._unusedBuf);
+    dcgmTerminateCharBuffer(drd10.entityIds);
+    dcgmTerminateCharBuffer(drd10.expectedNumEntities);
+    dcgmTerminateCharBuffer(drd10.ignoreErrorCodes);
+
+    size_t i;
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testNames); i++)
+    {
+        dcgmTerminateCharBuffer(drd10.testNames[i]);
+    }
+    for (i = 0; i < DCGM_ARRAY_CAPACITY(drd10.testParms); i++)
+    {
+        dcgmTerminateCharBuffer(drd10.testParms[i]);
+    }
+
+    /* Run the diag */
+    dcgmReturn = mpDiagManager->RunDiagAndAction(&drd10, msg->action, drw, msg->header.connectionId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("RunDiagAndAction returned {}", dcgmReturn);
+    }
+
+    return dcgmReturn;
+}
+
+dcgmReturn_t DcgmModuleDiag::ProcessRun_v11(dcgm_diag_msg_run_v11 *msg)
+{
+    dcgmReturn_t dcgmReturn;
+    DcgmDiagResponseWrapper drw;
+
+    dcgmReturn = CheckVersion(&msg->header, dcgm_diag_msg_run_version11);
     if (DCGM_ST_OK != dcgmReturn)
     {
         return dcgmReturn; /* Logging handled by helper method */
@@ -339,6 +437,8 @@ dcgmReturn_t DcgmModuleDiag::ProcessRun_v10(dcgm_diag_msg_run_v10 *msg)
     dcgmTerminateCharBuffer(msg->runDiag.pluginPath);
     dcgmTerminateCharBuffer(msg->runDiag._unusedBuf);
     dcgmTerminateCharBuffer(msg->runDiag.entityIds);
+    dcgmTerminateCharBuffer(msg->runDiag.expectedNumEntities);
+    dcgmTerminateCharBuffer(msg->runDiag.ignoreErrorCodes);
 
     size_t i;
     for (i = 0; i < DCGM_ARRAY_CAPACITY(msg->runDiag.testNames); i++)
@@ -422,7 +522,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
                 }
                 else
                 {
-                    if (moduleCommand->version == dcgm_diag_msg_run_version10)
+                    if (moduleCommand->version == dcgm_diag_msg_run_version11)
+                    {
+                        retSt = ProcessRun_v11(std::bit_cast<dcgm_diag_msg_run_v11 *>(moduleCommand));
+                    }
+                    else if (moduleCommand->version == dcgm_diag_msg_run_version10)
                     {
                         retSt = ProcessRun_v10(std::bit_cast<dcgm_diag_msg_run_v10 *>(moduleCommand));
                     }

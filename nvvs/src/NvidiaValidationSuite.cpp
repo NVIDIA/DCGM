@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "DcgmLogging.h"
 #include "DcgmSystem.h"
 #include "EntitySet.h"
+#include "IgnoreErrorCodesHelper.h"
 #include "NvvsJsonStrings.h"
 #include "ParameterValidator.h"
 #include "ParsingUtility.h"
@@ -55,7 +56,7 @@ NvidiaValidationSuite::NvidiaValidationSuite()
     , m_gpuVect()
     , testVect()
     , tpVect()
-    , m_allowlist(0)
+    , m_allowlist(nullptr)
     , fwcfg()
     , parser(nullptr)
     , m_tf(nullptr)
@@ -87,7 +88,6 @@ NvidiaValidationSuite::~NvidiaValidationSuite()
         delete (*it);
     }
     delete m_tf;
-    delete m_allowlist;
     delete parser;
 
     dcgmShutdown();
@@ -96,7 +96,12 @@ NvidiaValidationSuite::~NvidiaValidationSuite()
 /*****************************************************************************/
 void NvidiaValidationSuite::CheckDriverVersion()
 {
-    dcgmSystem.Init(dcgmHandle.GetHandle());
+    if (!dcgmSystem.IsInitialized())
+    {
+        log_error("DCGM is not initialized");
+        throw std::runtime_error("DCGM is not initialized");
+    }
+
     dcgmDeviceAttributes_t deviceAttr;
 
     memset(&deviceAttr, 0, sizeof(deviceAttr));
@@ -111,7 +116,6 @@ void NvidiaValidationSuite::CheckDriverVersion()
         dcgmReturn_t connectionRet = dcgmHandle.ConnectToDcgm(nvvsCommon.dcgmHostname);
         if (connectionRet == DCGM_ST_OK)
         {
-            dcgmSystem.Init(dcgmHandle.GetHandle());
             ret = dcgmSystem.GetDeviceAttributes(0, deviceAttr);
         }
         else
@@ -201,7 +205,7 @@ void NvidiaValidationSuite::stopTimer()
     sigaction(SIGALRM, &this->restoreSigAction, NULL);
 }
 
-bool NvidiaValidationSuite::IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices)
+bool NvidiaValidationSuite::IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices) const
 {
     if (gpuIndices.size() == 0)
     {
@@ -292,7 +296,7 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
     {
         // We know there's at most 1 GPU because we fail above if there's more than one
         std::stringstream val;
-        val << gpuIndices[0];
+        val << *gpuIndices.begin();
         errno = 0;
         if (setenv("CUDA_VISIBLE_DEVICES", val.str().c_str(), 1))
         {
@@ -363,6 +367,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         buf << "Unable to connect to DCGM: " << dcgmHandle.GetLastError();
         return buf.str();
     }
+    dcgmSystem.Init(dcgmHandle.GetHandle());
 
     /*
     stopTimer();
@@ -395,6 +400,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     parser->PrepareEntitySets(dcgmHandle.GetHandle());
     parser->legacyGlobalStructHelper();
 
+    m_allowlist                                         = std::make_unique<Allowlist>(*parser);
     std::vector<std::unique_ptr<EntitySet>> &entitySets = parser->GetEntitySets();
     bool hasGpuEntity                                   = false;
 
@@ -444,6 +450,13 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
     std::string errorString = BuildCommonGpusList(gpuIndices, m_gpuVect);
     if (errorString.empty() == false)
+    {
+        return errorString;
+    }
+
+    errorString
+        = ParseIgnoreErrorCodesString(nvvsCommon.ignoreErrorCodesString, nvvsCommon.parsedIgnoreErrorCodes, gpuIndices);
+    if (!errorString.empty())
     {
         return errorString;
     }
@@ -526,6 +539,12 @@ bool NvidiaValidationSuite::HasGenericSupport(const std::string &gpuBrand, uint6
 /*****************************************************************************/
 void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 {
+    if (!dcgmSystem.IsInitialized())
+    {
+        log_error("DCGM is not initialized");
+        throw std::runtime_error("DCGM is not initialized");
+    }
+
     bool isAllowlisted;
     std::vector<unsigned int> gpuIds;
     dcgmReturn_t ret = dcgmSystem.GetAllSupportedDevices(gpuIds);
@@ -536,8 +555,6 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
         buf << "Unable to retrieve device count: " << dcgmHandle.RetToString(ret);
         throw std::runtime_error(buf.str());
     }
-
-    m_allowlist = new Allowlist(*parser);
 
     for (size_t i = 0; i < gpuIds.size(); i++)
     {
@@ -648,15 +665,7 @@ void NvidiaValidationSuite::EnumerateAllVisibleGpus()
 /*****************************************************************************/
 void NvidiaValidationSuite::overrideParameters(TestParameters *tp, const std::string &lowerCaseTestName)
 {
-    if (nvvsCommon.parms.find(lowerCaseTestName) != nvvsCommon.parms.end())
-    {
-        for (std::map<std::string, std::string>::iterator it = nvvsCommon.parms[lowerCaseTestName].begin();
-             it != nvvsCommon.parms[lowerCaseTestName].end();
-             it++)
-        {
-            tp->OverrideFromString(it->first, it->second);
-        }
-    }
+    OverwriteTestParamtersIfAny(tp, lowerCaseTestName, nvvsCommon.parms);
 }
 
 void NvidiaValidationSuite::InitializeAndCheckGpuObjs(GpuSet *gpuSet)
@@ -880,7 +889,7 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
                             if (entitySet->GetEntityGroup() == DCGM_FE_GPU)
                             {
                                 GpuSet *gpuSet = ToGpuSet(entitySet.get());
-                                m_allowlist->getDefaultsByDeviceId(
+                                m_allowlist->GetDefaultsByDeviceId(
                                     compareRequestedName, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
                             }
 
@@ -1031,7 +1040,7 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
                 if (set->GetEntityGroup() == DCGM_FE_GPU)
                 {
                     GpuSet *gpuSet = ToGpuSet(set);
-                    m_allowlist->getDefaultsByDeviceId(*it, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
+                    m_allowlist->GetDefaultsByDeviceId(*it, gpuSet->GetGpuObjs()[0]->getDeviceId(), tp);
                 }
 
                 if (nvvsCommon.parms.size() > 0)
@@ -1429,6 +1438,18 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             "watch frquency",
             cmd);
 
+        TCLAP::ValueArg<std::string> ignoreErrorCodes(
+            "",
+            "ignoreErrorCodes",
+            "Specify error codes to be ignored on specific entities."
+            "Format: --ignoreErrorCodes=28,140 (ignore error codes 28 and 140 on all entities) \
+                    \n--ignoreErrorCodes=gpu0:28;gpu1:140 (ignore error 28 on GPU 0 and error 140 on GPU 1) \
+                    \n--ignoreErrorCodes=*:* (ignore all errors that can be ignored on all entities)",
+            false,
+            "",
+            "ignore error codes",
+            cmd);
+
         cmd.parse(argc, argv);
 
         configFileArg = configArg.getValue();
@@ -1437,24 +1458,25 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             configFile = configFileArg;
         }
 
-        listGpus                       = listGpusArg.getValue();
-        listTests                      = listTestsArg.getValue();
-        nvvsCommon.verbose             = verboseArg.getValue();
-        nvvsCommon.pluginPath          = pluginPathArg.getValue();
-        nvvsCommon.parse               = parseArg.getValue();
-        nvvsCommon.quietMode           = quietModeArg.getValue();
-        nvvsCommon.configless          = configLessArg.getValue();
-        nvvsCommon.fakegpusString      = fakeGpusArg.getValue();
-        nvvsCommon.statsOnlyOnFail     = statsOnFailArg.getValue();
-        nvvsCommon.indexString         = indexArg.getValue();
-        nvvsCommon.parmsString         = parms.getValue();
-        nvvsCommon.dcgmHostname        = dcgmHost.getValue();
-        nvvsCommon.currentIteration    = currentIteration.getValue();
-        nvvsCommon.totalIterations     = totalIterations.getValue();
-        nvvsCommon.entityIds           = entityIds.getValue();
-        nvvsCommon.channelFd           = channelFd.getValue();
-        nvvsCommon.diagResponseVersion = responseVersion.getValue();
-        nvvsCommon.rerunAsRoot         = rerunAsRoot.isSet();
+        listGpus                          = listGpusArg.getValue();
+        listTests                         = listTestsArg.getValue();
+        nvvsCommon.verbose                = verboseArg.getValue();
+        nvvsCommon.pluginPath             = pluginPathArg.getValue();
+        nvvsCommon.parse                  = parseArg.getValue();
+        nvvsCommon.quietMode              = quietModeArg.getValue();
+        nvvsCommon.configless             = configLessArg.getValue();
+        nvvsCommon.fakegpusString         = fakeGpusArg.getValue();
+        nvvsCommon.statsOnlyOnFail        = statsOnFailArg.getValue();
+        nvvsCommon.indexString            = indexArg.getValue();
+        nvvsCommon.parmsString            = parms.getValue();
+        nvvsCommon.dcgmHostname           = dcgmHost.getValue();
+        nvvsCommon.currentIteration       = currentIteration.getValue();
+        nvvsCommon.totalIterations        = totalIterations.getValue();
+        nvvsCommon.entityIds              = entityIds.getValue();
+        nvvsCommon.channelFd              = channelFd.getValue();
+        nvvsCommon.diagResponseVersion    = responseVersion.getValue();
+        nvvsCommon.rerunAsRoot            = rerunAsRoot.isSet();
+        nvvsCommon.ignoreErrorCodesString = ignoreErrorCodes.getValue();
         nvvsCommon.SetStatsPath(statsPathArg.getValue());
 
         this->initWaitTime = initializationWaitTime.getValue();

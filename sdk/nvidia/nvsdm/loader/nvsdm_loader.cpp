@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+// Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 //
 // NVIDIA CORPORATION and its licensors retain all intellectual property
 // and proprietary rights in and to this software, related documentation
@@ -147,7 +147,6 @@ char const *nvsdmGetErrorString(nvsdmRet_t ret)
 
 // DCGM portion
 
-const char *NVSDM_STUBS_LIBNAME = "libdcgm_nvsdm_test_stubs.so.4";
 const char *NVSDM_LIBNAME = "libnvsdm.so.1";
 
 namespace DcgmNs {
@@ -157,12 +156,7 @@ dcgmReturn_t dcgmLoadNvsdm() {
         return DCGM_ST_ALREADY_INITIALIZED;
     }
 
-    static const char envVarName[]  = "__DCGM_LOAD_NVSDM_STUBS";
-    const char *loadStubsStr = std::getenv(envVarName);
-    const bool loadStubs           = loadStubsStr && (loadStubsStr[0] == '1');
-    const char *libName = loadStubs ? NVSDM_STUBS_LIBNAME : NVSDM_LIBNAME;
-
-    s_handle.m_name = libName;
+    s_handle.m_name = NVSDM_LIBNAME;
     nvsdmHandle = s_handle.getHandle();
     if (!nvsdmHandle) {
         return DCGM_ST_LIBRARY_NOT_FOUND;

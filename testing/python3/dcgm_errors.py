@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ DCGM_FR_PCIE_GENERATION_MSG           = "GPU %u is running at PCI link generatio
 DCGM_FR_PCIE_WIDTH_MSG                = "GPU %u is running at PCI link width %dX, which is below the "\
                                                 "minimum allowed link generation of %d (parameter '%s')"
 DCGM_FR_ABORTED_MSG                   = "Test was aborted early due to user signal"
-DCGM_FR_TEST_DISABLED_MSG             = "The %s test is skipped for this GPU."
+DCGM_FR_TEST_DISABLED_MSG             = "The %s test is skipped."
 DCGM_FR_CANNOT_GET_STAT_MSG           = "Unable to generate / collect stat %s for GPU %u"
 DCGM_FR_STRESS_LEVEL_MSG              = "Max stress level of %.1f did not reach desired stress level of "\
                                                 "%.1f for GPU %u"

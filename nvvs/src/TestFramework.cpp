@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -909,6 +909,13 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
 std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework::GetSubtestParameters()
 {
     std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> parms;
+    auto addCommonParams = [](std::vector<dcgmDiagPluginParameterInfo_t> &p) {
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_SUITE_LEVEL, DcgmPluginParamInt });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE, DcgmPluginParamString });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_IGNORE_ERROR_CODES, DcgmPluginParamString });
+    };
 
     for (unsigned int i = 0; i < m_plugins.size(); i++)
     {
@@ -918,16 +925,13 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
             std::string Name = GetCompareName(testName, true);
             auto &p          = parms[Name];
             p                = m_plugins[i]->GetParameterInfo(testName);
-            //
-            // Add parameters common for all subtests
-            //
-            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_SUITE_LEVEL, DcgmPluginParamInt });
-            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE, DcgmPluginParamString });
-            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
-            p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
+            addCommonParams(p);
         }
     }
 
+    auto &swParameterInfo = parms["software"];
+    swParameterInfo       = GetSwParameterInfo();
+    addCommonParams(swParameterInfo);
     return parms;
 }
 
@@ -949,7 +953,7 @@ void TestFramework::runSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> co
         m_softwarePluginFramework = std::make_unique<SoftwarePluginFramework>(gpuSet->GetGpuObjs());
 
         // run softwarePlugin
-        m_softwarePluginFramework->Run(m_diagResponse, pluginAttr);
+        m_softwarePluginFramework->Run(m_diagResponse, pluginAttr, nvvsCommon.parms);
         gpuSetFound = true;
     }
 

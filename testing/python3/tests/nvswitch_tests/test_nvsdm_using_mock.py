@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,20 +19,24 @@ import dcgm_structs
 import test_utils
 import time
 import DcgmReader
+from . import nvsdm_helpers
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 def test_nvsdm_list_switches(handle):
-    """
-    Try to list switches using the NVSDM stub
-    """
     flags = 0
     switchIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_SWITCH, flags)
-
     assert len(switchIds) > 0
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_list_ib_cx(handle):
+    flags = 0
+    ibCxIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_CONNECTX, flags)
+    assert len(ibCxIds) > 0
+
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_nvml()
 def test_nvsdm_port_telemetry(handle):
     """
@@ -101,8 +105,8 @@ def test_nvsdm_port_telemetry(handle):
             errmsg = "NvLink: Expected GUID=%s, received GUID=%s" % (expectedGUID, receivedGUID)
             assert expectedGUID == receivedGUID, errmsg
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 def test_nvsdm_platform_telemetry(handle):
     """
     Read platform telemetry from NVSDM
@@ -170,8 +174,8 @@ def test_nvsdm_platform_telemetry(handle):
             errmsg = "NvSwitch: Expected GUID=%s, received GUID=%s" % (expectedGUID, receivedGUID)
             assert expectedGUID == receivedGUID, errmsg
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 def test_nvsdm_nvlink_status(handle):
     """
     Get nvlink status for each nvswitch using NVSDM stub and assert if it's down
@@ -184,8 +188,8 @@ def test_nvsdm_nvlink_status(handle):
                 errmsg = "LinkStatus for NvSwitch=%d's link=%d is down." % (i, j)
                 assert(linkStatus.nvSwitches[i].linkState[j] != dcgm_structs.DcgmNvLinkLinkStateDown), errmsg
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 def test_nvsdm_nvswitch_health_check(handle):
     """
     Test NvSwitch health check and assert if overall health result doesn't pass.
@@ -206,8 +210,8 @@ def test_nvsdm_nvswitch_health_check(handle):
     group_health = dcgmGroup.health.Check()
     assert(group_health.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
 
-@test_utils.run_with_nvsdm_stub()
-@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
 def test_nvsdm_composite_field_telemetry(handle):
     """
     Read composite field telemetry from NVSDM
@@ -263,3 +267,8 @@ def test_nvsdm_composite_field_telemetry(handle):
                     errmsg = errmsg + " Switch has extra entries for fields %s" % str(extraFieldIds)
 
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
+
+@test_utils.run_with_nvsdm_mock_config("one_switch_and_one_cx.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_mock_pause_resume(handle):
+    nvsdm_helpers.helper_nvsdm_pause_resume(handle)

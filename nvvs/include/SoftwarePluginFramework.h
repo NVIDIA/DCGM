@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,11 @@ public:
      * software plugin, run each test.
      * @params diagResponse - Structure to store the test results
      * @params pluginAttr - Plugin attributes assigned from nvvs used for software plugin
+     * @params userParms - User provided parameters.
      */
-    void Run(DcgmNvvsResponseWrapper &diagResponse, dcgmDiagPluginAttr_v1 const *pluginAttr);
+    void Run(DcgmNvvsResponseWrapper &diagResponse,
+             dcgmDiagPluginAttr_v1 const *pluginAttr,
+             std::map<std::string, std::map<std::string, std::string>> const &userParms);
 
     void SetSoftwarePlugin(std::unique_ptr<Software> softwareObj);
 
@@ -86,7 +89,6 @@ private:
     std::map<std::string, std::string> m_testNameMap;
     std::map<std::string, std::unique_ptr<TestParameters>> m_testParamMap;
     std::array<std::string_view, 11> m_swTestNames;
-    std::string m_header;
     std::unique_ptr<Software> m_softwareObj;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityList;
     std::vector<dcgmDiagError_v1> m_errors;
@@ -118,16 +120,6 @@ protected:
      * @params diagResponse - Structure to store the test result
      */
     void SetResult(std::string_view const testName, DcgmNvvsResponseWrapper &diagResponse);
-
-    /*************************************************************************/
-    /**
-     * method to return the header name
-     * Return: String header name
-     */
-    std::string const &getHeader() const
-    {
-        return m_header;
-    }
 
     /*************************************************************************/
     /**

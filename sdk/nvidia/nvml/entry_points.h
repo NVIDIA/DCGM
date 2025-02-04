@@ -266,6 +266,10 @@ NVML_ENTRY_POINT(nvmlDeviceSetTemperatureThreshold, tsapiDeviceSetTemperatureThr
         (nvmlDevice_t device, nvmlTemperatureThresholds_t thresholdType, int *temp),
         "(%p, %d, %p)",
         device, thresholdType, temp)
+NVML_ENTRY_POINT(nvmlDeviceGetMarginTemperature, tsapiDeviceGetMarginTemperature,
+        (nvmlDevice_t device, nvmlMarginTemperature_t *marginTempInfo),
+        "(%p, %p)",
+        device, marginTempInfo)
 NVML_ENTRY_POINT(nvmlDeviceGetFanSpeed, tsapiDeviceGetFanSpeed,
         (nvmlDevice_t device, unsigned int *speed),
         "(%p, %p)",
@@ -1417,3 +1421,9 @@ NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileClearRequestedProfiles,
                  (nvmlDevice_t device, nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles),
                  "(%p, %p)",
                  device, requestedProfiles);
+
+NVML_ENTRY_POINT(nvmlDeviceGetPlatformInfo,
+                 tsapiDeviceGetPlatformInfo,
+                 (nvmlDevice_t device, nvmlPlatformInfo_t *platformInfo),
+                 "(%p, %p)",
+                 device, platformInfo);

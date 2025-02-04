@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,10 +90,16 @@ public:
 
 namespace
 {
-constexpr double PCIE_DEFAULT_INTS_PER_COPY    = (512.0 / sizeof(int)) * 1024.0 * 1024.0;
-constexpr double PCIE_DEFAULT_BROKEN_P2P_SIZE  = 512.0 * 1024.0;
+constexpr double PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY   = (512.0 / sizeof(int)) * 1024.0 * 1024.0;
+constexpr double PCIE_BLACKWELL_DEFAULT_BROKEN_P2P_SIZE = 512.0 * 1024.0;
+
+constexpr double PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY   = 10000000.0;
+constexpr double PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE = 4096.0;
+
 constexpr unsigned int PCIE_DEFAULT_ITERATIONS = 50;
 }; //namespace
+
+class BusGrindTest;
 
 class BusGrind : public Plugin
 {
@@ -173,6 +179,12 @@ public:
 
     std::string GetPcieTestName() const;
 
+    void SetDcgmRecorder(std::unique_ptr<DcgmRecorderBase> dcgmRecorder)
+    {
+        m_dcgmRecorderPtr = std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>>(
+            dcgmRecorder.release(), std::function<void(DcgmRecorderBase *)>([](DcgmRecorderBase *p) { delete p; }));
+    }
+
 private:
     /*************************************************************************/
     /*
@@ -231,6 +243,10 @@ private:
      */
     int GetAERThresholdRate(SmPerfDevice *smDevice);
 
+    void SetCopySizes();
+    dcgmReturn_t SetCudaCapabilityInfo();
+
+    unsigned int m_cudaCompat;            /* Cuda compatibility version */
     std::vector<SmPerfDevice *> m_device; /* Per-device data */
 
     /* Cached smstress related parameters read from testParameters */
@@ -239,6 +255,10 @@ private:
     unsigned int m_maxAer;    /* max aer failures */
 
     dcgmHandle_t m_handle;
+
+    std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>> m_dcgmRecorderPtr;
+
+    friend class BusGrindTest;
 };
 
 /*****************************************************************************/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,18 +82,18 @@ std::string AddCudaError(Plugin *p,
  * AddCudaError method, the line number and file name would have been obscured.
  */
 #define LOG_CUDA_ERROR_FOR_PLUGIN(plugin, testName, callName, cuSt, gpuId, ...)                                   \
-    {                                                                                                   \
+    {                                                                                                             \
         std::string pluginCommonCudaError = AddCudaError(plugin, testName, callName, cuSt, gpuId, ##__VA_ARGS__); \
-        log_error(pluginCommonCudaError);                                                               \
-    }                                                                                                   \
+        log_error(pluginCommonCudaError);                                                                         \
+    }                                                                                                             \
     (void)0
 
 // Only for use by the Plugin subclasses
 #define LOG_CUDA_ERROR(testName, callName, cuSt, gpuId, ...)                                                    \
-    {                                                                                                 \
+    {                                                                                                           \
         std::string pluginCommonCudaError = AddCudaError(this, testName, callName, cuSt, gpuId, ##__VA_ARGS__); \
-        log_error(pluginCommonCudaError);                                                             \
-    }                                                                                                 \
+        log_error(pluginCommonCudaError);                                                                       \
+    }                                                                                                           \
     (void)0
 
 /*************************************************************************/
@@ -126,18 +126,18 @@ const char *GetAdditionalCuInitDetail(CUresult cuSt);
  * AddCublasError method, the line number and file name would have been obscured.
  */
 #define LOG_CUBLAS_ERROR_FOR_PLUGIN(plugin, testName, callName, cubSt, gpuId, ...)                                     \
-    {                                                                                                        \
+    {                                                                                                                  \
         std::string pluginCommonCublasError = AddCublasError(plugin, testName, callName, cubSt, gpuId, ##__VA_ARGS__); \
-        log_error(pluginCommonCublasError);                                                                  \
-    }                                                                                                        \
+        log_error(pluginCommonCublasError);                                                                            \
+    }                                                                                                                  \
     (void)0
 
 // Only for use by the Plugin subclasses
 #define LOG_CUBLAS_ERROR(testName, callName, cubSt, gpuId, ...)                                                      \
-    {                                                                                                      \
+    {                                                                                                                \
         std::string pluginCommonCublasError = AddCublasError(this, testName, callName, cubSt, gpuId, ##__VA_ARGS__); \
-        log_error(pluginCommonCublasError);                                                                \
-    }                                                                                                      \
+        log_error(pluginCommonCublasError);                                                                          \
+    }                                                                                                                \
     (void)0
 
 #endif // _NVVS_NVVS_Cuda_common_H_

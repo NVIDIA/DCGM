@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <DcgmLogging.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
+#include <PluginStrings.h>
 #include <UniquePtrUtil.h>
 
 #include <dlfcn.h>
@@ -415,6 +416,71 @@ const dcgmDiagEntityResults_v1 &PluginLib::GetEntityResults(std::string const &t
 }
 
 /*****************************************************************************/
+std::vector<unsigned int> GetGpuIds(std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos)
+{
+    std::vector<unsigned int> gpuIds;
+    for (auto const &entityInfo : entityInfos)
+    {
+        if (entityInfo.entity.entityGroupId == DCGM_FE_GPU)
+        {
+            gpuIds.push_back(entityInfo.entity.entityId);
+        }
+    }
+    return gpuIds;
+}
+
+std::string PluginLib::SetIgnoreErrorCodesParam(std::vector<dcgmDiagPluginTestParameter_t> &parameters,
+                                                std::string const &ignoreErrorCodesString,
+                                                gpuIgnoreErrorCodeMap_t &parsedIgnoreErrorCodeMap,
+                                                std::vector<unsigned int> const &gpuIds)
+{
+    // Check if the ignoreErrorCodes parameter is already part of the parameters
+    // list. If present, overwrite with any user provided cmdline input, or else
+    // validate and transform the parameter in place.
+    // Add a new parameter for any user provided cmdline input if the parameter
+    // does not already exist in the parameters list.
+    bool configFileIgnoreErrorCodesSet = false;
+    gpuIgnoreErrorCodeMap_t configParsedIgnoreErrorCodeMap;
+    unsigned int parameterIndex;
+    std::string errStr;
+    for (unsigned int i = 0; i < parameters.size(); i++)
+    {
+        if (std::string_view(parameters[i].parameterName) == std::string_view(PS_IGNORE_ERROR_CODES))
+        {
+            parameterIndex                 = i;
+            std::string localErrorCodesStr = parameters[i].parameterValue;
+            configFileIgnoreErrorCodesSet  = true;
+            errStr = ParseIgnoreErrorCodesString(localErrorCodesStr, configParsedIgnoreErrorCodeMap, gpuIds);
+            SafeCopyTo(parameters[i].parameterValue, localErrorCodesStr.c_str());
+            break;
+        }
+    }
+    if (!ignoreErrorCodesString.empty())
+    {
+        if (configFileIgnoreErrorCodesSet) // Overwrite the existing parameter
+        {
+            SafeCopyTo(parameters[parameterIndex].parameterValue, ignoreErrorCodesString.c_str());
+        }
+        else // Add a new parameter
+        {
+            dcgmDiagPluginTestParameter_t newParam;
+            SafeCopyTo(newParam.parameterName, PS_IGNORE_ERROR_CODES);
+            SafeCopyTo(newParam.parameterValue, ignoreErrorCodesString.c_str());
+            newParam.type = DcgmPluginParamString;
+            parameters.push_back(std::move(newParam));
+        }
+    }
+    else
+    {
+        if (!errStr.empty())
+        {
+            return errStr;
+        }
+        parsedIgnoreErrorCodeMap = std::move(configParsedIgnoreErrorCodeMap);
+    }
+    return "";
+}
+
 void PluginLib::RunTest(std::string const &testName,
                         std::vector<dcgmDiagPluginEntityInfo_v1> const &entityInfos,
                         unsigned int timeout,
@@ -441,7 +507,7 @@ void PluginLib::RunTest(std::string const &testName,
 
         log_error("failed to prepare entity list for testing");
         std::string errorMsg("DCGM error during entity list preparation");
-        snprintf(error.msg, sizeof(error.msg), "%s", errorMsg.c_str());
+        SafeCopyTo(error.msg, errorMsg.c_str());
         log_error(errorMsg);
         m_tests.at(testName).AddError(error);
         return;
@@ -449,25 +515,42 @@ void PluginLib::RunTest(std::string const &testName,
 
     dcgmDiagPluginTestParameter_t failEarly;
     dcgmDiagPluginTestParameter_t failCheckInterval;
-    snprintf(failEarly.parameterName, sizeof(failEarly.parameterName), "%s", FAIL_EARLY);
+    SafeCopyTo(failEarly.parameterName, FAIL_EARLY);
     if (nvvsCommon.failEarly)
     {
-        snprintf(failEarly.parameterValue, sizeof(failEarly.parameterValue), "true");
+        SafeCopyTo(failEarly.parameterValue, "true");
     }
     else
     {
-        snprintf(failEarly.parameterValue, sizeof(failEarly.parameterValue), "false");
+        SafeCopyTo(failEarly.parameterValue, "false");
     }
     failEarly.type = DcgmPluginParamString;
     parameters.push_back(failEarly);
 
-    snprintf(failCheckInterval.parameterName, sizeof(failCheckInterval.parameterName), "%s", FAIL_CHECK_INTERVAL);
-    snprintf(failCheckInterval.parameterValue,
-             sizeof(failCheckInterval.parameterValue),
-             "%lu",
-             nvvsCommon.failCheckInterval);
+    SafeCopyTo(failCheckInterval.parameterName, FAIL_CHECK_INTERVAL);
+    SafeCopyTo(failCheckInterval.parameterValue, std::to_string(nvvsCommon.failCheckInterval).c_str());
     failCheckInterval.type = DcgmPluginParamFloat;
     parameters.push_back(failCheckInterval);
+
+    gpuIgnoreErrorCodeMap_t parsedIgnoreErrorCodeMap = nvvsCommon.parsedIgnoreErrorCodes;
+    std::string errStr                               = SetIgnoreErrorCodesParam(
+        parameters, nvvsCommon.ignoreErrorCodesString, parsedIgnoreErrorCodeMap, GetGpuIds(entityInfos));
+    if (!errStr.empty())
+    {
+        DcgmError de { DcgmError::GpuIdTag::Unknown };
+        de.SetCode(DCGM_FR_BAD_PARAMETER);
+
+        dcgmDiagErrorDetail_v2 errStruct;
+        errStruct.gpuId    = de.GetGpuId();
+        errStruct.code     = de.GetCode();
+        errStruct.category = de.GetCategory();
+        errStruct.severity = de.GetSeverity();
+        SafeCopyTo(errStruct.msg, errStr.c_str());
+        log_error(errStr);
+        m_tests.at(testName).AddError(errStruct);
+        return;
+    }
+    m_coreFunctionality.SetRecorderIgnoreErrorCodes(parsedIgnoreErrorCodeMap);
 
     unsigned int numParameters                 = parameters.size();
     const dcgmDiagPluginTestParameter_t *parms = parameters.data();
@@ -599,7 +682,7 @@ void PluginLib::RunTest(std::string const &testName,
         auto customStats    = m_tests.at(testName).GetCustomStats();
         auto testParameters = m_tests.at(testName).GetTestParameters();
         m_coreFunctionality.PluginEnded(GetFullLogFileName(), testParameters, GetResult(testName), customStats);
-        std::vector<DcgmError> coreErrors = m_coreFunctionality.GetErrors();
+        std::vector<DcgmError> coreErrors = m_coreFunctionality.GetFatalErrors();
         for (auto &&error : coreErrors)
         {
             dcgmDiagErrorDetail_v2 errStruct;
@@ -609,6 +692,16 @@ void PluginLib::RunTest(std::string const &testName,
             errStruct.gpuId    = error.GetGpuId();
             snprintf(errStruct.msg, sizeof(errStruct.msg), "%s", error.GetMessage().c_str());
             m_tests.at(testName).AddError(errStruct);
+        }
+        // Add the ignored errors as information strings
+        auto const &ignoredErrors = m_coreFunctionality.GetIgnoredErrors();
+        for (auto &&error : ignoredErrors)
+        {
+            dcgmDiagInfo_v1 infoStruct;
+            auto newInfoMsg = SUPPRESSED_ERROR_STR + error.GetMessage();
+            SafeCopyTo(infoStruct.msg, newInfoMsg.c_str());
+            infoStruct.entity = error.GetEntity();
+            m_tests.at(testName).AddInfo(infoStruct);
         }
     }
 }
@@ -663,7 +756,7 @@ const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetErrors(std::string cons
 }
 
 /*****************************************************************************/
-const std::vector<dcgmDiagErrorDetail_v2> &PluginLib::GetInfo(std::string const &testName) const
+const std::vector<dcgmDiagInfo_v1> &PluginLib::GetInfo(std::string const &testName) const
 {
     return m_tests.at(testName).GetInfo();
 }

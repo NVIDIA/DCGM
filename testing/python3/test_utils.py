@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,6 +54,9 @@ noLogging = True
 noLoggingBackup = noLogging
 reRunning = False
 loggingLevel = "DEBUG" #Level to use for logging. These come from DcgmLogging.h
+loggingLevelNum = dcgm_structs.DcgmLoggingSeverityDebug
+noLoggingLevel = "NONE"
+noLoggingLevelNum = dcgm_structs.DcgmLoggingSeverityNone
 g_dcgmGpuCount = None
 
 DIAG_SMALL_FB_MODE_VAR = '__DCGM_DIAG_SMALL_FB_MODE'
@@ -1122,6 +1125,19 @@ def get_connect_mode():
     global dcgm_connect_mode
     return dcgm_connect_mode
 
+# HostengineLogLevelHandler
+#
+# This is a log level handler class with an update method to update the log
+# level of a running hostengine.
+#
+class HostengineLogLevelHandler:
+    def __init__(self, handle):
+        self.hostengineHandle = handle
+        
+    # Required by logger.LevelUpdateManager
+    def updateLogLevel(self):
+        dcgm_agent.dcgmHostengineSetLoggingSeverity(self.hostengineHandle, pydcgm.BASE_LOGGER, logger.logging_level_num)
+
 class RunEmbeddedHostEngine:
     """
     This class is used as part of a "with" clause to start and stop an embedded host engine
@@ -1145,10 +1161,13 @@ class RunEmbeddedHostEngine:
             self.handle = dcgm_agent.dcgmConnect('127.0.0.1:5555')
             logger.info("Started TCP server")
         set_connect_mode(DCGM_CONNECT_MODE_EMBEDDED)
+        self.logLevelHandler = HostengineLogLevelHandler(self.handle)
+        logger.LevelUpdateManager.register(self.logLevelHandler)
         return self.handle
 
     def __exit__(self, exception_type, exception, trace):
         if self.hostEngineStarted:
+            logger.LevelUpdateManager.deregister(self.logLevelHandler)
             logger.info("Stopping embedded host engine")
             try:
                 dcgm_agent.dcgmShutdown()
@@ -1255,10 +1274,13 @@ class RunClientInitShutdown:
             raise Exception('failed connection to dcgm hostengine')
 
         self.clientAPIStarted = True
+        self.logLevelHandler = HostengineLogLevelHandler(self.dcgm_handle)
+        logger.LevelUpdateManager.register(self.logLevelHandler)
         return self.dcgm_handle
 
     def __exit__(self, exception_type, exception, trace):
         if self.clientAPIStarted:
+            logger.LevelUpdateManager.deregister(self.logLevelHandler)
             try:
                 dcgm_agent.dcgmShutdown()
             except dcgmExceptionClass(DCGM_ST_INIT_ERROR):
@@ -1383,19 +1405,68 @@ def run_with_injection_nvml_using_specific_sku(skuFileName: str):
         return wrapper
     return decorator
 
-NVSDM_USE_TEST_STUBS = '__DCGM_LOAD_NVSDM_STUBS'
-def run_with_nvsdm_stub():
+DCGM_NVSDM_MOCK_YAML = "DCGM_NVSDM_MOCK_YAML"
+def run_with_nvsdm_mock_config(configYamlPath: str):
     """
-    Load NVSDM test stubs
+    Have DCGM load NvsdmMock instead of NvsdmLib
     """
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            os.environ[NVSDM_USE_TEST_STUBS] = '1'
+            configFilePath = os.path.abspath(os.path.join("nvsdm_mock_configs", configYamlPath))
+            if not os.path.exists(configFilePath):
+                skip_test(f"Skip test due to miss config YAML file [{configFilePath}]")
+            # This environment variable indicates the target SKU file
+            os.environ[DCGM_NVSDM_MOCK_YAML] = configFilePath
             try:
                 fn(*args, **kwds)
             finally:
-                del os.environ[NVSDM_USE_TEST_STUBS]
+                del os.environ[DCGM_NVSDM_MOCK_YAML]
+            return
+        return wrapper
+    return decorator
+
+def get_live_entity_ids(handle, entityGroup):
+    cxIdList = []
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    cxIdList = dcgmSystem.discovery.GetEntityGroupEntities(entityGroup, 1)
+    return cxIdList
+
+def run_with_nvsdm_mocked_cx():
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                if not os.getenv(DCGM_NVSDM_MOCK_YAML, default=None):
+                    raise Exception("Not connected to remote or embedded host engine that run with NvsdmMock. Use appropriate decorator")
+                cxIds = get_live_entity_ids(kwds['handle'], dcgm_fields.DCGM_FE_CONNECTX)
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if len(cxIds) < 1:
+                skip_test("Test requires mocked CX. None were found, skipping test.")
+            else:
+                kwds['cxIds'] = cxIds
+                fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
+
+def run_only_with_live_cx():
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' in kwds:
+                cxIds = get_live_entity_ids(kwds['handle'], dcgm_fields.DCGM_FE_CONNECTX)
+            else:
+                raise Exception("Not connected to remote or embedded host engine. Use appropriate decorator")
+
+            if len(cxIds) < 1:
+                skip_test("Test requires live ConnectX. None were found, skipping test.")
+            else:
+                kwds['cxIds'] = cxIds
+                fn(*args, **kwds)
             return
         return wrapper
     return decorator
@@ -1772,6 +1843,26 @@ def run_with_injection_cpu_cores(totalCores=1):
                 skip_test("Unable to create a fake CPU core: %s" % str(e))
             fn(*args, **kwds)
             return
+        return wrapper
+    return decorator
+
+def run_with_ipv6_enabled():
+    """
+    Run this test only if IPv6 is available. This is determined experientially by attempting to bind to UDP port.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                reusePort = 1
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, reusePort)
+                s.bind(('[::1]', 65535))
+                s.close()
+            except OSError:
+                skip_test('Skipping this test as it requires IPv6 to be enabled and for port 65535 to be unused')
+            fn(*args, **kwds)
         return wrapper
     return decorator
 
@@ -2751,7 +2842,7 @@ def diag_execute_wrapper(dd, handle):
         else:
             raise e
 
-def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9):
+def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10):
     try:
         response = dcgm_agent.dcgmActionValidate_v2(handle, runDiagInfo, runDiagVersion)
         return response
@@ -2871,6 +2962,46 @@ def gpu_supports_gpm(handle, gpuId):
     computeCapability = fieldValues[0].value.i64
 
     if computeCapability >= 0x090000:
+        return True
+    else:
+        return False
+
+def gpu_supports_ecc(handle, gpuId):
+    """
+    Returns true if the given gpuId support ECC and it is enabled.
+    """
+    entityPairList = [dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId), ]
+    flags = dcgm_structs.DCGM_FV_FLAG_LIVE_DATA
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, ]
+    fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entityPairList, fieldIds, flags)
+    assert fieldValues[0].status == 0
+
+    if dcgmvalue.DCGM_INT64_IS_BLANK(fieldValues[0].value.i64):
+        return False
+
+    cmd = 'nvidia-smi -q -x -i %u | grep current_ecc' % gpuId
+    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    out_buf, _ = p.communicate()
+    out = out_buf.decode('utf-8')
+
+    if "Enabled" not in out.rstrip():
+        return False
+
+    return True
+
+def gpu_reports_sram_memory_errors(handle, gpuId):
+    """
+    Returns true if the given gpuId reports simplified (SRAM and DRAM) ECC
+    Memory error counters (Turing and later do).
+    """
+    entityPairList = [dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId), ]
+    flags = dcgm_structs.DCGM_FV_FLAG_LIVE_DATA
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, ]
+    fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entityPairList, fieldIds, flags)
+    assert fieldValues[0].status == 0
+    computeCapability = fieldValues[0].value.i64
+
+    if computeCapability >= 0x070005:
         return True
     else:
         return False

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,4 +16,3 @@ target_link_libraries(sdk_nvsdm_interface INTERFACE sdk_nvidia)
 target_include_directories(sdk_nvsdm_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_subdirectory(loader)
-add_subdirectory(test_stubs)

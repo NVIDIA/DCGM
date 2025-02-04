@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 
 /* Profiling field IDs */
 #define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_ACTIVE
-#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_NVLINK_L17_RX_BYTES
+#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_C2C_RX_DATA_BYTES
 
 /* Sysmon field IDs */
 #define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_TOTAL

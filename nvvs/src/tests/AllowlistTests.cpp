@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ SCENARIO("Allowlist provides default values for device", "[.]")
             tp.AddString(SMSTRESS_STR_USE_DGEMM, "True");
             tp.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 0.0);
 
-            wl.getDefaultsByDeviceId(testName, id, &tp);
+            wl.GetDefaultsByDeviceId(testName, id, &tp);
 
             CHECK(tp.GetDouble(SMSTRESS_STR_TARGET_PERF) == 950.0);
             CHECK(tp.GetString(SMSTRESS_STR_USE_DGEMM) == "False");

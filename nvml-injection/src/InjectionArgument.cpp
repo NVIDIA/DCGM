@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ int nvmlBridgeChipHierarchy_tCompare(const nvmlBridgeChipHierarchy_t &a, const n
 int nvmlSample_tCompare(const nvmlSample_t &a, const nvmlSample_t &b);
 int nvmlViolationTime_tCompare(const nvmlViolationTime_t &a, const nvmlViolationTime_t &b);
 int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b);
+int nvmlMarginTemperature_tCompare(const nvmlMarginTemperature_t &a, const nvmlMarginTemperature_t &b);
 int nvmlClkMonFaultInfo_tCompare(const nvmlClkMonFaultInfo_t &a, const nvmlClkMonFaultInfo_t &b);
 int nvmlClkMonStatus_tCompare(const nvmlClkMonStatus_t &a, const nvmlClkMonStatus_t &b);
 int nvmlClockOffset_tCompare(const nvmlClockOffset_t &a, const nvmlClockOffset_t &b);
@@ -63,6 +64,7 @@ int nvmlProcessUtilizationSample_tCompare(const nvmlProcessUtilizationSample_t &
 int nvmlProcessUtilizationInfo_v1_tCompare(const nvmlProcessUtilizationInfo_v1_t &a, const nvmlProcessUtilizationInfo_v1_t &b);
 int nvmlProcessesUtilizationInfo_tCompare(const nvmlProcessesUtilizationInfo_t &a, const nvmlProcessesUtilizationInfo_t &b);
 int nvmlEccSramErrorStatus_tCompare(const nvmlEccSramErrorStatus_t &a, const nvmlEccSramErrorStatus_t &b);
+int nvmlPlatformInfo_v1_tCompare(const nvmlPlatformInfo_v1_t &a, const nvmlPlatformInfo_v1_t &b);
 int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInfo_t &b);
 int nvmlPowerValue_v2_tCompare(const nvmlPowerValue_v2_t &a, const nvmlPowerValue_v2_t &b);
 int nvmlVgpuHeterogeneousMode_tCompare(const nvmlVgpuHeterogeneousMode_t &a, const nvmlVgpuHeterogeneousMode_t &b);
@@ -76,6 +78,7 @@ int nvmlVgpuInstancesUtilizationInfo_tCompare(const nvmlVgpuInstancesUtilization
 int nvmlVgpuProcessUtilizationSample_tCompare(const nvmlVgpuProcessUtilizationSample_t &a, const nvmlVgpuProcessUtilizationSample_t &b);
 int nvmlVgpuProcessUtilizationInfo_v1_tCompare(const nvmlVgpuProcessUtilizationInfo_v1_t &a, const nvmlVgpuProcessUtilizationInfo_v1_t &b);
 int nvmlVgpuProcessesUtilizationInfo_tCompare(const nvmlVgpuProcessesUtilizationInfo_t &a, const nvmlVgpuProcessesUtilizationInfo_t &b);
+int nvmlVgpuRuntimeState_tCompare(const nvmlVgpuRuntimeState_t &a, const nvmlVgpuRuntimeState_t &b);
 int nvmlVgpuSchedulerLogEntry_tCompare(const nvmlVgpuSchedulerLogEntry_t &a, const nvmlVgpuSchedulerLogEntry_t &b);
 int nvmlVgpuSchedulerLog_tCompare(const nvmlVgpuSchedulerLog_t &a, const nvmlVgpuSchedulerLog_t &b);
 int nvmlVgpuSchedulerGetState_tCompare(const nvmlVgpuSchedulerGetState_t &a, const nvmlVgpuSchedulerGetState_t &b);
@@ -643,6 +646,22 @@ int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlMarginTemperature_tCompare(const nvmlMarginTemperature_t &a, const nvmlMarginTemperature_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.marginTemperature != b.marginTemperature)
+    {
+        return a.marginTemperature < b.marginTemperature ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlClkMonFaultInfo_tCompare(const nvmlClkMonFaultInfo_t &a, const nvmlClkMonFaultInfo_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -951,7 +970,7 @@ int nvmlEccSramErrorStatus_tCompare(const nvmlEccSramErrorStatus_t &a, const nvm
 }
 
 // The following snippet is generated from write_struct_compare_definition
-int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInfo_t &b)
+int nvmlPlatformInfo_v1_tCompare(const nvmlPlatformInfo_v1_t &a, const nvmlPlatformInfo_v1_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
     if (a.version != b.version)
@@ -982,6 +1001,52 @@ int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInf
     if (a.nodeIndex != b.nodeIndex)
     {
         return a.nodeIndex < b.nodeIndex ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.peerType != b.peerType)
+    {
+        return a.peerType < b.peerType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.moduleId != b.moduleId)
+    {
+        return a.moduleId < b.moduleId ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPlatformInfo_tCompare(const nvmlPlatformInfo_t &a, const nvmlPlatformInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.ibGuid, b.ibGuid, sizeof(a.ibGuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.chassisSerialNumber, b.chassisSerialNumber, sizeof(a.chassisSerialNumber)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.slotNumber != b.slotNumber)
+    {
+        return a.slotNumber < b.slotNumber ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.trayIndex != b.trayIndex)
+    {
+        return a.trayIndex < b.trayIndex ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.hostId != b.hostId)
+    {
+        return a.hostId < b.hostId ? -1 : 1;
     }
     // The following snippet is generated from write_struct_compare_definition
     if (a.peerType != b.peerType)
@@ -1359,6 +1424,22 @@ int nvmlVgpuProcessesUtilizationInfo_tCompare(const nvmlVgpuProcessesUtilization
     if (auto ret = nvmlVgpuProcessUtilizationInfo_v1_tCompare(*a.vgpuProcUtilArray, *b.vgpuProcUtilArray); ret)
     {
         return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlVgpuRuntimeState_tCompare(const nvmlVgpuRuntimeState_t &a, const nvmlVgpuRuntimeState_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.size != b.size)
+    {
+        return a.size < b.size ? -1 : 1;
     }
     return 0;
 }
@@ -6081,6 +6162,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_MARGINTEMPERATURE:
+        {
+            if (other.m_type == INJECTION_MARGINTEMPERATURE)
+            {
+                memcpy(&m_value.MarginTemperature, &other.m_value.MarginTemperature, sizeof(*&m_value.MarginTemperature));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MARGINTEMPERATURE_PTR)
+            {
+                memcpy(&m_value.MarginTemperature, other.m_value.MarginTemperaturePtr, sizeof(*&m_value.MarginTemperature));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_MARGINTEMPERATURE_PTR:
+        {
+            if (other.m_type == INJECTION_MARGINTEMPERATURE_PTR)
+            {
+                memcpy(m_value.MarginTemperaturePtr, other.m_value.MarginTemperaturePtr, sizeof(*m_value.MarginTemperaturePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_MARGINTEMPERATURE)
+            {
+                memcpy(m_value.MarginTemperaturePtr, &other.m_value.MarginTemperature, sizeof(*m_value.MarginTemperaturePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_MASK255:
         {
             if (other.m_type == INJECTION_MASK255)
@@ -6696,6 +6808,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_PLATFORMINFO)
             {
                 memcpy(m_value.PlatformInfoPtr, &other.m_value.PlatformInfo, sizeof(*m_value.PlatformInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PLATFORMINFO_V1:
+        {
+            if (other.m_type == INJECTION_PLATFORMINFO_V1)
+            {
+                memcpy(&m_value.PlatformInfo_v1, &other.m_value.PlatformInfo_v1, sizeof(*&m_value.PlatformInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PLATFORMINFO_V1_PTR)
+            {
+                memcpy(&m_value.PlatformInfo_v1, other.m_value.PlatformInfo_v1Ptr, sizeof(*&m_value.PlatformInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PLATFORMINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PLATFORMINFO_V1_PTR)
+            {
+                memcpy(m_value.PlatformInfo_v1Ptr, other.m_value.PlatformInfo_v1Ptr, sizeof(*m_value.PlatformInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PLATFORMINFO_V1)
+            {
+                memcpy(m_value.PlatformInfo_v1Ptr, &other.m_value.PlatformInfo_v1, sizeof(*m_value.PlatformInfo_v1Ptr));
                 set = true;
             }
             break;
@@ -8246,6 +8389,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_VGPUPROCESSESUTILIZATIONINFO)
             {
                 memcpy(m_value.VgpuProcessesUtilizationInfoPtr, &other.m_value.VgpuProcessesUtilizationInfo, sizeof(*m_value.VgpuProcessesUtilizationInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_VGPURUNTIMESTATE:
+        {
+            if (other.m_type == INJECTION_VGPURUNTIMESTATE)
+            {
+                memcpy(&m_value.VgpuRuntimeState, &other.m_value.VgpuRuntimeState, sizeof(*&m_value.VgpuRuntimeState));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPURUNTIMESTATE_PTR)
+            {
+                memcpy(&m_value.VgpuRuntimeState, other.m_value.VgpuRuntimeStatePtr, sizeof(*&m_value.VgpuRuntimeState));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_VGPURUNTIMESTATE_PTR:
+        {
+            if (other.m_type == INJECTION_VGPURUNTIMESTATE_PTR)
+            {
+                memcpy(m_value.VgpuRuntimeStatePtr, other.m_value.VgpuRuntimeStatePtr, sizeof(*m_value.VgpuRuntimeStatePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_VGPURUNTIMESTATE)
+            {
+                memcpy(m_value.VgpuRuntimeStatePtr, &other.m_value.VgpuRuntimeState, sizeof(*m_value.VgpuRuntimeStatePtr));
                 set = true;
             }
             break;
@@ -11711,6 +11885,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return nvmlLedState_tCompare(m_value.LedState, other.m_value.LedState);
                     break; // NOT REACHED
                 }
+                case INJECTION_MARGINTEMPERATURE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlMarginTemperature_tCompare(*m_value.MarginTemperaturePtr, *other.m_value.MarginTemperaturePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlMarginTemperature_tCompare(*m_value.MarginTemperaturePtr, *other.m_value.MarginTemperaturePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_MARGINTEMPERATURE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlMarginTemperature_tCompare(m_value.MarginTemperature, other.m_value.MarginTemperature);
+                    break; // NOT REACHED
+                }
                 case INJECTION_MASK255_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -12345,6 +12542,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     return nvmlPlatformInfo_tCompare(m_value.PlatformInfo, other.m_value.PlatformInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PLATFORMINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPlatformInfo_v1_tCompare(*m_value.PlatformInfo_v1Ptr, *other.m_value.PlatformInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPlatformInfo_v1_tCompare(*m_value.PlatformInfo_v1Ptr, *other.m_value.PlatformInfo_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PLATFORMINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPlatformInfo_v1_tCompare(m_value.PlatformInfo_v1, other.m_value.PlatformInfo_v1);
                     break; // NOT REACHED
                 }
                 case INJECTION_POWERPROFILETYPE_PTR:
@@ -13759,6 +13979,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return nvmlVgpuProcessesUtilizationInfo_tCompare(m_value.VgpuProcessesUtilizationInfo, other.m_value.VgpuProcessesUtilizationInfo);
                     break; // NOT REACHED
                 }
+                case INJECTION_VGPURUNTIMESTATE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlVgpuRuntimeState_tCompare(*m_value.VgpuRuntimeStatePtr, *other.m_value.VgpuRuntimeStatePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlVgpuRuntimeState_tCompare(*m_value.VgpuRuntimeStatePtr, *other.m_value.VgpuRuntimeStatePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_VGPURUNTIMESTATE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlVgpuRuntimeState_tCompare(m_value.VgpuRuntimeState, other.m_value.VgpuRuntimeState);
+                    break; // NOT REACHED
+                }
                 case INJECTION_VGPUSCHEDULERCAPABILITIES_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -15162,6 +15405,14 @@ InjectionArgument::~InjectionArgument()
             }
             break;
         }
+        case INJECTION_MARGINTEMPERATURE_PTR:
+        {
+            if (m_inHeap && m_value.MarginTemperaturePtr)
+            {
+                free(m_value.MarginTemperaturePtr);
+            }
+            break;
+        }
         case INJECTION_MASK255_PTR:
         {
             if (m_inHeap && m_value.Mask255Ptr)
@@ -15319,6 +15570,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.PlatformInfoPtr)
             {
                 free(m_value.PlatformInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_PLATFORMINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.PlatformInfo_v1Ptr)
+            {
+                free(m_value.PlatformInfo_v1Ptr);
             }
             break;
         }
@@ -15719,6 +15978,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.VgpuProcessesUtilizationInfoPtr)
             {
                 free(m_value.VgpuProcessesUtilizationInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_VGPURUNTIMESTATE_PTR:
+        {
+            if (m_inHeap && m_value.VgpuRuntimeStatePtr)
+            {
+                free(m_value.VgpuRuntimeStatePtr);
             }
             break;
         }

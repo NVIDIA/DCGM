@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -606,7 +606,7 @@ def helperDiagCheckReturn(ret, response):
 
 
 @ensure_byte_strings()
-def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version9):
+def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version10):
     if runDiagVersion == dcgm_structs.dcgmRunDiag_version7:
         response = dcgm_structs.c_dcgmDiagResponse_v10()
         response.version = dcgm_structs.dcgmDiagResponse_version10
@@ -626,8 +626,8 @@ def dcgmActionValidate(dcgm_handle, group_id, validate):
     response.version = dcgm_structs.dcgmDiagResponse_version11
 
     # Put the group_id and validate into a dcgmRunDiag struct
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
     runDiagInfo.validate = validate
     runDiagInfo.groupId = group_id
 
@@ -839,6 +839,17 @@ def dcgmVersionInfo():
     ret = fn(byref(msg))
     dcgm_structs._dcgmCheckReturn(ret)
     return msg
+
+@ensure_byte_strings()
+def dcgmHostengineSetLoggingSeverity(dcgmHandle, logger, severity):
+    msg = dcgm_structs.c_dcgmSettingsSetLoggingSeverity_v2()
+    msg.version = dcgm_structs.dcgmSettingsSetLoggingSeverity_version2
+    msg.targetLogger = logger
+    msg.targetSeverity = severity
+    fn = dcgmFP("dcgmHostengineSetLoggingSeverity")
+    ret = fn(dcgmHandle, byref(msg))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
 
 @ensure_byte_strings()
 def dcgmHostengineIsHealthy(dcgmHandle):

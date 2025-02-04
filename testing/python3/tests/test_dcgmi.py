@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -487,6 +487,27 @@ def test_dcgmi_discovery_cpus(handle, gpuIds, cpuIds):
             ["discovery", "--list", ""],
             ["discovery", "--info", "a", "--cpuid", "0"]     # check cpu can be specified
     ])
+
+def helper_dcgmi_discovery_can_list_cx(numCxCards):
+    expectedStr = f"{numCxCards} ConnectX found."
+    _, stdoutLines, _ = _run_dcgmi_command(["discovery", "--list"])
+    found = False
+    for line in stdoutLines:
+        if expectedStr in line:
+            found = True
+            break
+    assert found, f"Cannot find expected output: [{expectedStr}]"
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_cx()
+def test_dcgmi_discovery_can_list_cx_live(handle, cxIds):
+    helper_dcgmi_discovery_can_list_cx(len(cxIds))
+
+@test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_with_nvsdm_mocked_cx()
+def test_dcgmi_discovery_can_list_cx_mocked(handle, cxIds):
+    helper_dcgmi_discovery_can_list_cx(len(cxIds))
 
 def get_nvidia_cpu_count():
     try:
@@ -1359,8 +1380,7 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
             ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_GPU, gpu, field)
     """
 
-    gpuArg = "0"
-    gpuArg += ","+str(gpuIds[0])
+    gpuArg = str(gpuIds[0])
     gpuArg += ","+str(gpuIds[1])
     gpuArg += ","+str(gpuIds[2])
     gpuArg += ","+str(gpuIds[3])
@@ -1412,8 +1432,7 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
         assert stdout_lines[1][fieldPosition:].find(outputFormat.unit) == 0, outputFormat.shortName + " unit not in proper place on header"
         fieldPosition += outputFormat.width + outputPadding
 
-    lineHeaders = [ "GPU 0",
-                    "GPU " + str(gpuIds[0]),
+    lineHeaders = [ "GPU " + str(gpuIds[0]),
                     "GPU " + str(gpuIds[1]),
                     "GPU-I " + str(instanceIds[0]),
                     "GPU-CI " + str(ciIds[0]),
@@ -1572,9 +1591,9 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
 
         if expectError:
             with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(error)):
-                response = test_utils.action_validate_wrapper(runDiagInfo, handle)
+                response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version9)
         else:
-            response = test_utils.action_validate_wrapper(runDiagInfo, handle)
+            response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version9)
             assert response, "Should have received a response"
             assert response.tests[0].name == "software", \
                 f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
@@ -1769,3 +1788,220 @@ def test_dcgmi_diag_status_with_injected_gpu_r1(handle, gpuIds):
     # to the software test suite, and the first error code is from that test
     # instead.
     helper_dcgmi_diag_status(handle, args, 10, ["software"], {"software": dcgm_errors.DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR})
+
+def _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, error = None):
+    dd = DcgmDiag.DcgmDiag(ignoreErrorCodesStr=ignoreErrorCodes)
+
+    if error:
+        with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(error)):
+            response = test_utils.diag_execute_wrapper(dd, handle)
+    else:
+        response = test_utils.diag_execute_wrapper(dd, handle)
+        assert response, "Should have received a response"
+        assert response.tests[0].name == "software", \
+            f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgmi_diag_ignore_error_codes_with_injected_gpus(handle, gpuIds):
+    ignoreErrorCodes = "*:*"
+    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes)
+
+    ignoreErrorCodes = "gpu0:101"
+    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes)
+
+    ignoreErrorCodes = "gpu3:0"
+    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
+
+    ignoreErrorCodes = "gpu:*"
+    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
+
+def _get_run_diag_info(gpuIds, ignoreErrorCodes, testNameStr):
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
+    runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL       
+    runDiagInfo.entityIds = ",".join(map(str,gpuIds))
+    runDiagInfo.ignoreErrorCodes = ignoreErrorCodes
+
+    # The following is to ensure that the tests return as early as
+    # possible, and do not take too long to run.
+    runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_FAIL_EARLY
+    runDiagInfo.failCheckInterval = 1 # 1s
+    testDurationStr = None
+    if testNameStr not in ["nvbandwidth", "memory_bandwidth"]:
+        testDurationStr = f"{testNameStr}.test_duration=2"
+
+    index = 0
+    for c in testNameStr:
+        runDiagInfo.testNames[0][index] = ord(c)
+        index += 1 
+    index = 0
+    if testDurationStr:
+        for c in testDurationStr:
+            runDiagInfo.testParms[0][index] = ord(c)
+            index += 1
+
+    return runDiagInfo
+
+def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, expectedResults, testNameStr, errorCode = None):
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+
+    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    assert response.numTests == 2
+    assert response, "Should have received a response"
+    assert response.tests[0].name == "software", \
+        f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
+    assert response.tests[1].name == testNameStr, \
+        f"The response should have contained the '{testNameStr}' plugin result, instead got {response.tests[1].name}"
+     
+    assert response.numResults == 2 
+
+    # Skip checking software test results
+    assert response.results[1].entity.entityId == gpuId, f"Expected GPU ID {gpuId}, got {response.results[1].entity.entityId}"
+    assert response.results[1].result in expectedResults, f"Expected result in {expectedResults}, got {response.results[1].result}"
+    errorFound = False
+    if not errorCode:
+        errorFound = True
+        assert response.numErrors == 0, f"Expected 0 errors, got {response.numErrors} errors"
+        # Verify that the ignored error is in the info array
+        assert response.numInfo > 0
+        infoFound = False
+        for i in range(response.numInfo):
+            if response.info[i].msg.startswith("Suppressed error:"):
+                infoFound = True
+        assert infoFound
+
+    for i in range(response.numErrors):
+        if response.errors[i].code == errorCode:
+            errorFound = True
+        logger.debug(f"Error {response.errors[i].code} found.")
+    assert errorFound, f"Expected error code {errorCode} in response."
+
+@test_utils.run_with_standalone_host_engine(360)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_ignore_error_codes(handle, gpuIds):
+    testNames = ["memory"]
+    for test in testNames:
+        logger.debug(f"Running {test} test with injected error - blank ignoreErrorCodes")
+        ignoreErrorCodes = "" 
+        runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
+
+        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to different error code")
+        ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_THERMAL_VIOLATIONS}"
+        runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
+
+        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to all possible gpus and error codes")
+        ignoreErrorCodes = "*:*"
+        runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
+
+        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to same gpu and error code")
+        ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
+        runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
+
+@test_utils.run_with_standalone_host_engine(240)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_ignore_error_codes_multiple_gpus_only_one_passes(handle, gpuIds):
+    if len(gpuIds) <= 1:
+        test_utils.skip_test("This test can be run only when there is more than 1 GPU.")
+    
+    test = "memory"
+    # Inject error in both GPUs, but ignore error only on one GPU
+    ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
+    runDiagInfo = _get_run_diag_info([gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+
+    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    assert response.numTests == 2, f"Expected 2 tests, got {response.numTests}"
+    assert response, "Should have received a response"
+    assert response.tests[0].name == "software", \
+        f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
+    assert response.tests[1].name == test, \
+        f"The response should have contained the '{test}' plugin result, instead got {response.tests[0].name}"
+     
+    assert response.numResults == 4, f"Expected 4 results, got {response.numResults}"
+
+    # Skip checking software test results
+    assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
+    assert response.results[2].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[2].result}"
+
+    assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
+    assert response.results[3].result in [dcgm_structs.DCGM_DIAG_RESULT_FAIL], f"Got result {response.results[3].result}"
+
+    errorFound = False
+    for i in range(response.numErrors):
+        if response.errors[i].code == dcgm_errors.DCGM_FR_XID_ERROR and response.errors[i].entity.entityId == gpuIds[1]:
+            errorFound = True
+        logger.debug(f"Error {response.errors[i].code} for entity {response.errors[i].entity.entityId} found.")
+    assert errorFound, f"Expected error code {dcgm_errors.DCGM_FR_XID_ERROR} in response for entity {gpuIds[1]}."
+
+@test_utils.run_with_standalone_host_engine(240)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_ignore_error_codes_multiple_gpus_all_pass(handle, gpuIds):
+    if len(gpuIds) <= 1:
+        test_utils.skip_test("This test can be run only when there is more than 1 GPU.")
+    
+    test = "pcie"
+    # Inject error and ignore error on both GPUs
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+    
+    ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR};gpu{gpuIds[1]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
+    runDiagInfo = _get_run_diag_info([gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
+    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    assert response.numTests == 2, f"Expected 2 tests, got {response.numTests}"
+    assert response, "Should have received a response"
+    assert response.tests[0].name == "software", \
+        f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
+    assert response.tests[1].name == test, \
+        f"The response should have contained the '{test}' plugin result, instead got {response.tests[0].name}"
+     
+    assert response.numResults == 4, f"Expected 4 results, got {response.numResults}"
+
+    # Skip checking software test results
+    assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
+    assert response.results[2].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[2].result}"
+    assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
+    assert response.results[3].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[3].result}"
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(320)
+@test_utils.run_with_nvml_injected_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgmi_diag_ignore_error_codes_software(handle, gpuIds):
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
+    runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL
+    runDiagInfo.entityIds = str(gpuIds[0])
+    runDiagInfo.ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE}"
+    runDiagInfo.validate = 1
+
+    fieldId = dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE
+    injected_value = 20 # random non-zero number
+    inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 0)
+
+    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+
+    suppressedErrorFound = False
+    for i in range(response.numInfo):
+        if response.info[i].msg.startswith(f"Suppressed error:  Page Retirement/Row Remap: GPU {gpuIds[0]} had uncorrectable memory errors and row remapping failed"):
+            suppressedErrorFound = True
+            break
+        logger.debug(f"Info msg: {response.info[i].msg}")
+
+    assert suppressedErrorFound, f"Suppressed error info message not found for error code {dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE}"

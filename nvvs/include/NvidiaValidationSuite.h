@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ public:
 
     /*
      * Add the list of GPUs for the test to NvvsCommon
-     * @param gpuIndices[in/out] - a list of GPU indicies to use for this run, this is populated if passed in empty
+     * @param gpuIndices[in/out] - a set of GPU indicies to use for this run, this is populated if passed in empty
      * @param visibleGpus[in]    - the GPUs visible to NVVS
      * @return an error string if an error occurred, or an empty string on success
      **/
@@ -71,11 +71,11 @@ public:
      * Determines whether or not a GPU is included in this run of the diagnostic.
      *
      * @param gpuIndex[in]   - the index of the GPU in question
-     * @param gpuIndices[in] - a list of the user-specified indices for this run. If this is empty, then the GPU is
+     * @param gpuIndices[in] - a set of the user-specified indices for this run. If this is empty, then the GPU is
      *                         always included.
      * @return true if the GPU is to be included, false otherwise.
      **/
-    bool IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices);
+    bool IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices) const;
     // not private so they can be called in tests
 protected:
     // methods
@@ -102,7 +102,7 @@ protected:
     std::vector<Gpu *> m_gpuVect;
     std::vector<Test *> testVect;
     std::vector<TestParameters *> tpVect;
-    Allowlist *m_allowlist;
+    std::unique_ptr<Allowlist> m_allowlist;
     FrameworkConfig fwcfg;
 
     // classes

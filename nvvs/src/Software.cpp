@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,6 +112,7 @@ Software::Software(dcgmHandle_t handle)
     tp.AddString(SW_STR_DO_TEST, "None");
     tp.AddString(SW_STR_REQUIRE_PERSISTENCE, "True");
     tp.AddString(SW_STR_SKIP_DEVICE_TEST, "False");
+    tp.AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = &tp;
 
     m_dcgmSystem.Init(handle);
@@ -146,6 +147,9 @@ void Software::Go(std::string const &testName,
     }
     TestParameters testParameters(*(m_infoStruct.defaultTestParameters));
     testParameters.SetFromStruct(numParameters, tpStruct);
+
+    ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
     if (testParameters.GetString(SW_STR_DO_TEST) == "denylist")
         checkDenylist();
@@ -739,6 +743,7 @@ int Software::checkRowRemapping()
             continue;
         }
 
+        dcgmGroupEntityPair_t entity = { DCGM_FE_GPU, gpuId };
         if (rowRemapFailure.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(rowRemapFailure.value.i64))
         {
             DCGM_LOG_INFO << "gpuId " << gpuId << " returned status " << rowRemapFailure.status << ", value "
@@ -748,15 +753,26 @@ int Software::checkRowRemapping()
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d, gpuId);
-            addError(d);
-            SetResultForGpu(GetSoftwareTestName(), gpuId, NVVS_RESULT_FAIL);
+            bool ignoreRowRemapError = ShouldIgnoreError(GetSoftwareTestName(), entity, DCGM_FR_ROW_REMAP_FAILURE);
+            if (ignoreRowRemapError)
+            {
+                std::string infoStr
+                    = fmt::format("{} {}: {}", SUPPRESSED_ERROR_STR, SW_SUBTEST_PAGE_RETIREMENT, d.GetMessage());
+                AddInfoVerboseForEntity(GetSoftwareTestName(), entity, infoStr);
+            }
+            else
+            {
+                addError(d);
+                SetResultForGpu(GetSoftwareTestName(), gpuId, NVVS_RESULT_FAIL);
 
-            /*
-             * Halt nvvs for failures related to 'row remap/pending' or 'uncorrectable remapped row'. Please be aware
-             * that we will not stop for internal DCGM failures, such as issues with retrieving the current field value.
-             */
-            main_should_stop.store(1);
-            continue;
+                /*
+                 * Halt nvvs for failures related to 'row remap/pending' or 'uncorrectable remapped row'. Please be
+                 * aware that we will not stop for internal DCGM failures, such as issues with retrieving the current
+                 * field value.
+                 */
+                main_should_stop.store(1);
+                continue;
+            }
         }
 
         memset(&pendingRowRemap, 0, sizeof(pendingRowRemap));
@@ -1049,4 +1065,20 @@ void Software::addError(DcgmError &d)
         d.SetMessage(msg);
         AddError(GetSoftwareTestName(), d);
     }
+}
+
+std::vector<dcgmDiagPluginParameterInfo_t> GetSwParameterInfo()
+{
+    std::vector<dcgmDiagPluginParameterInfo_t> ret;
+    std::array<std::string, 2> parameterNames { SW_STR_REQUIRE_PERSISTENCE, SW_STR_SKIP_DEVICE_TEST };
+
+    for (std::string const &name : parameterNames)
+    {
+        dcgmDiagPluginParameterInfo_t param {};
+        SafeCopyTo(param.parameterName, name.c_str());
+        param.parameterType = DcgmPluginParamBool;
+        ret.emplace_back(param);
+    }
+
+    return ret;
 }

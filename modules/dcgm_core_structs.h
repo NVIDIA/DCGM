@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,16 +158,17 @@ typedef struct dcgm_core_msg_field_values_updated_v1
 
 typedef dcgm_core_msg_field_values_updated_v1 dcgm_core_msg_field_values_updated_t;
 
-typedef struct dcgm_core_msg_set_severity_v1
+typedef struct dcgm_core_msg_set_severity_v2
 {
     dcgm_module_command_header_t header; /* Command header */
-    dcgmSettingsSetLoggingSeverity_v1 logging;
-} dcgm_core_msg_set_severity_v1;
+    dcgmSettingsSetLoggingSeverity_v2 logging;
+} dcgm_core_msg_set_severity_v2;
 
-#define dcgm_core_msg_set_severity_version1 MAKE_DCGM_VERSION(dcgm_core_msg_set_severity_v1, 1)
-#define dcgm_core_msg_set_severity_version  dcgm_core_msg_set_severity_version1
+#define dcgm_core_msg_set_severity_version2 MAKE_DCGM_VERSION(dcgm_core_msg_set_severity_v2, 2)
 
-typedef dcgm_core_msg_set_severity_v1 dcgm_core_msg_set_severity_t;
+#define dcgm_core_msg_set_severity_version dcgm_core_msg_set_severity_version2
+
+typedef dcgm_core_msg_set_severity_v2 dcgm_core_msg_set_severity_t;
 
 typedef struct
 {
@@ -697,26 +698,26 @@ typedef dcgm_core_msg_pause_resume_v1 dcgm_core_msg_pause_resume_t;
 typedef struct
 {
     dcgm_module_command_header_t header; /* Command header */
-    dcgmMsgNvmlInjectDevice_v1 info;     /* IN/OUT user request to process */
-} dcgm_core_msg_nvml_inject_device_v1;
+    dcgmMsgNvmlInjectDevice_v2 info;     /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_inject_device_v2;
 
-#define dcgm_core_msg_nvml_inject_device_version1 MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_v1, 1)
-#define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version1
+#define dcgm_core_msg_nvml_inject_device_version2 MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_v2, 2)
+#define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version2
 
-typedef dcgm_core_msg_nvml_inject_device_v1 dcgm_core_msg_nvml_inject_device_t;
+typedef dcgm_core_msg_nvml_inject_device_v2 dcgm_core_msg_nvml_inject_device_t;
 
 typedef struct
 {
     dcgm_module_command_header_t header;              /* Command header */
-    dcgmMsgNvmlInjectDeviceForFollowingCalls_v1 info; /* IN/OUT user request to process */
-} dcgm_core_msg_nvml_inject_device_for_following_calls_v1;
+    dcgmMsgNvmlInjectDeviceForFollowingCalls_v2 info; /* IN/OUT user request to process */
+} dcgm_core_msg_nvml_inject_device_for_following_calls_v2;
 
-#define dcgm_core_msg_nvml_inject_device_for_following_calls_version1 \
-    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_for_following_calls_v1, 1)
+#define dcgm_core_msg_nvml_inject_device_for_following_calls_version2 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_for_following_calls_v2, 2)
 #define dcgm_core_msg_nvml_inject_device_for_following_calls_version \
-    dcgm_core_msg_nvml_inject_device_for_following_calls_version1
+    dcgm_core_msg_nvml_inject_device_for_following_calls_version2
 
-typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v1 dcgm_core_msg_nvml_inject_device_for_following_calls_t;
+typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v2 dcgm_core_msg_nvml_inject_device_for_following_calls_t;
 
 typedef struct
 {
@@ -784,7 +785,7 @@ DCGM_CASSERT(dcgm_core_msg_logging_changed_version1 == (long)0x1000018, 1);
 DCGM_CASSERT(dcgm_core_msg_mig_updated_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_group_removed_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_field_values_updated_version1 == (long)0x1000028, 1);
-DCGM_CASSERT(dcgm_core_msg_set_severity_version1 == (long)0x1000020, 1);
+DCGM_CASSERT(dcgm_core_msg_set_severity_version2 == (long)0x2000024, 2);
 DCGM_CASSERT(dcgm_core_msg_create_mig_entity_version1 == (long)0x100002c, 1);
 DCGM_CASSERT(dcgm_core_msg_delete_mig_entity_version1 == (long)0x1000028, 1);
 DCGM_CASSERT(dcgm_core_msg_get_gpu_status_version1 == (long)0x1000020, 1);
@@ -828,7 +829,7 @@ DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version1 == (long)0x1000578, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version == (long)0x1000578, 1);
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
-DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version1 == (long)0x101e370, 1);
-DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_for_following_calls_version1 == (long)0x1096cb0, 1);
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version2 == (long)0x201e370, 2);
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_for_following_calls_version2 == (long)0x2096cb0, 2);
 DCGM_CASSERT(dcgm_core_msg_nvml_injected_device_reset_version1 == (long)0x1000020, 1);
 #endif

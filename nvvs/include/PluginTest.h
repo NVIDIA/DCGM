@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 
 #include "CustomStatHolder.h"
 #include "DcgmError.h"
+#include "DcgmGroupEntityPairHelpers.h"
+#include "IgnoreErrorCodesHelper.h"
 #include "NvvsCommon.h"
 
 // observedMetrics: map the metric name to a map of GPU ID -> value
@@ -81,6 +83,9 @@ public:
 
     std::vector<unsigned int> const &GetGpuList() const;
 
+    void SetIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map);
+    gpuIgnoreErrorCodeMap_t const &GetIgnoreErrorCodes() const;
+
 private:
     void ResetResultsAndMessages();
 
@@ -102,26 +107,13 @@ private:
     nvvsPluginEntityMsgs_t m_verboseInfoPerEntity; /* Per entity list of verbose output from the plugin */
     nvvsPluginEntityResults_t m_resultsPerEntity;  /* Per entity list results: Pass | Fail | Skip | Warn */
 
-    observedMetrics_t m_values;          /* Record the values found for pass/fail criteria */
-    bool m_fakeGpus = false;             /* Whether or not this plugin is using fake gpus */
-    std::vector<unsigned int> m_gpuList; /* list of GPU ids for this plugin - TO BE REMOVED */
-    CustomStatHolder m_customStatHolder; /* hold stats that aren't DCGM fields */
-    std::string m_testName;              /* Test name */
+    observedMetrics_t m_values;                 /* Record the values found for pass/fail criteria */
+    bool m_fakeGpus = false;                    /* Whether or not this plugin is using fake gpus */
+    std::vector<unsigned int> m_gpuList;        /* list of GPU ids for this plugin - TO BE REMOVED */
+    CustomStatHolder m_customStatHolder;        /* hold stats that aren't DCGM fields */
+    std::string m_testName;                     /* Test name */
+    gpuIgnoreErrorCodeMap_t m_ignoreErrorCodes; /* Per entity set of ignore error codes */
 };
-
-/** Equality test for two entity pairs. DCGM-4223: Code clones exist in
- * Diag.cpp and PluginTest.h.  These clones should be consolidated in a single,
- * common location. */
-static inline bool operator==(const dcgmGroupEntityPair_t &a, const dcgmGroupEntityPair_t &b)
-{
-    return a.entityGroupId == b.entityGroupId && a.entityId == b.entityId;
-}
-
-/** Comparison test for two entity pairs. For std::map. */
-static inline bool operator<(dcgmGroupEntityPair_t const &a, dcgmGroupEntityPair_t const &b)
-{
-    return (b.entityGroupId > a.entityGroupId) || (b.entityGroupId == a.entityGroupId && b.entityId > a.entityId);
-}
 
 /** Equality test for two diagErrors. */
 static inline bool operator==(const dcgmDiagError_v1 &a, const dcgmDiagError_v1 &b)

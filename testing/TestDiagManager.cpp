@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     dcgmReturn_t result;
     std::string command;
     std::vector<std::string> cmdArgs;
-    dcgmRunDiag_v9 drd = {};
+    dcgmRunDiag_v10 drd = {};
     DcgmDiagManager am(g_coreCallbacks);
 
     std::string nvvsBinPath;
@@ -299,9 +299,9 @@ int TestDiagManager::TestCreateNvvsCommand()
 int TestDiagManager::TestPopulateRunDiag()
 {
     dcgmReturn_t result = DCGM_ST_OK;
-    dcgmRunDiag_v9 drd  = {};
+    dcgmRunDiag_v10 drd = {};
 
-    drd.version = dcgmRunDiag_version9;
+    drd.version = dcgmRunDiag_version10;
 
     std::string error;
     unsigned int const defaultFrequency = 5000000;
@@ -326,6 +326,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "*,cpu:*",
                                                 "gpu:1",
                                                 defaultFrequency,
+                                                "*:*",
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -425,13 +426,19 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
+    if (std::string_view(drd.ignoreErrorCodes) != "*:*")
+    {
+        fprintf(stderr, "Expected ignoreErrorCodes to be '*:*', but found %s.\n", drd.entityIds);
+        return -1;
+    }
+
     const char *tn1[] = { "pcie", "targeted power" };
     const char *tp1[] = { "pcie.test_pinned=false", "pcie.min_bandwidth=25000", "targeted power.temperature_max=82" };
     std::string debugFileName("kaladin");
     std::string statsPath("/home/aimian/");
     std::string clocksEventMask("HW_SLOWDOWN");
-    drd         = dcgmRunDiag_v9(); // Need to reset the struct
-    drd.version = dcgmRunDiag_version9;
+    drd         = dcgmRunDiag_v10(); // Need to reset the struct
+    drd.version = dcgmRunDiag_version10;
     result      = dcgm_diag_common_populate_run_diag(
         drd,
         "pcie,targeted power",
@@ -452,6 +459,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "*,cpu:*",
         "",
         defaultFrequency,
+        "",
         error);
     if (result != DCGM_ST_OK)
     {
@@ -574,6 +582,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "",
                                                 "",
                                                 defaultFrequency,
+                                                "",
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -608,6 +617,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "",
         "",
         defaultFrequency,
+        "",
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -638,6 +648,7 @@ int TestDiagManager::TestPopulateRunDiag()
         entityIds,
         "",
         defaultFrequency,
+        "",
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -668,6 +679,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "*,cpu:*",
         invalidExpectedNumEntities,
         defaultFrequency,
+        "",
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -698,6 +710,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "*,cpu:*",
         expectedNumEntities,
         defaultFrequency,
+        "",
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -726,6 +739,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "*,cpu:*",
                                                 "gpu:1",
                                                 validWatchFrequency,
+                                                "",
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -760,6 +774,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "*,cpu:*",
                                                 "gpu:1",
                                                 invalidWatchFrequency,
+                                                "",
                                                 error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -788,6 +803,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "*,cpu:*",
                                                 "gpu:1",
                                                 invalidWatchFrequency,
+                                                "",
                                                 error);
     if (result != DCGM_ST_BADPARAM)
     {

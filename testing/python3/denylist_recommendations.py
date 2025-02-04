@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,8 +126,8 @@ def setTestDurations(runDiagInfo, timePercentage):
     addParamString(runDiagInfo, 3, powerParam)
 
 def initialize_run_diag_info(settings):
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
     runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
     testNamesStr = settings['testNames']
     if testNamesStr == '1':

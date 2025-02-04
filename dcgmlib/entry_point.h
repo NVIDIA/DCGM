@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -651,7 +651,7 @@ DCGM_ENTRY_POINT(dcgmHealthCheck,
 
 DCGM_ENTRY_POINT(dcgmActionValidate_v2,
                  tsapiEngineActionValidate_v2,
-                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v9 *drd, dcgmDiagResponse_v11 *response),
+                 (dcgmHandle_t pDcgmHandle, dcgmRunDiag_v10 *drd, dcgmDiagResponse_v11 *response),
                  "({}, {}, {})",
                  pDcgmHandle,
                  drd,

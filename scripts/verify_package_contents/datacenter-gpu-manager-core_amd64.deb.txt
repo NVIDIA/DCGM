@@ -43,6 +43,7 @@
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmGroup.py
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmHandle.py
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmJsonReader.py
+./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmLogging.py
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmReader.py
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmStatus.py
 ./usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings/python3/DcgmSystem.py

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,4 +126,78 @@ TEST_CASE("AddAPIError Details")
     // Shouldn't append the GPU index since it isn't a GPU specific failure
     errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, false);
     CHECK(errText.find(gpuSpecficErrorPiece) == std::string::npos);
+}
+
+TEST_CASE("Negative test for DCGM_FR_API_FAIL")
+{
+    TestPlugin p;
+    std::string const testName = "capoo";
+    initializePluginWithGpus(p, testName, 2);
+
+    // Shouldn't append the GPU index since it isn't a GPU specific failure
+    unsigned int constexpr erraticGpuId { 0 };
+    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", erraticGpuId, 0, false);
+
+    DcgmError expectedError { 0 };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL, expectedError, "bridgeFour", "rock not found");
+
+    REQUIRE(expectedError.GetMessage() == errText);
+
+    nvvsPluginEntityErrors_t errorsPerEntity = p.GetEntityErrors(testName);
+    unsigned int count { 0 };
+    for (auto const &[entityPair, diagErrors] : errorsPerEntity)
+    {
+        // Make sure the error is not entity specific
+        if (entityPair.entityGroupId == DCGM_FE_NONE)
+        {
+            REQUIRE(diagErrors.size() == 1);
+            REQUIRE(diagErrors[0].entity.entityGroupId == DCGM_FE_NONE);
+            REQUIRE(std::string(diagErrors[0].msg) == expectedError.GetMessage());
+            count++;
+        }
+        else
+        {
+            REQUIRE(diagErrors.size() == 0);
+        }
+    }
+    // Make sure the map has only one entity with entityGroupId == DCGM_FE_NONE
+    REQUIRE(count == 1);
+}
+
+TEST_CASE("Negative test for DCGM_FR_API_FAIL_GPU")
+{
+    TestPlugin p;
+    std::string const testName = "capoo";
+    initializePluginWithGpus(p, testName, 2);
+
+    // Should append the GPU index since it's a GPU specific failure
+    unsigned int constexpr erraticGpuId { 0 };
+    std::string errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", erraticGpuId, 0, true);
+
+    DcgmError expectedError { 0 };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_API_FAIL_GPU, expectedError, "bridgeFour", 0, "rock not found");
+
+    REQUIRE(expectedError.GetMessage() == errText);
+
+    nvvsPluginEntityErrors_t errorsPerEntity = p.GetEntityErrors(testName);
+
+    unsigned int count { 0 };
+    for (auto const &[entityPair, diagErrors] : errorsPerEntity)
+    {
+        // Make sure the error only appears on the GPU entity with gpuId: 0
+        if (entityPair.entityGroupId == DCGM_FE_GPU && entityPair.entityId == erraticGpuId)
+        {
+            REQUIRE(diagErrors.size() == 1);
+            REQUIRE(diagErrors[0].entity.entityGroupId == DCGM_FE_GPU);
+            REQUIRE(diagErrors[0].entity.entityId == erraticGpuId);
+            REQUIRE(std::string(diagErrors[0].msg) == expectedError.GetMessage());
+            count++;
+        }
+        else
+        {
+            REQUIRE(diagErrors.size() == 0);
+        }
+    }
+    // Make sure the entity does happen
+    REQUIRE(count == 1);
 }

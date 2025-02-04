@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -488,42 +488,78 @@ def verify_nvidia_fabricmanager_service_active_if_needed():
             logException(f'{errmsg} Resolve the problem before proceeding.')
 
 def checkDmesgForProblems():
-    suspect_phrases = \
-    [
-        r'NVRM: .*Possible bad register read'
+    if not option_parser.options.dvssc_testing:
+        ignore_reason = 'Ignored as \'--dvssc-testing\' is not set'
+    if option_parser.options.ignore_dmesg_checks:
+        ignore_reason = 'Ignored by user request'
+    ignore_problems = option_parser.options.ignore_dmesg_checks
+
+    # Lines matching these patterns only emit warnings.
+    # If a pattern is a refinement of an 'abort_on_...' pattern, it will prevent the abort.
+    warn_on_these = [
+        r'NVRM: nvAssertFailed: Assertion failed: 0 @ g_kernel_gsp_nvoc.h',
+        r'NVRM: .*Possible bad register read',
     ]
 
-    problem_phrases = \
-    [
+    # Lines matching these patterns only abort when --dvssc-testing is set (unless ignored).
+    abort_on_these_if_dvssc = [
         r'NVRM: A GPU crash dump has been created',
         r'NVRM: .*GPU recovery action changed.*Reboot Required',
         r'NVRM: .*GPU has fallen off the bus',
+    ]
+
+    # Lines matching these patterns always abort unless ignored.
+    abort_on_these = [
         r'NVRM: .*Assertion failed:',
     ]
 
-    sus_pattern = '|'.join(suspect_phrases)
-    pattern = '|'.join(problem_phrases)
+    def check_display_limit():
+        if display_limit <= 0:
+            logger.info("Maximum problems displayed. Further potential problems may be present and not displayed here.")
 
+    # Read up to `history_len` lines from dmesg. This could use a time-based search or starting with the most recent driver load.
     history_len = 25000
     cmd = f"/usr/bin/dmesg | /usr/bin/tail -{int(history_len)}"
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate(timeout=15)
+    if not out_buf:
+        logger.debug('No output from dmesg')
+        return
 
-    if out_buf:
-        import re
-        out_buf = out_buf.decode('utf-8').split('\n')
-        problem_match = next(filter(lambda s: re.search(pattern, s), out_buf), None)
+    # Build the regexes used to find problems to warn or abort on
+    import re
+    if option_parser.options.dvssc_testing:
+        warn_pattern = re.compile('|'.join(warn_on_these))
+        abort_pattern = re.compile('|'.join(abort_on_these_if_dvssc + abort_on_these))
+    else:
+        warn_pattern = re.compile('|'.join(warn_on_these + abort_on_these_if_dvssc))
+        abort_pattern = re.compile('|'.join(abort_on_these))
 
-        if problem_match:
-            errmsg = f'Tests cannot run because dmesg contains this problem: "{problem_match}".'
-            if option_parser.options.ignore_dmesg_checks:
-                logger.warning(f'{errmsg} Resolve the problem and retry before filing a bug report. (Ignored by user request).')
-            else:
-                logException(f'{errmsg} Resolve the problem before proceeding.')
+    # Don't spam output on a messy system. Print the first few messages, then stop. Abort still means abort.
+    display_limit = 5
 
-        sus_match = next(filter(lambda s: re.search(sus_pattern, s), out_buf), None)
-        if sus_match:
-            logger.info(f'Potential problem found in dmesg: "{sus_match}".')
+    for line in out_buf.decode('utf-8').split('\n'):
+        abort_match = abort_pattern.search(line)
+        if abort_match:
+            if not warn_pattern.search(abort_match.string):
+                if ignore_problems:
+                    if display_limit > 0:
+                        logger.warning(f'Potential problem found in dmesg: "{abort_match.string}". ({ignore_reason}).')
+                        display_limit -= 1
+                        check_display_limit()
+                else:
+                    logException(f'Tests cannot run because dmesg contains this problem: \'{abort_match.string}\'. ' \
+                                 'Resolve the problem before proceeding.')
+            elif display_limit > 0:
+                logger.warning(f'Potential problem found in dmesg: "{abort_match.string}". (Ignored as it is believed to be non-fatal).')
+                display_limit -= 1
+                check_display_limit()
+        else:
+            warn_match = warn_pattern.search(line)
+            if warn_match and display_limit > 0:
+                logger.warning(f'Potential problem found in dmesg: "{warn_match.string}".')
+                display_limit -= 1
+                check_display_limit()
 
 def checkProcesses():
     process_list = \

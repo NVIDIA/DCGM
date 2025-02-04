@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,39 +81,30 @@ std::string ContextCreate::Init(const dcgmDiagPluginEntityList_v1 &entityList)
             continue;
         }
 
-        ContextCreateDevice *ccd = 0;
+        std::unique_ptr<ContextCreateDevice> ccd {};
 
         try
         {
-            ccd = new ContextCreateDevice(m_plugin->GetCtxCreateTestName(),
-                                          entityList.entities[i].entity.entityId,
-                                          entityList.entities[i].auxField.gpu.attributes.identifiers.pciBusId,
-                                          m_plugin,
-                                          m_dcgmHandle);
+            ccd = std::make_unique<ContextCreateDevice>(
+                m_plugin->GetCtxCreateTestName(),
+                entityList.entities[i].entity.entityId,
+                entityList.entities[i].auxField.gpu.attributes.identifiers.pciBusId,
+                m_plugin,
+                m_dcgmHandle);
         }
         catch (DcgmError &d)
         {
-            if (ccd)
-            {
-                delete ccd;
-            }
-
             m_plugin->AddError(m_plugin->GetCtxCreateTestName(), d);
             return d.GetMessage();
         }
         catch (std::runtime_error &re)
         {
-            if (ccd)
-            {
-                delete ccd;
-            }
-
             DcgmError d { entityList.entities[i].entity.entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, re.what());
             return d.GetMessage();
         }
 
-        m_device.push_back(ccd);
+        m_device.push_back(std::move(ccd));
         gpuVec.push_back(entityList.entities[i].entity.entityId);
     }
 
@@ -128,12 +119,6 @@ std::string ContextCreate::Init(const dcgmDiagPluginEntityList_v1 &entityList)
 
 void ContextCreate::Cleanup()
 {
-    for (size_t i = 0; i < m_device.size(); i++)
-    {
-        delete m_device[i];
-    }
-    m_device.clear();
-
     // Cleanup the group first because it needs a handle to take care of itself
     m_dcgmGroup.Cleanup();
     m_dcgmHandle.Cleanup();
@@ -141,40 +126,7 @@ void ContextCreate::Cleanup()
 
 int ContextCreate::CanCreateContext()
 {
-    int created = CTX_CREATED;
-    CUresult cuSt;
-    std::stringstream err;
-    std::string error;
-
-    for (size_t i = 0; i < m_device.size(); i++)
-    {
-        cuSt = cuCtxCreate(&m_device[i]->cuContext, 0, m_device[i]->cuDevice);
-
-        if (cuSt == CUDA_SUCCESS)
-        {
-            cuCtxDestroy(m_device[i]->cuContext);
-            continue;
-        }
-        else if (cuSt == CUDA_ERROR_UNKNOWN)
-        {
-            err << "GPU " << m_device[i]->gpuId << " is in prohibted mode; skipping test.";
-            m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err.str());
-            log_debug(err.str());
-            created |= CTX_SKIP;
-        }
-        else
-        {
-            const char *errStr;
-            cuGetErrorString(cuSt, &errStr);
-            DcgmError d { m_device[i]->gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, m_device[i]->gpuId, errStr);
-            m_plugin->AddError(m_plugin->GetCtxCreateTestName(), d);
-            log_debug(error);
-            created |= CTX_FAIL;
-        }
-    }
-
-    return created;
+    return CanCreateContext(m_device);
 }
 
 int ContextCreate::Run(const dcgmDiagPluginEntityList_v1 &entityList)

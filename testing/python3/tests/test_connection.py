@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ def test_dcgm_standalone_connection_disconnect_error_after_hostengine_murder(han
         gpuIds = group.GetGpuIds()
         
 @test_utils.run_only_as_root()
-def test_dcgm_connection_error_when_no_hostengine_exists():
+def test_dcgm_connection_error_when_no_ip4_hostengine_exists():
     if not utils.is_bare_metal_system():
         test_utils.skip_test("Virtualization Environment not supported")
 
@@ -91,6 +91,35 @@ def test_dcgm_connection_error_when_no_hostengine_exists():
                                   dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID)):
         # use a TEST-NET (rfc5737) addr instead of loopback in case a local hostengine is running
         handle = pydcgm.DcgmHandle(ipAddress='192.0.2.0', timeoutMs=100)
+
+@test_utils.run_only_as_root()
+@test_utils.run_with_ipv6_enabled()
+def test_dcgm_connection_error_when_no_ipv6_hostengine_exists():
+    if not utils.is_bare_metal_system():
+        test_utils.skip_test("Virtualization Environment not supported")
+
+    with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(
+                                  dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID)):
+        # use a ULA (rfc4193) instead of loopback in case a local hostengine is running
+        handle = pydcgm.DcgmHandle(ipAddress='fd00::7fff:42', timeoutMs=100)
+
+@test_utils.run_only_as_root()
+@test_utils.run_with_ipv6_enabled()
+def test_dcgm_ipv6_loopback():
+    nvHe = apps.NvHostEngineApp(['-b', '[::1]'])
+    nvHe.start(timeout=90)
+
+    handle = pydcgm.DcgmHandle(ipAddress='[::1]', timeoutMs=90)
+    assert handle
+    dcgmSystem = handle.GetSystem()
+    gpuIds = dcgmSystem.discovery.GetAllGpuIds()
+
+    #Try to disconnect cleanly
+    del(handle)
+    handle = None
+
+    nvHe.terminate()
+    nvHe.validate()
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()

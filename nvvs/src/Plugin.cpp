@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include "Plugin.h"
 #include "DcgmStringHelpers.h"
+#include "IgnoreErrorCodesHelper.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
 
@@ -291,4 +292,33 @@ void Plugin::SetPluginAttr(dcgmDiagPluginAttr_v1 const *pluginAttr)
 int Plugin::GetPluginId() const
 {
     return m_pluginAttr.pluginId;
+}
+
+void Plugin::ParseIgnoreErrorCodesParam(std::string const &testName, std::string const &paramStr)
+{
+    auto const &gpuList = m_tests.at(testName).GetGpuList();
+    gpuIgnoreErrorCodeMap_t map;
+    ParseIgnoreErrorCodesString(paramStr, map, gpuList, std::nullopt);
+    m_tests.at(testName).SetIgnoreErrorCodes(map);
+}
+
+gpuIgnoreErrorCodeMap_t const &Plugin::GetIgnoreErrorCodes(std::string const &testName) const
+{
+    return m_tests.at(testName).GetIgnoreErrorCodes();
+}
+
+bool Plugin::ShouldIgnoreError(std::string const &testName,
+                               dcgmGroupEntityPair_t const &entity,
+                               unsigned int errorCode) const
+{
+    auto const &ignoreErrorCodesMap = m_tests.at(testName).GetIgnoreErrorCodes();
+    auto it                         = ignoreErrorCodesMap.find(entity);
+    if (it != ignoreErrorCodesMap.end())
+    {
+        if (it->second.contains(errorCode))
+        {
+            return true;
+        }
+    }
+    return false;
 }

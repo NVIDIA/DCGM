@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,22 @@
 namespace Dcgm::CublasProxy
 {
 cublasStatus_t CublasGetVersion(cublasHandle_t /* handle */, int * /* version */)
+{
+    return CUBLAS_STATUS_SUCCESS;
+}
+
+cublasStatus_t CublasDgemv(cublasHandle_t /* handle */,
+                           cublasOperation_t /* trans */,
+                           int /* m */,
+                           int /* n */,
+                           double const * /* alpha */, /* host or device pointer */
+                           double const * /* A */,
+                           int /* lda */,
+                           double const * /* x */,
+                           int /* incx */,
+                           double const * /* beta */, /* host or device pointer */
+                           double * /* y */,
+                           int /* incy */)
 {
     return CUBLAS_STATUS_SUCCESS;
 }

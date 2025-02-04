@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <PluginCommon.h>
 #include <assert.h>
 #include <cuda.h>
+#include <cuda_runtime.h>
 #include <string.h>
 #include <utility>
 
@@ -424,26 +425,37 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
         return 1;
     }
 
-    // // Reset the device before context creation
-    cuRes = cuDevicePrimaryCtxReset(memGlobals->cuDevice);
-    if (CUDA_SUCCESS != cuRes)
+    // Clean up resources before context creation
+    cudaError_t cudaResult = cudaSetDevice(static_cast<int>(memGlobals->dcgmGpuIndex));
+    if (cudaResult != cudaSuccess)
     {
-        std::string error = AppendCudaDriverError("Unable to reset primary CUDA context", cuRes);
-        DcgmError d { memGlobals->dcgmGpuIndex };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDevicePrimaryCtxReset");
-        d.AddDetail(error);
-        memGlobals->memory->AddError(memGlobals->memory->GetMemoryTestName(), d);
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+                                  memGlobals->memory->GetMemoryTestName(),
+                                  "cudaSetDevice",
+                                  cudaResult,
+                                  memGlobals->dcgmGpuIndex);
+        return 1;
+    }
+
+    cudaResult = cudaDeviceReset();
+    if (cudaResult != cudaSuccess)
+    {
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+                                  memGlobals->memory->GetMemoryTestName(),
+                                  "cudaDeviceReset",
+                                  cudaResult,
+                                  memGlobals->dcgmGpuIndex);
         return 1;
     }
 
     cuRes = cuCtxCreate(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
     if (CUDA_SUCCESS != cuRes)
     {
-        std::string error = AppendCudaDriverError("Unable to create CUDA context", cuRes);
-        DcgmError d { memGlobals->dcgmGpuIndex };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate");
-        d.AddDetail(error);
-        memGlobals->memory->AddError(memGlobals->memory->GetMemoryTestName(), d);
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+                                  memGlobals->memory->GetMemoryTestName(),
+                                  "cuCtxCreate",
+                                  cuRes,
+                                  memGlobals->dcgmGpuIndex);
         return 1;
     }
     memGlobals->cuCtxCreated = 1;
@@ -470,6 +482,8 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
     memGlobals->testParameters = tp;
 
     memGlobals->m_dcgmRecorder = new DcgmRecorder(memory->GetHandle());
+    memGlobals->m_dcgmRecorder->SetIgnoreErrorCodes(
+        memGlobals->memory->GetIgnoreErrorCodes(memGlobals->memory->GetMemoryTestName()));
 
     st = mem_init(memGlobals, entityInfo);
     if (st)

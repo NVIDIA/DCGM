@@ -438,11 +438,18 @@ int Memtest::CudaInit()
     /* Do per-device initialization */
     for (auto &gpu : m_device)
     {
-        // Reset the device before context creation
-        if (auto cuSt = cuDevicePrimaryCtxReset(gpu.cuDevice); cuSt != CUDA_SUCCESS)
+        // Clean up resources before context creation
+        cudaError_t cudaResult = cudaSetDevice(gpu.gpuId);
+        if (cudaResult != cudaSuccess)
+        {
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMmeTestTestName(), "cudaSetDevice", cudaResult, gpu.gpuId);
+            return -1;
+        }
+        cudaResult = cudaDeviceReset();
+        if (cudaResult != cudaSuccess)
         {
             LOG_CUDA_ERROR_FOR_PLUGIN(
-                m_plugin, m_plugin->GetMmeTestTestName(), "cuDevicePrimaryCtxReset", cuSt, gpu.gpuId);
+                m_plugin, m_plugin->GetMmeTestTestName(), "cudaDeviceReset", cudaResult, gpu.gpuId);
             return -1;
         }
         {
@@ -532,6 +539,7 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityL
     {
         m_dcgmRecorder = std::make_unique<DcgmRecorder>(handle);
     }
+    m_dcgmRecorder->SetIgnoreErrorCodes(m_plugin->GetIgnoreErrorCodes(m_plugin->GetMmeTestTestName()));
 
     try /* Catch runtime errors */
     {
@@ -685,8 +693,15 @@ int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
                 DCGM_LOG_INFO << "Test" << i << " finished in "
                               << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << " seconds";
             }
+            // Break early if the tests are taking longer than testDuration to run
+            if (std::chrono::duration_cast<std::chrono::seconds>(end - runStart).count() > m_testDuration)
+            {
+                break;
+            }
         }
 
+        // Quit before starting the next sequence of tests if the tests have already taken longer than testDuration to
+        // run
         if (std::chrono::duration_cast<std::chrono::seconds>(end - runStart).count() > m_testDuration)
         {
             break;

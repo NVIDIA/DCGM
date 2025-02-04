@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,11 +24,12 @@
 
 /*****************************************************************************/
 /* Parameters common for all tests */
-#define PS_PLUGIN_NAME  "name"
-#define PS_TEST_NAME    "test_name"
-#define PS_LOGFILE      "logfile"
-#define PS_LOGFILE_TYPE "logfile_type"
-#define PS_SUITE_LEVEL  "suite_level"
+#define PS_PLUGIN_NAME        "name"
+#define PS_TEST_NAME          "test_name"
+#define PS_LOGFILE            "logfile"
+#define PS_LOGFILE_TYPE       "logfile_type"
+#define PS_SUITE_LEVEL        "suite_level"
+#define PS_IGNORE_ERROR_CODES "ignore_error_codes"
 
 #define PS_RUN_IF_GOM_ENABLED "run_if_gom_enabled" /* Should this plugin run if GOM mode is enabled */
 
@@ -226,20 +227,6 @@
                             perf runs */
 #define TS_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
 
-
-/******************************************************************************
- * EUD PLUGIN
- *****************************************************************************/
-/*#define EUD_PLUGIN_LF_NAME "diagnostic"
-#define EUD_PLUGIN_WL_NAME "diagnostic" */
-
-/* Test parameters */
-// #define EUD_PLUGIN_RUN_MODE "run_mode"
-// #define EUD_PLUGIN_SINGLE_TEST "single_test"
-/* Private test parameters */
-// #define EUD_STR_IS_ALLOWED "is_allowed"   /* Is the EUD plugin allowed to run? */
-// #define EUD_LOG_FILE_PATH "eud_log_file_path"
-
 /******************************************************************************
  * MEMORY PLUGIN
  *****************************************************************************/
@@ -362,6 +349,7 @@
 #define EUD_FULL_PROFILE     "full_profile"     /*!< Run the full MODS profile or not */
 #define EUD_PASSTHROUGH_ARGS "passthrough_args" /*!< Arguments to pass to the EUD binary */
 #define EUD_MLE_PARSE        "parse_mle"        /*!< Parse the MLE or not */
+#define EUD_STR_IS_ALLOWED   "is_allowed"       /* Is the EUD plugin allowed to run? */
 #define CPU_EUD_TEST_NAME    "cpu_eud"
 
 /****************************************************************************
@@ -446,5 +434,10 @@
  * SOFTWARE PLUGIN
  *****************************************************************************/
 #define SW_ERR_FAIL 0x0000000000000001ULL
+
+/******************************************************************************
+ * COMMON TO ALL PLUGINS
+ *****************************************************************************/
+#define SUPPRESSED_ERROR_STR "Suppressed error: "
 
 #endif // PLUGINSTRINGS_H

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -159,10 +159,13 @@ def test_dcgm_library_existence():
         'libdcgmmoduleconfig.so.4',
         'libdcgmmodulehealth.so.4',
         'libdcgmmodulenvswitch.so.4',
+        'libdcgmmoduleprofiling.so.4',
         'libdcgm_cublas_proxy11.so.4',
         'libdcgmmodulediag.so.4',
         'libdcgmmoduleintrospect.so.4',
         'libdcgmmodulepolicy.so.4',
+        'libdcgmmodulevgpu.so.4',
+        'libnvperf_dcgm_host.so',
     ]
 
     name_to_found = {}
