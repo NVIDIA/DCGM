@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ PluginCoreFunctionality::PluginCoreFunctionality()
     : m_dcgmRecorder()
     , m_entityInfos()
     , m_initialized(false)
-    , m_errors()
+    , m_fatalErrors()
+    , m_ignoredErrors()
     , m_startTime()
     , m_pluginName("Unknown")
 {}
@@ -36,7 +37,8 @@ PluginCoreFunctionality::PluginCoreFunctionality(PluginCoreFunctionality &&other
     : m_dcgmRecorder(std::move(other.m_dcgmRecorder))
     , m_entityInfos(other.m_entityInfos)
     , m_initialized(other.m_initialized)
-    , m_errors(other.m_errors)
+    , m_fatalErrors(other.m_fatalErrors)
+    , m_ignoredErrors(other.m_ignoredErrors)
     , m_startTime(other.m_startTime)
     , m_pluginName(other.m_pluginName)
 {}
@@ -139,7 +141,7 @@ void PluginCoreFunctionality::WriteStatsFile(const std::string &statsfile, int l
 
 nvvsPluginResult_t PluginCoreFunctionality::CheckCommonErrors(TestParameters &tp, nvvsPluginResult_t &result)
 {
-    m_errors = m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_entityInfos);
+    m_dcgmRecorder.CheckCommonErrors(tp, m_startTime, result, m_entityInfos, m_fatalErrors, m_ignoredErrors);
 
     return result;
 }
@@ -166,7 +168,17 @@ dcgmReturn_t PluginCoreFunctionality::PluginEnded(const std::string &statsfile,
     return DCGM_ST_OK;
 }
 
-std::vector<DcgmError> PluginCoreFunctionality::GetErrors() const
+std::vector<DcgmError> PluginCoreFunctionality::GetFatalErrors() const
 {
-    return m_errors;
+    return m_fatalErrors;
+}
+
+std::vector<DcgmError> PluginCoreFunctionality::GetIgnoredErrors() const
+{
+    return m_ignoredErrors;
+}
+
+void PluginCoreFunctionality::SetRecorderIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map)
+{
+    m_dcgmRecorder.SetIgnoreErrorCodes(map);
 }

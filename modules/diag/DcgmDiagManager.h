@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,10 +67,10 @@ public:
                                           dcgm_connection_id_t connectionId);
 
     /* perform the specified validation */
-    dcgmReturn_t RunDiag(dcgmRunDiag_v9 *drd, DcgmDiagResponseWrapper &response);
+    dcgmReturn_t RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response);
 
     /* possibly run the DCGM diagnostic and perform an action */
-    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v9 *drd,
+    dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v10 *drd,
                                   dcgmPolicyAction_t action,
                                   DcgmDiagResponseWrapper &response,
                                   dcgm_connection_id_t connectionId);
@@ -104,7 +104,7 @@ public:
      */
     dcgmReturn_t PerformNVVSExecute(std::string *stdoutStr,
                                     std::string *stderrStr,
-                                    dcgmRunDiag_v9 *drd,
+                                    dcgmRunDiag_v10 *drd,
                                     DcgmDiagResponseWrapper &response,
                                     std::string const &fakeGpuIds               = "",
                                     std::string const &entityIds                = "",
@@ -130,7 +130,7 @@ public:
      *
      */
     dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                   dcgmRunDiag_v9 *drd,
+                                   dcgmRunDiag_v10 *drd,
                                    unsigned int diagResponseVersion,
                                    std::string const &fakeGpuIds               = "",
                                    std::string const &entityIds                = "",
@@ -195,10 +195,10 @@ private:
     /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
      */
-    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v9 *drd) const;
+    dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v10 *drd) const;
 
     void AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                     dcgmRunDiag_v9 *drd,
+                                     dcgmRunDiag_v10 *drd,
                                      std::string const &fakeGpuIds,
                                      std::string const &entityIds) const;
 
@@ -216,7 +216,7 @@ private:
     /*
      * Write the config file (if needed) and add that to the command arguments
      */
-    dcgmReturn_t AddConfigFile(dcgmRunDiag_v9 *drd, std::vector<std::string> &cmdArgs) const;
+    dcgmReturn_t AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<std::string> &cmdArgs) const;
     static void AppendDummyArgs(std::vector<std::string> &args);
     dcgmReturn_t CanRunNewNvvsInstance() const;
 
@@ -229,7 +229,7 @@ private:
      */
     dcgmReturn_t PauseResumeHostEngine(bool pause);
 
-    std::tuple<WasExecuted_t, dcgmReturn_t> RerunEudDiagAsRoot(dcgmRunDiag_v9 *drd,
+    std::tuple<WasExecuted_t, dcgmReturn_t> RerunEudDiagAsRoot(dcgmRunDiag_v10 *drd,
                                                                std::string const &fakeGpuIds,
                                                                std::string const &entityIds,
                                                                std::unordered_set<std::string_view> const &testNames,

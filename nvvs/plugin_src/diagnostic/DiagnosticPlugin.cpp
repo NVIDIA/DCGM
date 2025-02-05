@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,6 +99,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle)
     m_testParameters->AddDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT, 0.0);
     m_testParameters->AddString(PS_LOGFILE, "stats_diagnostic.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
 
     m_infoStruct.defaultTestParameters = m_testParameters;
 }
@@ -346,6 +347,9 @@ void GpuBurnPlugin::Go(std::string const &testName,
         SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
+
+    ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
     /* Cache test parameters */
     m_testDuration        = m_testParameters->GetDouble(DIAGNOSTIC_STR_TEST_DURATION); /* test length, in seconds */

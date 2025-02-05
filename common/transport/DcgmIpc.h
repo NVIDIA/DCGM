@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -275,7 +275,7 @@ private:
 
         DcgmIpcConnectTcp(DcgmIpc *ipc, std::string hostname, int port, dcgm_connection_id_t connectionId)
             : m_ipc(ipc)
-            , m_hostname(hostname)
+            , m_hostname(std::move(hostname))
             , m_port(port)
             , m_connectionId(connectionId)
         {}
@@ -296,7 +296,7 @@ private:
 
         DcgmIpcConnectDomain(DcgmIpc *ipc, std::string path, dcgm_connection_id_t connectionId)
             : m_ipc(ipc)
-            , m_path(path)
+            , m_path(std::move(path))
             , m_connectionId(connectionId)
         {}
     };

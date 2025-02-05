@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ Memory::Memory(dcgmHandle_t handle)
     tp->AddDouble(MEMORY_L1TAG_STR_L1_CACHE_SIZE_KB_PER_SM, 0.0);
     tp->AddString(PS_LOGFILE, "stats_memory.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    tp->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = tp;
 }
 
@@ -83,6 +84,8 @@ void Memory::Go(std::string const &testName,
         SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
+
+    ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));
 
     unsigned const numEntities = std::min(
         entityInfo->numEntities, static_cast<unsigned>(sizeof(entityInfo->entities) / sizeof(entityInfo->entities[0])));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,6 +111,7 @@ extern const char *INJECTION_CURRPCIELINKWIDTH_KEY;
 extern const char *INJECTION_PCIEREPLAYCOUNTER_KEY;
 extern const char *INJECTION_GPCCLKVFOFFSET_KEY;
 extern const char *INJECTION_NUMFANS_KEY;
+extern const char *INJECTION_MARGINTEMPERATURE_KEY;
 extern const char *INJECTION_PERFORMANCESTATE_KEY;
 extern const char *INJECTION_CURRENTCLOCKSEVENTREASONS_KEY;
 extern const char *INJECTION_CURRENTCLOCKSTHROTTLEREASONS_KEY;
@@ -148,6 +149,7 @@ extern const char *INJECTION_ACCOUNTINGBUFFERSIZE_KEY;
 extern const char *INJECTION_RETIREDPAGESPENDINGSTATUS_KEY;
 extern const char *INJECTION_ROWREMAPPERHISTOGRAM_KEY;
 extern const char *INJECTION_ARCHITECTURE_KEY;
+extern const char *INJECTION_PLATFORMINFO_KEY;
 extern const char *INJECTION_SUPPORTEDEVENTTYPES_KEY;
 extern const char *INJECTION_VIRTUALIZATIONMODE_KEY;
 extern const char *INJECTION_HOSTVGPUMODE_KEY;

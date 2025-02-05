@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@ class ContextCreateDevice : public PluginDevice
 public:
     CUdevice cuDevice {};
     CUcontext cuContext {};
+
+    ContextCreateDevice()
+        : PluginDevice()
+    {}
 
     ContextCreateDevice(std::string const &testName,
                         unsigned int ndi,
@@ -136,6 +140,59 @@ public:
      */
     int CanCreateContext();
 
+    /*************************************************************************/
+    /*
+     * Attempt to create a context for each GPU in the list
+     * This is the templated version to be used for mocked cases
+     *
+     * @return:  0 on success
+     *           1 for skipping
+     *          -1 for failure to create
+     */
+    template <typename cuCtxCreateFunc      = decltype(&cuCtxCreate),
+              typename cuCtxDestroyFunc     = decltype(&cuCtxDestroy),
+              typename cuGetErrorStringFunc = decltype(&cuGetErrorString)>
+    int CanCreateContext(std::vector<std::unique_ptr<ContextCreateDevice>> &theDevices,
+                         cuCtxCreateFunc cuCtxCreateImpl           = cuCtxCreate,
+                         cuCtxDestroyFunc cuCtxDestroyImpl         = cuCtxDestroy,
+                         cuGetErrorStringFunc cuGetErrorStringImpl = cuGetErrorString)
+    {
+        int created = CTX_CREATED;
+        CUresult cuSt;
+        std::stringstream err;
+        std::string error;
+
+        for (size_t i = 0; i < theDevices.size(); i++)
+        {
+            cuSt = cuCtxCreateImpl(&theDevices[i]->cuContext, 0, theDevices[i]->cuDevice);
+
+            if (cuSt == CUDA_SUCCESS)
+            {
+                cuCtxDestroyImpl(theDevices[i]->cuContext);
+                continue;
+            }
+            else if (cuSt == CUDA_ERROR_UNKNOWN)
+            {
+                err << "GPU " << theDevices[i]->gpuId << " is in prohibted mode; skipping test.";
+                m_plugin->AddInfo(m_plugin->GetCtxCreateTestName(), err.str());
+                log_debug(err.str());
+                created |= CTX_SKIP;
+            }
+            else
+            {
+                const char *errStr;
+                cuGetErrorStringImpl(cuSt, &errStr);
+                DcgmError d { theDevices[i]->gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_CONTEXT, d, theDevices[i]->gpuId, errStr);
+                m_plugin->AddError(m_plugin->GetCtxCreateTestName(), d);
+                log_error("{}", d.GetMessage());
+                created |= CTX_FAIL;
+            }
+        }
+
+        return created;
+    }
+
 private:
     /*************************************************************************/
     /*
@@ -146,9 +203,9 @@ private:
     bool GpusAreNonExclusive();
 
     /*************************************************************************/
-    ContextCreatePlugin *m_plugin;               /* Which plugin we're a part of. This is a paramter to the instance */
-    TestParameters *m_testParameters;            /* The test parameters for this run of NVVS */
-    std::vector<ContextCreateDevice *> m_device; /* Per-device data */
+    ContextCreatePlugin *m_plugin;    /* Which plugin we're a part of. This is a paramter to the instance */
+    TestParameters *m_testParameters; /* The test parameters for this run of NVVS */
+    std::vector<std::unique_ptr<ContextCreateDevice>> m_device; /* Per-device data */
     DcgmRecorder *m_dcgmRecorder;
     DcgmHandle m_dcgmHandle;
     DcgmGroup m_dcgmGroup;

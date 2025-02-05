@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,6 +145,11 @@ std::string ParseBindIp(std::string const &value)
     if (value == "all"s || value == "ALL"s)
     {
         return ""s;
+    }
+    /* If the value is an IPv6 address, then we need to remove [] from it */
+    if (value.size() >= 3 && value.starts_with('[') && value.ends_with(']'))
+    {
+        return value.substr(1, value.size() - 2);
     }
     return value;
 }
@@ -495,3 +500,10 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
     result.m_pimpl.reset(impl.release());
     return result;
 }
+
+#ifdef HOSTENGINE_TESTS
+std::string HostEngineCommandLineInterface::ParseBindIp(std::string const &value)
+{
+    return ::ParseBindIp(value);
+}
+#endif

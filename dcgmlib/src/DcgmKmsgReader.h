@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,14 @@ struct KmsgXidData
 };
 
 /**
- * @brief Reads the __DCGM_XID_KMSG__ environment variable, and adds/removes
+ * @brief Reads the given environment variable, and adds/removes
  *        values to the provided set.
  *        For example, given __DCGM_XID_KMSG__=34,-2,1, adds 1 and 34 to the
  *        set, and removes 2 from the set if present.
+ * @param envVar - Name of the environment variable
  * @param xidSet - Set of XIDs to update
  */
-void ReadEnvXidAndUpdate(std::unordered_set<uint32_t> &xidSet);
+void ReadEnvXidAndUpdate(std::string_view envVar, std::unordered_set<uint32_t> &xidSet);
 
 /**
  * @brief Reads the __DCGM_TEST_KMSG_FILENAME__ environment variable, and

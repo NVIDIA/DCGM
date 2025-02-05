@@ -1,6 +1,6 @@
 #include "DcgmNvsdmManager.h"
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,22 @@
  * limitations under the License.
  */
 
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
-#include <tuple>
 
 #include <DcgmLogging.h>
 #include <DcgmSettings.h>
 #include <DcgmStringHelpers.h>
 #include <nvsdm_loader.hpp>
 
-#include "FieldIds.h"
-#include "NvSwitchData.h"
+#include "NvsdmLib.h"
 
 #include "DcgmNvsdmManager.h"
+#include "dcgm_fields.h"
+#include "dcgm_structs.h"
+#include "nvsdm.h"
 
 namespace DcgmNs
 {
@@ -42,6 +45,27 @@ struct NvsdmDataCollector
 /*************************************************************************/
 DcgmNvsdmManager::DcgmNvsdmManager(dcgmCoreCallbacks_t *dcc)
     : DcgmNvSwitchManagerBase(dcc)
+{
+    std::string const nvsdmMockYamlEnv = "DCGM_NVSDM_MOCK_YAML";
+    auto yamlPath                      = getenv(nvsdmMockYamlEnv.c_str());
+    if (yamlPath)
+    {
+        auto nvsdmMock = std::make_unique<NvsdmMock>();
+        if (nvsdmMock->LoadYaml(yamlPath))
+        {
+            m_nvsdm = std::move(nvsdmMock);
+        }
+    }
+
+    if (!m_nvsdm)
+    {
+        m_nvsdm = std::make_unique<NvsdmLib>();
+    }
+}
+
+DcgmNvsdmManager::DcgmNvsdmManager(dcgmCoreCallbacks_t *dcc, std::unique_ptr<NvsdmBase> nvsdm)
+    : DcgmNvSwitchManagerBase(dcc)
+    , m_nvsdm(std::move(nvsdm))
 {}
 
 /*************************************************************************/
@@ -90,6 +114,34 @@ static unsigned int getNvsdmPlatformFieldId(unsigned int dcgmFieldId)
     return NVSDM_PLATFORM_TELEM_CTR_NONE;
 }
 
+static unsigned int GetNvsdmConnextXFeildId(unsigned int dcgmFieldId)
+{
+    switch (dcgmFieldId)
+    {
+        case DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_WIDTH:
+            return NVSDM_CONNECTX_TELEM_CTR_ACTIVE_PCIE_LINK_WIDTH;
+        case DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_SPEED:
+            return NVSDM_CONNECTX_TELEM_CTR_ACTIVE_PCIE_LINK_SPEED;
+        case DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_WIDTH:
+            return NVSDM_CONNECTX_TELEM_CTR_EXPECT_PCIE_LINK_WIDTH;
+        case DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_SPEED:
+            return NVSDM_CONNECTX_TELEM_CTR_EXPECT_PCIE_LINK_SPEED;
+        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS:
+            return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_STATUS;
+        case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK:
+            return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_MASK;
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS:
+            return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_STATUS;
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK:
+            return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_MASK;
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY:
+            return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_SEVERITY;
+        case DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE:
+            return NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE;
+    }
+    return NVSDM_CONNECTX_TELEM_CTR_NONE;
+}
+
 /*************************************************************************/
 /**
  * Composite fields refer to the fields where telemetry counter values are aggregated.
@@ -121,6 +173,11 @@ bool DcgmNvsdmManager::IsValidNvSwitchId(dcgm_field_eid_t entityId)
         log_error("entityId [{}] for NvSwitch is more than max limit [{}].", entityId, DCGM_MAX_NUM_SWITCHES);
         return false;
     }
+    if (entityId >= m_nvSwitchDevices.size())
+    {
+        log_error("entityId [{}] for NvSwitch is invalid, max [{}].", entityId, m_nvSwitchDevices.size());
+        return false;
+    }
 
     return true;
 }
@@ -128,15 +185,20 @@ bool DcgmNvsdmManager::IsValidNvSwitchId(dcgm_field_eid_t entityId)
 /*************************************************************************/
 bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t entityId)
 {
-    if (entityId >= m_numNvsdmPorts)
+    if (entityId >= m_numNvSwitchPorts)
     {
-        log_error("entityId [{}] is not initialized. Number of nvsdm ports are [{}].", entityId, m_numNvsdmPorts);
+        log_error("entityId [{}] is not initialized. Number of nvsdm ports are [{}].", entityId, m_numNvSwitchPorts);
         return false;
     }
     if (entityId >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
     {
         log_error(
             "entityId [{}] for NvLink is more than max limit [{}].", entityId, DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH);
+        return false;
+    }
+    if (entityId >= m_nvSwitchPorts.size())
+    {
+        log_error("entityId [{}] for NvLink is invalid, max [{}].", entityId, m_nvSwitchPorts.size());
         return false;
     }
 
@@ -201,6 +263,17 @@ static std::optional<int64_t> nvsdmValToInt64(nvsdmVal_t val, uint16_t valType)
             log_error("Unknown val type {}", valType);
             return std::nullopt;
     }
+}
+
+bool DcgmNvsdmManager::IsValidConnectXId(dcgm_field_eid_t entityId)
+{
+    if (entityId >= m_ibCxDevices.size())
+    {
+        log_error("entityId [{}] is invalid. Accepted range [0, {}].", entityId, m_ibCxDevices.size());
+        return false;
+    }
+
+    return true;
 }
 
 /*************************************************************************/
@@ -278,7 +351,9 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
     param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
     compositeNvsdmVal.u64Val          = 0;
 
-    for (unsigned int i = 0; i < m_nvsdmDevices[entityId].numOfPorts; i++)
+    for (unsigned int i = 0;
+         i < std::min(static_cast<size_t>(m_nvSwitchDevices[entityId].numOfPorts), std::size(m_nvSwitchDevices));
+         i++)
     {
         if (m_nvSwitches[entityId].nvLinkLinkState[i] != DcgmNvLinkLinkStateUp)
         {
@@ -287,8 +362,8 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
 
         param.telemValsArray[0].val.u64Val = 0; /* Reset val before querying. */
 
-        portId         = m_nvsdmDevices[entityId].portIds[i];
-        nvsdmRet_t ret = nvsdmPortGetTelemetryValues(m_nvsdmPorts[portId].port, &param);
+        portId         = m_nvSwitchDevices[entityId].portIds[i];
+        nvsdmRet_t ret = m_nvsdm->nvsdmPortGetTelemetryValues(m_nvSwitchPorts[portId].port, &param);
         if (ret != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
         {
             log_error(
@@ -337,6 +412,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
     dcgmReturn_t dcgmReturn;
     nvsdmRet_t nvsdmReturn;
 
+    nvsdmPort_t targetPort            = nullptr;
     param.version                     = nvsdmTelemParam_v1;
     param.numTelemEntries             = 1;
     nvsdmTelem_v1_t telemValsArray[1] = {};
@@ -358,7 +434,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             if (fieldId == DCGM_FI_DEV_NVSWITCH_DEVICE_UUID)
             {
                 std::ostringstream os;
-                os << m_nvsdmPorts[entity.entityId].guid;
+                os << m_nvSwitchPorts[entity.entityId].guid;
                 const std::string &tmp = os.str();
                 buf.AddStringValue(entity.entityGroupId, entity.entityId, fieldId, tmp.c_str(), now, DCGM_ST_OK);
                 continue;
@@ -374,6 +450,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PORT;
             param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
             nvsdmEntityId                     = entity.entityId;
+            targetPort                        = m_nvSwitchPorts[nvsdmEntityId].port;
         }
         else if (entity.entityGroupId == DCGM_FE_SWITCH)
         {
@@ -406,7 +483,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             if (fieldId == DCGM_FI_DEV_NVSWITCH_DEVICE_UUID)
             {
                 std::ostringstream os;
-                os << m_nvsdmDevices[entity.entityId].guid;
+                os << m_nvSwitchDevices[entity.entityId].guid;
                 const std::string &tmp = os.str();
                 buf.AddStringValue(entity.entityGroupId, entity.entityId, fieldId, tmp.c_str(), now, DCGM_ST_OK);
                 continue;
@@ -421,7 +498,36 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PLATFORM;
             param.telemValsArray[0].telemCtr  = nvsdmPlatformFieldId;
             /* TODO(DCGM-4299): Using port 0 from switch for stub testing. Revisit after nvsdm library is live. */
-            nvsdmEntityId = m_nvsdmDevices[entity.entityId].portIds[0];
+            nvsdmEntityId = m_nvSwitchDevices[entity.entityId].portIds[0];
+            targetPort    = m_nvSwitchPorts[nvsdmEntityId].port;
+        }
+        else if (entity.entityGroupId == DCGM_FE_CONNECTX)
+        {
+            if (!IsValidConnectXId(entity.entityId))
+            {
+                log_error("entityId [{}] for ConnectX is not valid.", entity.entityId);
+                return DCGM_ST_BADPARAM;
+            }
+
+            if (fieldId == DCGM_FI_DEV_CONNECTX_HEALTH)
+            {
+                buf.AddInt64Value(entity.entityGroupId,
+                                  entity.entityId,
+                                  fieldId,
+                                  m_ibCxDevices[entity.entityId].info.status,
+                                  now,
+                                  DCGM_ST_OK);
+                continue;
+            }
+
+            unsigned int const nvsdmConnectXFieldId = GetNvsdmConnextXFeildId(fieldId);
+            if (nvsdmConnectXFieldId == NVSDM_CONNECTX_TELEM_CTR_NONE)
+            {
+                log_error("DCGM fieldId {} doesn't map to any of the nvsdm ConnectX field ids.", fieldId);
+                return DCGM_ST_UNKNOWN_FIELD;
+            }
+            param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_CONNECTX;
+            param.telemValsArray[0].telemCtr  = nvsdmConnectXFieldId;
         }
         else
         {
@@ -429,7 +535,15 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             return DCGM_ST_BADPARAM;
         }
 
-        nvsdmReturn = nvsdmPortGetTelemetryValues(m_nvsdmPorts[nvsdmEntityId].port, &param);
+        if (entity.entityGroupId == DCGM_FE_CONNECTX)
+        {
+            nvsdmReturn
+                = m_nvsdm->nvsdmDeviceGetTelemetryValues(m_ibCxDevices[entity.entityId].nvsdmDevice.device, &param);
+        }
+        else
+        {
+            nvsdmReturn = m_nvsdm->nvsdmPortGetTelemetryValues(targetPort, &param);
+        }
         if (nvsdmReturn != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
         {
             log_error(
@@ -474,10 +588,10 @@ dcgmReturn_t DcgmNvsdmManager::Init()
         return dcgmReturn;
     }
 
-    dcgmReturn = AttachNvSwitches();
+    dcgmReturn = AttachNvsdmDevices();
     if (dcgmReturn != DCGM_ST_OK)
     {
-        log_error("AttachNvSwitches() returned {}", dcgmReturn);
+        log_error("AttachNvsdmDevices() returned {}", dcgmReturn);
         return dcgmReturn;
     }
 
@@ -487,22 +601,29 @@ dcgmReturn_t DcgmNvsdmManager::Init()
         log_error("AttachNvLinks() returned {}", dcgmReturn);
         return dcgmReturn;
     }
-
     return dcgmReturn;
+}
+
+bool DcgmNvsdmManager::UsingMockNvsdm() const
+{
+    return !!dynamic_cast<NvsdmMock *>(m_nvsdm.get());
 }
 
 /*************************************************************************/
 dcgmReturn_t DcgmNvsdmManager::AttachToNvsdm()
 {
-    dcgmReturn_t dcgmRet = dcgmLoadNvsdm();
-
-    if (dcgmRet != DCGM_ST_OK)
+    // mock nvsdm does not need to have real library.
+    if (!UsingMockNvsdm())
     {
-        log_error("Could not load NVSDM");
-        return dcgmRet;
+        dcgmReturn_t dcgmRet = dcgmLoadNvsdm();
+        if (dcgmRet != DCGM_ST_OK && dcgmRet != DCGM_ST_ALREADY_INITIALIZED)
+        {
+            log_error("Could not load NVSDM");
+            return dcgmRet;
+        }
     }
 
-    nvsdmRet_t ret = nvsdmInitialize();
+    nvsdmRet_t ret = m_nvsdm->nvsdmInitialize();
     if (ret != NVSDM_SUCCESS)
     {
         log_error("NVSDM error: {}", ret);
@@ -520,23 +641,67 @@ dcgmReturn_t DcgmNvsdmManager::DetachFromNvsdm()
         log_warning("Not attached to NVSDM");
         return DCGM_ST_UNINITIALIZED;
     }
-    nvsdmFinalize();
+    m_nvSwitchDevices.clear();
+    m_nvSwitchPorts.clear();
+    m_ibCxDevices.clear();
+    m_numNvSwitchPorts = 0;
+    m_numNvSwitches    = 0;
+    m_nvsdm->nvsdmFinalize();
     m_attachedToNvsdm = false;
     return DCGM_ST_OK;
 }
 
-/*************************************************************************/
-dcgmReturn_t DcgmNvsdmManager::AttachNvSwitches()
+std::optional<NvsdmDevice> DcgmNvsdmManager::InitNvsdmDevice(nvsdmDevice_t const device)
 {
-    nvsdmDeviceIter_t iter;
-    char src_ca[]       = "mlx5_0";
-    nvsdmRet_t nvsdmRet = nvsdmDiscoverTopology(src_ca, 0);
+    char name[NVSDM_INFO_ARRAY_SIZE] = "NVSDM Device";
+
+    auto nvsdmRet = m_nvsdm->nvsdmDeviceToString(device, name, sizeof(name));
     if (nvsdmRet != NVSDM_SUCCESS)
     {
-        log_error("NVSDM returned {}. Continuing anyway", nvsdmRet);
+        log_error("NVSDM returned {}", nvsdmRet);
     }
-    nvsdmGetAllDevices(&iter);
 
+    NvsdmDevice newNvsdmDevice { .id         = 0,
+                                 .device     = device,
+                                 .longName   = name,
+                                 .portIds    = {},
+                                 .numOfPorts = 0,
+                                 .devID      = 0,
+                                 .vendorID   = 0,
+                                 .guid       = 0 };
+    nvsdmRet = m_nvsdm->nvsdmDeviceGetDevID(device, &newNvsdmDevice.devID);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return std::nullopt;
+    }
+    nvsdmRet = m_nvsdm->nvsdmDeviceGetVendorID(device, &newNvsdmDevice.vendorID);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return std::nullopt;
+    }
+    nvsdmRet = m_nvsdm->nvsdmDeviceGetGUID(device, &newNvsdmDevice.guid);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return std::nullopt;
+    }
+    return newNvsdmDevice;
+}
+
+/*************************************************************************/
+dcgmReturn_t DcgmNvsdmManager::AttachNvsdmDevices()
+{
+    nvsdmDeviceIter_t iter;
+    nvsdmRet_t nvsdmRet = m_nvsdm->nvsdmDiscoverTopology(nullptr, 0);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return DCGM_ST_NVML_ERROR;
+    }
+
+    nvsdmRet = m_nvsdm->nvsdmGetAllDevices(&iter);
     if (nvsdmRet != NVSDM_SUCCESS)
     {
         log_error("NVSDM returned {}", nvsdmRet);
@@ -563,7 +728,7 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvSwitches()
         return NVSDM_SUCCESS;
     };
 
-    nvsdmRet = nvsdmIterateDevices(iter, *cb, &collector);
+    nvsdmRet = m_nvsdm->nvsdmIterateDevices(iter, *cb, &collector);
     if (nvsdmRet != NVSDM_SUCCESS)
     {
         log_error("NVSDM returned {}", nvsdmRet);
@@ -572,16 +737,8 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvSwitches()
 
     for (auto &device : collector.data)
     {
-        char name[NVSDM_INFO_ARRAY_SIZE] = "NVSDM Device";
-
-        nvsdmRet = nvsdmDeviceToString(device, name, sizeof(name) * 8);
-        if (nvsdmRet != NVSDM_SUCCESS)
-        {
-            log_error("NVSDM returned {}", nvsdmRet);
-        }
-
         unsigned int type = 0;
-        nvsdmRet          = nvsdmDeviceGetType(device, &type);
+        nvsdmRet          = m_nvsdm->nvsdmDeviceGetType(device, &type);
         if (nvsdmRet != NVSDM_SUCCESS)
         {
             log_error("NVSDM returned {}", nvsdmRet);
@@ -598,39 +755,35 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvSwitches()
                 return DCGM_ST_INSUFFICIENT_SIZE;
             }
 
-            NvsdmDevice newSwitch { .id         = m_numNvSwitches,
-                                    .device     = device,
-                                    .longName   = name,
-                                    .portIds    = {},
-                                    .numOfPorts = 0,
-                                    .devID      = 0,
-                                    .vendorID   = 0,
-                                    .guid       = 0 };
-            nvsdmRet = nvsdmDeviceGetDevID(device, &newSwitch.devID);
-            if (nvsdmRet != NVSDM_SUCCESS)
+            auto newSwitchOpt = InitNvsdmDevice(device);
+            if (!newSwitchOpt)
             {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-            nvsdmRet = nvsdmDeviceGetVendorID(device, &newSwitch.vendorID);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-            nvsdmRet = nvsdmDeviceGetGUID(device, &newSwitch.guid);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
+                log_error("InitNvsdmDevice failed");
                 return DCGM_ST_NVML_ERROR;
             }
 
-            m_nvsdmDevices.push_back(std::move(newSwitch));
-
+            NvsdmDevice newSwitch = *newSwitchOpt;
+            newSwitch.id          = m_numNvSwitches;
+            m_nvSwitchDevices.push_back(std::move(newSwitch));
             m_nvSwitches[m_numNvSwitches].physicalId = m_numNvSwitches;
             m_nvSwitches[m_numNvSwitches].status     = DcgmEntityStatusUnknown;
 
             m_numNvSwitches++;
+        }
+        else if (type == NVSDM_DEV_TYPE_CA)
+        {
+            IbCxDevice ibCxDev;
+            auto newIbCxOpt = InitNvsdmDevice(device);
+            if (!newIbCxOpt)
+            {
+                log_error("InitNvsdmDevice failed");
+                return DCGM_ST_NVML_ERROR;
+            }
+
+            ibCxDev.nvsdmDevice    = std::move(*newIbCxOpt);
+            ibCxDev.nvsdmDevice.id = m_ibCxDevices.size();
+            ibCxDev.info.status    = DcgmEntityStatusUnknown;
+            m_ibCxDevices.push_back(std::move(ibCxDev));
         }
     }
 
@@ -641,7 +794,99 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvSwitches()
         return st;
     }
 
+    st = ReadIbCxStatusAllIbCxCards();
+    if (st != DCGM_ST_OK && st != DCGM_ST_PAUSED)
+    {
+        log_error("Could not read IB CX cards status, errored {}.", st);
+        return st;
+    }
+
     return DCGM_ST_OK;
+}
+
+std::optional<std::vector<NvsdmPort>> DcgmNvsdmManager::ScanPorts(NvsdmDevice const &dev)
+{
+    std::vector<NvsdmPort> ports;
+    nvsdmPortIter_t iter;
+    nvsdmRet_t nvsdmRet = m_nvsdm->nvsdmDeviceGetPorts(dev.device, &iter);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return std::nullopt;
+    }
+
+    using collector_t = NvsdmDataCollector<nvsdmPort_t>;
+    collector_t collector;
+
+    auto cb = [](nvsdmPort_t const port, void *_dest) {
+        collector_t *dest = static_cast<collector_t *>(_dest);
+        if (port == nullptr || dest == nullptr)
+        {
+            log_error("NVSDM passed invalid argument");
+            return NVSDM_ERROR_INVALID_ARG;
+        }
+
+        dest->callCounter++;
+
+        log_debug("received port = {}", port);
+
+        dest->data.push_back(port);
+
+        return NVSDM_SUCCESS;
+    };
+
+    nvsdmRet = m_nvsdm->nvsdmIteratePorts(iter, *cb, &collector);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("NVSDM returned {}", nvsdmRet);
+        return std::nullopt;
+    }
+
+    unsigned int devicePortIdIndex = 0;
+    for (auto &port : collector.data)
+    {
+        if (devicePortIdIndex >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+        {
+            log_error("Max number of ports reached for device {}", dev.id);
+            continue;
+        }
+
+        NvsdmPort newPort { .id            = 0,
+                            .port          = port,
+                            .state         = DcgmNvLinkLinkStateDown,
+                            .nvsdmDeviceId = dev.id,
+                            .num           = 0,
+                            .lid           = 0,
+                            .guid          = 0,
+                            .gid           = {} };
+        nvsdmRet = m_nvsdm->nvsdmPortGetNum(port, &newPort.num);
+        if (nvsdmRet != NVSDM_SUCCESS)
+        {
+            log_error("NVSDM returned {}", nvsdmRet);
+            return std::nullopt;
+        }
+        nvsdmRet = m_nvsdm->nvsdmPortGetLID(port, &newPort.lid);
+        if (nvsdmRet != NVSDM_SUCCESS)
+        {
+            log_error("NVSDM returned {}", nvsdmRet);
+            return std::nullopt;
+        }
+        nvsdmRet = m_nvsdm->nvsdmPortGetGUID(port, &newPort.guid);
+        if (nvsdmRet != NVSDM_SUCCESS)
+        {
+            log_error("NVSDM returned {}", nvsdmRet);
+            return std::nullopt;
+        }
+        nvsdmRet = m_nvsdm->nvsdmPortGetGID(port, newPort.gid);
+        if (nvsdmRet != NVSDM_SUCCESS)
+        {
+            log_error("NVSDM returned {}", nvsdmRet);
+            return std::nullopt;
+        }
+        ports.push_back(std::move(newPort));
+    }
+
+    return ports;
 }
 
 /*************************************************************************/
@@ -649,45 +894,17 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvLinks()
 {
     log_debug("Attaching to NvLinks.");
 
-    for (auto &device : m_nvsdmDevices)
+    for (auto &device : m_nvSwitchDevices)
     {
-        nvsdmPortIter_t iter;
-        nvsdmRet_t nvsdmRet = nvsdmDeviceGetPorts(device.device, &iter);
-        if (nvsdmRet != NVSDM_SUCCESS)
+        auto portsOpt = ScanPorts(device);
+        if (!portsOpt)
         {
-            log_error("NVSDM returned {}", nvsdmRet);
-            return DCGM_ST_NVML_ERROR;
-        }
-
-        using collector_t = NvsdmDataCollector<nvsdmPort_t>;
-        collector_t collector;
-
-        auto cb = [](nvsdmPort_t const port, void *_dest) {
-            collector_t *dest = static_cast<collector_t *>(_dest);
-            if (port == nullptr || dest == nullptr)
-            {
-                log_error("NVSDM passed invalid argument");
-                return NVSDM_ERROR_INVALID_ARG;
-            }
-
-            dest->callCounter++;
-
-            log_debug("received port = {}", port);
-
-            dest->data.push_back(port);
-
-            return NVSDM_SUCCESS;
-        };
-
-        nvsdmRet = nvsdmIteratePorts(iter, *cb, &collector);
-        if (nvsdmRet != NVSDM_SUCCESS)
-        {
-            log_error("NVSDM returned {}", nvsdmRet);
+            log_error("failed to scan ports of device: [{}].", device.id);
             return DCGM_ST_NVML_ERROR;
         }
 
         unsigned int devicePortIdIndex = 0;
-        for (auto &port : collector.data)
+        for (auto &port : *portsOpt)
         {
             if (devicePortIdIndex >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
             {
@@ -695,45 +912,13 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvLinks()
                 continue;
             }
 
-            NvsdmPort newPort { .id            = m_numNvsdmPorts,
-                                .port          = port,
-                                .state         = DcgmNvLinkLinkStateDown,
-                                .nvsdmDeviceId = device.id,
-                                .num           = 0,
-                                .lid           = 0,
-                                .guid          = 0,
-                                .gid           = {} };
-            nvsdmRet = nvsdmPortGetNum(port, &newPort.num);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-            nvsdmRet = nvsdmPortGetLID(port, &newPort.lid);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-            nvsdmRet = nvsdmPortGetGUID(port, &newPort.guid);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-            nvsdmRet = nvsdmPortGetGID(port, newPort.gid);
-            if (nvsdmRet != NVSDM_SUCCESS)
-            {
-                log_error("NVSDM returned {}", nvsdmRet);
-                return DCGM_ST_NVML_ERROR;
-            }
-
-            device.portIds[devicePortIdIndex] = m_numNvsdmPorts;
-            log_debug("Added link with id [{}] for device at index [{}].", m_numNvsdmPorts, devicePortIdIndex);
+            port.id                           = m_numNvSwitchPorts;
+            device.portIds[devicePortIdIndex] = m_numNvSwitchPorts;
+            log_debug("Added link with id [{}] for device at index [{}].", m_numNvSwitchPorts, devicePortIdIndex);
             devicePortIdIndex++;
 
-            m_nvsdmPorts.push_back(std::move(newPort));
-            m_numNvsdmPorts++;
+            m_nvSwitchPorts.push_back(std::move(port));
+            m_numNvSwitchPorts++;
         }
         device.numOfPorts = devicePortIdIndex;
     }
@@ -753,44 +938,24 @@ dcgmReturn_t DcgmNvsdmManager::GetNvLinkList(unsigned int &count, unsigned int *
 {
     dcgmReturn_t ret = DCGM_ST_OK;
 
-    if (m_numNvsdmPorts > count)
+    if (m_nvSwitchPorts.size() > count)
     {
         // Not enough space to copy all link ids - copy what you can.
         ret = DCGM_ST_INSUFFICIENT_SIZE;
     }
 
-    count = m_numNvsdmPorts;
-
-    for (unsigned int i = 0; i < count; i++)
+    unsigned int end = std::min(count, static_cast<unsigned int>(m_nvSwitchPorts.size()));
+    for (unsigned int i = 0; i < end; i++)
     {
-        linkIds[i] = m_nvsdmPorts[i].id;
+        linkIds[i] = m_nvSwitchPorts[i].id;
     }
+    count = m_nvSwitchPorts.size();
 
     return ret;
 }
 
-/*************************************************************************/
-dcgmReturn_t DcgmNvsdmManager::GetEntityStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
+dcgmReturn_t DcgmNvsdmManager::GetNvSwitchStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
 {
-    log_debug("GetEntityStatus received eg {} and entityId {}. Number of NvSwitches {} and NvsdmPorts {}.",
-              msg->entityGroupId,
-              msg->entityId,
-              m_numNvSwitches,
-              m_numNvsdmPorts);
-
-    if (msg->entityGroupId == DCGM_FE_LINK)
-    {
-        for (unsigned int i = 0; i < m_numNvsdmPorts; i++)
-        {
-            if (m_nvsdmPorts[i].id == msg->entityId)
-            {
-                msg->entityStatus = DcgmEntityStatusOk;
-                break;
-            }
-        }
-        return DCGM_ST_OK;
-    }
-
     dcgm_nvswitch_info_t *nvSwitch = nullptr;
     for (unsigned int i = 0; i < m_numNvSwitches; i++)
     {
@@ -809,6 +974,123 @@ dcgmReturn_t DcgmNvsdmManager::GetEntityStatus(dcgm_nvswitch_msg_get_entity_stat
     }
 
     msg->entityStatus = nvSwitch->status;
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvsdmManager::GetNvLinkStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
+{
+    for (unsigned int i = 0; i < std::min(static_cast<size_t>(m_numNvSwitchPorts), std::size(m_nvSwitchPorts)); i++)
+    {
+        if (m_nvSwitchPorts[i].id == msg->entityId)
+        {
+            msg->entityStatus = DcgmEntityStatusOk;
+            break;
+        }
+    }
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvsdmManager::GetIbCxStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
+{
+    bool found = false;
+    for (unsigned int i = 0; i < m_ibCxDevices.size(); i++)
+    {
+        if (m_ibCxDevices[i].nvsdmDevice.id != msg->entityId)
+        {
+            continue;
+        }
+        found             = true;
+        msg->entityStatus = m_ibCxDevices[i].info.status;
+        break;
+    }
+    if (!found)
+    {
+        log_error("GetEntityStatus called for invalid IB CX entityId {}", msg->entityId);
+        return DCGM_ST_BADPARAM;
+    }
+    return DCGM_ST_OK;
+}
+
+/*************************************************************************/
+dcgmReturn_t DcgmNvsdmManager::GetEntityStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
+{
+    log_debug("GetEntityStatus received eg {} and entityId {}. Number of NvSwitches {} and NvsdmPorts {}.",
+              msg->entityGroupId,
+              msg->entityId,
+              m_numNvSwitches,
+              m_numNvSwitchPorts);
+
+    switch (msg->entityGroupId)
+    {
+        case DCGM_FE_SWITCH:
+            return GetNvSwitchStatus(msg);
+        case DCGM_FE_LINK:
+            return GetNvLinkStatus(msg);
+        case DCGM_FE_CONNECTX:
+            return GetIbCxStatus(msg);
+        default:
+            return DCGM_ST_BADPARAM;
+    }
+}
+
+dcgmReturn_t DcgmNvsdmManager::UpdateDeviceState(DcgmNs::NvsdmDevice const &dev, auto &info)
+{
+    nvsdmDeviceHealthStatus_t status = {};
+    status.version                   = nvsdmDeviceHealthStatus_v1;
+
+    nvsdmRet_t nvsdmRet = m_nvsdm->nvsdmDeviceGetHealthStatus(dev.device, &status);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        info.status = DcgmEntityStatusOk;
+    }
+
+    switch (status.state)
+    {
+        case NVSDM_DEVICE_STATE_HEALTHY:
+            info.status = DcgmEntityStatusOk;
+            break;
+        case NVSDM_DEVICE_STATE_ERROR:
+            info.status = DcgmEntityStatusDisabled;
+            break;
+        case NVSDM_DEVICE_STATE_UNKNOWN:
+            info.status = DcgmEntityStatusUnknown;
+            break;
+        default:
+            log_error("NVSDM returned unknown state {} for device {}.", status.state, dev.id);
+            break;
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvsdmManager::ReadIbCxStatusAllIbCxCards()
+{
+    log_debug("Reading IB CX cards status for all IB CX cards.");
+
+    switch (CheckConnectionStatus())
+    {
+        case ConnectionStatus::Disconnected:
+            log_error("Not attached to NVSDM, aborting.");
+            return DCGM_ST_UNINITIALIZED;
+        case ConnectionStatus::Paused:
+            log_debug("The manager is paused. No actual data is available.");
+            return DCGM_ST_PAUSED;
+        case ConnectionStatus::Ok:
+            break;
+        default:
+            log_error("Unknown connection status.");
+            return DCGM_ST_UNINITIALIZED;
+    }
+
+    for (auto &ibCxDevice : m_ibCxDevices)
+    {
+        if (auto ret = UpdateDeviceState(ibCxDevice.nvsdmDevice, ibCxDevice.info); ret != DCGM_ST_OK)
+        {
+            log_error("failed to update status on [{}], with ret [{}].", ibCxDevice.nvsdmDevice.id, ret);
+            continue;
+        }
+        log_debug("Loaded status [{}] for switch at index [{}]", ibCxDevice.info.status, ibCxDevice.nvsdmDevice.id);
+    }
     return DCGM_ST_OK;
 }
 
@@ -832,34 +1114,22 @@ dcgmReturn_t DcgmNvsdmManager::ReadNvSwitchStatusAllSwitches()
             return DCGM_ST_UNINITIALIZED;
     }
 
-    nvsdmDeviceHealthStatus_t status = {};
-    status.version                   = nvsdmDeviceHealthStatus_v1;
-    nvsdmRet_t nvsdmRet;
-
-    for (unsigned int i = 0; i < m_numNvSwitches; i++)
+    for (unsigned int i = 0; i < std::min(static_cast<size_t>(m_numNvSwitches), std::size(m_nvSwitchDevices)); i++)
     {
-        nvsdmRet = nvsdmDeviceGetHealthStatus(m_nvsdmDevices[i].device, &status);
-        if (nvsdmRet != NVSDM_SUCCESS)
+        if (m_nvSwitchDevices[i].id >= m_numNvSwitches)
         {
-            m_nvSwitches[m_nvsdmDevices[i].id].status = DcgmEntityStatusOk;
+            log_error("invalid switch id [{}].", m_nvSwitchDevices[i].id);
+            continue;
         }
-
-        switch (status.state)
+        if (auto ret = UpdateDeviceState(m_nvSwitchDevices[i], m_nvSwitches[m_nvSwitchDevices[i].id]);
+            ret != DCGM_ST_OK)
         {
-            case NVSDM_DEVICE_STATE_HEALTHY:
-                m_nvSwitches[m_nvsdmDevices[i].id].status = DcgmEntityStatusOk;
-                break;
-            case NVSDM_DEVICE_STATE_ERROR:
-                m_nvSwitches[m_nvsdmDevices[i].id].status = DcgmEntityStatusDisabled;
-                break;
-            case NVSDM_DEVICE_STATE_UNKNOWN:
-                m_nvSwitches[m_nvsdmDevices[i].id].status = DcgmEntityStatusUnknown;
-                break;
-            default:
-                log_error("NVSDM returned unknown state {} for device {}.", status.state, m_nvsdmDevices[i].id);
-                break;
+            log_error("failed to update status on [{}], with ret [{}].", m_nvSwitchDevices[i].id, ret);
+            continue;
         }
-        log_debug("Loaded status for switch at index {}", m_nvsdmDevices[i].id);
+        log_debug("Loaded status [{}] for switch at index [{}]",
+                  m_nvSwitches[m_nvSwitchDevices[i].id].status,
+                  m_nvSwitchDevices[i].id);
     }
 
     /*
@@ -871,6 +1141,42 @@ dcgmReturn_t DcgmNvsdmManager::ReadNvSwitchStatusAllSwitches()
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_warning("ReadLinkStatesAllSwitches() returned {}", errorString(dcgmReturn));
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvsdmManager::UpdatePortState(DcgmNs::NvsdmPort &port)
+{
+    nvsdmPortInfo_t info = {};
+    info.version         = nvsdmPortInfo_v1;
+    nvsdmRet_t nvsdmRet;
+
+    nvsdmRet = m_nvsdm->nvsdmPortGetInfo(port.port, &info);
+    if (nvsdmRet != NVSDM_SUCCESS)
+    {
+        log_error("Failed to get info for port {}, NVSDM returned {}.", port.id, nvsdmRet);
+        return DCGM_ST_NVML_ERROR;
+    }
+
+    switch (info.portState)
+    {
+        case NVSDM_PORT_STATE_ACTIVE:
+            port.state = DcgmNvLinkLinkStateUp;
+            break;
+        case NVSDM_PORT_STATE_DOWN:
+            port.state = DcgmNvLinkLinkStateDown;
+            break;
+        case NVSDM_PORT_STATE_NO_STATE_CHANGE:
+        case NVSDM_PORT_STATE_INITIALIZE:
+        case NVSDM_PORT_STATE_ARMED:
+        case NVSDM_PORT_STATE_NONE:
+            port.state = DcgmNvLinkLinkStateDisabled;
+            break;
+        default:
+            port.state = DcgmNvLinkLinkStateNotSupported;
+            log_error("NVSDM returned unknown state {} for link {}.", info.portState, port.id);
+            break;
     }
 
     return DCGM_ST_OK;
@@ -895,42 +1201,22 @@ dcgmReturn_t DcgmNvsdmManager::ReadLinkStatesAllSwitches()
             return DCGM_ST_UNINITIALIZED;
     }
 
-    nvsdmPortInfo_t info = {};
-    info.version         = nvsdmPortInfo_v1;
-    nvsdmRet_t nvsdmRet;
-
     unsigned int switchLinkIndex[DCGM_MAX_NUM_SWITCHES] = {};
-    for (unsigned int i = 0; i < m_numNvsdmPorts; i++)
+    for (unsigned int i = 0; i < std::min(static_cast<size_t>(m_numNvSwitchPorts), std::size(m_nvSwitchPorts)); i++)
     {
-        nvsdmRet = nvsdmPortGetInfo(m_nvsdmPorts[i].port, &info);
-        if (nvsdmRet != NVSDM_SUCCESS)
+        if (auto ret = UpdatePortState(m_nvSwitchPorts[i]); ret != DCGM_ST_OK)
         {
-            log_error("Failed to get info for port {}, NVSDM returned {}.", m_nvsdmPorts[i].id, nvsdmRet);
+            log_error("Failed to get info for port {}, err {}.", m_nvSwitchPorts[i].id, ret);
             return DCGM_ST_NVML_ERROR;
         }
 
-        switch (info.portState)
+        unsigned int nvsdmDeviceId = m_nvSwitchPorts[i].nvsdmDeviceId;
+        if (nvsdmDeviceId >= m_nvSwitchDevices.size())
         {
-            case NVSDM_PORT_STATE_ACTIVE:
-                m_nvsdmPorts[i].state = DcgmNvLinkLinkStateUp;
-                break;
-            case NVSDM_PORT_STATE_DOWN:
-                m_nvsdmPorts[i].state = DcgmNvLinkLinkStateDown;
-                break;
-            case NVSDM_PORT_STATE_NO_STATE_CHANGE:
-            case NVSDM_PORT_STATE_INITIALIZE:
-            case NVSDM_PORT_STATE_ARMED:
-            case NVSDM_PORT_STATE_NONE:
-                m_nvsdmPorts[i].state = DcgmNvLinkLinkStateDisabled;
-                break;
-            default:
-                m_nvsdmPorts[i].state = DcgmNvLinkLinkStateNotSupported;
-                log_error("NVSDM returned unknown state {} for link {}.", info.portState, m_nvsdmPorts[i].id);
-                break;
+            log_error("switch Id {} >= num of nv switches {}, skipping.", nvsdmDeviceId, m_nvSwitchDevices.size());
+            continue;
         }
-
-        unsigned int nvsdmDeviceId = m_nvsdmPorts[i].nvsdmDeviceId;
-        unsigned int switchId      = m_nvsdmDevices[nvsdmDeviceId].id;
+        unsigned int switchId = m_nvSwitchDevices[nvsdmDeviceId].id;
         if (switchId >= m_numNvSwitches)
         {
             log_error("switch Id {} >= num of nv switches {}, skipping.", switchId, m_numNvSwitches);
@@ -941,12 +1227,12 @@ dcgmReturn_t DcgmNvsdmManager::ReadLinkStatesAllSwitches()
         unsigned int linkId = switchLinkIndex[switchId];
         switchLinkIndex[switchId] += 1;
 
-        if (linkId >= m_numNvsdmPorts)
+        if (linkId >= m_numNvSwitchPorts)
         {
-            log_error("link id {} >= num of nvsdm ports {}, skipping.", linkId, m_numNvsdmPorts);
+            log_error("link id {} >= num of nvsdm ports {}, skipping.", linkId, m_numNvSwitchPorts);
             continue;
         }
-        m_nvSwitches[switchId].nvLinkLinkState[linkId] = m_nvsdmPorts[i].state;
+        m_nvSwitches[switchId].nvLinkLinkState[linkId] = m_nvSwitchPorts[i].state;
     }
 
     return DCGM_ST_OK;
@@ -1023,7 +1309,7 @@ dcgm_nvswitch_info_t *DcgmNvsdmManager::GetNvSwitchObject(dcgm_field_entity_grou
               entityGroupId,
               entityId,
               m_numNvSwitches,
-              m_numNvsdmPorts);
+              m_numNvSwitchPorts);
 
     if (entityGroupId != DCGM_FE_SWITCH)
     {
@@ -1055,6 +1341,45 @@ dcgmReturn_t DcgmNvsdmManager::GetBackend(dcgm_nvswitch_msg_get_backend_v1 *msg)
     SafeCopyTo(msg->backendName, c_backendName);
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvsdmManager::GetIbCxList(unsigned int &count, unsigned int *ibCxIds, int64_t /* unused */)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    if (count < m_ibCxDevices.size())
+    {
+        ret = DCGM_ST_INSUFFICIENT_SIZE;
+    }
+
+    unsigned int end = std::min(count, static_cast<unsigned int>(m_ibCxDevices.size()));
+    for (unsigned int i = 0; i < end; ++i)
+    {
+        ibCxIds[i] = m_ibCxDevices[i].nvsdmDevice.id;
+    }
+    count = m_ibCxDevices.size();
+    return ret;
+}
+
+dcgmReturn_t DcgmNvsdmManager::GetEntityList(unsigned int &count,
+                                             unsigned int *entities,
+                                             dcgm_field_entity_group_t entityGroup,
+                                             int64_t const flags)
+{
+    static std::map<dcgm_field_entity_group_t,
+                    std::function<dcgmReturn_t(DcgmNvsdmManager *, unsigned int &, unsigned int *, int64_t)>> const
+        handlers {
+            { DCGM_FE_SWITCH, &DcgmNvsdmManager::GetNvSwitchList },
+            { DCGM_FE_LINK, &DcgmNvsdmManager::GetNvLinkList },
+            { DCGM_FE_CONNECTX, &DcgmNvsdmManager::GetIbCxList },
+        };
+
+    auto handler = handlers.find(entityGroup);
+    if (handler == handlers.end())
+    {
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+    return std::invoke(handler->second, this, count, entities, flags);
 }
 
 /*************************************************************************/

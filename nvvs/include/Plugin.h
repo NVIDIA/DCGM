@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -388,6 +388,14 @@ public:
 
     int GetPluginId() const;
 
+    void ParseIgnoreErrorCodesParam(std::string const &testName, std::string const &param);
+
+    gpuIgnoreErrorCodeMap_t const &GetIgnoreErrorCodes(std::string const &testName) const;
+
+    bool ShouldIgnoreError(std::string const &testName,
+                           dcgmGroupEntityPair_t const &entity,
+                           unsigned int errorCode) const;
+
     /***************************PRIVATE**********************************/
 #ifndef DCGM_PLUGIN_TEST
 private:
@@ -400,7 +408,7 @@ private:
 protected:
     /* Variables */
     infoStruct_t m_infoStruct;
-    std::unordered_map<std::string, PluginTest> m_tests; /* May test name to its PluginTest object */
+    std::unordered_map<std::string, PluginTest> m_tests; /* Map test name to its PluginTest object */
 
     /* Mutexes */
     mutable DcgmMutex m_dataMutex; /* Mutex for plugin data */

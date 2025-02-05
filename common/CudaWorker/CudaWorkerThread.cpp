@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -230,6 +230,7 @@ dcgmReturn_t CudaWorkerThread::Init(CUdevice device)
 
     DCGM_LOG_INFO << "DCGM CudaContext Init completed successfully. Starting our TaskRunner.";
 
+    SetThreadName(fmt::format("CudaWorker_{}", device));
     /* Start our TaskRunner now that we've survived initialization */
     int st = Start();
     if (st)
@@ -251,138 +252,74 @@ dcgmReturn_t CudaWorkerThread::Init(CUdevice device)
 }
 
 /*****************************************************************************/
+namespace
+{
+std::string FmtCudaError(std::string_view call,
+                         CUresult const cuSt,
+                         std::optional<CUdevice> const device = std::nullopt)
+{
+    char const *errStr = "";
+    cuGetErrorString(cuSt, &errStr);
+
+    if (device.has_value())
+    {
+        return fmt::format("Call to '{}' returned {} - {} for device {}", call, cuSt, errStr, *device);
+    }
+
+    return fmt::format("Call to '{}' returned {} - {}", call, cuSt, errStr);
+}
+}; //namespace
+
+// See also LOG_CUDA_ERROR in nvvs/plugin_src/cuda_common/CudaCommon.h.
+#define LOG_CUDA_ERROR(fn, cuSt, ...) log_error(FmtCudaError((fn), (cuSt), ##__VA_ARGS__))
+
+/*****************************************************************************/
 dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
 {
     int st;
     CUresult cuSt;
 
-    cuSt = cuInit(0);
-    if (cuSt)
+    if (cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
     {
-        const char *errorString;
-        cuGetErrorString(cuSt, &errorString);
-        DCGM_LOG_ERROR << "cuInit returned " << errorString;
+        LOG_CUDA_ERROR("cuInit", cuSt);
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    cuSt = cuDeviceGet(&m_cudaDevice.m_device, device);
-    if (cuSt)
+    if (cuSt = cuDeviceGet(&m_cudaDevice.m_device, device); cuSt != CUDA_SUCCESS)
     {
-        const char *errorString { nullptr };
-        cuGetErrorString(cuSt, &errorString);
-        DCGM_LOG_ERROR << "cuDeviceGet returned " << errorString << " for " << device;
+        LOG_CUDA_ERROR("cuDeviceGet", cuSt, device);
         return DCGM_ST_GENERIC_ERROR;
     }
 
     /* Do per-device initialization. */
-    cuSt = cuCtxCreate(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
-    if (cuSt)
+    if (cuSt = cuCtxCreate(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
+        cuSt != CUDA_SUCCESS)
     {
-        const char *errorString;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuCtxCreate returned " << errorString << " for " << m_cudaDevice.m_device;
-
+        LOG_CUDA_ERROR("cuCtxCreate", cuSt, m_cudaDevice.m_device);
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    cuSt = cuDeviceGetAttribute(&m_cudaDevice.m_maxThreadsPerMultiProcessor,
-                                CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
-                                m_cudaDevice.m_device);
-    if (cuSt)
+    std::pair<int *, CUdevice_attribute const> const attributes[] = {
+        { &m_cudaDevice.m_maxThreadsPerMultiProcessor, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR },
+        { &m_cudaDevice.m_multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT },
+        { &m_cudaDevice.m_sharedMemPerMultiprocessor, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR },
+        { &m_cudaDevice.m_computeCapabilityMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR },
+        { &m_cudaDevice.m_computeCapabilityMinor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR },
+        { &m_cudaDevice.m_memoryBusWidth, CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH },
+        { &m_cudaDevice.m_maxMemoryClockMhz, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE },
+        { &m_cudaDevice.m_eccSupport, CU_DEVICE_ATTRIBUTE_ECC_ENABLED },
+    };
+
+    for (auto const [value, cuDevAttr] : attributes)
     {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_cudaDevice.m_multiProcessorCount, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, m_cudaDevice.m_device);
-
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(&m_cudaDevice.m_sharedMemPerMultiprocessor,
-                                CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
-                                m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_cudaDevice.m_computeCapabilityMajor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_cudaDevice.m_computeCapabilityMinor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
+        if (cuSt = cuDeviceGetAttribute(value, cuDevAttr, m_cudaDevice.m_device); cuSt != CUDA_SUCCESS)
+        {
+            LOG_CUDA_ERROR(fmt::format("cuDeviceGetAttribute({})", cuDevAttr), cuSt, m_cudaDevice.m_device);
+        }
     }
 
     m_cudaDevice.m_computeCapability
         = (double)m_cudaDevice.m_computeCapabilityMajor + ((double)m_cudaDevice.m_computeCapabilityMinor / 10.0);
-
-    cuSt = cuDeviceGetAttribute(
-        &m_cudaDevice.m_memoryBusWidth, CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH, m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    cuSt = cuDeviceGetAttribute(
-        &m_cudaDevice.m_maxMemoryClockMhz, CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
 
     /* Convert to MHz */
     m_cudaDevice.m_maxMemoryClockMhz /= 1000;
@@ -393,18 +330,6 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
      */
     m_cudaDevice.m_maxMemBandwidth
         = (double)m_cudaDevice.m_maxMemoryClockMhz * 1000000.0 * 2.0 * (double)m_cudaDevice.m_memoryBusWidth / 8.0;
-
-    cuSt = cuDeviceGetAttribute(&m_cudaDevice.m_eccSupport, CU_DEVICE_ATTRIBUTE_ECC_ENABLED, m_cudaDevice.m_device);
-    if (cuSt)
-    {
-        const char *errorString = nullptr;
-
-        cuGetErrorString(cuSt, &errorString);
-
-        DCGM_LOG_ERROR << "cuDeviceGetAttribute returned " << errorString << " for " << m_cudaDevice.m_device;
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
 
     /* The modules must be loaded after we've created our contexts */
     st = LoadModule();
@@ -505,6 +430,7 @@ void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, 
         m_fieldWorker = AllocateFieldWorker(fieldId, preferCublas);
     }
 
+    m_achievedLoad  = 0;
     m_activeFieldId = fieldId;
 }
 
@@ -560,6 +486,11 @@ void CudaWorkerThread::SetPeerByBusId(std::string peerBusId)
 double CudaWorkerThread::GetCurrentAchievedLoad(void)
 {
     return m_achievedLoad;
+}
+
+CudaWorkerDevice_t const &CudaWorkerThread::GetCudaWorkerDevice() const
+{
+    return m_cudaDevice;
 }
 
 /*****************************************************************************/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "dcgm_fields.h"
-#include <catch2/catch_all.hpp>
-
 #include <Pcie.h>
 #include <PcieMain.h>
+
+#include "dcgm_fields.h"
+#include <catch2/catch_all.hpp>
 #include <sstream>
+#include <string_view>
+#include <tuple>
+#include <vector>
 
 unsigned int failingGpuId    = DCGM_MAX_NUM_DEVICES;
 unsigned int failingSwitchId = DCGM_MAX_NUM_SWITCHES;
@@ -331,4 +334,179 @@ TEST_CASE("Pcie: StartDcgmGroupWatch")
         std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
         REQUIRE(dcgmGroupPtr.get() == nullptr);
     }
+}
+
+/**
+ * @brief BusGrind test interface
+ * friend of @ref BusGrind
+ */
+class BusGrindTest : public BusGrind
+{
+public:
+    BusGrindTest(dcgmHandle_t h)
+        : BusGrind(h)
+    {}
+
+    void SetCopySizes()
+    {
+        BusGrind::SetCopySizes();
+    }
+
+    void SetCudaCapabilityInfo(unsigned int const val)
+    {
+        m_cudaCompat = val;
+    }
+
+    dcgmReturn_t SetCudaCapabilityInfoWrapper()
+    {
+        return BusGrind::SetCudaCapabilityInfo();
+    }
+
+    TestParameters &GetTestParams()
+    {
+        return *m_testParameters;
+    }
+};
+
+TEST_CASE("Pcie: SetCopySize")
+{
+    constexpr auto BEFORE_BLACKWELL = 9;
+    constexpr auto COMPAT_BLACKWELL = 10;
+
+    static_assert(PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY != PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+    static_assert(PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE != PCIE_BLACKWELL_DEFAULT_BROKEN_P2P_SIZE);
+
+    dcgmHandle_t handle = 42;
+    BusGrindTest bg(handle);
+
+    bg.SetCudaCapabilityInfo(BEFORE_BLACKWELL);
+    bg.SetCopySizes(); // expected to be a no-op in this case
+    auto &tp = bg.GetTestParams();
+
+    SECTION("Hopper And Before")
+    {
+        std::vector<std::tuple<std::string, std::string, double>> const testData = {
+            { PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_BROKEN_P2P,
+              PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB,
+              PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE }
+        };
+
+        for (auto [subtest, param, expectedVal] : testData)
+        {
+            double actual = tp.GetSubTestDouble(subtest, param);
+            CHECK(actual == expectedVal);
+        }
+    }
+
+    bg.SetCudaCapabilityInfo(COMPAT_BLACKWELL);
+    bg.SetCopySizes(); // should apply GPU-specific defaults
+    tp = bg.GetTestParams();
+
+    SECTION("Blackwell")
+    {
+        std::vector<std::tuple<std::string, std::string, double>> const testData = {
+            { PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
+              PCIE_STR_INTS_PER_COPY,
+              PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY },
+            { PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_BLACKWELL_DEFAULT_BROKEN_P2P_SIZE }
+        };
+
+        for (auto [subtest, param, expectedVal] : testData)
+        {
+            double actual = tp.GetSubTestDouble(subtest, param);
+            CHECK(actual == expectedVal);
+        }
+    }
+}
+
+
+class DcgmRecorderMock : public DcgmRecorderBase
+{
+public:
+    dcgmReturn_t GetCurrentFieldValue(unsigned int, unsigned short, dcgmFieldValue_v2 &, unsigned int) override
+    {
+        return DCGM_ST_UNKNOWN_FIELD;
+    }
+};
+
+TEST_CASE("BusGrind: SetCudaCapabilityInfo, negative test for DCGM_FR_DCGM_API")
+{
+    dcgmHandle_t handle                                     = 42;
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    BusGrindTest bg(handle);
+    entityInfo->numEntities                      = 2;
+    entityInfo->entities[0].entity.entityId      = 0;
+    entityInfo->entities[0].entity.entityGroupId = DCGM_FE_GPU;
+    entityInfo->entities[1].entity.entityId      = 1;
+    entityInfo->entities[1].entity.entityGroupId = DCGM_FE_GPU;
+    bg.InitializeForEntityList(bg.GetPcieTestName(), *entityInfo);
+
+    auto mockRecorder = std::make_unique<DcgmRecorderMock>();
+    bg.SetDcgmRecorder(std::move(mockRecorder));
+    auto ret = bg.SetCudaCapabilityInfoWrapper();
+
+    REQUIRE(ret == DCGM_ST_UNKNOWN_FIELD);
+
+    DcgmError expectedError { DcgmError::GpuIdTag::Unknown };
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, expectedError, "GetCurrentFieldValue");
+    expectedError.AddDcgmError(DCGM_ST_UNKNOWN_FIELD);
+
+    // The error is not entity specific
+    nvvsPluginEntityErrors_t errorsPerEntity = bg.GetEntityErrors(bg.GetPcieTestName());
+
+    unsigned int count { 0 };
+    for (auto const &[entityPair, diagErrors] : errorsPerEntity)
+    {
+        // Make sure the error is not entity specific
+        if (entityPair.entityGroupId == DCGM_FE_NONE)
+        {
+            REQUIRE(diagErrors.size() == 1);
+            REQUIRE(diagErrors[0].entity.entityGroupId == DCGM_FE_NONE);
+            REQUIRE(std::string(diagErrors[0].msg) == expectedError.GetMessage());
+            count++;
+        }
+        else
+        {
+            REQUIRE(diagErrors.size() == 0);
+        }
+    }
+    // Make sure the map has only one entity with entityGroupId == DCGM_FE_NONE
+    REQUIRE(count == 1);
 }

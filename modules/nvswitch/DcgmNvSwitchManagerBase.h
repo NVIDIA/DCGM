@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,26 @@ public:
      *         DCGM_ST_INSUFFICIENT_SIZE: the buffer wasn't big enough to add all desired link ids
      */
     virtual dcgmReturn_t GetNvLinkList(unsigned int &count, unsigned int *linkIds, int64_t flags) = 0;
+
+    /*************************************************************************/
+    /**
+     * Populate entities with the ids which present on the system.
+     *
+     * @param count[in/out]    - passed in as the maximum number of link ids that can be placed in entities. Set
+     *                           to the number of entities present on the system.
+     * @param entities[out]    - populated with the ids of the entities on the host.
+     * @param entityGroup[in]  - wanted entity group.
+     * @param flags            - specify a characteristic to get a subset of ids
+     *                           (unused for now)
+     *
+     * @return DCGM_ST_OK:                all desired link ids added to buffer
+     *         DCGM_ST_INSUFFICIENT_SIZE: the buffer wasn't big enough to add all desired link ids
+     */
+    virtual dcgmReturn_t GetEntityList(unsigned int &count,
+                                       unsigned int *entities,
+                                       dcgm_field_entity_group_t entityGroup,
+                                       int64_t const flags)
+        = 0;
 
     /*************************************************************************/
     /**
@@ -192,6 +212,12 @@ public:
      * Read switch status for all switches and update their information
      */
     virtual dcgmReturn_t ReadNvSwitchStatusAllSwitches() = 0;
+
+    /*************************************************************************/
+    /**
+     * Read IB CX cards status for all IB CX cards and update their information
+     */
+    virtual dcgmReturn_t ReadIbCxStatusAllIbCxCards();
 
     /*************************************************************************/
     /**

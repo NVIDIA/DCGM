@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -501,3 +501,38 @@ def test_nvvs_executes_directly(handle, gpuIds):
     nvvs.start(timeout=60)
     retValue = nvvs.wait()
     assert retValue == 0, f"Actual ret: [{retValue}]"
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_current_system_injection_nvml()
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.for_all_same_sku_gpus()
+def test_software_parameters(handle, gpuIds):
+    def mock_persistence_mode_off():
+        injectedRet = nvml_injection.c_injectNvmlRet_t()
+        injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+        injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_ENABLESTATE
+        injectedRet.values[0].value.EnableState = 0
+        injectedRet.valueCount = 1
+        ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuIds[0], "PersistenceMode", None, 0, injectedRet)
+        assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    mock_persistence_mode_off()
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]])
+    dd.AddParameter("software.require_persistence_mode=true")
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert response.numTests == 1, f"actual number of tests: [{response.numTests}]"
+    assert response.tests[0].name == "software", f"actual test name: [{response.tests[0].name}]"
+    assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"actual result: [{response.tests[0].result}]"
+    assert response.numErrors == 1, f"actual number of errors: [{response.numErrors}]"
+    assert response.errors[0].msg.find("Persistence Mode") != -1, f"actual error: [{response.errors[0].msg}]"
+
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]])
+    dd.AddParameter("software.require_persistence_mode=false")
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert response.numTests == 1, f"actual number of tests: [{response.numTests}]"
+    assert response.tests[0].name == "software", f"actual test name: [{response.tests[0].name}]"
+    assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"actual result: [{response.tests[0].result}]"
+    assert response.numErrors == 0, f"actual number of errors: [{response.numErrors}]"

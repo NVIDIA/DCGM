@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "L1TagCuda.h"
-#include "newrandom.h"
+#include "L1CudaUtils.h"
+
+#include <curand_kernel.h>
 
 __device__ void ReportError
 (
@@ -65,12 +66,12 @@ extern "C" __global__ void InitL1Data(const L1TagParams params)
     uint32_t* buf = GetPtr<uint32_t*>(params.data + smid * smidDataBytes);
 
     // Init RNG (each SM data region will have the same data)
-    unsigned64 s[2];
-    InitRand<2>(s, params.randSeed + threadIdx.x);
+    curandState state {};
+    curand_init(params.randSeed + threadIdx.x, 0, 0, &state);
 
     for (uint32_t i = threadIdx.x; i < smidDataBytes / sizeof(*buf); i += blockDim.x)
     {
-        const uint16_t rnd = static_cast<uint16_t>(FastRand(s) >> 48);
+        const uint16_t rnd = static_cast<uint16_t>(static_cast<uint32_t>(curand_uniform(&state) * UINT32_MAX) >> 16);
         buf[i] = EncodeOffset(i, rnd);
     }
 }
@@ -91,9 +92,9 @@ extern "C" __global__ void L1TagTest(const L1TagParams params)
     uint32_t* buf = GetPtr<uint32_t*>(params.data + smid * smidDataBytes);
 
     // Init RNG (each SM will use the same seed, for equivalent data accesses)
-    unsigned64 s[2];
-    InitRand<2>(s, params.randSeed + hwtid);
-    uint32_t rnd = static_cast<uint32_t>(FastRand(s));
+    curandState state {};
+    curand_init(params.randSeed + hwtid, 0, 0, &state);
+    uint32_t rnd = static_cast<uint32_t>(curand_uniform(&state) * UINT32_MAX);
 
     // Run the test for the specified iterations
     for (uint64_t iter = 0; iter < params.iterations; iter++)
@@ -168,7 +169,7 @@ extern "C" __global__ void L1TagTest(const L1TagParams params)
             }
 
             // Always use a new random offset
-            rnd = static_cast<uint32_t>(FastRand(s));
+            rnd = static_cast<uint32_t>(curand_uniform(&state) * UINT32_MAX);
         }
     }
 }

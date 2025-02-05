@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,14 @@
 #include <unordered_map>
 
 /*****************************************************************************/
+/* Enum of Bandwidth direction types (ALL, TX, RX) */
+typedef enum
+{
+    DcgmcmDirectionAll = 0,
+    DcgmcmDirectionTx,
+    DcgmcmDirectionRx
+} DcgmcmDirection_t;
+
 /* Summary information types */
 typedef enum
 {
@@ -315,6 +323,18 @@ using dcgmcm_runtime_stats_p = dcgmcm_runtime_stats_t *;
    overflow in the update thread by storing large objects on the heap */
 typedef struct dcgmcm_update_thread_t
 {
+    dcgmcm_update_thread_t()
+        : watchInfo(nullptr)
+        , fvBuffer(nullptr)
+        , affectedSubscribers(0)
+        , m_ownFvBuffer(false)
+    {
+        memset(&entityKey, 0, sizeof(entityKey));
+        memset(numFieldValues, 0, sizeof(numFieldValues));
+        memset(fieldValueFields, 0, sizeof(fieldValueFields));
+        memset(fieldValueWatchInfo, 0, sizeof(fieldValueWatchInfo));
+    }
+
     /* Information about the entity currently being worked on */
     dcgm_entity_key_t entityKey;   /* Key information for the current entity */
     dcgmcm_watch_info_p watchInfo; /* Optional cached pointer to the watch object for this entity.
@@ -334,6 +354,51 @@ typedef struct dcgmcm_update_thread_t
     dcgm_field_meta_p fieldValueFields[DCGM_MAX_NUM_DEVICES][NVML_FI_MAX]; /* Fields to update with field-value APIs
                                                                               rather than CacheLatest*Value() */
     dcgmcm_watch_info_p fieldValueWatchInfo[DCGM_MAX_NUM_DEVICES][NVML_FI_MAX]; /* Watch info for field values */
+
+    /*************************************************************************/
+    /*
+     * Clear a thread context variable so it's ready for next use.
+     *
+     * This should do as few memsets as possible as this is in the critical path
+     * for live field-value processing.
+     */
+    void Clear()
+    {
+        /* Clear the field-values counts */
+        memset(numFieldValues, 0, sizeof(numFieldValues));
+        watchInfo = nullptr;
+        if (fvBuffer)
+        {
+            fvBuffer->Clear();
+        }
+        affectedSubscribers = 0;
+    }
+
+    /*************************************************************************/
+    /*
+     * Allocate fvBuffer and set the ownFvBuffer flag to indicate that the destructor can safely delete it.
+     *
+     * In some instances, fvBuffer may be assigned a pre-allocated value or a pointer to a stack object passed
+     * through a function argument. To prevent deletion of fvBuffer in these cases, we need to avoid setting the
+     * ownFvBuffer flag by not calling initFvBuffer.
+     */
+    void initFvBuffer()
+    {
+        fvBuffer      = new DcgmFvBuffer();
+        m_ownFvBuffer = true;
+    }
+
+    ~dcgmcm_update_thread_t()
+    {
+        if (m_ownFvBuffer && fvBuffer)
+        {
+            delete fvBuffer;
+        }
+    }
+
+private:
+    bool m_ownFvBuffer;
+
 } dcgmcm_update_thread_t, *dcgmcm_update_thread_p;
 
 /*****************************************************************************/
@@ -1073,7 +1138,7 @@ public:
      *                         any stat should be updated (minimum timestamp)
      *
      */
-    dcgmReturn_t ActuallyUpdateAllFields(dcgmcm_update_thread_t *threadCtx, timelib64_t *earliestNextUpdate);
+    dcgmReturn_t ActuallyUpdateAllFields(dcgmcm_update_thread_t &threadCtx, timelib64_t *earliestNextUpdate);
 
     /*************************************************************************/
     /*
@@ -1282,7 +1347,7 @@ public:
     /*
      * Get and store the affinity information from NVML for this box
      */
-    dcgmReturn_t CacheTopologyAffinity(dcgmcm_update_thread_t *threadCtx, timelib64_t now, timelib64_t expireTime);
+    dcgmReturn_t CacheTopologyAffinity(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
 
     /*************************************************************************/
     /*
@@ -1320,7 +1385,7 @@ public:
      * Returns 0 if ok
      *         DCGM_ST_* on module error
      */
-    dcgmReturn_t CacheTopologyNvLink(dcgmcm_update_thread_t *threadCtx, timelib64_t now, timelib64_t expireTime);
+    dcgmReturn_t CacheTopologyNvLink(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
 
     /*************************************************************************/
     /*
@@ -1564,21 +1629,21 @@ public:
      *         DCGM_ST_? #define on error
      *
      */
-    dcgmReturn_t AppendEntityString(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendEntityString(dcgmcm_update_thread_t &threadCtx,
                                     const char *value,
                                     timelib64_t timestamp,
                                     timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityDouble(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendEntityDouble(dcgmcm_update_thread_t &threadCtx,
                                     double value1,
                                     double value2,
                                     timelib64_t timestamp,
                                     timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityInt64(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendEntityInt64(dcgmcm_update_thread_t &threadCtx,
                                    long long value1,
                                    long long value2,
                                    timelib64_t timestamp,
                                    timelib64_t oldestKeepTimestamp);
-    dcgmReturn_t AppendEntityBlob(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendEntityBlob(dcgmcm_update_thread_t &threadCtx,
                                   void *value,
                                   int valueSize,
                                   timelib64_t timestamp,
@@ -1631,7 +1696,7 @@ public:
                                               dcgmFabricManagerStatus_t &status,
                                               uint64_t &fmError);
 
-    dcgmReturn_t ReadFabricManagerStatusField(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t ReadFabricManagerStatusField(dcgmcm_update_thread_t &threadCtx,
                                               nvmlDevice_t nvmlDevice,
                                               dcgm_field_meta_p fieldMeta,
                                               timelib64_t now,
@@ -1718,8 +1783,8 @@ private:
 
     DcgmInjectionNvmlManager m_nvmlInjectionManager;
 
-    dcgmcm_update_thread_t
-        *m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
+    std::unique_ptr<dcgmcm_update_thread_t>
+        m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
 
     bool m_nvmlLoaded; /* true if NVML was successfully loaded */
 
@@ -1748,7 +1813,7 @@ private:
      */
     void ReadAndCacheFBMemoryInfo(unsigned int gpuId,
                                   nvmlDevice_t nvmlDevice,
-                                  dcgmcm_update_thread_t *threadCtx,
+                                  dcgmcm_update_thread_t &threadCtx,
                                   dcgmcm_watch_info_p watchInfo,
                                   timelib64_t expireTime,
                                   unsigned short fieldId);
@@ -1759,14 +1824,14 @@ private:
      *
      * If any do, mark them in watchInfo->bufferedWatchers
      */
-    void MarkSubscribersInThreadCtx(dcgmcm_update_thread_t *threadCtx, dcgmcm_watch_info_p watchInfo);
+    void MarkSubscribersInThreadCtx(dcgmcm_update_thread_t &threadCtx, dcgmcm_watch_info_p watchInfo);
 
     /*************************************************************************/
     /*
      * Call callbacks for any FVs that have been buffered by this update thread
      *
      */
-    dcgmReturn_t UpdateFvSubscribers(dcgmcm_update_thread_t *updateCtx);
+    dcgmReturn_t UpdateFvSubscribers(dcgmcm_update_thread_t &updateCtx);
 
     /*************************************************************************/
     /*
@@ -1917,32 +1982,6 @@ private:
 
     /*************************************************************************/
     /*
-     * Initialize and clear a thread context variable so it's ready for next use.
-     *
-     * This should do as few memsets as possible as this is in the critical path
-     * for module-published field-value processing.
-     */
-    void InitAndClearThreadCtx(dcgmcm_update_thread_t *threadCtx);
-
-    /*************************************************************************/
-    /*
-     * Clear a thread context variable so it's ready for next use.
-     *
-     * This should do as few memsets as possible as this is in the critical path
-     * for live field-value processing.
-     */
-    void ClearThreadCtx(dcgmcm_update_thread_t *threadCtx);
-
-    /*************************************************************************/
-    /*
-     * Free the contents of a thread context variable. This does not free threadCtx
-     * itself in case it's part of another structure or on the stack
-     *
-     */
-    void FreeThreadCtx(dcgmcm_update_thread_t *threadCtx);
-
-    /*************************************************************************/
-    /*
      * Check to see if an accounting PID has already been cached at a given timestamp
      *
      * RETURNS: 1 if PID has been cached
@@ -1977,7 +2016,7 @@ private:
      * Returns 0 if OK
      *        <0 DCGM_ST_? on module error
      */
-    dcgmReturn_t BufferOrCacheLatestGpuValue(dcgmcm_update_thread_t *threadCtx, dcgm_field_meta_p fieldMeta);
+    dcgmReturn_t BufferOrCacheLatestGpuValue(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
     /*************************************************************************/
     /*
@@ -2064,12 +2103,12 @@ private:
      */
     bool IsModulePushedFieldId(unsigned int fieldId);
 
-    dcgmReturn_t AppendDeviceSupportedClocks(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendDeviceSupportedClocks(dcgmcm_update_thread_t &threadCtx,
                                              nvmlDevice_t nvmlDevice,
                                              timelib64_t timestamp,
                                              timelib64_t oldestKeepTimestamp);
 
-    dcgmReturn_t AppendDeviceAccountingStats(dcgmcm_update_thread_t *threadCtx,
+    dcgmReturn_t AppendDeviceAccountingStats(dcgmcm_update_thread_t &threadCtx,
                                              unsigned int pid,
                                              nvmlAccountingStats_t *nvmlAccountingStats,
                                              timelib64_t timestamp,
@@ -2077,16 +2116,24 @@ private:
 
     /*************************************************************************/
     /* Helper methods to cache individual metrics */
-    void ReadAndCacheNvLinkBandwidthTotal(dcgmcm_update_thread_t *threadCtx,
-                                          nvmlDevice_t nvmlDevice,
-                                          unsigned int scopeId,
-                                          timelib64_t expireTime);
+    void ReadAndCacheNvLinkBandwidth(dcgmcm_update_thread_t &threadCtx,
+                                     nvmlDevice_t nvmlDevice,
+                                     unsigned int scopeId,
+                                     DcgmcmDirection_t directon,
+                                     timelib64_t expireTime);
 
-    void ReadAndCacheNvLinkData(dcgmcm_update_thread_t *threadCtx,
+    void ReadAndCacheNvLinkData(dcgmcm_update_thread_t &threadCtx,
                                 nvmlNvLinkErrorCounter_t fieldId,
                                 nvmlDevice_t nvmlDevice,
                                 unsigned int scopeId,
                                 timelib64_t expireTime);
+
+    void ReadAndCacheErrorCounts(dcgmcm_update_thread_t &threadCtx,
+                                 nvmlDevice_t nvmlDevice,
+                                 nvmlMemoryErrorType_t errorType,
+                                 nvmlEccCounterType_t counterType,
+                                 nvmlMemoryLocation_t locationType,
+                                 timelib64_t expireTime);
 
     /*************************************************************************/
     /*
@@ -2100,7 +2147,7 @@ private:
      * gpuId         IN: ID of the GPU to fetch fields for
      *
      */
-    dcgmReturn_t ActuallyUpdateGpuFieldValues(dcgmcm_update_thread_t *threadCtx, unsigned int gpuId);
+    dcgmReturn_t ActuallyUpdateGpuFieldValues(dcgmcm_update_thread_t &threadCtx, unsigned int gpuId);
 
     /*************************************************************************/
     /*
@@ -2224,7 +2271,7 @@ private:
     /*
      * Inserts an NVML error value translated to the relevant field type.
      */
-    void InsertNvmlErrorValue(dcgmcm_update_thread_t *threadCtx,
+    void InsertNvmlErrorValue(dcgmcm_update_thread_t &threadCtx,
                               unsigned char fieldType,
                               nvmlReturn_t err,
                               timelib64_t expireTime);
@@ -2352,4 +2399,14 @@ private:
      * the cached GPU list. Updates the status of lost GPUs to DcgmEntityStatusLost.
      */
     void UpdateLostGpus();
+
+    /*************************************************************************/
+    /*
+     * Read the platform info fields using the nvmlDeviceGetPlatformInfo() API.
+     */
+    dcgmReturn_t ReadPlatformInfoFields(dcgmcm_update_thread_t &threadCtx,
+                                        nvmlDevice_t nvmlDevice,
+                                        dcgm_field_meta_p fieldMeta,
+                                        timelib64_t now,
+                                        timelib64_t expireTime);
 };

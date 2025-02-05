@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ nvmlBridgeChipInfo_t *nvmlBridgeChipInfo_tDeserializer(const YAML::Node &node);
 nvmlBridgeChipHierarchy_t *nvmlBridgeChipHierarchy_tDeserializer(const YAML::Node &node);
 nvmlViolationTime_t *nvmlViolationTime_tDeserializer(const YAML::Node &node);
 nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node);
+nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &node);
 nvmlClkMonFaultInfo_t *nvmlClkMonFaultInfo_tDeserializer(const YAML::Node &node);
 nvmlClkMonStatus_t *nvmlClkMonStatus_tDeserializer(const YAML::Node &node);
 nvmlClockOffset_t *nvmlClockOffset_tDeserializer(const YAML::Node &node);
@@ -67,6 +68,7 @@ nvmlProcessUtilizationSample_t *nvmlProcessUtilizationSample_tDeserializer(const
 nvmlProcessUtilizationInfo_v1_t *nvmlProcessUtilizationInfo_v1_tDeserializer(const YAML::Node &node);
 nvmlProcessesUtilizationInfo_t *nvmlProcessesUtilizationInfo_tDeserializer(const YAML::Node &node);
 nvmlEccSramErrorStatus_t *nvmlEccSramErrorStatus_tDeserializer(const YAML::Node &node);
+nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node);
 nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node);
 nvmlPowerValue_v2_t *nvmlPowerValue_v2_tDeserializer(const YAML::Node &node);
 nvmlVgpuHeterogeneousMode_t *nvmlVgpuHeterogeneousMode_tDeserializer(const YAML::Node &node);
@@ -78,6 +80,7 @@ nvmlVgpuInstancesUtilizationInfo_t *nvmlVgpuInstancesUtilizationInfo_tDeserializ
 nvmlVgpuProcessUtilizationSample_t *nvmlVgpuProcessUtilizationSample_tDeserializer(const YAML::Node &node);
 nvmlVgpuProcessUtilizationInfo_v1_t *nvmlVgpuProcessUtilizationInfo_v1_tDeserializer(const YAML::Node &node);
 nvmlVgpuProcessesUtilizationInfo_t *nvmlVgpuProcessesUtilizationInfo_tDeserializer(const YAML::Node &node);
+nvmlVgpuRuntimeState_t *nvmlVgpuRuntimeState_tDeserializer(const YAML::Node &node);
 nvmlVgpuSchedulerLogEntry_t *nvmlVgpuSchedulerLogEntry_tDeserializer(const YAML::Node &node);
 nvmlVgpuSchedulerLog_t *nvmlVgpuSchedulerLog_tDeserializer(const YAML::Node &node);
 nvmlVgpuSchedulerGetState_t *nvmlVgpuSchedulerGetState_tDeserializer(const YAML::Node &node);
@@ -1054,6 +1057,36 @@ nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &node)
+{
+    auto *marginTemperature = reinterpret_cast<nvmlMarginTemperature_t *>(malloc(sizeof(nvmlMarginTemperature_t)));
+    if (marginTemperature == nullptr)
+    {
+        return nullptr;
+    }
+    memset(marginTemperature, 0, sizeof(*marginTemperature));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        marginTemperature->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlMarginTemperature_t");
+    }
+    if (node["marginTemperature"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        marginTemperature->marginTemperature = node["marginTemperature"].as<int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing marginTemperature for struct nvmlMarginTemperature_t");
+    }
+    return marginTemperature;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlClkMonFaultInfo_t *nvmlClkMonFaultInfo_tDeserializer(const YAML::Node &node)
 {
     auto *clkMonFaultInfo = reinterpret_cast<nvmlClkMonFaultInfo_t *>(malloc(sizeof(nvmlClkMonFaultInfo_t)));
@@ -1640,6 +1673,92 @@ nvmlEccSramErrorStatus_t *nvmlEccSramErrorStatus_tDeserializer(const YAML::Node 
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node)
+{
+    auto *platformInfo_v1 = reinterpret_cast<nvmlPlatformInfo_v1_t *>(malloc(sizeof(nvmlPlatformInfo_v1_t)));
+    if (platformInfo_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(platformInfo_v1, 0, sizeof(*platformInfo_v1));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["ibGuid"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto ibGuid = node["ibGuid"].as<std::string>();
+        std::memcpy(&platformInfo_v1->ibGuid, ibGuid.data(), sizeof(platformInfo_v1->ibGuid));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing ibGuid for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["rackGuid"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto rackGuid = node["rackGuid"].as<std::string>();
+        std::memcpy(&platformInfo_v1->rackGuid, rackGuid.data(), sizeof(platformInfo_v1->rackGuid));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing rackGuid for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["chassisPhysicalSlotNumber"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->chassisPhysicalSlotNumber = node["chassisPhysicalSlotNumber"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing chassisPhysicalSlotNumber for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["computeSlotIndex"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->computeSlotIndex = node["computeSlotIndex"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing computeSlotIndex for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["nodeIndex"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->nodeIndex = node["nodeIndex"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing nodeIndex for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["peerType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->peerType = node["peerType"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing peerType for struct nvmlPlatformInfo_v1_t");
+    }
+    if (node["moduleId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        platformInfo_v1->moduleId = node["moduleId"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing moduleId for struct nvmlPlatformInfo_v1_t");
+    }
+    return platformInfo_v1;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
 {
     auto *platformInfo = reinterpret_cast<nvmlPlatformInfo_t *>(malloc(sizeof(nvmlPlatformInfo_t)));
@@ -1667,42 +1786,42 @@ nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
     {
         NVML_LOG_ERR("missing ibGuid for struct nvmlPlatformInfo_t");
     }
-    if (node["rackGuid"])
+    if (node["chassisSerialNumber"])
     {
         // The following snippet is generated from write_deserializer_definition
-        auto rackGuid = node["rackGuid"].as<std::string>();
-        std::memcpy(&platformInfo->rackGuid, rackGuid.data(), sizeof(platformInfo->rackGuid));
+        auto chassisSerialNumber = node["chassisSerialNumber"].as<std::string>();
+        std::memcpy(&platformInfo->chassisSerialNumber, chassisSerialNumber.data(), sizeof(platformInfo->chassisSerialNumber));
     }
     else
     {
-        NVML_LOG_ERR("missing rackGuid for struct nvmlPlatformInfo_t");
+        NVML_LOG_ERR("missing chassisSerialNumber for struct nvmlPlatformInfo_t");
     }
-    if (node["chassisPhysicalSlotNumber"])
+    if (node["slotNumber"])
     {
         // The following snippet is generated from write_deserializer_definition
-        platformInfo->chassisPhysicalSlotNumber = node["chassisPhysicalSlotNumber"].as<unsigned char>();
+        platformInfo->slotNumber = node["slotNumber"].as<unsigned char>();
     }
     else
     {
-        NVML_LOG_ERR("missing chassisPhysicalSlotNumber for struct nvmlPlatformInfo_t");
+        NVML_LOG_ERR("missing slotNumber for struct nvmlPlatformInfo_t");
     }
-    if (node["computeSlotIndex"])
+    if (node["trayIndex"])
     {
         // The following snippet is generated from write_deserializer_definition
-        platformInfo->computeSlotIndex = node["computeSlotIndex"].as<unsigned char>();
+        platformInfo->trayIndex = node["trayIndex"].as<unsigned char>();
     }
     else
     {
-        NVML_LOG_ERR("missing computeSlotIndex for struct nvmlPlatformInfo_t");
+        NVML_LOG_ERR("missing trayIndex for struct nvmlPlatformInfo_t");
     }
-    if (node["nodeIndex"])
+    if (node["hostId"])
     {
         // The following snippet is generated from write_deserializer_definition
-        platformInfo->nodeIndex = node["nodeIndex"].as<unsigned char>();
+        platformInfo->hostId = node["hostId"].as<unsigned char>();
     }
     else
     {
-        NVML_LOG_ERR("missing nodeIndex for struct nvmlPlatformInfo_t");
+        NVML_LOG_ERR("missing hostId for struct nvmlPlatformInfo_t");
     }
     if (node["peerType"])
     {
@@ -2267,6 +2386,36 @@ nvmlVgpuProcessesUtilizationInfo_t *nvmlVgpuProcessesUtilizationInfo_tDeserializ
         NVML_LOG_ERR("missing vgpuProcUtilArray for struct nvmlVgpuProcessesUtilizationInfo_t");
     }
     return vgpuProcessesUtilizationInfo;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlVgpuRuntimeState_t *nvmlVgpuRuntimeState_tDeserializer(const YAML::Node &node)
+{
+    auto *vgpuRuntimeState = reinterpret_cast<nvmlVgpuRuntimeState_t *>(malloc(sizeof(nvmlVgpuRuntimeState_t)));
+    if (vgpuRuntimeState == nullptr)
+    {
+        return nullptr;
+    }
+    memset(vgpuRuntimeState, 0, sizeof(*vgpuRuntimeState));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        vgpuRuntimeState->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlVgpuRuntimeState_t");
+    }
+    if (node["size"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        vgpuRuntimeState->size = node["size"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing size for struct nvmlVgpuRuntimeState_t");
+    }
+    return vgpuRuntimeState;
 }
 
 // The following snippet is generated from write_deserializer_definition
@@ -5722,6 +5871,26 @@ std::optional<NvmlFuncReturn> CoolerInfoParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> MarginTemperatureParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *marginTemperature = nvmlMarginTemperature_tDeserializer(node["ReturnValue"]);
+    if (marginTemperature == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {marginTemperature, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> ClockOffsetParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -5879,6 +6048,26 @@ std::optional<NvmlFuncReturn> EccSramErrorStatusParser(const YAML::Node &node)
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {eccSramErrorStatus, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> PlatformInfo_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *platformInfo_v1 = nvmlPlatformInfo_v1_tDeserializer(node["ReturnValue"]);
+    if (platformInfo_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {platformInfo_v1, true});
 }
 
 // The following snippet is generated from write_known_struct_parser
@@ -6099,6 +6288,26 @@ std::optional<NvmlFuncReturn> VgpuProcessesUtilizationInfoParser(const YAML::Nod
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {vgpuProcessesUtilizationInfo, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> VgpuRuntimeStateParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *vgpuRuntimeState = nvmlVgpuRuntimeState_tDeserializer(node["ReturnValue"]);
+    if (vgpuRuntimeState == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {vgpuRuntimeState, true});
 }
 
 // The following snippet is generated from write_known_struct_parser
@@ -7730,6 +7939,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         // The following snippet is generated from try_to_write_device_handler
         {"NumFans", BasicTypeParser<unsigned int, unsigned int>},
         // The following snippet is generated from try_to_write_device_handler
+        {"MarginTemperature", MarginTemperatureParser},
+        // The following snippet is generated from try_to_write_device_handler
         {"PerformanceState", BasicTypeParser<int, nvmlPstates_t>},
         // The following snippet is generated from try_to_write_device_handler
         {"CurrentClocksEventReasons", BasicTypeParser<unsigned long long, unsigned long long>},
@@ -7831,6 +8042,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         {"RowRemapperHistogram", RowRemapperHistogramValuesParser},
         // The following snippet is generated from try_to_write_device_handler
         {"Architecture", BasicTypeParser<int, nvmlDeviceArchitecture_t>},
+        // The following snippet is generated from try_to_write_device_handler
+        {"PlatformInfo", PlatformInfoParser},
         // The following snippet is generated from try_to_write_device_handler
         {"SupportedEventTypes", BasicTypeParser<unsigned long long, unsigned long long>},
         // The following snippet is generated from try_to_write_device_handler

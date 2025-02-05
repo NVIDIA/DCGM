@@ -81,42 +81,48 @@ def get_all_functions(test_file_names):
         file_path = script_directory + "/" + file + ".py" 
         file_name = file.split("/")[-1]
 
-        # open each file 
+        if file_name in files_to_not_parse:
+            continue
+
+        # open each file and read it
         with open(file_path, 'r') as f:
+            """
             lines = f.readlines()
+            """
 
-        decorators = []
-        in_comment_single = False
-        in_comment_double = False
-    
-        for line in lines:
-            line = line.rstrip()
-            if not in_comment_double:
-                if line.startswith("'''"):
-                    in_comment_single = not in_comment_single
+            data = f.read()
+
+        # Build an index of line number to file offset
+
+        line_map=[]
+        line_start = True
+
+        for i in range(len(data)):
+            if line_start:
+                line_map.append(i)
+                line_start = False
+        
+            if data[i] == '\n':
+                line_start = True
+
+        # Parse file
+
+        tree = ast.parse(data)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                if node.name[0:4] != "test":
                     continue
-
-                if in_comment_single:
-                    continue
-
-            if line.startswith('"""'):
-                in_comment_double = not in_comment_double
-                continue
-
-            if in_comment_double:
-                continue
-                
-            if line.startswith('@'):
-                if file_name not in files_to_not_parse:
-                    decorators.append(line)
-            elif line.startswith("def test_"):
-                function_decl = line[4 : -1]
-                function_parm_index = function_decl.find('(')
-                function_name = function_decl[:function_parm_index]
+        
+                function_name = node.name
 
                 if function_name in test_funcs_to_not_parse:
                     decorator_tuple = ()
                 else:
+                    decorators = []
+                    for decorator in node.decorator_list:
+                        if isinstance(decorator, ast.Call):
+                            decorators.append(data[line_map[decorator.lineno - 1] + decorator.col_offset -1:line_map[decorator.end_lineno - 1] + decorator.end_col_offset])
                     decorator_tuple = tuple(decorators)
 
                 if decorator_tuple in decorators_map:
@@ -125,7 +131,7 @@ def get_all_functions(test_file_names):
                     amortized_decorator_name = "test_custom_function_"+ str(decorator_index)
                     # map decorator tuple to amortized decorator name
                     decorators_map[decorator_tuple] = amortized_decorator_name
-
+                                              
                     # map amortized decorator name to functions
                     amortized_decorators_map[amortized_decorator_name] = [decorator_tuple, []]
                     decorator_index += 1
@@ -140,8 +146,6 @@ def get_all_functions(test_file_names):
                         continue
 
                 amortized_decorators_map[amortized_decorator_name][1].append([file, function_name])
-            else:
-                decorators = []
 
     return amortized_decorators_map
 

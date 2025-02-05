@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -481,8 +481,8 @@ class DcgmGroupAction:
     Returns a dcgm_structs.c_dcgmDiagResponse_v11 instance
     '''
     def Validate(self, validate):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
         runDiagInfo.validate = validate
         runDiagInfo.groupId = self._groupId
 
@@ -506,8 +506,8 @@ class DcgmGroupAction:
     Returns a dcgm_structs.c_dcgmDiagResponse_v5 instance
     '''
     def RunSpecificTest(self, testName):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
         for i in range(len(testName)):
             runDiagInfo.testNames[0][i] = testName[i]
         runDiagInfo.groupId = self._groupId

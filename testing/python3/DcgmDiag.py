@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,20 +21,24 @@ class DcgmDiag:
 
     # Maps version codes to simple version values for range comparisons
     _versionMap = {
-        dcgm_structs.dcgmRunDiag_version: 9,
+        dcgm_structs.dcgmRunDiag_version: 10,
         dcgm_structs.dcgmRunDiag_version7: 7,
         dcgm_structs.dcgmRunDiag_version8: 8,
         dcgm_structs.dcgmRunDiag_version9: 9,
+        dcgm_structs.dcgmRunDiag_version10: 10,
     }
 
-    def __init__(self, gpuIds=None, cpuIds=None, testNamesStr='', paramsStr='', verbose=True,
-                 version=dcgm_structs.dcgmRunDiag_version9, timeout=0):
+    def __init__(self, gpuIds=None, cpuIds=None, testNamesStr='', paramsStr='',
+                 ignoreErrorCodesStr='', verbose=True, version=dcgm_structs.dcgmRunDiag_version10, 
+                 timeout=0):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
             raise ValueError("'%s' is not a valid version for dcgmRunDiag." % version)
         self.version = version
 
-        if self.version == dcgm_structs.dcgmRunDiag_version9:
+        if self.version == dcgm_structs.dcgmRunDiag_version10:
+            self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+        elif self.version == dcgm_structs.dcgmRunDiag_version9:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
         elif self.version == dcgm_structs.dcgmRunDiag_version8:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v8()
@@ -48,6 +52,7 @@ class DcgmDiag:
         self.gpuList = ""
         self.cpuList = ""
         self.expectedNumGpus = ""
+        self.ignoreErrorCodes = ignoreErrorCodesStr
         self.SetVerbose(verbose)
         if testNamesStr == '':
             # default to a level 1 test
@@ -95,7 +100,10 @@ class DcgmDiag:
         if gpuIds:
             self.gpuList = ",".join([str(gpuId) for gpuId in gpuIds])
 
-        if self.version == dcgm_structs.dcgmRunDiag_version9:
+        if self.version == dcgm_structs.dcgmRunDiag_version10:
+            self.runDiagInfo.ignoreErrorCodes = self.ignoreErrorCodes
+
+        if self.version == dcgm_structs.dcgmRunDiag_version9 or self.version == dcgm_structs.dcgmRunDiag_version10:
             if len(self.gpuList) > 0 and len(self.cpuList) > 0:
                 self.runDiagInfo.entityIds = f"{self.gpuList},{self.cpuList}"
             elif len(self.gpuList) > 0:
@@ -111,7 +119,9 @@ class DcgmDiag:
             else:
                 self.runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
 
-        if self.version == dcgm_structs.dcgmRunDiag_version8 or self.version == dcgm_structs.dcgmRunDiag_version9:
+        if self.version == dcgm_structs.dcgmRunDiag_version8 or \
+                self.version == dcgm_structs.dcgmRunDiag_version9 or \
+                self.version == dcgm_structs.dcgmRunDiag_version10:
             self.runDiagInfo.expectedNumEntities = self.expectedNumGpus
 
         if logger.nvvs_trace_log_filename is not None:

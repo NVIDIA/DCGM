@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,11 @@ public:
      * The actual work is done from the task thread as to be thread safe.
      */
     void SetPeerByBusId(std::string peerBusId);
+
+    /**
+     * Take cuda device attributes.
+     */
+    CudaWorkerDevice_t const &GetCudaWorkerDevice() const;
 
     /*************************************************************************/
 private:

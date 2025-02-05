@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include "FieldIds.h"
 #include "NvSwitchData.h"
 #include "UpdateFunctions.h"
+#include "dcgm_fields.h"
+#include "dcgm_structs.h"
 
 #include "DcgmNscqManager.h"
 
@@ -1064,6 +1066,27 @@ dcgmReturn_t DcgmNscqManager::GetBackend(dcgm_nvswitch_msg_get_backend_t *msg)
     SafeCopyTo(msg->backendName, c_backendName);
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNscqManager::GetEntityList(unsigned int &count,
+                                            unsigned int *entities,
+                                            dcgm_field_entity_group_t entityGroup,
+                                            int64_t const flags)
+{
+    if (entityGroup == DCGM_FE_SWITCH)
+    {
+        return GetNvSwitchList(count, entities, flags);
+    }
+    if (entityGroup == DCGM_FE_LINK)
+    {
+        return GetNvLinkList(count, entities, flags);
+    }
+    if (entityGroup == DCGM_FE_CONNECTX)
+    {
+        count = 0;
+        return DCGM_ST_OK;
+    }
+    return DCGM_ST_NOT_SUPPORTED;
 }
 
 /*************************************************************************/

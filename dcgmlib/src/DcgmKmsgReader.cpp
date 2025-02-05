@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,12 +32,12 @@
 #include <string.h>
 #include <unistd.h>
 
-void ReadEnvXidAndUpdate(std::unordered_set<uint32_t> &xidsToParse)
+void ReadEnvXidAndUpdate(std::string_view envVar, std::unordered_set<uint32_t> &xidsToParse)
 {
-    char *xidGetEnv = getenv("__DCGM_XID_KMSG__");
+    char *xidGetEnv = getenv(envVar.data());
     if (!xidGetEnv)
     {
-        log_debug("__DCGM_XID_KMSG__ unset. Not loading");
+        log_debug("Env variable {} unset. Not loading", envVar.data());
         return;
     }
     std::string xidEnvOverride(xidGetEnv);
@@ -62,7 +62,7 @@ void ReadEnvXidAndUpdate(std::unordered_set<uint32_t> &xidsToParse)
         }
         catch (std::invalid_argument const &)
         {
-            log_warning("Env variable __DCGM_XID_KMSG__ not formatted correctly. Specify comma-separated numbers.");
+            log_warning("Env variable {} not formatted correctly. Specify comma-separated numbers.", envVar.data());
             return;
         }
     }
@@ -168,7 +168,7 @@ DcgmKmsgReaderThread::DcgmKmsgReaderThread()
 {
     try
     {
-        ReadEnvXidAndUpdate(m_xidsToParse);
+        ReadEnvXidAndUpdate("__DCGM_XID_KMSG__", m_xidsToParse);
         ReadEnvKmsgFilenameAndUpdate(m_kmsgFilename);
     }
     catch (const std::exception &e)

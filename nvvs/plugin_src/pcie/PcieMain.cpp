@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2255,7 +2255,15 @@ bool bg_check_error_conditions(BusGrind *bg,
         failureThresholds.push_back(dt);
     }
 
-    int ret = bg->m_dcgmRecorder.CheckErrorFields(fieldIds, &failureThresholds, gpuId, 1000, errorList, startTime);
+    std::vector<DcgmError> ignoredErrorList;
+    int ret = bg->m_dcgmRecorder.CheckErrorFields(
+        fieldIds, &failureThresholds, gpuId, 1000, errorList, ignoredErrorList, startTime);
+
+    for (auto const &error : ignoredErrorList)
+    {
+        auto newInfoMsg = SUPPRESSED_ERROR_STR + error.GetMessage();
+        bg->AddInfoVerboseForEntity(bg->GetPcieTestName(), error.GetEntity(), newInfoMsg);
+    }
 
     dcgmReturn_t st = bg_check_per_second_error_conditions(bg, gpuId, errorList, startTime);
     if (ret != DR_SUCCESS || st != DCGM_ST_OK)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,15 @@ DcgmGpuInstance::DcgmGpuInstance(DcgmNs::Mig::GpuInstanceId dcgmInstanceId,
             break;
         case NVML_GPU_INSTANCE_PROFILE_1_SLICE_REV2:
             m_sliceProfile = DcgmMigProfileGpuInstanceSlice1Rev2;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_1_SLICE_GFX:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice1GFX;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_2_SLICE_GFX:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice2GFX;
+            break;
+        case NVML_GPU_INSTANCE_PROFILE_4_SLICE_GFX:
+            m_sliceProfile = DcgmMigProfileGpuInstanceSlice4GFX;
             break;
         default:
             // In practice we cannot get here due to how we're instantiating things

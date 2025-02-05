@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2753,7 +2753,12 @@ dcgmReturn_t PhysicalGpu::RunSubtestNvLinkBandwidth(void)
                 break;
 
             case 8: // AMPERE
+            case 9: // HOPPER
                 nvLinkMbPerSec = 50000;
+                break;
+
+            case 10: // BLACKWELL
+                nvLinkMbPerSec = 100000;
                 break;
 
             default:

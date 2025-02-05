@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,12 +50,6 @@ public:
     void WrapperSetSoftwarePlugin(std::unique_ptr<Software> softwareObj);
     void createGpuObject();
     void destroyAllObjects();
-
-    // getters
-    std::string const &WrapperGetHeader()
-    {
-        return getHeader();
-    }
 
     std::map<std::string, std::string> const &WrapperGetTestNameMap() const
     {
@@ -134,11 +128,6 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
     WrapperSoftwareTestFramework softwareObj(softwareObjLocal.m_visibleGpus);
 
     // ---------------
-    // check the header
-    std::string headerValue = softwareObj.WrapperGetHeader();
-    REQUIRE(headerValue == "Software Deployment");
-
-    // ---------------
     // check the test map
     std::map<std::string, std::string> testMap = softwareObj.WrapperGetTestNameMap();
     std::vector<std::string> testNameVec       = { "CUDA Main Library",
@@ -166,7 +155,7 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
 
     // ---------------------------------------
     softwareObjLocal.destroyAllObjects();
-};
+}
 
 TEST_CASE("Test 2 - Init Test Name Map")
 {
@@ -195,8 +184,7 @@ TEST_CASE("Test 2 - Init Test Name Map")
 
     // ---------------
     softwareObjLocal.destroyAllObjects();
-};
-
+}
 
 TEST_CASE("Test 3 - Init Test Parameters Map")
 {
@@ -242,8 +230,7 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
 
     // ---------------
     softwareObjLocal.destroyAllObjects();
-};
-
+}
 
 TEST_CASE("Test 4 - Populate GPU Information")
 {
@@ -274,4 +261,4 @@ TEST_CASE("Test 4 - Populate GPU Information")
     REQUIRE(areEqual);
 
     softwareObjLocal.destroyAllObjects();
-};
+}

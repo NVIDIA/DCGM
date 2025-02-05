@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 include(utils)
 
 set(Cuda11_prefix usr/local/cuda-11.8)
-set(Cuda12_prefix usr/local/cuda-12.6)
+set(Cuda12_prefix usr/local/cuda-12.8)
 
 macro (load_cuda cuda_version)
     foreach (prefix ${Cuda${cuda_version}_prefix})

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1009,6 +1009,16 @@ private:
                 }
                 break;
             }
+            case INJECTION_MARGINTEMPERATURE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.MarginTemperaturePtr = static_cast<nvmlMarginTemperature_t *>(malloc(allocateNum * sizeof(*other.m_value.MarginTemperaturePtr)));
+                if (m_value.MarginTemperaturePtr != nullptr)
+                {
+                    std::memcpy(m_value.MarginTemperaturePtr, other.m_value.MarginTemperaturePtr, allocateNum * sizeof(*other.m_value.MarginTemperaturePtr));
+                }
+                break;
+            }
             case INJECTION_MASK255_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -1206,6 +1216,16 @@ private:
                 if (m_value.PlatformInfoPtr != nullptr)
                 {
                     std::memcpy(m_value.PlatformInfoPtr, other.m_value.PlatformInfoPtr, allocateNum * sizeof(*other.m_value.PlatformInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_PLATFORMINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PlatformInfo_v1Ptr = static_cast<nvmlPlatformInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PlatformInfo_v1Ptr)));
+                if (m_value.PlatformInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PlatformInfo_v1Ptr, other.m_value.PlatformInfo_v1Ptr, allocateNum * sizeof(*other.m_value.PlatformInfo_v1Ptr));
                 }
                 break;
             }
@@ -1706,6 +1726,16 @@ private:
                 if (m_value.VgpuProcessesUtilizationInfoPtr != nullptr)
                 {
                     std::memcpy(m_value.VgpuProcessesUtilizationInfoPtr, other.m_value.VgpuProcessesUtilizationInfoPtr, allocateNum * sizeof(*other.m_value.VgpuProcessesUtilizationInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_VGPURUNTIMESTATE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.VgpuRuntimeStatePtr = static_cast<nvmlVgpuRuntimeState_t *>(malloc(allocateNum * sizeof(*other.m_value.VgpuRuntimeStatePtr)));
+                if (m_value.VgpuRuntimeStatePtr != nullptr)
+                {
+                    std::memcpy(m_value.VgpuRuntimeStatePtr, other.m_value.VgpuRuntimeStatePtr, allocateNum * sizeof(*other.m_value.VgpuRuntimeStatePtr));
                 }
                 break;
             }
@@ -4727,6 +4757,36 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlMarginTemperature_t *MarginTemperaturePtr, bool inHeap = false)
+        : m_type(INJECTION_MARGINTEMPERATURE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MarginTemperaturePtr = MarginTemperaturePtr;
+    }
+    InjectionArgument(nvmlMarginTemperature_t MarginTemperature)
+        : m_type(INJECTION_MARGINTEMPERATURE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MarginTemperature = MarginTemperature;
+    }
+    InjectionArgument(nvmlMarginTemperature_t *MarginTemperaturePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_MARGINTEMPERATURE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.MarginTemperaturePtr = MarginTemperaturePtr;
+    }
+
+    nvmlMarginTemperature_t *AsMarginTemperaturePtr() const
+    {
+        return m_value.MarginTemperaturePtr;
+    }
+
+    nvmlMarginTemperature_t const &AsMarginTemperature() const
+    {
+        return m_value.MarginTemperature;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
     InjectionArgument(nvmlMask255_t *Mask255Ptr, bool inHeap = false)
         : m_type(INJECTION_MASK255_PTR), m_inHeap(inHeap)
     {
@@ -5324,6 +5384,36 @@ public:
     nvmlPlatformInfo_t const &AsPlatformInfo() const
     {
         return m_value.PlatformInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPlatformInfo_v1_t *PlatformInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PLATFORMINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfo_v1Ptr = PlatformInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlPlatformInfo_v1_t PlatformInfo_v1)
+        : m_type(INJECTION_PLATFORMINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfo_v1 = PlatformInfo_v1;
+    }
+    InjectionArgument(nvmlPlatformInfo_v1_t *PlatformInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PLATFORMINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PlatformInfo_v1Ptr = PlatformInfo_v1Ptr;
+    }
+
+    nvmlPlatformInfo_v1_t *AsPlatformInfo_v1Ptr() const
+    {
+        return m_value.PlatformInfo_v1Ptr;
+    }
+
+    nvmlPlatformInfo_v1_t const &AsPlatformInfo_v1() const
+    {
+        return m_value.PlatformInfo_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header
@@ -6764,6 +6854,36 @@ public:
     nvmlVgpuProcessesUtilizationInfo_t const &AsVgpuProcessesUtilizationInfo() const
     {
         return m_value.VgpuProcessesUtilizationInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlVgpuRuntimeState_t *VgpuRuntimeStatePtr, bool inHeap = false)
+        : m_type(INJECTION_VGPURUNTIMESTATE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuRuntimeStatePtr = VgpuRuntimeStatePtr;
+    }
+    InjectionArgument(nvmlVgpuRuntimeState_t VgpuRuntimeState)
+        : m_type(INJECTION_VGPURUNTIMESTATE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuRuntimeState = VgpuRuntimeState;
+    }
+    InjectionArgument(nvmlVgpuRuntimeState_t *VgpuRuntimeStatePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_VGPURUNTIMESTATE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.VgpuRuntimeStatePtr = VgpuRuntimeStatePtr;
+    }
+
+    nvmlVgpuRuntimeState_t *AsVgpuRuntimeStatePtr() const
+    {
+        return m_value.VgpuRuntimeStatePtr;
+    }
+
+    nvmlVgpuRuntimeState_t const &AsVgpuRuntimeState() const
+    {
+        return m_value.VgpuRuntimeState;
     }
 
     // The following snippet is generated from write_injection_argument_header

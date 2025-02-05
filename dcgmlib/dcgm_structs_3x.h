@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,20 @@ typedef struct
 #define dcgmNvLinkStatus_version3 MAKE_DCGM_VERSION(dcgmNvLinkStatus_v3, 3)
 
 DCGM_CASSERT(dcgmNvLinkStatus_version3 == (long)0x30015bc, 3);
+
+/**
+ * Version 1 of dcgmSettingsSetLoggingSeverity_t
+ */
+typedef struct
+{
+    int targetLogger;
+    DcgmLoggingSeverity_t targetSeverity;
+} dcgmSettingsSetLoggingSeverity_v1;
+
+
+#define dcgmSettingsSetLoggingSeverity_version1 MAKE_DCGM_VERSION(dcgmSettingsSetLoggingSeverity_v1, 1)
+
+DCGM_CASSERT(dcgmSettingsSetLoggingSeverity_version1 == (long)0x1000008, 1);
 
 #ifdef __cplusplus
 }

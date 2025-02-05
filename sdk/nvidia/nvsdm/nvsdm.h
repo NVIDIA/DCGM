@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+// Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 //
 // NVIDIA CORPORATION and its licensors retain all intellectual property
 // and proprietary rights in and to this software, related documentation
@@ -400,7 +400,8 @@ typedef enum
     NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_STATUS   = 7,
     NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_MASK     = 8,
     NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_SEVERITY = 9,
-    NVSDM_CONNECTX_TELEM_CTR_MAX                        = NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_SEVERITY,
+    NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE         = 10,
+    NVSDM_CONNECTX_TELEM_CTR_MAX                        = NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE,
     NVSDM_CONNECTX_TELEM_CTR_NONE                       = 9999,
 } nvsdmConnectXTelemCounter_t;
 

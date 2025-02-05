@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -3625,6 +3625,80 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
+ # B100 SKU PG525
+  - name: B100
+    id: 29bc
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 350.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 3416250
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~4555000. Multiply by .75 to get 3416250
+      target_stress: 3416250
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 1792500. Multiply by .75 to get 1344375
+      minimum_bandwidth: 1344375
+    pulse_test:
+      is_allowed: true
+  # SKU525_0200
+  - name: TS4
+    id: 2920
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 700.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 13200
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~17600. Multiply by .75 to get 13200
+      target_stress: 13200
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 3530000. Multiply by .75 to get 2647500
+      minimum_bandwidth: 2647500
+    pulse_test:
+      is_allowed: true
   - name: H100 144GB HBM3
     id: 2348
     targeted_power:
@@ -3660,6 +3734,46 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 measures ~3120000. Multiply by .75 to get ~2340000.00
       minimum_bandwidth: 2340000
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+  - name: B100 DevId 197f
+    id: 2920197f
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 850.00
+      use_dgemm: true
+      cuda_streams_per_gpu: 16
+      ops_per_requeue: 16
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 12300
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~16400. Multiply by .75 to get 12300
+      target_stress: 12300
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 5770000. Multiply by .75 to get 4327500
+      minimum_bandwidth: 4327500
     pulse_test:
       is_allowed: true
     nvbandwidth:

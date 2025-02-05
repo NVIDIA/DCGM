@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 # limitations under the License.
 import pydcgm
 import dcgm_agent
+from . import nvsdm_helpers
 import dcgm_structs
 import dcgm_structs_internal
 import dcgm_fields
@@ -263,3 +264,8 @@ def helper_is_active_link(linkId, linkStates):
         if linkStates.nvSwitches[i].linkState[linkId - 1] != dcgm_structs_internal.DcgmEntityStatusOk:
             return False
     return True
+
+@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_only_with_nvsdm_live()
+def test_nvsdm_live_pause_resume(handle):
+    nvsdm_helpers.helper_nvsdm_pause_resume(handle)

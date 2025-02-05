@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ target_link_libraries(nvswitch_interface
 target_link_libraries(nvswitch_objects
     PRIVATE
         nvswitch_interface
+        ${YAML_STATIC_LIBS}
 )
 
 set(SRCS 
@@ -44,12 +45,15 @@ set(SRCS
     FieldDefinitions.h
     FieldDefinitions.cpp
     dcgm_nvswitch_structs.h
+    NvsdmLib.cpp
+    NvsdmLib.h
 )
 
 target_sources(nvswitch_objects
     PRIVATE
         ${SRCS}
 )
+target_include_directories(nvswitch_objects PRIVATE ${YAML_INCLUDE_DIR})
 
 define_dcgm_module(dcgmmodulenvswitch)
 target_link_libraries(dcgmmodulenvswitch
@@ -60,6 +64,7 @@ target_link_libraries(dcgmmodulenvswitch
         module_common_objects
         dcgm_thread
         fmt::fmt
+        ${YAML_STATIC_LIBS}
 )
 target_sources(dcgmmodulenvswitch
     PRIVATE

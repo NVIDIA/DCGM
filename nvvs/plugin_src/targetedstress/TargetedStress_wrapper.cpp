@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle)
     m_testParameters->AddDouble(TS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_stress.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
 }
 
@@ -400,6 +401,9 @@ void ConstantPerf::Go(std::string const &testName,
         SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
+
+    ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
     /* Cache test parameters */
     m_useDgemm            = m_testParameters->GetBoolFromString(TS_STR_USE_DGEMM);

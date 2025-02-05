@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,9 +50,6 @@ extern DcgmSystem dcgmSystem;
 SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList)
     : m_entityList(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
-    // init class variables
-    m_header = "Software Deployment";
-
     // initalizing the test name map
     initTestNameMap();
 
@@ -185,7 +182,9 @@ void SoftwarePluginFramework::SetSoftwarePlugin(std::unique_ptr<Software> softwa
     m_softwareObj = std::move(softwareObj);
 }
 
-void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse, dcgmDiagPluginAttr_v1 const *pluginAttr)
+void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
+                                  dcgmDiagPluginAttr_v1 const *pluginAttr,
+                                  std::map<std::string, std::map<std::string, std::string>> const &userParms)
 {
     bool did = false;
 
@@ -209,9 +208,22 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse, dcgmDia
 
         // for each test, get the test parameters
         // convert the test parameters to c struct for software class
+        auto &tp = m_testParamMap[pair.second];
+        OverwriteTestParamtersIfAny(tp.get(), "software", userParms);
         std::vector<dcgmDiagPluginTestParameter_t> parameters = m_testParamMap[pair.second]->GetParametersAsStruct();
-        unsigned int numParameters                            = parameters.size();
-        dcgmDiagPluginTestParameter_t const *parms            = parameters.data();
+
+        // Add ignoreErrorCodes param here
+        if (!nvvsCommon.ignoreErrorCodesString.empty())
+        {
+            dcgmDiagPluginTestParameter_t ignoreErrorCodes;
+            SafeCopyTo(ignoreErrorCodes.parameterName, PS_IGNORE_ERROR_CODES);
+            SafeCopyTo(ignoreErrorCodes.parameterValue, nvvsCommon.ignoreErrorCodesString.c_str());
+            ignoreErrorCodes.type = DcgmPluginParamString;
+            parameters.push_back(std::move(ignoreErrorCodes));
+        }
+
+        unsigned int numParameters                 = parameters.size();
+        dcgmDiagPluginTestParameter_t const *parms = parameters.data();
 
         // run the test
         m_softwareObj->Go(m_softwareObj->GetSoftwareTestName(), m_entityList.get(), numParameters, parms);

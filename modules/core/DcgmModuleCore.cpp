@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
         {
             case DCGM_CORE_SR_SET_LOGGING_SEVERITY:
                 dcgmReturn = ProcessSetLoggingSeverity(*(dcgm_core_msg_set_severity_t *)moduleCommand);
+                break;
+            case DCGM_CORE_SR_LOGGING_CHANGED:
+                // Handled through ProcessSetLoggingSeverity to all modules.
                 break;
             case DCGM_CORE_SR_MIG_ENTITY_CREATE:
                 dcgmReturn = ProcessCreateMigEntity(*(dcgm_core_msg_create_mig_entity_t *)moduleCommand);

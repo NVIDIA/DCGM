@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,8 @@ static const char c_gpuId[] = "GPU ID";
 static const char c_info[]  = "Device Information";
 
 static const char c_switchId[] = "Switch ID";
+
+static const char c_cxId[] = "ConnectX";
 
 static const char c_cpuId[] = "CPU ID";
 
@@ -238,6 +240,31 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
         for (unsigned int i = 0; i < entityIds.size(); i++)
         {
             out[std::to_string(entityIds[i])][c_switchId] = entityIds[i];
+        }
+        std::cout << out.str();
+    }
+
+    {
+        DcgmiOutputColumns out;
+
+        DcgmiOutputFieldSelector ibCxIdSelector = DcgmiOutputFieldSelector().child(c_cxId);
+
+        out.addColumn(10, c_cxId, ibCxIdSelector);
+        /* display the NvSwitches in the system */
+
+        result = HelperGetEntityList(dcgmHandle, DCGM_FE_CONNECTX, entityIds);
+        if (DCGM_ST_OK != result && DCGM_ST_NOT_SUPPORTED != result && DCGM_ST_FUNCTION_NOT_FOUND != result)
+        {
+            std::cout << "Error: Cannot get ConnectX list from remote node. Return: " << errorString(result)
+                      << std::endl;
+            log_error("Cannot get ConnectX list from remote node. Return: {}", result);
+            return result;
+        }
+
+        std::cout << entityIds.size() << " ConnectX found." << std::endl;
+        for (auto const &entityId : entityIds)
+        {
+            out[std::to_string(entityId)][c_cxId] = entityId;
         }
         std::cout << out.str();
     }
@@ -960,7 +987,8 @@ dcgmReturn_t Query::HelperGetEntityList(dcgmHandle_t dcgmHandle,
     result = dcgmGetEntityGroupEntities(dcgmHandle, entityGroup, entities, &numItems, 0);
     if (DCGM_ST_OK != result)
     {
-        if (result != DCGM_ST_MODULE_NOT_LOADED)
+        if (result != DCGM_ST_MODULE_NOT_LOADED && DCGM_ST_NOT_SUPPORTED != result
+            && DCGM_ST_FUNCTION_NOT_FOUND != result)
         {
             std::cout << "Error: Cannot get devices from remote node. Return: " << errorString(result) << std::endl;
             log_error("Error discovering devices from remote node. Return: {}", result);

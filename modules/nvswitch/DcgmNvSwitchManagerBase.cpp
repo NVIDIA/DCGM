@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,9 +185,9 @@ dcgmReturn_t DcgmNvSwitchManagerBase::WatchField(const dcgm_field_entity_group_t
      * notifying watchers
      */
 
-    if ((entityGroupId != DCGM_FE_SWITCH) && (entityGroupId != DCGM_FE_LINK))
+    if ((entityGroupId != DCGM_FE_SWITCH) && (entityGroupId != DCGM_FE_LINK) && (entityGroupId != DCGM_FE_CONNECTX))
     {
-        log_error("entityGroupId must be DCGM_FE_SWITCH or DCGM_FE_LINK. Received {}", entityGroupId);
+        log_error("entityGroupId must be DCGM_FE_SWITCH, DCGM_FE_LINK or DCGM_FE_CONNECTX. Received {}", entityGroupId);
         return DCGM_ST_BADPARAM;
     }
 
@@ -218,11 +218,12 @@ dcgmReturn_t DcgmNvSwitchManagerBase::WatchField(const dcgm_field_entity_group_t
 
     for (unsigned int i = 0; i < numFieldIds; i++)
     {
-        if ((fieldIds[i] < DCGM_FI_FIRST_NVSWITCH_FIELD_ID) || (fieldIds[i] > DCGM_FI_LAST_NVSWITCH_FIELD_ID))
+        if (((fieldIds[i] < DCGM_FI_FIRST_NVSWITCH_FIELD_ID) || (fieldIds[i] > DCGM_FI_LAST_NVSWITCH_FIELD_ID))
+            && ((fieldIds[i] < DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID)
+                || (fieldIds[i] > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID)))
         {
-            log_debug("Skipping watching non-nvswitch field {}", fieldIds[i]);
+            log_debug("Skipping watching non supported field {}", fieldIds[i]);
         }
-
         m_watchTable.AddWatcher(entityGroupId, entityId, fieldIds[i], watcher, updateIntervalUsec, maxAgeUsec, false);
     }
 
@@ -535,6 +536,11 @@ dcgmReturn_t DcgmNvSwitchManagerBase::SetEntityNvLinkLinkState(dcgm_nvswitch_msg
     nvSwitch->nvLinkLinkState[msg->portIndex] = msg->linkState;
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmNvSwitchManagerBase::ReadIbCxStatusAllIbCxCards()
+{
+    return DCGM_ST_NOT_SUPPORTED;
 }
 
 /*************************************************************************/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@
 #include "dcgm_fields.h"
 #include <cstdlib>
 #include <cstring>
+
+namespace
+{
+constexpr unsigned int BLACKWELL_COMPAT = 10;
+} //namespace
 
 /*****************************************************************************/
 BusGrind::BusGrind(dcgmHandle_t handle)
@@ -70,6 +75,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     , m_matrixDim(0)
     , m_maxAer(1)
     , m_handle(handle)
+    , m_dcgmRecorderPtr(&m_dcgmRecorder, [](DcgmRecorderBase *) {})
 {
     m_infoStruct.testIndex        = DCGM_PCI_INDEX;
     m_infoStruct.shortDescription = "This plugin will exercise the PCIe bus for a given list of GPUs.";
@@ -89,6 +95,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     tp->AddDouble(PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP, 0.0);
     tp->AddString(PS_LOGFILE, "stats_pcie.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    tp->AddString(PS_IGNORE_ERROR_CODES, "");
 
     tp->AddString(PCIE_STR_IS_ALLOWED, "False");
 
@@ -104,23 +111,27 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     tp->AddDouble(PCIE_STR_PARALLEL_BW_CHECK_DURATION, 15.0);
     tp->AddString(PCIE_STR_DONT_BIND_NUMA, "False");
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, PCIE_DEFAULT_ITERATIONS);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
@@ -132,31 +143,38 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0);
     tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
+                         PCIE_STR_INTS_PER_COPY,
+                         PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
-        PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
+                         PCIE_STR_INTS_PER_COPY,
+                         PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_DEFAULT_INTS_PER_COPY);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
     tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0);
 
     tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_DEFAULT_BROKEN_P2P_SIZE);
+    tp->AddSubTestDouble(
+        PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE);
 
     /* SM Stress related parameters */
     tp->AddString(SMSTRESS_STR_USE_DGEMM, "True");
@@ -199,6 +217,15 @@ void BusGrind::Go(std::string const &testName,
 
     int st = NVVS_RESULT_SKIP;
 
+    if (SetCudaCapabilityInfo() != DCGM_ST_OK)
+    {
+        // The error has already been recorded and we cannot execute
+        SetResult(testName, NVVS_RESULT_FAIL);
+        return;
+    }
+
+    SetCopySizes();
+
     m_testParameters->SetFromStruct(numParameters, tpStruct);
 
     if (main_init(*this, *entityInfo) != DCGM_ST_OK)
@@ -209,23 +236,32 @@ void BusGrind::Go(std::string const &testName,
         return;
     }
 
-    if (m_testParameters->GetBoolFromString(PCIE_STR_IS_ALLOWED))
+    if (!m_testParameters->GetBoolFromString(PCIE_STR_IS_ALLOWED))
     {
-        st = main_entry(this, *entityInfo);
-        if (main_should_stop)
-        {
-            DcgmError d { DcgmError::GpuIdTag::Unknown };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
-            AddError(testName, d);
-            SetResult(testName, NVVS_RESULT_SKIP);
-            return;
-        }
-        else if (st)
-        {
-            // Fatal error in plugin or test could not be initialized
-            SetResult(testName, NVVS_RESULT_FAIL);
-            return;
-        }
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
+        AddInfo(testName, d.GetMessage());
+        SetResult(testName, NVVS_RESULT_SKIP);
+        return;
+    }
+
+    ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
+
+    st = main_entry(this, *entityInfo);
+    if (main_should_stop)
+    {
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ABORTED, d);
+        AddError(testName, d);
+        SetResult(testName, NVVS_RESULT_SKIP);
+        return;
+    }
+    else if (st)
+    {
+        // Fatal error in plugin or test could not be initialized
+        SetResult(testName, NVVS_RESULT_FAIL);
+        return;
     }
 
     if (m_testParameters->GetDouble(PS_SUITE_LEVEL) >= (double)NVVS_SUITE_PRODUCTION_TESTING
@@ -753,6 +789,75 @@ bool BusGrind::CheckPassFail(timelib64_t startTime, timelib64_t earliestStopTime
     }
 
     return allPassed;
+}
+
+/*****************************************************************************/
+
+
+/**
+ * @brief Overrides default copy sizes based on GPU (`m_cudaCompat`)
+ *
+ * Must be called before processing user-specified parameters.
+ */
+void BusGrind::SetCopySizes()
+{
+    auto &tp = *m_testParameters;
+
+    if (m_cudaCompat >= BLACKWELL_COMPAT)
+    {
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_BLACKWELL_DEFAULT_INTS_PER_COPY);
+        tp.SetSubTestDouble(
+            PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_BLACKWELL_DEFAULT_BROKEN_P2P_SIZE);
+        log_debug("Using copy sizes for Blackwell");
+    }
+    else
+    {
+        log_debug("Using copy sizes for GPUs prior to Blackwell");
+    }
+}
+
+/*****************************************************************************/
+
+dcgmReturn_t BusGrind::SetCudaCapabilityInfo()
+{
+    dcgmFieldValue_v2 cudaComputeVal = {};
+    auto const &gpuList              = m_tests.at(GetPcieTestName()).GetGpuList();
+    unsigned int const flags         = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
+    dcgmReturn_t ret                 = m_dcgmRecorderPtr->GetCurrentFieldValue(
+        gpuList[0], DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, cudaComputeVal, flags);
+
+
+    if (ret != DCGM_ST_OK)
+    {
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DCGM_API, d, "GetCurrentFieldValue");
+        d.AddDcgmError(ret);
+        AddError(GetPcieTestName(), d);
+        return ret;
+    }
+
+    m_cudaCompat = DCGM_CUDA_COMPUTE_CAPABILITY_MAJOR(cudaComputeVal.value.i64) >> 16;
+
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/

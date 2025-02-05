@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -142,6 +142,21 @@ DCGM_GROUP_ALL_ENTITIES = 0x7ffffffb
 DCGM_GROUP_NULL = 0x7ffffffa
 
 DCGM_GROUP_MAX_ENTITIES_V2 = 1024 #Maximum number of entities per entity group
+
+DCGM_CHIP_ARCH_OLDER     = 1,  # All GPUs older than Kepler
+DCGM_CHIP_ARCH_KEPLER    = 2,  # All Kepler-architecture parts
+DCGM_CHIP_ARCH_MAXWELL   = 3,  # All Maxwell-architecture parts
+DCGM_CHIP_ARCH_PASCAL    = 4,  # All Pascal-architecture parts
+DCGM_CHIP_ARCH_VOLTA     = 5,  # All Volta-architecture parts
+DCGM_CHIP_ARCH_TURING    = 6,  # All Turing-architecture parts
+DCGM_CHIP_ARCH_AMPERE    = 7,  # All Ampere-architecture parts
+DCGM_CHIP_ARCH_ADA       = 8,  # All Ada-architecture parts
+DCGM_CHIP_ARCH_HOPPER    = 9,  # All Hopper-architecture parts
+DCGM_CHIP_ARCH_T3X       = 11, # All T3x-architecture parts
+
+DCGM_CHIP_ARCH_COUNT     = 11, # Keep this 2nd to last, exclude unknown
+
+DCGM_CHIP_ARCH_UNKNOWN   = 0xffffffff # Anything else, likely something newer
 
 DCGM_CONFIG_TARGET_STATE  = 0          # The target configuration values to be applied
 DCGM_CONFIG_CURRENT_STATE = 1          # The current configuration state
@@ -1271,6 +1286,17 @@ class c_dcgmConfigPowerLimit(_PrintableStructure):
         ('val', c_uint)
     ]
 
+# DcgmLoggingSeverity_t
+#
+DcgmLoggingSeverityUnspecified = -1
+DcgmLoggingSeverityNone        = 0
+DcgmLoggingSeverityFatal       = 1
+DcgmLoggingSeverityError       = 2
+DcgmLoggingSeverityWarning     = 3
+DcgmLoggingSeverityInfo        = 4
+DcgmLoggingSeverityDebug       = 5
+DcgmLoggingSeverityVerbose     = 6
+
 
 class c_dcgmConfigPerfStateSettings_t(_PrintableStructure):
     _fields_ = [
@@ -2068,6 +2094,7 @@ DCGM_EXPECTED_ENTITIES_LEN = 50
 DCGM_FILE_LEN = 30
 DCGM_PATH_LEN = 128
 DCGM_CLOCKS_EVENT_MASK_LEN = 50
+DCGM_IGNORE_ERROR_MAX_LEN = 512
 DCGM_THROTTLE_MASK_LEN = DCGM_CLOCKS_EVENT_MASK_LEN # Deprecated: Use DCGM_CLOCKS_EVENT_MASK_LEN instead
 
 # Flags options for running the GPU diagnostic
@@ -2157,11 +2184,40 @@ class c_dcgmRunDiag_v9(_PrintableStructure):
 
 dcgmRunDiag_version9 = make_dcgm_version(c_dcgmRunDiag_v9, 9)
 
+class c_dcgmRunDiag_v10(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint), # version of this message
+        ('flags', c_uint), # flags specifying binary options for running it. Currently verbose and stats on fail
+        ('debugLevel', c_uint), # 0-5 for the debug level the GPU diagnostic will use for logging
+        ('groupId', c_void_p), # group of GPUs to verify. Cannot be specified together with entityIds. When entityIds is specified, this value should be set to DCGM_GROUP_NULL.
+        ('validate', c_uint), # 0-3 for which tests to run. Optional.
+        ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES), # Specifed list of test names. Optional.
+        ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS), # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN), # Comma-separated list of fake gpus. Cannot be specified with the groupId, entityIds or gpuList.
+        ('debugLogFile', c_char * DCGM_PATH_LEN), # Alternate name for the debug log file that should be used
+        ('statsPath', c_char * DCGM_PATH_LEN), # Path that the plugin's statistics files should be written to
+        ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN), # Contents of nvvs config file (likely yaml)
+        ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN), # Clocks event reasons to ignore as either integer mask or csv list of reasons
+        ('pluginPath', c_char * DCGM_PATH_LEN), # Custom path to the diagnostic plugins
+        ('currentIterations', c_uint), # The current iteration that will be executed
+        ('totalIterations', c_uint), # The total iterations that will be executed
+        ('timeoutSeconds', c_uint), # The timeout in seconds
+        ('_unusedBuf', c_char * DCGM_PATH_LEN), # Unused
+        ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN), # The expected number of entities the diag will run on.
+        ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN), # Comma-separated list of entity ids. Cannot be specified with the groupId.
+        ('watchFrequency', c_uint), # The watch frequency for fields being watched
+        ('ignoreErrorCodes', c_char * DCGM_IGNORE_ERROR_MAX_LEN), # String of error codes to be ignored on different entities
+
+    ]
+
+dcgmRunDiag_version10 = make_dcgm_version(c_dcgmRunDiag_v10, 10)
+
 # Latest c_dcgmRunDiag class
-c_dcgmRunDiag_t = c_dcgmRunDiag_v9
+c_dcgmRunDiag_t = c_dcgmRunDiag_v10
 
 # Latest version for dcgmRunDiag_t
-dcgmRunDiag_version = dcgmRunDiag_version9
+dcgmRunDiag_version = dcgmRunDiag_version10
 
 #Flags for dcgmGetEntityGroupEntities's flags parameter
 DCGM_GEGE_FLAG_ONLY_SUPPORTED = 0x00000001 #Only return entities that are supported by DCGM.
@@ -2361,6 +2417,16 @@ class c_dcgmVersionInfo_v2(_PrintableStructure):
 
 dcgmVersionInfo_version2 = make_dcgm_version(c_dcgmVersionInfo_v2, 2)
 dcgmVersionInfo_version = dcgmVersionInfo_version2
+
+class c_dcgmSettingsSetLoggingSeverity_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('targetLogger', c_uint32),
+        ('targetSeverity', c_uint32),
+    ]
+
+dcgmSettingsSetLoggingSeverity_version2 = make_dcgm_version(c_dcgmSettingsSetLoggingSeverity_v2, 2)
+dcgmSettingsSetLoggingSeverity_version = dcgmSettingsSetLoggingSeverity_version2
 
 # Fabric Manager status
 DcgmFMStatusNotSupported  = 0 # The Fabric Manager isn't supported for this GPU

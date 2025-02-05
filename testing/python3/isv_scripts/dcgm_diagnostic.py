@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,8 +50,8 @@ if __name__ == "__main__":
     with RunDCGM('127.0.0.1', dcgm_structs.DCGM_OPERATION_MODE_MANUAL) as handle:
        
         # The validate information should be packed in the dcgmRunDiag object 
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
     
         ## Create a default group. (Default group is comprised of all the GPUs on the node)
         ## Let's call the group as "all_gpus_group". The method returns an opaque handle (groupId) to

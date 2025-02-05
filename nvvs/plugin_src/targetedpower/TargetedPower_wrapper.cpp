@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ ConstantPower::ConstantPower(dcgmHandle_t handle)
     m_testParameters->AddString(TP_STR_IS_ALLOWED, "False");
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_power.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
 }
 
@@ -122,8 +123,6 @@ void ConstantPower::Cleanup()
 
         /* Synchronize the device in case any kernels are running in other streams we aren't tracking */
         cudaDeviceSynchronize();
-
-        delete device;
     }
 
     m_device.clear();
@@ -426,6 +425,9 @@ void ConstantPower::Go(std::string const &testName,
         return;
     }
 
+    ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
+
     /* Cache test parameters */
     m_useDgemv            = m_testParameters->GetBoolFromString(TP_STR_USE_DGEMV);
     m_useDgemm            = m_testParameters->GetBoolFromString(TP_STR_USE_DGEMM);
@@ -585,14 +587,14 @@ bool ConstantPower::EnforcedPowerLimitTooLow()
     double minRatio       = m_testParameters->GetDouble(TP_STR_TARGET_POWER_MIN_RATIO);
     double minRatioTarget = minRatio * m_targetPower;
     bool allTooLow        = true;
-
     for (size_t i = 0; i < m_device.size(); i++)
     {
         if (minRatioTarget >= m_device[i]->maxPowerTarget)
         {
             // Enforced power limit is too low. Skip the test.
             DcgmError d { m_device[i]->gpuId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ENFORCED_POWER_LIMIT, d, m_device[i]->gpuId, m_device[i]->maxPowerTarget);
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_ENFORCED_POWER_LIMIT, d, m_device[i]->gpuId, m_device[i]->maxPowerTarget, minRatioTarget);
             AddError(GetTargetedPowerTestName(), d);
             SetResultForGpu(GetTargetedPowerTestName(), m_device[i]->gpuId, NVVS_RESULT_SKIP);
             m_device[i]->m_lowPowerLimit = true;

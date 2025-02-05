@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ public:
     std::string const &GetDescription() const;
     std::vector<dcgmDiagCustomStats_t> const &GetCustomStats() const;
     std::vector<dcgmDiagErrorDetail_v2> const &GetErrors() const;
-    std::vector<dcgmDiagErrorDetail_v2> const &GetInfo() const;
+    std::vector<dcgmDiagInfo_v1> const &GetInfo() const;
     std::vector<dcgmDiagSimpleResult_t> const &GetResults() const;
     std::string const &GetTestCategory() const;
     dcgmDiagEntityResults_v1 const &GetEntityResults() const;
@@ -56,6 +56,7 @@ public:
 
     void AddError(dcgmDiagErrorDetail_v2 const &err);
     void AddCustomStats(dcgmDiagCustomStats_t const &customStats);
+    void AddInfo(dcgmDiagInfo_v1 const &info);
 
     void PopulateEntityResults(dcgmDiagEntityResults_v1 const &entityResult);
 
@@ -64,7 +65,7 @@ private:
     std::string m_description;
     std::vector<dcgmDiagCustomStats_t> m_customStats;
     std::vector<dcgmDiagErrorDetail_v2> m_errors;
-    std::vector<dcgmDiagErrorDetail_v2> m_info;
+    std::vector<dcgmDiagInfo_v1> m_info;
     std::vector<dcgmDiagSimpleResult_t> m_results;
     std::string m_testCategory;
     dcgm_field_entity_group_t m_targetEntityGroup;

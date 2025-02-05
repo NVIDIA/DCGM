@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,9 +83,9 @@ TEST_CASE("EntityListParser")
     {
         std::vector<dcgmGroupEntityPair_t> entityList;
         std::string err = DcgmNs::EntityListParser(
-            "{0-3},instance:0,compute_instance:{0-1},nvswitch:0,cpu:{0-3},core:{0-99}", entityList);
+            "{0-3},instance:0,compute_instance:{0-1},nvswitch:0,cpu:{0-3},core:{0-99},cx:{0-1}", entityList);
         CHECK(err.empty());
-        REQUIRE(entityList.size() == 112);
+        REQUIRE(entityList.size() == 114);
         size_t index = 0;
         for (unsigned int i = 0; i < 4; i++)
         {
@@ -122,6 +122,15 @@ TEST_CASE("EntityListParser")
             CHECK(entityList[index].entityId == i);
             index++;
         }
+
+        for (unsigned int i = 0; i < 2; i++)
+        {
+            CHECK(entityList[index].entityGroupId == DCGM_FE_CONNECTX);
+            CHECK(entityList[index].entityId == i);
+            index++;
+        }
+
+        index++;
     }
 
     SECTION("Unexpected entity ids")

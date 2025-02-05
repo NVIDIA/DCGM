@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,6 +119,7 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessage(dcgm_module_command_header_t *mo
             case DCGM_NVSWITCH_SR_GET_ENTITY_STATUS:
             case DCGM_NVSWITCH_SR_GET_LINK_IDS:
             case DCGM_NVSWITCH_SR_GET_BACKEND:
+            case DCGM_NVSWITCH_SR_GET_ENTITIES_IDS:
             {
                 processInTaskRunner = true;
             }
@@ -308,6 +309,21 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessMessageFromTaskRunner(dcgm_module_comman
                 break;
             }
 
+            case DCGM_NVSWITCH_SR_GET_ENTITIES_IDS:
+            {
+                retSt = CheckVersion(moduleCommand, dcgm_nvswitch_msg_get_entities_ids_version);
+                if (retSt != DCGM_ST_OK)
+                {
+                    log_error("Version mismatch, [{}] != [{}].",
+                              moduleCommand->version,
+                              dcgm_nvswitch_msg_get_entities_ids_version);
+                    return retSt;
+                }
+
+                retSt = ProcessGetEntityIds(reinterpret_cast<dcgm_nvswitch_msg_get_entities_ids_t *>(moduleCommand));
+                break;
+            }
+
             default:
                 DCGM_LOG_DEBUG << "Unknown subcommand: " << static_cast<int>(moduleCommand->subCommand);
                 return DCGM_ST_FUNCTION_NOT_FOUND;
@@ -344,6 +360,12 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessGetLinkIds(dcgm_nvswitch_msg_get_links_v
 dcgmReturn_t DcgmModuleNvSwitch::ProcessGetBackend(dcgm_nvswitch_msg_get_backend_t *msg)
 {
     return m_nvswitchMgr.GetBackend(msg);
+}
+
+dcgmReturn_t DcgmModuleNvSwitch::ProcessGetEntityIds(dcgm_nvswitch_msg_get_entities_ids_t *msg)
+{
+    msg->entitiesCount = DCGM_NVLINK_MAX_ENTITIES;
+    return m_nvswitchMgr.GetEntityList(msg->entitiesCount, msg->entities, msg->entityGroup, msg->flags);
 }
 
 /*****************************************************************************/
@@ -435,10 +457,24 @@ dcgmReturn_t DcgmModuleNvSwitch::ProcessCoreMessage(dcgm_module_command_header_t
     return retSt;
 }
 
+void DcgmModuleNvSwitch::RescanDevicesState()
+{
+    log_debug("Rescanning devices states");
+    auto dcgmReturn = m_nvswitchMgr.ReadNvSwitchStatusAllSwitches();
+    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED)
+    {
+        log_warning("ReadNvSwitchStatusAllSwitches() returned: [{}].", errorString(dcgmReturn));
+    }
+    dcgmReturn = m_nvswitchMgr.ReadIbCxStatusAllIbCxCards();
+    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED && dcgmReturn != DCGM_ST_NOT_SUPPORTED)
+    {
+        log_warning("ReadIbCxStatusAllIbCxCards() returned: [{}].", errorString(dcgmReturn));
+    }
+}
+
 /*****************************************************************************/
 unsigned int DcgmModuleNvSwitch::RunOnce()
 {
-    dcgmReturn_t dcgmReturn;
     timelib64_t nextUpdateTimeUsec;
     timelib64_t untilNextLinkStatusUsec;                       /* How long until our next switch status rescan */
     timelib64_t const linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
@@ -448,13 +484,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     untilNextLinkStatusUsec = -((now - m_lastLinkStatusUpdateUsec) - linkStatusRescanIntervalUsec);
     if (untilNextLinkStatusUsec <= 0)
     {
-        DCGM_LOG_DEBUG << "Rescanning switch states";
-        dcgmReturn = m_nvswitchMgr.ReadNvSwitchStatusAllSwitches();
-        if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED)
-        {
-            DCGM_LOG_WARNING << "ReadNvSwitchStatusAllSwitches() returned " << errorString(dcgmReturn);
-        }
-
+        RescanDevicesState();
         m_lastLinkStatusUpdateUsec = now;
         untilNextLinkStatusUsec    = linkStatusRescanIntervalUsec;
     }

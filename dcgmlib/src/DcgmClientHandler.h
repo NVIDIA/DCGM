@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,9 @@ public:
                                             size_t maxResponseSize,
                                             unsigned int timeoutMs = 60000);
 
+#ifndef DCGMLIB_TESTS
 private:
+#endif
     DcgmIpc m_dcgmIpc;
     std::atomic<dcgm_request_id_t> m_requestId = DCGM_REQUEST_ID_NONE;
     DcgmMutex m_mutex; /* Lock to use for threaded data structures */
@@ -94,7 +96,12 @@ private:
     /* A map of connectionId -> attributes for each connection */
     std::unordered_map<dcgm_connection_id_t, DCHConnectionAttributes> m_connectionAttributes;
 
-    dcgmReturn_t TryConnectingToHostEngine(char identifier[],
+    dcgmReturn_t splitIdentifierAndPort(std::string_view identifier,
+                                        bool const addressIsUnixSocket,
+                                        std::vector<char> &result,
+                                        unsigned int &portNumber);
+
+    dcgmReturn_t TryConnectingToHostEngine(char const identifier[],
                                            unsigned int portNumber,
                                            dcgmHandle_t *pDcgmHandle,
                                            bool addressIsUnixSocket,

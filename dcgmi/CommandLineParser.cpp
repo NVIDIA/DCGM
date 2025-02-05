@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1625,6 +1625,18 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                  "watch frquency",
                                                  cmd);
 
+    TCLAP::ValueArg<std::string> ignoreErrorCodes(
+        "",
+        "ignoreErrorCodes",
+        "Specify error codes to be ignored on specific entities. Only GPUs are supported at this time."
+        "Format: \n--ignoreErrorCodes \"28,140\" (ignore error codes 28 and 140 on all entities) \
+                 \n--ignoreErrorCodes \"gpu0:28;gpu1:140\" (ignore error 28 on GPU 0 and error 140 on GPU 1) \
+                 \n--ignoreErrorCodes \"*:*\" (ignore all errors that can be ignored on all entities)",
+        false,
+        "",
+        "ignoreErrorCodes",
+        cmd);
+
 
     // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
@@ -1652,6 +1664,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     helpOutput.addToGroup("1", &iterations);
     helpOutput.addToGroup("1", &timeout);
     helpOutput.addToGroup("1", &watchFrequency);
+    helpOutput.addToGroup("1", &ignoreErrorCodes);
 
     cmd.parse(argc, argv);
 
@@ -1777,9 +1790,9 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     }
     ValidateParameters(concatenatedParams);
 
-    dcgmRunDiag_v9 drd = {};
+    dcgmRunDiag_v10 drd = {};
 
-    drd.version = dcgmRunDiag_version9;
+    drd.version = dcgmRunDiag_version10;
     std::string error;
 
     // We set it to BLANK by default so the processes underneath can use the ENV
@@ -1811,6 +1824,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 entityIds.getValue(),
                                                 expectedNumEntities.getValue(),
                                                 watchFrequency.getValue(),
+                                                ignoreErrorCodes.getValue(),
                                                 error);
 
     if (result == DCGM_ST_BADPARAM)

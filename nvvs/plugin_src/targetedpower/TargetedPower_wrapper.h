@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,23 @@ public:
     int NdeviceC; /* Number of entries in deviceC that are valid */
 
     bool m_lowPowerLimit;
+
+    CPDevice()
+        : PluginDevice()
+        , maxPowerTarget(0)
+        , NcudaStreams(0)
+        , allocatedCublasHandle(0)
+        , cublasHandle(0)
+        , minMatrixDim(0)
+        , onlySmallAdjustments(0)
+        , deviceA(0)
+        , deviceB(0)
+        , NdeviceC(0)
+        , m_lowPowerLimit(false)
+    {
+        memset(cudaStream, 0, sizeof(cudaStream));
+        memset(deviceC, 0, sizeof(deviceC));
+    }
 
     CPDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
         : PluginDevice(testName, ndi, pciBusId, p)
@@ -254,6 +271,7 @@ private:
     void *m_hostB;
     void *m_hostC;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
+    friend class ConstantPowerTest;
 };
 
 

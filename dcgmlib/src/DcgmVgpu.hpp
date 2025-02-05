@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,14 +31,14 @@
  */
 dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
                                       nvmlDevice_t nvmlDevice,
-                                      dcgmcm_update_thread_t *threadCtx,
+                                      dcgmcm_update_thread_t &threadCtx,
                                       dcgmcm_watch_info_p watchInfo,
                                       timelib64_t now,
                                       timelib64_t expireTime);
 
 dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager *cm,
                                             nvmlVgpuInstance_t vgpuId,
-                                            dcgmcm_update_thread_t *threadCtx,
+                                            dcgmcm_update_thread_t &threadCtx,
                                             dcgmcm_watch_info_p watchInfo,
                                             timelib64_t now,
                                             timelib64_t expireTime);
@@ -51,6 +51,6 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager *cm,
  *        <0 DCGM_ST_? on module error
  */
 dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
-                                          dcgmcm_update_thread_t *threadCtx,
+                                          dcgmcm_update_thread_t &threadCtx,
                                           nvmlVgpuInstance_t vgpuId,
                                           dcgm_field_meta_p fieldMeta);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,23 @@
 
 /*****************************************************************************/
 /**
+ * Subrequest DCGM_DIAG_SR_RUN version 11
+ */
+typedef struct dcgm_diag_msg_run_v11
+{
+    dcgm_module_command_header_t header; /* Command header */
+
+    dcgmPolicyAction_t action;         /*  IN: Action to perform after running the diagnostic */
+    dcgmRunDiag_v10 runDiag;           /*  IN: Parameters for how to run the diagnostic */
+    dcgmDiagResponse_v11 diagResponse; /* OUT: Detailed specifics about how the diag run went */
+} dcgm_diag_msg_run_v11;
+
+#define dcgm_diag_msg_run_version11 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v11, 11)
+
+#define dcgm_diag_msg_run_version dcgm_diag_msg_run_version11
+
+/*****************************************************************************/
+/**
  * Subrequest DCGM_DIAG_SR_RUN version 10
  */
 typedef struct dcgm_diag_msg_run_v10
@@ -42,8 +59,6 @@ typedef struct dcgm_diag_msg_run_v10
 } dcgm_diag_msg_run_v10;
 
 #define dcgm_diag_msg_run_version10 MAKE_DCGM_VERSION(dcgm_diag_msg_run_v10, 10)
-
-#define dcgm_diag_msg_run_version dcgm_diag_msg_run_version10
 
 /*****************************************************************************/
 /**

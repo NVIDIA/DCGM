@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
     tp->AddString(MEMTEST_STR_TEST8, "False");
     tp->AddString(MEMTEST_STR_TEST9, "False");
     tp->AddString(MEMTEST_STR_TEST10, "True");
+    tp->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = tp;
 }
 
@@ -93,6 +94,8 @@ void MemtestPlugin::Go(std::string const &testName,
         SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
+
+    ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));
 
     int numGpus = 0;
     for (unsigned idx = 0; idx < entityInfo->numEntities; ++idx)
