@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 
 #define DCGM_INIT_UUID
 #include "DcgmDiagCommon.h"
+#include "DcgmGroupEntityPairHelpers.h"
 #include "DcgmStringHelpers.h"
 #include "DcgmUtilities.h"
 #include "EntityListHelpers.h"
@@ -188,20 +189,12 @@ std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiag
     return json["version"].asString();
 }
 
-/* Equality test for two entity pairs. DCGM-4223: This is cloned from
- * EntityListHelpers.cpp. Another clone exists in PluginTest.h.  These clones
- * should be consolidated in a single, common location. */
-static inline bool operator==(dcgmGroupEntityPair_t const &a, dcgmGroupEntityPair_t const &b)
-{
-    return std::tie(a.entityGroupId, a.entityId) == std::tie(b.entityGroupId, b.entityId);
-}
-
 /*****************************************************************************
  *****************************************************************************
  * RemoteDiagExecutor
  *****************************************************************************
  *****************************************************************************/
-RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v9 &drd)
+RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd)
     : m_handle(handle)
     , m_response(std::make_unique<dcgmDiagResponse_v11>())
     , m_result(DCGM_ST_OK)
@@ -246,7 +239,7 @@ Diag::~Diag()
 {}
 
 /*******************************************************************************/
-void Diag::setDcgmRunDiag(dcgmRunDiag_v9 *drd)
+void Diag::setDcgmRunDiag(dcgmRunDiag_v10 *drd)
 {
     memcpy(&this->m_drd, drd, sizeof(this->m_drd));
 }
@@ -1288,14 +1281,14 @@ StartDiag::StartDiag(const std::string &hostname,
                      const std::string &parms,
                      const std::string &configPath,
                      bool jsonOutput,
-                     dcgmRunDiag_v9 &drd,
+                     dcgmRunDiag_v10 &drd,
                      unsigned int iterations,
                      const std::string &pathToDcgmExecutable)
     : m_diagObj(iterations, hostname)
 
 {
     std::string configFileContents;
-    drd.version = dcgmRunDiag_version9;
+    drd.version = dcgmRunDiag_version10;
     m_hostName  = hostname;
 
     /* If the host address was overridden, complain if we can't connect.

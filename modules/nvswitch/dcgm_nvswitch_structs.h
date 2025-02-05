@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #define DCGM_NVSWITCH_SR_GET_ENTITY_STATUS   8
 #define DCGM_NVSWITCH_SR_GET_LINK_IDS        9
 #define DCGM_NVSWITCH_SR_GET_BACKEND         10
+#define DCGM_NVSWITCH_SR_GET_ENTITIES_IDS    11
 
 /*****************************************************************************/
 /**
@@ -183,6 +184,25 @@ typedef struct
 
 #define dcgm_nvswitch_msg_get_links_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_links_v1, 1)
 #define dcgm_nvswitch_msg_get_links_version  dcgm_nvswitch_msg_get_links_version1
+
+/*****************************************************************************/
+/**
+ * Subrequest to get entities list
+ */
+
+#define DCGM_NVLINK_MAX_ENTITIES 256
+
+typedef struct
+{
+    dcgm_module_command_header_t header; // Command header
+    unsigned int entitiesCount;
+    unsigned int entities[DCGM_NVLINK_MAX_ENTITIES];
+    dcgm_field_entity_group_t entityGroup;
+    int64_t flags;
+} dcgm_nvswitch_msg_get_entities_ids_v1, dcgm_nvswitch_msg_get_entities_ids_t;
+
+#define dcgm_nvswitch_msg_get_entities_ids_version1 MAKE_DCGM_VERSION(dcgm_nvswitch_msg_get_entities_ids_v1, 1)
+#define dcgm_nvswitch_msg_get_entities_ids_version  dcgm_nvswitch_msg_get_entities_ids_version1
 
 /*****************************************************************************/
 /**

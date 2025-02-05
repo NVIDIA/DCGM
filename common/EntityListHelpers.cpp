@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include "EntityListHelpers.h"
 #include "CpuHelpers.h"
+#include "DcgmGroupEntityPairHelpers.h"
 #include "DcgmLogging.h"
 #include "DcgmStringHelpers.h"
 #include "dcgm_agent.h"
@@ -54,12 +55,6 @@ bool AllDigits(std::string const &str)
 
 namespace DcgmNs
 {
-/* Equality test for two entity pairs. DCGM-4223: Code clones exist in Diag.cpp and PluginTest.h.
- * These clones should be consolidated in a single, common location. */
-bool operator==(dcgmGroupEntityPair_t const &left, dcgmGroupEntityPair_t const &right) noexcept
-{
-    return std::tie(left.entityGroupId, left.entityId) == std::tie(right.entityGroupId, right.entityId);
-}
 
 struct EntityMapTypedSentinel
 {};
@@ -494,6 +489,7 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                 {
                     static std::string const CPU("cpu");
                     static std::string const CORE("core");
+                    static std::string const CX("cx");
 
                     if (lowered == CPU)
                     {
@@ -502,6 +498,10 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
                     else if (lowered == CORE)
                     {
                         insertElem.entityGroupId = DCGM_FE_CPU_CORE;
+                    }
+                    else if (lowered == CX)
+                    {
+                        insertElem.entityGroupId = DCGM_FE_CONNECTX;
                     }
                     else
                     {

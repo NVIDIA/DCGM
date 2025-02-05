@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,10 @@ private:
     dcgmReturn_t ProcessPauseResumeMessage(PauseResumeMessage msg);
     dcgmReturn_t ProcessGetLinkIds(dcgm_nvswitch_msg_get_links_v1 *moduleCommand);
     dcgmReturn_t ProcessGetBackend(dcgm_nvswitch_msg_get_backend_t *moduleCommand);
+    dcgmReturn_t ProcessGetEntityIds(dcgm_nvswitch_msg_get_entities_ids_t *moduleCommand);
     std::chrono::system_clock::time_point TryRunOnce(bool forceRun);
+
+    void RescanDevicesState();
 
     /*
      */

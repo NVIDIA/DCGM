@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -265,6 +265,13 @@ unsigned int DcgmSystem::GetCudaMajorVersion()
                       errorString(ret));
             return 0;
         }
+    }
+
+    if (DCGM_INT64_IS_BLANK(cudaDriverValue.value.i64))
+    {
+        log_error("Unable to detect Cuda version. Please verify that nvml is present on the system, value: [{}].",
+                  cudaDriverValue.value.i64);
+        return 0;
     }
 
     m_cudaMajorVersion = cudaDriverValue.value.i64 / 1000;

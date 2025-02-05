@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,6 +88,8 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , diagResponseVersion(other.diagResponseVersion)
     , rerunAsRoot(other.rerunAsRoot)
     , watchFrequency(other.watchFrequency)
+    , ignoreErrorCodesString(other.ignoreErrorCodesString)
+    , parsedIgnoreErrorCodes(other.parsedIgnoreErrorCodes)
 {}
 
 NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
@@ -121,6 +123,8 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     diagResponseVersion    = other.diagResponseVersion;
     rerunAsRoot            = other.rerunAsRoot;
     watchFrequency         = other.watchFrequency;
+    ignoreErrorCodesString = other.ignoreErrorCodesString;
+    parsedIgnoreErrorCodes = other.parsedIgnoreErrorCodes;
 
     return *this;
 }
@@ -146,14 +150,16 @@ void NvvsCommon::Init()
     fakegpusString = "";
     parmsString    = "";
     parms.clear();
-    dcgmHostname          = "";
-    clocksEventIgnoreMask = DCGM_INT64_BLANK;
-    failEarly             = false;
-    failCheckInterval     = 5;
-    currentIteration      = 0;
-    totalIterations       = 1;
-    channelFd             = -1;
-    watchFrequency        = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
+    dcgmHostname           = "";
+    clocksEventIgnoreMask  = DCGM_INT64_BLANK;
+    failEarly              = false;
+    failCheckInterval      = 5;
+    currentIteration       = 0;
+    totalIterations        = 1;
+    channelFd              = -1;
+    watchFrequency         = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
+    ignoreErrorCodesString = "";
+    parsedIgnoreErrorCodes.clear();
 }
 
 void NvvsCommon::SetStatsPath(const std::string &statsPath)

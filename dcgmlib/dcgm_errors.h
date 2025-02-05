@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -340,7 +340,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
     "minimum allowed link generation of %d (parameter '%s')"
 #define DCGM_FR_ABORTED_MSG "Test was aborted early due to user signal"
 // Test name
-#define DCGM_FR_TEST_DISABLED_MSG "The %s test is skipped for this GPU."
+#define DCGM_FR_TEST_DISABLED_MSG "The %s test is skipped."
 // stat name, gpu id
 #define DCGM_FR_CANNOT_GET_STAT_MSG "Unable to generate / collect stat %s for GPU %u"
 // observed value, minimum allowed, gpu id

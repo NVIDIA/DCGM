@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,4 +65,170 @@ TEST_CASE("PluginLib: General")
 
     // Need to wait for DCGM-3857: support RetrieveResults getting dcgmDiagError_v1 () for testing the correctness of
     // plugin index
+}
+
+std::string GetStringParamValue(std::vector<dcgmDiagPluginTestParameter_t> const &parameters,
+                                std::string_view paramaterName)
+{
+    for (auto const &param : parameters)
+    {
+        if (std::string_view(param.parameterName) == paramaterName)
+        {
+            return param.parameterValue;
+        }
+    }
+    return "";
+}
+
+static inline bool operator==(dcgmDiagPluginTestParameter_t const &a, dcgmDiagPluginTestParameter_t const &b)
+{
+    return std::string_view(a.parameterName) == std::string_view(b.parameterName)
+           && std::string_view(a.parameterValue) == std::string_view(b.parameterValue) && a.type == b.type;
+}
+
+TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
+{
+    /* Initialize logging or the plugin will crash when it tries to log to us */
+    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
+
+    PluginLib pl;
+    dcgmReturn_t ret = pl.LoadPlugin("./libtestplugin.so", "software");
+    CHECK(ret == DCGM_ST_OK);
+
+    ret = pl.GetPluginInfo();
+    CHECK(ret == DCGM_ST_OK);
+
+    SECTION("Cmd line param overrides config file param")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr             = "gpu0:81";
+        std::string configFileIgnoreErrorCodesStr          = "gpu0:40;gpu1:101";
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap = { { { { DCGM_FE_GPU, 0 }, { 81 } } } };
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
+        std::vector<unsigned int> gpuIds                      = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(errStr.empty());
+
+        std::string paramValue = GetStringParamValue(parameters, PS_IGNORE_ERROR_CODES);
+        CHECK(paramValue == cmdLineIgnoreErrorCodesStr);
+        CHECK(localIgnoreErrorCodesMap == cmdLineIgnoreErrorCodesMap);
+    }
+
+    SECTION("New param inserted when only cmd line param available")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr             = "gpu0:81";
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap = { { { { DCGM_FE_GPU, 0 }, { 81 } } } };
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
+        std::vector<unsigned int> gpuIds                      = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(errStr.empty());
+
+        std::string paramValue = GetStringParamValue(parameters, PS_IGNORE_ERROR_CODES);
+        CHECK(paramValue == cmdLineIgnoreErrorCodesStr);
+        CHECK(localIgnoreErrorCodesMap == cmdLineIgnoreErrorCodesMap);
+    }
+
+    SECTION("No param update when both cmd line and config file params missing")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr;
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap;
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        std::vector<dcgmDiagPluginTestParameter_t> parameters          = tp.GetParametersAsStruct();
+        std::vector<dcgmDiagPluginTestParameter_t> localParametersCopy = parameters;
+        std::vector<unsigned int> gpuIds                               = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(errStr.empty());
+        CHECK(localParametersCopy == parameters);
+    }
+
+    SECTION("Config file param preserved when no cmd line parameter available")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr    = "";
+        std::string configFileIgnoreErrorCodesStr = "gpu0:40;gpu1:101";
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap;
+        gpuIgnoreErrorCodeMap_t configFileIgnoreErrorCodesMap
+            = { { { { DCGM_FE_GPU, 0 }, { 40 } }, { { DCGM_FE_GPU, 1 }, { 101 } } } };
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
+        std::vector<unsigned int> gpuIds                      = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(errStr.empty());
+
+        std::string paramValue = GetStringParamValue(parameters, PS_IGNORE_ERROR_CODES);
+        CHECK(paramValue == configFileIgnoreErrorCodesStr);
+        CHECK(localIgnoreErrorCodesMap == configFileIgnoreErrorCodesMap);
+    }
+
+    SECTION("Invalid config file param errors when no cmd line parameter available")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr    = "";
+        std::string configFileIgnoreErrorCodesStr = "gpu0;40;gpu1:101";
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap;
+        gpuIgnoreErrorCodeMap_t configFileIgnoreErrorCodesMap
+            = { { { { DCGM_FE_GPU, 0 }, { 40 } }, { { DCGM_FE_GPU, 1 }, { 101 } } } };
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
+        std::vector<unsigned int> gpuIds                      = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(!errStr.empty());
+    }
+
+    SECTION("Invalid config file param does not error when cmd line parameter available")
+    {
+        TestParameters tp;
+        std::string cmdLineIgnoreErrorCodesStr             = "gpu0:81";
+        std::string configFileIgnoreErrorCodesStr          = "gpu0::40;gpu1:101";
+        gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap = { { { { DCGM_FE_GPU, 0 }, { 81 } } } };
+        gpuIgnoreErrorCodeMap_t configFileIgnoreErrorCodesMap
+            = { { { { DCGM_FE_GPU, 0 }, { 40 } }, { { DCGM_FE_GPU, 1 }, { 101 } } } };
+        tp.AddString(PS_PLUGIN_NAME, "Software plugin");
+        tp.AddString(PS_TEST_NAME, "Dummy test");
+        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
+        std::vector<unsigned int> gpuIds                      = { 0, 1 };
+        ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
+
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        std::string errStr
+            = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
+        CHECK(errStr.empty());
+
+        std::string paramValue = GetStringParamValue(parameters, PS_IGNORE_ERROR_CODES);
+        CHECK(paramValue == cmdLineIgnoreErrorCodesStr);
+        CHECK(localIgnoreErrorCodesMap == cmdLineIgnoreErrorCodesMap);
+    }
 }

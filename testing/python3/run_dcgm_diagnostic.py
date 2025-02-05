@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -232,7 +232,7 @@ class TestRunner():
 
     ################################################################################
     def run(self):
-        self.dcgmiDiag.SetRunMode(3)
+        self.dcgmiDiag.SetRunMode(4)
         self.dcgmiDiag.SetConfigFile(None)
         failCount, exclusionCount = self.run_command(self.cycles)
         return [failCount, exclusionCount]
@@ -352,7 +352,7 @@ def main(cmdArgs):
     paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
-    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=3, 
+    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=4, 
                 debugLevel=5, debugFile=debugFile)
 
     # Start tests

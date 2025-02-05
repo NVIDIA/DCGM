@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ static std::string_view ConvertNvmlLicenseExpiryStatusToString(unsigned int lice
 
 dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
                                       nvmlDevice_t nvmlDevice,
-                                      dcgmcm_update_thread_t *threadCtx,
+                                      dcgmcm_update_thread_t &threadCtx,
                                       dcgmcm_watch_info_p watchInfo,
                                       timelib64_t now,
                                       timelib64_t expireTime)
@@ -146,7 +146,7 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
 
 dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
                                             nvmlVgpuInstance_t vgpuId,
-                                            dcgmcm_update_thread_t *threadCtx,
+                                            dcgmcm_update_thread_t &threadCtx,
                                             dcgmcm_watch_info_p watchInfo,
                                             timelib64_t now,
                                             timelib64_t expireTime)
@@ -231,17 +231,17 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
 
 /*****************************************************************************/
 dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
-                                          dcgmcm_update_thread_t *threadCtx,
+                                          dcgmcm_update_thread_t &threadCtx,
                                           nvmlVgpuInstance_t vgpuId,
                                           dcgm_field_meta_p fieldMeta)
 {
     timelib64_t now, expireTime;
     nvmlReturn_t nvmlReturn;
 
-    if (!threadCtx || !fieldMeta || fieldMeta->scope != DCGM_FS_DEVICE)
+    if (!fieldMeta || fieldMeta->scope != DCGM_FS_DEVICE)
         return DCGM_ST_BADPARAM;
 
-    dcgmcm_watch_info_p watchInfo = threadCtx->watchInfo;
+    dcgmcm_watch_info_p watchInfo = threadCtx.watchInfo;
 
     now = timelib_usecSince1970();
 

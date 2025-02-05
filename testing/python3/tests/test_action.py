@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -121,8 +121,8 @@ def helper_dcgm_action_run_diag_gpu_list(handle, gpuIds):
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
 
-    drd = dcgm_structs.c_dcgmRunDiag_v9()
-    drd.version = dcgm_structs.dcgmRunDiag_version9
+    drd = dcgm_structs.c_dcgmRunDiag_v10()
+    drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL #Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
     drd.entityIds = gpuIdStr
@@ -168,8 +168,8 @@ def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
         _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9)
 
     # GPUs are specified by group id
-    drd = dcgm_structs.c_dcgmRunDiag_v9()
-    drd.version = dcgm_structs.dcgmRunDiag_version9
+    drd = dcgm_structs.c_dcgmRunDiag_v10()
+    drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
@@ -180,8 +180,8 @@ def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_action_run_diag_entity_and_group_specified(handle, gpuIds):
-    drd = dcgm_structs.c_dcgmRunDiag_v9()
-    drd.version = dcgm_structs.dcgmRunDiag_version9
+    drd = dcgm_structs.c_dcgmRunDiag_v10()
+    drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
     drd.entityIds = str(gpuIds[0])

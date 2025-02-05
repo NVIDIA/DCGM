@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ nvvsPluginResult_t EarlyFailChecker::CheckCommonErrors(unsigned long checkTime,
     if (checkTime - m_lastCheckTime > m_failCheckInterval)
     {
         m_lastCheckTime = checkTime;
-        m_errors        = dcgmRecorder.CheckCommonErrors(*m_testParameters, startTime, result, m_entityInfos);
+        std::vector<DcgmError> ignoredErrors;
+        dcgmRecorder.CheckCommonErrors(*m_testParameters, startTime, result, m_entityInfos, m_errors, ignoredErrors);
         if (result == NVVS_RESULT_FAIL)
         {
             std::stringstream buf;

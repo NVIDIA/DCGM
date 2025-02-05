@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -234,6 +234,7 @@ typedef enum dcgm_field_entity_group_t
     DCGM_FE_LINK,     /*!< Field is associated with an NVLink */
     DCGM_FE_CPU,      /*!< Field is associated with a CPU node */
     DCGM_FE_CPU_CORE, /*!< Field is associated with a CPU */
+    DCGM_FE_CONNECTX, /*!< Field is associated with a ConnectX card */
 
     DCGM_FE_COUNT /*!< Number of elements in this enumeration. Keep this entry last */
 } dcgm_field_entity_group_t;
@@ -580,6 +581,10 @@ typedef unsigned int dcgm_field_eid_t;
  */
 #define DCGM_FI_DEV_GPU_MAX_OP_TEMP 152
 
+/**
+ * Thermal margin temperature (distance to nearest slowdown threshold) for this GPU
+ */
+#define DCGM_FI_DEV_GPU_TEMP_LIMIT 153
 
 /**
  * Power usage for the device in Watts
@@ -756,17 +761,17 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_PCIE_LINK_WIDTH 238
 
 /**
- * Power Violation time in usec
+ * Power Violation time in ns
  */
 #define DCGM_FI_DEV_POWER_VIOLATION 240
 
 /**
- * Thermal Violation time in usec
+ * Thermal Violation time in ns
  */
 #define DCGM_FI_DEV_THERMAL_VIOLATION 241
 
 /**
- * Sync Boost Violation time in usec
+ * Sync Boost Violation time in ns
  */
 #define DCGM_FI_DEV_SYNC_BOOST_VIOLATION 242
 
@@ -904,7 +909,6 @@ typedef unsigned int dcgm_field_eid_t;
  * Register file single bit volatile ECC errors
  */
 #define DCGM_FI_DEV_ECC_SBE_VOL_REG 320
-
 /**
  * Register file double bit volatile ECC errors
  */
@@ -979,6 +983,71 @@ typedef unsigned int dcgm_field_eid_t;
  * Note: monotonically increasing
  */
 #define DCGM_FI_DEV_ECC_DBE_AGG_TEX 333
+
+/**
+ * Texture SHM single bit volatile ECC errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_VOL_SHM 334
+
+/**
+ * Texture SHM double bit volatile ECC errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_VOL_SHM 335
+
+/**
+ * CBU single bit ECC volatile errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_VOL_CBU 336
+
+/**
+ * CBU double bit ECC volatile errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_VOL_CBU 337
+
+/**
+ * Texture SHM single bit aggregate ECC errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_AGG_SHM 338
+
+/**
+ * Texture SHM double bit aggregate ECC errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_AGG_SHM 339
+
+/**
+ * CBU single bit ECC aggregate errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_AGG_CBU 340
+
+/**
+ * CBU double bit ECC aggregate errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_AGG_CBU 341
+
+/**
+ * Turing and later fields
+ */
+
+/**
+ * SRAM single bit ECC volatile errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_VOL_SRM 342
+
+/**
+ * SRAM double bit ECC volatile errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_VOL_SRM 343
+
+/**
+ * SRAM single bit ECC aggregate errors
+ */
+#define DCGM_FI_DEV_ECC_SBE_AGG_SRM 344
+
+/**
+ * SRAM double bit ECC aggregate errors
+ */
+#define DCGM_FI_DEV_ECC_DBE_AGG_SRM 345
+
 
 /**
  * Result of the GPU Memory test
@@ -1670,6 +1739,41 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_MAX_VGPU_FIELDS DCGM_FI_LAST_VGPU_FIELD_ID - DCGM_FI_FIRST_VGPU_FIELD_ID
 
 /**
+ * Infiniband GUID string (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+ */
+#define DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID 571
+
+/**
+ * Serial number of the chassis containing this GPU
+ */
+#define DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER 572
+
+/**
+ * Slot number in the rack containing the GPU (includes switches)
+ */
+#define DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER 573
+
+/**
+ * Tray index within the compute slots in the chassis containing this GPU (does not include switches)
+ */
+#define DCGM_FI_DEV_PLATFORM_TRAY_INDEX 574
+
+/**
+ * Index of the node within the slot containing the GPU
+ */
+#define DCGM_FI_DEV_PLATFORM_HOST_ID 575
+
+/**
+ * Platform indicated NVLink-peer type (e.g. switch present or not)
+ */
+#define DCGM_FI_DEV_PLATFORM_PEER_TYPE 576
+
+/**
+ * ID of the GPU within the node
+ */
+#define DCGM_FI_DEV_PLATFORM_MODULE_ID 577
+
+/**
  * Starting ID for all the internal fields
  */
 #define DCGM_FI_INTERNAL_FIELDS_0_START 600
@@ -1956,6 +2060,101 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE7 824
 
 /**
+ * NV Link TX Bandwidth Counter for Lane 0
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L0 825
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 1
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L1 826
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 2
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L2 827
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 3
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L3 828
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 4
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L4 829
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 5
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L5 830
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 6
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L6 831
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 7
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L7 832
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 8
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L8 833
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 9
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L9 834
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 10
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L10 835
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 11
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L11 836
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 12
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L12 837
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 13
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L13 838
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 14
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L14 839
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 15
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L15 840
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 16
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L16 841
+
+/**
+ * NV Link TX Bandwidth Counter for Lane 17
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L17 842
+
+/**
+ * NV Link Bandwidth Counter total for all TX Lanes
+ */
+#define DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_TOTAL 843
+
+/**
  * NVSwitch fatal error information.
  * Note: value field indicates the specific SXid reported
  */
@@ -2070,6 +2269,101 @@ typedef unsigned int dcgm_field_eid_t;
  * NvLink device switch/link uid.
  */
 #define DCGM_FI_DEV_NVSWITCH_DEVICE_UUID 878
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 0
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L0 879
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 1
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L1 880
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 2
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L2 881
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 3
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L3 882
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 4
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L4 883
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 5
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L5 884
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 6
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L6 885
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 7
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L7 886
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 8
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L8 887
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 9
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L9 888
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 10
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L10 889
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 11
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L11 890
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 12
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L12 891
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 13
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L13 892
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 14
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L14 893
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 15
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L15 894
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 16
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L16 895
+
+/**
+ * NV Link RX Bandwidth Counter for Lane 17
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L17 896
+
+/**
+ * NV Link Bandwidth Counter total for all RX Lanes
+ */
+#define DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_TOTAL 897
 
 /**
  * Last field ID of the NVSwitch instance
@@ -2265,6 +2559,14 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
 /**
+ * C2C (Chip-to-Chip) interface metrics.
+ */
+#define DCGM_FI_PROF_C2C_TX_ALL_BYTES  1076
+#define DCGM_FI_PROF_C2C_TX_DATA_BYTES 1077
+#define DCGM_FI_PROF_C2C_RX_ALL_BYTES  1078
+#define DCGM_FI_PROF_C2C_RX_DATA_BYTES 1079
+
+/**
  * CPU Utilization, total
  */
 #define DCGM_FI_DEV_CPU_UTIL_TOTAL 1100
@@ -2420,9 +2722,74 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER 1215
 
 /**
+ * First field id of ConnectX
+ */
+#define DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID 1300
+
+/**
+ * Health state of ConnectX
+ */
+#define DCGM_FI_DEV_CONNECTX_HEALTH 1300
+
+/**
+ * Active PCIe link width
+ */
+#define DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_WIDTH 1301
+
+/**
+ * Active PCIe link speed
+ */
+#define DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_SPEED 1302
+
+/**
+ * Expect PCIe link width
+ */
+#define DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_WIDTH 1303
+
+/**
+ * Expect PCIe link speed
+ */
+#define DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_SPEED 1304
+
+/**
+ * Correctable error status
+ */
+#define DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS 1305
+
+/**
+ * Correctable error mask
+ */
+#define DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK 1306
+
+/**
+ * Uncorrectable error status
+ */
+#define DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS 1307
+
+/**
+ * Uncorrectable error mask
+ */
+#define DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK 1308
+
+/**
+ * Uncorrectable error severity
+ */
+#define DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY 1309
+
+/**
+ * Device temperature
+ */
+#define DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE 1310
+
+/**
+ * The last field id of ConnectX
+ */
+#define DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID 1399
+
+/**
  * 1 greater than maximum fields above. This is the 1 greater than the maximum field id that could be allocated
  */
-#define DCGM_FI_MAX_FIELDS 1216
+#define DCGM_FI_MAX_FIELDS 1311
 
 
 /** @} */

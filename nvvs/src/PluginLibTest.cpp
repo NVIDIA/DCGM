@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ std::vector<dcgmDiagErrorDetail_v2> const &PluginLibTest::GetErrors() const
     return m_errors;
 }
 
-std::vector<dcgmDiagErrorDetail_v2> const &PluginLibTest::GetInfo() const
+std::vector<dcgmDiagInfo_v1> const &PluginLibTest::GetInfo() const
 {
     return m_info;
 }
@@ -119,6 +119,20 @@ void PluginLibTest::SetTestParameters(TestParameters const &tp)
 void PluginLibTest::AddCustomStats(dcgmDiagCustomStats_t const &customStats)
 {
     m_customStats.push_back(customStats);
+}
+
+void PluginLibTest::AddInfo(dcgmDiagInfo_v1 const &info)
+{
+    m_info.push_back(info);
+    if (m_entityResult.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+    {
+        log_error("Too many info: skip the following: [{}].", info.msg);
+    }
+    else
+    {
+        m_entityResult.info[m_entityResult.numInfo] = info;
+        m_entityResult.numInfo++;
+    }
 }
 
 void PluginLibTest::AddError(dcgmDiagErrorDetail_v2 const &err)

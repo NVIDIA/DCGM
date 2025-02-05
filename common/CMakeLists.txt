@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
 add_subdirectory(DcgmThread)
 add_subdirectory(serialize)
 add_subdirectory(CudaWorker)
+add_subdirectory(CudaLib)
 
 add_subdirectory(transport)
+add_subdirectory(mock)
 add_subdirectory(tests)
 
 configure_file(DcgmBuildInfo.cpp.in DcgmBuildInfo.cpp @ONLY)
@@ -56,6 +58,7 @@ target_sources(dcgm_common PRIVATE
     DcgmFvBuffer.cpp
     DcgmFvBuffer.h
     DcgmGPUHardwareLimits.h
+    DcgmGroupEntityPairHelpers.h
     DcgmPolicyRequest.cpp
     DcgmPolicyRequest.h
     DcgmRequest.cpp
@@ -90,9 +93,8 @@ target_sources(dcgm_common PRIVATE
     TaskRunner.hpp
     ThreadSafeQueue.hpp
     TimeLib.cpp
-    LsHw.cpp
-    LsHw.h
-)
+    DcgmLib.cpp
+    DcgmLib.h)
 
 target_link_libraries(dcgm_common PUBLIC
     ${JSONCPP_STATIC_LIBS}

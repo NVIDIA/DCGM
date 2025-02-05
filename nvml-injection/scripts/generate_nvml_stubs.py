@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -430,7 +430,7 @@ def print_ungenerated_function(funcname, arg_types):
 
 def write_auto_generate_c_file_header(out_file):
     copyright_notice ='''/*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -451,7 +451,7 @@ def write_auto_generate_c_file_header(out_file):
 
 def write_auto_generate_py_file_header(out_file):
     copyright_notice ='''#
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1248,6 +1248,10 @@ c_type_mapping = {
 
 def is_pynvml_missing_struct(struct_name):
     struct_name_with_c_prefix = "c_" + struct_name
+    # To enable injecting function returns from NVML functions in Python code, we rely on the definitions provided by PyNVML.
+    # The following structures are not yet defined in PyNVML. To avoid import failures from nvml_injection_structs.py,
+    # we're temporarily skipping their generation. We'll revisit this when updating PyNVML and consider removing them from this list or
+    # adapting to its well-defined forms.
     missing = {
         "c_nvmlPciInfoExt_t",
         "c_nvmlNvLinkUtilizationControl_t",
@@ -1259,7 +1263,6 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlDeviceCurrentClockFreqs_t",
         "c_nvmlProcessesUtilizationInfo_t",
         "c_nvmlEccSramErrorStatus_t",
-        "c_nvmlPlatformInfo_t",
         "c_nvmlVgpuHeterogeneousMode_t",
         "c_nvmlVgpuPlacementId_t",
         "c_nvmlVgpuPlacementList_t",
@@ -1281,6 +1284,8 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlWorkloadPowerProfileProfilesInfo_t",
         "c_nvmlWorkloadPowerProfileCurrentProfiles_t",
         "c_nvmlWorkloadPowerProfileRequestedProfiles_t",
+        "c_nvmlMarginTemperature_t",
+        "c_nvmlVgpuRuntimeState_t",
     }
     return struct_name_with_c_prefix in missing
 
@@ -1350,14 +1355,27 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"healthMask\", c_uint),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
+        # PyNVML does not define c_nvmlPlatformInfo_t yet. Define separately here.
+        print_body_line('class c_nvmlPlatformInfo_t_dcgm_ver(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"version\", c_uint),", out_file, 2)
+        print_body_line("(\"ibGuid\", c_char * 16),", out_file, 2)
+        print_body_line("(\"chassisSerialNumber\", c_char * 16),", out_file, 2)
+        print_body_line("(\"slotNumber\", c_char),", out_file, 2)
+        print_body_line("(\"trayIndex\", c_char),", out_file, 2)
+        print_body_line("(\"hostId\", c_char),", out_file, 2)
+        print_body_line("(\"peerType\", c_char),", out_file, 2)
+        print_body_line("(\"moduleId\", c_char),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
         print_body_line('class c_simpleValue_t(Union):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
         for struct_name, _ in struct_with_member.items():
             variable_name, variable_name_ptr = get_struct_variable_name(struct_name)
             print_body_line(f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
             if is_pynvml_missing_struct(struct_name):
-                # we don't know the structure declarition now, just use void_p and wait for their updates.
-                print_body_line(f"(\"{variable_name}\", c_void_p),", out_file, 2)
+                # we don't know the structure declarition now, comment out and wait for PyNVML updates.
+                print_body_line(f"# (\"{variable_name}\", c_{struct_name}),", out_file, 2)
             elif struct_name == "nvmlDeviceAttributes_t" or struct_name == "nvmlRowRemapperHistogramValues_t":
                 # nvmlDeviceAttributes_t in PyNVML is c_nvmlDeviceAttributes
                 # nvmlRowRemapperHistogramValues_t in PyNVML is nvmlRowRemapperHistogramValues
@@ -1374,6 +1392,9 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
                 print_body_line(f"(\"{variable_name}\", {struct_name}),", out_file, 2)
             elif struct_name == "nvmlGpuFabricInfoV_t":
                 # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own definition
+                print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
+            elif struct_name == "nvmlPlatformInfo_t":
+                # nvmlPlatformInfo_t is not defined in PyNVML, add definition
                 print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             else:
                 # other nvml structures will add c_ as prefix in PyNVML

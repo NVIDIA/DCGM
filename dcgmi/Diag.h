@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ public:
     virtual ~Diag();
     dcgmReturn_t RunStartDiag(dcgmHandle_t mNvcmHandle);
 
-    void setDcgmRunDiag(dcgmRunDiag_v9 *drd);
+    void setDcgmRunDiag(dcgmRunDiag_v10 *drd);
     void setJsonOutput(bool jsonOutput);
     std::string Sanitize(std::string sanitize);
 
@@ -115,7 +115,7 @@ private:
 
     bool isWhitespace(char c) const;
 
-    dcgmRunDiag_v9 m_drd;
+    dcgmRunDiag_v10 m_drd;
     bool m_jsonOutput;
     unsigned int m_iterations;
     std::string m_hostname;
@@ -131,7 +131,7 @@ class RemoteDiagExecutor : public DcgmThread
 {
 public:
     /*****************************************************************************/
-    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v9 &drd);
+    RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd);
 
     /*****************************************************************************/
     void run(void) override;
@@ -144,7 +144,7 @@ public:
 
 private:
     dcgmHandle_t m_handle;
-    dcgmRunDiag_v9 m_drd;
+    dcgmRunDiag_v10 m_drd;
     std::unique_ptr<dcgmDiagResponse_v11> m_response;
     dcgmReturn_t m_result;
 };
@@ -160,7 +160,7 @@ public:
               const std::string &parms,
               const std::string &configPath,
               bool jsonOutput,
-              dcgmRunDiag_v9 &drd,
+              dcgmRunDiag_v10 &drd,
               unsigned int iterations,
               const std::string &pathToDcgmExecutable);
 

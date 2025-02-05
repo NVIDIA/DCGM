@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ TEST_CASE("ReadEnvXidAndUpdate")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
         SetEnv(XidEnvKey, "3");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 3);
         std::unordered_set<unsigned int> expectedXids = { 3, 79, 119 };
         CHECK(testXids == expectedXids);
@@ -144,7 +144,7 @@ TEST_CASE("ReadEnvXidAndUpdate")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
         SetEnv(XidEnvKey, "-79");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 1);
         std::unordered_set<unsigned int> expectedXids = { 119 };
         CHECK(testXids == expectedXids);
@@ -155,7 +155,7 @@ TEST_CASE("ReadEnvXidAndUpdate")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
         SetEnv(XidEnvKey, "-3");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
         CHECK(testXids == defaultXids);
         UnsetEnv(XidEnvKey);
@@ -165,7 +165,7 @@ TEST_CASE("ReadEnvXidAndUpdate")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
         SetEnv(XidEnvKey, "-79,3");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
         std::unordered_set<unsigned int> expectedXids = { 3, 119 };
         CHECK(testXids == expectedXids);
@@ -175,15 +175,15 @@ TEST_CASE("ReadEnvXidAndUpdate")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
         SetEnv(XidEnvKey, "-79, 3");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
 
         SetEnv(XidEnvKey, " 3");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
 
         SetEnv(XidEnvKey, "rubbish");
-        ReadEnvXidAndUpdate(testXids);
+        ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
         UnsetEnv(XidEnvKey);
     }

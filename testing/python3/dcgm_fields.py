@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,6 +126,7 @@ DCGM_FE_GPU_CI   = 5 # Field is associated with a GPU Compute Instance entity
 DCGM_FE_LINK     = 6 # Field is associated with an NVLINK
 DCGM_FE_CPU      = 7 # Field is associated with a CPU
 DCGM_FE_CPU_CORE = 8 # Field is associated with a CPU core
+DCGM_FE_CONNECTX    = 9 #Field is associated with a ConnectX card
 
 c_dcgm_field_eid_t = c_uint32 #Represents an identifier for an entity within a field entity. For instance, this is the gpuId for DCGM_FE_GPU.
 
@@ -196,6 +197,7 @@ DCGM_FI_DEV_MEMORY_TEMP         = 140 #Memory temperature for the device
 DCGM_FI_DEV_GPU_TEMP            = 150 #Current temperature readings for the device, in degrees C
 DCGM_FI_DEV_MEM_MAX_OP_TEMP     = 151 #Maximum operating temperature for the memory of this GPU
 DCGM_FI_DEV_GPU_MAX_OP_TEMP     = 152 #Maximum operating temperature for this GPU
+DCGM_FI_DEV_GPU_TEMP_TLIMIT     = 153 #Thermal margin temperature (distance to nearest slowdown threshold)
 DCGM_FI_DEV_POWER_USAGE         = 155 #Power usage for the device in Watts
 DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION = 156 #Total energy consumption for the GPU in mJ since the driver was last reloaded
 DCGM_FI_DEV_POWER_USAGE_INSTANT = 157 #Current instantaneous power usage of the device in Watts
@@ -252,6 +254,9 @@ DCGM_FI_DEV_ECC_SBE_VOL_TOTAL   = 310 #Total single bit volatile ecc errors
 DCGM_FI_DEV_ECC_DBE_VOL_TOTAL   = 311 #Total double bit volatile ecc errors
 DCGM_FI_DEV_ECC_SBE_AGG_TOTAL   = 312 #Total single bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_DBE_AGG_TOTAL   = 313 #Total double bit aggregate (persistent) ecc errors
+
+# Start of ECC Counters
+
 DCGM_FI_DEV_ECC_SBE_VOL_L1      = 314 #L1 cache single bit volatile ecc errors
 DCGM_FI_DEV_ECC_DBE_VOL_L1      = 315 #L1 cache double bit volatile ecc errors
 DCGM_FI_DEV_ECC_SBE_VOL_L2      = 316 #L2 cache single bit volatile ecc errors
@@ -272,6 +277,24 @@ DCGM_FI_DEV_ECC_SBE_AGG_REG     = 330 #Register File single bit aggregate (persi
 DCGM_FI_DEV_ECC_DBE_AGG_REG     = 331 #Register File double bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_SBE_AGG_TEX     = 332 #Texture memory single bit aggregate (persistent) ecc errors
 DCGM_FI_DEV_ECC_DBE_AGG_TEX     = 333 #Texture memory double bit aggregate (persistent) ecc errors
+
+DCGM_FI_DEV_ECC_SBE_VOL_SHM     = 334 #Texture SHM single bit volatile ECC erro
+DCGM_FI_DEV_ECC_DBE_VOL_SHM     = 335 #Texture SHM double bit volatile ECC errors
+DCGM_FI_DEV_ECC_SBE_VOL_CBU     = 336 #CBU single bit ECC volatile errors
+DCGM_FI_DEV_ECC_DBE_VOL_CBU     = 337 #CBU double bit ECC volatile errors
+DCGM_FI_DEV_ECC_SBE_AGG_SHM     = 338 #Texture SHM single bit aggregate ECC errors
+DCGM_FI_DEV_ECC_DBE_AGG_SHM     = 339 #Texture SHM double bit aggregate ECC errors
+DCGM_FI_DEV_ECC_SBE_AGG_CBU     = 340 #CBU single bit ECC aggregate errors
+DCGM_FI_DEV_ECC_DBE_AGG_CBU     = 341 #CBU double bit ECC aggregate errors
+
+# Turing and later fields
+
+DCGM_FI_DEV_ECC_SBE_VOL_SRM     = 342 #SRAM single bit ECC volatile errors
+DCGM_FI_DEV_ECC_DBE_VOL_SRM     = 343 #SRAM double bit ECC volatile errors
+DCGM_FI_DEV_ECC_SBE_AGG_SRM     = 344 #SRAM single bit ECC aggregate errors
+DCGM_FI_DEV_ECC_DBE_AGG_SRM     = 345 #SRAM double bit ECC aggregate errors
+
+# End of ECC Counters
 
 DCGM_FI_DEV_DIAG_MEMORY_RESULT           = 350 #Result of the GPU Memory test
 DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT       = 351 #Result of the Diagnostics test
@@ -435,6 +458,15 @@ DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO       = 531  #Information about active frame 
 DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE  = 532  #License state information of the vGPU instance
 DCGM_FI_DEV_VGPU_PCI_ID                  = 533  #PCI Id of the vGPU instance
 DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID      = 534  #GPU Instance Id of the vGPU instance
+
+DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID       = 571  #Infiniband GUID string (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER = 572  #GUID string of the rack containing the GPU (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER   = 573  #Slot number in the rack containing the GPU (includes switches)
+DCGM_FI_DEV_PLATFORM_TRAY_INDEX            = 574  #Index within the compute slots in the rack containing the GPU (does not include switches)
+DCGM_FI_DEV_PLATFORM_HOST_ID               = 575  #Index of the node within the slot containing the GPU
+DCGM_FI_DEV_PLATFORM_PEER_TYPE             = 576  #Platform indicated NVLink-peer type (e.g. switch present or not)
+DCGM_FI_DEV_PLATFORM_MODULE_ID             = 577  #ID of the GPU within the node
+
 #Internal fields reserve the range 600..699
 #below fields related to NVSwitch
 DCGM_FI_FIRST_NVSWITCH_FIELD_ID                  = 700 #Starting field ID of the NVSwitch instance
@@ -490,6 +522,25 @@ DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE4       = 821
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE5       = 822
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE6       = 823
 DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE7       = 824
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L0               = 825
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L1               = 826
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L2               = 827
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L3               = 828
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L4               = 829
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L5               = 830
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L6               = 831
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L7               = 832
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L8               = 833
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L9               = 834
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L10              = 835
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L11              = 836
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L12              = 837
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L13              = 838
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L14              = 839
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L15              = 840
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L16              = 841
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L17              = 842
+DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_TOTAL            = 843
 DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS                = 856
 DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS            = 857
 DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT         = 858
@@ -499,6 +550,26 @@ DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX               = 861
 DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX               = 862
 
 DCGM_FI_DEV_NVSWITCH_DEVICE_UUID                 = 878
+
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L0               = 879
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L1               = 880
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L2               = 881
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L3               = 882
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L4               = 883
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L5               = 884
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L6               = 885
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L7               = 886
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L8               = 887
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L9               = 888
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L10              = 889
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L11              = 890
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L12              = 891
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L13              = 892
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L14              = 893
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L15              = 894
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L16              = 895
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L17              = 896
+DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_TOTAL            = 897
 
 DCGM_FI_LAST_NVSWITCH_FIELD_ID                   = 899 #Last field ID of the NVSwitch instance
 
@@ -602,6 +673,12 @@ DCGM_FI_PROF_NVLINK_L17_RX_BYTES = 1075
 DCGM_FI_PROF_NVLINK_THROUGHPUT_FIRST = DCGM_FI_PROF_NVLINK_L0_TX_BYTES
 DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST  = DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
+# C2C (Chip-to-Chip) interface metrics.
+DCGM_FI_PROF_C2C_TX_ALL_BYTES  = 1076
+DCGM_FI_PROF_C2C_TX_DATA_BYTES = 1077
+DCGM_FI_PROF_C2C_RX_ALL_BYTES  = 1078
+DCGM_FI_PROF_C2C_RX_DATA_BYTES = 1079
+
 DCGM_FI_DEV_CPU_UTIL_TOTAL            = 1100 # CPU Utilization, total
 DCGM_FI_DEV_CPU_UTIL_USER             = 1101 # CPU Utilization, user
 DCGM_FI_DEV_CPU_UTIL_NICE             = 1102 # CPU Utilization, nice
@@ -666,8 +743,47 @@ DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS = 1214
 # BER for symbol errors
 DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER = 1215
 
-#greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS         = 1216
+# First field id of ConnectX
+DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID = 1300
+
+# Health state of ConnectX
+DCGM_FI_DEV_CONNECTX_HEALTH = 1300
+
+# Active PCIe link width
+DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_WIDTH = 1301
+
+# Active PCIe link speed
+DCGM_FI_DEV_CONNECTX_ACTIVE_PCIE_LINK_SPEED = 1302
+
+# Expect PCIe link width
+DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_WIDTH = 1303
+
+# Expect PCIe link speed
+DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_SPEED = 1304
+
+# Correctable error status
+DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS = 1305
+
+# Correctable error mask
+DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK = 1306
+
+# Uncorrectable error status
+DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS = 1307
+
+# Uncorrectable error mask
+DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK = 1308
+
+# Uncorrectable error severity
+DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY = 1309
+
+# Device temperature
+DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE = 1310
+
+# The last field id of ConnectX
+DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID = 1399
+
+# 1 greater than maximum fields above. This value can increase in the future
+DCGM_FI_MAX_FIELDS = 1311
 
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):

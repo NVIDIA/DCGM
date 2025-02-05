@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ from DcgmGroup import *
 from DcgmStatus import *
 from DcgmSystem import *
 from DcgmFieldGroup import *
+from DcgmLogging import *
 
 import os
 if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1':

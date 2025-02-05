@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -255,7 +255,7 @@ dcgmReturn_t DcgmDiagManager::EnforceGPUConfiguration(unsigned int gpuId, dcgm_c
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v9 *drd) const
+dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v10 *drd) const
 {
     std::string testParms;
     std::string testNames;
@@ -311,7 +311,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v9 *drd, std::vector<std::string> &cmdArgs) const
+dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<std::string> &cmdArgs) const
 {
     static const unsigned int MAX_RETRIES = 3;
 
@@ -409,7 +409,7 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v9 *drd, std::vector<std
 
 /*****************************************************************************/
 void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
-                                                  dcgmRunDiag_v9 *drd,
+                                                  dcgmRunDiag_v10 *drd,
                                                   std::string const &fakeGpuIds,
                                                   std::string const &entityIds) const
 {
@@ -496,11 +496,17 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
         cmdArgs.push_back("--watch-frequency");
         cmdArgs.push_back(fmt::format("{}", drd->watchFrequency));
     }
+
+    if (strlen(drd->ignoreErrorCodes) > 0)
+    {
+        cmdArgs.push_back("--ignoreErrorCodes");
+        cmdArgs.push_back(fmt::format("{}", drd->ignoreErrorCodes));
+    }
 }
 
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArgs,
-                                                dcgmRunDiag_v9 *drd,
+                                                dcgmRunDiag_v10 *drd,
                                                 unsigned int diagResponseVersion,
                                                 std::string const &fakeGpuIds,
                                                 std::string const &entityIds,
@@ -547,7 +553,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
 /*****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  std::string *stderrStr,
-                                                 dcgmRunDiag_v9 *drd,
+                                                 dcgmRunDiag_v10 *drd,
                                                  DcgmDiagResponseWrapper &response,
                                                  std::string const &fakeGpuIds,
                                                  std::string const &entityIds,
@@ -951,7 +957,7 @@ struct ExecuteAndParseNvvsResult
  */
 auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
                          DcgmDiagResponseWrapper &response,
-                         dcgmRunDiag_v9 *drd,
+                         dcgmRunDiag_v10 *drd,
                          std::string const &fakeGpuIds,
                          std::string const &entityIds,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
@@ -1065,7 +1071,7 @@ std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(DcgmCoreProxy &coreProxy, 
  * @return true if the EUD was executed, false otherwise
  */
 bool ExecuteEudPluginsAsRoot(DcgmDiagManager const &diagManager,
-                             dcgmRunDiag_v9 const *drd,
+                             dcgmRunDiag_v10 const *drd,
                              DcgmDiagResponseWrapper &eudResponse,
                              char const *serviceAccount,
                              std::string const &fakeGpuIds,
@@ -1111,7 +1117,7 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager const &diagManager,
 } // namespace
 
 std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
-    dcgmRunDiag_v9 *drd,
+    dcgmRunDiag_v10 *drd,
     std::string const &fakeGpuIds,
     std::string const &entityIds,
     std::unordered_set<std::string_view> const &testNames,
@@ -1217,7 +1223,7 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     return { wasExecuted, DCGM_ST_OK };
 }
 
-dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v9 *drd, DcgmDiagResponseWrapper &response)
+dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response)
 {
     bool areAllSameSku = true;
     std::vector<unsigned int> gpuIds;
@@ -1411,7 +1417,7 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v9 *drd,
+dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
                                                dcgmPolicyAction_t action,
                                                DcgmDiagResponseWrapper &response,
                                                dcgm_connection_id_t connectionId)

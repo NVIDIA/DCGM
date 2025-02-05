@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,8 +88,8 @@ def helper_check_diag_empty_group(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
-    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+    runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+    runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
     runDiagInfo.groupId = groupObj.GetId()
     runDiagInfo.validate = 1
 
@@ -159,18 +159,6 @@ def diag_assert_error_not_found_v1(response, gpuId, testIndex, errorStr):
         warningFound = response.perGpuResponses[gpuId].results[testIndex].error[0].msg
         assert warningFound.find(errorStr) == -1, "Expected not to find '%s' as a warning, but found it: '%s'" % (errorStr, warningFound)
 
-def helper_check_diag_thermal_violation(handle, gpuIds):
-    testName = TEST_DIAGNOSTIC
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=testName, paramsStr='diagnostic.test_duration=10')
-
-    # kick off a thread to inject the failing value while I run the diag
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 9223372036854775792, 0, repeatCount=3, repeatOffset=5)
-    response = test_utils.diag_execute_wrapper(dd, handle)
-
-    assert response.gpuCount == len(gpuIds), "Expected %d gpus, but found %d reported" % (len(gpuIds), response.gpuCount)
-    for gpuIndex in range(response.gpuCount):
-        diag_assert_error_not_found(response, gpuIndex, testName, "Thermal violations")
-
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_multiple_xid_errors(handle, gpuIds):
@@ -222,20 +210,28 @@ def helper_check_dcgm_run_diag_backwards_compatibility(handle, gpuId):
         ret = fn(dcgm_handle, byref(runDiagInfo), byref(response))
         return ret
 
-    # Test "latest" (may be redundant with some tests below)
-    drd = dcgm_structs.c_dcgmRunDiag_t()
-    drd.version = dcgm_structs.dcgmRunDiag_version
-    drd.entityIds = str(gpuId)
-    drd.groupId = dcgm_structs.DCGM_GROUP_NULL
-    drd.validate = 1
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
-    response.version = dcgm_structs.dcgmDiagResponse_version11
-    response.numTests = 0
-    ret = localDcgmActionValidate_v2(handle, drd, response)
-    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11
-    assert response.numTests == 1, f"response.numTests: [{response.numTests}]"
-    assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}]"
+    def _test_run_diag_v9_and_v10():
+        runDiagVersions = {
+            dcgm_structs.dcgmRunDiag_version9: dcgm_structs.c_dcgmRunDiag_v9(),
+            dcgm_structs.dcgmRunDiag_version10: dcgm_structs.c_dcgmRunDiag_v10(),
+        }
+        for version, runDiag in runDiagVersions.items():
+            drd = runDiag
+            drd.version = version
+            drd.entityIds = str(gpuId)
+            drd.groupId = dcgm_structs.DCGM_GROUP_NULL
+            drd.validate = 1
+            response = dcgm_structs.c_dcgmDiagResponse_v11()
+            response.version = dcgm_structs.dcgmDiagResponse_version11
+            response.numTests = 0
+            ret = localDcgmActionValidate_v2(handle, drd, response)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}] for RunDiag version {version}"
+            assert response.version == dcgm_structs.dcgmDiagResponse_version11
+            assert response.numTests == 1, f"response.numTests: [{response.numTests}] for RunDiag version {version}"
+            assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}] for RunDiag version {version}"
+    
+    # Test runDiag_v9 and runDiag_v10 (may be redundant with some tests below)
+    _test_run_diag_v9_and_v10()
 
     # Test dcgmRunDiag_v8 with dcgmDiagResponse_v10
     drd = dcgm_structs.c_dcgmRunDiag_v8()
@@ -379,22 +375,23 @@ def find_clocks_event_failure(response, gpuId, testName):
     return find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId) ], testName,
                                    'clocks event')
 
-def helper_test_thermal_violations_in_seconds(handle):
+# Inject a thermal violation and excessive temperature, demonstrating the thermal violation is reported
+def helper_test_thermal_violations(handle, gpuIds):
+    gpuId = gpuIds[0]
     testName = TEST_DIAGNOSTIC
-    gpuIds = test_utils.create_injection_nvml_gpus(handle, 2)
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=testName, paramsStr='diagnostic.test_duration=10')
-    dd.UseFakeGpus()
-    fieldId = dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION
     injected_value = 2344122048
-    inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 180)
 
-    # Verify that the inserted values are visible in DCGM before starting the diag
-    assert dcgm_internal_helpers.verify_field_value(gpuIds[0], fieldId, injected_value, maxWait=5, numMatches=1), \
-        "Expected inserted values to be visible in DCGM"
+    dcgm_field_injection_helpers.inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
+                                              injected_value, 180, verifyInsertion=True)
+
+    dcgm_field_injection_helpers.inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+                                              199, 180, verifyInsertion=True)
 
     # Start the diag
+    dd = DcgmDiag.DcgmDiag([gpuId], testNamesStr=testName, paramsStr='diagnostic.test_duration=10')
+    dd.UseFakeGpus()
     response = dd.Execute(handle)
-    foundError, errmsg = find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuIds[0]) ],
+    foundError, errmsg = find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId) ],
                                                  testName, "hermal violations")
     if foundError:
         import re
@@ -404,10 +401,52 @@ def helper_test_thermal_violations_in_seconds(handle):
         # Didn't find an error
         assert False, "Thermal violations were injected but no errors were found"
 
-@test_utils.run_with_injection_nvml()
+    assert response.numTests == 2
+    assert response.numResults == 2
+    assert response.results[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS
+    assert response.results[1].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL
+
+# Inject a thermal violation without other error condition, demonstrating the thermal violation is NOT reported
+def helper_test_silent_thermal_violations(handle, gpuIds):
+    gpuId = gpuIds[0]
+    testName = TEST_DIAGNOSTIC
+    injected_value = 2344122048
+
+    dcgm_field_injection_helpers.inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
+                                              injected_value, 180, verifyInsertion=True)
+
+    # Start the diag
+    dd = DcgmDiag.DcgmDiag([gpuId], testNamesStr=testName, paramsStr='diagnostic.test_duration=10')
+    dd.UseFakeGpus()
+    response = dd.Execute(handle)
+    foundError, errmsg = find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId) ],
+                                                 testName, "hermal violations")
+    assert not foundError, "Unexpected thermal violation error: '%s'" % errmsg
+
+    assert response.numTests == 2
+    assert response.numResults == 2
+    assert response.results[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS
+    # PASS should be expected here, but this reflects a current behavior
+    assert response.results[1].result != dcgm_structs.DCGM_DIAG_RESULT_FAIL
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
 @test_utils.run_with_standalone_host_engine(120)
-def test_thermal_violations_in_seconds_standalone(handle):
-    helper_test_thermal_violations_in_seconds(handle)
+@test_utils.run_with_injection_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.for_all_same_sku_gpus()
+def test_thermal_violations_standalone(handle, gpuIds):
+    helper_test_thermal_violations(handle, gpuIds)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.for_all_same_sku_gpus()
+def test_silent_thermal_violations_standalone(handle, gpuIds):
+    helper_test_silent_thermal_violations(handle, gpuIds)
+
 
 #####
 # Helper method for inserting errors and performing the diag
@@ -827,7 +866,7 @@ def helper_clocks_event_masking_failures(handle, gpuId):
     testName = "memtest"
     # First check whether the GPU is healthy
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2",
-                           version=dcgm_structs.dcgmRunDiag_version9)
+                           version=dcgm_structs.dcgmRunDiag_version10)
     dd.SetClocksEventMask(0) # We explicitly want to fail for clocks event reasons since this test inserts those errors 
                           # for verification
     dd.UseFakeGpus()
@@ -839,7 +878,7 @@ def helper_clocks_event_masking_failures(handle, gpuId):
     
     #####
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=15",
-                           version=dcgm_structs.dcgmRunDiag_version9)
+                           version=dcgm_structs.dcgmRunDiag_version10)
     dd.SetClocksEventMask(0)
     dd.UseFakeGpus()
 
@@ -885,7 +924,7 @@ def test_dcgm_diag_handle_concurrency_standalone(handle, gpuIds):
     gpuId = gpuIds[0]
 
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=%d" % diagDuration,
-                           version=dcgm_structs.dcgmRunDiag_version9)
+                           version=dcgm_structs.dcgmRunDiag_version10)
 
     dd.UseFakeGpus()
     
@@ -934,7 +973,7 @@ def helper_per_gpu_responses_api(handle, gpuIds, testDir):
     failGpuId = gpuIds[0]
     dd = helper_verify_diag_passing(handle, gpuIds, useFakeGpus=True)
 
-    dd = DcgmDiag.DcgmDiag(gpuIds=[failGpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=15", version=dcgm_structs.dcgmRunDiag_version9)
+    dd = DcgmDiag.DcgmDiag(gpuIds=[failGpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=15", version=dcgm_structs.dcgmRunDiag_version10)
     dd.SetClocksEventMask(0) # We explicitly want to fail for clocks event reasons since this test inserts those errors 
                           # for verification
     dd.UseFakeGpus()

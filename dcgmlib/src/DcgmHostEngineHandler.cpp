@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -252,6 +252,35 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
             }
             return DCGM_ST_OK;
         }
+        case DCGM_FE_CONNECTX:
+        {
+            dcgm_nvswitch_msg_get_entities_ids_v1 nvsMsg {};
+            nvsMsg.header.length     = sizeof(nvsMsg);
+            nvsMsg.header.version    = dcgm_nvswitch_msg_get_entities_ids_version;
+            nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
+            nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ENTITIES_IDS;
+            nvsMsg.entityGroup       = entityGroupId;
+
+            dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error("ProcessModuleCommand of DCGM_NVSWITCH_SR_GET_ENTITIES_IDS returned: [{}]",
+                          errorString(dcgmReturn));
+                return dcgmReturn;
+            }
+
+            dcgmGroupEntityPair_t entityPair;
+            entityPair.entityGroupId = entityGroupId;
+
+            for (unsigned int i = 0;
+                 i < std::min(static_cast<size_t>(nvsMsg.entitiesCount), std::size(nvsMsg.entities));
+                 i++)
+            {
+                entityPair.entityId = nvsMsg.entities[i];
+                entities.push_back(entityPair);
+            }
+            return DCGM_ST_OK;
+        }
         case DCGM_FE_CPU:
         {
             dcgm_sysmon_msg_get_cpus_t sysmonMsg {};
@@ -369,6 +398,7 @@ bool DcgmHostEngineHandler::GetIsValidEntityId(dcgm_field_entity_group_t entityG
             break;
         }
         case DCGM_FE_SWITCH:
+        case DCGM_FE_CONNECTX:
             break; /* Handle below */
 
         case DCGM_FE_COUNT:
@@ -4137,7 +4167,7 @@ void DcgmHostEngineHandler::Cleanup()
 DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_group_t entityGroupId,
                                                           dcgm_field_eid_t entityId)
 {
-    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK))
+    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK) || (entityGroupId == DCGM_FE_CONNECTX))
     {
         dcgm_nvswitch_msg_get_entity_status_t nvsMsg {};
         nvsMsg.header.length     = sizeof(nvsMsg);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ bool is_valid_gpu_list(const std::string &gpuList)
     return true;
 }
 
-bool is_valid_expected_num_entities(dcgmRunDiag_v9 const &drd,
+bool is_valid_expected_num_entities(dcgmRunDiag_v10 const &drd,
                                     std::string const &expectedNumEntities,
                                     std::string &error)
 {
@@ -65,7 +65,7 @@ bool is_valid_expected_num_entities(dcgmRunDiag_v9 const &drd,
     return true;
 }
 
-dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v9 &drd,
+dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
                                                 const std::string &testNames,
                                                 const std::string &parms,
                                                 const std::string &configFileContents,
@@ -84,6 +84,7 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v9 &drd,
                                                 std::string const &entityIds,
                                                 std::string const &expectedNumEntities,
                                                 unsigned int watchFrequency,
+                                                std::string const &ignoreErrorCodes,
                                                 std::string &error)
 {
     std::stringstream errbuf;
@@ -214,10 +215,12 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v9 &drd,
     }
     drd.watchFrequency = watchFrequency;
 
+    SafeCopyTo(drd.ignoreErrorCodes, ignoreErrorCodes.data());
+
     return DCGM_ST_OK;
 }
 
-void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v9 &drd)
+void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v10 &drd)
 {
     snprintf(drd.configFileContents, sizeof(drd.configFileContents), "%s", configFileContents.c_str());
 }

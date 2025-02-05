@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.0.0)
+project(datacenter-gpu-manager-4 VERSION 4.1.0)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -103,7 +103,7 @@ set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fmax-errors=1 -Werror -fno-omit-frame-poi
 set(DCGM_C_FLAGS ${DCGM_CXX_FLAGS})
 
 string(JOIN " " DCGM_CXX_FLAGS
-  "${DCGM_CXX_FLAGS}"
+    "${DCGM_CXX_FLAGS}"
     -Wdangling-reference
     -Winvalid-constexpr
     -Wsign-promo
@@ -178,23 +178,31 @@ set_property(GLOBAL APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}
 execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     OUTPUT_VARIABLE COMMIT_ID
+    RESULT_VARIABLE GIT_EXIT_CODE
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-# Git branch -> ${BUILD_BRANCH}
-# Jenkins does some weird checkouts so it ends up in a detached HEAD state.
-# The command below will
-# - grab all refs that are related to the current commit
-# - filter out detached HEAD
-# - use rel_dcgm_* if found
-# - use main or master if found
-# - use the first branch we find otherwise
-execute_process(COMMAND "./scripts/get_build_branch.py" ${COMMIT_ID}
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE BUILD_BRANCH)
-# Git has uncommitted changes -> ${HAS_UNCOMMITTED_CHANGES}
-execute_process(COMMAND "${GIT_EXECUTABLE}" diff-index --quiet HEAD --
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    RESULT_VARIABLE HAS_UNCOMMITTED_CHANGES)
+if (GIT_EXIT_CODE EQUAL 0)
+    # Git branch -> ${BUILD_BRANCH}
+    # Jenkins does some weird checkouts so it ends up in a detached HEAD state.
+    # The command below will
+    # - grab all refs that are related to the current commit
+    # - filter out detached HEAD
+    # - use rel_dcgm_* if found
+    # - use main or master if found (RELINGO_IGNORE until DCGM-1855 is done)
+    # - use the first branch we find otherwise
+    execute_process(COMMAND "./scripts/get_build_branch.py" ${COMMIT_ID}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE BUILD_BRANCH)
+    # Git has uncommitted changes -> ${HAS_UNCOMMITTED_CHANGES}
+    execute_process(COMMAND "${GIT_EXECUTABLE}" diff-index --quiet HEAD --
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE HAS_UNCOMMITTED_CHANGES)
+else ()
+    message(STATUS "The working directory is not a Git repository")
+    set(BUILD_BRANCH "non-branched")
+    set(HAS_UNCOMMITED_CHANGES 1)
+endif ()
+
 # Build Platform -> ${BUILDPLATFORM}
 execute_process(COMMAND uname -srvm
     OUTPUT_VARIABLE BUILDPLATFORM
@@ -283,6 +291,9 @@ add_library(sysmon_interface INTERFACE)
 
 add_library(childprocess_interface INTERFACE)
 add_library(common_interface INTERFACE)
+add_library(mock_interface INTERFACE)
+add_library(cuda_mock_interface INTERFACE)
+add_library(cuda_lib_base_interface INTERFACE)
 add_library(cuda_common_interface INTERFACE)
 add_library(dcgm_interface INTERFACE)
 add_library(dcgm_thread_interface INTERFACE)
@@ -317,6 +328,8 @@ add_library(common_watch_objects STATIC)
 add_library(dcgm_common STATIC)
 add_library(dcgm_cuda_worker11 STATIC)
 add_library(dcgm_cuda_worker12 STATIC)
+add_library(dcgm_cuda_lib11 STATIC)
+add_library(dcgm_cuda_lib12 STATIC)
 add_library(dcgm_entity_types STATIC)
 add_library(dcgm_logging STATIC)
 add_library(dcgm_mutex STATIC)
@@ -369,7 +382,6 @@ add_library(TargetedStress_12 SHARED)
 add_library(dcgm SHARED)
 add_library(dcgm_cublas_proxy11 SHARED)
 add_library(dcgm_cublas_proxy12 SHARED)
-add_library(dcgm_nvsdm_test_stubs SHARED)
 add_library(pluginCommon SHARED)
 
 add_library(sdk_nscq_loader)
@@ -403,7 +415,6 @@ set_target_properties(
     dcgmmodulesysmon
     dcgm_cublas_proxy11
     dcgm_cublas_proxy12
-    dcgm_nvsdm_test_stubs
     pluginCommon
     PROPERTIES
         SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -663,7 +674,6 @@ install(
         dcgm
         dcgm_cublas_proxy11
         dcgm_cublas_proxy12
-        dcgm_nvsdm_test_stubs
         dcgmi
         dcgmmoduleconfig
         dcgmmodulediag

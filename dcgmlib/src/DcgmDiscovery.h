@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,3 +30,12 @@ typedef struct dcgm_nvswitch_info_t
     dcgmNvLinkLinkState_t nvLinkLinkState[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH]; /* NvLink link state
                                                                                   for each link */
 } dcgm_nvswitch_info_t, *dcgm_nvswitch_info_p;
+
+typedef struct dcgm_ib_cx_info_t
+
+{
+    unsigned int physicalId;   /* Physical hardware ID of the NvSwitch */
+    DcgmEntityStatus_t status; /* Status of this NvSwitch */
+    dcgmNvLinkLinkState_t nvLinkLinkState[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH]; /* NvLink link state
+                                                                                  for each link */
+} dcgm_ib_cx_info_t, *dcgm_ib_cx_info_p;

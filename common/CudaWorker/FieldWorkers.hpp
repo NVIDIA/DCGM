@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cuda.h>
 
 #include <timelib.h>
+
+#include <random>
 
 using namespace Dcgm;
 
@@ -360,8 +362,6 @@ public:
 /*****************************************************************************/
 class FieldWorkerSmActivity : public FieldWorkerBase
 {
-    double m_achievedLoad = 0.0;
-
 public:
     FieldWorkerSmActivity(CudaWorkerDevice_t cudaDevice)
         : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_ACTIVE)
@@ -385,7 +385,7 @@ public:
         /* Wait for this kernel to finish. This will block for dutyCycleLengthMs until the kernel finishes */
         cuCtxSynchronize();
 
-        m_achievedLoad = loadTarget;
+        m_achievedLoad = static_cast<double>(numSms) / m_cudaDevice.m_multiProcessorCount;
     }
 };
 
@@ -866,29 +866,34 @@ public:
             throw std::runtime_error(s);
         }
 
+        static thread_local std::minstd_rand gen(std::random_device {}());
         switch (m_fieldId)
         {
             case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
             {
+                std::uniform_int_distribution<> dist;
+
                 float *floatHostA = (float *)m_hostA;
                 float *floatHostB = (float *)m_hostB;
                 for (size_t i = 0; i < arrayCount; i++)
                 {
-                    floatHostA[i] = (float)rand() / 100.0;
-                    floatHostB[i] = (float)rand() / 100.0;
+                    floatHostA[i] = (float)dist(gen) / 100.0;
+                    floatHostB[i] = (float)dist(gen) / 100.0;
                 }
                 break;
             }
 
             case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
             {
+                std::uniform_int_distribution<> dist;
+
                 double *doubleHostA = (double *)m_hostA;
                 double *doubleHostB = (double *)m_hostB;
 
                 for (size_t i = 0; i < arrayCount; i++)
                 {
-                    doubleHostA[i] = (double)rand() / 100.0;
-                    doubleHostB[i] = (double)rand() / 100.0;
+                    doubleHostA[i] = (double)dist(gen) / 100.0;
+                    doubleHostB[i] = (double)dist(gen) / 100.0;
                 }
                 break;
             }
@@ -896,14 +901,16 @@ public:
             case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
             case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
             {
+                std::uniform_int_distribution<> dist(0, 65535);
+
                 __half *halfHostA = (__half *)m_hostA;
                 __half *halfHostB = (__half *)m_hostB;
                 __half_raw rawA, rawB;
 
                 for (size_t i = 0; i < arrayCount; i++)
                 {
-                    rawA.x = rand() % 65536;
-                    rawB.x = rand() % 65536;
+                    rawA.x = dist(gen);
+                    rawB.x = dist(gen);
 
                     halfHostA[i] = rawA;
                     halfHostB[i] = rawB;

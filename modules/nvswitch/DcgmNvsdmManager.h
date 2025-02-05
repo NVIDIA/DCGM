@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,13 @@
  */
 #pragma once
 
-#include <map>
-
 #include <DcgmCoreProxy.h>
 #include <DcgmNvSwitchManagerBase.h>
 #include <DcgmWatchTable.h>
 #include <dcgm_nvsdm.h>
 #include <dcgm_structs.h>
+
+#include "NvsdmLib.h"
 
 namespace DcgmNs
 {
@@ -50,11 +50,18 @@ struct NvsdmDevice
     uint64_t guid;
 };
 
+struct IbCxDevice
+{
+    NvsdmDevice nvsdmDevice;
+    dcgm_ib_cx_info_t info;
+};
+
 class DcgmNvsdmManager : public DcgmNvSwitchManagerBase
 {
 public:
     /*************************************************************************/
     explicit DcgmNvsdmManager(dcgmCoreCallbacks_t *dcc);
+    explicit DcgmNvsdmManager(dcgmCoreCallbacks_t *dcc, std::unique_ptr<NvsdmBase> nvsdm);
 
     /*************************************************************************/
     ~DcgmNvsdmManager() override;
@@ -82,6 +89,12 @@ public:
      * Read switch status for all switches and update their information
      */
     dcgmReturn_t ReadNvSwitchStatusAllSwitches() override;
+
+    /*************************************************************************/
+    /**
+     * Read IB CX cards status for all IB CX cards and update their information
+     */
+    dcgmReturn_t ReadIbCxStatusAllIbCxCards() override;
 
     /*************************************************************************/
     /**
@@ -148,15 +161,36 @@ public:
      */
     dcgmReturn_t GetBackend(dcgm_nvswitch_msg_get_backend_t *msg) override;
 
+    /*************************************************************************/
+    /**
+     * Populate entities with the ids which present on the system.
+     *
+     * @param count[in/out]    - passed in as the maximum number of link ids that can be placed in entities. Set
+     *                           to the number of entities present on the system.
+     * @param entities[out]    - populated with the ids of the entities on the host.
+     * @param entityGroup[in]  - wanted entity group.
+     * @param flags            - specify a characteristic to get a subset of ids
+     *                           (unused for now)
+     *
+     * @return DCGM_ST_OK:                all desired link ids added to buffer
+     *         DCGM_ST_INSUFFICIENT_SIZE: the buffer wasn't big enough to add all desired link ids
+     */
+    dcgmReturn_t GetEntityList(unsigned int &count,
+                               unsigned int *entities,
+                               dcgm_field_entity_group_t entityGroup,
+                               int64_t const flags) override;
+
 #ifndef DCGM_NVSWITCH_TEST // Allow nvsdm tests to peek in
 protected:
 #endif
-    std::vector<NvsdmDevice> m_nvsdmDevices;                // NVSDM Devices
-    std::vector<NvsdmPort> m_nvsdmPorts;                    // NVSDM Ports
+    std::unique_ptr<NvsdmBase> m_nvsdm;                     // NVSDM Library functions
+    std::vector<NvsdmDevice> m_nvSwitchDevices;             // NVSDM NvSwitch Devices
+    std::vector<NvsdmPort> m_nvSwitchPorts;                 // NVSDM NvSwitch Ports
+    std::vector<IbCxDevice> m_ibCxDevices;                  // NVSDM IB ConnectX Devices
     bool m_attachedToNvsdm = false;                         // Have we attached to nvsdm yet? */
     DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES]; // Fatal errors. Max 1 per switch
-    bool m_paused                = false;                   // Is the Switch Manager paused?
-    unsigned int m_numNvsdmPorts = 0;                       // Number of entries in m_nvsdmPorts that are valid
+    bool m_paused                   = false;                // Is the Switch Manager paused?
+    unsigned int m_numNvSwitchPorts = 0;                    // Number of entries in m_nvSwitchPorts that are valid
 
     /*************************************************************************/
     /**
@@ -169,6 +203,12 @@ protected:
      * Returns true if the specified link id is present on the host, false otherwise
      */
     bool IsValidNvLinkId(dcgm_field_eid_t entityId);
+
+    /*************************************************************************/
+    /**
+     * Returns true if the specified ConnectX id is present on the host, false otherwise
+     */
+    bool IsValidConnectXId(dcgm_field_eid_t entityId);
 
     /*************************************************************************/
     /**
@@ -196,11 +236,15 @@ protected:
 
     /*************************************************************************/
     /**
-     * Scan the NVSDM driver for NvSwitches and add any new switches to m_nvSwitches.
-     * This also sets the link state for each port of the nvSwitch.
+     * Scan the NVSDM driver for NvSwitches and ConnectX devices, and do:
+     *    - Update m_nvSwitchDevices with any new switches discovered.
+     *    - Update m_ibCxDevices with any new ConnectX devices found.
+     *    - Set link states for each port on the nvSwitch.
      */
-    dcgmReturn_t AttachNvSwitches();
+    dcgmReturn_t AttachNvsdmDevices();
 
+
+    std::optional<NvsdmDevice> InitNvsdmDevice(nvsdmDevice_t const device);
 
     /*************************************************************************/
     /**
@@ -225,9 +269,15 @@ protected:
 
     /*************************************************************************/
     /**
-     * Scan the NVSDM driver for nvsdmPorts and add any new Ports to m_nvsdmPorts.
+     * Scan the NVSDM driver for nvsdmPorts and add any new Ports to m_nvSwitchPorts.
      */
     dcgmReturn_t AttachNvLinks();
+
+    /*************************************************************************/
+    /**
+     * Scan all the ports from the provided device.
+     */
+    std::optional<std::vector<NvsdmPort>> ScanPorts(NvsdmDevice const &dev);
 
     /*************************************************************************/
     /**
@@ -246,9 +296,27 @@ protected:
 
     /*************************************************************************/
     /**
+     * Populate IB CX with the ids present on the system.
+     *
+     * @param count[in/out]    - passed in as the maximum number of ib cx port ids that can be placed in ibCxIds. Set
+     *                           to the number of ib cx ids on the host.
+     * @param ibCxIds[out]      - populated with the IB CX cards on the host.
+     * @param flags            - specify a characteristic to get a subset of IB CX cards.
+     *                           (unused for now)
+     *
+     * @return DCGM_ST_OK:                all desired link ids added to buffer
+     *         DCGM_ST_INSUFFICIENT_SIZE: the buffer wasn't big enough to add all desired link ids
+     */
+    dcgmReturn_t GetIbCxList(unsigned int &count, unsigned int *ibCxIds, int64_t flags);
+
+    /*************************************************************************/
+    /**
      * Process a dcgm_nvswitch_msg_get_entity_status_t message.
      */
     dcgmReturn_t GetEntityStatus(dcgm_nvswitch_msg_get_entity_status_t *msg) override;
+    dcgmReturn_t GetNvSwitchStatus(dcgm_nvswitch_msg_get_entity_status_t *msg);
+    dcgmReturn_t GetNvLinkStatus(dcgm_nvswitch_msg_get_entity_status_t *msg);
+    dcgmReturn_t GetIbCxStatus(dcgm_nvswitch_msg_get_entity_status_t *msg);
 
     /**
      * @brief Returns the connection status of the Switch Manager.
@@ -257,6 +325,12 @@ protected:
      * @return \c ConnectionStatus::Paused:       The Switch Manager is paused and not connected to the NVSDM
      */
     ConnectionStatus CheckConnectionStatus() const override;
+
+    dcgmReturn_t UpdateDeviceState(DcgmNs::NvsdmDevice const &dev, auto &info);
+
+    dcgmReturn_t UpdatePortState(DcgmNs::NvsdmPort &port);
+
+    bool UsingMockNvsdm() const;
 };
 
 } // namespace DcgmNs

@@ -9,9 +9,9 @@
         nvmlDeviceReset;
         nvmlDeviceInjectFieldValue;
         nvmlGetFuncCallCount;
+        nvmlResetFuncCallCount;
         nvmlRemoveGpu;
         nvmlRestoreGpu;
-        nvmlResetFuncCallCount;
         nvmlDeviceGetClockInfo;
         nvmlDeviceGetMaxClockInfo;
         nvmlDeviceGetComputeMode;
@@ -67,6 +67,7 @@
         nvmlDeviceGetTemperature;
         nvmlDeviceGetTemperatureThreshold;
         nvmlDeviceSetTemperatureThreshold;
+        nvmlDeviceGetMarginTemperature;
         nvmlDeviceGetFanSpeed;
         nvmlDeviceGetFanSpeed_v2;
         nvmlDeviceGetTargetFanSpeed;
@@ -311,6 +312,7 @@
         nvmlDeviceWorkloadPowerProfileGetCurrentProfiles;
         nvmlDeviceWorkloadPowerProfileSetRequestedProfiles;
         nvmlDeviceWorkloadPowerProfileClearRequestedProfiles;
+        nvmlDeviceGetPlatformInfo;
         extern "C++" {
             _ZTI*;
             _ZTS*;

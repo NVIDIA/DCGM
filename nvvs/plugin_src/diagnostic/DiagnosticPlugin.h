@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,20 +97,22 @@ public:
         }
         else if (cuContext == NULL)
         {
-            // Reset the device before context creation
-            cuSt = cuDevicePrimaryCtxReset(cudaDeviceIdx);
-            if (cuSt != CUDA_SUCCESS)
+            // Clean up resources before context creation
+            cudaError_t cudaResult = cudaDeviceReset();
+            if (cudaResult != cudaSuccess)
             {
                 DcgmError d { gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDevicePrimaryCtxReset");
-                cuGetErrorString(cuSt, &errorString);
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaDeviceReset");
+                errorString = cudaGetErrorString(cudaResult);
                 if (errorString != NULL)
                 {
-                    snprintf(buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cuSt), gpuId);
+                    snprintf(
+                        buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cudaResult), gpuId);
                     d.AddDetail(buf);
                 }
                 throw d;
             }
+
             // cuCtxGetCurrent doesn't return an error if there's no context, so check and attempt to create one
             cuSt = cuCtxCreate(&cuContext, 0, cudaDeviceIdx);
 

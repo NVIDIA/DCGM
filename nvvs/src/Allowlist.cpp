@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ bool Allowlist::IsAllowlisted(const std::string deviceId, const std::string ssid
 }
 
 /*****************************************************************************/
-void Allowlist::getDefaultsByDeviceId(const std::string &testName, const std::string &deviceId, TestParameters *tp)
+void Allowlist::GetDefaultsByDeviceId(const std::string &testName, const std::string &deviceId, TestParameters *tp)
 {
     int st;
     TestParameters *testDeviceTp = m_featureDb[deviceId][testName];
@@ -164,15 +164,22 @@ void Allowlist::PostProcessAllowlist(std::vector<Gpu *> &gpus)
 }
 
 /*****************************************************************************/
-static bool isBoolParam(const std::string &param)
+static bool IsBoolParam(std::string const &param)
 {
-    const static std::unordered_set<std::string> boolParams = {
+    static std::unordered_set<std::string> const boolParams = {
         "use_dgemv",
         "use_dgemm",
         "use_doubles",
         "l1_is_allowed",
     };
     return boolParams.find(param) != boolParams.end();
+}
+
+/*****************************************************************************/
+static bool IsStringParam(std::string const &param)
+{
+    static std::unordered_set<std::string> const stringParams = { PS_IGNORE_ERROR_CODES };
+    return stringParams.contains(param);
 }
 
 /*****************************************************************************/
@@ -223,18 +230,19 @@ void Allowlist::FillMap()
                                              << " as a bool. Scalar: " << paramOrSubtest.Scalar();
                             isAllowed = paramOrSubtest.as<bool>();
                         }
-                        else if (isBoolParam(testName))
+                        else if (IsBoolParam(testName))
                         {
                             DCGM_LOG_VERBOSE << "Reading " << testName
                                              << " as a bool. Scalar: " << paramOrSubtest.Scalar();
                             bool paramValue = paramOrSubtest.as<bool>();
                             tp->AddString(testName, paramValue ? "True" : "False");
                         }
-                        /* We used to have an if to handle the string parameters here in order to ensure correct
-                         * parsing. For now, the string parameters have been removed, but if we add some back then we'll
-                         * need to add this if statement again.
-                         *
-                         * else if (isStringParam(testName)) */
+                        else if (IsStringParam(testName))
+                        {
+                            DCGM_LOG_VERBOSE << "Reading " << testName
+                                             << " as a string. String: " << paramOrSubtest.as<std::string>();
+                            tp->AddString(testName, paramOrSubtest.as<std::string>());
+                        }
                         else
                         {
                             DCGM_LOG_VERBOSE << "Reading " << testName

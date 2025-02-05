@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,16 @@ import logger
 import test_utils
 import dcgm_fields
 import dcgm_fields_internal
+import dcgm_nvml
 import dcgmvalue
 import time
 import ctypes
 import apps
 from dcgm_structs import dcgmExceptionClass
+from _test_helpers import skip_test_if_no_dcgm_nvml
+import nvml_injection
+import nvml_injection_structs
+import dcgm_nvml
 import utils
 import os
 from ctypes import *
@@ -49,7 +54,11 @@ g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE,
     dcgm_fields.DCGM_FI_PROF_PIPE_INT_ACTIVE,
     dcgm_fields.DCGM_FI_PROF_NVOFA0_ACTIVE,
-    dcgm_fields.DCGM_FI_PROF_NVOFA1_ACTIVE ]
+    dcgm_fields.DCGM_FI_PROF_NVOFA1_ACTIVE,
+    dcgm_fields.DCGM_FI_PROF_C2C_TX_ALL_BYTES,
+    dcgm_fields.DCGM_FI_PROF_C2C_TX_DATA_BYTES,
+    dcgm_fields.DCGM_FI_PROF_C2C_RX_ALL_BYTES,
+    dcgm_fields.DCGM_FI_PROF_C2C_RX_DATA_BYTES ]
 
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVDEC0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVDEC7_ACTIVE + 1):
     g_profilingFieldIds.append(fieldId)
@@ -121,7 +130,7 @@ def test_dcgm_field_values_since_agent(handle, gpuIds):
         nextSinceTimestamp = fieldWatcher._nextSinceTimestamp
 
         assert nextSinceTimestamp != 0, "Got 0 nextSinceTimestamp"
-        
+
         #A field value is always returned. If no data exists, then a single field value is returned with status set to NO DATA
         if numValuesPerLoop == 0:
             assert newValueCount == 1, "newValueCount %d != 1" % newValueCount
@@ -230,27 +239,28 @@ def helper_dcgm_entity_get_latest_values(handle, gpuIds):
     systemObj.UpdateAllFields(True)
 
     fieldValues = dcgm_agent.dcgmEntityGetLatestValues(handle, dcgm_fields.DCGM_FE_GPU, gpuId, fieldIds)
-    
+
     for i, fieldValue in enumerate(fieldValues):
         logger.info(str(fieldValue))
         assert(fieldValue.version != 0), "idx %d Version was 0" % i
         assert(fieldValue.fieldId == fieldIds[i]), "idx %d fieldValue.fieldId %d != fieldIds[i] %d" % (i, fieldValue.fieldId, fieldIds[i])
         assert(fieldValue.status == dcgm_structs.DCGM_ST_OK), "idx %d status was %d" % (i, fieldValue.status)
         assert(fieldValue.ts != 0), "idx %d timestamp was 0" % i
-        
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_nvml()
 def test_dcgm_entity_get_latest_values_embedded(handle, gpuIds):
     helper_dcgm_entity_get_latest_values(handle, gpuIds)
 
 '''
 Verify that the returned field values match the requested ones for dcgmEntitiesGetLatestValues
 '''
-def helper_validate_entities_lastest_values_request(handle, gpuIds, fieldIds):
+def helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds):
     entityPairList = []
     responses = {}
-    
+
     for gpuId in gpuIds:
         entityPairList.append(dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId))
         for fieldId in fieldIds:
@@ -259,7 +269,7 @@ def helper_validate_entities_lastest_values_request(handle, gpuIds, fieldIds):
 
     flags = dcgm_structs.DCGM_FV_FLAG_LIVE_DATA
     fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, entityPairList, fieldIds, flags)
-    
+
     for i, fieldValue in enumerate(fieldValues):
         logger.info(str(fieldValue))
         assert(fieldValue.version == dcgm_structs.dcgmFieldValue_version2), "idx %d Version was x%X. not x%X" % (i, fieldValue.version, dcgm_structs.dcgmFieldValue_version2)
@@ -280,22 +290,22 @@ def helper_dcgm_entities_get_latest_values(handle, gpuIds):
                          dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
                          dcgm_fields.DCGM_FI_DEV_MEM_CLOCK,
                          dcgm_fields.DCGM_FI_DEV_VIDEO_CLOCK]
+    
     fieldIds = nonMappedFieldIds
-    helper_validate_entities_lastest_values_request(handle, gpuIds, fieldIds)
+    helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds)
 
     #Now just field IDs that have mappings
     fieldIds = []
     for fieldId in range(dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TEX):
         fieldIds.append(fieldId)
-    helper_validate_entities_lastest_values_request(handle, gpuIds, fieldIds)
+    helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds)
 
     #Now a mix of both
     fieldIds = []
     for i in range(len(nonMappedFieldIds)):
         fieldIds.append(nonMappedFieldIds[i])
         fieldIds.append(i + dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL)
-    helper_validate_entities_lastest_values_request(handle, gpuIds, fieldIds)
-
+    helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -379,12 +389,12 @@ def helper_dcgm_values_pid_stats(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
-    
+
     ## Add first GPU to the group (only need single GPU)
     gpuId = gpuIds[0]
     groupObj.AddGpu(gpuId)
     busId = _get_gpu_bus_id(gpuId, handle)
-    
+
     #watch the process info fields
     if utils.is_root():
         groupObj.stats.WatchPidFields(updateFreq=100000, maxKeepAge=3600, maxKeepSamples=0)
@@ -393,7 +403,7 @@ def helper_dcgm_values_pid_stats(handle, gpuIds):
             groupObj.stats.WatchPidFields(updateFreq=100000, maxKeepAge=3600, maxKeepSamples=0)
         except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_REQUIRES_ROOT) as e:
             return
-    
+
     #Start a cuda app so we have something to accounted
     #Start a 2nd app that will appear in the compute app list
     appTimeout = 5000
@@ -406,7 +416,7 @@ def helper_dcgm_values_pid_stats(handle, gpuIds):
     app3.wait()
     app3.terminate()
     app3.validate()
-    
+
     #Wait for RM to think the app has exited. Querying immediately after app.wait() did not work
     time.sleep(1.0)
 
@@ -418,9 +428,9 @@ def _assert_pid_cuda_assert_occurence(dcgmSystem, dcgmGroup, appPid):
     ''' Force an update and verifies that a xid error occurred during the life of the process '''
     dcgmSystem.UpdateAllFields(1)
     pidInfo = dcgmGroup.stats.GetPidInfo(appPid)
-    
+
     assert pidInfo.summary.numXidCriticalErrors > 0, "At least one Xid error should have been caught, but (%d) were found" % pidInfo.summary.numXidCriticalErrors
-    
+
     for index in range(pidInfo.summary.numXidCriticalErrors):
         assert pidInfo.summary.xidCriticalErrorsTs[index] != 0, "Unable to find a valid timestamp for the Xid Error %d" % index
         logger.debug("Xid Timestamp: " + str(pidInfo.summary.xidCriticalErrorsTs[index]))
@@ -432,7 +442,7 @@ def _assert_pid_utilization_rate(dcgmSystem, dcgmGroup, appPid):
 
     assert pidInfo.gpus[0].processUtilization.pid == appPid, " Expected PID %d, got PID %d"  % (appPid, pidInfo.gpus[0].processUtilization.pid)
     utilizationRate = 0
-    
+
     if pidInfo.gpus[0].processUtilization.smUtil > 0 :
         utilizationRate = 1
     if pidInfo.gpus[0].processUtilization.memUtil > 0 :
@@ -440,7 +450,7 @@ def _assert_pid_utilization_rate(dcgmSystem, dcgmGroup, appPid):
 
     #TODO: DCGM-1418 - Uncomment the following line again
     #assert utilizationRate, "Expected non-zero utilization rates for the PID %d"  %appPid
-    
+
 def _assert_other_compute_pid_seen(dcgmSystem, dcgmGroup, app1Pid, app2Pid):
     '''Force an update and then assert that PID 1 stats see PID2'''
     dcgmSystem.UpdateAllFields(1)
@@ -454,7 +464,7 @@ def _assert_other_compute_pid_seen(dcgmSystem, dcgmGroup, app1Pid, app2Pid):
         if app2Pid == pidInfo.summary.otherComputePids[pid]:
             pidFound = True
             break
-            
+
     assert pidFound,  "Expected other compute pid %d, number of other Compute Pids - %d \
                                      . PIDs Found %d, %d, %d , %d, %d, %d, %d, %d, %d, %d"\
                                      % (app2Pid, pidInfo.summary.numOtherComputePids, pidInfo.summary.otherComputePids[0],  pidInfo.summary.otherComputePids[1],\
@@ -473,7 +483,7 @@ def _create_cuda_assert_app_for_pid_stats(handle, busId, appTimeout, gpuId):
                               "--cuMemAlloc", busId, "200",
                               "--cuMemFree", busId,
                               "--assertGpu", busId, str(appTimeout)], env=test_utils.get_cuda_visible_devices_env(handle, gpuId))
-    
+
     app.start(appTimeout*2)
     return app
 
@@ -487,17 +497,17 @@ def _get_gpu_bus_id(gpuId, handle):
     dcgm_agent.dcgmUpdateAllFields(handle, 1)
     values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [fieldId,])
     return values[0].value.str
-    
+
 def helper_dcgm_values_pid_stats_realtime(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
-    
+
     ## Add first GPU to the group (only need single GPU)
     gpuId = gpuIds[0]
     groupObj.AddGpu(gpuId)
     busId = _get_gpu_bus_id(gpuId, handle)
-    
+
     #watch the process info fields
     try:
         groupObj.stats.WatchPidFields(updateFreq=100000,
@@ -506,13 +516,13 @@ def helper_dcgm_values_pid_stats_realtime(handle, gpuIds):
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_REQUIRES_ROOT) as e:
         test_utils.skip_test("Skipping test for non-root due to accounting mode not being watched ahead of time.")
         return
-    
+
     #Start a cuda app so we have something to accounted
     appTimeout = 10000
     app = _create_cuda_app_for_pid_stats(handle, busId, appTimeout, gpuId)
     appPid = app.getpid()
     app.stdout_readtillmatch(lambda s: s.find("Calling cuInit") != -1)
-    
+
     #Start a 2nd app that will appear in the compute app list
     app2 = _create_cuda_app_for_pid_stats(handle, busId, appTimeout, gpuId)
     app2Pid = app2.getpid()
@@ -520,13 +530,13 @@ def helper_dcgm_values_pid_stats_realtime(handle, gpuIds):
 
     time.sleep(1.0)
     _assert_other_compute_pid_seen(systemObj, groupObj, appPid, app2Pid)
-    
+
     app.wait()
     app2.wait()
-    
+
     _assert_pid_utilization_rate(systemObj, groupObj,appPid)
     _assert_pid_utilization_rate(systemObj, groupObj,app2Pid)    
-    
+
     ## Make sure the stats can be fetched after the process is complete
     for count in range(0,2):
         time.sleep(1.0)
@@ -552,7 +562,7 @@ def test_dcgm_live_pid_stats_remote(handle, gpuIds):
         test_utils.skip_test("Skipping GPU Cuda tests on NvSwitch systems since they require the FM to be loaded")
 
     helper_dcgm_values_pid_stats(handle, gpuIds)
-    
+
 #Skip this test when running in injection-only mode
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -662,15 +672,15 @@ def test_dcgm_values_job_stats_get(handle, gpuIds):
     appParams = ["--ctxCreate", busId,
                 "--busyGpu", busId, str(appTimeout),
                 "--ctxDestroy", busId]
-    
+
     xidArgs = ["--ctxCreate", busId,
                "--cuMemAlloc", busId, "200",
                "--cuMemFree", busId,
                "--assertGpu", busId, str(appTimeout)]
-    
+
     #app.start(appTimeout*2)
     #app_xid.start(appTimeout*2)
-    
+
     appPid = []
     appObjs = []
 
@@ -678,18 +688,18 @@ def test_dcgm_values_job_stats_get(handle, gpuIds):
     for i in range (0,3):
         app = apps.CudaCtxCreateAdvancedApp(appParams, env=environ)
         app.start(appTimeout*2)
-        
+
         app_xid = apps.RunCudaAssert(xidArgs, env=environ)
         app_xid.start(appTimeout)
-        
+
         appPid.append(app.getpid())
-        
+
         appObjs.append(app)
         appObjs.append(app_xid)
 
     for app in appObjs:
         app.wait()
-        
+
     for app_xid in appObjs:
         app_xid.wait()
         app_xid.terminate()
@@ -717,7 +727,7 @@ def test_dcgm_values_job_stats_get(handle, gpuIds):
                 pidFound = 1
                 break
         assert pidFound, "CUDA Process PID not captured during job. Missing: %d" % appPid[i]
-        
+
     #Validate the values in the summary and the gpu Info
     assert jobInfo.summary.energyConsumed >= jobInfo.gpus[0].energyConsumed, "energyConsumed in the job stat summary %d is less than the one consumed by a gpu %d" % \
                                                                               (jobInfo.summary.energyConsumed, jobInfo.gpus[0].energyConsumed)
@@ -744,15 +754,15 @@ def test_dcgm_values_job_stats_get(handle, gpuIds):
     assert jobInfo.summary.numXidCriticalErrors == jobInfo.gpus[0].numXidCriticalErrors, "At least (%d) Xid error should have been caught, but (%d) were found" %\
                                                                         (jobInfo.summary.numXidCriticalErrors, jobInfo.gpus[0].numXidCriticalErrors)
     assert jobInfo.summary.numXidCriticalErrors > 0, "At least one Xid error should have been caught, but (%d) were found" % jobInfo.summary.numXidCriticalErrors   
-    
+
     for index in range(jobInfo.summary.numXidCriticalErrors):
         assert jobInfo.summary.xidCriticalErrorsTs[index] != 0, "Unable to find a valid timestamp for the Xid Error %d" % index
         logger.debug("Xid Timestamp: " + str(jobInfo.summary.xidCriticalErrorsTs[index]))
-   
+
     #Start another job with the same job ID and it should return DUPLICATE KEY Error
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_DUPLICATE_KEY)):
         groupObj.stats.StartJobStats(jobId)
-        
+
     #print str(jobInfo.summary)
     #print ""
     #print str(jobInfo.gpus[0])
@@ -843,18 +853,17 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
 
     baseFieldIds = [dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
                     dcgm_fields.DCGM_FI_DEV_FB_FREE]
-    
+
     gpuId = gpuIds[0]
     fieldIdVars = {}
 
     ignoreFieldIds = set(('DCGM_FI_MAX_FIELDS', 'DCGM_FI_UNKNOWN', 'DCGM_FI_FIRST_NVSWITCH_FIELD_ID', 
-                         'DCGM_FI_LAST_NVSWITCH_FIELD_ID'))
+                         'DCGM_FI_LAST_NVSWITCH_FIELD_ID', 'DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID', 'DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID'))
 
     #Find all of the numerical field IDs by looking at the dcgm_fields module's attributes
     for moduleAttribute in list(dcgm_fields.__dict__.keys()):
         if moduleAttribute.find("DCGM_FI_") == 0 and moduleAttribute not in ignoreFieldIds:
             fieldIdVars[moduleAttribute] = dcgm_fields.__dict__[moduleAttribute]
-
     migModeEnabled = test_utils.is_mig_mode_enabled()
 
     numErrors = 0
@@ -903,6 +912,10 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
 
         # Skip values populated by SysMon
         if fieldId >= dcgm_fields_internal.DCGM_FI_SYSMON_FIRST_ID and fieldId <= dcgm_fields_internal.DCGM_FI_SYSMON_LAST_ID:
+            continue
+
+        # Skip CX and CX port fields since they are pushed from nvsdm manager
+        if (fieldId >= dcgm_fields.DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID and fieldId <= dcgm_fields.DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID):
             continue
 
         if fieldValue.status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
@@ -954,7 +967,7 @@ def test_dcgm_verify_manual_mode_behavior():
         values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handleObj.handle, gpuId, [fieldId,])
         otherTimestamp = values[0].ts
         time.sleep(300.0 / 1000.0) # sleep for 300 miliseconds
-        
+
         assert firstTimestamp == otherTimestamp, "Fields got updated automatically, that should not happen in MANUAL OPERATION MODE"
 
     # trigger update manually to make sure fields got updated
@@ -1004,7 +1017,7 @@ def test_dcgm_verify_auto_mode_behavior():
     nextTimestamp = otherValues[0].ts
 
     handleObj.Shutdown()
-            
+
     assert firstTimestamp != nextTimestamp, "Failed to update Fields automatically, that should not happen in AUTO OPERATION MODE"
 
 @test_utils.run_with_embedded_host_engine()
@@ -1055,7 +1068,64 @@ def test_dcgm_nvlink_bandwidth(handle, gpuIds):
     groupObj = systemObj.GetDefaultGroup()
     gpuId = gpuIds[0]
 
-    fieldIds = [ dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL, ]
+    fieldIds = [ dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_TOTAL,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_TOTAL,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L0,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L1,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L2,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L3,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L4,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L5,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L6,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L7,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L8,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L9,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L10,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L11,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L12,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L13,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L14,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L15,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L16,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_L17,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L0,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L1,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L2,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L3,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L4,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L5,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L6,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L7,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L8,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L9,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L10,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L11,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L12,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L13,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L14,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L15,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L16,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L17,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L0,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L1,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L2,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L3,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L4,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L5,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L6,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L7,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L8,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L9,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L10,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L11,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L12,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L13,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L14,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L15,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L16,
+                 dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L17,
+                ]
 
     fieldGroupObj = pydcgm.DcgmFieldGroup(handleObj, "my_group", fieldIds)
 
@@ -1077,28 +1147,28 @@ def test_dcgm_nvlink_bandwidth(handle, gpuIds):
             # supported.
             assert ((value.isBlank == True) or (value.isBlank == False and value.value >= 0)), "Unexpected error reading field %d on GPU %d" % (fieldId, gpuId)
 
-def helper_nvswitch_monitoring(handle, switchIds):
+def helper_fields_monitoring(handle, entityIds, entityGroup, firstField, lastField, isBlank):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
 
     entities = []
-    for switchId in switchIds:
+    for entityId in entityIds:
         entity = dcgm_structs.c_dcgmGroupEntityPair_t()
-        entity.entityGroupId = dcgm_fields.DCGM_FE_SWITCH
-        entity.entityId = switchId
+        entity.entityGroupId = entityGroup
+        entity.entityId = entityId
         entities.append(entity)
 
-    groupObj = systemObj.GetGroupWithEntities('SwitchGroup', entities)
+    groupObj = systemObj.GetGroupWithEntities('EntityGroup', entities)
 
     fieldIds = []
-    for i in range(dcgm_fields.DCGM_FI_FIRST_NVSWITCH_FIELD_ID, dcgm_fields.DCGM_FI_LAST_NVSWITCH_FIELD_ID):
+    for i in range(firstField, lastField):
         fieldMeta = dcgm_fields.DcgmFieldGetById(i)
         if fieldMeta is not None:
             fieldIds.append(i)
 
     fieldGroupObj = pydcgm.DcgmFieldGroup(handleObj, "my_group", fieldIds)
 
-    switchId = switchIds[0]
+    entityId = entityIds[0]
 
     operationMode = dcgm_structs.DCGM_OPERATION_MODE_AUTO
     updateFreq = 100000
@@ -1106,18 +1176,161 @@ def helper_nvswitch_monitoring(handle, switchIds):
     maxKeepSamples = 0
 
     fieldWatcher = dcgm_field_helpers.DcgmFieldGroupEntityWatcher(handle, groupObj.GetId(), fieldGroupObj, operationMode, updateFreq, maxKeepAge, maxKeepSamples, 0)
-    
-    msg = "Expected %d NVlink bandwidth values, got %d" % (len(fieldIds), len(fieldWatcher.values[dcgm_fields.DCGM_FE_SWITCH][switchId]))
-    assert len(fieldWatcher.values[dcgm_fields.DCGM_FE_SWITCH][switchId]) == len(fieldIds), msg
+
+    msg = "Expected [%d] values, got [%d]" % (len(fieldIds), len(fieldWatcher.values[entityGroup][entityId]))
+    assert len(fieldWatcher.values[entityGroup][entityId]) == len(fieldIds), msg
 
     # Check that the values are the appropriate dummy values
     for fieldId in fieldIds:
-        for value in fieldWatcher.values[dcgm_fields.DCGM_FE_SWITCH][switchId][fieldId]:
-            # For now, these should all be blank values. This test may be updated or deleted later
-            # when the NSCQ library exists
-            assert (value.isBlank == True), "Unexpected error reading field %d on Switch %d" % (fieldId, switchId)
+        for value in fieldWatcher.values[entityGroup][entityId][fieldId]:
+            assert (value.isBlank == isBlank), "Unexpected error reading field %d on entity %d" % (fieldId, entityId)
 
 @test_utils.run_with_standalone_host_engine(30)
 @test_utils.run_with_injection_nvswitches(switchCount=2)
 def test_nvswitch_monitoring_standalone(handle, switchIds):
-    helper_nvswitch_monitoring(handle, switchIds)
+    # For now, these should all be blank values. This test may be updated or deleted later
+    # when the NSCQ library exists
+    helper_fields_monitoring(handle, switchIds, dcgm_fields.DCGM_FE_SWITCH,\
+                             dcgm_fields.DCGM_FI_FIRST_NVSWITCH_FIELD_ID, dcgm_fields.DCGM_FI_LAST_NVSWITCH_FIELD_ID,\
+                             True)
+
+@test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_with_nvsdm_mocked_cx()
+def test_cx_monitoring_mocked(handle, cxIds):
+    helper_fields_monitoring(handle, cxIds, dcgm_fields.DCGM_FE_CONNECTX,\
+                             dcgm_fields.DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID, dcgm_fields.DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID,\
+                             False)
+
+
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_only_with_live_cx()
+def test_cx_monitoring_live(handle, cxIds):
+    helper_fields_monitoring(handle, cxIds, dcgm_fields.DCGM_FE_CONNECTX,\
+                             dcgm_fields.DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID, dcgm_fields.DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID,\
+                             False)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.run_with_nvml_injected_gpus()
+def test_platform_info_fields(handle, gpuIds):
+    """  
+    This test injects platform field values and verifies that they can be retrieved.
+    """
+    platformFields = {
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: ("3f26f0def26b9c79", "3f26f0de-f26b-9c79-0000-000000000000"),
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: ("3f26f0def26bdeaa", "3f26f0de-f26b-deaa-0000-000000000000"),
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: 1,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: 2,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID: 3,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE: 4,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID: 5
+    }
+
+    injectedRet = nvml_injection.c_injectNvmlRet_t()
+    injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PLATFORMINFO
+    injectedRet.values[0].value.PlatformInfo.ibGuid = bytes.fromhex(platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID][0])
+    injectedRet.values[0].value.PlatformInfo.chassisSerialNumber = bytes.fromhex(platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER][0])
+    injectedRet.values[0].value.PlatformInfo.slotNumber = platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER]
+    injectedRet.values[0].value.PlatformInfo.trayIndex = platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX]
+    injectedRet.values[0].value.PlatformInfo.hostId = platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID]
+    injectedRet.values[0].value.PlatformInfo.peerType = platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE]
+    injectedRet.values[0].value.PlatformInfo.moduleId = platformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID]
+    injectedRet.valueCount = 1
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuIds[0], "PlatformInfo", None, 0, injectedRet)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    strFields = [
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER
+    ]
+    for field in strFields:
+        dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], field, 1, 3600.0, 0)
+        dcgm_agent.dcgmUpdateAllFields(handle, 1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
+        assert (values[0].value.str == platformFields[field][1]), f"Expected value {platformFields[field][1]} for field {field}, but got {values[0].value.str}"
+
+    i64Fields = [
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID
+    ]
+    for field in i64Fields:
+        dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], field, 1, 3600.0, 0)
+        dcgm_agent.dcgmUpdateAllFields(handle, 1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
+        assert (values[0].value.i64 == platformFields[field]), f"Expected value {platformFields[field]} for field {field}, but got {values[0].value.i64}"
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.run_with_nvml_injected_gpus()
+def test_platform_info_fields_invalid_values(handle, gpuIds):
+    """  
+    This test injects invalid platform rack-based fields and verifies that null values
+    are retrieved.
+    """
+    injectedPlatformFields = {
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: "3f26f0def26b9c79",
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: "",
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: 255,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: 255,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID: 3,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE: 4,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID: 5
+    }
+
+    expectedPlatformFields = {
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: "3f26f0de-f26b-9c79-0000-000000000000",
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: dcgmvalue.DCGM_STR_BLANK,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: dcgmvalue.DCGM_INT64_BLANK,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: dcgmvalue.DCGM_INT64_BLANK,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID: 3,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE: 4,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID: 5
+    }
+
+    injectedRet = nvml_injection.c_injectNvmlRet_t()
+    injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PLATFORMINFO
+    injectedRet.values[0].value.PlatformInfo.ibGuid = bytes.fromhex(injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID])
+    injectedRet.values[0].value.PlatformInfo.chassisSerialNumber = bytes.fromhex(injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER])
+    injectedRet.values[0].value.PlatformInfo.slotNumber = injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER]
+    injectedRet.values[0].value.PlatformInfo.trayIndex = injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX]
+    injectedRet.values[0].value.PlatformInfo.hostId = injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID]
+    injectedRet.values[0].value.PlatformInfo.peerType = injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE]
+    injectedRet.values[0].value.PlatformInfo.moduleId = injectedPlatformFields[dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID]
+    injectedRet.valueCount = 1
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuIds[0], "PlatformInfo", None, 0, injectedRet)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    strFields = [
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER
+    ]
+    for field in strFields:
+        dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], field, 1, 3600.0, 0)
+        dcgm_agent.dcgmUpdateAllFields(handle, 1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
+        assert (values[0].value.str == expectedPlatformFields[field]), f"Expected value {expectedPlatformFields[field]} for field {field}, but got {values[0].value.str}"
+
+    i64Fields = [
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_PEER_TYPE,
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_MODULE_ID
+    ]
+    for field in i64Fields:
+        dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], field, 1, 3600.0, 0)
+        dcgm_agent.dcgmUpdateAllFields(handle, 1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
+        assert (values[0].value.i64 == expectedPlatformFields[field]), f"Expected value {expectedPlatformFields[field]} for field {field}, but got {values[0].value.i64}"

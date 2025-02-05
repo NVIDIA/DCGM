@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <set>
 #include <string>
 #include <sysexits.h>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #define DEPRECATION_WARNING "NVVS has been deprecated. Please use dcgmi diag to invoke these tests."
@@ -110,14 +112,17 @@ public:
     bool failEarly;             // enable failure checks throughout test rather than at the end so we stop test sooner
     uint64_t failCheckInterval; /* how often failure checks should occur when running tests (in seconds). Only
                                        applies if failEarly is enabled. */
-    unsigned int currentIteration;    /* the current iteration of the diagnostic being executed.
-                                         See dcgmi/CommandLineParser.h */
-    unsigned int totalIterations;     /* the total number of iterations of the diagnostic that will run. */
-    std::string entityIds;            // Comma-separated list of entity ids.
-    int channelFd;                    // A file description used to send back response to caller.
-    unsigned int diagResponseVersion; // The version of diag response to be returned via channel-fd.
-    bool rerunAsRoot;                 // Flag indicating if this round is the second attemping or not.
-    unsigned int watchFrequency;      // The watch frequency for fields being watched
+    unsigned int currentIteration;      /* the current iteration of the diagnostic being executed.
+                                           See dcgmi/CommandLineParser.h */
+    unsigned int totalIterations;       /* the total number of iterations of the diagnostic that will run. */
+    std::string entityIds;              // Comma-separated list of entity ids.
+    int channelFd;                      // A file description used to send back response to caller.
+    unsigned int diagResponseVersion;   // The version of diag response to be returned via channel-fd.
+    bool rerunAsRoot;                   // Flag indicating if this round is the second attemping or not.
+    unsigned int watchFrequency;        // The watch frequency for fields being watched
+    std::string ignoreErrorCodesString; // String of error codes to be ignored on different entities
+    std::map<dcgmGroupEntityPair_t, std::unordered_set<unsigned int>>
+        parsedIgnoreErrorCodes; // String of error codes to be ignored on different entities
 
 private:
     static unsigned int constexpr DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS { 5000000 };

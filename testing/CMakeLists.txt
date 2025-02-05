@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -143,6 +143,7 @@ install(
 install(
     PROGRAMS
         run_tests.sh
+        python3/test_times.sh
         generate_coverage_report.sh
         process_coverage_report.sh
         process_coverage_report.awk
@@ -164,6 +165,7 @@ install(
         python3/DcgmGroup.py
         python3/DcgmHandle.py
         python3/DcgmJsonReader.py
+	    python3/DcgmLogging.py
         python3/DcgmReader.py
         python3/DcgmStatus.py
         python3/DcgmSystem.py

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <DcgmRecorder.h>
+#include <IgnoreErrorCodesHelper.h>
 #include <TestParameters.h>
 #include <dcgm_structs.h>
 #include <timelib.h>
@@ -62,13 +63,26 @@ public:
     /*
      * Retrieves the list of errors we detected during the plugin run
      */
-    std::vector<DcgmError> GetErrors() const;
+    std::vector<DcgmError> GetFatalErrors() const;
+
+    /********************************************************************/
+    /*
+     * Retrieves the list of errors we detected during the plugin run
+     */
+    std::vector<DcgmError> GetIgnoredErrors() const;
+
+    /********************************************************************/
+    /*
+     * Sets the ignore error code map to be forwarded to the DcgmRecorder
+     */
+    void SetRecorderIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map);
 
 private:
     DcgmRecorder m_dcgmRecorder;
     std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfos;
     bool m_initialized;
-    std::vector<DcgmError> m_errors;
+    std::vector<DcgmError> m_fatalErrors;
+    std::vector<DcgmError> m_ignoredErrors;
     timelib64_t m_startTime;
     std::string m_pluginName;
 

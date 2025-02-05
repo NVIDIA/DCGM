@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include "L1TagCuda.h"
 #include "NvvsDeviceList.h"
 #include "l1tag_ptx_string.h"
+#include "memory_plugin.h"
 #include "timelib.h"
 #include <CudaCommon.h>
 #include <assert.h>

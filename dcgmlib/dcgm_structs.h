@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -430,7 +430,7 @@ typedef enum dcgmChipArchitecture_enum
     DCGM_CHIP_ARCH_HOPPER    = 9,  //!< All Hopper-architecture parts
     DCGM_CHIP_ARCH_BLACKWELL = 10, //!< All Blackwell-architecture parts
 
-    DCGM_CHIP_ARCH_COUNT, //!< Keep this second to last, exclude unknown
+    DCGM_CHIP_ARCH_COUNT = 10, //!< Keep this 2nd to last, exclude unknown
 
     DCGM_CHIP_ARCH_UNKNOWN = 0xffffffff //!< Anything else, presumably something newer
 } dcgmChipArchitecture_t;
@@ -657,6 +657,9 @@ typedef enum
     DcgmMigProfileGpuInstanceSlice1Rev1     = 8,  /*!< GPU instance slice 1 revision 1 */
     DcgmMigProfileGpuInstanceSlice2Rev1     = 9,  /*!< GPU instance slice 2 revision 1 */
     DcgmMigProfileGpuInstanceSlice1Rev2     = 10, /*!< GPU instance slice 1 revision 2 */
+    DcgmMigProfileGpuInstanceSlice1GFX      = 11, /*!< GPU instance slice 1 GFX */
+    DcgmMigProfileGpuInstanceSlice2GFX      = 12, /*!< GPU instance slice 2 GFX */
+    DcgmMigProfileGpuInstanceSlice4GFX      = 13, /*!< GPU instance slice 4 GFX */
     DcgmMigProfileComputeInstanceSlice1     = 30, /*!< compute instance slice 1 */
     DcgmMigProfileComputeInstanceSlice2     = 31, /*!< compute instance slice 2 */
     DcgmMigProfileComputeInstanceSlice3     = 32, /*!< compute instance slice 3 */
@@ -3126,6 +3129,8 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
 #define DCGM_FILE_LEN              30
 #define DCGM_PATH_LEN              128
 #define DCGM_CLOCKS_EVENT_MASK_LEN 50
+#define DCGM_IGNORE_ERROR_MAX_LEN  512
+
 // Deprecated: Use DCGM_CLOCKS_EVENT_MASK_LEN instead
 #define DCGM_THROTTLE_MASK_LEN DCGM_CLOCKS_EVENT_MASK_LEN
 
@@ -3278,6 +3283,47 @@ typedef struct
  * Version 9 for \ref dcgmRunDiag_t
  */
 #define dcgmRunDiag_version9 MAKE_DCGM_VERSION(dcgmRunDiag_v9, 9)
+
+/*
+ * Run diagnostic structure v10
+ */
+typedef struct
+{
+    unsigned int version;    //!< version of this message
+    unsigned int flags;      //!< flags specifying binary options for running it. See DCGM_RUN_FLAGS_*
+    unsigned int debugLevel; //!< 0-5 for the debug level the GPU diagnostic will use for logging.
+    dcgmGpuGrp_t groupId; //!< group of GPUs to verify. Cannot be specified together with entityIds. When entityIds is
+                          //!< specified, this value should be set to DCGM_GROUP_NULL.
+    dcgmPolicyValidation_t validate;                              //!< 0-3 for which tests to run. Optional.
+    char testNames[DCGM_MAX_TEST_NAMES][DCGM_MAX_TEST_NAMES_LEN]; //!< Specified list of test names. Optional.
+    char testParms[DCGM_MAX_TEST_PARMS]
+                  [DCGM_MAX_TEST_PARMS_LEN_V2]; //!< Parameters to set for specified tests
+                                                //!< in the format:
+                                                //!< testName.parameterName=parameterValue. Optional.
+    char fakeGpuList[DCGM_GPU_LIST_LEN]; //!< Comma-separated list of GPUs. Cannot be specified with the groupId or
+                                         //!< entityIds.
+    char debugLogFile[DCGM_PATH_LEN];    //!< Alternate name for the debug log file that should be used
+    char statsPath[DCGM_PATH_LEN];       //!< Path that the plugin's statistics files should be written to
+    char configFileContents[DCGM_MAX_CONFIG_FILE_LEN]; //!< Contents of nvvs config file (likely yaml)
+    char clocksEventMask[DCGM_CLOCKS_EVENT_MASK_LEN];  //!< Clocks event reasons to ignore as either integer mask or
+    //!< csv list of reasons
+    char pluginPath[DCGM_PATH_LEN]; //!< Custom path to the diagnostic plugins - No longer supported as of 2.2.9
+    unsigned int currentIteration;  //!< The current iteration that will be executed
+    unsigned int totalIterations;   //!< The total iterations that will be executed
+    unsigned int timeoutSeconds;    //!< The timeout for the diagnostic in seconds
+    char _unusedBuf[DCGM_PATH_LEN]; //!< No longer used
+    unsigned int failCheckInterval; //!< How often the fail early checks should occur when enabled.
+    char expectedNumEntities[DCGM_EXPECTED_ENTITIES_LEN]; //!< The expected number of entities the diag will run on.
+    char entityIds[DCGM_ENTITY_ID_LIST_LEN]; //!< Comma-separated list of entity ids. Cannot be specified with the
+                                             //!< groupId.
+    unsigned int watchFrequency;             //!< The watch frequency for fields being watched
+    char ignoreErrorCodes[DCGM_IGNORE_ERROR_MAX_LEN]; //!< String of error codes to be ignored on different entities
+} dcgmRunDiag_v10;
+
+/**
+ * Version 10 for \ref dcgmRunDiag_t
+ */
+#define dcgmRunDiag_version10 MAKE_DCGM_VERSION(dcgmRunDiag_v10, 10)
 
 /**
  * Flags for dcgmGetEntityGroupEntities's flags parameter
@@ -3600,8 +3646,22 @@ typedef struct
 
 
 #define dcgmSettingsSetLoggingSeverity_version1 MAKE_DCGM_VERSION(dcgmSettingsSetLoggingSeverity_v1, 1)
-#define dcgmSettingsSetLoggingSeverity_version  dcgmSettingsSetLoggingSeverity_version1
-typedef dcgmSettingsSetLoggingSeverity_v1 dcgmSettingsSetLoggingSeverity_t;
+
+/**
+ * Version 2 of dcgmSettingsSetLoggingSeverity_t
+ */
+typedef struct
+{
+    unsigned int version;
+    int targetLogger;
+    DcgmLoggingSeverity_t targetSeverity;
+} dcgmSettingsSetLoggingSeverity_v2;
+
+
+#define dcgmSettingsSetLoggingSeverity_version2 MAKE_DCGM_VERSION(dcgmSettingsSetLoggingSeverity_v2, 2)
+
+#define dcgmSettingsSetLoggingSeverity_version dcgmSettingsSetLoggingSeverity_version2
+typedef dcgmSettingsSetLoggingSeverity_v2 dcgmSettingsSetLoggingSeverity_t;
 
 /**
  * Structure to describe the DCGM build environment ver 2.0

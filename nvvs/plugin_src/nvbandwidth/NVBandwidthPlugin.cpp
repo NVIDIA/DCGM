@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ NVBandwidthPlugin::NVBandwidthPlugin(dcgmHandle_t handle)
     // Set all the defaults for the parameters
     m_testParameters.AddString(PS_LOGFILE, "stats_nvbandwidth.json");
     m_testParameters.AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_testParameters.AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = &m_testParameters;
 }
 
@@ -223,6 +224,9 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
+
+    ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));
+    m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
     SetCudaDriverMajorVersion();
 

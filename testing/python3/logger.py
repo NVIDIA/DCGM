@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,8 +43,38 @@ _coloring_enabled = True #coloring is applied even there is no file descriptor c
 _message_levels = (FATAL, ERROR, INFO, WARNING, DEBUG) = list(range(5))
 messages_level_counts = [0] * len(_message_levels)
 level_names = ("FATAL", "ERROR", "INFO", "WARNING", "DEBUG")
+logging_level_num = dcgm_structs.DcgmLoggingSeverityNone
 
 stdout_loglevel = WARNING
+
+# LevelUpdateManager
+#
+# This class manages all specific log level change handlers to be called
+# when log levels change, methods to add to and remove from this set, and a
+# method to call all the handler handling methods when log levels change. This
+# is useful with --fast-run when decorators are not rerun between failing tests
+# and rerunning them with different log levels.
+
+# By having these decorators register appropriate objects with update methods
+# with this class via register (and remove them via deregister), when do_update
+# is called, the update methods of all registered handlers are called.
+#
+class LevelUpdateManager:
+    handlers = set()
+
+    @classmethod
+    def register(cls, handler):
+        cls.handlers.add(handler);
+
+    @classmethod
+    def deregister(cls, handler):
+        if handler in cls.handlers:
+           cls.handlers.remove(handler)
+
+    @classmethod
+    def do_update(cls):
+        for handler in cls.handlers:
+            handler.updateLogLevel()
 
 def caller_function_details(depth=1):
     """
@@ -101,6 +131,7 @@ def setup_environment():
     global nvml_trace_log_filename
     global nvvs_trace_log_filename
     global have_recreated_log_dir
+    global logging_level_num
     curr_log_dir = None
 
     # Users can specify a non-default logging base path via the command line
@@ -162,6 +193,7 @@ def setup_environment():
         addtrace_logging(dcgm_structs, 
                 # Don't attach trace logging to some functions
                 lambda name, fn: name not in ["dcgmErrorString", "dcgmStructToFriendlyObject"])
+        logging_level_num = test_utils.loggingLevelNum
     else:
         #Not logging. Clear the environmental variables
         envVars = ['__NVML_DBG_FILE', '__NVML_DBG_LVL', '__NVML_DBG_APPEND', 
@@ -170,6 +202,9 @@ def setup_environment():
             if envVar in os.environ:
                 del(os.environ[envVar])
         nvvs_trace_log_filename = None
+        logging_level_num = test_utils.noLoggingLevelNum
+
+    LevelUpdateManager.do_update()
 
     global _coloring_enabled
     if sys.stdout.isatty():
