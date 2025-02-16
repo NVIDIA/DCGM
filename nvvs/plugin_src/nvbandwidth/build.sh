@@ -24,8 +24,8 @@ NVBANDWIDTH_REPO_URL="${NVBANDWIDTH_REPO_URL:-https://github.com/NVIDIA/nvbandwi
 NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-v0.5}"
 
 declare -a cuda_local_repo_urls=(
-    'https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda-repo-ubuntu2004-12-6-local_12.6.3-560.35.05-1_arm64.deb'
-    'https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda-repo-ubuntu2004-12-6-local_12.6.3-560.35.05-1_amd64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-ubuntu2404-12-8-local_12.8.0-570.86.10-1_amd64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-ubuntu2404-12-8-local_12.8.0-570.86.10-1_arm64.deb'
 )
 
 while true; do

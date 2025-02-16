@@ -16,7 +16,8 @@
 
 set -o errexit -o pipefail -o noclobber -o nounset
 
-if [[ ${DEBUG_BUILD_SCRIPT:-0} -eq 1 ]]; then
+if [[ ${DEBUG_BUILD_SCRIPT:-0} -eq 1 ]]
+then
     PS4='$LINENO: ' # to see line numbers
     set -xv
 fi

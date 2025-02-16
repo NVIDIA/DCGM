@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
+#include <cerrno>
 #include <cstring>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
-#include <stdio.h>
+#include <system_error>
 
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
@@ -105,7 +106,7 @@ dcgmPowerFileInfo_t DcgmSystemMonitor::GetCpuSocketFileIndex(const std::string &
 
 void DcgmSystemMonitor::PopulateSocketPowerMap(const std::string &baseDir)
 {
-    static const std::string POWER_PATH_EXTENSION("device/");
+    static const std::string POWER_PATH_EXTENSION("device");
     static const std::string HWMON_DIR_NAME_START("hwmon");
     static const std::string POWER_USAGE_FILENAME("power1_average");
     static const std::string POWER_CAP_FILENAME("power1_cap");
@@ -117,59 +118,77 @@ void DcgmSystemMonitor::PopulateSocketPowerMap(const std::string &baseDir)
         return;
     }
 
-    DIR *dir = opendir(baseDir.c_str());
-    struct dirent *entry;
-
-    while ((entry = readdir(dir)) != nullptr)
-    {
-        if (entry->d_type == DT_DIR
-            || !strncmp(entry->d_name, HWMON_DIR_NAME_START.c_str(), HWMON_DIR_NAME_START.size()))
+    auto dirDeleter = [](DIR *dir) {
+        if (dir != nullptr)
         {
-            std::string path = fmt::format("{}/{}/{}{}", baseDir, entry->d_name, POWER_PATH_EXTENSION, POWER_OEM_INFO);
-            dcgmPowerFileInfo_t info = GetCpuSocketFileIndex(path);
-            if (info.socketId != SYSMON_INVALID_SOCKET_ID)
+            closedir(dir);
+            dir = nullptr;
+        }
+    };
+
+    auto dir = std::unique_ptr<DIR, decltype(dirDeleter)>(opendir(baseDir.c_str()), dirDeleter);
+    if (!dir)
+    {
+        auto syserr = std::system_error(errno, std::generic_category());
+        log_info("Could not open directory '{}'", baseDir);
+        log_debug("Got opendir error: ({}) {}", syserr.code().value(), syserr.what());
+        return;
+    }
+
+    struct dirent *entry = nullptr;
+
+    while ((entry = readdir(dir.get())) != nullptr)
+    {
+        if (entry->d_type != DT_DIR || !std::string_view { entry->d_name }.starts_with(HWMON_DIR_NAME_START))
+        {
+            continue;
+        }
+
+        auto pathPrefix = fmt::format("{}/{}/{}", baseDir, entry->d_name, POWER_PATH_EXTENSION);
+
+        std::string path = fmt::format("{}/{}", pathPrefix, POWER_OEM_INFO);
+
+        dcgmPowerFileInfo_t info = GetCpuSocketFileIndex(path);
+        if (info.socketId == SYSMON_INVALID_SOCKET_ID)
+        {
+            log_debug("Invalid socket ID. Skipping: '{}'", entry->d_name);
+            continue;
+        }
+
+        if (info.fileType == DCGM_POWER_USAGE_FILE)
+        {
+            // Something like: /sys/class/hwmon/hwmon4/device/power1_average
+            auto usagePath = fmt::format("{}/{}", pathPrefix, POWER_USAGE_FILENAME);
+
+            if (info.fileSrc == DCGM_CPU_POWER_SOCKET_FILE)
             {
-                if (info.fileType == DCGM_POWER_USAGE_FILE)
-                {
-                    if (info.fileSrc == DCGM_CPU_POWER_SOCKET_FILE)
-                    {
-                        // Something like: /sys/class/hwmon/hwmon4/device/power1_average
-                        m_cpuSocketToPowerUsagePath[info.socketId] = fmt::format(
-                            "{}/{}/{}{}", baseDir, entry->d_name, POWER_PATH_EXTENSION, POWER_USAGE_FILENAME);
-                    }
-                    else if (info.fileSrc == DCGM_SYSIO_POWER_SOCKET_FILE)
-                    {
-                        // Something like: /sys/class/hwmon/hwmon4/device/power1_average
-                        m_sysioSocketToPowerUsagePath[info.socketId] = fmt::format(
-                            "{}/{}/{}{}", baseDir, entry->d_name, POWER_PATH_EXTENSION, POWER_USAGE_FILENAME);
-                    }
-                    else if (info.fileSrc == DCGM_MODULE_POWER_SOCKET_FILE)
-                    {
-                        // Something like: /sys/class/hwmon/hwmon4/device/power1_average
-                        m_moduleSocketToPowerUsagePath[info.socketId] = fmt::format(
-                            "{}/{}/{}{}", baseDir, entry->d_name, POWER_PATH_EXTENSION, POWER_USAGE_FILENAME);
-                    }
-                    else
-                    {
-                        log_debug("File source invalid: '{}'", info.fileSrc);
-                        return;
-                    }
-                }
-                else if (info.fileType == DCGM_POWER_CAP_FILE)
-                {
-                    // Something like: /sys/class/hwmon/hwmon3/device/power1_cap
-                    m_socketToPowerCapPath[info.socketId]
-                        = fmt::format("{}/{}/{}{}", baseDir, entry->d_name, POWER_PATH_EXTENSION, POWER_CAP_FILENAME);
-                }
-                else
-                {
-                    log_debug("File type invalid: '{}'", info.fileType);
-                    return;
-                }
+                m_cpuSocketToPowerUsagePath[info.socketId] = std::move(usagePath);
+            }
+            else if (info.fileSrc == DCGM_SYSIO_POWER_SOCKET_FILE)
+            {
+                m_sysioSocketToPowerUsagePath[info.socketId] = std::move(usagePath);
+            }
+            else if (info.fileSrc == DCGM_MODULE_POWER_SOCKET_FILE)
+            {
+                m_moduleSocketToPowerUsagePath[info.socketId] = std::move(usagePath);
+            }
+            else
+            {
+                log_debug("File source invalid: '{}'", info.fileSrc);
+                return;
             }
         }
+        else if (info.fileType == DCGM_POWER_CAP_FILE)
+        {
+            // Something like: /sys/class/hwmon/hwmon3/device/power1_cap
+            m_socketToPowerCapPath[info.socketId] = fmt::format("{}/{}", pathPrefix, POWER_CAP_FILENAME);
+        }
+        else
+        {
+            log_debug("File type invalid: '{}'", info.fileType);
+            return;
+        }
     }
-    closedir(dir);
 }
 
 double DcgmSystemMonitor::GetPowerValueFromFile(const std::string &path)

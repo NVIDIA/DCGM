@@ -1096,12 +1096,20 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
         }
     };
 
-    std::unique_ptr<DIR, decltype(dirDeleter)> dir(opendir(THERMAL_BASE_PATH.c_str()), dirDeleter);
-    struct dirent *entry {};
+    auto dir = std::unique_ptr<DIR, decltype(dirDeleter)>(opendir(THERMAL_BASE_PATH.c_str()), dirDeleter);
+    if (!dir)
+    {
+        auto syserr = std::system_error(errno, std::generic_category());
+        log_info("Could not open directory '{}'", THERMAL_BASE_PATH);
+        log_debug("Got opendir error: ({}) {}", syserr.code().value(), syserr.what());
+        return;
+    }
+
+    struct dirent *entry = nullptr;
 
     while ((entry = readdir(dir.get())) != nullptr)
     {
-        if (strncmp(entry->d_name, THERMAL_DIR_NAME_START.c_str(), THERMAL_DIR_NAME_START.size()))
+        if (entry->d_type != DT_DIR || !std::string_view { entry->d_name }.starts_with(THERMAL_DIR_NAME_START))
         {
             // Not a socket temperature match candidate
             log_verbose(
@@ -1109,23 +1117,21 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
             continue;
         }
 
-        std::string path(fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_PATH_EXTENSION));
+        auto pathPrefix = fmt::format("{}/{}", THERMAL_BASE_PATH, entry->d_name);
+
+        auto path = fmt::format("{}/{}", pathPrefix, THERMAL_PATH_EXTENSION);
+
         unsigned int socketId = GetSocketIdFromThermalFile(path);
         if (socketId != SYSMON_INVALID_SOCKET_ID)
         {
-            std::string tempFilePath(
-                fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_FILENAME));
+            auto tempFilePath = fmt::format("{}/{}", pathPrefix, THERMAL_TEMPERATURE_FILENAME);
             log_debug("Recording temperature path '{}' for Socket {}", tempFilePath, socketId);
             m_socketTemperatureFileMap[socketId] = std::move(tempFilePath);
 
-            std::string trip0TypePath(
-                fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_TRIPTYPE0_FILENAME));
-            std::string trip1TypePath(
-                fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_TRIPTYPE1_FILENAME));
-            std::string trip0TempPath(
-                fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_TRIPTEMP0_FILENAME));
-            std::string trip1TempPath(
-                fmt::format("{}/{}/{}", THERMAL_BASE_PATH, entry->d_name, THERMAL_TEMPERATURE_TRIPTEMP1_FILENAME));
+            auto trip0TypePath = fmt::format("{}/{}", pathPrefix, THERMAL_TEMPERATURE_TRIPTYPE0_FILENAME);
+            auto trip1TypePath = fmt::format("{}/{}", pathPrefix, THERMAL_TEMPERATURE_TRIPTYPE1_FILENAME);
+            auto trip0TempPath = fmt::format("{}/{}", pathPrefix, THERMAL_TEMPERATURE_TRIPTEMP0_FILENAME);
+            auto trip1TempPath = fmt::format("{}/{}", pathPrefix, THERMAL_TEMPERATURE_TRIPTEMP1_FILENAME);
             std::ifstream type0File(trip0TypePath);
             std::ifstream type1File(trip1TypePath);
             auto type0Type = readEntireFile(type0File);
