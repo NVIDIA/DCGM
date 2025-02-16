@@ -25,7 +25,7 @@ project(datacenter-gpu-manager-4-config
 set(DCGM_ROOT_DIR "@CMAKE_SOURCE_DIR@")
 
 set(DCGM_NVVS_SRC_DIR "${DCGM_ROOT_DIR}/nvvs")
-set(DCGM_NVVS_INSTALL_DIR "@CMAKE_INSTALL_LIBEXECDIR@/@PROJECT_NAME@")
+set(DCGM_NVVS_INSTALL_DIR "@CMAKE_INSTALL_DATAROOTDIR@/@PROJECT_NAME@")
 
 configure_file("${DCGM_NVVS_SRC_DIR}/diag-skus.yaml.in" diag-skus.yaml @ONLY)
 

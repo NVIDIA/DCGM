@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include "TestCacheManager.h"
 #include "DcgmCacheManager.h"
 #include "DcgmTopology.hpp"
@@ -2577,6 +2578,86 @@ int TestCacheManager::TestAreAllGpuIdsSameSku()
     }
 }
 
+
+/*****************************************************************************/
+int TestCacheManager::TestMultipleWatchersMaxAge(void)
+{
+    auto dcm = createCacheManager(1);
+    if (nullptr == dcm)
+    {
+        fprintf(stderr, "Failed to create DcgmCacheManager\n");
+        return -1;
+    }
+
+    DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+
+    bool updateOnFirstWatch { false };
+    bool wereFirstWatcher { false };
+
+    dcgmReturn_t st = dcm->AddFieldWatch(
+        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 1000, 5000, 0, watcher, false, updateOnFirstWatch, wereFirstWatcher);
+
+    if (st)
+    {
+        fprintf(stderr, "AddFieldWatch returned %d\n", st);
+        return -1;
+    }
+
+    DcgmWatcher watcher2(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+    updateOnFirstWatch = false;
+    wereFirstWatcher   = false;
+
+    st = dcm->AddFieldWatch(
+        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 500, 3000, 0, watcher2, false, updateOnFirstWatch, wereFirstWatcher);
+    if (st)
+    {
+        fprintf(stderr, "AddFieldWatch returned %d\n", st);
+        return -1;
+    }
+
+    dcgmcm_watch_info_t watchInfo;
+
+    watchInfo.watchKey.entityGroupId = DCGM_FE_GPU;
+    watchInfo.watchKey.entityId      = 0;
+    watchInfo.watchKey.fieldId       = DCGM_FI_DEV_GPU_UTIL;
+
+    dcgm_watch_watcher_info_t w1;
+    w1.monitorIntervalUsec = 1000;
+    w1.maxAgeUsec          = 5000;
+    w1.isSubscribed        = false;
+
+    dcgm_watch_watcher_info_t w2;
+    w2.monitorIntervalUsec = 500;
+    w2.maxAgeUsec          = 3000;
+    w2.isSubscribed        = true;
+
+    watchInfo.watchers.push_back(std::move(w1));
+    watchInfo.watchers.push_back(std::move(w2));
+
+    // Update watch info from watchers
+    dcgmReturn_t ret = dcm->UpdateWatchFromWatchers(&watchInfo);
+    if (ret != DCGM_ST_OK)
+    {
+        fprintf(stderr, "UpdateWatchFromWatchers returned %d\n", ret);
+        return 1;
+    }
+
+    if (watchInfo.monitorIntervalUsec != 500)
+    {
+        fprintf(stderr, "monitorInterval is not 500\n");
+        return 1;
+    }
+
+    if (watchInfo.maxAgeUsec != 5000)
+    {
+        fprintf(stderr, "maxAgeUsec is not 5000\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+
 /*****************************************************************************/
 void TestCacheManager::CompleteTest(std::string testName, int testReturn, int &Nfailed)
 {
@@ -2627,6 +2708,7 @@ int TestCacheManager::Run()
         CompleteTest("TestAttachDetachNoWatches", TestAttachDetachNoWatches(), Nfailed);
         CompleteTest("TestAttachDetachWithWatches", TestAttachDetachWithWatches(), Nfailed);
         CompleteTest("TestAreAllGpuIdsSameSku", TestAreAllGpuIdsSameSku(), Nfailed);
+        CompleteTest("TestMultipleWatchersMaxAge", TestMultipleWatchersMaxAge(), Nfailed);
     }
     // fatal test return ocurred
     catch (const std::runtime_error &e)

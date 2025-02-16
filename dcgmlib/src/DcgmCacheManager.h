@@ -1702,7 +1702,10 @@ public:
                                               timelib64_t now,
                                               timelib64_t expireTime);
 
+#ifndef TEST_DCGMCACHEMANAGER
 private:
+#endif
+
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
                                     frequency of the most frequent stat being tracked (0) */
 

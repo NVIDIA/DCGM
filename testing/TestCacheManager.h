@@ -76,6 +76,7 @@ private:
     int TestAttachDetachNoWatches();
     int TestAttachDetachWithWatches();
     int TestAreAllGpuIdsSameSku();
+    int TestMultipleWatchersMaxAge();
 
     /*************************************************************************/
     /*

@@ -3076,7 +3076,7 @@ dcgmReturn_t DcgmCacheManager::UpdateWatchFromWatchers(dcgmcm_watch_info_p watch
     for (++it; it != watchInfo->watchers.end(); ++it)
     {
         minMonitorFreqUsec = std::min(minMonitorFreqUsec, it->monitorIntervalUsec);
-        minMaxAgeUsec      = std::min(minMaxAgeUsec, it->maxAgeUsec);
+        minMaxAgeUsec      = std::max(minMaxAgeUsec, it->maxAgeUsec);
         if (it->isSubscribed)
             hasSubscribedWatchers = 1;
     }
@@ -3085,7 +3085,10 @@ dcgmReturn_t DcgmCacheManager::UpdateWatchFromWatchers(dcgmcm_watch_info_p watch
     watchInfo->maxAgeUsec            = minMaxAgeUsec;
     watchInfo->hasSubscribedWatchers = hasSubscribedWatchers;
 
-    log_debug("UpdateWatchFromWatchers minMonitorFreqUsec {}, minMaxAgeUsec {}, hsw {}",
+    log_debug("UpdateWatchFromWatchers gid {}, eid {}, fid {}, minMonitorFreqUsec {}, minMaxAgeUsec {}, hsw {}",
+              watchInfo->watchKey.entityGroupId,
+              watchInfo->watchKey.entityId,
+              watchInfo->watchKey.fieldId,
               (long long)minMonitorFreqUsec,
               (long long)minMaxAgeUsec,
               watchInfo->hasSubscribedWatchers);

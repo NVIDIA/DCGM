@@ -232,7 +232,7 @@ public:
 
     UpdateFuncType UpdateFunc(void) const override
     {
-        return UpdateNvSwitchVectorFieldType<fieldId>::updateFunc;
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
     }
 };
 
@@ -254,7 +254,7 @@ public:
 
     UpdateFuncType UpdateFunc(void) const override
     {
-        return UpdateNvSwitchVectorFieldType<fieldId>::updateFunc;
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
     }
 };
 
