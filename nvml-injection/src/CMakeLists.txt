@@ -30,6 +30,7 @@ target_sources(nvmli_public
     PRIVATE
         InjectionArgument.cpp
         InjectionKeys.cpp
+        NvmlInjectionUtil.cpp
         nvml_generated_stubs.cpp
         nvml_stubs.cpp
 )

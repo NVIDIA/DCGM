@@ -25,6 +25,7 @@
         dcgmGetDeviceTopology;
         dcgmGetEntityGroupEntities;
         dcgmGetFieldSummary;
+        dcgmGetGpuChipArchitecture;
         dcgmGetGpuInstanceHierarchy;
         dcgmGetGroupTopology;
         dcgmGetLatestValues;

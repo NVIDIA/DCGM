@@ -2412,4 +2412,9 @@ private:
                                         dcgm_field_meta_p fieldMeta,
                                         timelib64_t now,
                                         timelib64_t expireTime);
+
+    dcgmReturn_t ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &threadCtx,
+                                       nvmlDevice_t const nvmlDevice,
+                                       unsigned short const fieldId,
+                                       timelib64_t const expireTime);
 };

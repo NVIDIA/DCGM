@@ -1609,47 +1609,53 @@ typedef dcgmComputeInstanceProfiles_v1 dcgmComputeInstanceProfiles_t;
  * Workload power profile information
  */
 
-#define DCGM_POWER_PROFILE_ARRAY_SIZE         8
-#define DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM 32
-#define DCGM_POWER_PROFILE_MAX_NUM            (255)
+#define DCGM_POWER_PROFILE_ARRAY_SIZE         8     //!< Power profile array size
+#define DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM 32    //!< Power profile bits per element
+#define DCGM_POWER_PROFILE_MAX_NUM            (255) //!< Max number of power profiles
 typedef enum
 {
-    DCGM_POWER_PROFILE_MAX_P         = 0,
-    DCGM_POWER_PROFILE_MAX_Q         = 1,
-    DCGM_POWER_PROFILE_COMPUTE       = 2,
-    DCGM_POWER_PROFILE_MEMORY_BOUND  = 3,
-    DCGM_POWER_PROFILE_NETWORK       = 4,
-    DCGM_POWER_PROFILE_BALANCED      = 5,
-    DCGM_POWER_PROFILE_LLM_INFERENCE = 6,
-    DCGM_POWER_PROFILE_LLM_TRAINING  = 7,
-    DCGM_POWER_PROFILE_RBM           = 8,
-    DCGM_POWER_PROFILE_DCPCIE        = 9,
-    DCGM_POWER_PROFILE_HMMA_SPARSE   = 10,
-    DCGM_POWER_PROFILE_HMMA_DENSE    = 11,
-    DCGM_POWER_PROFILE_SYNC_BALANCED = 12,
-    DCGM_POWER_PROFILE_HPC           = 13,
-    DCGM_POWER_PROFILE_MIG           = 14,
-    DCGM_POWER_PROFILE_MAX           = 15,
+    DCGM_POWER_PROFILE_MAX_P         = 0,  //!< 0 - MaxP workload power profile
+    DCGM_POWER_PROFILE_MAX_Q         = 1,  //!< 1 - MaxQ workload power profile
+    DCGM_POWER_PROFILE_COMPUTE       = 2,  //!< 2 - Compute workload power profile
+    DCGM_POWER_PROFILE_MEMORY_BOUND  = 3,  //!< 3 - Memory Bound workload power profile
+    DCGM_POWER_PROFILE_NETWORK       = 4,  //!< 4 - Network workload power profile
+    DCGM_POWER_PROFILE_BALANCED      = 5,  //!< 5 - Balanced workload power profile
+    DCGM_POWER_PROFILE_LLM_INFERENCE = 6,  //!< 6 - LLM Inference workload power profile
+    DCGM_POWER_PROFILE_LLM_TRAINING  = 7,  //!< 7 - LLM Training workload power profile
+    DCGM_POWER_PROFILE_RBM           = 8,  //!< 8 - RBM workload power profile
+    DCGM_POWER_PROFILE_DCPCIE        = 9,  //!< 9 - DCPCIE workload power profile
+    DCGM_POWER_PROFILE_HMMA_SPARSE   = 10, //!< 10 - HMMA Sparse workload power profile
+    DCGM_POWER_PROFILE_HMMA_DENSE    = 11, //!< 11 - HMMA Dense workload power profile
+    DCGM_POWER_PROFILE_SYNC_BALANCED = 12, //!< 12 - Sync Balanced workload power profile
+    DCGM_POWER_PROFILE_HPC           = 13, //!< 13 - HPC workload power profile
+    DCGM_POWER_PROFILE_MIG           = 14, //!< 14 - MIG workload power profile
+    DCGM_POWER_PROFILE_MAX           = 15, //!< 15 - Max workload power profile index
 } dcgmPowerProfileType_t;
 
+/**
+ * Information about the specified power profile
+ */
 typedef struct
 {
     unsigned int version; //!< the API version number
     dcgmPowerProfileType_t
-        profileId;         //<! Workload Power Profile Id to provide semantic name such as compute, Memory, Max-Q...
-    unsigned int priority; //<! Priority of the profile
-    unsigned int conflictingMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //<! Mask of conflicting workload power profiles
+        profileId;         //!< Workload Power Profile Id to provide semantic name such as compute, Memory, Max-Q...
+    unsigned int priority; //!< Priority of the profile
+    unsigned int conflictingMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Mask of conflicting workload power profiles
 } dcgmWorkloadPowerProfileInfo_v1;
 typedef dcgmWorkloadPowerProfileInfo_v1 dcgmWorkloadPowerProfileInfo_t;
 #define dcgmWorkloadPowerProfileInfo_version1 MAKE_DCGM_VERSION(dcgmWorkloadPowerProfileInfo_v1, 1)
 #define dcgmWorkloadPowerProfileInfo_version  dcgmWorkloadPowerProfileInfo_version1
 
+/**
+ * Information about the supported power profiles
+ */
 typedef struct
 {
     unsigned int version; //!< the API version number
     dcgmWorkloadPowerProfileInfo_v1
         workloadPowerProfile[DCGM_POWER_PROFILE_MAX_NUM]; //!< Array of workload power profile info parameters
-    unsigned int profileCount;
+    unsigned int profileCount;                            //!< number of profiles in the workloadPowerProfile array
 } dcgmWorkloadPowerProfileProfilesInfo_v1;
 typedef dcgmWorkloadPowerProfileProfilesInfo_v1 dcgmWorkloadPowerProfileProfilesInfo_t;
 #define dcgmWorkloadPowerProfileProfilesInfo_version1 MAKE_DCGM_VERSION(dcgmWorkloadPowerProfileProfilesInfo_v1, 1)
@@ -1664,8 +1670,8 @@ typedef struct
     unsigned int version; //!< the API version number
 
     unsigned int profileMask[DCGM_POWER_PROFILE_ARRAY_SIZE];          //!< Bitmask of valid workload power profiles
-    unsigned int requestedProfileMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //<! Bitmask of requested workload power profiles
-    unsigned int enforcedProfileMask[DCGM_POWER_PROFILE_ARRAY_SIZE];  //<! Bitmask of enforced workload power profiles
+    unsigned int requestedProfileMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Bitmask of requested workload power profiles
+    unsigned int enforcedProfileMask[DCGM_POWER_PROFILE_ARRAY_SIZE];  //!< Bitmask of enforced workload power profiles
 } dcgmDeviceWorkloadPowerProfilesStatus_v1;
 
 typedef dcgmDeviceWorkloadPowerProfilesStatus_v1 dcgmDeviceWorkloadPowerProfilesStatus_t;
@@ -1714,7 +1720,7 @@ typedef struct
     unsigned int computeMode; //!< Compute Mode (One of DCGM_CONFIG_COMPUTEMODE_? OR DCGM_INT32_BLANK to Ignore)
     dcgmConfigPerfStateSettings_t perfState; //!< Performance State Settings (clocks / boost mode)
     dcgmConfigPowerLimit_t powerLimit;       //!< Power Limits
-    unsigned int workloadPowerProfiles[DCGM_POWER_PROFILE_ARRAY_SIZE];
+    unsigned int workloadPowerProfiles[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Configured Workload Power Profiles
 } dcgmConfig_v2;
 
 /**
@@ -2314,8 +2320,10 @@ typedef struct
 
 // See DCGM_DIAG_MAX_ERRORS in PluginInterface.h. Must match DCGM_DIAG_RESPONSE_ERRORS_MAX in dcgm_diag_structs.h
 #define DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX 32 //!< The maximum number of per-entity errors that can be reported.
-// See DCGM_DIAG_MAX_INFO in PluginInterface.h. Must match DCGM_DIAG_RESPONSE_ERRORS_MAX in dcgm_diag_structs.h
-#define DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX 16 //!< The maximum number of per-entity info msgs that can be reported.
+#define DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX \
+    16 //!< Deprecated.The maximum number of per-entity info msgs that can be reported.
+#define DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2 \
+    128 //!< The maximum number of per-entity info msgs that can be reported (v2).
 #define DCGM_DIAG_TEST_RUN_RESULTS_MAX \
     DCGM_GROUP_MAX_ENTITIES_V2         //!< The maximum number of per-entity results that can be reported.
 #define DCGM_DIAG_TEST_RUN_NAME_LEN 32 //!< The maximum number of characters (including '\0') used for a name
@@ -2323,7 +2331,35 @@ typedef struct
 /**
  * Information about each test run.
  *
+ * Since DCGM 4.2
+ * @note This structure is not byte-for-byte compatible with v1. Conversion is required.
+ */
+
+typedef struct
+{
+    char name[DCGM_DIAG_TEST_RUN_NAME_LEN];       //!< The name of the test.
+    char pluginName[DCGM_DIAG_TEST_RUN_NAME_LEN]; //!< Plugin name that this test belongs to
+
+    dcgmDiagResult_t result; //!< Overall result of the plugin (PASS, FAIL, SKIP, WARN, NOT_RUN).
+
+    unsigned char numErrors;     //!< Number of errors, always 0 on PASS.
+    unsigned char numInfo;       //!< Number of info msgs.
+    unsigned char categoryIndex; //!< Index into DiagResponse.categories
+    unsigned char _unused;       //!< padding byte
+
+    unsigned short numResults; //!< Number of entity results.
+
+    unsigned char errorIndices[DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX];  //!< Per-entity error indices for this run.
+    unsigned char infoIndices[DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2]; //!< Per-entity info indices for this run (v2).
+    unsigned short resultIndices[DCGM_DIAG_TEST_RUN_RESULTS_MAX];      //!< Per-entity result indices for this run.
+    dcgmDiagTestAuxData_v1 auxData;
+} dcgmDiagTestRun_v2;
+
+/**
+ * Information about each test run.
+ *
  * Since DCGM 4.0
+ * @deprecated Use dcgmDiagTestRun_v2 instead
  */
 
 typedef struct
@@ -2760,8 +2796,12 @@ typedef enum dcgmSoftwareTest_enum
     DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX //!< Maximum number of errors that can be reported. This must match
                                          //!< DCGM_DIAG_PLUGINRUN_ERROR_INDICES_MAX.
 #define DCGM_DIAG_RESPONSE_INFO_MAX \
-    DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX //!< Maximum number of info msgs that can be reported. This must match
-                                        //!< DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX.
+    DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX //!< Deprecated.Maximum number of info msgs that can be reported. This must
+                                        //!< match DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX.
+
+#define DCGM_DIAG_RESPONSE_INFO_MAX_V2 \
+    DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2 //!< Maximum number of info msgs that can be reported (v2). This must match
+                                           //!< DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2.
 #define DCGM_DIAG_RESPONSE_ENTITIES_MAX DCGM_GROUP_MAX_ENTITIES_V2 //!< Maximum number of entities that can be reported.
 #define DCGM_DIAG_RESPONSE_RESULTS_MAX \
     (DCGM_DIAG_RESPONSE_TESTS_MAX      \
@@ -2770,11 +2810,44 @@ typedef enum dcgmSoftwareTest_enum
 #define DCGM_DIAG_RESPONSE_CATEGORY_LEN   20 //!< Number of bytes (including '\0') for each category
 #define DCGM_DIAG_RESPONSE_V11_UNUSED_LEN \
     682880 //!< Unused bytes in diagResponse_v11 for compatibility with v10 and earlier
+#define DCGM_DIAG_RESPONSE_V12_UNUSED_LEN \
+    621952 //!< Unused bytes in diagResponse_v12 for compatibility with v11 and earlier
+
+/**
+ * Global diagnostics result structure v12
+ *
+ * Since DCGM 4.2
+ * @note This structure is not byte-for-byte compatible with v11. Conversion is required.
+ */
+typedef struct
+{
+    unsigned int version; //!< version number (dcgmDiagResponse_v12)
+
+    unsigned char numTests;      //!< Number of tests included in this response.
+    unsigned char numErrors;     //!< Number of errors included in this response.
+    unsigned char numInfo;       //!< Number of info msgs included in this response.
+    unsigned char numCategories; //!< Number of categories included in this response.
+
+    unsigned short numEntities; //!< Number of entities included with this response.
+    unsigned short numResults;  //!< Number of results included in this response.
+
+    dcgmDiagTestRun_v2 tests[DCGM_DIAG_RESPONSE_TESTS_MAX];      //!< Test run information for each relevant test.
+    dcgmDiagEntity_v1 entities[DCGM_DIAG_RESPONSE_ENTITIES_MAX]; //!< Per-entity details.
+    dcgmDiagError_v1 errors[DCGM_DIAG_RESPONSE_ERRORS_MAX];      //!< Per-entity errors.
+    dcgmDiagInfo_v1 info[DCGM_DIAG_RESPONSE_INFO_MAX_V2];        //!< Per-entity info messages (increased size in v12).
+    dcgmDiagEntityResult_v1 results[DCGM_DIAG_RESPONSE_RESULTS_MAX];                     //!< Per-entity result.
+    char categories[DCGM_DIAG_RESPONSE_CATEGORIES_MAX][DCGM_DIAG_RESPONSE_CATEGORY_LEN]; //!< List of plugin categories.
+
+    char dcgmVersion[DCGM_VERSION_LEN];              //!< A string representing DCGM's version
+    char driverVersion[DCGM_MAX_STR_LENGTH];         //!< A string representing the driver version
+    char _unused[DCGM_DIAG_RESPONSE_V12_UNUSED_LEN]; //!< Unused bytes in dcgmDiagResponse_v12 for compatibility with
+                                                     //!< v11 and earlier
+} dcgmDiagResponse_v12;
 
 /**
  * Global diagnostics result structure v11
- *
  * Since DCGM 4.0
+ * @deprecated Use dcgmDiagResponse_v12 instead.
  */
 typedef struct
 {
@@ -2803,8 +2876,8 @@ typedef struct
 
 /**
  * Global diagnostics result structure v10
- *
  * Since DCGM 3.3.7
+ * @deprecated Use dcgmDiagResponse_v12 instead.
  */
 typedef struct
 {
@@ -2882,9 +2955,14 @@ typedef struct
 } dcgmDiagResponse_v7;
 
 /**
- * Typedef for \ref dcgmDiagResponse_v11
+ * Typedef for \ref dcgmDiagResponse_v12
  */
-typedef dcgmDiagResponse_v11 dcgmDiagResponse_t;
+typedef dcgmDiagResponse_v12 dcgmDiagResponse_t;
+
+/**
+ * Version 12 for \ref dcgmDiagResponse_v12
+ */
+#define dcgmDiagResponse_version12 MAKE_DCGM_VERSION(dcgmDiagResponse_v12, 12)
 
 /**
  * Version 11 for \ref dcgmDiagResponse_v11
@@ -2892,7 +2970,7 @@ typedef dcgmDiagResponse_v11 dcgmDiagResponse_t;
 #define dcgmDiagResponse_version11 MAKE_DCGM_VERSION(dcgmDiagResponse_v11, 11)
 
 /**
- * Version 10 for \ref dcgmDiagResponse_v11
+ * Version 10 for \ref dcgmDiagResponse_v10
  */
 #define dcgmDiagResponse_version10 MAKE_DCGM_VERSION(dcgmDiagResponse_v10, 10)
 
@@ -2914,7 +2992,7 @@ typedef dcgmDiagResponse_v11 dcgmDiagResponse_t;
 /**
  * Latest version for \ref dcgmDiagResponse_t
  */
-#define dcgmDiagResponse_version dcgmDiagResponse_version11
+#define dcgmDiagResponse_version dcgmDiagResponse_version12
 
 /**
  * Diagnostics live status structure v1
@@ -3173,6 +3251,7 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
 
 /*
  * Run diagnostic structure v7
+ * @deprecated Use dcgmRunDiag_v10 instead
  */
 typedef struct
 {
@@ -3208,6 +3287,7 @@ typedef struct
 
 /*
  * Run diagnostic structure v8
+ * @deprecated Use dcgmRunDiag_v10 instead
  */
 typedef struct
 {
@@ -3246,6 +3326,7 @@ typedef struct
 
 /*
  * Run diagnostic structure v9
+ * @deprecated Use dcgmRunDiag_v10 instead
  */
 typedef struct
 {
@@ -3286,6 +3367,7 @@ typedef struct
 
 /*
  * Run diagnostic structure v10
+ * Since DCGM 4.0
  */
 typedef struct
 {

@@ -22,12 +22,14 @@ add_executable(nvmlicoretests)
 target_sources(nvmlicoretests
     PRIVATE
         InjectedNvmlTests.cpp
+        NvmlInjectionUtilTests.cpp
         ../CompoundValue.cpp
         ../InjectedNvml.cpp
         ../InjectionArgument.cpp
         ../InjectionKeys.cpp
         ../NvmlFuncReturn.cpp
         ../NvmlReturnDeserializer.cpp
+        ../NvmlInjectionUtil.cpp
         ../nvml_generated_stubs.cpp
         ../nvml_stubs.cpp
         ../PassThruNvml.cpp

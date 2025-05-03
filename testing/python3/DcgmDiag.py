@@ -17,6 +17,9 @@ import dcgm_fields
 import dcgm_agent
 import logger
 
+g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
+g_latestRunDiagVer = dcgm_structs.dcgmRunDiag_version10
+
 class DcgmDiag:
 
     # Maps version codes to simple version values for range comparisons
@@ -45,6 +48,7 @@ class DcgmDiag:
         elif self.version == dcgm_structs.dcgmRunDiag_version7:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
         else:
+            logger.info("Unexpected runDiag version " + self.version + " using RunDiag_t")
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
 
         self.numTests = 0
@@ -100,10 +104,10 @@ class DcgmDiag:
         if gpuIds:
             self.gpuList = ",".join([str(gpuId) for gpuId in gpuIds])
 
-        if self.version == dcgm_structs.dcgmRunDiag_version10:
+        if hasattr(self.runDiagInfo, 'ignoreErrorCodes'):
             self.runDiagInfo.ignoreErrorCodes = self.ignoreErrorCodes
 
-        if self.version == dcgm_structs.dcgmRunDiag_version9 or self.version == dcgm_structs.dcgmRunDiag_version10:
+        if hasattr(self.runDiagInfo, 'entityIds'):
             if len(self.gpuList) > 0 and len(self.cpuList) > 0:
                 self.runDiagInfo.entityIds = f"{self.gpuList},{self.cpuList}"
             elif len(self.gpuList) > 0:
@@ -112,16 +116,13 @@ class DcgmDiag:
                 self.runDiagInfo.entityIds = f"{self.cpuList}"
             else:
                 self.runDiagInfo.entityIds = "*,cpu:*"
-
-        elif self.version == dcgm_structs.dcgmRunDiag_version7 or self.version == dcgm_structs.dcgmRunDiag_version8:
+        elif hasattr(self.runDiagInfo, 'gpuList'):
             if len(self.gpuList) > 0:
                 self.runDiagInfo.gpuList = self.gpuList
             else:
                 self.runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
 
-        if self.version == dcgm_structs.dcgmRunDiag_version8 or \
-                self.version == dcgm_structs.dcgmRunDiag_version9 or \
-                self.version == dcgm_structs.dcgmRunDiag_version10:
+        if hasattr(self.runDiagInfo, 'expectedNumEntities'):
             self.runDiagInfo.expectedNumEntities = self.expectedNumGpus
 
         if logger.nvvs_trace_log_filename is not None:
@@ -201,7 +202,7 @@ class DcgmDiag:
             self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_FAIL_EARLY
 
     def Execute(self, handle):
-            return dcgm_agent.dcgmActionValidate_v2(handle, self.runDiagInfo, self.version)
+        return dcgm_agent.dcgmActionValidate_v2(handle, self.runDiagInfo, self.version)
 
     def SetStatsPath(self, statsPath):
         if len(statsPath) >= dcgm_structs.DCGM_PATH_LEN:
@@ -244,6 +245,7 @@ class DcgmDiag:
 
 def check_diag_result_fail(response, entityPair, testName):
     # Returns `True` when there is a FAIL result associated with the specified `entityPair` and `testName`, `False` otherwise.
+    assert hasattr(response, 'tests') and hasattr(response, 'results'), "Response does not have tests or results"
     for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == testName:
             break
@@ -260,7 +262,7 @@ def check_diag_result_pass(response, entityPair, testName):
             break
     assert test.name == testName, "Expected pass result for test %s but none was found" % testName
     if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_PASS and cur.entity == entityPair,
-                   map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+               map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
         return True
     return False
 
@@ -290,10 +292,10 @@ def check_diag_result_non_running(response, entityPair, testName):
 
 def GetEntityCount(response, entityGroupId):
     # Returns the count of the specified entity group associated with the response.
-    if response.version == dcgm_structs.dcgmDiagResponse_version11:
+    if hasattr(response, 'entities'):
         return sum(1 for entity in response.entities[:min(response.numEntities, dcgm_structs.DCGM_DIAG_RESPONSE_ENTITIES_MAX)] \
                    if entity.entity.entityGroupId == entityGroupId)
-    elif entityGroupId == dcgm_fields.DCGM_FE_GPU:
+    elif hasattr(response, 'gpuCount') and entityGroupId == dcgm_fields.DCGM_FE_GPU:
         return response.gpuCount
     else:
         raise NotImplementedError("Entity type {} not handled for version {}.".format(entityGroupId, response.version))

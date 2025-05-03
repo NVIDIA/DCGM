@@ -410,9 +410,25 @@ std::string PluginLib::GetName() const
     return m_pluginName;
 }
 
-const dcgmDiagEntityResults_v1 &PluginLib::GetEntityResults(std::string const &testName) const
+/*****************************************************************************/
+
+template <typename EntityResultsType>
+    requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+             || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+EntityResultsType const &PluginLib::GetEntityResults(std::string const &testName) /* const */
 {
-    return m_tests.at(testName).GetEntityResults();
+    if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>)
+    {
+        return m_tests.at(testName).GetEntityResults<EntityResultsType>();
+    }
+    else if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>)
+    {
+        return m_tests.at(testName).GetEntityResults<EntityResultsType>();
+    }
+    else
+    {
+        static_assert(false, "Unsupported entity results type");
+    }
 }
 
 /*****************************************************************************/
@@ -645,8 +661,8 @@ void PluginLib::RunTest(std::string const &testName,
 
     try
     {
-        auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-        dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+        auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+        dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
         m_retrieveResultsCB(testName.c_str(), &entityResults, m_userData);
 
@@ -797,3 +813,9 @@ void PluginLib::SetTestRunningState(std::string const &testName, TestRuningState
 {
     m_tests.at(testName).SetTestRunningState(state);
 }
+
+// Explicit template instantiations
+template dcgmDiagEntityResults_v2 const &PluginLib::GetEntityResults<dcgmDiagEntityResults_v2>(
+    std::string const &testName) /* const */;
+template dcgmDiagEntityResults_v1 const &PluginLib::GetEntityResults<dcgmDiagEntityResults_v1>(
+    std::string const &testName) /* const */;

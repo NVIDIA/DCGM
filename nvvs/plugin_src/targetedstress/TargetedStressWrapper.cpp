@@ -111,7 +111,7 @@ void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStat
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v2 *entityResults, void *userData)
 {
     auto *cp = static_cast<ConstantPerf *>(userData);
     cp->GetResults(testName, entityResults);

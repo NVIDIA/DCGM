@@ -181,6 +181,18 @@ cublasStatus_t CublasLtMatmul(cublasLtHandle_t lightHandle,
                   stream);
 }
 
+
+#if CUBLAS_VER_MAJOR >= 12
+cublasStatus_t CublasLtMatmulAlgoCapGetAttribute(const cublasLtMatmulAlgo_t *algo,
+                                                 cublasLtMatmulAlgoCapAttributes_t attr,
+                                                 void *buf,
+                                                 size_t sizeInBytes,
+                                                 size_t *sizeWritten)
+{
+    MAKE_API_CALL(cublasLtMatmulAlgoCapGetAttribute, algo, attr, buf, sizeInBytes, sizeWritten);
+}
+#endif // CUBLAS_VER_MAJOR >= 12
+
 cublasStatus_t CublasLtMatmulAlgoConfigGetAttribute(const cublasLtMatmulAlgo_t *algo,
                                                     cublasLtMatmulAlgoConfigAttributes_t attr,
                                                     void *buf,
@@ -190,6 +202,32 @@ cublasStatus_t CublasLtMatmulAlgoConfigGetAttribute(const cublasLtMatmulAlgo_t *
     MAKE_API_CALL(cublasLtMatmulAlgoConfigGetAttribute, algo, attr, buf, sizeInBytes, sizeWritten);
 }
 
+#if CUBLAS_VER_MAJOR >= 12
+cublasStatus_t CublasLtMatmulAlgoGetIds(cublasLtHandle_t lightHandle,
+                                        cublasComputeType_t computeType,
+                                        cudaDataType_t scaleType,
+                                        cudaDataType_t Atype,
+                                        cudaDataType_t Btype,
+                                        cudaDataType_t Ctype,
+                                        cudaDataType_t Dtype,
+                                        int requestedAlgoCount,
+                                        int algoIdsArray[],
+                                        int *returnAlgoCount)
+{
+    MAKE_API_CALL(cublasLtMatmulAlgoGetIds,
+                  lightHandle,
+                  computeType,
+                  scaleType,
+                  Atype,
+                  Btype,
+                  Ctype,
+                  Dtype,
+                  requestedAlgoCount,
+                  algoIdsArray,
+                  returnAlgoCount);
+}
+#endif // CUBLAS_VER_MAJOR >= 12
+
 cublasStatus_t CublasLtMatmulAlgoConfigSetAttribute(cublasLtMatmulAlgo_t *algo,
                                                     cublasLtMatmulAlgoConfigAttributes_t attr,
                                                     const void *buf,
@@ -197,7 +235,6 @@ cublasStatus_t CublasLtMatmulAlgoConfigSetAttribute(cublasLtMatmulAlgo_t *algo,
 {
     MAKE_API_CALL(cublasLtMatmulAlgoConfigSetAttribute, algo, attr, buf, sizeInBytes);
 }
-
 
 cublasStatus_t CublasLtMatmulAlgoGetHeuristic(cublasLtHandle_t lightHandle,
                                               cublasLtMatmulDesc_t operationDesc,

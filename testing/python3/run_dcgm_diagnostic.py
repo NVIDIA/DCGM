@@ -38,7 +38,15 @@ logFile = "nvvs_diag.log"
 debugFile = "nvvs_debug.log"
 goldenValuesFile = "/tmp/golden_values.yml"
 PASSED_COUNT = 0
+base_test_name = "run_dcgm_diag"
+test_name = ""
 
+################################################################################
+def print_parseable_status(phase_name, iteration):
+    if iteration:
+        print("&&&& %s %s_%d" % (phase_name, test_name, iteration))
+    else:
+        print("&&&& %s %s_%d" % (phase_name, test_name, iteration))
 
 ################################################################################
 def remove_file_yolo(filename):
@@ -196,7 +204,10 @@ class TestRunner():
 
         print("Running command: %s " % " ".join(self.dcgmiDiag.BuildDcgmiCommand()))
         ret = 0
+        fail_total = 0
+        exclusion_total = 0
         for runIndex in range(cycles):
+            print_parseable_status("RUNNING", runIndex)
             self.dcgmiDiag.Run()
             if self.dcgmiDiag.failed_list:
                 self.failing_tests[runIndex] = self.dcgmiDiag.failed_list
@@ -205,8 +216,17 @@ class TestRunner():
             if self.dcgmiDiag.diagRet and not ret:
                 ret = self.dcgmiDiag.diagRet
 
-        # Get the number of actual errors in the output
-        failCount, exclusionCount = self.checkForErrors()
+            # Get the number of actual errors in the output
+            failCount, exclusionCount = self.checkForErrors()
+
+            if failCount > fail_total:
+                print_parseable_status("FAILED", runIndex)
+            else:
+                print_parseable_status("PASSED", runIndex)
+
+            fail_total = fail_total + failCount
+            exclusion_total = exclusion_total + exclusionCount
+
 
         if self.verbose:
             print(self.dcgmiDiag.lastStdout)
@@ -217,22 +237,18 @@ class TestRunner():
             if self.failed_runs > 0:
                 print("%d of %d runs Failed. Please attach %s and %s to your bug report."
                       % (self.failed_runs, cycles, logFile, debugFile))
-            print("ExclusionCount: %d" % exclusionCount)
-            print("FailCount: %d" % failCount)
-            print("&&&& FAILED")
+            print("ExclusionCount: %d" % exclusion_total)
+            print("FailCount: %d" % fail_total)
             from ctypes import c_int8
             print("Diagnostic test failed with code %d.\n" % c_int8(ret).value)
 
             # Popen returns 0 even if diag test fails, so failing here
-            return [failCount, exclusionCount]
-        elif exclusionCount == 0:
-             print("Success")
+            return [fail_total, exclusion_total]
 
         return [0, exclusionCount]
 
     ################################################################################
     def run(self):
-        self.dcgmiDiag.SetRunMode(4)
         self.dcgmiDiag.SetConfigFile(None)
         failCount, exclusionCount = self.run_command(self.cycles)
         return [failCount, exclusionCount]
@@ -263,45 +279,18 @@ def checkCmdLine(cmdArgs, settings):
     else:
         settings['verbose'] = False
 
+    global test_name
+    if cmdArgs.test_names is not "":
+        settings['run_mode'] = 0
+        settings['test_names'] = cmdArgs.test_names
+        test_name = "%s_%s" % (base_test_name, cmdArgs.test_names)
+    else:
+        settings['run_mode'] = int(cmdArgs.run_mode)
+        test_name = "%s_%d" % (base_test_name, int(cmdArgs.run_mode))
+        settings['test_names'] = cmdArgs.test_names
+
     settings['dev_id'] = cmdArgs.device_id
     settings['cycles'] = cmdArgs.cycles
-
-################################################################################
-def getGoldenValueDebugFiles():
-    # This method copies debug files for golden values to the current directory.
-    gpuIdMetricsFileList = glob.glob('/tmp/dcgmgd_withgpuids*')
-    gpuIdMetricsFile = None
-    allMetricsFileList = glob.glob('/tmp/dcgmgd[!_]*')
-    allMetricsFile = None
-
-    if gpuIdMetricsFileList:
-        # Grab latest debug file
-        gpuIdMetricsFileList.sort()
-        gpuIdMetricsFile = gpuIdMetricsFileList[-1]
-    if allMetricsFileList:
-        # Grab latest debug file
-        allMetricsFileList.sort()
-        allMetricsFile = allMetricsFileList[-1]
-
-    fileList = []
-    try:
-        if gpuIdMetricsFile is not None:
-            shutil.copyfile(gpuIdMetricsFile, './dcgmgd_withgpuids.txt')
-            fileList.append('dcgmgd_withgpuids.txt')
-        if allMetricsFile is not None:
-            shutil.copyfile(allMetricsFile, './dcgmgd_allmetrics.txt')
-            fileList.append('dcgmgd_allmetrics.txt')
-        if os.path.isfile(goldenValuesFile):
-            shutil.copyfile(goldenValuesFile, './golden_values.yml')
-            fileList.append('golden_values.yml')
-    except (IOError, OSError) as e:
-        print("There was an error copying the debug files to the current directory %s" % e)
-
-    if fileList:
-        print("Please attach %s to the bug report." % fileList)
-    else:
-        print("No debug files were copied.")
-
 
 ################################################################################
 def parseCommandLine():
@@ -311,6 +300,8 @@ def parseCommandLine():
     parser.add_argument("-v", "--vulcan", action="store_true", help="Deprecated flag for running in the eris environment")
     parser.add_argument("--verbose", action="store_true", help="Sets verbose mode")
     parser.add_argument("-d", "--device-id", help="Comma separated list of nvml device ids.")
+    parser.add_argument("-r", "--run-mode", default=4, help="Specify the tests to run: (1,2,3, or 4")
+    parser.add_argument("-t", "--test-names", default="", help="Specify a comma-separated list of test names. Will override run mode")
 
     args = parser.parse_args()
 
@@ -352,17 +343,14 @@ def main(cmdArgs):
     paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
-    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, paramsStr=paramsStr, dcgmiPrefix=prefix, runMode=4, 
-                debugLevel=5, debugFile=debugFile)
+    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, testNamesStr=settings['test_names'], paramsStr=paramsStr,
+                dcgmiPrefix=prefix, runMode=settings['run_mode'], debugLevel=5, debugFile=debugFile)
 
     # Start tests
     run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])
 
     print("\nRunning with the diagnostic... This may take a while, please wait...\n")
     failedCount, exclusionCount = run_test.run()
-
-    if failedCount != 0:
-        print("&&&& FAILED")
 
     return [failedCount, exclusionCount]
 
@@ -378,15 +366,6 @@ if __name__ == "__main__":
                 if "Pass" in log:
                     PASSED_COUNT += 1
 
-        # QA uses these to count the tests passed
-        if failedCount > 0:
-            print('&&&& FAILED')
-            ret = 1
-        elif PASSED_COUNT == 0:
-            print('&&&& SKIPPED')
-        else:
-            print('&&&& PASSED')
-
         logger.info("\n========== TEST SUMMARY ==========\n")
         logger.info("Passed: {}".format(PASSED_COUNT))
         logger.info("Failed: {}".format(failedCount))
@@ -395,7 +374,7 @@ if __name__ == "__main__":
         logger.info("Cycles: {}".format(cmdArgs.cycles))
         logger.info("==================================\n\n")
     else:
-        print("&&&& SKIPPED")
+        print_parseable_status("SKIPPED", None)
         print("Unable to provide test summary due to missing log file")
 
     sys.exit(ret)

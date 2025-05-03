@@ -223,13 +223,13 @@ public:
     /**
      * Initialize Switch Manager
      *
-     * Calling this method creates an NSCQ/NVIBDM session for communicating with
+     * Calling this method creates an NSCQ/NVSDM session for communicating with
      * switches and NVLINKs
      *
      *
      * @return DCGM_ST_OK:            Successfully initialized
      *         DCGM_ST_BADPARAM:      Already initialized
-     *         DCGM_ST_NVML_ERROR:    Both NSCQ and NVIBDM returned an error during session creation
+     *         DCGM_ST_NVML_ERROR:    Both NSCQ and NVSDM returned an error during session creation
      */
     virtual dcgmReturn_t Init() = 0;
 

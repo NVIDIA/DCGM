@@ -39,7 +39,8 @@ target_sources(nvvscoretests
         SoftwareTests.cpp
         CpuSetTests.cpp
         DcgmNvvsResponseWrapperTests.cpp
-        IgnoreErrorCodesHelperTests.cpp)
+        IgnoreErrorCodesHelperTests.cpp
+        NvvsDeviceListTests.cpp)
 
 target_include_directories(nvvscoretests
     PRIVATE

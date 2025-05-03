@@ -28,6 +28,7 @@
 
 // observedMetrics: map the metric name to a map of GPU ID -> value
 typedef std::map<std::string, std::map<unsigned int, double>> observedMetrics_t;
+using nvvsPluginOptionalErrors_t = std::vector<DcgmError>;
 
 class PluginTest
 {
@@ -62,7 +63,10 @@ public:
     void AddInfoVerboseForEntity(dcgmGroupEntityPair_t entity, std::string const &info);
     void AddInfoVerboseForGpu(unsigned int gpuId, std::string const &info);
 
-    dcgmReturn_t GetResults(dcgmDiagEntityResults_v1 *entityResults);
+    template <typename EntityResultsType>
+        requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+                 || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+    dcgmReturn_t GetResults(EntityResultsType *entityResults);
 
     void SetGpuStat(unsigned int gpuId, std::string const &name, double value);
     void SetGpuStat(unsigned int gpuId, std::string const &name, long long value);

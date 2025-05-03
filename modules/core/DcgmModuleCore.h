@@ -80,6 +80,7 @@ public:
     dcgmReturn_t ProcessModuleStatus(dcgm_core_msg_module_status_t &msg);
     dcgmReturn_t ProcessHostEngineHealth(dcgm_core_msg_hostengine_health_t &msg);
     dcgmReturn_t ProcessFieldGroupGetAll(dcgm_core_msg_fieldgroup_get_all_t &msg);
+    dcgmReturn_t ProcessGetGpuChipArchitecture(dcgm_core_msg_get_gpu_chip_architecture_t &msg);
     dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gpu_instance_hierarchy_t &msg);
     dcgmReturn_t ProcessProfGetMetricGroups(dcgm_core_msg_get_metric_groups_t &msg);
     dcgmReturn_t ProcessNvmlInjectFieldValue(dcgm_core_msg_nvml_inject_field_value_t &msg);

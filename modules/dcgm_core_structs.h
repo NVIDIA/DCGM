@@ -88,6 +88,7 @@
 #define DCGM_CORE_SR_REMOVE_NVML_INJECTED_GPU               65 /* Remove nvml injected GPU from injection library */
 #define DCGM_CORE_SR_RESTORE_NVML_INJECTED_GPU              66 /* Restore nvml injected GPU to injection library */
 #define DCGM_CORE_SR_NVSWITCH_GET_BACKEND                   67 /* Get name for active NVSwitch backend */
+#define DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE              70 /* Get simplified GPU chip architecture */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -643,6 +644,18 @@ typedef struct
 #define dcgm_core_msg_fieldgroup_get_all_version  dcgm_core_msg_fieldgroup_get_all_version1
 
 typedef dcgm_core_msg_fieldgroup_get_all_v1 dcgm_core_msg_fieldgroup_get_all_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmMsgGetGpuChipArchitecture_v1 info;
+} dcgm_core_msg_get_gpu_chip_architecture_v1;
+
+#define dcgm_core_msg_get_gpu_chip_architecture_version1 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_get_gpu_chip_architecture_v1, 1)
+#define dcgm_core_msg_get_gpu_chip_architecture_version dcgm_core_msg_get_gpu_chip_architecture_version1
+
+typedef dcgm_core_msg_get_gpu_chip_architecture_v1 dcgm_core_msg_get_gpu_chip_architecture_t;
 
 typedef struct
 {

@@ -195,6 +195,7 @@ public:
     std::string GetTargetedPowerTestName() const;
 
 private:
+    typedef void *(*mallocFunc)(size_t);
     /*************************************************************************/
     /*
      * Initialize the parts of cuda and cublas needed for this plugin to run
@@ -202,7 +203,7 @@ private:
      * Returns: 0 on success
      *         <0 on error
      */
-    int CudaInit();
+    int CudaInit(mallocFunc mallocImpl = malloc);
 
     /*************************************************************************/
     /*
@@ -271,6 +272,7 @@ private:
     void *m_hostB;
     void *m_hostC;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
+    std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>> m_dcgmRecorderPtr;
     friend class ConstantPowerTest;
 };
 

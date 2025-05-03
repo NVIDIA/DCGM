@@ -2339,7 +2339,38 @@ typedef enum nvmlDeviceGpuRecoveryAction_s  {
 #define NVML_FI_DEV_PCIE_OUTBOUND_ATOMICS_MASK                   228
 #define NVML_FI_DEV_PCIE_INBOUND_ATOMICS_MASK                    229
 #define NVML_FI_DEV_GET_GPU_RECOVERY_ACTION                      230 //!< GPU Recovery action - None/Reset/Reboot/Drain P2P
-#define NVML_FI_MAX                                              231 //!< One greater than the largest field ID defined above
+#define NVML_FI_DEV_C2C_LINK_ERROR_INTR                          231 //!< C2C Link CRC Error Counter
+#define NVML_FI_DEV_C2C_LINK_ERROR_REPLAY                        232 //!< C2C Link Replay Error Counter
+#define NVML_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B                    233 //!< C2C Link Back to Back Replay Error Counter
+#define NVML_FI_DEV_C2C_LINK_POWER_STATE                         234 //!< C2C Link Power state. See NVML_C2C_POWER_STATE_*
+/* NVLINK FEC fields are available only for Blackwell */
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0                   235 //!< Count of symbol errors that are corrected - bin 0
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1                   236 //!< Count of symbol errors that are corrected - bin 1
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2                   237 //!< Count of symbol errors that are corrected - bin 2
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3                   238 //!< Count of symbol errors that are corrected - bin 3
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4                   239 //!< Count of symbol errors that are corrected - bin 4
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5                   240 //!< Count of symbol errors that are corrected - bin 5
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6                   241 //!< Count of symbol errors that are corrected - bin 6
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7                   242 //!< Count of symbol errors that are corrected - bin 7
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8                   243 //!< Count of symbol errors that are corrected - bin 8
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9                   244 //!< Count of symbol errors that are corrected - bin 9
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10                  245 //!< Count of symbol errors that are corrected - bin 10
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11                  246 //!< Count of symbol errors that are corrected - bin 11
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12                  247 //!< Count of symbol errors that are corrected - bin 12
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13                  248 //!< Count of symbol errors that are corrected - bin 13
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14                  249 //!< Count of symbol errors that are corrected - bin 14
+#define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15                  250 //!< Count of symbol errors that are corrected - bin 15
+/**
+ * Field values for Clock Throttle Reason Counters
+ * All counters are in nanoseconds
+ */
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP             NVML_FI_DEV_PERF_POLICY_POWER      //!< Throttling to not exceed currently set power limits in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST               NVML_FI_DEV_PERF_POLICY_SYNC_BOOST //!< Throttling to match minimum possible clock across Sync Boost Group in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN        251 //!< Throttling to ensure ((GPU temp < GPU Max Operating Temp) && (Memory Temp < Memory Max Operating Temp)) in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN        252 //!< Throttling due to temperature being too high (reducing core clocks by a factor of 2 or more) in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN  253 //!< Throttling due to external power brake assertion trigger (reducing core clocks by a factor of 2 or more) in ns
+                                                                     
+#define NVML_FI_MAX                                              254 //!< One greater than the largest field ID defined above
 
 /**
  * NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_UNITS
@@ -6140,7 +6171,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetDecoderUtilization(nvmlDevice_t device, unsign
 /**
  * Retrieves the current utilization and sampling size in microseconds for the JPG
  *
- * %TURING_OR_NEWER%
+ * For Turing &tm; or newer fully supported devices.
  *
  * @note On MIG-enabled GPUs, querying decoder utilization is not currently supported.
  *
@@ -6161,7 +6192,7 @@ nvmlReturn_t DECLDIR nvmlDeviceGetJpgUtilization(nvmlDevice_t device, unsigned i
 /**
  * Retrieves the current utilization and sampling size in microseconds for the OFA (Optical Flow Accelerator)
  *
- * %TURING_OR_NEWER%
+ * For Turing &tm; or newer fully supported devices.
  *
  * @note On MIG-enabled GPUs, querying decoder utilization is not currently supported.
  *
@@ -8258,15 +8289,15 @@ nvmlReturn_t DECLDIR nvmlDeviceSetPowerManagementLimit_v2(nvmlDevice_t device, n
  */
 /***************************************************************************************************/
 
-#define NVML_NVLINK_SYMBOL_BER_MANTISSA_SHIFT 8
-#define NVML_NVLINK_SYMBOL_BER_MANTISSA_WIDTH 0xf
+#define NVML_NVLINK_BER_MANTISSA_SHIFT 8
+#define NVML_NVLINK_BER_MANTISSA_WIDTH 0xf
 
-#define NVML_NVLINK_SYMBOL_BER_EXP_SHIFT 0
-#define NVML_NVLINK_SYMBOL_BER_EXP_WIDTH 0xff
+#define NVML_NVLINK_BER_EXP_SHIFT 0
+#define NVML_NVLINK_BER_EXP_WIDTH 0xff
 
 /**
  * Nvlink Error counter BER can be obtained using the below macros
- * Ex - NVML_NVLINK_ERROR_COUNTER_BER_GET(var, SYMBOL_BER_MANTISSA)
+ * Ex - NVML_NVLINK_ERROR_COUNTER_BER_GET(var, BER_MANTISSA)
  */
 #define NVML_NVLINK_ERROR_COUNTER_BER_GET(var, type) \
     (((var) >> NVML_NVLINK_##type##_SHIFT) &         \

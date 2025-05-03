@@ -88,7 +88,6 @@ public:
 private:
     std::map<std::string, std::string> m_testNameMap;
     std::map<std::string, std::unique_ptr<TestParameters>> m_testParamMap;
-    std::array<std::string_view, 11> m_swTestNames;
     std::unique_ptr<Software> m_softwareObj;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityList;
     std::vector<dcgmDiagError_v1> m_errors;
@@ -150,8 +149,6 @@ protected:
     {
         return *(m_entityList);
     }
-
-    unsigned GetSwTestResultIndex(std::string_view const testName);
 };
 
 #endif //  NVVS_NVVS_SoftwarePluginFramework_H

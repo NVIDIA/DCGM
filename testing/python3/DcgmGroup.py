@@ -478,7 +478,7 @@ class DcgmGroupAction:
 
     validate is what sort of validation to do. See dcgm_structs.DCGM_POLICY_VALID_* defines.
 
-    Returns a dcgm_structs.c_dcgmDiagResponse_v11 instance
+    Returns a dcgm_structs.c_dcgmDiagResponse_v12 instance
     '''
     def Validate(self, validate):
         runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
@@ -494,7 +494,7 @@ class DcgmGroupAction:
 
     diagLevel is the level of diagnostic desired. See dcgm_structs.DCGM_DIAG_LVL_* constants.
 
-    Returns a dcgm_structs.c_dcgmDiagResponse_v11 instance
+    Returns a dcgm_structs.c_dcgmDiagResponse_v12 instance
     '''
     def RunDiagnostic(self, diagLevel):
         ret = dcgm_agent.dcgmRunDiagnostic(self._dcgmHandle.handle, self._groupId, diagLevel)
@@ -503,7 +503,7 @@ class DcgmGroupAction:
     '''
     Run a specific diagnostic test on this group of GPUs.
     testName is the name of the specific test that should be invoked.
-    Returns a dcgm_structs.c_dcgmDiagResponse_v5 instance
+    Returns a dcgm_structs.c_dcgmDiagResponse_v12 instance
     '''
     def RunSpecificTest(self, testName):
         runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()

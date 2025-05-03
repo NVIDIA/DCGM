@@ -23,7 +23,158 @@
 #include <filesystem>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <sys/wait.h>
+
+namespace
+{
+
+struct NVBandwidthLogPaths
+{
+    std::filesystem::path nvbandwidthLogFilename;
+    std::filesystem::path nvbandwidthStdoutFilename;
+};
+
+/*************************************************************************/
+/*
+ * Get the DCGM log directory path
+ */
+std::string GetNvbandwidthLogDir()
+{
+    if (auto const *dcgmHomeDir = getenv(DCGM_HOME_DIR_VAR_NAME); dcgmHomeDir != nullptr)
+    {
+        return dcgmHomeDir;
+    }
+    return "/var/log/nvidia-dcgm";
+}
+
+/*************************************************************************/
+/*
+ * Get the log file paths for the NVBandwidth plugin
+ */
+NVBandwidthLogPaths GetNvbandwidthLogFilePath(std::string_view testName)
+{
+    std::filesystem::path const logDir = GetNvbandwidthLogDir();
+
+    return { .nvbandwidthLogFilename    = logDir / fmt::format("dcgm_{}.log", testName),
+             .nvbandwidthStdoutFilename = logDir / fmt::format("dcgm_{}_stdout.txt", testName) };
+}
+
+/*************************************************************************/
+/*
+ * Get the current module location
+ */
+std::string GetCurrentModuleLocation()
+{
+    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
+    Dl_info info;
+    if (0 == dladdr((void *)GetCurrentModuleLocation, &info))
+    {
+        return "."; // Just fallback to current working directory
+    }
+    return std::filesystem::path { info.dli_fname }.parent_path().string();
+}
+
+/*************************************************************************/
+/*
+ * Get the NVVS bin check path
+ */
+std::string GetNvvsBinCheckPath(unsigned int cudaDriverMajorVersion)
+{
+    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
+    char const *nvvsBinPath = getenv("NVVS_BIN_PATH");
+    if (nvvsBinPath != nullptr)
+    {
+        return fmt::format("{}/plugins/cuda{}", nvvsBinPath, cudaDriverMajorVersion);
+    }
+    return "";
+}
+
+/*************************************************************************/
+/*
+ * Get the executable in path
+ */
+std::optional<std::string> GetExecutableInPath(std::string_view path, std::string_view executableName)
+{
+    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
+    std::string filename = fmt::format("{}/{}", path, executableName);
+    struct stat fileStat = {};
+    if (stat(filename.c_str(), &fileStat) == 0)
+    {
+        // Make sure the file is also a regular file
+        if (S_ISREG(fileStat.st_mode) != 0)
+        {
+            return filename;
+        }
+    }
+    return std::nullopt;
+}
+
+/*************************************************************************/
+/*
+ * Sanitize the output from the nvbandwidth binary
+ */
+std::string_view sanitizeOutput(std::string_view output)
+{
+    auto isOnlyCharInLine = [](std::string_view line, char c) {
+        if (line.empty())
+        {
+            return false;
+        }
+        return line.find_first_not_of("\t") == line.find(c) && line.find_last_not_of("\t\n") == line.find(c);
+    };
+
+    size_t start = std::string_view::npos;
+    size_t end   = std::string_view::npos;
+    size_t pos   = 0;
+
+    // Find the start position of the valid json object
+    while (pos < output.length())
+    {
+        size_t newlinePos = output.find('\n', pos);
+        if (newlinePos == std::string_view::npos)
+        {
+            break;
+        }
+        std::string_view line = output.substr(pos, newlinePos - pos + 1);
+        if (isOnlyCharInLine(line, '{'))
+        {
+            start = pos;
+            break;
+        }
+        pos = newlinePos + 1;
+    }
+
+    if (start == std::string_view::npos)
+    {
+        return {};
+    }
+
+    // Find the end position of the valid json object
+    pos = output.length() - 1;
+    while (pos > 0)
+    {
+        size_t newlinePos = output.rfind('\n', pos);
+        if (newlinePos == std::string_view::npos)
+        {
+            break;
+        }
+        std::string_view line = output.substr(newlinePos + 1, pos - newlinePos);
+        if (isOnlyCharInLine(line, '}'))
+        {
+            end = newlinePos + 1;
+            break;
+        }
+        pos = newlinePos - 1;
+    }
+
+    if (end != std::string_view::npos && start < end)
+    {
+        return output.substr(start, end - start + 1);
+    }
+    return {};
+}
+} // namespace
 
 namespace DcgmNs::Nvvs::Plugins::NVBandwidth
 {
@@ -62,7 +213,35 @@ dcgmReturn_t NVBandwidthPlugin::Shutdown()
 
 void NVBandwidthPlugin::Cleanup()
 {
-    // m_device.clear();
+    // Restore or unset CUDA_VISIBLE_DEVICES based on whether it existed before
+    if (!m_originalCudaVisibleDevices.empty())
+    {
+        int rc = [this]() {
+            DcgmLockGuard lg(&m_envMutex);
+            return setenv("CUDA_VISIBLE_DEVICES", m_originalCudaVisibleDevices.c_str(), 1);
+        }();
+
+        if (rc)
+        {
+            char errbuf[DCGM_MAX_STR_LENGTH];
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            log_warning("Couldn't restore CUDA_VISIBLE_DEVICES to {} ({}).", m_originalCudaVisibleDevices, errbuf);
+        }
+    }
+    else
+    {
+        int rc = [this]() {
+            DcgmLockGuard lg(&m_envMutex);
+            return unsetenv("CUDA_VISIBLE_DEVICES");
+        }();
+
+        if (rc)
+        {
+            char errbuf[DCGM_MAX_STR_LENGTH];
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            log_warning("Couldn't unset CUDA_VISIBLE_DEVICES ({}).", errbuf);
+        }
+    }
 
     if (m_dcgmRecorderInitialized)
     {
@@ -71,9 +250,8 @@ void NVBandwidthPlugin::Cleanup()
     m_dcgmRecorderInitialized = false;
 }
 
-dcgmReturn_t NVBandwidthPlugin::GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults)
+dcgmReturn_t NVBandwidthPlugin::GetResults(std::string const &testName, dcgmDiagEntityResults_v2 *entityResults)
 {
-    // TODO(huwang): add more logic, if none is needed simply return Plugin::GetResults(results);
     if (auto res = Plugin::GetResults(testName, entityResults); res != DCGM_ST_OK)
     {
         return res;
@@ -81,47 +259,9 @@ dcgmReturn_t NVBandwidthPlugin::GetResults(std::string const &testName, dcgmDiag
     return DCGM_ST_OK;
 }
 
-static std::string GetCurrentModuleLocation()
-{
-    // TODO(huwang): tobe refactored into PluginCommon.h/.cpp
-    Dl_info info;
-    if (0 == dladdr((void *)GetCurrentModuleLocation, &info))
-    {
-        return "."; // Just fallback to current working directory
-    }
-    return std::filesystem::path { info.dli_fname }.parent_path().string();
-}
-
-static std::string GetNvvsBinCheckPath(unsigned int cudaDriverMajorVersion)
-{
-    // TODO(huwang): tobe refactored into PluginCommon.h/.cpp
-    const char *nvvsBinPath = getenv("NVVS_BIN_PATH");
-    if (nvvsBinPath != nullptr)
-    {
-        return fmt::format("{}/plugins/cuda{}", nvvsBinPath, cudaDriverMajorVersion);
-    }
-    return "";
-}
-
-static std::optional<std::string> GetExecutableInPath(const std::string &path, const std::string &executableName)
-{
-    // TODO(huwang): tobe refactored into PluginCommon.h/.cpp
-    std::string filename = path + "/" + executableName;
-    struct stat fileStat = {};
-    if (stat(filename.c_str(), &fileStat) == 0)
-    {
-        // Make sure the file is also a regular file
-        if (S_ISREG(fileStat.st_mode) != 0)
-        {
-            return filename;
-        }
-    }
-    return std::nullopt;
-}
-
 std::optional<std::string> NVBandwidthPlugin::FindExecutable()
 {
-    // TODO(huwang): tobe refactored into PluginCommon.h/.cpp
+    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
     //        needs change the declaration into
     //         std::optional<std::string> FindExecutable(std::string const &executableName /* "nvbandwidth" */,
     //                                                   std::vector<std::string> const &searchPaths = {},
@@ -164,10 +304,9 @@ std::optional<std::string> NVBandwidthPlugin::FindExecutable()
     return std::nullopt;
 }
 
-
 void NVBandwidthPlugin::SetCudaDriverMajorVersion()
 {
-    // TODO(huwang): tobe refactored into Plugin.h/.cpp
+    // TODO(DCGM-5109): tobe refactored into Plugin.h/.cpp
     const unsigned int flags = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
     dcgmFieldValue_v2 cudaDriverValue {};
     auto const &gpuList = m_tests.at(GetNvBandwidthTestName()).GetGpuList();
@@ -201,7 +340,6 @@ void NVBandwidthPlugin::appendExtraArgv(std::vector<std::string> &execArgv) cons
     }
 }
 
-
 void NVBandwidthPlugin::Go(std::string const &testName,
                            dcgmDiagPluginEntityList_v1 const *entityInfo,
                            unsigned int numParameters,
@@ -228,14 +366,55 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));
     m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
-    SetCudaDriverMajorVersion();
-
-    auto nvBandwidthExecutable = FindExecutable();
-    if (!nvBandwidthExecutable.has_value())
+    // Make sure the memory copy utilitization is low before launching the nvbandwidth test
+    // This is to avoid the memory bandwidth from being saturated and affecting the results
+    // of the nvbandwidth test
+    dcgmFieldValue_v2 memCopyUtil = {};
+    for (unsigned int entityIdx = 0; entityIdx < entityInfo->numEntities; entityIdx++)
     {
-        SetResult(testName, NVVS_RESULT_FAIL);
-        return;
+        if (entityInfo->entities[entityIdx].entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+        dcgmReturn_t ret = m_dcgmRecorder.GetCurrentFieldValue(
+            entityInfo->entities[entityIdx].entity.entityId, DCGM_FI_DEV_MEM_COPY_UTIL, memCopyUtil, 0);
+        if (ret != DCGM_ST_OK)
+        {
+            std::string errStr = fmt::format("Failed to get the memory copy utilitization for the GPU: {}",
+                                             entityInfo->entities[entityIdx].entity.entityId);
+            log_error(errStr);
+            dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
+                                   .code     = DCGM_FR_CANNOT_GET_FIELD_TAG,
+                                   .category = DCGM_FR_EC_HARDWARE_MEMORY,
+                                   .severity = DCGM_ERROR_ISOLATE,
+                                   .msg      = "",
+                                   .testId   = DCGM_INT32_BLANK };
+            SafeCopyTo(err.msg, errStr.c_str());
+            AddError(testName, err);
+            SetResult(testName, NVVS_RESULT_FAIL);
+            return;
+        }
+        constexpr int64_t MAX_MEM_COPY_UTIL_PERCENTAGE { 10 };
+        if (memCopyUtil.value.i64 > MAX_MEM_COPY_UTIL_PERCENTAGE)
+        {
+            std::string errStr = fmt::format(
+                "The memory copy utilitization for the GPU: {} is greater than 10%. This may affect the results of the nvbandwidth test.",
+                entityInfo->entities[entityIdx].entity.entityId);
+            log_error(errStr);
+            dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
+                                   .code     = DCGM_FR_FIELD_THRESHOLD_TS,
+                                   .category = DCGM_FR_EC_HARDWARE_MEMORY,
+                                   .severity = DCGM_ERROR_ISOLATE,
+                                   .msg      = "",
+                                   .testId   = DCGM_INT32_BLANK };
+            SafeCopyTo(err.msg, errStr.c_str());
+            AddError(testName, err);
+            SetResult(testName, NVVS_RESULT_FAIL);
+            return;
+        }
     }
+
+    SetCudaDriverMajorVersion();
 
     std::ostringstream visibleDevices;
     for (unsigned int entityIdx = 0; entityIdx < entityInfo->numEntities; entityIdx++)
@@ -251,7 +430,20 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         visibleDevices << entityInfo->entities[entityIdx].auxField.gpu.attributes.identifiers.uuid;
     }
 
-    int rc = setenv("CUDA_VISIBLE_DEVICES", visibleDevices.str().c_str(), 1);
+    // Store the original CUDA_VISIBLE_DEVICES value if it exists
+    if (char const *originalValue = [this]() {
+            DcgmLockGuard lg(&m_envMutex);
+            return getenv("CUDA_VISIBLE_DEVICES");
+        }())
+    {
+        m_originalCudaVisibleDevices = originalValue;
+    }
+
+    // Set the new CUDA_VISIBLE_DEVICES value
+    int rc = [this](std::string_view value) {
+        DcgmLockGuard lg(&m_envMutex);
+        return setenv("CUDA_VISIBLE_DEVICES", value.data(), 1);
+    }(visibleDevices.str());
     if (rc)
     {
         char errbuf[DCGM_MAX_STR_LENGTH];
@@ -261,6 +453,12 @@ void NVBandwidthPlugin::Go(std::string const &testName,
                     errbuf);
     }
 
+    auto nvBandwidthExecutable = FindExecutable();
+    if (!nvBandwidthExecutable.has_value())
+    {
+        SetResult(testName, NVVS_RESULT_FAIL);
+        return;
+    }
     std::vector<std::string> execArgv { nvBandwidthExecutable.value() };
     // Setup argument list passed to NVBandwidth executable and run it
     // Output json format with argument "-j"
@@ -269,7 +467,6 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     execArgv.push_back("-v");
 
     appendExtraArgv(execArgv);
-
     if (LaunchExecutable(testName, execArgv))
     {
         SetResult(testName, NVVS_RESULT_FAIL);
@@ -278,7 +475,6 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     {
         SetResult(testName, NVVS_RESULT_PASS);
     }
-
     return;
 }
 
@@ -298,12 +494,9 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         return true;
     }
 
-    bool errorCondition { false };
-    log_debug("Launched the nvbandwidth ({}) with pid {}", execArgv[0], childPid);
+    log_info("Launched the nvbandwidth ({}) with pid {}", execArgv[0], childPid);
 
     fmt::memory_buffer stdoutStream;
-
-    std::string stdoutStr;
 
     if (auto const ret = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd)); ret != 0)
     {
@@ -311,132 +504,107 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         const std::string err = fmt::format("Error while reading output from the NVBandwidth: '{}'", strerror(errno));
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
         AddError(testName, d);
-        errorCondition = true;
+        return true;
     }
 
-    // Set output string in caller's context
-    // Do this before the error check so that if there are errors, we have more useful error messages
-    stdoutStr = fmt::to_string(stdoutStream);
-    log_debug("External command stdout: \n {}", stdoutStr);
+    auto const logPaths = GetNvbandwidthLogFilePath(testName);
+
+    {
+        std::ofstream logFile(logPaths.nvbandwidthLogFilename.string());
+        bool logToNvvsLog { false };
+
+        if (!logFile.is_open())
+        {
+            log_error(
+                "Failed to open log file: {}. Reason: {}", logPaths.nvbandwidthLogFilename.string(), strerror(errno));
+            logToNvvsLog = true;
+        }
+        else
+        {
+            logFile.write(stdoutStream.data(), stdoutStream.size());
+            if (!logFile.good())
+            {
+                log_error("Failed to write to log file: {}. Reason: {}",
+                          logPaths.nvbandwidthLogFilename.string(),
+                          strerror(errno));
+                logToNvvsLog = true;
+            }
+        }
+
+        if (logToNvvsLog)
+        {
+            // log the stdout/stderr of nvbandwidth binary to nvvs.log when failed to open or write to log file
+            log_info("External command stdout: \n{}\n", fmt::to_string(stdoutStream));
+        }
+    }
 
     // Get exit status of child
     int childStatus { 0 };
     if (waitpid(childPid, &childStatus, 0) == -1)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
-        const std::string err = fmt::format("Error while waiting for the NVBandwidth: '{}'", strerror(errno));
+        std::string const err = fmt::format("Error while waiting for the NVBandwidth: '{}'", strerror(errno));
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
         AddError(testName, d);
-        errorCondition = true;
+        return true;
     }
 
     // Check exit status
     if (WIFEXITED(childStatus))
     {
-        // Exited normally - check for non-zero exit code
-        childStatus = WEXITSTATUS(childStatus);
-        if (childStatus)
+        auto exitCode = WEXITSTATUS(childStatus);
+        if (exitCode != 0)
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
-            const std::string err = fmt::format("The NVBandwidth exited with non-zero status {}", childStatus);
+            std::string const err = fmt::format("The NVBandwidth exited with non-zero status {}", exitCode);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+            d.SetNextSteps(
+                fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
             AddError(testName, d);
-            errorCondition = true;
+            return true;
         }
     }
     else if (WIFSIGNALED(childStatus))
     {
         // Child terminated due to signal
-        childStatus = WTERMSIG(childStatus);
+        auto exitCode = WTERMSIG(childStatus);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
-        const std::string err = fmt::format("The NVBandwidth terminated with signal {}", childStatus);
+        std::string const err = fmt::format("The NVBandwidth terminated with signal {}", exitCode);
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+        d.SetNextSteps(
+            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
         AddError(testName, d);
-        errorCondition = true;
+        return true;
     }
     else
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
-        const std::string err = "The NVBandwidth is being traced or otherwise can't exit";
+        std::string const err = "The NVBandwidth is being traced or otherwise can't exit";
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+        d.SetNextSteps(
+            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
         AddError(testName, d);
-        errorCondition = true;
+        return true;
     }
 
     // Parse the json output from NVBandwidth executable
-    auto parsedResult = AttemptToReadOutput(stdoutStr);
-    if (parsedResult.first)
+    auto [hasError, result] = AttemptToReadOutput(fmt::to_string(stdoutStream));
+    if (hasError)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         std::string err = "Error found in the NVBandwidth JSON output. ";
-        if (parsedResult.second.has_value() && parsedResult.second.value().overallError.has_value())
+        if (result.has_value() && result.value().overallError.has_value())
         {
-            err += parsedResult.second.value().overallError.value();
+            err += result.value().overallError.value();
         }
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+        d.SetNextSteps(
+            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
         AddError(testName, d);
-        errorCondition = true;
-    }
-    return errorCondition;
-}
-
-static std::string_view sanitizeOutput(std::string_view output)
-{
-    auto is_only_char_in_line = [](std::string_view line, char c) {
-        if (line.empty())
-            return false;
-        return line.find_first_not_of("\t") == line.find(c) && line.find_last_not_of("\t\n") == line.find(c);
-    };
-
-    size_t start = std::string_view::npos;
-    size_t end   = std::string_view::npos;
-    size_t pos   = 0;
-
-    // Find the start position of the valid json object
-    while (pos < output.length())
-    {
-        size_t newline_pos = output.find('\n', pos);
-        if (newline_pos == std::string_view::npos)
-        {
-            break;
-        }
-        std::string_view line = output.substr(pos, newline_pos - pos + 1);
-        if (is_only_char_in_line(line, '{'))
-        {
-            start = pos;
-            break;
-        }
-        pos = newline_pos + 1;
+        return true;
     }
 
-    if (start == std::string_view::npos)
-    {
-        return {};
-    }
-
-    // Find the end position of the valid json object
-    pos = output.length() - 1;
-    while (pos > 0)
-    {
-        size_t newline_pos = output.rfind('\n', pos);
-        if (newline_pos == std::string_view::npos)
-        {
-            break;
-        }
-        std::string_view line = output.substr(newline_pos + 1, pos - newline_pos);
-        if (is_only_char_in_line(line, '}'))
-        {
-            end = newline_pos + 1;
-            break;
-        }
-        pos = newline_pos - 1;
-    }
-
-    if (end != std::string_view::npos && start < end)
-    {
-        return output.substr(start, end - start + 1);
-    }
-    return {};
+    return false;
 }
 
 std::pair<bool, std::optional<NVBandwidthResult>> NVBandwidthPlugin::AttemptToReadOutput(std::string_view output)

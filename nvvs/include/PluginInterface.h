@@ -76,6 +76,9 @@ typedef struct
 static_assert(DCGM_MAX_PLUGIN_NAME_LEN <= std::min({ sizeof(dcgmDiagTestRun_v1().name),
                                                      sizeof(dcgmDiagTestRun_v1().pluginName),
                                                      sizeof(dcgmDiagResponse_v11().categories[0]) }));
+static_assert(DCGM_MAX_PLUGIN_NAME_LEN <= std::min({ sizeof(dcgmDiagTestRun_v2().name),
+                                                     sizeof(dcgmDiagTestRun_v2().pluginName),
+                                                     sizeof(dcgmDiagResponse_v12().categories[0]) }));
 
 typedef enum
 {
@@ -106,6 +109,7 @@ typedef struct
 
 #define DCGM_MAX_PLUGIN_TEST_NUM 20
 static_assert(DCGM_MAX_PLUGIN_TEST_NUM <= std::size(dcgmDiagResponse_v11().tests));
+static_assert(DCGM_MAX_PLUGIN_TEST_NUM <= std::size(dcgmDiagResponse_v12().tests));
 
 typedef struct
 {
@@ -170,7 +174,7 @@ typedef struct
 /* Pcie test can generate at least (NUM_GPUs * 6) entries */
 /* NOTE: dcgmi condenses discreet entries into per-gpu output */
 #define DCGM_DIAG_MAX_ERRORS 128
-#define DCGM_DIAG_MAX_INFO   128
+// DCGM_DIAG_MAX_INFO was removed. Use DCGM_DIAG_RESPONSE_INFO_MAX_V2 instead.
 
 #define DCGM_DIAG_ALL_GPUS -1
 
@@ -211,7 +215,9 @@ typedef struct
 } dcgmDiagPluginAttr_v1;
 
 /**
- * @brief Test results.
+ * Test results.
+ * @deprecated Use dcgmDiagEntityResults_v2 instead.
+ * As of DCGM 4.0.
  */
 typedef struct
 {
@@ -223,6 +229,21 @@ typedef struct
     dcgmDiagEntityResult_v1 results[DCGM_DIAG_TEST_RUN_RESULTS_MAX]; //!< Per-entity result for this test.
     dcgmDiagAuxData_t auxData;                                       //!< Auxiliary data for this test.
 } dcgmDiagEntityResults_v1;
+
+/**
+ * @brief Test results.
+ * As of DCGM 4.2.
+ */
+typedef struct
+{
+    unsigned char numErrors;                                         //!< Number of errors included in this response.
+    unsigned char numInfo;                                           //!< Number of info msgs included in this response.
+    unsigned short numResults;                                       //!< Number of results included in this response.
+    dcgmDiagError_v1 errors[DCGM_DIAG_RESPONSE_ERRORS_MAX];          //!< Per-entity errors.
+    dcgmDiagInfo_v1 info[DCGM_DIAG_RESPONSE_INFO_MAX_V2];            //!< Per-entity info messages.
+    dcgmDiagEntityResult_v1 results[DCGM_DIAG_TEST_RUN_RESULTS_MAX]; //!< Per-entity result for this test.
+    dcgmDiagAuxData_t auxData;                                       //!< Auxiliary data for this test.
+} dcgmDiagEntityResults_v2;
 
 /**
  * Get the version of this plugin.
@@ -339,9 +360,9 @@ typedef void (*dcgmDiagRetrieveCustomStats_f)(char const *testName, dcgmDiagCust
  * @param entityResults[out] - detailed results of entity for the test
  * @param userData[in] - the user data set in InitializePlugin()
  */
-DCGM_PUBLIC_API void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData);
+DCGM_PUBLIC_API void RetrieveResults(char const *testName, dcgmDiagEntityResults_v2 *entityResults, void *userData);
 typedef void (*dcgmDiagRetrieveResults_f)(char const *testName,
-                                          dcgmDiagEntityResults_v1 *entityResults,
+                                          dcgmDiagEntityResults_v2 *entityResults,
                                           void *userData);
 
 #ifdef __cplusplus

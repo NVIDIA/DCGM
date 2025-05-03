@@ -18,18 +18,94 @@
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
 #include "dcgm_agent.h"
+#include "dcgm_fields.h"
 #include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
 
 #include <UniquePtrUtil.h>
+#include <array>
 #include <dcgm_nvml.h>
+#include <experimental/scope>
+#include <fmt/format.h>
 #include <iostream>
 #include <map>
-#include <sstream>
+#include <ranges>
+#include <span>
 #include <stdexcept>
 #include <string.h>
 
 std::string DISPLAY_NVLINK_ERROR_COUNT_HEADER = "NVLINK Error Counts";
+
+constexpr auto NVLINK_ERROR_FIELD_IDS_HOPPER_OR_OLDER = std::to_array<unsigned short>(
+    { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16,
+
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17 });
+static_assert(std::size(NVLINK_ERROR_FIELD_IDS_HOPPER_OR_OLDER)
+                  == DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU,
+              "hopper fields count mismatch");
+
+constexpr auto NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER
+    = std::to_array<unsigned short>({ DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT,
+                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT });
 
 /************************************************************************************/
 Nvlink::Nvlink()
@@ -134,7 +210,13 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
         case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
             return "Rx Symbol Error";
         case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
             return "Symbol BER";
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER:
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+            return "Effective BER";
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS:
+            return "Effective Error";
         case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
             return "Tx Discards";
         default:
@@ -144,132 +226,25 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
 
 dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, unsigned int gpuId, bool json)
 {
-    dcgmReturn_t result       = DCGM_ST_OK;
-    dcgmReturn_t returnResult = DCGM_ST_OK;
-    DcgmiOutputTree outTree(30, 50);
-    DcgmiOutputJson outJson;
-    DcgmiOutput &out                                = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outTree;
-    constexpr int numNvLinkFieldsOnBlackwellOrNewer = 9;
-    constexpr int numNvLinkFieldsOnHopperOrOlder    = DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU;
-    constexpr int numFieldIds                   = numNvLinkFieldsOnHopperOrOlder + numNvLinkFieldsOnBlackwellOrNewer;
-    unsigned short fieldIds[numFieldIds]        = { 0 };
-    std::unique_ptr<dcgmFieldValue_v1[]> values = MakeUniqueZero<dcgmFieldValue_v1>(numFieldIds);
-    std::stringstream ss;
-    dcgmFieldGrp_t fieldGroupId;
+    dcgmReturn_t result = DCGM_ST_OK;
 
-    // Variable to get the fieldId in fieldIds array
-    unsigned int fieldIdStart = 0;
-    // Variable to track the count of the nvlink error types for each link
-    unsigned int fieldIdCount = 0;
-    unsigned int fieldId      = 0;
+    // Get chip architecture
+    dcgmChipArchitecture_t chipArchitecture;
+    result = dcgmGetGpuChipArchitecture(mNvcmHandle, gpuId, &chipArchitecture);
+    if (result != DCGM_ST_OK)
+    {
+        std::cout << "Error: Unable to get chip architecture. Return : " << errorString(result) << std::endl;
+        log_debug("Error while getting chip architecture - {}", result);
+        return result;
+    }
 
-    /* Various NVLink error counters to be displayed */
-    fieldIds[0] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0;
-    fieldIds[1] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0;
-    fieldIds[2] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0;
-    fieldIds[3] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0;
-
-    fieldIds[4] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1;
-    fieldIds[5] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1;
-    fieldIds[6] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1;
-    fieldIds[7] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1;
-
-    fieldIds[8]  = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2;
-    fieldIds[9]  = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2;
-    fieldIds[10] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2;
-    fieldIds[11] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2;
-
-    fieldIds[12] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3;
-    fieldIds[13] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3;
-    fieldIds[14] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3;
-    fieldIds[15] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3;
-
-    fieldIds[16] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4;
-    fieldIds[17] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4;
-    fieldIds[18] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4;
-    fieldIds[19] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4;
-
-    fieldIds[20] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5;
-    fieldIds[21] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5;
-    fieldIds[22] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5;
-    fieldIds[23] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5;
-
-    fieldIds[24] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6;
-    fieldIds[25] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6;
-    fieldIds[26] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6;
-    fieldIds[27] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6;
-
-    fieldIds[28] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7;
-    fieldIds[29] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7;
-    fieldIds[30] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7;
-    fieldIds[31] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7;
-
-    fieldIds[32] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8;
-    fieldIds[33] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8;
-    fieldIds[34] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8;
-    fieldIds[35] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8;
-
-    fieldIds[36] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9;
-    fieldIds[37] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9;
-    fieldIds[38] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9;
-    fieldIds[39] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9;
-
-    fieldIds[40] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10;
-    fieldIds[41] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10;
-    fieldIds[42] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10;
-    fieldIds[43] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10;
-
-    fieldIds[44] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11;
-    fieldIds[45] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11;
-    fieldIds[46] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11;
-    fieldIds[47] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11;
-
-    fieldIds[48] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12;
-    fieldIds[49] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12;
-    fieldIds[50] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12;
-    fieldIds[51] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12;
-
-    fieldIds[52] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13;
-    fieldIds[53] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13;
-    fieldIds[54] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13;
-    fieldIds[55] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13;
-
-    fieldIds[56] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14;
-    fieldIds[57] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14;
-    fieldIds[58] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14;
-    fieldIds[59] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14;
-
-    fieldIds[60] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15;
-    fieldIds[61] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15;
-    fieldIds[62] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15;
-    fieldIds[63] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15;
-
-    fieldIds[64] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16;
-    fieldIds[65] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16;
-    fieldIds[66] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16;
-    fieldIds[67] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16;
-
-    fieldIds[68] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17;
-    fieldIds[69] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17;
-    fieldIds[70] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17;
-    fieldIds[71] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17;
-
-    fieldIds[72] = DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS;
-    fieldIds[73] = DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS;
-    fieldIds[74] = DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS;
-    fieldIds[75] = DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS;
-    fieldIds[76] = DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS;
-    fieldIds[77] = DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS;
-    fieldIds[78] = DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS;
-    fieldIds[79] = DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS;
-    fieldIds[80] = DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER;
-
-    /* Make sure to update the 2nd parameter to dcgmFieldGroupCreate below if you make this
-     * list bigger
-     */
+    auto fieldIds(chipArchitecture < DCGM_CHIP_ARCH_BLACKWELL
+                      ? std::span<const unsigned short>(NVLINK_ERROR_FIELD_IDS_HOPPER_OR_OLDER)
+                      : std::span<const unsigned short>(NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER));
 
     // Add a field group
-    result = dcgmFieldGroupCreate(mNvcmHandle, numFieldIds, fieldIds, (char *)"dcgmi_nvlink", &fieldGroupId);
+    dcgmFieldGrp_t fieldGroupId;
+    result = dcgmFieldGroupCreate(mNvcmHandle, fieldIds.size(), fieldIds.data(), (char *)"dcgmi_nvlink", &fieldGroupId);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to add a nvlink field group. Return : " << errorString(result) << std::endl;
@@ -277,112 +252,132 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
         return result;
     }
 
+    // RAII wrapper for destroying field group
+    std::experimental::unique_resource raiiFieldGroup(fieldGroupId, [mNvcmHandle, &result](dcgmFieldGrp_t id) {
+        dcgmReturn_t r = dcgmFieldGroupDestroy(mNvcmHandle, id);
+        if (r != DCGM_ST_OK)
+        {
+            std::cout << "Error: Unable to remove a nvlink field group. Return : " << errorString(r) << std::endl;
+            log_error("Error {} from dcgmFieldGroupDestroy", (int)r);
+
+            if (result == DCGM_ST_OK)
+            {
+                result = r;
+            }
+        }
+    });
+
     // Add watch for nvlink error count fields
     result = dcgmWatchFields(mNvcmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, fieldGroupId, 1000000, 300, 0);
-    if (DCGM_ST_OK != result)
+    if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to add watch for nvlink error field collections. Return : " << errorString(result)
                   << std::endl;
         log_debug("Error while adding watch for nvlink error count field collection - {}", result);
-        returnResult = result;
-        goto CLEANUP;
+        return result;
     }
 
     // Wait for the fields to be updated
     result = dcgmUpdateAllFields(mNvcmHandle, 1);
-    if (DCGM_ST_OK != result)
+    if (result != DCGM_ST_OK)
     {
         std::cout << "Error Updating the nvlink error count fields. Return: " << errorString(result) << std::endl;
         log_debug("Error while updating the nvlink error count fields - {}", result);
-        returnResult = result;
-        goto CLEANUP;
+        return result;
     }
 
     // Header Info
+    DcgmiOutputTree outTree(30, 50);
+    DcgmiOutputJson outJson;
+    auto &out = json ? static_cast<DcgmiOutput &>(outJson) : static_cast<DcgmiOutput &>(outTree);
     out.addHeader(DISPLAY_NVLINK_ERROR_COUNT_HEADER);
-    ss << "GPU " << gpuId;
-    out.addHeader(ss.str());
+    out.addHeader(fmt::format("GPU {}", gpuId));
 
     // Get the latest values of the fields for the requested gpu Id
-    result = dcgmGetLatestValuesForFields(mNvcmHandle, gpuId, fieldIds, numFieldIds, values.get());
-    if (DCGM_ST_OK != result)
+    auto valuesRaw = MakeUniqueZero<dcgmFieldValue_v1>(fieldIds.size());
+    std::span<dcgmFieldValue_v1> values(valuesRaw.get(), fieldIds.size());
+    result = dcgmGetLatestValuesForFields(
+        mNvcmHandle, gpuId, const_cast<unsigned short *>(fieldIds.data()), fieldIds.size(), values.data());
+    if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to retreive latest value for nvlink error counts. Return: " << errorString(result)
                   << "." << std::endl;
         log_error("Error retrieveing latest value for nvlink error counts : {}", result);
-        returnResult = result;
-        goto CLEANUP;
+        return result;
     }
 
     // Display the nvlink errors for each link
-    for (unsigned int nvlink = 0; nvlink < DCGM_NVLINK_MAX_LINKS_PER_GPU; nvlink++)
+    if (chipArchitecture < DCGM_CHIP_ARCH_BLACKWELL)
     {
-        for (fieldId = fieldIdStart, fieldIdCount = 0;
-             fieldIdCount < DCGM_NVLINK_ERROR_COUNT && fieldId < numNvLinkFieldsOnHopperOrOlder;
-             fieldIdCount++, fieldId++)
+        for (auto [index, value] : std::views::enumerate(values))
         {
-            if (values[fieldId].status == DCGM_ST_NOT_SUPPORTED)
+            unsigned int nvlink   = index / DCGM_NVLINK_ERROR_COUNT;
+            std::string fieldName = HelperGetNvlinkErrorCountType(value.fieldId);
+
+            if (value.status == DCGM_ST_NOT_SUPPORTED)
             {
-                /* Skip unsupported nvlinks */
-                log_debug("Unable to retrieve nvlink {} count for link {}, gpuId {}",
-                          HelperGetNvlinkErrorCountType(values[fieldId].fieldId).c_str(),
-                          nvlink,
-                          gpuId);
+                // Skip unsupported nvlinks
+                log_debug("Unable to retrieve nvlink {} count for link {}, gpuId {}", fieldName, nvlink, gpuId);
             }
-            else if (values[fieldId].status != DCGM_ST_OK)
+            else if (value.status != DCGM_ST_OK)
             {
-                std::cout << "Warning: Unable to retrieve nvlink "
-                          << HelperGetNvlinkErrorCountType(values[fieldId].fieldId) << " count for link " << nvlink
-                          << " for gpuId " << gpuId << " - " << errorString((dcgmReturn_t)values[fieldId].status)
+                std::cout << fmt::format("Warning: Unable to retrieve nvlink {} count for link {} for gpuId {} - {}",
+                                         fieldName,
+                                         nvlink,
+                                         gpuId,
+                                         errorString((dcgmReturn_t)value.status))
                           << std::endl;
-                log_debug("Unable to retrieve nvlink {} count for link {}, gpuId {}",
-                          HelperGetNvlinkErrorCountType(values[fieldId].fieldId).c_str(),
-                          nvlink,
-                          gpuId);
+                log_debug("Unable to retrieve nvlink {} count for link {}, gpuId {}", fieldName, nvlink, gpuId);
             }
             else
             {
-                ss.str("");
-                ss << "Link " << nvlink;
-                DcgmiOutputBoxer &outLink                                       = out[ss.str()];
-                outLink[HelperGetNvlinkErrorCountType(values[fieldId].fieldId)] = (long long)values[fieldId].value.i64;
+                DcgmiOutputBoxer &outLink = out[fmt::format("Link {}", nvlink)];
+                outLink[fieldName]        = (long long)value.value.i64;
             }
         }
-
-        fieldIdStart = fieldIdStart + DCGM_NVLINK_ERROR_COUNT;
     }
-
-    for (fieldId = numNvLinkFieldsOnHopperOrOlder; fieldId < numFieldIds; ++fieldId)
+    else
     {
-        auto val = static_cast<long long>(values[fieldId].value.i64);
-
-        if (DCGM_INT64_IS_BLANK(val))
+        for (auto const &value : values)
         {
-            /* Skip unsupported nvlinks */
-            log_debug("Unable to retrieve nvlink {} count for gpuId {}",
-                      HelperGetNvlinkErrorCountType(values[fieldId].fieldId).c_str(),
-                      gpuId);
-            continue;
-        }
+            std::string fieldName = HelperGetNvlinkErrorCountType(value.fieldId);
 
-        DcgmiOutputBoxer &outLink                                       = out["Error Detail"];
-        outLink[HelperGetNvlinkErrorCountType(values[fieldId].fieldId)] = (long long)values[fieldId].value.i64;
+            if (value.fieldType == DCGM_FT_INT64)
+            {
+                long long const val = static_cast<long long>(value.value.i64);
+                if (DCGM_INT64_IS_BLANK(val))
+                {
+                    log_debug("Unable to retrieve nvlink {} count for gpuId {}", fieldName, gpuId);
+                }
+                else
+                {
+                    DcgmiOutputBoxer &outLink = out["Error Detail"];
+                    outLink[fieldName]        = val;
+                }
+            }
+            else if (value.fieldType == DCGM_FT_DOUBLE)
+            {
+                double const val = value.value.dbl;
+                if (DCGM_FP64_IS_BLANK(val))
+                {
+                    log_debug("Unable to retrieve nvlink {} count for gpuId {}", fieldName, gpuId);
+                }
+                else
+                {
+                    DcgmiOutputBoxer &outLink = out["Error Detail"];
+                    outLink[fieldName]        = val;
+                }
+            }
+            else
+            {
+                log_warning("Unhandled field type {} for fieldId {}", value.fieldType, value.fieldId);
+            }
+        }
     }
 
     std::cout << out.str();
 
-CLEANUP:
-    result = dcgmFieldGroupDestroy(mNvcmHandle, fieldGroupId);
-    if (result != DCGM_ST_OK)
-    {
-        std::cout << "Error: Unable to remove a nvlink field group. Return : " << errorString(result) << std::endl;
-        log_error("Error {} from dcgmFieldGroupDestroy", (int)result);
-        /* In cleanup code already. Return retResult from above */
-        if (returnResult == DCGM_ST_OK)
-            returnResult = result;
-    }
-
-    return returnResult;
+    return result;
 }
 
 static char nvLinkStateToCharacter(dcgmNvLinkLinkState_t linkState)

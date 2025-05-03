@@ -2689,7 +2689,7 @@ dcgmReturn_t tsapiUnwatchFields(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, 
 
 dcgmReturn_t tsapiFieldGroupCreate(dcgmHandle_t pDcgmHandle,
                                    int numFieldIds,
-                                   unsigned short *fieldIds,
+                                   const unsigned short *fieldIds,
                                    const char *fieldGroupName,
                                    dcgmFieldGrp_t *dcgmFieldGroupId)
 {
@@ -2875,6 +2875,10 @@ dcgmReturn_t helperHealthGet(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgm
 }
 
 template <typename MsgType>
+    requires std::is_same_v<MsgType, dcgm_diag_msg_run_v12> || std::is_same_v<MsgType, dcgm_diag_msg_run_v11>
+             || std::is_same_v<MsgType, dcgm_diag_msg_run_v10> || std::is_same_v<MsgType, dcgm_diag_msg_run_v9>
+             || std::is_same_v<MsgType, dcgm_diag_msg_run_v8> || std::is_same_v<MsgType, dcgm_diag_msg_run_v7>
+             || std::is_same_v<MsgType, dcgm_diag_msg_run_v6> || std::is_same_v<MsgType, dcgm_diag_msg_run_v5>
 static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
                                                                  unsigned int const msgVersion,
                                                                  dcgmPolicyAction_t action)
@@ -2886,23 +2890,31 @@ static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
 
     switch (msg->header.version)
     {
-        case dcgm_diag_msg_run_version5:
-            msg->diagResponse.version = dcgmDiagResponse_version7;
+        case dcgm_diag_msg_run_version12:
+            msg->diagResponse.version = dcgmDiagResponse_version12;
             break;
-        case dcgm_diag_msg_run_version6:
-            msg->diagResponse.version = dcgmDiagResponse_version8;
+        case dcgm_diag_msg_run_version11:
+        case dcgm_diag_msg_run_version10:
+            msg->diagResponse.version = dcgmDiagResponse_version11;
+            break;
+        case dcgm_diag_msg_run_version9:
+        case dcgm_diag_msg_run_version8:
+            msg->diagResponse.version = dcgmDiagResponse_version10;
             break;
         case dcgm_diag_msg_run_version7:
             msg->diagResponse.version = dcgmDiagResponse_version9;
             break;
-        case dcgm_diag_msg_run_version8:
-        case dcgm_diag_msg_run_version9:
-            msg->diagResponse.version = dcgmDiagResponse_version10;
+        case dcgm_diag_msg_run_version6:
+            msg->diagResponse.version = dcgmDiagResponse_version8;
             break;
-        case dcgm_diag_msg_run_version10:
-        case dcgm_diag_msg_run_version11:
+        case dcgm_diag_msg_run_version5:
+            msg->diagResponse.version = dcgmDiagResponse_version7;
+            break;
         default:
-            msg->diagResponse.version = dcgmDiagResponse_version11;
+            log_error("Unexpected run diag version: [{:x}], treating as [{:x}].",
+                      msg->header.version,
+                      dcgm_diag_msg_run_version12);
+            msg->diagResponse.version = dcgmDiagResponse_version12;
             break;
     }
 
@@ -2912,22 +2924,22 @@ static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
 dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                                  dcgmRunDiag_v10 *drd,
                                  dcgmPolicyAction_t action,
-                                 dcgmDiagResponse_v11 *response)
+                                 dcgmDiagResponse_v12 *response)
 {
-    std::unique_ptr<dcgm_diag_msg_run_v11> msg11 = std::make_unique<dcgm_diag_msg_run_v11>();
-    std::unique_ptr<dcgm_diag_msg_run_v10> msg10 = std::make_unique<dcgm_diag_msg_run_v10>();
-    std::unique_ptr<dcgm_diag_msg_run_v9> msg9   = std::make_unique<dcgm_diag_msg_run_v9>();
-    std::unique_ptr<dcgm_diag_msg_run_v8> msg8   = std::make_unique<dcgm_diag_msg_run_v8>();
-    std::unique_ptr<dcgm_diag_msg_run_v7> msg7   = std::make_unique<dcgm_diag_msg_run_v7>();
-    std::unique_ptr<dcgm_diag_msg_run_v6> msg6   = std::make_unique<dcgm_diag_msg_run_v6>();
-    std::unique_ptr<dcgm_diag_msg_run_v5> msg5   = std::make_unique<dcgm_diag_msg_run_v5>();
-    dcgmReturn_t dcgmReturn;
-
     if (!drd || !response)
     {
         log_error("drd {} or response {} was NULL.", (void *)drd, (void *)response);
         return DCGM_ST_BADPARAM;
     }
+
+    auto msg12 = std::make_unique<dcgm_diag_msg_run_v12>();
+    auto msg11 = std::make_unique<dcgm_diag_msg_run_v11>();
+    auto msg10 = std::make_unique<dcgm_diag_msg_run_v10>();
+    auto msg9  = std::make_unique<dcgm_diag_msg_run_v9>();
+    auto msg8  = std::make_unique<dcgm_diag_msg_run_v8>();
+    auto msg7  = std::make_unique<dcgm_diag_msg_run_v7>();
+    auto msg6  = std::make_unique<dcgm_diag_msg_run_v6>();
+    auto msg5  = std::make_unique<dcgm_diag_msg_run_v5>();
 
     switch (drd->version)
     {
@@ -2948,6 +2960,26 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version12:
+            if (drd->version == dcgmRunDiag_version10)
+            {
+                header = helperInitDiagMsgRun(msg12.get(), dcgm_diag_msg_run_version12, action);
+                memcpy(&msg12->runDiag, drd, sizeof(dcgmRunDiag_v10));
+            }
+            else if (drd->version == dcgmRunDiag_version9)
+            {
+                header = helperInitDiagMsgRun(msg10.get(), dcgm_diag_msg_run_version10, action);
+                memcpy(&msg10->runDiag, drd, sizeof(dcgmRunDiag_v9));
+            }
+            else
+            {
+                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
+                          drd->version,
+                          dcgmRunDiag_version10,
+                          dcgmRunDiag_version9);
+                return DCGM_ST_VER_MISMATCH;
+            }
+            break;
         case dcgmDiagResponse_version11:
             if (drd->version == dcgmRunDiag_version10)
             {
@@ -2961,7 +2993,7 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             }
             else
             {
-                log_error("Unexpected run diag version: [{}], expected versions: [{}, {}].",
+                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
                           drd->version,
                           dcgmRunDiag_version10,
                           dcgmRunDiag_version9);
@@ -2982,7 +3014,7 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             }
             else
             {
-                log_error("Unexpected run diag version: [{}], expected versions: [{}, {}].",
+                log_error("Unexpected run diag version: [{:x}], expected versions: [{:x}, {:x}].",
                           drd->version,
                           dcgmRunDiag_version8,
                           dcgmRunDiag_version7);
@@ -2993,8 +3025,9 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             header = helperInitDiagMsgRun(msg7.get(), dcgm_diag_msg_run_version7, action);
             if (drd->version != dcgmRunDiag_version7)
             {
-                log_error(
-                    "Unexpected run diag version: [{}], expected version: [{}].", drd->version, dcgmRunDiag_version7);
+                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
+                          drd->version,
+                          dcgmRunDiag_version7);
                 return DCGM_ST_VER_MISMATCH;
             }
             memcpy(&msg7->runDiag, drd, sizeof(dcgmRunDiag_v7));
@@ -3004,8 +3037,9 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             header = helperInitDiagMsgRun(msg6.get(), dcgm_diag_msg_run_version6, action);
             if (drd->version != dcgmRunDiag_version7)
             {
-                log_error(
-                    "Unexpected run diag version: [{}], expected version: [{}].", drd->version, dcgmRunDiag_version7);
+                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
+                          drd->version,
+                          dcgmRunDiag_version7);
                 return DCGM_ST_VER_MISMATCH;
             }
             memcpy(&msg6->runDiag, drd, sizeof(dcgmRunDiag_v7));
@@ -3015,16 +3049,16 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
             header = helperInitDiagMsgRun(msg5.get(), dcgm_diag_msg_run_version5, action);
             if (drd->version != dcgmRunDiag_version7)
             {
-                log_error(
-                    "Unexpected run diag version: [{}], expected version: [{}].", drd->version, dcgmRunDiag_version7);
+                log_error("Unexpected run diag version: [{:x}], expected version: [{:x}].",
+                          drd->version,
+                          dcgmRunDiag_version7);
                 return DCGM_ST_VER_MISMATCH;
             }
             memcpy(&msg5->runDiag, drd, sizeof(dcgmRunDiag_v7));
             break;
 
         default:
-            DCGM_LOG_ERROR << "response->version 0x" << std::hex << response->version
-                           << " doesn't match a valid version";
+            log_error("response->version 0x{:x} doesn't match a valid version", response->version);
             return DCGM_ST_VER_MISMATCH;
     }
 
@@ -3032,6 +3066,7 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     header->subCommand = DCGM_DIAG_SR_RUN;
 
     // Compatibility requirement
+    static_assert(sizeof(msg11->diagResponse) <= sizeof(msg12->diagResponse));
     static_assert(sizeof(msg10->diagResponse) <= sizeof(msg11->diagResponse));
     static_assert(sizeof(msg9->diagResponse) <= sizeof(msg10->diagResponse));
     static_assert(sizeof(msg8->diagResponse) <= sizeof(msg9->diagResponse));
@@ -3060,11 +3095,21 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     }
 
     // coverity[overrun-buffer-arg]
-    dcgmReturn = dcgmModuleSendBlockingFixedRequest(
-        dcgmHandle, header, sizeof(*msg11), nullptr, timeoutSeconds * secToMsMultiplier);
+    dcgmReturn_t dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+        dcgmHandle, header, sizeof(*msg12), nullptr, timeoutSeconds * secToMsMultiplier);
 
     switch (response->version)
     {
+        case dcgmDiagResponse_version12:
+            if (drd->version == dcgmRunDiag_version10)
+            {
+                memcpy(response, &msg12->diagResponse, sizeof(msg12->diagResponse));
+            }
+            else if (drd->version == dcgmRunDiag_version9)
+            {
+                memcpy(response, &msg10->diagResponse, sizeof(msg10->diagResponse));
+            }
+            break;
         case dcgmDiagResponse_version11:
             if (drd->version == dcgmRunDiag_version10)
             {
@@ -3488,6 +3533,37 @@ dcgmReturn_t tsapiGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
     }
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t tsapiGetGpuChipArchitecture(dcgmHandle_t dcgmHandle,
+                                         unsigned int gpuId,
+                                         dcgmChipArchitecture_t *chipArchitecture)
+{
+    if (chipArchitecture == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgm_core_msg_get_gpu_chip_architecture_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE;
+    msg.header.version    = dcgm_core_msg_get_gpu_chip_architecture_version;
+
+    msg.info.gpuId = gpuId;
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        return ret;
+    }
+
+    *chipArchitecture = msg.info.data;
+
+    return (dcgmReturn_t)msg.info.cmdRet;
 }
 
 dcgmReturn_t tsapiGetGpuInstanceHierarchy(dcgmHandle_t dcgmHandle, dcgmMigHierarchy_v2 *hierarchy)
@@ -4094,7 +4170,7 @@ static dcgmReturn_t tsapiEngineHealthCheck(dcgmHandle_t pDcgmHandle,
 
 static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
                                                  dcgmRunDiag_v10 *drd,
-                                                 dcgmDiagResponse_v11 *response)
+                                                 dcgmDiagResponse_v12 *response)
 {
     return helperActionManager(pDcgmHandle, drd, DCGM_POLICY_ACTION_NONE, response);
 }
@@ -4102,7 +4178,7 @@ static dcgmReturn_t tsapiEngineActionValidate_v2(dcgmHandle_t pDcgmHandle,
 static dcgmReturn_t tsapiEngineActionValidate(dcgmHandle_t pDcgmHandle,
                                               dcgmGpuGrp_t groupId,
                                               dcgmPolicyValidation_t validate,
-                                              dcgmDiagResponse_v11 *response)
+                                              dcgmDiagResponse_v12 *response)
 {
     dcgmRunDiag_v10 drd10 = {};
 
@@ -4116,7 +4192,7 @@ static dcgmReturn_t tsapiEngineActionValidate(dcgmHandle_t pDcgmHandle,
 static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                              dcgmGpuGrp_t groupId,
                                              dcgmDiagnosticLevel_t diagLevel,
-                                             dcgmDiagResponse_v11 *diagResponse)
+                                             dcgmDiagResponse_v12 *diagResponse)
 {
     dcgmPolicyValidation_t validation = DCGM_POLICY_VALID_NONE;
 
@@ -4154,7 +4230,7 @@ static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
             return DCGM_ST_BADPARAM;
     }
 
-    if (diagResponse->version == dcgmDiagResponse_version11)
+    if (diagResponse->version == dcgmDiagResponse_version12 || diagResponse->version == dcgmDiagResponse_version11)
     {
         dcgmRunDiag_v10 drd = {};
         drd.version         = dcgmRunDiag_version10;

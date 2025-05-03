@@ -20,6 +20,9 @@ import dcgm_fields
 from ctypes import *
 import functools
 
+g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
+g_latestRunDiagVer = dcgm_structs.dcgmRunDiag_version10
+
 def ensure_byte_strings():
     """
     Ensures that we don't call C APIs with unicode strings in the arguments
@@ -195,6 +198,14 @@ def dcgmGetCpuHierarchy_v2(dcgm_handle):
 def dcgmCpuHierarchyCpuOwnsCore(core_id, owned_cores):
     fn = dcgmFP("dcgmCpuHierarchyCpuOwnsCore")
     return fn(core_id, byref(owned_cores))
+
+@ensure_byte_strings()
+def dcgmGetGpuChipArchitecture(dcgm_handle, gpuId):
+    c_chip_architecture = c_int32()
+    fn = dcgmFP("dcgmGetGpuChipArchitecture")
+    ret = fn(dcgm_handle, gpuId, byref(c_chip_architecture))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return c_chip_architecture.value
 
 @ensure_byte_strings()
 def dcgmGetGpuInstanceHierarchy(dcgm_handle):
@@ -582,8 +593,8 @@ def helperDiagCheckReturn_v2(ret, response):
 
 # For v10 and earlier
 def helperDiagCheckReturn_v1(ret, response):
-    assert response.version < dcgm_structs.dcgmDiagResponse_version11, "Expected version earlier than %d, got %d " % \
-        (dcgm_structs.dcgmDiagResponse_version11, response.version)
+    assert response.version <= dcgm_structs.dcgmDiagResponse_version10, "Expected version %d or earlier, got %d " % \
+        (dcgm_structs.dcgmDiagResponse_version10, response.version)
     try:
         dcgm_structs._dcgmCheckReturn(ret)
     except dcgm_structs.DCGMError as e:
@@ -604,15 +615,14 @@ def helperDiagCheckReturn(ret, response):
     else:
         return helperDiagCheckReturn_v1(ret, response)
 
-
 @ensure_byte_strings()
 def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version10):
     if runDiagVersion == dcgm_structs.dcgmRunDiag_version7:
         response = dcgm_structs.c_dcgmDiagResponse_v10()
         response.version = dcgm_structs.dcgmDiagResponse_version10
     else:
-        response = dcgm_structs.c_dcgmDiagResponse_v11()
-        response.version = dcgm_structs.dcgmDiagResponse_version11
+        response = dcgm_structs.c_dcgmDiagResponse_v12()
+        response.version = dcgm_structs.dcgmDiagResponse_version12
 
     runDiagInfo.version = runDiagVersion
     fn = dcgmFP("dcgmActionValidate_v2")
@@ -622,8 +632,8 @@ def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.
 
 @ensure_byte_strings()
 def dcgmActionValidate(dcgm_handle, group_id, validate):
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
-    response.version = dcgm_structs.dcgmDiagResponse_version11
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
+    response.version = dcgm_structs.dcgmDiagResponse_version12
 
     # Put the group_id and validate into a dcgmRunDiag struct
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
@@ -638,8 +648,8 @@ def dcgmActionValidate(dcgm_handle, group_id, validate):
 
 @ensure_byte_strings()
 def dcgmRunDiagnostic(dcgm_handle, group_id, diagLevel):
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
-    response.version = dcgm_structs.dcgmDiagResponse_version11
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
+    response.version = dcgm_structs.dcgmDiagResponse_version12
     fn = dcgmFP("dcgmRunDiagnostic")
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
 

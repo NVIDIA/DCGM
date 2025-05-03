@@ -60,8 +60,8 @@ TEST_CASE("Logging GPU Specific Errors")
     AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 1, 123400);
     AddCudaError(&p, testName, "cudaMalloc", cudaErrorMemoryAllocation, 2, 123400, true);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     dcgmReturn_t ret = p.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);
@@ -99,8 +99,8 @@ TEST_CASE("Verify entityResults when logging generic errors")
     LOG_CUDA_ERROR_FOR_PLUGIN(&p, testName, "cudaFake", cudaErrorMemoryAllocation, 1, 0, false);
     LOG_CUBLAS_ERROR_FOR_PLUGIN(&p, testName, "cublasFake", cubSt, 0, 0, false);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     dcgmReturn_t ret = p.GetResults(testName, &entityResults);
     CHECK(ret == DCGM_ST_OK);

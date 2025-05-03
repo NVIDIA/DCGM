@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "DcgmStringHelpers.h"
 #include "EntitySet.h"
 #include "PluginInterface.h"
@@ -271,6 +272,9 @@ std::optional<std::string> TestFramework::GetPluginCudaDirExtension() const
         case 11:
             return CUDA_11_EXTENSION;
         case 12:
+            return CUDA_12_EXTENSION;
+        case 13:
+            // FIXME: Update to CUDA 13 directory once CUDA 13 support is added
             return CUDA_12_EXTENSION;
         default:
             log_error("Detected unsupported Cuda version: {}.{}", cudaMajorVersion, cudaMinorVersion);
@@ -859,9 +863,12 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
 
             if (!skipRest && !main_should_stop)
             {
-                dcgmDiagEntityResults_v1 const &entityResults = m_plugins[pluginIndex]->GetEntityResults(testName);
+                dcgmDiagEntityResults_v2 const &entityResults
+                    = m_plugins[pluginIndex]->GetEntityResults<dcgmDiagEntityResults_v2>(testName);
                 DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
                 std::vector<dcgmDiagPluginEntityInfo_v1> entityInfos = PopulateEntityInfoForPlugins(entitySet);
+
+                log_debug("Test {} start", testName);
 
                 m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Running);
                 m_plugins[pluginIndex]->RunTest(testName, entityInfos, 600, tp);
@@ -885,8 +892,10 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
 
             m_diagResponse.AddTestCategory(testName, test->GetCategory());
 
-            DCGM_LOG_DEBUG << "Test " << testName << " had result " << m_plugins[pluginIndex]->GetResult(testName)
-                           << ". Configless is " << nvvsCommon.configless;
+            log_debug("Test {} had result {}. Configless is {}",
+                      testName,
+                      m_plugins[pluginIndex]->GetResult(testName),
+                      nvvsCommon.configless);
 
             if (m_plugins[pluginIndex]->GetResult(testName) == NVVS_RESULT_FAIL
                 && ((!nvvsCommon.configless) || nvvsCommon.failEarly))

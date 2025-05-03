@@ -28,10 +28,10 @@ SCENARIO("Diag::GetFailureResult")
 {
     Diag d(1, "localhost");
 
-    SECTION("Diag::GetFailureResult w/dcgmDiagResponse v11")
+    SECTION("Diag::GetFailureResult")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr              = MakeUniqueZero<dcgmDiagResponse_v12>();
+        dcgmDiagResponse_v12 &response = *(responseUptr.get());
         // Initialized to all zeros won't pass as no test references Software
 
         CHECK(d.GetFailureResult(response) == DCGM_ST_NO_DATA);
@@ -77,9 +77,45 @@ SCENARIO("Diag::GetFailureResult")
         // Ensure invalid responses are not referenced (the ISOLATE error will be skipped)
         response.tests[1].errorIndices[1] = response.tests[1].numErrors;
         CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ERROR);
+
+        // Test errors with DCGM_FE_NONE entity
+        // Reset errors
+        response.numErrors          = 0;
+        response.tests[0].numErrors = 0;
+        response.tests[1].numErrors = 0;
+
+        // Add an error with DCGM_FE_NONE entity but code == 0
+        response.errors[0].code           = 0;
+        response.errors[0].entity         = { DCGM_FE_NONE, 0 };
+        response.tests[0].errorIndices[0] = 0;
+        response.numErrors += 1;
+        response.tests[0].numErrors += 1;
+
+        // Code == 0 with DCGM_FE_NONE entity - default
+        CHECK(d.GetFailureResult(response) == DCGM_ST_OK);
+
+        // Add an error with DCGM_FE_NONE entity and non-zero error code
+        response.errors[1].code           = 1;
+        response.errors[1].entity         = { DCGM_FE_NONE, 0 };
+        response.tests[0].errorIndices[1] = 1;
+        response.numErrors += 1;
+        response.tests[0].numErrors += 1;
+
+        // DCGM_FE_NONE entity with non-zero error code - Unknown device type with test failure
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ERROR);
+
+        // DCGM_FE_NONE entity and ISOLATE error code - Unknown device type with test failure
+        response.errors[2].code           = 95;
+        response.errors[2].entity         = { DCGM_FE_NONE, 0 };
+        response.tests[0].errorIndices[2] = 2;
+        response.numErrors += 1;
+        response.tests[0].numErrors += 1;
+
+        // Should return ISOLATE error
+        CHECK(d.GetFailureResult(response) == DCGM_ST_NVVS_ISOLATE_ERROR);
     }
 
-    SECTION("Sanitize")
+    SECTION("Diag::Sanitize")
     {
         CHECK(d.Sanitize("") == "");
         CHECK(d.Sanitize(" ") == "");
@@ -112,8 +148,8 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 {
     SECTION("Default Output")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr                    = MakeUniqueZero<dcgmDiagResponse_v12>();
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
 
         Diag d(1, "localhost");
         Json::Value output;
@@ -125,20 +161,23 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Has EUD and CPU EUD version")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        SafeCopyTo(response.tests[0].name, "cpu_eud");
-        response.tests[0].auxData.version = dcgmDiagTestAuxData_version;
-        SafeCopyTo(response.tests[0].auxData.data, "{\"version\": \"cpu_eud_version\"}");
-        response.numTests += 1;
+            SafeCopyTo(response.tests[0].name, "cpu_eud");
+            response.tests[0].auxData.version = dcgmDiagTestAuxData_version;
+            SafeCopyTo(response.tests[0].auxData.data, "{\"version\": \"cpu_eud_version\"}");
+            response.numTests += 1;
 
-        SafeCopyTo(response.tests[1].name, "eud");
-        response.tests[1].auxData.version = dcgmDiagTestAuxData_version;
-        SafeCopyTo(response.tests[1].auxData.data, "{\"version\": \"eud_version\"}");
-        response.numTests += 1;
+            SafeCopyTo(response.tests[1].name, "eud");
+            response.tests[1].auxData.version = dcgmDiagTestAuxData_version;
+            SafeCopyTo(response.tests[1].auxData.data, "{\"version\": \"eud_version\"}");
+            response.numTests += 1;
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -152,17 +191,20 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("No EUD versions")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        SafeCopyTo(response.tests[0].name, "cpu_eud");
-        response.numTests += 1;
-        SafeCopyTo(response.tests[1].name, "eud");
-        response.numTests += 1;
+            SafeCopyTo(response.tests[0].name, "cpu_eud");
+            response.numTests += 1;
+            SafeCopyTo(response.tests[1].name, "eud");
+            response.numTests += 1;
 
-        SafeCopyTo(response.dcgmVersion, "4.0.0");
+            SafeCopyTo(response.dcgmVersion, "4.0.0");
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -173,11 +215,14 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Has DCGM version")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
-        SafeCopyTo(response.dcgmVersion, "4.0.0");
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
+            SafeCopyTo(response.dcgmVersion, "4.0.0");
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -189,11 +234,14 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("Has driver version")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
-        SafeCopyTo(response.driverVersion, "545.29.06");
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
+            SafeCopyTo(response.driverVersion, "545.29.06");
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -205,12 +253,14 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
 
     SECTION("No driver version")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
-
-        SafeCopyTo(response.dcgmVersion, "4.0.0");
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
+            SafeCopyTo(response.dcgmVersion, "4.2.0");
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -221,14 +271,19 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Non-first Entity Group")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 0 }, .serialNum = "", .skuDeviceId = "" });
-        response.entities[1] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 1 }, .serialNum = "", .skuDeviceId = "" });
-        response.numEntities = 2;
+            response.entities[0]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+            response.entities[1]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_CPU, 1 }, .serialNum = "", .skuDeviceId = "" });
+            response.numEntities = 2;
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -243,15 +298,19 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Non-adjacent entity groups")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
-        response.entities[1]
-            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_SWITCH, 0 }, .serialNum = "", .skuDeviceId = "" });
-        response.numEntities = 2;
+            response.entities[0]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+            response.entities[1]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_SWITCH, 0 }, .serialNum = "", .skuDeviceId = "" });
+            response.numEntities = 2;
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -271,14 +330,17 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("No entity groups in output when all entities are in group NONE")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        response.entities[0]
-            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
-        response.numEntities = 1;
+            response.entities[0]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
+            response.numEntities = 1;
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);
@@ -290,15 +352,19 @@ TEST_CASE("Diag::HelperJsonBuildOutput")
     // DCGM-4396: JSON output: multiple 'null' entity groups in output
     SECTION("Entities in group NONE excluded from output")
     {
-        std::unique_ptr<dcgmDiagResponse_v11> responseUptr = MakeUniqueZero<dcgmDiagResponse_v11>();
-        dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+        auto responseUptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        {
+            dcgmDiagResponse_v12 &response = *(responseUptr.get());
 
-        response.entities[0]
-            = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
-        response.entities[0] = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
-        response.numEntities = 2;
+            response.entities[0]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_NONE, 42 }, .serialNum = "", .skuDeviceId = "" });
+            response.entities[1]
+                = dcgmDiagEntity_v1({ .entity = { DCGM_FE_GPU, 0 }, .serialNum = "", .skuDeviceId = "" });
+            response.numEntities = 2;
+        }
 
         Diag d(1, "localhost");
+        dcgmDiagResponse_v12 const &response = *(responseUptr.get());
         Json::Value output;
 
         d.HelperJsonBuildOutput(output, response);

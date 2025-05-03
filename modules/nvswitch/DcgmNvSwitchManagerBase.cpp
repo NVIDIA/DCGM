@@ -303,7 +303,7 @@ using fieldEntityMapType = std::map<unsigned short, std::vector<dcgm_field_updat
 
 /*************************************************************************/
 /* Helper to buffer up a blank value for every entity. This is useful when
-   the fieldId in question isn't supported by DCGM or NSCQ yet */
+   the fieldId in question isn't supported by DCGM/NSCQ/NVSDM yet. */
 void DcgmNvSwitchManagerBase::BufferBlankValueForAllEntities(unsigned short fieldId,
                                                              DcgmFvBuffer &buf,
                                                              const std::vector<dcgm_field_update_info_t> &entities)
@@ -351,8 +351,8 @@ dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFields(timelib64_t &nextUpdateTime)
 
     /**
      * For now, we're going to only visit each fieldId once and update all
-     * requested entities for that field ID. We'll also only make one NSCQ call
-     * per fieldId
+     * requested entities for that field ID. We'll also only make one call
+     * per fieldId.
      */
     fieldEntityMapType fieldEntityMap;
 

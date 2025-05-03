@@ -113,8 +113,23 @@ public:
     const std::optional<std::any> &GetAuxData(std::string const &testName) const;
 
     dcgm_field_entity_group_t GetTargetEntityGroup(std::string const &testName) const;
-
-    const dcgmDiagEntityResults_v1 &GetEntityResults(std::string const &testName) const;
+    /**
+     * Retrieves test results for the specified test in the requested format
+     *
+     * This template method forwards the type parameter to the test's GetEntityResults
+     * method, allowing callers to request either v1 or v2 format results.
+     *
+     * @param testName Name of the test to retrieve results for
+     * @return Reference to the test results in the requested format
+     * @throws std::out_of_range if the specified test doesn't exist
+     *
+     * @note Developers must ensure that explicit instantiations at the end of PluginLib.cpp
+     *       are updated accordingly when modifying this template method.
+     */
+    template <typename EntityResultsType>
+        requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+                 || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+    EntityResultsType const &GetEntityResults(std::string const &testName) /* const */;
 
     std::unordered_map<std::string, PluginLibTest> const &GetSupportedTests() const;
 

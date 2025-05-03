@@ -44,7 +44,22 @@ public:
     std::vector<dcgmDiagInfo_v1> const &GetInfo() const;
     std::vector<dcgmDiagSimpleResult_t> const &GetResults() const;
     std::string const &GetTestCategory() const;
-    dcgmDiagEntityResults_v1 const &GetEntityResults() const;
+
+    /**
+     * Retrieves test results for the specified test in the requested format
+     *
+     * This template method forwards the type parameter to the test's GetEntityResults
+     * method, allowing callers to request either v1 or v2 format results.
+     *
+     * @return Reference to the test results in the requested format
+     * @note Developers must ensure that explicit instantiations at the end of PluginLibTest.cpp
+     *       are updated accordingly when modifying this template method.
+     */
+    template <typename EntityResultsType>
+        requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+                 || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+    EntityResultsType const &GetEntityResults() /* const */;
+
     std::optional<std::any> const &GetAuxData() const;
     nvvsPluginResult_t GetResult() const;
     dcgm_field_entity_group_t GetTargetEntityGroup() const;
@@ -58,7 +73,7 @@ public:
     void AddCustomStats(dcgmDiagCustomStats_t const &customStats);
     void AddInfo(dcgmDiagInfo_v1 const &info);
 
-    void PopulateEntityResults(dcgmDiagEntityResults_v1 const &entityResult);
+    void PopulateEntityResults(dcgmDiagEntityResults_v2 const &entityResult);
 
 private:
     std::string m_testName;
@@ -72,6 +87,7 @@ private:
     std::vector<dcgmDiagPluginParameterInfo_t> m_parameterInfo;
     TestParameters m_testParameters;
     std::optional<std::any> m_auxData;
-    dcgmDiagEntityResults_v1 m_entityResult {};
+    dcgmDiagEntityResults_v1 m_entityResultV1 {}; // Deprecated. Temporary storage for v1 results.
+    dcgmDiagEntityResults_v2 m_entityResult {};
     TestRuningState m_testRunningState = TestRuningState::Pending;
 };

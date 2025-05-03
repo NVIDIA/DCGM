@@ -101,7 +101,7 @@ def get_all_functions(test_file_names):
             if line_start:
                 line_map.append(i)
                 line_start = False
-        
+
             if data[i] == '\n':
                 line_start = True
 
@@ -113,16 +113,52 @@ def get_all_functions(test_file_names):
             if isinstance(node, ast.FunctionDef):
                 if node.name[0:4] != "test":
                     continue
-        
+
                 function_name = node.name
 
                 if function_name in test_funcs_to_not_parse:
                     decorator_tuple = ()
                 else:
                     decorators = []
+
+                    # Start of function definition. We parse this way to
+                    # be compatible with ast 3.6. Version 3.8 has end_lineno
+                    # and end_col_offset which makes this much easier, and
+                    # version 3.9 has unparse() but we have to support ast 3.6
+                    # for RHEL 8.
+                    #
+                    # Basically, we keep track of the start of each decorator
+                    # and extract the text between decorators and between the
+                    # last decorator and the function definition. This can
+                    # pick up comments (which do not matter), and trailing
+                    # white space (which we strip, but which would not matter).
+
+                    node_lineno = node.lineno
+                    node_col_offset = node.col_offset
+                    last_lineno = -1
+                    last_col_offset = -1
+
                     for decorator in node.decorator_list:
                         if isinstance(decorator, ast.Call):
-                            decorators.append(data[line_map[decorator.lineno - 1] + decorator.col_offset -1:line_map[decorator.end_lineno - 1] + decorator.end_col_offset])
+                            if last_lineno >= 0:
+                                # This does not remove trailing comments on the
+                                # decorator, but they do not matter.
+                                decoratorCall = data[line_map[last_lineno - 1] + last_col_offset - 1 : line_map[decorator.lineno - 1] + decorator.col_offset - 1].strip()
+                                decorators.append(decoratorCall)
+
+                            last_lineno = decorator.lineno
+                            last_col_offset = decorator.col_offset
+
+                    if last_lineno != -1:
+                        # Some old ASTs start the node line as the line of the first decorator
+                        # We presume the last decorator is all on one line (they all usually are)
+                        if last_lineno >= node_lineno:
+                            node_lineno = last_lineno + 1
+                            node_col_offset = 0
+                            
+                        decoratorCall = data[line_map[last_lineno - 1] + last_col_offset - 1 : line_map[node_lineno - 1] + node_col_offset].strip()
+                        decorators.append(decoratorCall)
+                        
                     decorator_tuple = tuple(decorators)
 
                 if decorator_tuple in decorators_map:
@@ -131,7 +167,7 @@ def get_all_functions(test_file_names):
                     amortized_decorator_name = "test_custom_function_"+ str(decorator_index)
                     # map decorator tuple to amortized decorator name
                     decorators_map[decorator_tuple] = amortized_decorator_name
-                                              
+
                     # map amortized decorator name to functions
                     amortized_decorators_map[amortized_decorator_name] = [decorator_tuple, []]
                     decorator_index += 1
@@ -146,6 +182,8 @@ def get_all_functions(test_file_names):
                         continue
 
                 amortized_decorators_map[amortized_decorator_name][1].append([file, function_name])
+
+    logger.info("Tests compiled.")
 
     return amortized_decorators_map
 
@@ -194,7 +232,7 @@ def generate_function_calls(amortized_decorators_map):
             file_content += "    unwrap = False\n\n"
         else:
             file_content += "    unwrap = True\n\n"
-                
+
         file_content += "    cbFun(test_data_obj, exception, wrapped_functions, unwrap, *args, **kwargs)\n\n"
 
     return file_content
@@ -238,10 +276,10 @@ def run_compilation():
     # Add import of test_globals to set values for globals referenced in
     # test decorator arguments.
     new_file_content += "from test_globals import *\n\n"   # import test globals
-    
+
     # Generate Amortized Decorator test calls.
     new_file_content += generate_function_calls(amortized_decorators_map) + "\n"
-    
+
     # Write the compiled file.
     logger.debug("writing new file")
     with open(script_directory + test_directory + "/" + compiled_file_name, "w") as f:

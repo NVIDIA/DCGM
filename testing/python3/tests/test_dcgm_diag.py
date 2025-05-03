@@ -53,15 +53,18 @@ TEST_DIAGNOSTIC = "diagnostic"
 TEST_MEMORY = "memory"
 TEST_MEMTEST = "memtest"
 
+g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
+g_latestDiagRunVer = dcgm_structs.dcgmRunDiag_version10
+
 def diag_result_assert_fail(response, gpuIndex, testName, msg, errorCode):
     # Raises AssertError when there is one or more passing result associated with gpuIndex and testName.
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11
+    assert response.version == g_latestDiagResponseVer
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuIndex )
     assert check_diag_result_non_passing(response, entityPair, testName), msg
 
 def diag_result_assert_pass(response, gpuIndex, testName, msg):
     # Raises AssertError when there is one or more failure result associated with gpuIndex and testName.
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11
+    assert response.version == g_latestDiagResponseVer
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuIndex )
     assert check_diag_result_non_failing(response, entityPair, testName), msg
 
@@ -70,7 +73,7 @@ def diag_result_assert_fail_v1(response, gpuIndex, testIndex, msg, errorCode):
     # Instead of checking that it failed, just make sure it didn't pass because we want to ignore skipped
     # tests or tests that did not run.
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_PASS, msg
-    if response.version < dcgm_structs.dcgmDiagResponse_version11:
+    if response.version < g_latestDiagResponseVer:
         codeMsg = "Failing test expected error code %d, but found %d" % \
                     (errorCode, response.perGpuResponses[gpuIndex].results[testIndex].error[0].code)
         assert response.perGpuResponses[gpuIndex].results[testIndex].error[0].code == errorCode, codeMsg
@@ -80,7 +83,7 @@ def diag_result_assert_pass_v1(response, gpuIndex, testIndex, msg):
     # Instead of checking that it passed, just make sure it didn't fail because we want to ignore skipped
     # tests or tests that did not run.
     assert response.perGpuResponses[gpuIndex].results[testIndex].result != dcgm_structs.DCGM_DIAG_RESULT_FAIL, msg
-    if response.version < dcgm_structs.dcgmDiagResponse_version11:
+    if response.version < g_latestDiagResponseVer:
         codeMsg = "Passing test somehow has a non-zero error code!"
         assert response.perGpuResponses[gpuIndex].results[testIndex].error[0].code == 0, codeMsg
 
@@ -111,7 +114,7 @@ def diag_assert_error_found(response, entityPair, testName, errorStr):
     # Raises AssertError if errorStr is not found associated with entityPair and testName.
     # This currently asserts on the first matching error and can be made more robust by searching all
     # errors associated with entityPair and testName.
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11, "Version %d is not handled." % response.version
+    assert response.version == g_latestDiagResponseVer, "Version %d is not handled." % response.version
     if type(entityPair) == int:
         gpuId = entityPair
         entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
@@ -138,7 +141,7 @@ def diag_assert_error_not_found(response, entityPair, testName, errorStr):
     # Raises AssertError when the specified errorStr is found associated with entity and testName.
     # This currently asserts on the first matching error and can be made more robust by searching all
     # errors associated with entityPair and testName.
-    assert response.version == dcgm_structs.dcgmDiagResponse_version11, "Version %d is not handled." % response.version
+    assert response.version == g_latestDiagResponseVer, "Version %d is not handled." % response.version
     if type(entityPair) == int:
         gpuId = entityPair
         entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
@@ -215,20 +218,25 @@ def helper_check_dcgm_run_diag_backwards_compatibility(handle, gpuId):
             dcgm_structs.dcgmRunDiag_version9: dcgm_structs.c_dcgmRunDiag_v9(),
             dcgm_structs.dcgmRunDiag_version10: dcgm_structs.c_dcgmRunDiag_v10(),
         }
-        for version, runDiag in runDiagVersions.items():
+        diagResponseVersions = {
+            dcgm_structs.dcgmRunDiag_version9: [ dcgm_structs.c_dcgmDiagResponse_v11(), dcgm_structs.dcgmDiagResponse_version11 ],
+            dcgm_structs.dcgmRunDiag_version10: [ dcgm_structs.c_dcgmDiagResponse_v12(), dcgm_structs.dcgmDiagResponse_version12 ],
+        }
+
+        for runDiagVer, runDiag in runDiagVersions.items():
             drd = runDiag
-            drd.version = version
+            drd.version = runDiagVer
             drd.entityIds = str(gpuId)
             drd.groupId = dcgm_structs.DCGM_GROUP_NULL
             drd.validate = 1
-            response = dcgm_structs.c_dcgmDiagResponse_v11()
-            response.version = dcgm_structs.dcgmDiagResponse_version11
+            response, responseVer = diagResponseVersions[runDiagVer]
+            response.version = responseVer
             response.numTests = 0
             ret = localDcgmActionValidate_v2(handle, drd, response)
-            assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}] for RunDiag version {version}"
-            assert response.version == dcgm_structs.dcgmDiagResponse_version11
-            assert response.numTests == 1, f"response.numTests: [{response.numTests}] for RunDiag version {version}"
-            assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}] for RunDiag version {version}"
+            assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}] for RunDiag version {runDiagVer}"
+            assert response.version == responseVer, f"expected {responseVer:x} actual {response.version:x}"
+            assert response.numTests == 1, f"response.numTests: [{response.numTests}] for RunDiag version {runDiagVer}"
+            assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}] for RunDiag version {runDiagVer}"
     
     # Test runDiag_v9 and runDiag_v10 (may be redundant with some tests below)
     _test_run_diag_v9_and_v10()
@@ -295,6 +303,16 @@ def test_dcgm_run_diagnostic_backwards_compatibility(handle, gpuIds):
     createdGroupId = createdGroup.GetId().value
 
     # Test "latest" (may be redundant with some tests below)
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
+    response.version = dcgm_structs.dcgmDiagResponse_version12
+    response.numTests = 0
+    ret = localDcgmRunDiagnostic(handle, createdGroupId, response)
+    assert ret == dcgm_structs.DCGM_ST_OK, f"ret: [{ret}]"
+    assert response.version == dcgm_structs.dcgmDiagResponse_version12
+    assert response.numTests == 1, f"response.numTests: [{response.numTests}]"
+    assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}]"
+
+    # Test dcgmDiagResponse_v11
     response = dcgm_structs.c_dcgmDiagResponse_v11()
     response.version = dcgm_structs.dcgmDiagResponse_version11
     response.numTests = 0
@@ -324,7 +342,7 @@ def test_dcgm_run_diagnostic_backwards_compatibility(handle, gpuIds):
 
 checked_gpus = {} # Used to track that a GPU has been verified as passing
 # Makes sure a very basic diagnostic passes and returns a DcgmDiag object
-def helper_verify_diag_passing(handle, gpuIds, testNames=TEST_MEMTEST, params="memtest.test_duration=15", version=dcgm_structs.dcgmRunDiag_version9, useFakeGpus=False):
+def helper_verify_diag_passing(handle, gpuIds, testNames=TEST_MEMTEST, params="memtest.test_duration=15", version=g_latestDiagRunVer, useFakeGpus=False):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr=testNames, paramsStr=params, version=version)
     dd.SetClocksEventMask(0) # We explicitly want to fail for throttle reasons since this test inserts throttling errors 
                              # for verification
@@ -567,7 +585,7 @@ def test_dcgm_diag_pcie_failure(handle, gpuIds):
         test_utils.skip_test("Debug test only")
     testName = "pcie"
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr=testName, paramsStr="pcie.test_duration=60;pcie.test_with_gemm=true;pcie.is_allowed=true",
-                           version=dcgm_structs.dcgmRunDiag_version9)
+                           version=g_latestDiagRunVer)
     response = test_utils.diag_execute_wrapper(dd, handle)
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuIds[0] )
     assert check_diag_result_fail(response, entityPair, testName), "No failure detected in diagnostic"
@@ -656,7 +674,7 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     # First check whether the GPU is healthy/supported
     testName = "memtest"
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2",
-                           version=dcgm_structs.dcgmRunDiag_version9)
+                           version=g_latestDiagRunVer)
     response = test_utils.diag_execute_wrapper(dd, handle)
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
     if not check_diag_result_pass(response, entityPair, testName):
@@ -1224,7 +1242,7 @@ def test_memtest_failures_standalone(handle, gpuIds):
 def test_dcgm_diag_nvbandwidth_failure(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="nvbandwidth", paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
 
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_GPU_TEMP, 1000, 0, True, repeatCount=20)
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL, 99, 0, True, repeatCount=5)
 
     response = test_utils.diag_execute_wrapper(dd, handle)
     nvbandwidth_test_idx = -1
@@ -1237,7 +1255,7 @@ def test_dcgm_diag_nvbandwidth_failure(handle, gpuIds):
     assert response.results[resultIdx].entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Should have entity group as DCGM_FE_GPU, but got {response.results[resultIdx].entity.entityGroupId}"
     assert response.results[resultIdx].entity.entityId == gpuIds[0], f"Should have entityId as {gpuIds[0]}, but got {response.results[resultIdx].entity.entityId}"
     assert response.results[resultIdx].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, \
-                "Should have a failure due to high temperatures, but got passing result"
+                "Should have a failure due to high memory copy utilitization, but got passing result"
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
@@ -1521,3 +1539,173 @@ def test_dcgm_diag_will_display_num_cpu(handle, gpuIds):
         if expectedNumCpuStr in stdoutLine:
             found = True
     assert found, f"Actual stdout: [{diagApp.stdout_lines}]"
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_diag_nvbandwidth_env_var_restoration(handle, gpuIds):
+    # Store original value if it exists
+    original_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+    
+    try:
+        # Run nvbandwidth test
+        dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="nvbandwidth", paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+        response = test_utils.diag_execute_wrapper(dd, handle)
+        
+        # Verify test results
+        nvbandwidth_test_idx = -1
+        for i in range(response.numTests):
+            if response.tests[i].name == "nvbandwidth":
+                nvbandwidth_test_idx = i
+                break
+        assert nvbandwidth_test_idx != -1, "Should have nvbandwidth test result."
+        
+        # Verify CUDA_VISIBLE_DEVICES was restored
+        current_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if original_cuda_visible_devices:
+            assert current_cuda_visible_devices == original_cuda_visible_devices, \
+                f"CUDA_VISIBLE_DEVICES should be restored to {original_cuda_visible_devices}, but got {current_cuda_visible_devices}"
+        else:
+            assert current_cuda_visible_devices is None, \
+                "CUDA_VISIBLE_DEVICES should be unset, but it was set"
+            
+    finally:
+        # Restore original value in case test fails
+        if original_cuda_visible_devices:
+            os.environ["CUDA_VISIBLE_DEVICES"] = original_cuda_visible_devices
+        else:
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+
+def helper_check_nvbandwidth_log_file_creation(handle, gpuIds):
+    """
+    Helper function to verify that the nvbandwidth log file is created when running the nvbandwidth test.
+    """
+    def validate_json_content(lines, source_name):
+        """
+        Helper function to validate JSON content in the lines.
+        Skips warning lines and checks for the expected JSON format.
+        
+        Args:
+            lines: List of lines to check
+            source_name: Name of the source (for error messages)
+            
+        Returns:
+            True if valid JSON content is found, False otherwise
+        """
+
+        def is_valid_json_content(json_lines):
+            try:
+                json.loads('\n'.join(json_lines))
+                return True
+            except json.JSONDecodeError:
+                return False
+        
+        # Skip any warning lines until we find the first line that starts with "{"
+        json_start_idx = -1
+        for i, line in enumerate(lines):
+            if line.startswith("{"):
+                json_start_idx = i
+                break
+        
+        if json_start_idx != -1:
+            # Extract the JSON content starting from the "{" line
+            json_lines = lines[json_start_idx:]
+
+            # For nvvs.log, json_lines may contain other logging information
+            if source_name != "nvvs.log":
+                assert is_valid_json_content(json_lines), f"Invalid JSON content in {source_name}"                
+            
+            if len(json_lines) >= 2:
+                # Check that the first two lines match the expected format
+                assert json_lines[0] == '{', f"First JSON line in {source_name} should be '{{', but got '{json_lines[0]}'"
+                assert json_lines[1].startswith('"nvbandwidth"'), f"Second JSON line in {source_name} should start with '\"nvbandwidth\"', but got '{json_lines[1]}'"
+                return True
+            else:
+                assert False, f"Found JSON start in {source_name} but fewer than 2 lines: {json_lines}"
+        else:
+            assert False, f"Could not find JSON content starting with '{{' in {source_name}. Lines found: {lines}"
+        
+    
+    # Determine the log directory
+    log_dir = os.environ.get("DCGM_HOME_DIR", "/var/log/nvidia-dcgm")
+    
+    # Ensure the log directory exists
+    if not os.path.exists(log_dir):
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"Failed to create log directory {log_dir}: {str(e)}")
+            # If we can't create the directory, we should skip the test
+            test_utils.skip_test(f"Skipping test because log directory {log_dir} doesn't exist and couldn't be created")
+    
+    # Check if we have write permissions to the log directory
+    if not os.access(log_dir, os.W_OK):
+        test_utils.skip_test(f"Skipping test because we don't have write permissions to log directory {log_dir}")
+    
+    log_file_path = os.path.join(log_dir, "dcgm_nvbandwidth.log")
+    nvvs_log_path = os.path.join(log_dir, "nvvs.log")
+    
+    # Remove the log file if it exists to ensure we're testing the creation of a new file
+    if os.path.exists(log_file_path):
+        try:
+            os.remove(log_file_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove existing log file {log_file_path}: {str(e)}")
+    
+    # Run the nvbandwidth test
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="nvbandwidth", paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+    
+    # Execute the diagnostic
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    
+    # Verify the test ran
+    nvbandwidth_test_idx = -1
+    for i in range(response.numTests):
+        if response.tests[i].name == "nvbandwidth":
+            nvbandwidth_test_idx = i
+            break
+    assert nvbandwidth_test_idx != -1, "Should have nvbandwidth test result."
+    
+    # Check if the main log file exists
+    if os.path.isfile(log_file_path) and os.path.getsize(log_file_path) > 0:
+        # Check that the first two lines (after removing spaces) are '{' and '"nvbandwidth":'
+        with open(log_file_path, 'r') as f:
+            lines = [line.strip() for line in f.readlines() if line.strip()]
+            validate_json_content(lines, f"log file {log_file_path}")
+    else:    
+        # Check nvvs.log for the "External command stdout:" line
+        if os.path.isfile(nvvs_log_path):
+            # Look for the "External command stdout:" line which indicates stdout was written to nvvs.log
+            external_cmd_stdout_found = False
+            
+            with open(nvvs_log_path, 'r') as f:
+                nvvs_log_content = f.read()
+                
+                # Find the last occurrence of "External command stdout:"
+                external_cmd_stdout_pattern = "External command stdout:"
+                last_position = nvvs_log_content.rfind(external_cmd_stdout_pattern)
+                
+                if last_position != -1:
+                    external_cmd_stdout_found = True
+                    
+                    # Get content after the last occurrence
+                    content_after = nvvs_log_content[last_position + len(external_cmd_stdout_pattern):]
+                    
+                    # Get the non-empty lines after the pattern
+                    lines_after_stdout = [line.strip() for line in content_after.splitlines() if line.strip()]
+                    validate_json_content(lines_after_stdout, "nvvs.log after 'External command stdout:'")
+            
+            # If the stdout log file doesn't exist, then "External command stdout:" must be found in nvvs.log
+            assert external_cmd_stdout_found, f"'External command stdout:' was not found in nvvs.log"
+
+@test_utils.run_only_as_root()
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_nvbandwidth_log_file_creation(handle, gpuIds):
+    """
+    Test to verify that the nvbandwidth log file is created when running the nvbandwidth test.
+    """
+    helper_check_nvbandwidth_log_file_creation(handle, gpuIds)

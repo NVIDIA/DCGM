@@ -185,10 +185,28 @@ void Plugin::SetResultForEntity(std::string const &testName,
 }
 
 /*************************************************************************/
+template <typename EntityResultsType>
+    requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+             || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+dcgmReturn_t Plugin::GetResultsImpl(std::string const &testName, EntityResultsType *entityResults)
+{
+    return m_tests.at(testName).GetResults<EntityResultsType>(entityResults);
+}
+
+/*************************************************************************/
+
+dcgmReturn_t Plugin::GetResults(std::string const &testName, dcgmDiagEntityResults_v2 *entityResults)
+{
+    return GetResultsImpl<dcgmDiagEntityResults_v2>(testName, entityResults);
+}
+
+/*************************************************************************/
+
 dcgmReturn_t Plugin::GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults)
 {
-    return m_tests.at(testName).GetResults(entityResults);
+    return GetResultsImpl<dcgmDiagEntityResults_v1>(testName, entityResults);
 }
+
 
 long long Plugin::DetermineMaxTemp(unsigned int gpuId,
                                    double parameterValue,

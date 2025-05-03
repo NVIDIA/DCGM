@@ -82,6 +82,7 @@ private:
     bool findLib(std::string, std::string &error);
     int checkDriverPathDenylist(std::string, std::vector<std::string> const &);
     int checkPersistenceMode(dcgmDiagPluginEntityList_v1 const &entityList);
+    int checkForSramThreshold();
     int checkForGraphicsProcesses();
     int checkForBadEnvVaribles();
     int checkPageRetirement();

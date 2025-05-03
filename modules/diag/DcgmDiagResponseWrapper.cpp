@@ -16,10 +16,11 @@
 
 #include "DcgmDiagResponseWrapper.h"
 #include "dcgm_structs.h"
+#include "dcgm_structs_internal.h"
 
 #include <CpuHelpers.h>
-#include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
+#include <PluginStrings.h>
 #include <dcgm_errors.h>
 
 #include <cstring>
@@ -27,6 +28,7 @@
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <type_traits>
 #include <unordered_map>
 
 const std::string_view denylistName("Denylist");
@@ -49,13 +51,13 @@ const std::string_view swTestNames[]
 #define DDRW_VER_NOT_HANDLED_FMT "Version mismatch. Version {} is not handled."
 // Args: none
 #define DDRW_NOT_INITIALIZED_FMT "Must initialize DcgmDiagResponseWrapper before using."
-// Args: new_ver cur_ver
-#define DDRW_VER_ALREADY_SET_FMT "Unable to set response version to {}, already set to {}."
 
 namespace
 {
-
-std::optional<unsigned int> FindTestIdxByName(dcgmDiagResponse_v11 const &diagResponse, std::string_view name)
+template <typename DiagResponseType>
+    requires std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>
+             || std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>
+std::optional<unsigned int> FindTestIdxByName(DiagResponseType const &diagResponse, std::string_view name)
 {
     for (unsigned int i = 0; i < diagResponse.numTests; ++i)
     {
@@ -68,9 +70,18 @@ std::optional<unsigned int> FindTestIdxByName(dcgmDiagResponse_v11 const &diagRe
     return std::nullopt;
 }
 
-dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 const &src)
+// Explicit instantiations for the supported response types
+template std::optional<unsigned int> FindTestIdxByName<dcgmDiagResponse_v11>(dcgmDiagResponse_v11 const &diagResponse,
+                                                                             std::string_view name);
+template std::optional<unsigned int> FindTestIdxByName<dcgmDiagResponse_v12>(dcgmDiagResponse_v12 const &diagResponse,
+                                                                             std::string_view name);
+
+template <typename DiagResponseType>
+    requires std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>
+             || std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>
+dcgmReturn_t MergeEudResponse(DiagResponseType &dest, DiagResponseType const &src)
 {
-    std::vector<std::string> eudTestNames = { "eud", "cpu_eud" };
+    std::vector<std::string> eudTestNames = { EUD_PLUGIN_NAME, CPU_EUD_TEST_NAME };
     for (auto const &testName : eudTestNames)
     {
         auto srcEudIdxOpt = FindTestIdxByName(src, testName);
@@ -83,15 +94,14 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
         auto destEudIdxOpt = FindTestIdxByName(dest, testName);
         if (destEudIdxOpt.has_value())
         {
-            // only handle specific missing root and re-run case.
-            if (dest.tests[*destEudIdxOpt].result != DCGM_DIAG_RESULT_FAIL || dest.tests[*destEudIdxOpt].numErrors != 1
-                || dest.errors[dest.tests[*destEudIdxOpt].errorIndices[0]].code != DCGM_FR_EUD_NON_ROOT_USER)
+            if (!(dest.tests[*destEudIdxOpt].result == DCGM_DIAG_RESULT_FAIL
+                  && dest.tests[*destEudIdxOpt].numErrors == 1
+                  && dest.errors[dest.tests[*destEudIdxOpt].errorIndices[0]].code == DCGM_FR_EUD_NON_ROOT_USER))
             {
                 log_debug("Skip merging test [{}] due to destination not meeting expectations.", testName);
                 continue;
             }
 
-            // erase dest.errors[dest.tests[*destEudIdxOpt].errorIndices[0]] which is DCGM_FR_EUD_NON_ROOT_USER
             unsigned int const lastErrTestId = dest.errors[dest.numErrors - 1].testId;
             for (unsigned int i = 0; i < dest.tests[lastErrTestId].numErrors; ++i)
             {
@@ -128,12 +138,6 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
         {
             destEudTestId = *destEudIdxOpt;
 
-            if (dest.tests[destEudTestId].numErrors != 0 || dest.tests[destEudTestId].numInfo != 0)
-            {
-                log_debug("Skipping merge test [{}] because destination includes results.", testName);
-                continue;
-            }
-
             if (dest.tests[destEudTestId].numResults != 0
                 && dest.tests[destEudTestId].numResults > src.tests[*srcEudIdxOpt].numResults)
             {
@@ -165,15 +169,17 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
             dest.tests[destEudTestId].numErrors += 1;
         }
 
-        for (unsigned int i = 0; i < src.numInfo; i++)
+        // Struct size used here for info bounds check as the constant may vary by version and may
+        // otherwise fall out of date.
+        for (unsigned int i = 0; i < std::min(static_cast<size_t>(src.numInfo), std::size(src.info)); i++)
         {
             if (src.info[i].testId != *srcEudIdxOpt)
             {
                 continue;
             }
 
-            if (dest.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX
-                || dest.tests[destEudTestId].numInfo >= DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX)
+            if (dest.numInfo >= std::size(dest.info)
+                || dest.tests[destEudTestId].numInfo >= std::size(dest.tests[destEudTestId].infoIndices))
             {
                 log_error("Too many info, the following info is skipped [{}].", src.info[i].msg);
                 continue;
@@ -249,8 +255,9 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
 
                 srcIdx = src.tests[*srcEudIdxOpt].resultIndices[srcResultIdx];
 
-                dest.results[destIdx]                                                         = src.results[srcIdx];
-                dest.results[destIdx].testId                                                  = destEudTestId;
+                dest.results[destIdx]        = src.results[srcIdx];
+                dest.results[destIdx].testId = destEudTestId;
+
                 dest.tests[destEudTestId].resultIndices[dest.tests[destEudTestId].numResults] = dest.numResults;
                 dest.numResults += 1;
                 dest.tests[destEudTestId].numResults += 1;
@@ -276,7 +283,7 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
         {
             if (dest.numCategories >= DCGM_DIAG_RESPONSE_CATEGORIES_MAX)
             {
-                log_error("Too many categorise, [{}] is skipped.", srcCategory);
+                log_error("Too many categories, [{}] is skipped.", srcCategory);
             }
             else
             {
@@ -315,6 +322,12 @@ dcgmReturn_t MergeEudResponse(dcgmDiagResponse_v11 &dest, dcgmDiagResponse_v11 c
 
     return DCGM_ST_OK;
 }
+
+// Explicit instantiations for the supported response types
+template dcgmReturn_t MergeEudResponse<dcgmDiagResponse_v11>(dcgmDiagResponse_v11 &dest,
+                                                             dcgmDiagResponse_v11 const &src);
+template dcgmReturn_t MergeEudResponse<dcgmDiagResponse_v12>(dcgmDiagResponse_v12 &dest,
+                                                             dcgmDiagResponse_v12 const &src);
 
 template <typename T>
 bool CanSkipLegacyTest(T const &dest)
@@ -407,11 +420,13 @@ bool DcgmDiagResponseWrapper::StateIsValid() const
 {
     return m_version != 0;
 }
-
 /**
  * Add an error message to an existing diagResponse.
  */
-static void AddErrorMessage(dcgmDiagResponse_v11 &response,
+template <typename DiagResponseType>
+    requires std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>
+             || std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>
+static void AddErrorMessage(DiagResponseType &response,
                             std::optional<unsigned int> testIndex,
                             std::string const &msg,
                             std::optional<dcgmGroupEntityPair_t> entity)
@@ -447,7 +462,7 @@ static void AddErrorMessage(dcgmDiagResponse_v11 &response,
     if (testIndex.has_value())
     {
         err.testId                        = *testIndex;
-        dcgmDiagTestRun_v1 &test          = response.tests[*testIndex];
+        auto &test                        = response.tests[*testIndex];
         test.errorIndices[test.numErrors] = response.numErrors;
         test.numErrors++;
     }
@@ -459,10 +474,23 @@ static void AddErrorMessage(dcgmDiagResponse_v11 &response,
     return;
 }
 
+// Explicit instantiations for the supported response types
+template void AddErrorMessage<dcgmDiagResponse_v11>(dcgmDiagResponse_v11 &response,
+                                                    std::optional<unsigned int> testIndex,
+                                                    std::string const &msg,
+                                                    std::optional<dcgmGroupEntityPair_t> entity);
+template void AddErrorMessage<dcgmDiagResponse_v12>(dcgmDiagResponse_v12 &response,
+                                                    std::optional<unsigned int> testIndex,
+                                                    std::string const &msg,
+                                                    std::optional<dcgmGroupEntityPair_t> entity);
+
 /**
  * Add an information message to an existing diagResponse.
  */
-static void AddInfoMessage(dcgmDiagResponse_v11 &response,
+template <typename DiagResponseType>
+    requires std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>
+             || std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>
+static void AddInfoMessage(DiagResponseType &response,
                            std::optional<unsigned int> testIndex,
                            std::string const &msg,
                            std::optional<dcgmGroupEntityPair_t> entity)
@@ -477,8 +505,8 @@ static void AddInfoMessage(dcgmDiagResponse_v11 &response,
         log_error("Unreported info, no testIndex specified: {}", msg);
         return;
     }
-    if (response.tests[*testIndex].numInfo >= DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX
-        || response.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+    if (response.tests[*testIndex].numInfo >= std::size(response.tests[*testIndex].infoIndices)
+        || response.numInfo >= std::size(response.info))
     {
         log_error("Unreported info, too many msgs in response: {}", msg);
         return;
@@ -498,17 +526,30 @@ static void AddInfoMessage(dcgmDiagResponse_v11 &response,
     info.testId = *testIndex;
     SafeCopyTo(info.msg, msg.c_str());
 
-    dcgmDiagTestRun_v1 &test       = response.tests[*testIndex];
+    auto &test                     = response.tests[*testIndex];
     test.infoIndices[test.numInfo] = response.numInfo;
     test.numInfo++;
     response.numInfo++;
     return;
 }
 
+// Explicit instantiations for the supported response types
+template void AddInfoMessage<dcgmDiagResponse_v11>(dcgmDiagResponse_v11 &response,
+                                                   std::optional<unsigned int> testIndex,
+                                                   std::string const &msg,
+                                                   std::optional<dcgmGroupEntityPair_t> entity);
+template void AddInfoMessage<dcgmDiagResponse_v12>(dcgmDiagResponse_v12 &response,
+                                                   std::optional<unsigned int> testIndex,
+                                                   std::string const &msg,
+                                                   std::optional<dcgmGroupEntityPair_t> entity);
+
 /**
  * Add msg of the specified type to an existing diagResponse.
  */
-static void AddMessage(dcgmDiagResponse_v11 &response,
+template <typename DiagResponseType>
+    requires std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>
+             || std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>
+static void AddMessage(DiagResponseType &response,
                        std::optional<unsigned int> testIndex,
                        std::string const &msg,
                        std::optional<dcgmGroupEntityPair_t> entity,
@@ -517,13 +558,25 @@ static void AddMessage(dcgmDiagResponse_v11 &response,
     switch (msgType)
     {
         case MsgType::Info:
-            AddInfoMessage(response, testIndex, msg, entity);
+            AddInfoMessage<DiagResponseType>(response, testIndex, msg, entity);
             break;
         case MsgType::Error:
-            AddErrorMessage(response, testIndex, msg, entity);
+            AddErrorMessage<DiagResponseType>(response, testIndex, msg, entity);
             break;
     }
 }
+
+// Explicit instantiations for the supported response types
+template void AddMessage<dcgmDiagResponse_v11>(dcgmDiagResponse_v11 &response,
+                                               std::optional<unsigned int> testIndex,
+                                               std::string const &msg,
+                                               std::optional<dcgmGroupEntityPair_t> entity,
+                                               MsgType msgType);
+template void AddMessage<dcgmDiagResponse_v12>(dcgmDiagResponse_v12 &response,
+                                               std::optional<unsigned int> testIndex,
+                                               std::string const &msg,
+                                               std::optional<dcgmGroupEntityPair_t> entity,
+                                               MsgType msgType);
 
 /*****************************************************************************/
 /**
@@ -531,9 +584,13 @@ static void AddMessage(dcgmDiagResponse_v11 &response,
  */
 void DcgmDiagResponseWrapper::RecordSystemError(std::string const &sysError) const
 {
-    if (m_version == dcgmDiagResponse_version11)
+    if (m_version == dcgmDiagResponse_version12)
     {
-        AddMessage(*(m_response.v11ptr), std::nullopt, sysError, std::nullopt, MsgType::Error);
+        AddMessage<dcgmDiagResponse_v12>(*(m_response.v12ptr), std::nullopt, sysError, std::nullopt, MsgType::Error);
+    }
+    else if (m_version == dcgmDiagResponse_version11)
+    {
+        AddMessage<dcgmDiagResponse_v11>(*(m_response.v11ptr), std::nullopt, sysError, std::nullopt, MsgType::Error);
     }
     else if (m_version == dcgmDiagResponse_version10)
     {
@@ -561,14 +618,17 @@ void DcgmDiagResponseWrapper::RecordSystemError(std::string const &sysError) con
     }
 }
 
+
+dcgmReturn_t DcgmDiagResponseWrapper::SetVersion12(dcgmDiagResponse_v12 *response)
+{
+    m_version         = dcgmDiagResponse_version12;
+    m_response.v12ptr = response;
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion11(dcgmDiagResponse_v11 *response)
 {
-    if (m_version != 0)
-    {
-        // We don't support setting the version twice
-        return DCGM_ST_NOT_SUPPORTED;
-    }
-
     m_version         = dcgmDiagResponse_version11;
     m_response.v11ptr = response;
 
@@ -577,12 +637,6 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion11(dcgmDiagResponse_v11 *respons
 
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion10(dcgmDiagResponse_v10 *response)
 {
-    if (m_version != 0)
-    {
-        log_warning(DDRW_VER_ALREADY_SET_FMT, dcgmDiagResponse_version10, m_version);
-        return DCGM_ST_NOT_SUPPORTED;
-    }
-
     m_version         = dcgmDiagResponse_version10;
     m_response.v10ptr = response;
 
@@ -591,12 +645,6 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion10(dcgmDiagResponse_v10 *respons
 
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion9(dcgmDiagResponse_v9 *response)
 {
-    if (m_version != 0)
-    {
-        log_warning(DDRW_VER_ALREADY_SET_FMT, dcgmDiagResponse_version9, m_version);
-        return DCGM_ST_NOT_SUPPORTED;
-    }
-
     m_version        = dcgmDiagResponse_version9;
     m_response.v9ptr = response;
 
@@ -605,12 +653,6 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion9(dcgmDiagResponse_v9 *response)
 
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion8(dcgmDiagResponse_v8 *response)
 {
-    if (m_version != 0)
-    {
-        log_warning(DDRW_VER_ALREADY_SET_FMT, dcgmDiagResponse_version8, m_version);
-        return DCGM_ST_NOT_SUPPORTED;
-    }
-
     m_version        = dcgmDiagResponse_version8;
     m_response.v8ptr = response;
 
@@ -619,12 +661,6 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion8(dcgmDiagResponse_v8 *response)
 
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion7(dcgmDiagResponse_v7 *response)
 {
-    if (m_version != 0)
-    {
-        log_warning(DDRW_VER_ALREADY_SET_FMT, dcgmDiagResponse_version7, m_version);
-        return DCGM_ST_NOT_SUPPORTED;
-    }
-
     m_version        = dcgmDiagResponse_version7;
     m_response.v7ptr = response;
 
@@ -637,6 +673,19 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetResult(std::string_view data) const
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            if (sizeof(*m_response.v12ptr) != data.size())
+            {
+                log_error(
+                    "Cannot set the response via API for version {} due to size mismatch, expected: [{}], got: [{}].",
+                    m_version,
+                    sizeof(*m_response.v12ptr),
+                    data.size());
+                return DCGM_ST_GENERIC_ERROR;
+            }
+            memcpy(m_response.v12ptr, data.data(), data.size());
+            break;
+
         case dcgmDiagResponse_version11:
             if (sizeof(*m_response.v11ptr) != data.size())
             {
@@ -715,15 +764,31 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetResult(std::string_view data) const
 
 bool DcgmDiagResponseWrapper::HasTest(const std::string &pluginName) const
 {
-    if (m_version != dcgmDiagResponse_version11)
+    if (m_version != dcgmDiagResponse_version11 && m_version != dcgmDiagResponse_version12)
     {
-        log_error("HasTest is only supported for version 11 responses - returning false");
+        log_error("HasTest is only supported for version 11 and 12 responses - returning false");
         return false;
     }
 
-    for (unsigned int i = 0; i < m_response.v11ptr->numTests; i++)
+    unsigned int numTests = 0;
+    const char *testNames = nullptr;
+    size_t testNameStride = 0;
+    if (m_version == dcgmDiagResponse_version12)
     {
-        if (pluginName == m_response.v11ptr->tests[i].name)
+        numTests       = m_response.v12ptr->numTests;
+        testNames      = m_response.v12ptr->tests[0].name;
+        testNameStride = sizeof(m_response.v12ptr->tests[0]);
+    }
+    else // m_version == dcgmDiagResponse_version11
+    {
+        numTests       = m_response.v11ptr->numTests;
+        testNames      = m_response.v11ptr->tests[0].name;
+        testNameStride = sizeof(m_response.v11ptr->tests[0]);
+    }
+
+    for (unsigned int i = 0; i < numTests; i++)
+    {
+        if (pluginName == testNames + (i * testNameStride))
         {
             return true;
         }
@@ -743,6 +808,8 @@ dcgmReturn_t DcgmDiagResponseWrapper::MergeEudResponse(DcgmDiagResponseWrapper &
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return ::MergeEudResponse(*m_response.v12ptr, *eudResponse.m_response.v12ptr);
         case dcgmDiagResponse_version11:
             return ::MergeEudResponse(*m_response.v11ptr, *eudResponse.m_response.v11ptr);
         case dcgmDiagResponse_version10:
@@ -790,6 +857,9 @@ dcgmReturn_t DcgmDiagResponseWrapper::AdoptEudResponse(DcgmDiagResponseWrapper &
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            std::memcpy(m_response.v12ptr, eudResponse.m_response.v12ptr, sizeof(*m_response.v12ptr));
+            break;
         case dcgmDiagResponse_version11:
             std::memcpy(m_response.v11ptr, eudResponse.m_response.v11ptr, sizeof(*m_response.v11ptr));
             break;
@@ -810,8 +880,9 @@ dcgmReturn_t DcgmDiagResponseWrapper::AdoptEudResponse(DcgmDiagResponseWrapper &
 
     return DCGM_ST_OK;
 }
-
-std::string GetSystemErrV11(dcgmDiagResponse_v11 const &response)
+template <typename DiagResponseType>
+    requires DcgmNs::IsDiagResponse<DiagResponseType>
+std::string GetSystemErrImpl(DiagResponseType const &response)
 {
     std::stringstream sysErrs;
     char const *delim = "";
@@ -834,19 +905,30 @@ bool DcgmDiagResponseWrapper::AddCpuSerials()
         log_error("ERROR: Must initialize DcgmDiagResponseWrapper before using.");
         return false;
     }
-
-    if (m_version != dcgmDiagResponse_version11)
+    if (m_version != dcgmDiagResponse_version11 && m_version != dcgmDiagResponse_version12)
     {
-        log_error("AddCpuSerials is only supported for version 11 responses - returning false");
+        log_error("AddCpuSerials is only supported for version 11 and 12 responses - returning false");
         return false;
     }
 
-    unsigned int const numEntities = std::min(static_cast<unsigned int>(m_response.v11ptr->numEntities),
-                                              static_cast<unsigned int>(DCGM_DIAG_RESPONSE_ENTITIES_MAX));
-    bool hasCpuEntities            = false;
+    // Both v11 and v12 have the same entity structure, so we can use either pointer
+    auto getEntities = [this]() -> auto & {
+        return (m_version == dcgmDiagResponse_version12) ? m_response.v12ptr->entities : m_response.v11ptr->entities;
+    };
+
+    auto getNumEntities = [this]() -> unsigned int {
+        return (m_version == dcgmDiagResponse_version12) ? m_response.v12ptr->numEntities
+                                                         : m_response.v11ptr->numEntities;
+    };
+
+    unsigned int const numEntities
+        = std::min(getNumEntities(), static_cast<unsigned int>(DCGM_DIAG_RESPONSE_ENTITIES_MAX));
+    auto &entities = getEntities();
+
+    bool hasCpuEntities = false;
     for (unsigned int i = 0; i < numEntities; ++i)
     {
-        if (m_response.v11ptr->entities[i].entity.entityGroupId == DCGM_FE_CPU)
+        if (entities[i].entity.entityGroupId == DCGM_FE_CPU)
         {
             hasCpuEntities = true;
             break;
@@ -869,19 +951,18 @@ bool DcgmDiagResponseWrapper::AddCpuSerials()
 
     for (unsigned int i = 0; i < numEntities; ++i)
     {
-        if (m_response.v11ptr->entities[i].entity.entityGroupId != DCGM_FE_CPU)
+        if (entities[i].entity.entityGroupId != DCGM_FE_CPU)
         {
             continue;
         }
-        if (m_response.v11ptr->entities[i].entity.entityId >= cpuSerials->size())
+        if (entities[i].entity.entityId >= cpuSerials->size())
         {
             log_error("CPU entity id [{}] is not expected and exceed the size of serials [{}].",
-                      m_response.v11ptr->entities[i].entity.entityId,
+                      entities[i].entity.entityId,
                       cpuSerials->size());
             return false;
         }
-        SafeCopyTo(m_response.v11ptr->entities[i].serialNum,
-                   cpuSerials.value()[m_response.v11ptr->entities[i].entity.entityId].c_str());
+        SafeCopyTo(entities[i].serialNum, cpuSerials.value()[entities[i].entity.entityId].c_str());
     }
     return true;
 }
@@ -895,8 +976,10 @@ std::string DcgmDiagResponseWrapper::GetSystemErr() const
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return GetSystemErrImpl(*m_response.v12ptr);
         case dcgmDiagResponse_version11:
-            return GetSystemErrV11(*m_response.v11ptr);
+            return GetSystemErrImpl(*m_response.v11ptr);
         case dcgmDiagResponse_version10:
             return m_response.v10ptr->systemError.msg;
         case dcgmDiagResponse_version9:

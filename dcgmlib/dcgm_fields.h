@@ -1048,6 +1048,15 @@ typedef unsigned int dcgm_field_eid_t;
  */
 #define DCGM_FI_DEV_ECC_DBE_AGG_SRM 345
 
+/**
+ * Ampere and later fields
+ */
+
+/**
+ * SRAM Threashhold Exceeded boolean (1=true)
+ */
+#define DCGM_FI_DEV_THRESHOLD_SRM 346
+
 
 /**
  * Result of the GPU Memory test
@@ -2717,9 +2726,29 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS 1214
 
 /**
- * BER for symbol errors
+ * BER for symbol errors - raw value
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER 1215
+
+/**
+ * BER for symbol errors - decoded float (derived from DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER)
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT 1216
+
+/**
+ * Effective BER for effective errors - raw value
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER 1217
+
+/**
+ * Effective BER for effective errors - decoded float (derived from DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT 1218
+
+/**
+ * Sum of the number of errors in each Nvlink packet
+ */
+#define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS 1219
 
 /**
  * First field id of ConnectX
@@ -2787,9 +2816,173 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID 1399
 
 /**
- * 1 greater than maximum fields above. This is the 1 greater than the maximum field id that could be allocated
+ * C2C Link CRC Error Counter
  */
-#define DCGM_FI_MAX_FIELDS 1311
+
+#define DCGM_FI_DEV_C2C_LINK_ERROR_INTR 1400
+
+/**
+ * C2C Link Replay Error Counter
+ */
+
+#define DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY 1401
+
+/**
+ * C2C Link Back to Back Replay Error Counter
+ */
+
+#define DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B 1402
+
+/**
+ * C2C Link Power state. See NVML_C2C_POWER_STATE_*
+ */
+
+#define DCGM_FI_DEV_C2C_LINK_POWER_STATE 1403
+
+/**
+ * Count of symbol errors that are corrected in each bin.
+ */
+
+/**
+ * Count of symbol errors that are corrected - bin 0
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0 1404
+
+/**
+ * Count of symbol errors that are corrected - bin 1
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1 1405
+
+/**
+ * Count of symbol errors that are corrected - bin 2
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2 1406
+
+/**
+ * Count of symbol errors that are corrected - bin 3
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3 1407
+
+/**
+ * Count of symbol errors that are corrected - bin 4
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4 1408
+
+/**
+ * Count of symbol errors that are corrected - bin 5
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5 1409
+
+/**
+ * Count of symbol errors that are corrected - bin 6
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6 1410
+
+/**
+ * Count of symbol errors that are corrected - bin 7
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7 1411
+
+/**
+ * Count of symbol errors that are corrected - bin 8
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8 1412
+
+/**
+ * Count of symbol errors that are corrected - bin 9
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9 1413
+
+/**
+ * Count of symbol errors that are corrected - bin 10
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10 1414
+
+/**
+ * Count of symbol errors that are corrected - bin 11
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11 1415
+
+/**
+ * Count of symbol errors that are corrected - bin 12
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12 1416
+/**
+ * Count of symbol errors that are corrected - bin 13
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13 1417
+
+/**
+ * Count of symbol errors that are corrected - bin 14
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14 1418
+
+/**
+ * Count of symbol errors that are corrected - bin 15
+ */
+
+#define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15 1419
+
+/**
+ * Count, in nanoseconds, of slowdown or shutdown in sampling
+ * interval.
+ */
+
+/**
+ * Throttling to not exceed currently set power limits in ns
+ */
+
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP_NS 1420
+
+/**
+ * Throttling to match minimum possible clock across Sync
+ * Boost Group in ns
+ */
+
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST_NS 1421
+
+/**
+ * Throttling to ensure ((GPU temp < GPU Max Operating Temp) &&
+ * (Memory Temp < Memory Max Operating Temp)) in ns
+ */
+
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN_NS 1422
+
+/**
+ * Throttling due to temperature being too high (reducing core
+ * clocks by a factor of 2 or more) in ns
+ */
+
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN_NS 1423
+
+/**
+ * Throttling due to external power brake assertion trigger
+ * (reducing core clocks by a factor of 2 or more) in ns
+ */
+
+#define DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS 1424
+
+/**
+ * 1 greater than maximum fields above. This is the 1 greater
+ * than the maximum field id that could be allocated.
+ */
+
+#define DCGM_FI_MAX_FIELDS 1425
 
 
 /** @} */

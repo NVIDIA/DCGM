@@ -23,6 +23,8 @@ import option_parser
 import DcgmDiag
 from _test_helpers import skip_test_if_no_dcgm_nvml
 
+g_latestDiagResponseVersion = dcgm_structs.dcgmDiagResponse_version12
+
 g_allValidations = [dcgm_structs.DCGM_POLICY_VALID_NONE, dcgm_structs.DCGM_POLICY_VALID_SV_SHORT,
                     dcgm_structs.DCGM_POLICY_VALID_SV_MED, dcgm_structs.DCGM_POLICY_VALID_SV_LONG,
                     dcgm_structs.DCGM_POLICY_VALID_SV_XLONG]
@@ -42,8 +44,8 @@ def helper_validate_action(groupObj):
         response = groupObj.action.Validate(validation)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version11, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version11, response.version)
+        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % \
+                                                                           (g_latestDiagResponseVersion, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -83,8 +85,8 @@ def helper_validate_run_diag(groupObj):
         response = groupObj.action.RunDiagnostic(diagLevel)
 
         #Validate the contents
-        assert response.version == dcgm_structs.dcgmDiagResponse_version11, "Version mismatch. Expected %d. got %d" % \
-                                                                           (dcgm_structs.dcgmDiagResponse_version11, response.version)
+        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % \
+                                                                           (g_latestDiagResponseVersion, response.version)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()

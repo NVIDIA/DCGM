@@ -207,6 +207,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_FIELDGROUP_GET_ALL:
                 dcgmReturn = ProcessFieldGroupGetAll(*(dcgm_core_msg_fieldgroup_get_all_t *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE:
+                dcgmReturn = ProcessGetGpuChipArchitecture(*(dcgm_core_msg_get_gpu_chip_architecture_t *)moduleCommand);
+                break;
             case DCGM_CORE_SR_GET_GPU_INSTANCE_HIERARCHY:
                 dcgmReturn
                     = ProcessGetGpuInstanceHierarchy(*(dcgm_core_msg_get_gpu_instance_hierarchy_t *)moduleCommand);
@@ -1993,6 +1996,21 @@ dcgmReturn_t DcgmModuleCore::ProcessFieldGroupGetAll(dcgm_core_msg_fieldgroup_ge
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmModuleCore::ProcessGetGpuChipArchitecture(dcgm_core_msg_get_gpu_chip_architecture_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_gpu_chip_architecture_version);
+
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    msg.info.cmdRet = m_cacheManager->GetGpuArch(msg.info.gpuId, msg.info.data);
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmModuleCore::ProcessGetGpuInstanceHierarchy(dcgm_core_msg_get_gpu_instance_hierarchy_t &msg)
 {
     dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_gpu_instance_hierarchy_version);
@@ -2458,8 +2476,7 @@ dcgmReturn_t DcgmModuleCore::ProcessSetLoggingSeverity(dcgm_core_msg_set_severit
     std::string loggerString   = LoggerToString(logging.targetLogger, "Unknown");
 
     DCGM_LOG_INFO << "ProcessSetLoggingSeverity set severity to " << severityString << " (" << logging.targetSeverity
-                  << ")"
-                  << " for logger " << loggerString << " (" << logging.targetLogger << ")";
+                  << ")" << " for logger " << loggerString << " (" << logging.targetLogger << ")";
     return DCGM_ST_OK;
 }
 

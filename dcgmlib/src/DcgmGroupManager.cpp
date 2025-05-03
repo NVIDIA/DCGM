@@ -197,7 +197,7 @@ dcgmReturn_t DcgmGroupManager::AddNewGroup(dcgm_connection_id_t connectionId,
 
     Lock();
 
-    if (mNumGroups >= DCGM_MAX_NUM_GROUPS + 2)
+    if (mNumGroups >= DCGM_MAX_NUM_GROUPS)
     {
         log_error("Add Group: Max number of groups already configured");
         Unlock();

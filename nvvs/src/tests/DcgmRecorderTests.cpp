@@ -220,7 +220,7 @@ dcgmReturn_t dcgmGroupCreate(dcgmHandle_t /* handle */,
 
 dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t /* handle */,
                                   int /* numFieldIds */,
-                                  unsigned short * /* fieldIdArray */,
+                                  const unsigned short * /* fieldIdArray */,
                                   const char * /* name */,
                                   dcgmFieldGrp_t *m_fieldGroupId)
 {

@@ -348,6 +348,27 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetDeviceAttributes(dcgmHandle_t pDcgmHandle,
                                                      dcgmDeviceAttributes_t *pDcgmAttr);
 
 /**
+ * Gets device workload power profile information and status.
+ *
+ * @param pDcgmHandle             IN: DCGM Handle
+ * @param gpuId                   IN: GPU Id corresponding to which topology information should be fetched
+ * @param profilesInfo           OUT: Information about each of the supported workload power profiles available on this
+ *                                    device
+ * @param profilesStatus         OUT: Currently active, requested, and enforced workload power profiles on this device
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful.
+ *        - \ref DCGM_ST_BADPARAM             if \a gpuId, \a profileInfo, or \a profileStatus were not valid.
+ *        - \ref DCGM_ST_VER_MISMATCH         if profilesInfo or profilesStatus were not set to the correct versions.
+ *
+ */
+dcgmReturn_t DCGM_PUBLIC_API
+dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHandle,
+                                      unsigned int gpuId,
+                                      dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
+                                      dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus);
+
+/**
  * Gets the list of entities that exist for a given entity group. This API can be used in place of
  * \ref dcgmGetAllDevices.
  *
@@ -372,6 +393,23 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetEntityGroupEntities(dcgmHandle_t dcgmHandle,
                                                         dcgm_field_eid_t *entities,
                                                         int *numEntities,
                                                         unsigned int flags);
+
+/**
+ * Gets simplified GPU chip architecture enumeration.
+ *
+ * @param dcgmHandle              IN: DCGM Handle
+ * @param gpuId                   IN: DCGM GPU Id
+ * @param chipArchitecture        OUT: GPU chip architecture enumeration value
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if \a gpuId or \a chipArchitecture were not valid
+ *        - \ref DCGM_ST_VER_MISMATCH         if the struct version is incorrect
+ *
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuChipArchitecture(dcgmHandle_t dcgmHandle,
+                                                        unsigned int gpuId,
+                                                        dcgmChipArchitecture_t *chipArchitecture);
 
 /**
  * Gets the hierarchy of GPUs, GPU Instances, and Compute Instances.
@@ -625,7 +663,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGroupGetAllIds(dcgmHandle_t pDcgmHandle,
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmFieldGroupCreate(dcgmHandle_t dcgmHandle,
                                                   int numFieldIds,
-                                                  unsigned short *fieldIds,
+                                                  const unsigned short *fieldIds,
                                                   const char *fieldGroupName,
                                                   dcgmFieldGrp_t *dcgmFieldGroupId);
 
@@ -1630,7 +1668,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyUnregister(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
                                                 dcgmGpuGrp_t groupId,
                                                 dcgmPolicyValidation_t validate,
-                                                dcgmDiagResponse_v11 *response);
+                                                dcgmDiagResponse_v12 *response);
 
 /**
  * Inform the action manager to perform a manual validation of a group of GPUs on the system
@@ -1655,7 +1693,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate(dcgmHandle_t pDcgmHandle,
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
                                                    dcgmRunDiag_v10 *drd,
-                                                   dcgmDiagResponse_v11 *response);
+                                                   dcgmDiagResponse_v12 *response);
 
 
 /**
@@ -1683,7 +1721,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmActionValidate_v2(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                                dcgmGpuGrp_t groupId,
                                                dcgmDiagnosticLevel_t diagLevel,
-                                               dcgmDiagResponse_v11 *diagResponse);
+                                               dcgmDiagResponse_v12 *diagResponse);
 
 /** @} */ // Closing for DCGMAPI_PO_MI
 
@@ -1712,27 +1750,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
 dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyTrigger(dcgmHandle_t pDcgmHandle);
 
 /** @} */ // Closing for DCGMAPI_Admin_ExecCtrl
-
-/**
- * Gets device workload power profile information and status.
- *
- * @param pDcgmHandle             IN: DCGM Handle
- * @param gpuId                   IN: GPU Id corresponding to which topology information should be fetched
- * @param profilesInfo           OUT: Information about each of the supported workload power profiles available on this
- *                                    device
- * @param profilesStatus         OUT: Currently active, requested, and enforced workload power profiles on this device
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful.
- *        - \ref DCGM_ST_BADPARAM             if \a gpuId, \a profileInfo, or \a profileStatus were not valid.
- *        - \ref DCGM_ST_VER_MISMATCH         if profileInfo or profileStatus were not set to the correct versions.
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API
-dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHandle,
-                                      unsigned int gpuId,
-                                      dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
-                                      dcgmDeviceWorkloadPowerProfilesStatus_v1 *profileStatus);
 
 /***************************************************************************************************/
 /** @defgroup DCGMAPI_Topo Topology

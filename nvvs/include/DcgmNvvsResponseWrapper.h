@@ -47,11 +47,19 @@ public:
 
     dcgmReturn_t SetSoftwareTestResult(std::string_view testName,
                                        nvvsPluginResult_enum overallResult,
-                                       dcgmDiagEntityResults_v1 const &entityResults);
+                                       dcgmDiagEntityResults_v2 const &entityResults);
     void IncreaseNumTests();
+    /**
+     * Sets the test result for the specified test in the requested format
+     *
+     * @param pluginName Name of the plugin to set the test result for
+     * @param testName Name of the test to set the result for
+     * @param entityResults Reference to the test results in the requested format
+     * @param pluginSpecificData Optional plugin-specific data to include with the test result
+     */
     dcgmReturn_t SetTestResult(std::string_view pluginName,
                                std::string_view testName,
-                               dcgmDiagEntityResults_v1 const &entityResults,
+                               dcgmDiagEntityResults_v2 const &entityResults,
                                std::optional<std::any> const &pluginSpecificData);
     dcgmReturn_t SetTestSkipped(std::string_view pluginName, std::string_view testName);
     void SetSystemError(std::string const &msg, unsigned int code);
@@ -73,7 +81,8 @@ private:
         return *std::get<std::unique_ptr<T>>(m_response);
     }
 
-    std::variant<std::unique_ptr<dcgmDiagResponse_v11>,
+    std::variant<std::unique_ptr<dcgmDiagResponse_v12>,
+                 std::unique_ptr<dcgmDiagResponse_v11>,
                  std::unique_ptr<dcgmDiagResponse_v10>,
                  std::unique_ptr<dcgmDiagResponse_v9>,
                  std::unique_ptr<dcgmDiagResponse_v8>,

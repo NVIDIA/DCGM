@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.1.1)
+project(datacenter-gpu-manager-4 VERSION 4.2.3)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")

@@ -206,24 +206,13 @@ NvvsDeviceList::NvvsDeviceList(Plugin *plugin)
 /*****************************************************************************/
 NvvsDeviceList::~NvvsDeviceList(void)
 {
-    std::vector<NvvsDevice *>::iterator it;
-    NvvsDevice *device;
-
-    /* Free all of the devices */
-    for (it = m_devices.begin(); it != m_devices.end(); it++)
-    {
-        device = *it;
-
-        delete (device);
-    }
-
     m_devices.clear();
 }
 
 /*****************************************************************************/
 int NvvsDeviceList::Init(std::string const &testName, std::vector<unsigned int> gpuIds)
 {
-    NvvsDevice *nvvsDevice;
+    std::unique_ptr<NvvsDevice> nvvsDevice;
     char buf[256];
 
     if (m_devices.size() > 0)
@@ -236,7 +225,7 @@ int NvvsDeviceList::Init(std::string const &testName, std::vector<unsigned int> 
     {
         unsigned int gpuId = gpuIds[i];
 
-        nvvsDevice = new NvvsDevice(m_plugin);
+        nvvsDevice = std::make_unique<NvvsDevice>(m_plugin);
         int st     = nvvsDevice->Init(testName, gpuId);
         if (st)
         {
@@ -244,11 +233,9 @@ int NvvsDeviceList::Init(std::string const &testName, std::vector<unsigned int> 
             snprintf(buf, sizeof(buf), "Got error %d while initializing NvvsDevice index %u", st, gpuId);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, buf);
             RecordWarning(testName, d, 1);
-            delete (nvvsDevice);
-            nvvsDevice = 0;
         }
 
-        m_devices.push_back(nvvsDevice);
+        m_devices.push_back(std::move(nvvsDevice));
     }
 
     return 0;
@@ -288,19 +275,17 @@ void NvvsDeviceList::RecordWarning(std::string const &testName, DcgmError const 
 int NvvsDeviceList::RestoreState(std::string const &testName, int failOnRestore)
 {
     int i, st;
-    NvvsDevice *nvvsDevice;
     std::vector<unsigned int> changedIndexes;
 
     for (i = 0; i < (int)m_devices.size(); i++)
     {
-        nvvsDevice = m_devices[i];
-        st         = nvvsDevice->RestoreState(testName);
+        st = m_devices[i]->RestoreState(testName);
         if (!st)
             continue; /* Nothing changed. Great */
         else if (failOnRestore)
         {
             /* Save for later complaint. Restore rest of devices for now */
-            changedIndexes.push_back(nvvsDevice->GetGpuId());
+            changedIndexes.push_back(m_devices[i]->GetGpuId());
         }
     }
 

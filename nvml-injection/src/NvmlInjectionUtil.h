@@ -16,7 +16,24 @@
 
 #pragma once
 
-#include <PluginInterface.h>
-#include <dcgm_structs.h>
+#include <string>
 
-dcgmDiagResult_t GetOverallDiagResult(dcgmDiagEntityResults_v2 const &entityResults);
+/**
+ * binary UUID type
+ */
+typedef unsigned char NvmlInjectionUuid[16];
+
+/**
+ * Parses UUID string into unsigned character array
+ *
+ * Arguments:
+ *
+ * IN  std::string const &uuidString: UUID string
+ * OUT NvmlInjectionUuid uuidBin:     output binary array;
+ *
+ * Returns:
+ *
+ * true is returned for a sucessful parse, false otherwise.
+ *
+ */
+extern bool NvmlUuidParse(std::string const &uuidString, NvmlInjectionUuid uuidBin);

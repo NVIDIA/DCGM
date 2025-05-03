@@ -13,19 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "TestDiagManager.h"
+
+#include <DcgmCoreCommunication.h>
+#include <DcgmDiagCommon.h>
+#include <DcgmDiagManager.h>
+#include <DcgmDiagResponseWrapper.h>
+#include <DcgmError.h>
+#include <UniquePtrUtil.h>
+#include <dcgm_structs.h>
 #include <fstream>
 #include <iostream>
 #include <stddef.h>
 #include <string>
-
-#include "DcgmDiagCommon.h"
-#include "DcgmDiagManager.h"
-#include "DcgmDiagResponseWrapper.h"
-#include "DcgmError.h"
-#include "TestDiagManager.h"
-#include "TestDiagManagerStrings.h"
-#include "dcgm_structs.h"
-#include <DcgmCoreCommunication.h>
 
 dcgmCoreCallbacks_t g_coreCallbacks;
 
@@ -224,7 +225,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     else
         nvvsBinPath = "/usr/libexec/datacenter-gpu-manager-4/nvvs";
 
-    std::string diagResponseVersionArg = fmt::format("--response-version {}", dcgmDiagResponse_version11);
+    std::string diagResponseVersionArg = fmt::format("--response-version {}", dcgmDiagResponse_version12);
     expected.push_back(nvvsBinPath + " --channel-fd 3 " + diagResponseVersionArg
                        + " --specifiedtest long --configless -d NONE");
     expected.push_back(nvvsBinPath + " --channel-fd 3 " + diagResponseVersionArg
@@ -235,7 +236,7 @@ int TestDiagManager::TestCreateNvvsCommand()
 
     // When no test names are specified, none isn't valid
     drd.validate = DCGM_POLICY_VALID_NONE;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
     if (result == 0)
     {
         // Should've failed
@@ -245,7 +246,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     // Check a valid scenario
     cmdArgs.clear();
     drd.validate = DCGM_POLICY_VALID_SV_LONG;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -262,7 +263,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testNames[1], sizeof(drd.testNames[1]), "sm stress");
     snprintf(drd.testNames[2], sizeof(drd.testNames[2]), "targeted stress");
     drd.debugLevel = DcgmLoggingSeverityWarning;
-    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -280,7 +281,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testParms[2], sizeof(drd.testParms[2]), "targeted stress.test_duration=600");
     // Invalid severity to test default value
     drd.debugLevel = 20; // TODO (nik, aalsuldani): this is UB. Let's find a better way
-    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version11);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -875,13 +876,13 @@ int TestDiagManager::TestPerformExternalCommand()
     std::string stderrStr;
     std::vector<std::string> dummyCmds;
     dummyCmds.push_back("dummy"); // added to DcgmDiagManager so we can generate stderr
-    dcgmReturn_t result                                = DCGM_ST_OK;
-    std::unique_ptr<dcgmDiagResponse_v11> diagResponse = std::make_unique<dcgmDiagResponse_v11>();
+    dcgmReturn_t result = DCGM_ST_OK;
+    auto diagResponse   = MakeUniqueZero<dcgmDiagResponse_v12>();
     DcgmDiagResponseWrapper wrapper;
 
     DcgmDiagManager am(g_coreCallbacks);
 
-    wrapper.SetVersion11(diagResponse.get());
+    wrapper.SetVersion(diagResponse.get());
     // Make the script that will fail
     CreateDummyFailScript();
     am.PerformExternalCommand(dummyCmds, wrapper, &stdoutStr, &stderrStr);

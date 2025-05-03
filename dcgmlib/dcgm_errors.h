@@ -156,7 +156,8 @@ typedef enum dcgmError_enum
     DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE
         = 116,                    //!< 116 P2P copy test detected an error writing from this GPU over NVLink
     DCGM_FR_TEST_SKIPPED   = 117, //!< 117 Indicates that the test was skipped
-    DCGM_FR_ERROR_SENTINEL = 118, //!< 117 MUST BE THE LAST ERROR CODE
+    DCGM_FR_SRAM_THRESHOLD = 118, //!< 118 indicates SRAM Threshold Count exceeded
+    DCGM_FR_ERROR_SENTINEL = 119, //!< 119 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -273,6 +274,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_DENYLISTED_DRIVER_MSG "Found driver on the denylist: %s"
 // the name of the function that wasn't found
 #define DCGM_FR_NVML_LIB_BAD_MSG "Cannot get pointer to %s from libnvidia-ml.so"
+#define DCGM_FR_SRAM_THRESHOLD_MSG "SRAM Threshold Count exceeded on GPU %d: %ld"
 #define DCGM_FR_GRAPHICS_PROCESSES_MSG                                                 \
     "NVVS has detected processes with graphics contexts open running on at least one " \
     "GPU. This may cause some tests to fail."
@@ -521,6 +523,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_NVML_LIB_BAD_NEXT                             \
     "Make sure that the required version of libnvidia-ml.so " \
     "is present and accessible on the system."
+#define DCGM_FR_SRAM_THRESHOLD_NEXT "Check memory"
 #define DCGM_FR_GRAPHICS_PROCESSES_NEXT                               \
     "Stop the graphics processes or run this diagnostic on a server " \
     "that is not being used for display purposes."

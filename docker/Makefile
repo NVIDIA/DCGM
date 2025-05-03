@@ -20,7 +20,7 @@
 REGISTRY ?= nvidia
 
 # Sync with latest DCGM version available in the public cuda repo
-DCGM_VERSION   := 3.3.9
+DCGM_VERSION   := 4.1.0
 FULL_VERSION   := $(DCGM_VERSION)-1
 OUTPUT         := type=image
 PLATFORMS      := linux/amd64,linux/arm64

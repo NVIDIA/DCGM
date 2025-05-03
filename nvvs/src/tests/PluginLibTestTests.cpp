@@ -19,6 +19,7 @@
 
 #include <PluginLibTest.h>
 #include <UniquePtrUtil.h>
+#include <fmt/format.h>
 
 TEST_CASE("PluginLibTest::Constructor")
 {
@@ -47,8 +48,8 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
     dcgmDiagPluginTest_t pluginTest {};
     PluginLibTest pluginLibTest(pluginTest);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     entityResults.numErrors          = 2;
     entityResults.errors[0].entity   = { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
@@ -91,7 +92,7 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
 
     pluginLibTest.PopulateEntityResults(entityResults);
 
-    auto const &ret = pluginLibTest.GetEntityResults();
+    auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
     REQUIRE(ret.numErrors == entityResults.numErrors);
     for (unsigned i = 0; i < ret.numErrors; ++i)
     {
@@ -116,4 +117,42 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
         REQUIRE(ret.results[0].result == entityResults.results[0].result);
     }
     REQUIRE(pluginLibTest.GetAuxData() != std::nullopt);
+}
+
+TEST_CASE("PluginLibTest::MaxInfoMessages")
+{
+    dcgmDiagPluginTest_t pluginTest {};
+    PluginLibTest pluginLibTest(pluginTest);
+
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
+
+    // Add more than the maximum number of info messages
+    auto const maxInfoMessages = std::size(entityResults.info);
+    entityResults.numInfo      = maxInfoMessages + 2; // Exceed the limit by 2
+    char const *baseMsg        = "Info message #";
+
+    for (unsigned i = 0; i < entityResults.numInfo; ++i)
+    {
+        dcgmDiagInfo_v1 info {};
+        info.entity = { .entityGroupId = DCGM_FE_GPU, .entityId = static_cast<dcgm_field_eid_t>(i) };
+        auto result = fmt::format_to_n(info.msg, std::size(info.msg) - 1, "{}{}", baseMsg, i);
+        *result.out = '\0';
+        info.testId = 0;
+        pluginLibTest.AddInfo(info);
+    }
+
+    pluginLibTest.PopulateEntityResults(entityResults);
+
+    auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
+
+    // Verify only up to maxInfoMessages are present
+    REQUIRE(ret.numInfo == maxInfoMessages);
+    for (unsigned i = 0; i < ret.numInfo; ++i)
+    {
+        REQUIRE(ret.info[i].entity.entityGroupId == DCGM_FE_GPU);
+        REQUIRE(ret.info[i].entity.entityId == i);
+        std::string expectedMsg = fmt::format("{}{}", baseMsg, i);
+        REQUIRE(std::string_view(ret.info[i].msg) == std::string_view(expectedMsg));
+    }
 }

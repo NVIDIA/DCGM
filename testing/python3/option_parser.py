@@ -239,17 +239,10 @@ def parse_options():
             )
 
     parser.add_option(
-            "--fast-run",
-            dest="fast_run",
-            action="store_true",
-            default=False,
-            help="Runs test modules under shared decorators.)"
-            )
-
-    parser.add_option(
             "--slow-run",
             dest="fast_run",
             action="store_false",
+            default=True,
             help="Runs test modules individually. (Legacy mode.)"
             )
 

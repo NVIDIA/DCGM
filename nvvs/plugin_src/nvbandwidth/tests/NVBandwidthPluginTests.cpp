@@ -133,3 +133,51 @@ TEST_CASE("NVBandwidthPlugin: AttemptToReadOutput() with error messages in stdou
     REQUIRE(jsonResult.value().cudaRuntimeVersion == 12070);
     REQUIRE(jsonResult.value().testCases[0].status == TestCaseStatus::PASSED);
 }
+
+TEST_CASE("NVBandwidthPlugin: Restore CUDA_VISIBLE_DEVICES after Go()")
+{
+    // Before calling Go(), CUDA_VISIBLE_DEVICES should be empty
+    char const *valueOfCudaVisibleDevices = getenv("CUDA_VISIBLE_DEVICES");
+    std::string originalValue;
+    if (valueOfCudaVisibleDevices)
+    {
+        originalValue = valueOfCudaVisibleDevices;
+    }
+    {
+        using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+        WrapperNVBandwidthPlugin wnvbp((dcgmHandle_t)1); // we don't need a real DCGM handle
+        std::unique_ptr<dcgmDiagPluginEntityList_v1> entityListUptr = std::make_unique<dcgmDiagPluginEntityList_v1>();
+        dcgmDiagPluginEntityList_v1 &entityList                     = *entityListUptr;
+
+        entityList.numEntities                      = 1;
+        entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
+        entityList.entities[0].entity.entityId      = 0;
+        SafeCopyTo(entityList.entities[0].auxField.gpu.attributes.identifiers.uuid,
+                   "GPU-00000000-0000-0000-0000-000000000000");
+        wnvbp.WrapperInitializeForEntityList(wnvbp.WrapperGetNvBandwidthTestName(), entityList);
+
+        static unsigned int const paramCount = 1;
+        dcgmDiagPluginTestParameter_t tpStructs[paramCount];
+        tpStructs[0].type = DcgmPluginParamBool;
+        snprintf(tpStructs[0].parameterName, sizeof(tpStructs[0].parameterName), NVBANDWIDTH_STR_IS_ALLOWED);
+        snprintf(tpStructs[0].parameterValue, sizeof(tpStructs[0].parameterValue), "true");
+
+        // When calling Go(), CUDA_VISIBLE_DEVICES should be set to the UUID of the GPU
+        wnvbp.WrapperGo(wnvbp.WrapperGetNvBandwidthTestName(), &entityList, paramCount, &tpStructs[0]);
+        valueOfCudaVisibleDevices = getenv("CUDA_VISIBLE_DEVICES");
+        if (valueOfCudaVisibleDevices)
+        {
+            REQUIRE(strcmp(valueOfCudaVisibleDevices, "GPU-00000000-0000-0000-0000-000000000000") == 0);
+        }
+    }
+    // After the plugin instance is destroyed, the original value of CUDA_VISIBLE_DEVICES should be restored
+    valueOfCudaVisibleDevices = getenv("CUDA_VISIBLE_DEVICES");
+    if (originalValue.empty())
+    {
+        REQUIRE(valueOfCudaVisibleDevices == nullptr);
+    }
+    else
+    {
+        REQUIRE(strcmp(valueOfCudaVisibleDevices, originalValue.c_str()) == 0);
+    }
+}

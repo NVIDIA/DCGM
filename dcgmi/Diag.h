@@ -49,14 +49,14 @@ public:
     void DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, T const &errorOrInfo)
         requires std::is_same_v<T, dcgmDiagError_v1> || std::is_same_v<T, dcgmDiagInfo_v1>;
 
-    dcgmReturn_t GetFailureResult(dcgmDiagResponse_v11 &response);
-    void HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v11 const &response);
-    bool HelperJsonAddResult(dcgmDiagResponse_v11 const &response,
-                             dcgmDiagTestRun_v1 const &test,
+    dcgmReturn_t GetFailureResult(dcgmDiagResponse_v12 &response);
+    void HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v12 const &response);
+    bool HelperJsonAddResult(dcgmDiagResponse_v12 const &response,
+                             dcgmDiagTestRun_v2 const &test,
                              dcgmDiagEntityResult_v1 const &result,
                              Json::Value &resultEntry);
-    void HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v11 const &response);
-    void InitializeDiagResponse(dcgmDiagResponse_v11 &response);
+    void HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v12 const &response);
+    void InitializeDiagResponse(dcgmDiagResponse_v12 &response);
 
 #ifndef DCGMI_TESTS
 private:
@@ -69,31 +69,31 @@ private:
     std::string const HelperDisplayDiagResult(dcgmDiagResult_t val,
                                               displayDiagResultWarn_enum showWarn = DDR_NO_DISPLAY_WARN) const;
     void HelperDisplayEntityResults(CommandOutputController &view,
-                                    dcgmDiagResponse_v11 const &response,
-                                    dcgmDiagTestRun_v1 const &test,
+                                    dcgmDiagResponse_v12 const &response,
+                                    dcgmDiagTestRun_v2 const &test,
                                     bool verbose);
     void HelperDisplayGlobalResult(CommandOutputController &view,
-                                   dcgmDiagResponse_v11 const &response,
-                                   dcgmDiagTestRun_v1 const &test,
+                                   dcgmDiagResponse_v12 const &response,
+                                   dcgmDiagTestRun_v2 const &test,
                                    bool verbose);
     void HelperDisplayCategory(std::string_view categoryName,
                                std::string_view categoryText,
-                               dcgmDiagResponse_v11 const &response);
-    dcgmReturn_t HelperDisplayAsCli(dcgmDiagResponse_v11 const &response);
-    dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_v11 const &response);
-    void HelperDisplayMetadata(dcgmDiagResponse_v11 const &response) const;
-    void HelperDisplayVersionAndDevIds(dcgmDiagResponse_v11 const &response) const;
-    void HelperDisplayCpuInfo(dcgmDiagResponse_v11 const &response) const;
-    void HelperDisplayEudTestsVersion(dcgmDiagResponse_v11 const &response) const;
+                               dcgmDiagResponse_v12 const &response);
+    dcgmReturn_t HelperDisplayAsCli(dcgmDiagResponse_v12 const &response);
+    dcgmReturn_t HelperDisplayAsJson(dcgmDiagResponse_v12 const &response);
+    void HelperDisplayMetadata(dcgmDiagResponse_v12 const &response) const;
+    void HelperDisplayVersionAndDevIds(dcgmDiagResponse_v12 const &response) const;
+    void HelperDisplayCpuInfo(dcgmDiagResponse_v12 const &response) const;
+    void HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) const;
 
     std::string const HelperJsonGetEntityGroupTag(dcgm_field_entity_group_t const) const;
     void HelperJsonAddCategory(Json::Value &output, Json::Value &category);
     void HelperJsonAddTest(Json::Value &category, unsigned int testIndex, Json::Value &testEntry);
     void HelperJsonAddTestSummary(Json::Value &category,
                                   unsigned int const testIndex,
-                                  dcgmDiagTestRun_v1 const &test,
-                                  dcgmDiagResponse_v11 const &response);
-    void HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v11 const &response);
+                                  dcgmDiagTestRun_v2 const &test,
+                                  dcgmDiagResponse_v12 const &response);
+    void HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const &response);
 
     /*****************************************************************************/
     /*
@@ -105,7 +105,7 @@ private:
     dcgmReturn_t RunDiagOnce(dcgmHandle_t handle);
 
     /*****************************************************************************/
-    dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v11 &response);
+    dcgmReturn_t ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12 &response);
 
     /*
      * Displays a complete failure message for the diag accounting for JSON or normal output
@@ -140,12 +140,12 @@ public:
     dcgmReturn_t GetResult() const;
 
     /*****************************************************************************/
-    dcgmDiagResponse_v11 const &GetResponse() const;
+    dcgmDiagResponse_v12 const &GetResponse() const;
 
 private:
     dcgmHandle_t m_handle;
     dcgmRunDiag_v10 m_drd;
-    std::unique_ptr<dcgmDiagResponse_v11> m_response;
+    std::unique_ptr<dcgmDiagResponse_v12> m_response;
     dcgmReturn_t m_result;
 };
 

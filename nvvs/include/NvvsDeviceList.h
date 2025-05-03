@@ -33,8 +33,20 @@ typedef struct nvvs_device_state_t
 } nvvs_device_state_t, *nvvs_device_state_p;
 
 /*****************************************************************************/
+/* Interface class to represent a single production/mock NVVS GPU */
+class NvvsDeviceBase
+{
+public:
+    virtual ~NvvsDeviceBase() = default;
+
+    virtual int Init(std::string const &testName, unsigned int gpuId) = 0;
+    virtual int RestoreState(std::string const &testName)             = 0;
+    virtual unsigned int GetGpuId()                                   = 0;
+};
+
+/*****************************************************************************/
 /* Class to represent a single NVVS GPU */
-class NvvsDevice
+class NvvsDevice : public NvvsDeviceBase
 {
 public:
     NvvsDevice(Plugin *plugin);
@@ -47,7 +59,7 @@ public:
      * Returns 0 on success.
      *         Nonzero on failure
      **/
-    int Init(std::string const &testName, unsigned int gpuId);
+    int Init(std::string const &testName, unsigned int gpuId) override;
 
     /*************************************************************************/
     /*
@@ -66,7 +78,7 @@ public:
      * Get the GPU id associated with this device
      *
      */
-    unsigned int GetGpuId();
+    unsigned int GetGpuId() override;
 
     /*
      * Try to set the CPU affinity of this device
@@ -84,7 +96,7 @@ public:
      *         >0 if state was restored
      *
      */
-    int RestoreState(std::string const &testName);
+    int RestoreState(std::string const &testName) override;
 
     /*************************************************************************/
     /*
@@ -137,7 +149,14 @@ public:
      * plugin: Plugin object to log to. NULL=not inside plugin
      *
      */
-    NvvsDeviceList(Plugin *plugin);
+    explicit NvvsDeviceList(Plugin *plugin);
+
+    // Avoid auto-generating the copy constructor/copy assignment as we use std::vector<std::unique_ptr<NvvsDeviceBase>>
+    NvvsDeviceList(NvvsDeviceList const &)            = delete;
+    NvvsDeviceList &operator=(NvvsDeviceList const &) = delete;
+
+    NvvsDeviceList(NvvsDeviceList &&)            = default;
+    NvvsDeviceList &operator=(NvvsDeviceList &&) = default;
 
     /*************************************************************************/
     /* Destructor */
@@ -201,7 +220,8 @@ public:
 
 private:
     Plugin *m_plugin; /* Plugin object to log to. Can be null */
-    std::vector<NvvsDevice *> m_devices;
+    std::vector<std::unique_ptr<NvvsDeviceBase>> m_devices;
+    friend class NvvsDeviceListTest;
 };
 
 /*****************************************************************************/

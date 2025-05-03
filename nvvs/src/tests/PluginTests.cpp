@@ -38,8 +38,8 @@ class UnitTestPlugin : public Plugin
 TEST_CASE("Plugin Results Reporting")
 {
     UnitTestPlugin p;
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     auto pEntityList                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
     dcgmDiagPluginEntityList_v1 &entityList = *(pEntityList.get());
@@ -57,7 +57,7 @@ TEST_CASE("Plugin Results Reporting")
     p.AddError(testName, d);
     memset(&entityResults, 0, sizeof(entityResults));
 
-    CHECK(p.GetResults(testName, nullptr) == DCGM_ST_BADPARAM);
+    CHECK(p.GetResults(testName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)) == DCGM_ST_BADPARAM);
     CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 1);
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_NONE);
@@ -110,9 +110,8 @@ TEST_CASE("Plugin Duplicate Errors")
     p.AddError(testName, d);
     p.AddError(testName, dDup);
 
-    std::unique_ptr<dcgmDiagEntityResults_v1> entityResultsUptr = std::make_unique<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults                     = *entityResultsUptr;
-    memset(&entityResults, 0, sizeof(entityResults));
+    auto entityResultsUptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *entityResultsUptr;
 
     CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 1); // it shouldn't have added the second error
@@ -215,9 +214,8 @@ TEST_CASE("Optional Errors")
     p.AddOptionalError(testName, globalError2);
 
     {
-        std::unique_ptr<dcgmDiagEntityResults_v1> entityResults1Uptr = std::make_unique<dcgmDiagEntityResults_v1>();
-        dcgmDiagEntityResults_v1 &entityResults1                     = *entityResults1Uptr;
-        memset(&entityResults1, 0, sizeof(entityResults1));
+        auto entityResults1Uptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+        dcgmDiagEntityResults_v2 &entityResults1 = *entityResults1Uptr;
 
         p.GetResults(testName, &entityResults1);
         CHECK(entityResults1.numErrors == 1);
@@ -227,9 +225,8 @@ TEST_CASE("Optional Errors")
     }
 
     {
-        std::unique_ptr<dcgmDiagEntityResults_v1> entityResults2Uptr = std::make_unique<dcgmDiagEntityResults_v1>();
-        dcgmDiagEntityResults_v1 &entityResults2                     = *entityResults2Uptr;
-        memset(&entityResults2, 0, sizeof(entityResults2));
+        auto entityResults2Uptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+        dcgmDiagEntityResults_v2 &entityResults2 = *entityResults2Uptr;
 
         p2.AddOptionalError(testName, globalError1);
         p2.AddOptionalError(testName, globalError2);
@@ -363,7 +360,7 @@ TEST_CASE("Plugin operates on non-existing test")
     CHECK_THROWS(p.AddInfoVerbose(nonExistingTestName, "info"));
     CHECK_THROWS(p.AddInfoVerboseForEntity(nonExistingTestName, dcgmGroupEntityPair_t(), "info"));
     CHECK_THROWS(p.AddInfoVerboseForGpu(nonExistingTestName, 0, "info"));
-    CHECK_THROWS(p.GetResults(nonExistingTestName, nullptr));
+    CHECK_THROWS(p.GetResults(nonExistingTestName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)));
     CHECK_THROWS(p.SetGpuStat(nonExistingTestName, 0, "key", 0.0));
     CHECK_THROWS(p.SetGpuStat(nonExistingTestName, 0, "key", 0LL));
     CHECK_THROWS(p.SetSingleGroupStat(nonExistingTestName, "0", "key", "value"));

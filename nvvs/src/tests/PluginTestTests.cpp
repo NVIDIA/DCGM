@@ -76,9 +76,8 @@ TEST_CASE("PluginTest::AddError")
     REQUIRE(entityErrors.at(entity).size() == 1);
     REQUIRE(entityErrors.at(entity)[0] == error);
 
-    std::unique_ptr<dcgmDiagEntityResults_v1> entityResultsUptr = std::make_unique<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults                     = *entityResultsUptr;
-    memset(&entityResults, 0, sizeof(entityResults));
+    auto entityResultsUPtr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *entityResultsUPtr;
 
     REQUIRE(DCGM_ST_OK == pluginTest.GetResults(&entityResults));
     REQUIRE(entityResults.numErrors == 1);
@@ -131,8 +130,8 @@ TEST_CASE("PluginTest::AddInfoVerboseForEntity")
     REQUIRE(entityInfo.at(entity).size() == 1);
     REQUIRE(entityInfo.at(entity)[0] == info);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     REQUIRE(DCGM_ST_OK == pluginTest.GetResults(&entityResults));
     REQUIRE(entityResults.numInfo == 1);
@@ -155,8 +154,8 @@ TEST_CASE("PluginTest::SetResultForEntity")
 
     pluginTest.SetResultForEntity(entity, NVVS_RESULT_FAIL);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     REQUIRE(DCGM_ST_OK == pluginTest.GetResults(&entityResults));
     REQUIRE(entityResults.numResults == 1);
@@ -183,8 +182,8 @@ TEST_CASE("PluginTest::SetResult")
 
     pluginTest.SetResult(NVVS_RESULT_FAIL);
 
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     REQUIRE(DCGM_ST_OK == pluginTest.GetResults(&entityResults));
     REQUIRE(entityResults.numResults == 2);
@@ -192,4 +191,35 @@ TEST_CASE("PluginTest::SetResult")
     REQUIRE(entityResults.results[0].result == NvvsPluginResultToDiagResult(NVVS_RESULT_FAIL));
     REQUIRE(entityResults.results[1].entity == entity2);
     REQUIRE(entityResults.results[1].result == NvvsPluginResultToDiagResult(NVVS_RESULT_FAIL));
+}
+
+TEST_CASE("PluginTest::InfoLimit")
+{
+    std::string const testName = "capoo";
+    PluginTest pluginTest(testName);
+
+    auto pEntityList                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    dcgmDiagPluginEntityList_v1 &entityList = *(pEntityList.get());
+
+    dcgmGroupEntityPair_t entity  = { .entityGroupId = DCGM_FE_CPU, .entityId = 0 };
+    entityList.numEntities        = 1;
+    entityList.entities[0].entity = entity;
+
+    pluginTest.InitializeForEntityList(entityList);
+
+    // Add info messages up to the limit
+    dcgmDiagEntityResults_v2 response {};
+    size_t infoLimit = std::size(response.info);
+
+    for (size_t i = 0; i < infoLimit + 1; i++)
+    {
+        std::string msg = "Info message " + std::to_string(i);
+        pluginTest.AddInfoVerboseForEntity(entity, msg);
+    }
+
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
+
+    REQUIRE(DCGM_ST_OK == pluginTest.GetResults(&entityResults));
+    REQUIRE(entityResults.numInfo == infoLimit); // Should be capped at limit
 }

@@ -35,6 +35,8 @@ import dcgm_nvml
 import utils
 import os
 from ctypes import *
+from dcgm_field_injection_helpers import inject_nvml_value, inject_value
+
 
 g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE,
@@ -65,6 +67,14 @@ for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVDEC0_ACTIVE, dcgm_fields.DCGM_FI
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVJPG0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVJPG7_ACTIVE + 1):
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVLINK_L0_TX_BYTES, dcgm_fields.DCGM_FI_PROF_NVLINK_L17_RX_BYTES + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_DEV_CPU_UTIL_TOTAL, dcgm_fields.DCGM_FI_DEV_CPU_MODEL + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID, dcgm_fields.DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE + 1):
+    g_profilingFieldIds.append(fieldId)
+for fieldId in range(dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_INTR, dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS + 1):
     g_profilingFieldIds.append(fieldId)
 
 def get_usec_since_1970():
@@ -1334,3 +1344,111 @@ def test_platform_info_fields_invalid_values(handle, gpuIds):
         dcgm_agent.dcgmUpdateAllFields(handle, 1)
         values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
         assert (values[0].value.i64 == expectedPlatformFields[field]), f"Expected value {expectedPlatformFields[field]} for field {field}, but got {values[0].value.i64}"
+
+def helper_inject_ber_float(handle, gpuIds, berFieldId, berFloatFieldId, fakeBer, expectedBerFloat):
+    """Helper function to inject and verify BER values
+
+    Args:
+        handle: DCGM handle
+        gpuIds: List of GPU IDs
+        berFieldId: Field ID for raw BER value
+        berFloatFieldId: Field ID for decoded BER float value
+        fakeBer: Raw BER value to inject
+        expectedBerFloat: Expected decoded float value
+    """
+    gpuId = gpuIds[0]
+    injectionOffset = 1
+
+    logger.debug(f"Testing BER injection - berFieldId: {berFieldId}, berFloatFieldId: {berFloatFieldId}, " \
+                 f"fakeBer: {fakeBer}, expectedBerFloat: {expectedBerFloat}")
+
+    inject_nvml_value(handle, gpuId, berFieldId, fakeBer, injectionOffset)
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    updateIntervalUsec = 10000 # 0.1sec
+
+    # Set watches on both fields
+    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, berFieldId, updateIntervalUsec, 1, 2)
+    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, berFloatFieldId, updateIntervalUsec, 1, 2)
+    dcgmSystem.UpdateAllFields(1)
+
+    # Obtain and verify raw BER value
+    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [berFieldId])
+    assert values[0].value.i64 == fakeBer, f"BER value mismatch. Expected {fakeBer}, got {values[0].value.i64}"
+
+    # Sleep required for float value update; UpdateAllFields() does not address this
+    time.sleep(0.01)
+
+    # Obtain and verify float BER value
+    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [berFloatFieldId])
+
+    assert abs(values[0].value.dbl - expectedBerFloat) < 1e-300, \
+            f"BER float value mismatch. Expected {expectedBerFloat}, got {values[0].value.dbl}"
+
+    # Clear cache at end of test
+    dcgm_agent_internal.dcgmUnwatchFieldValue(dcgmHandle.handle, gpuId, berFieldId, True)
+    dcgm_agent_internal.dcgmUnwatchFieldValue(dcgmHandle.handle, gpuId, berFloatFieldId, True)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_ber_fields(handle, gpuIds):
+    # Test various BER values and edge cases
+    test_cases = [
+        # Max value case
+        (4095, 15.0 * pow(10.0, -255.0)),
+        # Zero case
+        (0, 0.0),
+        # Some normal cases with different mantissa/exponent combinations
+        (1000, 3.0 * pow(10.0, -232)),  # mantissa=3, exp=-232
+        (1025, 4.0 * pow(10.0, -1.0)),  # mantissa=4, exp=-1
+        (2048, 8.0 * pow(10.0, 0.0)),   # mantissa=8, exp=0
+        (3072, 12.0 * pow(10.0, 0.0)),  # mantissa=12, exp=0
+        (513, 2.0 * pow(10.0, -1.0)),   # mantissa=2, exp=1
+    ]
+
+    fields = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT),
+    ]
+
+    for berFieldId, berFloatFieldId in fields:
+        for fakeBer, expectedBerFloat in test_cases:
+            helper_inject_ber_float(
+                handle,
+                gpuIds,
+                berFieldId,
+                berFloatFieldId,
+                fakeBer,
+                expectedBerFloat
+            )
+
+def helper_check_field_values(handle, gpuIds, field_id, test_values):
+    """Helper to test fields with various values"""
+    gpuId = gpuIds[0]
+    injectionOffset = 1
+
+    for fake_value in test_values:
+        inject_nvml_value(handle, gpuId, field_id, fake_value, injectionOffset)
+
+        dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+        dcgmSystem = dcgmHandle.GetSystem()
+        dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, field_id, 10000, 1.0, 1)
+        dcgmSystem.UpdateAllFields(1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [field_id])
+        assert values[0].value.i64 == fake_value, f"Expected {fake_value} but got {values[0].value.i64}"
+
+        dcgm_agent_internal.dcgmUnwatchFieldValue(dcgmHandle.handle, gpuId, field_id, True)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_error_fields(handle, gpuIds):
+    """Test NVLink error counter fields with various values"""
+    test_values = [0, 42, 2**31-1, 2**63-1]
+    helper_check_field_values(handle, gpuIds, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS, test_values)
+    helper_check_field_values(handle, gpuIds, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, test_values)

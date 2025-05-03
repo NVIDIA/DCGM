@@ -38,8 +38,10 @@ public:
     std::string GetTag() override;
     void GetConfig(TestDcgmModuleConfig &config) override;
 
+
 private:
     int TestGroupCreation();
+    int TestGroupLimits();
     int TestGroupGetAllGrpIds();
     int TestGroupManageGpus();
     int TestGroupReportErrOnDuplicate();

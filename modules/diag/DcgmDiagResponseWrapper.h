@@ -16,10 +16,13 @@
 #ifndef DCGM_DIAG_RESPONSE_WRAPPER_H
 #define DCGM_DIAG_RESPONSE_WRAPPER_H
 
-#include <string>
-
 #include "dcgm_structs.h"
-#include "json/json.h"
+#include "dcgm_structs_internal.h"
+
+#include <DcgmLogging.h>
+#include <DiagResponseUtils.h>
+#include <json/json.h>
+#include <string>
 
 extern const std::string_view denylistName;
 extern const std::string_view nvmlLibName;
@@ -44,6 +47,9 @@ enum class MsgType
     Error //!< Error message
 };
 
+// Forward declaration of friend DcgmModuleDiag
+class DcgmModuleDiag;
+
 /*****************************************************************************/
 /*
  * Class for handling the different versions of the diag response
@@ -58,11 +64,49 @@ public:
     void RecordSystemError(std::string const &errorStr) const;
 
     /*****************************************************************************/
-    dcgmReturn_t SetVersion11(dcgmDiagResponse_v11 *response);
-    dcgmReturn_t SetVersion10(dcgmDiagResponse_v10 *response);
-    dcgmReturn_t SetVersion9(dcgmDiagResponse_v9 *response);
-    dcgmReturn_t SetVersion8(dcgmDiagResponse_v8 *response);
-    dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
+
+    /**
+     * Set the version of the response
+     * @param response The response to set
+     * @return DCGM_ST_OK if the version was set, DCGM_ST_NOT_SUPPORTED if the version is already set, or
+     * DCGM_ST_GENERIC_ERROR if the version is not supported
+     */
+    template <typename DiagResponseType>
+        requires DcgmNs::IsDiagResponse<DiagResponseType>
+    dcgmReturn_t SetVersion(DiagResponseType *response)
+    {
+        if (m_version != 0)
+        {
+            // Message should match DDRW_VER_ALREADY_SET_FMT
+            log_warning("Unable to set response version to {}, already set to {}.", m_version, m_version);
+            return DCGM_ST_NOT_SUPPORTED;
+        }
+
+        if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v12>)
+        {
+            return SetVersion12(response);
+        }
+        else if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v11>)
+        {
+            return SetVersion11(response);
+        }
+        else if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v10>)
+        {
+            return SetVersion10(response);
+        }
+        else if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v9>)
+        {
+            return SetVersion9(response);
+        }
+        else if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v8>)
+        {
+            return SetVersion8(response);
+        }
+        else if constexpr (std::is_same_v<DiagResponseType, dcgmDiagResponse_v7>)
+        {
+            return SetVersion7(response);
+        }
+    }
 
     /*****************************************************************************/
     dcgmReturn_t SetResult(std::string_view data) const;
@@ -84,8 +128,18 @@ public:
 #ifndef __DIAG_UNIT_TESTING__
 private:
 #endif
+
+    /* Deprecated methods. Use SetVersion() instead. */
+    dcgmReturn_t SetVersion12(dcgmDiagResponse_v12 *response);
+    dcgmReturn_t SetVersion11(dcgmDiagResponse_v11 *response);
+    dcgmReturn_t SetVersion10(dcgmDiagResponse_v10 *response);
+    dcgmReturn_t SetVersion9(dcgmDiagResponse_v9 *response);
+    dcgmReturn_t SetVersion8(dcgmDiagResponse_v8 *response);
+    dcgmReturn_t SetVersion7(dcgmDiagResponse_v7 *response);
+
     union
     {
+        dcgmDiagResponse_v12 *v12ptr; // A pointer to the version12 struct
         dcgmDiagResponse_v11 *v11ptr; // A pointer to the version11 struct
         dcgmDiagResponse_v10 *v10ptr; //!< Deprecated. A pointer to the version10 struct
         dcgmDiagResponse_v9 *v9ptr;   //!< Deprecated. A pointer to the version9 struct
@@ -97,6 +151,7 @@ private:
 
     /*****************************************************************************/
     bool StateIsValid() const;
+    friend class DcgmModuleDiag;
 };
 
 #endif
