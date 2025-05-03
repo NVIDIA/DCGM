@@ -174,6 +174,8 @@ skus:
       minimum_bandwidth: 1905000
     pulse_test:
       is_allowed: true
+    nvbandwidth:
+      is_allowed: true
   - name: DGX Station
     id: 15fa
     targeted_power:
@@ -3940,12 +3942,14 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
-  - name: H20 NVL16
-    id: 230e
+
+  - name: B200 DevId 10DE
+    id: 2941
+    # subsystem id: 29412046
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
-      target_power: 500.00
+      target_power: 1199.00
       max_matrix_dim: 8196
       use_dgemv: true
       use_dgemm: false
@@ -3955,11 +3959,50 @@ skus:
       is_allowed: true
       use_dgemm: false
       #  Copied from sm stress target
-      target_stress: 18881
+      target_stress: 15225
     sm_stress:
       is_allowed: true
-      # dcgmproftester -t 1007 measures ~25175. Multiply by .75 to get 18881
-      target_stress: 18881
+      # dcgmproftester -t 1007 measures ~20300. Multiply by .75 to get 15225
+      target_stress: 15225
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 1.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 192.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 3470000. Multiply by .75 to get 2602500
+      minimum_bandwidth: 2602500
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+
+  - name: PG153 SKU 210
+    id: 2bb5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 600.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 54543
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~72725. Multiply by .75 to get 54543
+      target_stress: 54543
       use_dgemm: false
     pcie:
       is_allowed: true
@@ -3976,9 +4019,9 @@ skus:
       is_allowed: true
     memory_bandwidth:
       is_allowed: true
-      # dcgmproftester -t 1005 shows 3183333. Multiply by .75 to get 2387499
-      minimum_bandwidth: 2387499
+      # dcgmproftester -t 1005 shows 1480000. Multiply by .75 to get 1110000
+      minimum_bandwidth: 1110000
     pulse_test:
-      is_allowed: true
+      is_allowed: false
     nvbandwidth:
       is_allowed: true

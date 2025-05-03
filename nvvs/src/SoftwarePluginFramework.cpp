@@ -81,35 +81,10 @@ void SoftwarePluginFramework::initTestNameMap()
                       { "Persistence Mode", "persistence_mode" },
                       { "Environmental Variables", "env_variables" },
                       { "Page Retirement/Row Remap", "page_retirement" },
+                      { "SRAM Threshold Count", "sram_threshold" },
                       { "Graphics Processes", "graphics_processes" },
                       { "Inforom", "inforom" },
                       { "Fabric Manager", "fabric_manager" } };
-
-    m_swTestNames = {
-        "Denylist",
-        "NVML Library",
-        "CUDA Main Library",
-        "CUDA Toolkit Libraries",
-        "Permissions and OS-related Blocks",
-        "Persistence Mode",
-        "Environmental Variables",
-        "Page Retirement/Row Remap",
-        "Graphics Processes",
-        "Inforom",
-        "Fabric Manager",
-    };
-}
-
-unsigned SoftwarePluginFramework::GetSwTestResultIndex(std::string_view const testName)
-{
-    for (unsigned i = 0; i < m_swTestNames.size(); i++)
-    {
-        if (testName == m_swTestNames[i])
-        {
-            return i;
-        }
-    }
-    return DCGM_SWTEST_COUNT;
 }
 
 void SoftwarePluginFramework::initTestParametersMap()
@@ -153,8 +128,8 @@ void SoftwarePluginFramework::populateGpuInfo(const std::vector<Gpu *> &gpuList)
 
 void SoftwarePluginFramework::SetResult(std::string_view const testName, DcgmNvvsResponseWrapper &diagResponse)
 {
-    std::unique_ptr<dcgmDiagEntityResults_v1> entityResultsPtr = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    auto &entityResults                                        = *entityResultsPtr;
+    auto entityResultsPtr = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    auto &entityResults   = *entityResultsPtr;
     m_softwareObj->GetResults(m_softwareObj->GetSoftwareTestName(), &entityResults);
 
     for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(entityResults.numErrors),
@@ -225,13 +200,15 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
         unsigned int numParameters                 = parameters.size();
         dcgmDiagPluginTestParameter_t const *parms = parameters.data();
 
+        log_debug("Test {} start", testName);
+
         // run the test
         m_softwareObj->Go(m_softwareObj->GetSoftwareTestName(), m_entityList.get(), numParameters, parms);
 
         SetResult(testName, diagResponse);
         did = true;
 
-        log_debug("Test {} had over result {}. Configless is {}",
+        log_debug("Test {} had result {}. Configless is {}",
                   testName,
                   m_softwareObj->GetResult(m_softwareObj->GetSoftwareTestName()),
                   nvvsCommon.configless);

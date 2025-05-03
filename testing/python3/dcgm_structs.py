@@ -1859,19 +1859,40 @@ class c_dcgmDiagTestAuxData_v1(_PrintableStructure):
     ]
 
 dcgmDiagTestAuxData_version1 = make_dcgm_version(c_dcgmDiagTestAuxData_v1, 1)
-
 dcgmDiagTestAuxData_version = dcgmDiagTestAuxData_version1
-
-DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX = 32
-DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX = 16
-DCGM_DIAG_TEST_RUN_RESULTS_MAX = DCGM_GROUP_MAX_ENTITIES_V2
-DCGM_DIAG_TEST_RUN_NAME_LEN = 32
 
 class c_dcgmDiagEntityResult_v1(_PrintableStructure):
     _fields_ = [
         ('entity', c_dcgmGroupEntityPair_t),
         ('result', c_int),
         ('testId', c_uint),
+    ]
+
+DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX = 32
+DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX = 16
+DCGM_DIAG_TEST_RUN_RESULTS_MAX = DCGM_GROUP_MAX_ENTITIES_V2
+DCGM_DIAG_TEST_RUN_NAME_LEN = 32
+
+DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2 = 128
+
+class c_dcgmDiagTestRun_v2(_PrintableStructure):
+    _fields_ = [
+        ('name', c_char * DCGM_DIAG_TEST_RUN_NAME_LEN),
+        ('pluginName', c_char * DCGM_DIAG_TEST_RUN_NAME_LEN),
+
+        ('result', c_uint),
+
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('categoryIndex', c_ubyte),
+        ('_unused', c_ubyte),
+
+        ('numResults', c_ushort),
+
+        ('errorIndices', c_ubyte * DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX),
+        ('infoIndices', c_ubyte * DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2),
+        ('resultIndices', c_ushort * DCGM_DIAG_TEST_RUN_RESULTS_MAX),
+        ('auxData', c_dcgmDiagTestAuxData_v1),
     ]
 
 class c_dcgmDiagTestRun_v1(_PrintableStructure):
@@ -1907,6 +1928,36 @@ DCGM_DIAG_RESPONSE_RESULTS_MAX = DCGM_DIAG_RESPONSE_TESTS_MAX * DCGM_DIAG_RESPON
 DCGM_DIAG_RESPONSE_CATEGORIES_MAX = 5
 DCGM_DIAG_RESPONSE_CATEGORY_LEN = 20
 DCGM_DIAG_RESPONSE_V11_UNUSED_LEN = 682880
+
+DCGM_DIAG_RESPONSE_V12_UNUSED_LEN = 621952
+DCGM_DIAG_RESPONSE_INFO_MAX_V2 = DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX_V2
+
+class c_dcgmDiagResponse_v12(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+
+        ('numTests', c_ubyte),
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('numCategories', c_ubyte),
+
+        ('numEntities', c_ushort),
+        ('numResults', c_ushort),
+
+        ('tests', c_dcgmDiagTestRun_v2 * DCGM_DIAG_RESPONSE_TESTS_MAX),
+        ('entities', c_dcgmDiagEntity_v1 * DCGM_DIAG_RESPONSE_ENTITIES_MAX),
+        ('errors', c_dcgmDiagError_v1 * DCGM_DIAG_RESPONSE_ERRORS_MAX),
+        ('info', c_dcgmDiagInfo_v1 * DCGM_DIAG_RESPONSE_INFO_MAX_V2),
+        ('results', c_dcgmDiagEntityResult_v1 * DCGM_DIAG_RESPONSE_RESULTS_MAX),
+        ('categories', (c_char * DCGM_DIAG_RESPONSE_CATEGORY_LEN) * DCGM_DIAG_RESPONSE_CATEGORIES_MAX),
+
+        ('dcgmVersion', c_char * DCGM_VERSION_LEN),
+        ('dcgmDriverVersion', c_char * DCGM_MAX_STR_LENGTH),
+
+        ('_unused', c_char * DCGM_DIAG_RESPONSE_V12_UNUSED_LEN),
+    ]
+
+dcgmDiagResponse_version12 = make_dcgm_version(c_dcgmDiagResponse_v12, 12)
 
 class c_dcgmDiagResponse_v11(_PrintableStructure):
     _fields_ = [
@@ -2208,7 +2259,6 @@ class c_dcgmRunDiag_v10(_PrintableStructure):
         ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN), # Comma-separated list of entity ids. Cannot be specified with the groupId.
         ('watchFrequency', c_uint), # The watch frequency for fields being watched
         ('ignoreErrorCodes', c_char * DCGM_IGNORE_ERROR_MAX_LEN), # String of error codes to be ignored on different entities
-
     ]
 
 dcgmRunDiag_version10 = make_dcgm_version(c_dcgmRunDiag_v10, 10)

@@ -61,6 +61,10 @@ public:
                                               unsigned short fieldId,
                                               dcgmFieldValue_v2 &value,
                                               unsigned int flags);
+
+    virtual dcgmReturn_t GetFieldSummary(dcgmFieldSummaryRequest_t &request);
+
+    virtual std::string GetGpuUtilizationNote(unsigned int gpuId, timelib64_t startTime);
 };
 
 class DcgmRecorder : public DcgmRecorderBase
@@ -115,7 +119,7 @@ public:
 
     /*
      */
-    dcgmReturn_t GetFieldSummary(dcgmFieldSummaryRequest_t &request);
+    dcgmReturn_t GetFieldSummary(dcgmFieldSummaryRequest_t &request) override;
 
     /*
      * Populate tag with the field name for the specified field id
@@ -304,7 +308,7 @@ public:
      * If gpu utilization is below 75% for this GPU, then return a note prompting the user to investigate.
      * Otherwise return an empty string
      */
-    std::string GetGpuUtilizationNote(unsigned int gpuId, timelib64_t startTime);
+    std::string GetGpuUtilizationNote(unsigned int gpuId, timelib64_t startTime) override;
 
     /*
      * Get the attributes for the specified device

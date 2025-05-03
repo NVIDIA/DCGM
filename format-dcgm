@@ -23,7 +23,7 @@ if [ "$DCGM_BUILD_INSIDE_DOCKER" = 1 ]; then
                   -a "(" -iname "*.h" -o -iname "*.hpp" -o -iname "*.c" -o -iname "*.cpp" ")"); do
 
         pushd $(dirname $(realpath ${TOP_LEVEL_DIR}/$file)) >/dev/null
-        clang-format -i --style=file $(basename ${TOP_LEVEL_DIR}/$file) &
+        clang-format -i --style=file $(basename ${TOP_LEVEL_DIR}/$file)
         popd >/dev/null
 
     done

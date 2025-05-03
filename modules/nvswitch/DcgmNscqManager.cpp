@@ -516,6 +516,7 @@ dcgmReturn_t DcgmNscqManager::AttachToNscq()
         log_error(
             "NSCQ returned warning during session creation. Ensure driver version matches NSCQ version. NSCQ warning ret: {}",
             int(nscqRet.rc));
+        return DCGM_ST_3RD_PARTY_LIBRARY_ERROR;
     }
 
     log_debug("Created NSCQ session");

@@ -109,11 +109,32 @@ cublasStatus_t PUBLIC_API CublasLtMatmul(cublasLtHandle_t lightHandle,
                                          size_t workspaceSizeInBytes,
                                          cudaStream_t stream);
 
+#if CUBLAS_VER_MAJOR >= 12
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoCapGetAttribute(const cublasLtMatmulAlgo_t *algo,
+                                                            cublasLtMatmulAlgoCapAttributes_t attr,
+                                                            void *buf,
+                                                            size_t sizeInBytes,
+                                                            size_t *sizeWritten);
+#endif // CUBLAS_VER_MAJOR >= 12
+
 cublasStatus_t PUBLIC_API CublasLtMatmulAlgoConfigGetAttribute(const cublasLtMatmulAlgo_t *algo,
                                                                cublasLtMatmulAlgoConfigAttributes_t attr,
                                                                void *buf,
                                                                size_t sizeInBytes,
                                                                size_t *sizeWritten);
+
+#if CUBLAS_VER_MAJOR >= 12
+cublasStatus_t PUBLIC_API CublasLtMatmulAlgoGetIds(cublasLtHandle_t lightHandle,
+                                                   cublasComputeType_t computeType,
+                                                   cudaDataType_t scaleType,
+                                                   cudaDataType_t Atype,
+                                                   cudaDataType_t Btype,
+                                                   cudaDataType_t Ctype,
+                                                   cudaDataType_t Dtype,
+                                                   int requestedAlgoCount,
+                                                   int algoIdsArray[],
+                                                   int *returnAlgoCount);
+#endif // CUBLAS_VER_MAJOR >= 12
 
 cublasStatus_t PUBLIC_API CublasLtMatmulAlgoConfigSetAttribute(cublasLtMatmulAlgo_t *algo,
                                                                cublasLtMatmulAlgoConfigAttributes_t attr,

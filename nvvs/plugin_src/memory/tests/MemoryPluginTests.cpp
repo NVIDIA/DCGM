@@ -44,8 +44,8 @@ TEST_CASE("mem_init")
     mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
     REQUIRE(mem_init(&memGlobals, entityList->entities[1]) == 1);
 
-    auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 entityResults = *(pEntityResults.get());
+    auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
     dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);

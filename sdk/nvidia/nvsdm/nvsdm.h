@@ -11,8 +11,6 @@
 #ifndef __NVSDM_H__
 #define __NVSDM_H__
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
 
 #include <stdint.h>
 
@@ -1236,5 +1234,4 @@ char const *nvsdmGetErrorString(nvsdmRet_t ret);
 #ifdef __cplusplus
 }
 #endif
-#pragma GCC diagnostic pop
 #endif // __NVSDM_H__

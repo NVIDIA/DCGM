@@ -471,6 +471,10 @@ NVML_ENTRY_POINT(nvmlDeviceGetMemoryErrorCounter, tsapiDeviceGetMemoryErrorCount
          nvmlMemoryLocation_t locationType, unsigned long long *count),
         "(%p, %d, %d, %d, %p)",
         device, errorType, counterType, locationType, count)
+NVML_ENTRY_POINT(nvmlDeviceGetSramEccErrorStatus, tsapiDeviceGetSramEccErrorStatus,
+        (nvmlDevice_t device, nvmlEccSramErrorStatus_t *status),
+        "(%p, %p)",
+        device, status)
 NVML_ENTRY_POINT(nvmlDeviceSetGpuLockedClocks, tsapiDeviceSetGpuLockedClocks,
         (nvmlDevice_t device, unsigned int minGpuClockMHz, unsigned int maxGpuClockMHz),
         "(%p, %u, %u)",

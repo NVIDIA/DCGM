@@ -105,7 +105,7 @@ void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStat
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v2 *entityResults, void *userData)
 {
     GpuBurnPlugin *gbp = static_cast<GpuBurnPlugin *>(userData);
     gbp->GetResults(testName, entityResults);

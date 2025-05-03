@@ -118,6 +118,7 @@
         nvmlDeviceSetGpuOperationMode;
         nvmlDeviceGetDisplayActive;
         nvmlDeviceGetMemoryErrorCounter;
+        nvmlDeviceGetSramEccErrorStatus;
         nvmlDeviceSetGpuLockedClocks;
         nvmlDeviceResetGpuLockedClocks;
         nvmlDeviceSetMemoryLockedClocks;

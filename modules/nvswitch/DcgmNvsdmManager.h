@@ -98,7 +98,7 @@ public:
 
     /*************************************************************************/
     /**
-     * Update fields for NVSWITCH from NSCQ library.
+     * Update fields for NVSWITCH from NVSDM library.
      *
      * @param fieldId[in]  - Field id to update.
      * @param buf[out]     - DcgmFvBuffer type which needs to be populated with fieldId value.
@@ -258,14 +258,6 @@ protected:
      * Read fatal errors for all switches
      */
     dcgmReturn_t ReadNvSwitchFatalErrorsAllSwitches() override;
-
-    /*************************************************************************/
-    /**
-     * Helper to buffer blank values for all affected entities of a fieldId
-     */
-    void BufferBlankValueForAllEntities(unsigned short fieldId,
-                                        DcgmFvBuffer &buf,
-                                        const std::vector<dcgm_field_update_info_t> &entities);
 
     /*************************************************************************/
     /**

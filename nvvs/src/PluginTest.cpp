@@ -240,71 +240,182 @@ void PluginTest::AddInfoVerboseForGpu(unsigned int gpuId, std::string const &inf
     AddInfoVerboseForEntity(entity, info);
 }
 
-/* Caller is responsible for setting testId on errors. */
-dcgmReturn_t PluginTest::GetResults(dcgmDiagEntityResults_v1 *entityResults)
+namespace
 {
-    if (entityResults == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
+constexpr std::string_view PTErrTooManyErrors        = "Too many errors. Additional errors will be discarded.";
+constexpr std::string_view PTErrTooManyOptErrors     = "Too many errors. Additional optional errors will be discarded.";
+constexpr std::string_view PTErrTooManyInfo          = "Too many info messages. Additional messages will be discarded.";
+constexpr std::string_view PTErrTooManyEntityResults = "Too many entity results. Additional results will be discarded.";
+} // namespace
 
-    entityResults->numErrors = 0;
-    for (auto const &[_, errors] : m_errorsPerEntity)
+void GetResultsV1(nvvsPluginEntityErrors_t const &errorsPerEntity,
+                  nvvsPluginOptionalErrors_t const &optionalErrors,
+                  nvvsPluginEntityMsgs_t const &verboseInfoPerEntity,
+                  nvvsPluginEntityResults_t const &resultsPerEntity,
+                  dcgmDiagEntityResults_v1 &entityResults)
+{
+    entityResults.numErrors = 0;
+    std::span entityErrors(entityResults.errors, std::size(entityResults.errors));
+    for (auto const &[_, errors] : errorsPerEntity)
     {
         for (auto const &error : errors)
         {
-            if (entityResults->numErrors >= DCGM_DIAG_RESPONSE_ERRORS_MAX)
+            if (entityResults.numErrors >= std::size(entityErrors))
             {
-                log_error("Too many errors, skip setting the followings.");
+                log_error("{}", PTErrTooManyErrors);
                 break;
             }
-            entityResults->errors[entityResults->numErrors] = error;
-            entityResults->numErrors += 1;
+            entityErrors[entityResults.numErrors] = error;
+            entityResults.numErrors += 1;
         }
     }
 
-    if (entityResults->numErrors == 0)
+    if (entityResults.numErrors == 0)
     {
-        for (auto &&error : m_optionalErrors)
+        for (auto &&error : optionalErrors)
         {
-            if (entityResults->numErrors == DCGM_DIAG_MAX_ERRORS)
+            if (entityResults.numErrors >= std::size(entityErrors))
             {
-                log_error("Too many errors, skip setting the followings.");
+                log_error("{}", PTErrTooManyOptErrors);
                 break;
             }
 
-            entityResults->errors[entityResults->numErrors] = DcgmErrorToDiagError(error);
-            entityResults->numErrors += 1;
+            entityErrors[entityResults.numErrors] = DcgmErrorToDiagError(error);
+            entityResults.numErrors += 1;
         }
     }
 
-    entityResults->numInfo = 0;
-    for (auto const &[entity, infos] : m_verboseInfoPerEntity)
+    std::span entityInfo(entityResults.info, std::size(entityResults.info));
+    entityResults.numInfo = 0;
+    for (auto const &[entity, infos] : verboseInfoPerEntity)
     {
         for (auto const &info : infos)
         {
-            if (entityResults->numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+            if (entityResults.numInfo >= std::size(entityInfo))
             {
-                log_error("Too many info, skip setting the followings.");
+                log_error("{}", PTErrTooManyInfo);
                 break;
             }
-            entityResults->info[entityResults->numInfo].entity = entity;
-            SafeCopyTo(entityResults->info[entityResults->numInfo].msg, info.c_str());
-            entityResults->numInfo += 1;
+            entityInfo[entityResults.numInfo].entity = entity;
+            SafeCopyTo(entityInfo[entityResults.numInfo].msg, info.c_str());
+            entityResults.numInfo += 1;
         }
     }
 
-    entityResults->numResults = 0;
-    for (auto const &[entity, result] : m_resultsPerEntity)
+    std::span results(entityResults.results, std::size(entityResults.results));
+    entityResults.numResults = 0;
+    for (auto const &[entity, result] : resultsPerEntity)
     {
-        if (entityResults->numResults >= DCGM_DIAG_TEST_RUN_RESULTS_MAX)
+        if (entityResults.numResults >= std::size(results))
         {
-            log_error("Too manay entity results, skip setting followings.");
+            log_error("{}", PTErrTooManyEntityResults);
             break;
         }
-        entityResults->results[entityResults->numResults].entity = entity;
-        entityResults->results[entityResults->numResults].result = NvvsPluginResultToDiagResult(result);
-        entityResults->numResults += 1;
+        results[entityResults.numResults].entity = entity;
+        results[entityResults.numResults].result = NvvsPluginResultToDiagResult(result);
+        entityResults.numResults += 1;
+    }
+}
+
+void GetResultsV2(nvvsPluginEntityErrors_t const &errorsPerEntity,
+                  nvvsPluginOptionalErrors_t const &optionalErrors,
+                  nvvsPluginEntityMsgs_t const &verboseInfoPerEntity,
+                  nvvsPluginEntityResults_t const &resultsPerEntity,
+                  dcgmDiagEntityResults_v2 &entityResults)
+{
+    std::span entityErrors(entityResults.errors, std::size(entityResults.errors));
+    entityResults.numErrors = 0;
+    for (auto const &[_, errors] : errorsPerEntity)
+    {
+        for (auto const &error : errors)
+        {
+            if (entityResults.numErrors >= std::size(entityErrors))
+            {
+                log_error("{}", PTErrTooManyErrors);
+                break;
+            }
+            entityErrors[entityResults.numErrors] = error;
+            entityResults.numErrors += 1;
+        }
+    }
+
+    if (entityResults.numErrors == 0)
+    {
+        for (auto &&error : optionalErrors)
+        {
+            if (entityResults.numErrors >= std::size(entityErrors))
+            {
+                log_error("{}", PTErrTooManyOptErrors);
+                break;
+            }
+
+            entityErrors[entityResults.numErrors] = DcgmErrorToDiagError(error);
+            entityResults.numErrors += 1;
+        }
+    }
+
+    std::span entityInfo(entityResults.info, std::size(entityResults.info));
+    entityResults.numInfo = 0;
+    for (auto const &[entity, infos] : verboseInfoPerEntity)
+    {
+        for (auto const &info : infos)
+        {
+            if (entityResults.numInfo >= std::size(entityInfo))
+            {
+                log_error("{}", PTErrTooManyInfo);
+                break;
+            }
+            entityInfo[entityResults.numInfo].entity = entity;
+            SafeCopyTo(entityInfo[entityResults.numInfo].msg, info.c_str());
+            entityResults.numInfo += 1;
+        }
+    }
+
+    std::span results(entityResults.results, std::size(entityResults.results));
+    entityResults.numResults = 0;
+    for (auto const &[entity, result] : resultsPerEntity)
+    {
+        if (entityResults.numResults >= std::size(results))
+        {
+            log_error("{}", PTErrTooManyEntityResults);
+            break;
+        }
+        results[entityResults.numResults].entity = entity;
+        results[entityResults.numResults].result = NvvsPluginResultToDiagResult(result);
+        entityResults.numResults += 1;
+    }
+}
+
+/**
+ * @brief Get test results
+ *
+ * @param entityResults
+ * @returns DCGM_ST_OK on success, DCGM_ST_BADPARAM if entityResults is nullptr
+ *
+ * Caller is responsible for setting testId on errors.
+ */
+template <typename EntityResultsType>
+    requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+             || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+dcgmReturn_t PluginTest::GetResults(EntityResultsType *entityResults)
+{
+    if (entityResults == nullptr)
+    {
+        log_error("Entity results is nullptr");
+        return DCGM_ST_BADPARAM;
+    }
+
+    if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>)
+    {
+        GetResultsV1(m_errorsPerEntity, m_optionalErrors, m_verboseInfoPerEntity, m_resultsPerEntity, *entityResults);
+    }
+    else if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>)
+    {
+        GetResultsV2(m_errorsPerEntity, m_optionalErrors, m_verboseInfoPerEntity, m_resultsPerEntity, *entityResults);
+    }
+    else
+    {
+        static_assert(false, "Unsupported entity results type");
     }
 
     entityResults->auxData = dcgmDiagAuxData_t {
@@ -453,3 +564,7 @@ gpuIgnoreErrorCodeMap_t const &PluginTest::GetIgnoreErrorCodes() const
 {
     return m_ignoreErrorCodes;
 }
+
+// Explicit template instantiations
+template dcgmReturn_t PluginTest::GetResults<dcgmDiagEntityResults_v1>(dcgmDiagEntityResults_v1 *entityResults);
+template dcgmReturn_t PluginTest::GetResults<dcgmDiagEntityResults_v2>(dcgmDiagEntityResults_v2 *entityResults);

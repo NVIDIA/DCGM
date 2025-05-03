@@ -132,7 +132,8 @@ def _lines_with_errors(lines):
         'rx remote error',
         'rx general error',
         'link integrity error',
-        'rx symbol error'
+        'rx symbol error',
+        'effective error'
     ]
 
     for line in lines:
@@ -1756,9 +1757,9 @@ def test_dcgmi_diag_status_r_memory(handle, gpuIds):
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_status_r_memory_error(handle, gpuIds):
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_GPU_TEMP, 120, 0, repeatCount=30, repeatOffset=1)
-    args = ["diag", "-i", str(gpuIds[0]), "--run", "memory"]
-    helper_dcgmi_diag_status(handle, args, 120, ["software", "memory"], {"software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEMP_VIOLATION})
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, 0, 0, repeatCount=5)
+    args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true"]
+    helper_dcgmi_diag_status(handle, args, 120, ["software", "memory"], {"software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()

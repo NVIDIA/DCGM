@@ -45,8 +45,8 @@ TEST_CASE("TargetedStress::CudaInit()")
     CHECK(cp.Init(entityList.get()) == true);
 
     CHECK(cp.CudaInit() == -1);
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     dcgmReturn_t ret = cp.GetResults(cp.GetTargetedStressTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);

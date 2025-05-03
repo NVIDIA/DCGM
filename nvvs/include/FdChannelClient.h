@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cerrno>
 #include <cstdint>
 #include <span>

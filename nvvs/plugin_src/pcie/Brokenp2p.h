@@ -89,7 +89,7 @@ public:
      *
      * @retrun false if there was an error, true otherwise
      */
-    bool CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errstr);
+    bool CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr);
 
     /*****************************************************************************/
     /*
@@ -126,7 +126,7 @@ private:
                          void *hostBuf,
                          void *expected,
                          size_t size,
-                         std::string &errstr);
+                         std::string &errStr);
 
     BusGrind *m_bg;
     std::vector<PluginDevice *> m_gpus;

@@ -115,6 +115,21 @@ int TestGroupManager::Run()
         return 1;
     }
 
+    st = TestGroupLimits();
+    if (st)
+    {
+        Nfailed++;
+        fprintf(stderr, "TestGroupManager::TestGroupLimits FAILED with %d\n", st);
+        if (st < 0)
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        printf("TestGroupManager::TestGroupLimits PASSED\n");
+    }
+
     return 0;
 }
 
@@ -361,7 +376,7 @@ int TestGroupManager::TestGroupGetAllGrpIds()
 {
     int st, retSt = 0;
     unsigned int groupId;
-    unsigned int max_groups, index;
+    unsigned int index;
     unsigned int groupIdList[DCGM_MAX_NUM_GROUPS];
     unsigned int count;
 
@@ -372,8 +387,7 @@ int TestGroupManager::TestGroupGetAllGrpIds()
     }
     std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
 
-
-    max_groups = 10;
+    unsigned int max_groups = 10;
     for (index = 0; index < max_groups; index++)
     {
         st = pDcgmGrpManager->AddNewGroup(0, "Test", DCGM_GROUP_EMPTY, &groupId);
@@ -496,3 +510,68 @@ void TestGroupManager::GetConfig(TestDcgmModuleConfig &config)
 }
 
 /*************************************************************************/
+
+#define CHECK(x, fmt, ...)                                                        \
+    do                                                                            \
+    {                                                                             \
+        if (!(x))                                                                 \
+        {                                                                         \
+            fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #x); \
+            fprintf(stderr, fmt __VA_OPT__(, ) __VA_ARGS__);                      \
+            return -1;                                                            \
+        }                                                                         \
+    } while (0)
+
+/*************************************************************************/
+
+int TestGroupManager::TestGroupLimits()
+{
+    int st, retSt = 0;
+    unsigned int groupId;
+    unsigned int index;
+    unsigned int groupIdList[DCGM_MAX_NUM_GROUPS];
+    unsigned int count;
+
+    std::unique_ptr<DcgmCacheManager> cacheManager = GetCacheManagerInstance();
+    CHECK(cacheManager != nullptr, "expected cacheManager != nullptr\n");
+
+    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+    CHECK(pDcgmGrpManager != nullptr, "expected pDcgmGrpManager != nullptr\n");
+
+    /* Verify default groups */
+    retSt = pDcgmGrpManager->GetAllGroupIds(0, groupIdList, &count);
+    CHECK(retSt == 0, "expected st %d, got %d\n", 0, retSt);
+    CHECK(count == 2, "expected default group count %d, got %d\n", 2, count);
+
+    /* Test group maximum */
+
+    for (index = 2; index < DCGM_MAX_NUM_GROUPS; index++)
+    {
+        st = pDcgmGrpManager->AddNewGroup(0, "Test", DCGM_GROUP_EMPTY, &groupId);
+        CHECK(st == DCGM_ST_OK, "expected AddNewGroup[%d] st %d, got %d\n", index, DCGM_ST_OK, st);
+    }
+
+    retSt = pDcgmGrpManager->GetAllGroupIds(0, groupIdList, &count);
+    CHECK(retSt == 0, "expected GetAllGroupIds st %d, got %d\n", 0, retSt);
+    CHECK(count == 64, "expected count %d, got %d\n", 64, count);
+
+    for (index = 2; index < DCGM_MAX_NUM_GROUPS; index++)
+    {
+        std::vector<dcgmGroupEntityPair_t> entities {};
+        st = pDcgmGrpManager->GetGroupEntities(index, entities);
+        CHECK(st == DCGM_ST_OK, "Unable to retrieve entities for groupId %d", index);
+        CHECK(entities.size() == 0, "Got %ld entities for groupId %d, expected %d\n", entities.size(), index, 0);
+        std::string groupName = pDcgmGrpManager->GetGroupName(DCGM_CONNECTION_ID_NONE, index);
+        CHECK(groupName == std::string_view("Test"),
+              "Got groupName \"%s\" for groupId %d, expected \"Test\"",
+              groupName.c_str(),
+              index);
+    }
+
+    st = pDcgmGrpManager->AddNewGroup(0, "Test", DCGM_GROUP_EMPTY, &groupId);
+    CHECK(st == DCGM_ST_MAX_LIMIT, "expected AddNewGroup() st %d, got %d\n", DCGM_ST_MAX_LIMIT, st);
+
+    retSt = pDcgmGrpManager->RemoveAllGroupsForConnection(0);
+    CHECK(retSt == 0, "expected RemoveAllGroupsForConnection st %d, got %d\n", 0, retSt);
+    return 0;
+}

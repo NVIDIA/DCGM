@@ -43,6 +43,7 @@ ConstantPower::ConstantPower(dcgmHandle_t handle)
     , m_hostB(nullptr)
     , m_hostC(nullptr)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
+    , m_dcgmRecorderPtr(&m_dcgmRecorder, [](DcgmRecorderBase *) {})
 {
     m_infoStruct.testIndex        = DCGM_TARGETED_POWER_INDEX;
     m_infoStruct.shortDescription = "This plugin will keep the list of GPUs at a constant power level.";
@@ -210,7 +211,7 @@ bool ConstantPower::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
 }
 
 /*************************************************************************/
-int ConstantPower::CudaInit()
+int ConstantPower::CudaInit(mallocFunc mallocImpl)
 {
     using namespace Dcgm;
     int count, valueSize;
@@ -240,9 +241,9 @@ int ConstantPower::CudaInit()
     arrayByteSize = valueSize * m_maxMatrixDim * m_maxMatrixDim;
     arrayNelem    = m_maxMatrixDim * m_maxMatrixDim;
 
-    m_hostA = malloc(arrayByteSize);
-    m_hostB = malloc(arrayByteSize);
-    m_hostC = malloc(arrayByteSize);
+    m_hostA = mallocImpl(arrayByteSize);
+    m_hostB = mallocImpl(arrayByteSize);
+    m_hostC = mallocImpl(arrayByteSize);
     if (!m_hostA || !m_hostB || !m_hostC)
     {
         log_error("Error allocating {} bytes x 3 on the host (malloc)", (int)arrayByteSize);
@@ -469,7 +470,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
     fsr.startTime       = startTime;
     fsr.endTime         = earliestStopTime;
 
-    dcgmReturn_t ret = m_dcgmRecorder.GetFieldSummary(fsr);
+    dcgmReturn_t ret = m_dcgmRecorderPtr->GetFieldSummary(fsr);
 
     if (ret != DCGM_ST_OK)
     {
@@ -504,7 +505,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_TARGET_POWER, d, maxVal, TP_STR_TARGET_POWER_MIN_RATIO, minRatioTarget, device->gpuId);
 
-            std::string utilNote = m_dcgmRecorder.GetGpuUtilizationNote(device->gpuId, startTime);
+            std::string utilNote = m_dcgmRecorderPtr->GetGpuUtilizationNote(device->gpuId, startTime);
             if (utilNote.empty() == false)
             {
                 d.AddDetail(utilNote);

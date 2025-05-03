@@ -17,6 +17,8 @@
 #include <catch2/catch_all.hpp>
 
 #include <DcgmStringHelpers.h>
+#include <DiagResponseUtils.h>
+#include <PluginStrings.h>
 #include <UniquePtrUtil.h>
 #include <dcgm_errors.h>
 
@@ -28,14 +30,14 @@ TEST_CASE("DcgmDiagResponseWrapper: HasTest")
     SECTION("Unsupported version")
     {
         DcgmDiagResponseWrapper ddr;
-        dcgmDiagResponse_v11 dr11 {};
+        auto dr12Uptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto &dr12    = *dr12Uptr;
 
-        dr11.numTests           = 1;
+        dr12.numTests           = 1;
         std::string const capoo = "capoo";
-        SafeCopyTo(dr11.tests[0].name, capoo.c_str());
+        SafeCopyTo(dr12.tests[0].name, capoo.c_str());
 
-        REQUIRE(ddr.SetVersion11(&dr11) == DCGM_ST_OK);
-
+        REQUIRE(ddr.SetVersion(&dr12) == DCGM_ST_OK);
         ddr.m_version = dcgmDiagResponse_version9;
         CHECK(ddr.HasTest(capoo) == false);
         CHECK(ddr.HasTest("dogdog") == false);
@@ -44,15 +46,16 @@ TEST_CASE("DcgmDiagResponseWrapper: HasTest")
     SECTION("Basic case")
     {
         DcgmDiagResponseWrapper ddr;
-        dcgmDiagResponse_v11 dr11 {};
+        auto dr12Uptr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        auto &dr12    = *dr12Uptr;
 
-        dr11.numTests            = 2;
+        dr12.numTests            = 2;
         std::string const capoo  = "capoo";
         std::string const dogdog = "dogdog";
-        SafeCopyTo(dr11.tests[0].name, capoo.c_str());
-        SafeCopyTo(dr11.tests[1].name, dogdog.c_str());
+        SafeCopyTo(dr12.tests[0].name, capoo.c_str());
+        SafeCopyTo(dr12.tests[1].name, dogdog.c_str());
 
-        REQUIRE(ddr.SetVersion11(&dr11) == DCGM_ST_OK);
+        REQUIRE(ddr.SetVersion(&dr12) == DCGM_ST_OK);
 
         CHECK(ddr.HasTest(capoo) == true);
         CHECK(ddr.HasTest("dogdog") == true);
@@ -60,21 +63,357 @@ TEST_CASE("DcgmDiagResponseWrapper: HasTest")
     }
 }
 
-TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse")
+TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::Version Mismatch")
 {
-    SECTION("Version Mismatch")
+    SECTION("v12/v11 mismatch")
     {
         DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v11> dr11 = std::make_unique<dcgmDiagResponse_v11>();
-        dest.SetVersion11(dr11.get());
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        dest.SetVersion(destResponse.get());
 
         DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v10> dr10 = std::make_unique<dcgmDiagResponse_v10>();
-        src.SetVersion10(dr10.get());
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v11>();
+        src.SetVersion(srcResponse.get());
 
         REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_VER_MISMATCH);
     }
 
+    SECTION("v11/v10 mismatch")
+    {
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v11>();
+        dest.SetVersion(destResponse.get());
+
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v10>();
+        src.SetVersion(srcResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_VER_MISMATCH);
+    }
+}
+
+TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v12")
+{
+    SECTION("Version 12: Destination includes eud results with non-DCGM_FR_EUD_NON_ROOT_USER code")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        srcResponse->numTests        = 1;
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, EUD_PLUGIN_NAME);
+        destResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[0].numErrors       = 1;
+        destResponse->tests[0].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_TEST_FAILED;
+        destResponse->numTests                 = 1;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(destResponse->tests[0].result == DCGM_DIAG_RESULT_FAIL);
+    }
+
+    SECTION("Version 12: Category found")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        srcResponse->numTests        = 1;
+        srcResponse->numCategories   = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        destResponse->numCategories            = 2;
+        SafeCopyTo(destResponse->categories[0], SW_PLUGIN_NAME);
+        SafeCopyTo(destResponse->categories[1], PLUGIN_CATEGORY_HW);
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_PASS);
+        REQUIRE(destResponse->tests[1].categoryIndex == 1);
+        REQUIRE(destResponse->tests[1].numErrors == 0);
+    }
+
+    SECTION("Version 12: Category not found")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        srcResponse->numTests        = 1;
+        srcResponse->numCategories   = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, EUD_PLUGIN_NAME);
+        destResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[0].numErrors       = 1;
+        destResponse->tests[0].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 1;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->tests[0].result == DCGM_DIAG_RESULT_PASS);
+        REQUIRE(destResponse->tests[0].categoryIndex == 0);
+        REQUIRE(destResponse->tests[0].numErrors == 0);
+    }
+
+    SECTION("Version 12: Merge error")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result          = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->tests[0].errorIndices[0] = 0;
+        srcResponse->tests[0].errorIndices[1] = 1;
+        srcResponse->numTests                 = 1;
+        srcResponse->numErrors                = 2;
+        srcResponse->errors[0].code           = 0xc8763;
+        srcResponse->errors[1].code           = 3345678;
+        srcResponse->numCategories            = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == MEMORY_PLUGIN_NAME);
+        REQUIRE(std::string_view(destResponse->tests[1].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->numTests == 2);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->tests[1].numErrors == 2);
+        REQUIRE(destResponse->tests[1].errorIndices[0] == 0);
+        REQUIRE(destResponse->tests[1].errorIndices[1] == 1);
+        REQUIRE(destResponse->numErrors == 2);
+        REQUIRE(destResponse->errors[0].code == 0xc8763);
+        REQUIRE(destResponse->errors[0].testId == 1);
+        REQUIRE(destResponse->errors[1].code == 3345678);
+        REQUIRE(destResponse->errors[1].testId == 1);
+    }
+
+    SECTION("Version 12: Merge info")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result         = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->tests[0].infoIndices[0] = 0;
+        srcResponse->tests[0].infoIndices[1] = 1;
+        srcResponse->numTests                = 1;
+        srcResponse->numInfo                 = 2;
+        SafeCopyTo(srcResponse->info[0].msg, "Hello Capoo!");
+        SafeCopyTo(srcResponse->info[1].msg, "Hello Dogdog!");
+        srcResponse->numCategories = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == MEMORY_PLUGIN_NAME);
+        REQUIRE(std::string_view(destResponse->tests[1].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->numTests == 2);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->tests[1].numInfo == 2);
+        REQUIRE(destResponse->tests[1].infoIndices[0] == 0);
+        REQUIRE(destResponse->tests[1].infoIndices[1] == 1);
+        REQUIRE(destResponse->numInfo == 2);
+        REQUIRE(std::string_view(destResponse->info[0].msg) == "Hello Capoo!");
+        REQUIRE(destResponse->info[0].testId == 1);
+        REQUIRE(std::string_view(destResponse->info[1].msg) == "Hello Dogdog!");
+        REQUIRE(destResponse->info[1].testId == 1);
+    }
+
+    SECTION("Version 12: Merge empty results")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result           = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->tests[0].resultIndices[0] = 0;
+        srcResponse->tests[0].resultIndices[1] = 1;
+        srcResponse->numTests                  = 1;
+        srcResponse->numResults                = 2;
+        srcResponse->results[0].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
+        srcResponse->results[0].result         = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->results[1].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 1 };
+        srcResponse->results[1].result         = DCGM_DIAG_RESULT_PASS;
+        srcResponse->numCategories             = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == MEMORY_PLUGIN_NAME);
+        REQUIRE(std::string_view(destResponse->tests[1].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->numTests == 2);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->tests[1].numResults == 2);
+        REQUIRE(destResponse->tests[1].resultIndices[0] == 0);
+        REQUIRE(destResponse->tests[1].resultIndices[1] == 1);
+        REQUIRE(destResponse->numResults == 2);
+        REQUIRE(destResponse->results[0].entity.entityGroupId == DCGM_FE_GPU);
+        REQUIRE(destResponse->results[0].entity.entityId == 0);
+        REQUIRE(destResponse->results[0].testId == 1);
+        REQUIRE(destResponse->results[0].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->results[1].entity.entityGroupId == DCGM_FE_GPU);
+        REQUIRE(destResponse->results[1].entity.entityId == 1);
+        REQUIRE(destResponse->results[1].testId == 1);
+        REQUIRE(destResponse->results[1].result == DCGM_DIAG_RESULT_PASS);
+    }
+
+    SECTION("Version 12: Merge non-empty results")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result           = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->tests[0].resultIndices[0] = 0;
+        srcResponse->tests[0].resultIndices[1] = 1;
+        srcResponse->tests[0].numResults       = 2;
+        srcResponse->numTests                  = 1;
+        srcResponse->numResults                = 2;
+        srcResponse->results[0].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
+        srcResponse->results[0].result         = DCGM_DIAG_RESULT_FAIL;
+        srcResponse->results[0].testId         = 0;
+        srcResponse->results[1].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 1 };
+        srcResponse->results[1].result         = DCGM_DIAG_RESULT_PASS;
+        srcResponse->results[1].testId         = 0;
+        srcResponse->numCategories             = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result           = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors        = 1;
+        destResponse->tests[1].errorIndices[0]  = 0;
+        destResponse->errors[0].code            = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                 = 1;
+        destResponse->tests[1].resultIndices[0] = 0;
+        destResponse->tests[1].resultIndices[1] = 1;
+        destResponse->tests[1].numResults       = 2;
+        destResponse->results[0].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
+        destResponse->results[0].result         = DCGM_DIAG_RESULT_FAIL;
+        destResponse->results[0].testId         = 1;
+        destResponse->results[1].entity         = dcgmGroupEntityPair_t { .entityGroupId = DCGM_FE_GPU, .entityId = 1 };
+        destResponse->results[1].result         = DCGM_DIAG_RESULT_FAIL;
+        destResponse->results[1].testId         = 1;
+        destResponse->numResults                = 2;
+        destResponse->numTests                  = 2;
+        dest.SetVersion12(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == MEMORY_PLUGIN_NAME);
+        REQUIRE(std::string_view(destResponse->tests[1].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->numTests == 2);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->tests[1].numResults == 2);
+        REQUIRE(destResponse->tests[1].resultIndices[0] == 0);
+        REQUIRE(destResponse->tests[1].resultIndices[1] == 1);
+        REQUIRE(destResponse->numResults == 2);
+        REQUIRE(destResponse->results[0].entity.entityGroupId == DCGM_FE_GPU);
+        REQUIRE(destResponse->results[0].entity.entityId == 0);
+        REQUIRE(destResponse->results[0].result == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(destResponse->results[0].testId == 1);
+        REQUIRE(destResponse->results[1].entity.entityGroupId == DCGM_FE_GPU);
+        REQUIRE(destResponse->results[1].entity.entityId == 1);
+        REQUIRE(destResponse->results[1].result == DCGM_DIAG_RESULT_PASS);
+        REQUIRE(destResponse->results[1].testId == 1);
+    }
+
+    SECTION("Version 12: Merge aux")
+    {
+        DcgmDiagResponseWrapper src;
+        auto srcResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        SafeCopyTo(srcResponse->tests[0].name, EUD_PLUGIN_NAME);
+        srcResponse->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        SafeCopyTo(srcResponse->tests[0].auxData.data, "Hello Capoo!");
+        srcResponse->tests[0].auxData.version = dcgmDiagTestAuxData_version1;
+        srcResponse->numTests                 = 1;
+        srcResponse->numErrors                = 0;
+        srcResponse->numCategories            = 1;
+        SafeCopyTo(srcResponse->categories[0], PLUGIN_CATEGORY_HW);
+        src.SetVersion(srcResponse.get());
+
+        DcgmDiagResponseWrapper dest;
+        auto destResponse = MakeUniqueZero<dcgmDiagResponse_v12>();
+        memset(destResponse.get(), 0, sizeof(dcgmDiagResponse_v12));
+        SafeCopyTo(destResponse->tests[0].name, MEMORY_PLUGIN_NAME);
+        SafeCopyTo(destResponse->tests[1].name, EUD_PLUGIN_NAME);
+        destResponse->tests[1].result          = DCGM_DIAG_RESULT_FAIL;
+        destResponse->tests[1].numErrors       = 1;
+        destResponse->tests[1].errorIndices[0] = 0;
+        destResponse->errors[0].code           = DCGM_FR_EUD_NON_ROOT_USER;
+        destResponse->numErrors                = 1;
+        destResponse->numTests                 = 2;
+        dest.SetVersion(destResponse.get());
+
+        REQUIRE(dest.MergeEudResponse(src) == DCGM_ST_OK);
+        REQUIRE(destResponse->numTests == 2);
+        REQUIRE(std::string_view(destResponse->tests[0].name) == MEMORY_PLUGIN_NAME);
+        REQUIRE(std::string_view(destResponse->tests[1].name) == EUD_PLUGIN_NAME);
+        REQUIRE(destResponse->tests[1].result == DCGM_DIAG_RESULT_PASS);
+        REQUIRE(std::string_view(destResponse->tests[1].auxData.data) == "Hello Capoo!");
+        REQUIRE(destResponse->tests[1].auxData.version == dcgmDiagTestAuxData_version1);
+        REQUIRE(destResponse->tests[1].numErrors == 0);
+    }
+}
+
+TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v11")
+{
     SECTION("Version 11: Destination includes eud results with non-DCGM_FR_EUD_NON_ROOT_USER code")
     {
         DcgmDiagResponseWrapper src;
@@ -406,7 +745,11 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse")
         REQUIRE(dr11Dest->tests[1].auxData.version == dcgmDiagTestAuxData_version1);
         REQUIRE(dr11Dest->tests[1].numErrors == 0);
     }
+}
 
+
+TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse::v10")
+{
     SECTION("Version 10: Merge aux")
     {
         DcgmDiagResponseWrapper src;
@@ -503,176 +846,105 @@ TEST_CASE("DcgmDiagResponseWrapper::MergeEudResponse")
     }
 }
 
-TEST_CASE("DcgmDiagResponseWrapper: RecordSystemError")
+TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::RecordSystemError",
+                   "",
+                   dcgmDiagResponse_v12,
+                   dcgmDiagResponse_v11,
+                   dcgmDiagResponse_v10,
+                   dcgmDiagResponse_v9,
+                   dcgmDiagResponse_v8,
+                   dcgmDiagResponse_v7)
 {
-    SECTION("Version 11")
+    using ResponseType = TestType;
+
+    DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
     {
         DcgmDiagResponseWrapper wrapper;
 
-        std::unique_ptr<dcgmDiagResponse_v11> rv11 = std::make_unique<dcgmDiagResponse_v11>();
-        memset(rv11.get(), 0, sizeof(*rv11));
-
-        wrapper.SetVersion11(rv11.get());
+        auto response = MakeUniqueZero<ResponseType>();
+        wrapper.SetVersion(response.get());
 
         static const std::string horrible("You've Moash'ed things horribly");
 
         wrapper.RecordSystemError(horrible);
-        REQUIRE(wrapper.GetSystemErr() == horrible);
-    }
 
-    SECTION("Version 10")
-    {
-        DcgmDiagResponseWrapper wrapper;
-
-        std::unique_ptr<dcgmDiagResponse_v10> rv10 = std::make_unique<dcgmDiagResponse_v10>();
-        memset(rv10.get(), 0, sizeof(*rv10));
-
-        wrapper.SetVersion10(rv10.get());
-
-        static const std::string horrible("You've Moash'ed things horribly");
-
-        wrapper.RecordSystemError(horrible);
-        REQUIRE(rv10->systemError.msg == horrible);
-    }
-
-    SECTION("Version 9")
-    {
-        DcgmDiagResponseWrapper wrapper;
-
-        std::unique_ptr<dcgmDiagResponse_v9> rv9 = std::make_unique<dcgmDiagResponse_v9>();
-        memset(rv9.get(), 0, sizeof(*rv9));
-
-        wrapper.SetVersion9(rv9.get());
-
-        static const std::string horrible("You've Moash'ed things horribly");
-
-        wrapper.RecordSystemError(horrible);
-        REQUIRE(rv9->systemError.msg == horrible);
-    }
-
-    SECTION("Version 8")
-    {
-        DcgmDiagResponseWrapper wrapper;
-
-        std::unique_ptr<dcgmDiagResponse_v8> rv8 = std::make_unique<dcgmDiagResponse_v8>();
-        memset(rv8.get(), 0, sizeof(*rv8));
-
-        wrapper.SetVersion8(rv8.get());
-
-        static const std::string horrible("You've Moash'ed things horribly");
-
-        wrapper.RecordSystemError(horrible);
-        REQUIRE(rv8->systemError.msg == horrible);
-    }
-
-    SECTION("Version 7")
-    {
-        DcgmDiagResponseWrapper wrapper;
-
-        std::unique_ptr<dcgmDiagResponse_v7> rv7 = std::make_unique<dcgmDiagResponse_v7>();
-        memset(rv7.get(), 0, sizeof(*rv7));
-
-        wrapper.SetVersion7(rv7.get());
-
-        static const std::string horrible("You've Moash'ed things horribly");
-
-        wrapper.RecordSystemError(horrible);
-        REQUIRE(rv7->systemError.msg == horrible);
+        if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v12>
+                      || std::is_same_v<ResponseType, dcgmDiagResponse_v11>)
+        {
+            REQUIRE(wrapper.GetSystemErr() == horrible);
+        }
+        else
+        {
+            REQUIRE(response->systemError.msg == horrible);
+        }
     }
 }
 
-TEST_CASE("DcgmDiagResponseWrapper: AdoptEudResponse")
+TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse",
+                   "",
+                   dcgmDiagResponse_v12,
+                   dcgmDiagResponse_v11,
+                   dcgmDiagResponse_v10,
+                   dcgmDiagResponse_v9,
+                   dcgmDiagResponse_v8,
+                   dcgmDiagResponse_v7)
 {
-    SECTION("Version 11")
+    using ResponseType = TestType;
+
+    DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
     {
         DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v11> destRv11 = MakeUniqueZero<dcgmDiagResponse_v11>();
-        SafeCopyTo(destRv11->dcgmVersion, "6.6.6");
-        dest.SetVersion11(destRv11.get());
+        auto destResponse = MakeUniqueZero<ResponseType>();
+
+        // Set up destination response
+        if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v7>)
+        {
+            destResponse->levelOneTestCount = 123;
+        }
+        else
+        {
+            SafeCopyTo(destResponse->dcgmVersion, "4.2.0");
+        }
+        dest.SetVersion(destResponse.get());
 
         DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v11> srcRv11 = MakeUniqueZero<dcgmDiagResponse_v11>();
-        SafeCopyTo(srcRv11->dcgmVersion, "4.0.0");
-        src.SetVersion11(srcRv11.get());
+        auto srcResponse = MakeUniqueZero<ResponseType>();
+
+        // Set up source response
+        if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v7>)
+        {
+            srcResponse->levelOneTestCount = 456;
+        }
+        else
+        {
+            SafeCopyTo(srcResponse->dcgmVersion, "4.2.0");
+        }
+
+        src.SetVersion(srcResponse.get());
 
         REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_OK);
-        REQUIRE(std::string_view(destRv11->dcgmVersion) == "4.0.0");
+
+        // Verify results
+        if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v7>)
+        {
+            REQUIRE(destResponse->levelOneTestCount == 123);
+        }
+        else
+        {
+            REQUIRE(std::string_view(destResponse->dcgmVersion) == "4.2.0");
+        }
     }
+}
 
-    SECTION("Version 10")
-    {
-        DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v10> destRv10 = MakeUniqueZero<dcgmDiagResponse_v10>();
-        SafeCopyTo(destRv10->dcgmVersion, "6.6.6");
-        dest.SetVersion10(destRv10.get());
+TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse::Version mismatch")
+{
+    DcgmDiagResponseWrapper dest;
+    auto destRv7 = MakeUniqueZero<dcgmDiagResponse_v7>();
+    dest.SetVersion(destRv7.get());
 
-        DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v10> srcRv10 = MakeUniqueZero<dcgmDiagResponse_v10>();
-        SafeCopyTo(srcRv10->dcgmVersion, "4.0.0");
-        src.SetVersion10(srcRv10.get());
+    DcgmDiagResponseWrapper src;
+    auto srcRv8 = MakeUniqueZero<dcgmDiagResponse_v8>();
+    src.SetVersion(srcRv8.get());
 
-        REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_OK);
-        REQUIRE(std::string_view(destRv10->dcgmVersion) == "4.0.0");
-    }
-
-    SECTION("Version 9")
-    {
-        DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v9> destRv9 = MakeUniqueZero<dcgmDiagResponse_v9>();
-        SafeCopyTo(destRv9->dcgmVersion, "6.6.6");
-        dest.SetVersion9(destRv9.get());
-
-        DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v9> srcRv9 = MakeUniqueZero<dcgmDiagResponse_v9>();
-        SafeCopyTo(srcRv9->dcgmVersion, "4.0.0");
-        src.SetVersion9(srcRv9.get());
-
-        REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_OK);
-        REQUIRE(std::string_view(destRv9->dcgmVersion) == "4.0.0");
-    }
-
-    SECTION("Version 8")
-    {
-        DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v8> destRv8 = MakeUniqueZero<dcgmDiagResponse_v8>();
-        SafeCopyTo(destRv8->dcgmVersion, "6.6.6");
-        dest.SetVersion8(destRv8.get());
-
-        DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v8> srcRv8 = MakeUniqueZero<dcgmDiagResponse_v8>();
-        SafeCopyTo(srcRv8->dcgmVersion, "4.0.0");
-        src.SetVersion8(srcRv8.get());
-
-        REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_OK);
-        REQUIRE(std::string_view(destRv8->dcgmVersion) == "4.0.0");
-    }
-
-    SECTION("Version 7")
-    {
-        DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v7> destRv7 = MakeUniqueZero<dcgmDiagResponse_v7>();
-        dest.SetVersion7(destRv7.get());
-        destRv7->levelOneTestCount = 123;
-
-        DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v7> srcRv7 = MakeUniqueZero<dcgmDiagResponse_v7>();
-        src.SetVersion7(srcRv7.get());
-        srcRv7->levelOneTestCount = 456;
-
-        REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_OK);
-        REQUIRE(destRv7->levelOneTestCount == 123);
-    }
-
-    SECTION("Version mismatch")
-    {
-        DcgmDiagResponseWrapper dest;
-        std::unique_ptr<dcgmDiagResponse_v7> destRv7 = MakeUniqueZero<dcgmDiagResponse_v7>();
-        dest.SetVersion7(destRv7.get());
-
-        DcgmDiagResponseWrapper src;
-        std::unique_ptr<dcgmDiagResponse_v8> srcRv8 = MakeUniqueZero<dcgmDiagResponse_v8>();
-        src.SetVersion8(srcRv8.get());
-
-        REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_VER_MISMATCH);
-    }
+    REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_VER_MISMATCH);
 }

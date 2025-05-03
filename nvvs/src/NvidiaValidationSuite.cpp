@@ -328,7 +328,9 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
                     LoggingSeverityFromString(debugLogLevel.c_str(), DcgmLoggingSeverityDebug),
                     DcgmLoggingSeverityNone);
     RouteLogToBaseLogger(SYSLOG_LOGGER);
-    DCGM_LOG_INFO << "Initialized NVVS logger";
+    log_info("Initialized NVVS logger, version: {}", DcgmNs::DcgmBuildInfo().GetVersion());
+    log_debug("Build info: {}", DcgmNs::DcgmBuildInfo().GetBuildInfoStr());
+
     logInit = true;
     {
         std::ostringstream out;
@@ -1417,7 +1419,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
                                                       "response-version",
                                                       "The version of diag response to be returned via channel-fd.",
                                                       false,
-                                                      dcgmDiagResponse_version11,
+                                                      dcgmDiagResponse_version12,
                                                       "responseVersion",
                                                       cmd);
         TCLAP::SwitchArg rerunAsRoot(

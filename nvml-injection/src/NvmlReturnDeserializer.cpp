@@ -34,6 +34,7 @@
 
 #include "NvmlLogging.h"
 #include "NvmlFuncReturn.h"
+#include "NvmlInjectionUtil.h"
 
 namespace {
 
@@ -3975,7 +3976,9 @@ nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto clusterUuid = node["clusterUuid"].as<std::string>();
-        std::memcpy(&gpuFabricInfo->clusterUuid, clusterUuid.data(), sizeof(gpuFabricInfo->clusterUuid));
+        NvmlInjectionUuid uuid;
+        NvmlUuidParse(clusterUuid, uuid);
+        std::memcpy(&gpuFabricInfo->clusterUuid, uuid, sizeof(gpuFabricInfo->clusterUuid));
     }
     else
     {
@@ -4033,7 +4036,9 @@ nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto clusterUuid = node["clusterUuid"].as<std::string>();
-        std::memcpy(&gpuFabricInfoV->clusterUuid, clusterUuid.data(), sizeof(gpuFabricInfoV->clusterUuid));
+        NvmlInjectionUuid uuid;
+        NvmlUuidParse(clusterUuid, uuid);
+        std::memcpy(&gpuFabricInfoV->clusterUuid, uuid, sizeof(gpuFabricInfoV->clusterUuid));
     }
     else
     {
@@ -8030,6 +8035,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         {"GpuFabricInfo", GpuFabricInfoParser},
         // The following snippet is generated from try_to_write_device_handler
         {"GpuFabricInfoV", GpuFabricInfoVParser},
+        // The following snippet is generated from try_to_write_device_handler
+        {"SramEccErrorStatus", EccSramErrorStatusParser},
         // The following snippet is generated from try_to_write_device_handler
         {"AccountingMode", BasicTypeParser<int, nvmlEnableState_t>},
         // The following snippet is generated from try_to_write_device_handler

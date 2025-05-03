@@ -53,6 +53,16 @@ dcgmReturn_t DcgmRecorderBase::GetCurrentFieldValue(unsigned int, unsigned short
     return DCGM_ST_NOT_SUPPORTED;
 }
 
+dcgmReturn_t DcgmRecorderBase::GetFieldSummary(dcgmFieldSummaryRequest_t &)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+std::string DcgmRecorderBase::GetGpuUtilizationNote(unsigned int, timelib64_t)
+{
+    return "";
+}
+
 DcgmRecorder::DcgmRecorder()
     : m_fieldIds()
     , m_gpuIds()

@@ -103,7 +103,7 @@ void RetrieveCustomStats(char const *testName, dcgmDiagCustomStats_t *customStat
     }
 }
 
-void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v2 *entityResults, void *userData)
 {
     auto *memtestp = static_cast<MemtestPlugin *>(userData);
     memtestp->GetResults(testName, entityResults);

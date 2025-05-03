@@ -71,9 +71,30 @@ std::string const &PluginLibTest::GetTestCategory() const
     return m_testCategory;
 }
 
-dcgmDiagEntityResults_v1 const &PluginLibTest::GetEntityResults() const
+template <typename EntityResultsType>
+    requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+             || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+EntityResultsType const &PluginLibTest::GetEntityResults() /* const */
 {
-    return m_entityResult;
+    if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>)
+    {
+        return m_entityResult;
+    }
+    else if constexpr (std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>)
+    {
+        // Copy data from m_entityResult (v2) to m_entityResults (v1)
+        m_entityResultV1.numResults = m_entityResult.numResults;
+        m_entityResultV1.numErrors  = m_entityResult.numErrors;
+        m_entityResultV1.numInfo    = std::min({ static_cast<size_t>(std::size(m_entityResultV1.info)),
+                                                 static_cast<size_t>(std::size(m_entityResult.info)),
+                                                 static_cast<size_t>(m_entityResult.numInfo) });
+        std::copy_n(m_entityResult.results, m_entityResultV1.numResults, m_entityResultV1.results);
+        std::copy_n(m_entityResult.errors, m_entityResultV1.numErrors, m_entityResultV1.errors);
+        std::copy_n(m_entityResult.info, m_entityResultV1.numInfo, m_entityResultV1.info);
+
+        // Note: This approach will drop info messages that don't fit in v1's smaller array without logging
+        return m_entityResultV1;
+    }
 }
 
 std::optional<std::any> const &PluginLibTest::GetAuxData() const
@@ -124,7 +145,7 @@ void PluginLibTest::AddCustomStats(dcgmDiagCustomStats_t const &customStats)
 void PluginLibTest::AddInfo(dcgmDiagInfo_v1 const &info)
 {
     m_info.push_back(info);
-    if (m_entityResult.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+    if (m_entityResult.numInfo >= std::size(m_entityResult.info))
     {
         log_error("Too many info: skip the following: [{}].", info.msg);
     }
@@ -202,7 +223,7 @@ void PluginLibTest::AddError(dcgmDiagErrorDetail_v2 const &err)
     }
 }
 
-void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v1 const &entityResult)
+void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entityResult)
 {
     log_debug("Called; errors = {}, info = {}, results = {}",
               entityResult.numErrors,
@@ -225,7 +246,7 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v1 const &entity
 
     for (unsigned int i = 0; i < entityResult.numInfo; ++i)
     {
-        if (m_entityResult.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX)
+        if (m_entityResult.numInfo >= std::size(m_entityResult.info))
         {
             log_error("Too many info, skipping the following: entity group: [{}], entity id: [{}], info: [{}].",
                       entityResult.info[i].entity.entityGroupId,
@@ -298,3 +319,7 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v1 const &entity
                     entityResult.auxData.version);
     }
 }
+
+// Explicit template instantiations
+template dcgmDiagEntityResults_v2 const &PluginLibTest::GetEntityResults() /* const */;
+template dcgmDiagEntityResults_v1 const &PluginLibTest::GetEntityResults() /* const */;

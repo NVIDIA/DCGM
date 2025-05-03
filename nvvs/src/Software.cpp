@@ -92,6 +92,7 @@ const std::string SW_SUBTEST_PERMS("Permissions and OS Blocks");
 const std::string SW_SUBTEST_PERSISTENCE("Persistence Mode");
 const std::string SW_SUBTEST_ENV("Environment Variables");
 const std::string SW_SUBTEST_PAGE_RETIREMENT("Page Retirement/Row Remap");
+const std::string SW_SUBTEST_SRAM_THRESHOLD("SRAM Threshold Count");
 const std::string SW_SUBTEST_GRAPHICS("Graphics Processes");
 const std::string SW_SUBTEST_INFOROM("Inforom");
 const std::string SW_SUBTEST_FABRIC_MANAGER("Fabric Manager");
@@ -180,6 +181,8 @@ void Software::Go(std::string const &testName,
     }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "env_variables")
         checkForBadEnvVaribles();
+    else if (testParameters.GetString(SW_STR_DO_TEST) == "sram_threshold")
+        checkForSramThreshold();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "graphics_processes")
         checkForGraphicsProcesses();
     else if (testParameters.GetString(SW_STR_DO_TEST) == "page_retirement")
@@ -499,6 +502,59 @@ bool Software::findLib(std::string library, std::string &error)
     }
     dlclose(handle);
     return true;
+}
+
+int Software::checkForSramThreshold()
+{
+    unsigned int flags = DCGM_FV_FLAG_LIVE_DATA;
+    dcgmFieldValue_v2 thresholdExceeded;
+
+    setSubtestName(SW_SUBTEST_SRAM_THRESHOLD);
+
+    auto const &gpuList = m_tests.at(GetSoftwareTestName()).GetGpuList();
+
+    for (auto const gpuId : gpuList)
+    {
+        dcgmReturn_t ret
+            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_THRESHOLD_SRM, thresholdExceeded, flags);
+
+        if (ret != DCGM_ST_OK)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "sram_threshold", gpuId);
+            addError(d);
+            SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+            continue;
+        }
+
+        if (thresholdExceeded.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(thresholdExceeded.value.i64))
+        {
+            std::stringstream buf;
+            buf << "Error getting the SRAM Threshold Count for GPU " << gpuId
+                << ". Status = " << thresholdExceeded.status << ".";
+
+            if (thresholdExceeded.status == DCGM_ST_OK)
+            {
+                buf << " Value = " << thresholdExceeded.value.i64 << ".";
+            }
+
+            buf << " SRAM Threshold checking was skipped.";
+
+            std::string info(buf.str());
+            DCGM_LOG_WARNING << info;
+            AddInfoVerbose(GetSoftwareTestName(), info);
+            continue;
+        }
+        else if (thresholdExceeded.value.i64 != 0)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SRAM_THRESHOLD, d, gpuId, thresholdExceeded.value.i64);
+            addError(d);
+            SetResult(GetSoftwareTestName(), NVVS_RESULT_WARN);
+        }
+    }
+
+    return 0;
 }
 
 int Software::checkForGraphicsProcesses()

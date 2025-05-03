@@ -30,7 +30,9 @@
 namespace
 {
 
-inline void AddSystemErrorV11(dcgmDiagResponse_v11 &response, std::string const &msg, unsigned int code)
+
+template <typename DiagResponseType>
+inline void AddSystemError(DiagResponseType &response, std::string const &msg, unsigned int code)
 {
     if (response.numErrors >= std::min(static_cast<unsigned int>(DCGM_DIAG_RESPONSE_ERRORS_MAX),
                                        static_cast<unsigned int>(std::size(response.errors))))
@@ -49,8 +51,8 @@ bool ForAllGpus(dcgmGroupEntityPair_t const &entity)
 {
     return entity.entityGroupId == DCGM_FE_NONE && entity.entityId == 0;
 }
-
 template <typename T>
+    requires requires(T t) { t.levelOneResults; }
 void PopulateDefaultLevelOne(T &diagResponse)
 {
     diagResponse.levelOneTestCount = 0;
@@ -61,6 +63,7 @@ void PopulateDefaultLevelOne(T &diagResponse)
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v9> || std::is_same_v<T, dcgmDiagResponse_v10>
 void PopulateDefaultPerGpuResponseForV9AndV10(T &diagResponse, unsigned int testCount)
 {
     for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
@@ -84,6 +87,7 @@ void PopulateDefaultPerGpuResponseForV9AndV10(T &diagResponse, unsigned int test
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v7> || std::is_same_v<T, dcgmDiagResponse_v8>
 void PopulateDefaultPerGpuResponseForV7AndV8(T &diagResponse, unsigned int testCount)
 {
     for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
@@ -105,66 +109,8 @@ void PopulateDefaultPerGpuResponseForV7AndV8(T &diagResponse, unsigned int testC
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v11> || std::is_same_v<T, dcgmDiagResponse_v12>
 void PopulateEntities(std::vector<std::unique_ptr<EntitySet>> const &entitySets, T &diagResponse)
-{
-    char const *fakeGpuUuid  = "GPU-00000000-0000-0000-0000-000000000000";
-    diagResponse.gpuCount    = 0;
-    diagResponse.numEntities = 0;
-    for (auto const &entitySet : entitySets)
-    {
-        unsigned gpuObjIdx = 0;
-
-        for (auto const entityId : entitySet->GetEntityIds())
-        {
-            if (diagResponse.numEntities >= sizeof(diagResponse.entities) / sizeof(diagResponse.entities[0]))
-            {
-                log_error("Too many entities are indicated.");
-                throw std::runtime_error("Too many entities are indicated.");
-            }
-
-            diagResponse.entities[diagResponse.numEntities].entity.entityId      = entityId;
-            diagResponse.entities[diagResponse.numEntities].entity.entityGroupId = entitySet->GetEntityGroup();
-
-            if (entitySet->GetEntityGroup() == DCGM_FE_GPU)
-            {
-                auto const *gpuSet  = ToGpuSet(entitySet.get());
-                auto const &gpuObjs = gpuSet->GetGpuObjs();
-                diagResponse.gpuCount += 1;
-
-                if (!gpuObjs.empty() && diagResponse.driverVersion[0] == '\0')
-                {
-                    SafeCopyTo(diagResponse.driverVersion, gpuObjs[0]->GetDriverVersion().c_str());
-                }
-
-                SafeCopyTo(diagResponse.entities[diagResponse.numEntities].skuDeviceId,
-                           gpuObjs[gpuObjIdx]->getDevicePciDeviceId().c_str());
-                if (gpuObjs[gpuObjIdx]->getDeviceGpuUuid() == fakeGpuUuid)
-                {
-                    std::string const fakeSerial = fmt::format(
-                        "fake_serial_{}", diagResponse.entities[diagResponse.numEntities].entity.entityId);
-                    SafeCopyTo(diagResponse.entities[diagResponse.numEntities].serialNum, fakeSerial.c_str());
-                }
-                else
-                {
-                    SafeCopyTo(diagResponse.entities[diagResponse.numEntities].serialNum,
-                               gpuObjs[gpuObjIdx]->getDeviceSerial().c_str());
-                }
-                gpuObjIdx += 1;
-            }
-            else
-            {
-                SafeCopyTo(diagResponse.entities[diagResponse.numEntities].skuDeviceId, "");
-                SafeCopyTo(diagResponse.entities[diagResponse.numEntities].serialNum, DCGM_STR_BLANK);
-            }
-
-            diagResponse.numEntities += 1;
-        }
-    }
-}
-
-template <>
-void PopulateEntities<dcgmDiagResponse_v11>(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
-                                            dcgmDiagResponse_v11 &diagResponse)
 {
     char const *fakeGpuUuid  = "GPU-00000000-0000-0000-0000-000000000000";
     diagResponse.numEntities = 0;
@@ -265,6 +211,11 @@ void PopulateDevIdsAndSerials(std::vector<std::unique_ptr<EntitySet>> const &ent
 
 template <>
 void PopulateDevIdsAndSerials(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
+                              dcgmDiagResponse_v12 &diagResponse)
+    = delete;
+
+template <>
+void PopulateDevIdsAndSerials(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
                               dcgmDiagResponse_v11 &diagResponse)
     = delete;
 
@@ -346,13 +297,14 @@ unsigned int GetSwTestResultIndex(std::string_view const testName)
     return DCGM_SWTEST_COUNT;
 }
 
-dcgmDiagResult_t GetOverallResult(dcgmDiagEntityResults_v1 const &entityResults)
+dcgmDiagResult_t GetOverallResult(dcgmDiagEntityResults_v2 const &entityResults)
 {
     return GetOverallDiagResult(entityResults);
 }
 
 template <typename T>
-dcgmReturn_t SetSoftwareTestResult(dcgmDiagEntityResults_v1 const &entityResults, T &diagResponse)
+    requires std::is_same_v<T, dcgmDiagResponse_v11> || std::is_same_v<T, dcgmDiagResponse_v12>
+dcgmReturn_t SetSoftwareTestResult(dcgmDiagEntityResults_v2 const &entityResults, T &diagResponse)
 {
     unsigned const testIdx = diagResponse.numTests;
     char const swName[]    = "software";
@@ -386,8 +338,8 @@ dcgmReturn_t SetSoftwareTestResult(dcgmDiagEntityResults_v1 const &entityResults
                                           static_cast<unsigned int>(entityResults.numInfo));
          ++i)
     {
-        if (diagResponse.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX
-            || diagResponse.tests[testIdx].numInfo >= DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX)
+        if (diagResponse.numInfo >= std::size(diagResponse.info)
+            || diagResponse.tests[testIdx].numInfo >= std::size(diagResponse.tests[testIdx].infoIndices))
         {
             log_error("Too many info: cannot add more, this info [{}] is skipped.", entityResults.info[i].msg);
             break;
@@ -482,9 +434,10 @@ dcgmReturn_t SetSoftwareTestResult(dcgmDiagEntityResults_v1 const &entityResults
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v9> || std::is_same_v<T, dcgmDiagResponse_v10>
 dcgmReturn_t SetLevelOneResultForV9AndV10(std::string_view testName,
                                           nvvsPluginResult_enum overallResult,
-                                          dcgmDiagEntityResults_v1 const &entityResults,
+                                          dcgmDiagEntityResults_v2 const &entityResults,
                                           T &diagResponse)
 {
     unsigned levelOneIdx = GetSwTestResultIndex(testName);
@@ -512,7 +465,9 @@ dcgmReturn_t SetLevelOneResultForV9AndV10(std::string_view testName,
         diagResponse.levelOneResults[levelOneIdx].error[i].category = entityResults.errors[i].category;
         diagResponse.levelOneResults[levelOneIdx].error[i].severity = entityResults.errors[i].severity;
     }
-    for (int i = 0; i < std::min(DCGM_DIAG_MAX_INFO, static_cast<int>(entityResults.numInfo)); ++i)
+    for (int i = 0;
+         i < std::min(static_cast<int>(std::size(entityResults.info)), static_cast<int>(entityResults.numInfo));
+         ++i)
     {
         if (i == 0)
         {
@@ -529,9 +484,10 @@ dcgmReturn_t SetLevelOneResultForV9AndV10(std::string_view testName,
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v7> || std::is_same_v<T, dcgmDiagResponse_v8>
 dcgmReturn_t SetLevelOneResultForV7AndV8(std::string_view testName,
                                          nvvsPluginResult_enum overallResult,
-                                         dcgmDiagEntityResults_v1 const &entityResults,
+                                         dcgmDiagEntityResults_v2 const &entityResults,
                                          T &diagResponse)
 {
     unsigned levelOneIdx = GetSwTestResultIndex(testName);
@@ -549,7 +505,9 @@ dcgmReturn_t SetLevelOneResultForV7AndV8(std::string_view testName,
         SafeCopyTo(diagResponse.levelOneResults[levelOneIdx].error.msg, entityResults.errors[i].msg);
         diagResponse.levelOneResults[levelOneIdx].error.code = entityResults.errors[i].code;
     }
-    for (int i = 0; i < std::min(DCGM_DIAG_MAX_INFO, static_cast<int>(entityResults.numInfo)); ++i)
+    for (int i = 0;
+         i < std::min(static_cast<int>(std::size(entityResults.info)), static_cast<int>(entityResults.numInfo));
+         ++i)
     {
         if (i == 0)
         {
@@ -566,11 +524,12 @@ dcgmReturn_t SetLevelOneResultForV7AndV8(std::string_view testName,
 }
 
 template <typename T>
-dcgmReturn_t SetTestResult(std::string_view pluginName,
-                           std::string_view testName,
-                           dcgmDiagEntityResults_v1 const &entityResults,
-                           std::optional<std::any> const &pluginSpecificData,
-                           T &diagResponse)
+    requires std::is_same_v<T, dcgmDiagResponse_v11> || std::is_same_v<T, dcgmDiagResponse_v12>
+dcgmReturn_t SetTestResultForV11AndV12(std::string_view pluginName,
+                                       std::string_view testName,
+                                       dcgmDiagEntityResults_v2 const &entityResults,
+                                       std::optional<std::any> const &pluginSpecificData,
+                                       T &diagResponse)
 {
     if (diagResponse.numTests >= DCGM_DIAG_RESPONSE_TESTS_MAX)
     {
@@ -607,12 +566,13 @@ dcgmReturn_t SetTestResult(std::string_view pluginName,
                                           static_cast<unsigned int>(entityResults.numInfo));
          ++i)
     {
-        if (diagResponse.numInfo >= DCGM_DIAG_RESPONSE_INFO_MAX
-            || diagResponse.tests[targetTest].numInfo >= DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX)
+        if (diagResponse.numInfo >= std::size(diagResponse.info)
+            || diagResponse.tests[targetTest].numInfo >= std::size(diagResponse.tests[targetTest].infoIndices))
         {
             log_error("Too many info: cannot add '{}'.", entityResults.info[i].msg);
             break;
         }
+
         diagResponse.info[diagResponse.numInfo]        = entityResults.info[i];
         diagResponse.info[diagResponse.numInfo].testId = targetTest;
         diagResponse.tests[targetTest].infoIndices[i]  = diagResponse.numInfo;
@@ -625,8 +585,8 @@ dcgmReturn_t SetTestResult(std::string_view pluginName,
                                           static_cast<unsigned int>(entityResults.numResults));
          ++i)
     {
-        if (diagResponse.numResults >= DCGM_DIAG_RESPONSE_RESULTS_MAX
-            || diagResponse.tests[targetTest].numResults >= DCGM_DIAG_TEST_RUN_RESULTS_MAX)
+        if (diagResponse.numResults >= std::size(diagResponse.results)
+            || diagResponse.tests[targetTest].numResults >= std::size(diagResponse.tests[targetTest].resultIndices))
         {
             log_error(
                 "Too many entity results: cannot add more, the result [{}] of the entity id [{}] with group [{}] is skipped.",
@@ -665,9 +625,10 @@ dcgmReturn_t SetTestResult(std::string_view pluginName,
 }
 
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v10> || std::is_same_v<T, dcgmDiagResponse_v9>
 dcgmReturn_t SetTestResultForV9AndV10(std::string_view testName,
                                       std::unordered_set<unsigned int> const &gpuIds,
-                                      dcgmDiagEntityResults_v1 const &entityResults,
+                                      dcgmDiagEntityResults_v2 const &entityResults,
                                       T &diagResponse)
 {
     if (testName == "cpu_eud")
@@ -768,46 +729,11 @@ dcgmReturn_t SetTestResultForV9AndV10(std::string_view testName,
     return DCGM_ST_OK;
 }
 
-void SetAuxFieldLegacy(std::string_view testName,
-                       std::optional<std::any> const &pluginSpecificData,
-                       dcgmDiagResponse_v10 &diagResponse)
-{
-    auto const testIdx = GetTestIndex(std::string(testName));
-    if (testIdx == DCGM_UNKNOWN_INDEX)
-    {
-        log_error("Unable to set aux field, no known index for test \"{}\"", testName);
-        return;
-    }
-
-    if (testIdx >= std::size(diagResponse.auxDataPerTest))
-    {
-        log_error("Unable to set aux field, invalid index {} for test", testIdx);
-        return;
-    }
-
-    if (pluginSpecificData)
-    {
-        try
-        {
-            auto auxData = std::any_cast<Json::Value>(*pluginSpecificData);
-            Json::StreamWriterBuilder builder;
-            builder["indentation"] = "";
-            std::string const aux  = Json::writeString(builder, auxData);
-
-            diagResponse.auxDataPerTest[testIdx].version = dcgmDiagTestAuxData_version1;
-            SafeCopyTo(diagResponse.auxDataPerTest[testIdx].data, aux.c_str());
-        }
-        catch (std::bad_any_cast const &e)
-        {
-            log_debug("Failed to cast plugin specific data to json: {}", e.what());
-        }
-    }
-}
-
 template <typename T>
+    requires std::is_same_v<T, dcgmDiagResponse_v7> || std::is_same_v<T, dcgmDiagResponse_v8>
 dcgmReturn_t SetTestResultForV7AndV8(std::string_view testName,
                                      std::unordered_set<unsigned int> const &gpuIds,
-                                     dcgmDiagEntityResults_v1 const &entityResults,
+                                     dcgmDiagEntityResults_v2 const &entityResults,
                                      unsigned int testCount,
                                      T &diagResponse)
 {
@@ -892,6 +818,43 @@ dcgmReturn_t SetTestResultForV7AndV8(std::string_view testName,
     }
     return DCGM_ST_OK;
 }
+
+void SetAuxFieldLegacy(std::string_view testName,
+                       std::optional<std::any> const &pluginSpecificData,
+                       dcgmDiagResponse_v10 &diagResponse)
+{
+    auto const testIdx = GetTestIndex(std::string(testName));
+    if (testIdx == DCGM_UNKNOWN_INDEX)
+    {
+        log_error("Unable to set aux field, no known index for test \"{}\"", testName);
+        return;
+    }
+
+    if (testIdx >= std::size(diagResponse.auxDataPerTest))
+    {
+        log_error("Unable to set aux field, invalid index {} for test", testIdx);
+        return;
+    }
+
+    if (pluginSpecificData)
+    {
+        try
+        {
+            auto auxData = std::any_cast<Json::Value>(*pluginSpecificData);
+            Json::StreamWriterBuilder builder;
+            builder["indentation"] = "";
+            std::string const aux  = Json::writeString(builder, auxData);
+
+            diagResponse.auxDataPerTest[testIdx].version = dcgmDiagTestAuxData_version1;
+            SafeCopyTo(diagResponse.auxDataPerTest[testIdx].data, aux.c_str());
+        }
+        catch (std::bad_any_cast const &e)
+        {
+            log_debug("Failed to cast plugin specific data to json: {}", e.what());
+        }
+    }
+}
+
 
 template <typename T>
 dcgmReturn_t SetTestSkipped(std::string_view pluginName, std::string_view testName, T &diagResponse)
@@ -994,6 +957,14 @@ dcgmReturn_t DcgmNvvsResponseWrapper::SetVersion(unsigned int version)
     {
         switch (version)
         {
+            case dcgmDiagResponse_version12:
+            {
+                m_response   = std::make_unique<dcgmDiagResponse_v12>();
+                auto &rawV12 = Response<dcgmDiagResponse_v12>();
+                memset(&rawV12, 0, sizeof(rawV12));
+                rawV12.version = dcgmDiagResponse_version12;
+                break;
+            }
             case dcgmDiagResponse_version11:
             {
                 m_response   = std::make_unique<dcgmDiagResponse_v11>();
@@ -1058,6 +1029,7 @@ bool DcgmNvvsResponseWrapper::PopulateDefault(std::vector<std::unique_ptr<Entity
 {
     if (!IsVersionSet())
     {
+        log_error("Version is not set, unable to populate default values");
         return false;
     }
 
@@ -1074,6 +1046,9 @@ std::span<char const> DcgmNvvsResponseWrapper::RawBinaryBlob() const
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v12>()),
+                     sizeof(dcgmDiagResponse_v12) };
         case dcgmDiagResponse_version11:
             return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v11>()),
                      sizeof(dcgmDiagResponse_v11) };
@@ -1100,6 +1075,10 @@ void DcgmNvvsResponseWrapper::PopulateDcgmVersion()
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            SafeCopyTo(Response<dcgmDiagResponse_v12>().dcgmVersion,
+                       std::string(DcgmNs::DcgmBuildInfo().GetVersion()).c_str());
+            return;
         case dcgmDiagResponse_version11:
             SafeCopyTo(Response<dcgmDiagResponse_v11>().dcgmVersion,
                        std::string(DcgmNs::DcgmBuildInfo().GetVersion()).c_str());
@@ -1130,8 +1109,14 @@ void DcgmNvvsResponseWrapper::PopulateDefaultTestRun()
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            for (unsigned int i = 0; i < std::size(Response<dcgmDiagResponse_v12>().tests); ++i)
+            {
+                Response<dcgmDiagResponse_v12>().tests[i].result = DCGM_DIAG_RESULT_NOT_RUN;
+            }
+            return;
         case dcgmDiagResponse_version11:
-            for (unsigned int i = 0; i < DCGM_DIAG_RESPONSE_TESTS_MAX; ++i)
+            for (unsigned int i = 0; i < std::size(Response<dcgmDiagResponse_v11>().tests); ++i)
             {
                 Response<dcgmDiagResponse_v11>().tests[i].result = DCGM_DIAG_RESULT_NOT_RUN;
             }
@@ -1150,10 +1135,12 @@ void DcgmNvvsResponseWrapper::PopulateDefaultTestRun()
 
 dcgmReturn_t DcgmNvvsResponseWrapper::SetSoftwareTestResult(std::string_view testName,
                                                             nvvsPluginResult_enum overallResult,
-                                                            dcgmDiagEntityResults_v1 const &entityResults)
+                                                            dcgmDiagEntityResults_v2 const &entityResults)
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return ::SetSoftwareTestResult(entityResults, Response<dcgmDiagResponse_v12>());
         case dcgmDiagResponse_version11:
             return ::SetSoftwareTestResult(entityResults, Response<dcgmDiagResponse_v11>());
         case dcgmDiagResponse_version10:
@@ -1179,6 +1166,9 @@ void DcgmNvvsResponseWrapper::IncreaseNumTests()
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            Response<dcgmDiagResponse_v12>().numTests += 1;
+            return;
         case dcgmDiagResponse_version11:
             Response<dcgmDiagResponse_v11>().numTests += 1;
             return;
@@ -1197,14 +1187,25 @@ void DcgmNvvsResponseWrapper::IncreaseNumTests()
 
 dcgmReturn_t DcgmNvvsResponseWrapper::SetTestResult(std::string_view pluginName,
                                                     std::string_view testName,
-                                                    dcgmDiagEntityResults_v1 const &entityResults,
+                                                    dcgmDiagEntityResults_v2 const &entityResults,
                                                     std::optional<std::any> const &pluginSpecificData)
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+        {
+            if (auto ret = ::SetTestResultForV11AndV12(
+                    pluginName, testName, entityResults, pluginSpecificData, Response<dcgmDiagResponse_v12>());
+                ret != DCGM_ST_OK)
+            {
+                return ret;
+            }
+            Response<dcgmDiagResponse_v12>().numTests += 1;
+            return DCGM_ST_OK;
+        }
         case dcgmDiagResponse_version11:
         {
-            if (auto ret = ::SetTestResult(
+            if (auto ret = ::SetTestResultForV11AndV12(
                     pluginName, testName, entityResults, pluginSpecificData, Response<dcgmDiagResponse_v11>());
                 ret != DCGM_ST_OK)
             {
@@ -1248,6 +1249,9 @@ void DcgmNvvsResponseWrapper::PopulateEntities(std::vector<std::unique_ptr<Entit
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            ::PopulateEntities(entitySets, Response<dcgmDiagResponse_v12>());
+            break;
         case dcgmDiagResponse_version11:
             ::PopulateEntities(entitySets, Response<dcgmDiagResponse_v11>());
             break;
@@ -1276,6 +1280,9 @@ void DcgmNvvsResponseWrapper::PopulateDriverVersion(std::vector<std::unique_ptr<
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            ::PopulateDriverVersion(entitySets, Response<dcgmDiagResponse_v12>());
+            break;
         case dcgmDiagResponse_version11:
             ::PopulateDriverVersion(entitySets, Response<dcgmDiagResponse_v11>());
             break;
@@ -1302,6 +1309,7 @@ void DcgmNvvsResponseWrapper::PopulateDefaultLevelOne()
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
         case dcgmDiagResponse_version11:
             // version11 should be no-op
             break;
@@ -1328,6 +1336,7 @@ void DcgmNvvsResponseWrapper::PopulateDefaultPerGpuResponse()
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
         case dcgmDiagResponse_version11:
             // version11 is no-op
             break;
@@ -1354,6 +1363,8 @@ dcgmReturn_t DcgmNvvsResponseWrapper::SetTestSkipped(std::string_view pluginName
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return ::SetTestSkipped(pluginName, testName, Response<dcgmDiagResponse_v12>());
         case dcgmDiagResponse_version11:
             return ::SetTestSkipped(pluginName, testName, Response<dcgmDiagResponse_v11>());
         case dcgmDiagResponse_version10:
@@ -1379,6 +1390,8 @@ bool DcgmNvvsResponseWrapper::TestSlotsFull() const
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return ConstResponse<dcgmDiagResponse_v12>().numTests >= DCGM_DIAG_RESPONSE_TESTS_MAX;
         case dcgmDiagResponse_version11:
             return ConstResponse<dcgmDiagResponse_v11>().numTests >= DCGM_DIAG_RESPONSE_TESTS_MAX;
         case dcgmDiagResponse_version10:
@@ -1399,8 +1412,11 @@ void DcgmNvvsResponseWrapper::SetSystemError(std::string const &msg, unsigned in
     {
         switch (m_version)
         {
+            case dcgmDiagResponse_version12:
+                ::AddSystemError(Response<dcgmDiagResponse_v12>(), msg, code);
+                break;
             case dcgmDiagResponse_version11:
-                AddSystemErrorV11(Response<dcgmDiagResponse_v11>(), msg, code);
+                ::AddSystemError(Response<dcgmDiagResponse_v11>(), msg, code);
                 break;
             case dcgmDiagResponse_version10:
                 SafeCopyTo(Response<dcgmDiagResponse_v10>().systemError.msg, msg.c_str());
@@ -1436,6 +1452,8 @@ dcgmReturn_t DcgmNvvsResponseWrapper::AddTestCategory(std::string_view testName,
 {
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+            return ::AddTestCategory(testName, category, Response<dcgmDiagResponse_v12>());
         case dcgmDiagResponse_version11:
             return ::AddTestCategory(testName, category, Response<dcgmDiagResponse_v11>());
         case dcgmDiagResponse_version10:
@@ -1468,6 +1486,18 @@ void DcgmNvvsResponseWrapper::Print() const
 
     switch (m_version)
     {
+        case dcgmDiagResponse_version12:
+        {
+            auto const &resp = ConstResponse<dcgmDiagResponse_v12>();
+            fmt::print("[{}] test(s) ran.\n\n", resp.numTests);
+            for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(std::size(resp.tests)),
+                                                  static_cast<unsigned int>(resp.numTests));
+                 ++i)
+            {
+                fmt::print("{}: [{}]\n", resp.tests[i].name, resp.tests[i].result);
+            }
+            return;
+        }
         case dcgmDiagResponse_version11:
         {
             auto const &resp = ConstResponse<dcgmDiagResponse_v11>();

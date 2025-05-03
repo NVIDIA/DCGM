@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from dcgm_json import DcgmJson
+import dcgm_agent
+import dcgm_structs
 import test_utils
 import json
 
@@ -46,3 +48,11 @@ def helper_test_dcgm_json(handle):
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_json_standalone(handle, gpuIds):
     helper_test_dcgm_json(handle)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_chip_architecture(handle, gpuIds):
+    for gpuId in gpuIds:
+        chip_architecture = dcgm_agent.dcgmGetGpuChipArchitecture(handle, gpuId)
+        assert chip_architecture != dcgm_structs.DCGM_CHIP_ARCH_UNKNOWN, \
+            f"GPU {gpuId} returned unknown chip architecture"

@@ -151,7 +151,7 @@ void InstallSigHandlers()
     SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGTERM, Term, handle_signal_during_diag);
 }
 
-std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v11 const &diagResponse)
+std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12 const &diagResponse)
 {
     dcgmDiagTestAuxData_v1 const *auxData = nullptr;
 
@@ -196,12 +196,12 @@ std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiag
  *****************************************************************************/
 RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd)
     : m_handle(handle)
-    , m_response(std::make_unique<dcgmDiagResponse_v11>())
+    , m_response(std::make_unique<dcgmDiagResponse_v12>())
     , m_result(DCGM_ST_OK)
 {
     memcpy(&m_drd, &drd, sizeof(m_drd));
     memset(m_response.get(), 0, sizeof(*m_response));
-    m_response->version = dcgmDiagResponse_version11;
+    m_response->version = dcgmDiagResponse_version12;
 }
 
 void RemoteDiagExecutor::run()
@@ -214,7 +214,7 @@ dcgmReturn_t RemoteDiagExecutor::GetResult() const
     return m_result;
 }
 
-dcgmDiagResponse_v11 const &RemoteDiagExecutor::GetResponse() const
+dcgmDiagResponse_v12 const &RemoteDiagExecutor::GetResponse() const
 {
     return *(m_response);
 }
@@ -252,7 +252,7 @@ void Diag::setJsonOutput(bool jsonOutput)
 
 /* Retrieve failure results from all software tests and tests targeting GPUs, tests giving precedence to ISOLATE errors.
  * Current and past implementations do not inspect system errors. */
-dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v11 &response)
+dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v12 &response)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
 
@@ -282,7 +282,8 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v11 &response)
         for (auto const &error : errors)
         {
             if ((swTestCatIdx != DCGM_DIAG_RESPONSE_CATEGORIES_MAX && test.categoryIndex == swTestCatIdx)
-                || error.entity.entityGroupId == DCGM_FE_GPU)
+                || error.entity.entityGroupId == DCGM_FE_GPU
+                || (error.entity.entityGroupId == DCGM_FE_NONE && error.code != 0))
             {
                 if (dcgmErrorGetPriorityByCode(error.code) == DCGM_ERROR_ISOLATE)
                 {
@@ -335,13 +336,13 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v11 &response)
     return ret;
 }
 
-void Diag::InitializeDiagResponse(dcgmDiagResponse_v11 &response)
+void Diag::InitializeDiagResponse(dcgmDiagResponse_v12 &response)
 {
     memset(&response, 0, sizeof(response));
-    response.version = dcgmDiagResponse_version11;
+    response.version = dcgmDiagResponse_version12;
 }
 
-static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v11 const &response)
+static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v12 const &response)
 {
     std::stringstream errMsg;
     char const *delim = "";
@@ -368,8 +369,8 @@ static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v11 c
 /*******************************************************************************/
 dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 {
-    std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
-    dcgmDiagResponse_v11 &response                     = *(responseUptr.get());
+    std::unique_ptr<dcgmDiagResponse_v12> responseUptr = std::make_unique<dcgmDiagResponse_v12>();
+    dcgmDiagResponse_v12 &response                     = *(responseUptr.get());
     dcgmReturn_t result                                = DCGM_ST_OK;
     std::vector<std::string> gpuStrList;
 
@@ -431,16 +432,31 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     else if (result != DCGM_ST_OK)
     {
         std::stringstream errMsg;
-        if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
+        if (std::strlen(m_drd.fakeGpuList) != 0)
         {
-            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
-                   << ". Return: (" << std::to_underlying(result) << ") " << std::endl
-                   << *systemErrors;
+            errMsg << "Error: Unable to complete diagnostic for fake GPUs " << m_drd.fakeGpuList << ". ";
+        }
+        else if (m_drd.groupId == DCGM_GROUP_NULL)
+        {
+            if (m_drd.entityIds[0] != '\0')
+            {
+                errMsg << "Error: Unable to complete diagnostic for entities " << m_drd.entityIds << ". ";
+            }
+            else
+            {
+                errMsg << "Error: Unable to complete diagnostic. ";
+            }
         }
         else
         {
             errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
-                   << ". Return: (" << std::to_underlying(result) << ") " << errorString(result) << ".";
+                   << ". ";
+        }
+        errMsg << "Return: (" << std::to_underlying(result) << ") " << "\n";
+
+        if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
+        {
+            errMsg << *systemErrors;
         }
 
         if (result == DCGM_ST_TIMEOUT)
@@ -467,7 +483,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 
     if (m_jsonOutput)
     {
-        if (response.version == dcgmDiagResponse_version11)
+        if (response.version == dcgmDiagResponse_version12)
         {
             result = HelperDisplayAsJson(response);
         }
@@ -479,7 +495,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     }
     else
     {
-        if (response.version == dcgmDiagResponse_version11)
+        if (response.version == dcgmDiagResponse_version12)
         {
             result = HelperDisplayAsCli(response);
         }
@@ -499,7 +515,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 }
 
 /*******************************************************************************/
-dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v11 &response)
+dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12 &response)
 {
     std::unique_ptr<RemoteDiagExecutor> rde = std::make_unique<RemoteDiagExecutor>(handle, m_drd);
     dcgmReturn_t result                     = DCGM_ST_OK;
@@ -620,7 +636,7 @@ void Diag::HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t r
 /**
  * Main method driving CLI output rendering.
  */
-dcgmReturn_t Diag::HelperDisplayAsCli(dcgmDiagResponse_v11 const &response)
+dcgmReturn_t Diag::HelperDisplayAsCli(dcgmDiagResponse_v12 const &response)
 {
     std::cout << "Successfully ran diagnostic for group." << std::endl;
     std::cout << DIAG_HEADER;
@@ -642,7 +658,7 @@ dcgmReturn_t Diag::HelperDisplayAsCli(dcgmDiagResponse_v11 const &response)
     return DCGM_ST_OK;
 }
 
-void Diag::HelperDisplayMetadata(dcgmDiagResponse_v11 const &response) const
+void Diag::HelperDisplayMetadata(dcgmDiagResponse_v12 const &response) const
 {
     std::cout << DIAG_INFO;
     HelperDisplayVersionAndDevIds(response);
@@ -654,7 +670,7 @@ void Diag::HelperDisplayMetadata(dcgmDiagResponse_v11 const &response) const
  * Render CLI output for DCGM and driver versions, as well as produce the list of entities.
  */
 
-void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v11 const &response) const
+void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v12 const &response) const
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -703,7 +719,7 @@ void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v11 const &response) c
     }
 }
 
-void Diag::HelperDisplayCpuInfo(dcgmDiagResponse_v11 const &response) const
+void Diag::HelperDisplayCpuInfo(dcgmDiagResponse_v12 const &response) const
 {
     unsigned int const maxEntities = std::min(static_cast<unsigned int>(response.numEntities),
                                               static_cast<unsigned int>(std::size(response.entities)));
@@ -729,7 +745,7 @@ void Diag::HelperDisplayCpuInfo(dcgmDiagResponse_v11 const &response) const
     cmdView.display();
 }
 
-void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v11 const &response) const
+void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) const
 {
     CommandOutputController cmdView = CommandOutputController();
 
@@ -757,7 +773,7 @@ void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v11 const &response) co
  */
 void Diag::HelperDisplayCategory(std::string_view categoryName,
                                  std::string_view categoryText,
-                                 dcgmDiagResponse_v11 const &response)
+                                 dcgmDiagResponse_v12 const &response)
 
 {
     auto const allTests = std::span(
@@ -886,8 +902,8 @@ void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::strin
 
 /** Display overall result and any global errors that are present. */
 void Diag::HelperDisplayGlobalResult(CommandOutputController &view,
-                                     dcgmDiagResponse_v11 const &response,
-                                     dcgmDiagTestRun_v1 const &test,
+                                     dcgmDiagResponse_v12 const &response,
+                                     dcgmDiagTestRun_v2 const &test,
                                      bool verbose)
 {
     constexpr auto isGlobalEntity = [](dcgmGroupEntityPair_t const &entity) -> bool {
@@ -941,8 +957,8 @@ void Diag::HelperDisplayGlobalResult(CommandOutputController &view,
  * Display each result for each kind of entity that is present.
  */
 void Diag::HelperDisplayEntityResults(CommandOutputController &view,
-                                      dcgmDiagResponse_v11 const &response,
-                                      dcgmDiagTestRun_v1 const &test,
+                                      dcgmDiagResponse_v12 const &response,
+                                      dcgmDiagTestRun_v2 const &test,
                                       bool verbose)
 {
     // Iterate the results for this test only ...
@@ -1022,8 +1038,8 @@ void Diag::HelperDisplayEntityResults(CommandOutputController &view,
 /**
  * Adds `result` to `testEntry` and returns true, or returns false if this gpu didn't run the test.
  */
-bool Diag::HelperJsonAddResult(dcgmDiagResponse_v11 const &response,
-                               dcgmDiagTestRun_v1 const &test,
+bool Diag::HelperJsonAddResult(dcgmDiagResponse_v12 const &response,
+                               dcgmDiagTestRun_v2 const &test,
                                dcgmDiagEntityResult_v1 const &result,
                                Json::Value &resultEntry)
 {
@@ -1113,7 +1129,7 @@ void Diag::HelperJsonAddCategory(Json::Value &output, Json::Value &category)
  * Produce a JSON object at root `output` documenting all entities within all
  * entity groups found in `response`.
  */
-void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v11 const &response)
+void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v12 const &response)
 {
     for (unsigned int entityGroup = DCGM_FE_GPU; entityGroup < DCGM_FE_COUNT; entityGroup++)
     {
@@ -1147,7 +1163,7 @@ void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v11 const
     }
 }
 
-void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v11 const &response)
+void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const &response)
 {
     auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
     if (gpuEudVersion.has_value())
@@ -1178,8 +1194,8 @@ void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v11 const
  */
 void Diag::HelperJsonAddTestSummary(Json::Value &category,
                                     unsigned int const testIndex,
-                                    dcgmDiagTestRun_v1 const &test,
-                                    dcgmDiagResponse_v11 const &response)
+                                    dcgmDiagTestRun_v2 const &test,
+                                    dcgmDiagResponse_v12 const &response)
 {
     /* Use a constructed result to capture overall results. */
     dcgmDiagEntityResult_v1 overallResult = { .entity = { DCGM_FE_NONE, 0 }, .result = test.result, .testId = 0 };
@@ -1194,7 +1210,7 @@ void Diag::HelperJsonAddTestSummary(Json::Value &category,
 /**
  * Produce a JSON object at root `output` from the specified `response`.
  */
-void Diag::HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v11 const &response)
+void Diag::HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v12 const &response)
 {
     HelperJsonAddEntities(output, response);
     HelperJsonAddMetadata(output, response);
@@ -1250,7 +1266,7 @@ void Diag::HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v11 const
  * Displays `response` as JSON instead of CLI-formatted output.
  * Accrues output in `m_jsonTmpValue` across multiple iterations when specified.
  */
-dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_v11 const &response)
+dcgmReturn_t Diag::HelperDisplayAsJson(dcgmDiagResponse_v12 const &response)
 {
     Json::Value output;
     dcgmReturn_t result = DCGM_ST_OK;

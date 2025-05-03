@@ -26,7 +26,7 @@
 // See function description at bottom of file.
 int displayFieldValue(unsigned int gpuId, dcgmFieldValue_v1 *values, int numValues, void *userData);
 
-bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v11 const &response, std::string &msg)
+bool ReceivedIncompatibleMigConfigurationMessage(dcgmDiagResponse_v12 const &response, std::string &msg)
 {
     // Check for errors not specific to any entity group
     for (auto const &error :
@@ -351,11 +351,11 @@ int main(int /* argc */, char const ** /* argv */)
         // thorough diagnostic would be preferred, but this is just an example.
         std::cout << "Running diagnostic.\n";
 
-        std::unique_ptr<dcgmDiagResponse_v11> diagnosticResponse = std::make_unique<dcgmDiagResponse_v11>();
+        std::unique_ptr<dcgmDiagResponse_v12> diagnosticResponse = std::make_unique<dcgmDiagResponse_v12>();
         memset(diagnosticResponse.get(), 0, sizeof(*diagnosticResponse));
 
         // Update version
-        diagnosticResponse->version = dcgmDiagResponse_version11;
+        diagnosticResponse->version = dcgmDiagResponse_version12;
         result = dcgmRunDiagnostic(dcgmHandle, myGroupId, DCGM_DIAG_LVL_SHORT, diagnosticResponse.get());
 
         // Check result to see if DCGM operation was successful.

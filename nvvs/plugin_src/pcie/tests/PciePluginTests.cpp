@@ -17,6 +17,7 @@
 #include <PcieMain.h>
 
 #include "dcgm_fields.h"
+#include <UniquePtrUtil.h>
 #include <catch2/catch_all.hpp>
 #include <sstream>
 #include <string_view>
@@ -88,9 +89,7 @@ TEST_CASE("Pcie: pcie_check_nvlink_status_expected")
     entityInfo->entities[0].entity.entityGroupId            = DCGM_FE_GPU;
     entityInfo->entities[1].entity.entityId                 = 2;
     entityInfo->entities[1].entity.entityGroupId            = DCGM_FE_GPU;
-    std::unique_ptr<dcgmDiagEntityResults_v1> entityResults = std::make_unique<dcgmDiagEntityResults_v1>();
-    memset(entityResults.get(), 0, sizeof(*entityResults));
-
+    auto entityResults                                      = MakeUniqueZero<dcgmDiagEntityResults_v2>();
 
     BusGrind bg1 = BusGrind(handle);
     bg1.InitializeForEntityList(bg1.GetPcieTestName(), *entityInfo);
@@ -170,8 +169,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
 {
     dcgmHandle_t handle = {};
 
-    std::unique_ptr<dcgmDiagEntityResults_v1> entityResults = std::make_unique<dcgmDiagEntityResults_v1>();
-    memset(entityResults.get(), 0, sizeof(*entityResults));
+    auto entityResults                                      = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityInfo = std::make_unique<dcgmDiagPluginEntityList_v1>();
     BusGrind bg(handle);
     entityInfo->numEntities                      = 1;
@@ -272,7 +270,7 @@ dcgmReturn_t dcgmGroupAddDevice(dcgmHandle_t, dcgmGpuGrp_t, unsigned int)
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t, int, unsigned short *, const char *, dcgmFieldGrp_t *groupId)
+dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t, int, const unsigned short *, const char *, dcgmFieldGrp_t *groupId)
 {
     *groupId = 1;
     return globalFieldGroupCreateError;

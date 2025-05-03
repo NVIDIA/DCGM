@@ -23,10 +23,10 @@
 #include <bitset>
 #include <chrono>
 #include <iostream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <thread>
-
 
 /* No. of iterations corresponding to different sample set of vgpuIds */
 #define NUM_VGPU_LISTS             5
@@ -914,58 +914,51 @@ int TestCacheManager::TestWatchesVisited()
     std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
     if (nullptr == cacheManager)
     {
+        fmt::print(stderr, "Failed to create cache manager\n");
         return -1;
     }
 
-    int st, retSt = 0, i, j;
+    constexpr timelib64_t watchFreq = 30000000; /* 30 seconds */
+    constexpr double maxSampleAge   = 3600;
+    constexpr int maxKeepSamples    = 0;
+    constexpr int numVgpus          = 3; /* Number of VGPUs to create per GPU */
+
+    int retSt = 0;
     std::vector<unsigned short> validFieldIds;
     std::bitset<DCGM_FI_MAX_FIELDS>
-        fieldIdIsGlobal;              /* 1/0 of if each entry in validFieldIds is global (1) or not (0) */
-    timelib64_t watchFreq = 30000000; /* 30 seconds */
-    double maxSampleAge   = 3600;
-    int maxKeepSamples    = 0;
-    dcgmcm_watch_info_t watchInfo;
-    dcgm_field_meta_p fieldMeta;
-    dcgm_field_entity_group_t fieldEntityGroup;
-    std::vector<nvmlVgpuInstance_t> vgpuIds;
-    std::vector<nvmlVgpuInstance_t>::iterator vgpuIt;
-    int numVgpus = 3; /* Number of VGPUs to create per GPU */
-    unsigned int fakeGpuId;
+        fieldIdIsGlobal; /* 1/0 of if each entry in validFieldIds is global (1) or not (0) */
+
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
 
     if (m_gpus.size() < 1)
     {
         fprintf(stderr, "Can't watch TestWatchesVisited() without live GPUs.\n");
-        retSt = 100;
-        goto CLEANUP;
+        return 100;
     }
 
-    fakeGpuId = cacheManager->AddFakeGpu();
+    auto fakeGpuId = cacheManager->AddFakeGpu();
     if (fakeGpuId == DCGM_GPU_ID_BAD)
     {
         if (m_gpus.size() >= DCGM_MAX_NUM_DEVICES)
         {
             printf("Skipping TestWatchesVisited() due to having no space for a fake GPU.\n");
-            retSt = 0;
-            goto CLEANUP;
+            return 0;
         }
 
         fprintf(stderr, "Unable to add fake GPU\n");
-        retSt = -1;
-        goto CLEANUP;
+        return -1;
     }
 
     cacheManager->GetValidFieldIds(validFieldIds, false);
 
     /* Mark each field as global or not */
-    for (i = 0; i < (int)validFieldIds.size(); i++)
+    for (auto fieldId : validFieldIds)
     {
-        fieldMeta = DcgmFieldGetById(validFieldIds[i]);
+        auto fieldMeta = DcgmFieldGetById(fieldId);
         if (!fieldMeta)
         {
-            fprintf(stderr, "FieldId %u had no metadata.\n", validFieldIds[i]);
-            retSt = -1;
-            goto CLEANUP;
+            fprintf(stderr, "FieldId %u had no metadata.\n", fieldId);
+            return -1;
         }
 
         if (fieldMeta->scope == DCGM_FS_GLOBAL)
@@ -977,29 +970,28 @@ int TestCacheManager::TestWatchesVisited()
 
     /* Watch all valid fields on all GPUs. We're going to check to make sure that they
      * were visited by the watch code */
-    for (i = 0; i < (int)m_gpus.size(); i++)
+    for (auto gpuId : m_gpus)
     {
-        vgpuIds = gpuIdToVgpuList(m_gpus[i], numVgpus);
+        auto vgpuIds = gpuIdToVgpuList(gpuId, numVgpus);
 
-        st = cacheManager->ManageVgpuList(m_gpus[i], (unsigned int *)&vgpuIds[0]);
+        int st = cacheManager->ManageVgpuList(gpuId, (unsigned int *)&vgpuIds[0]);
         if (st)
         {
             fprintf(stderr, "cacheManager->ManageVgpuList failed with %d", (int)st);
-            retSt = -1;
-            goto CLEANUP;
+            return -1;
         }
 
         bool updateOnFirstWatch = false; /* we call UpdateFields() right after the loop */
         bool wereFirstWatcher   = false;
 
-        for (j = 0; j < (int)validFieldIds.size(); j++)
+        for (int j = 0; j < (int)validFieldIds.size(); j++)
         {
-            fieldEntityGroup = DCGM_FE_GPU;
+            auto fieldEntityGroup = DCGM_FE_GPU;
             if (fieldIdIsGlobal[validFieldIds[j]])
                 fieldEntityGroup = DCGM_FE_NONE;
 
             st = cacheManager->AddFieldWatch(fieldEntityGroup,
-                                             m_gpus[i],
+                                             gpuId,
                                              validFieldIds[j],
                                              watchFreq,
                                              maxSampleAge,
@@ -1018,8 +1010,7 @@ int TestCacheManager::TestWatchesVisited()
             if (st) /* Purposely leaving as if rather than else if in case both of above aren't true */
             {
                 fprintf(stderr, "cacheManager->AddFieldWatch() returned %d for field %hu\n", st, validFieldIds[j]);
-                retSt = -1;
-                goto CLEANUP;
+                return -1;
             }
 
             /* Don't do VGPU watches for global fields */
@@ -1028,9 +1019,8 @@ int TestCacheManager::TestWatchesVisited()
 
             fieldEntityGroup = DCGM_FE_VGPU;
 
-
             /* Add a watch on every GPU field for every VGPU */
-            for (vgpuIt = vgpuIds.begin() + 1; vgpuIt != vgpuIds.end(); ++vgpuIt)
+            for (auto vgpuIt = vgpuIds.begin() + 1; vgpuIt != vgpuIds.end(); ++vgpuIt)
             {
                 st = cacheManager->AddFieldWatch(fieldEntityGroup,
                                                  *vgpuIt,
@@ -1045,8 +1035,7 @@ int TestCacheManager::TestWatchesVisited()
                 if (st)
                 {
                     fprintf(stderr, "cacheManager->AddFieldWatch() returned %d\n", st);
-                    retSt = -1;
-                    goto CLEANUP;
+                    return -1;
                 }
             }
         }
@@ -1056,32 +1045,33 @@ int TestCacheManager::TestWatchesVisited()
     cacheManager->UpdateAllFields(1);
 
     /* Verify that all fields of all GPUs were visited */
-    for (i = 0; i < (int)m_gpus.size(); i++)
+    for (auto const gpuId : m_gpus)
     {
-        for (j = 0; j < (int)validFieldIds.size(); j++)
+        dcgmcm_watch_info_t watchInfo {};
+
+        for (auto const fieldId : validFieldIds)
         {
-            fieldEntityGroup = DCGM_FE_GPU;
-            if (fieldIdIsGlobal[validFieldIds[j]])
+            auto fieldEntityGroup = DCGM_FE_GPU;
+            if (fieldIdIsGlobal[fieldId])
                 fieldEntityGroup = DCGM_FE_NONE;
 
-            st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, m_gpus[i], validFieldIds[j], &watchInfo);
+            int st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, gpuId, fieldId, &watchInfo);
             if (st)
             {
                 fprintf(stderr, "cacheManager->GetEntityWatchInfoSnapshot() returned %d\n", st);
-                retSt = 200;
-                goto CLEANUP;
+                return 200;
             }
 
             if (!watchInfo.isWatched)
             {
-                fprintf(stderr, "gpuId %u, fieldId %u was not watched.\n", m_gpus[i], validFieldIds[j]);
+                fprintf(stderr, "gpuId %u, fieldId %u was not watched.\n", gpuId, fieldId);
                 retSt = 300;
                 continue;
             }
 
             if (!watchInfo.lastQueriedUsec)
             {
-                fprintf(stderr, "gpuId %u, fieldId %u has never updated.\n", m_gpus[i], validFieldIds[j]);
+                fprintf(stderr, "gpuId %u, fieldId %u has never updated.\n", gpuId, fieldId);
                 retSt = 400;
                 continue;
             }
@@ -1090,37 +1080,26 @@ int TestCacheManager::TestWatchesVisited()
             if (fieldEntityGroup == DCGM_FE_NONE)
                 continue;
             fieldEntityGroup = DCGM_FE_VGPU;
-            vgpuIds          = gpuIdToVgpuList(m_gpus[i], numVgpus);
 
-            /* Add a watch on every GPU field for every VGPU */
-            for (vgpuIt = vgpuIds.begin() + 1; vgpuIt != vgpuIds.end(); ++vgpuIt)
+            for (auto const vgpuId : gpuIdToVgpuList(gpuId, numVgpus) | std::views::drop(1))
             {
-                st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, *vgpuIt, validFieldIds[j], &watchInfo);
+                st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, vgpuId, fieldId, &watchInfo);
                 if (st)
                 {
                     fprintf(stderr, "cacheManager->GetEntityWatchInfoSnapshot() returned %d\n", st);
-                    retSt = 500;
-                    goto CLEANUP;
+                    return 500;
                 }
 
                 if (!watchInfo.isWatched)
                 {
-                    fprintf(stderr,
-                            "gpuId %u, vgpu %u, fieldId %u was not watched.\n",
-                            m_gpus[i],
-                            *vgpuIt,
-                            validFieldIds[j]);
+                    fprintf(stderr, "gpuId %u, vgpu %u, fieldId %u was not watched.\n", gpuId, vgpuId, fieldId);
                     retSt = 600;
                     continue;
                 }
 
                 if (!watchInfo.lastQueriedUsec)
                 {
-                    fprintf(stderr,
-                            "gpuId %u, vgpu %u, fieldId %u has never updated.\n",
-                            m_gpus[i],
-                            *vgpuIt,
-                            validFieldIds[j]);
+                    fprintf(stderr, "gpuId %u, vgpu %u, fieldId %u has never updated.\n", gpuId, vgpuId, fieldId);
                     retSt = 700;
                     continue;
                 }
@@ -1128,8 +1107,6 @@ int TestCacheManager::TestWatchesVisited()
         }
     }
 
-
-CLEANUP:
     return retSt;
 }
 
@@ -2728,3 +2705,5 @@ int TestCacheManager::Run()
 }
 
 /*****************************************************************************/
+
+static_assert(sizeof(std::bitset<DCGM_FI_MAX_FIELDS>) < 10000, "Bitset is too large for stack allocation");

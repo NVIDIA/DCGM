@@ -851,6 +851,13 @@ typedef struct
 
 typedef struct
 {
+    unsigned int gpuId;          //!< IN: GPU ID to get chip architecture for
+    dcgmChipArchitecture_t data; //!< OUT: populated on success
+    unsigned int cmdRet;         //!< OUT: Error code generated
+} dcgmMsgGetGpuChipArchitecture_v1;
+
+typedef struct
+{
     dcgmMigHierarchy_v2 data; //!< OUT: populated on success
 
     unsigned int cmdRet; //!< OUT: Error code generated
@@ -958,7 +965,8 @@ DCGM_CASSERT(dcgmDiagResponse_version8 == (long)0x80d9690, 8);
 DCGM_CASSERT(dcgmDiagResponse_version9 == (long)0x914f4dc, 9);
 DCGM_CASSERT(dcgmDiagResponse_version10 == (long)0xa155abc, 10);
 DCGM_CASSERT(dcgmDiagResponse_version11 == (long)0xb155abc, 11);
-DCGM_CASSERT(dcgmDiagResponse_version == (long)0xb155abc, 11);
+DCGM_CASSERT(dcgmDiagResponse_version12 == (long)0xc155abc, 12);
+DCGM_CASSERT(dcgmDiagResponse_version == (long)0xc155abc, 12);
 DCGM_CASSERT(dcgmDiagTestAuxData_version1 == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmDiagTestAuxData_version == (long)0x1000804, 10);
 DCGM_CASSERT(dcgmRunDiag_version7 == (long)0x70054D0, 1);
@@ -981,6 +989,16 @@ DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmNvLinkStatus_version4 == (long)0x40039BC, 4);
 DCGM_CASSERT(dcgmDiagStatus_version1 == (long)0x1000090, 1);
+DCGM_CASSERT(dcgmHostengineHealth_version1 == (long)0x1000008, 1);
+DCGM_CASSERT(dcgmGroupInfo_version2 == (long)0x2000308, 2);
+DCGM_CASSERT(dcgmGroupInfo_version3 == (long)0x3002108, 3);
+DCGM_CASSERT(dcgmDeviceMigAttributesInfo_version1 == (long)0x1000038, 1);
+DCGM_CASSERT(dcgmDeviceMigAttributes_version1 == (long)0x1000040, 1);
+DCGM_CASSERT(dcgmGpuInstanceProfileInfo_version1 == (long)0x1000038, 1);
+DCGM_CASSERT(dcgmGpuInstanceProfiles_version1 == (long)0x1000040, 1);
+DCGM_CASSERT(dcgmComputeInstanceProfileInfo_version1 == (long)0x100002C, 1);
+DCGM_CASSERT(dcgmComputeInstanceProfiles_version1 == (long)0x1000034, 1);
+DCGM_CASSERT(dcgmRunningProcess_version1 == (long)0x1000010, 1);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

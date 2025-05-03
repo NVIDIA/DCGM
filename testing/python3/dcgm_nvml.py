@@ -432,6 +432,7 @@ NVML_MAX_GPC_COUNT          = 32
 NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE      = 16
 NVML_DEVICE_UUID_BUFFER_SIZE                 = 80
 NVML_DEVICE_UUID_V2_BUFFER_SIZE              = 96
+NVML_GPU_FABRIC_UUID_LEN                     = 16
 NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE       = 80
 NVML_SYSTEM_NVML_VERSION_BUFFER_SIZE         = 80
 NVML_DEVICE_NAME_BUFFER_SIZE                 = 64
@@ -728,7 +729,53 @@ NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_MAX    = 199
 
 NVML_FI_DEV_IS_MIG_MODE_INDEPENDENT_MIG_QUERY_CAPABLE   = 200
 
-NVML_FI_MAX = 223 # One greater than the largest field ID defined above
+NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS     = 219
+NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER        = 220
+NVML_FI_DEV_NVLINK_COUNT_SYMBOL_ERRORS        = 221
+NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER           = 222
+
+NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_MIN       = 223
+NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_UNITS     = 224
+NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_SUPPORTED = 225
+NVML_FI_DEV_RESET_STATUS                         = 226
+NVML_FI_DEV_DRAIN_AND_RESET_STATUS               = 227
+NVML_FI_DEV_PCIE_OUTBOUND_ATOMICS_MASK           = 228
+NVML_FI_DEV_PCIE_INBOUND_ATOMICS_MASK            = 229
+NVML_FI_DEV_GET_GPU_RECOVERY_ACTION              = 230
+NVML_FI_DEV_C2C_LINK_ERROR_INTR                  = 231
+NVML_FI_DEV_C2C_LINK_ERROR_REPLAY                = 232
+NVML_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B            = 233
+NVML_FI_DEV_C2C_LINK_POWER_STATE                 = 234
+
+# NVLINK FEC fields are available only for Blackwell.
+
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0           = 235
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1           = 236
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2           = 237
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3           = 238
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4           = 239
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5           = 240
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6           = 241
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7           = 242
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8           = 243
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9           = 244
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10          = 245
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11          = 246
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12          = 247
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13          = 248
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14          = 249
+NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15          = 250
+
+# Field values for Clock Throttle Reason Counters.
+# All counters are in nanoseconds.
+
+NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP            = NVML_FI_DEV_PERF_POLICY_POWER
+NVML_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST              = NVML_FI_DEV_PERF_POLICY_SYNC_BOOST
+NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN       = 251
+NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN       = 252
+NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN = 253
+                                                                     
+NVML_FI_MAX = 254 # One greater than the largest field ID defined above
 
 ## Enums needed for the method nvmlDeviceGetVirtualizationMode and nvmlDeviceSetVirtualizationMode
 NVML_GPU_VIRTUALIZATION_MODE_NONE        = 0  # Represents Bare Metal GPU
@@ -5369,7 +5416,7 @@ NVML_GPU_FABRIC_STATE_COMPLETED     = 3
 
 class c_nvmlGpuFabricInfo_t(_PrintableStructure):
     _fields_ = [
-        ("clusterUuid", c_char * NVML_DEVICE_UUID_BUFFER_SIZE),
+        ("clusterUuid", c_ubyte * NVML_GPU_FABRIC_UUID_LEN),
         ("status", _nvmlReturn_t),
         ("cliqueId", c_uint32),
         ("state", _nvmlGpuFabricState_t)
@@ -5380,7 +5427,7 @@ nvmlGpuFabricInfo_v2 = 0x02000024
 class c_nvmlGpuFabricInfoV_t(_PrintableStructure):
     _fields_ = [
         ("version", c_uint),
-        ("clusterUuid", c_char * NVML_DEVICE_UUID_BUFFER_SIZE),
+        ("clusterUuid", c_ubyte * NVML_GPU_FABRIC_UUID_LEN),
         ("status", _nvmlReturn_t),
         ("cliqueId", c_uint32),
         ("state", _nvmlGpuFabricState_t),

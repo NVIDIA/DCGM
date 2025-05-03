@@ -352,13 +352,13 @@ def test_dcgm_health_check_validate(handle):
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
     response.version = dcgm_structs.make_dcgm_version(response, 7)
     logger.debug("Structure version: %d" % response.version)
 
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
     runDiagInfo.version = dcgm_structs.dcgmRunDiag_version7
-    logger.debug("Structure version: %d" % runDiagInfo.version)
+    logger.debug(f"Structure version: {runDiagInfo.version:x}")
 
     runDiagInfo.version = versionTest
     response.version = versionTest
@@ -368,7 +368,7 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     return response
 
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
-    response = dcgm_structs.c_dcgmDiagResponse_v11()
+    response = dcgm_structs.c_dcgmDiagResponse_v12()
     response.version = versionTest
     
     # Put the group_id and validate into a dcgmRunDiag struct

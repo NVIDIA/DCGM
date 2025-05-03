@@ -53,7 +53,7 @@ NvvsCommon::NvvsCommon()
     , currentIteration(0)
     , totalIterations(1)
     , channelFd(-1)
-    , diagResponseVersion(dcgmDiagResponse_version11)
+    , diagResponseVersion(dcgmDiagResponse_version12)
     , rerunAsRoot(false)
     , watchFrequency(DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS)
 {}

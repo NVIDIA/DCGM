@@ -12,20 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/cuda:12.6.2-base-ubi9
+FROM nvcr.io/nvidia/cuda:12.8.0-base-ubi9
 
 LABEL io.k8s.display-name="NVIDIA DCGM"
 LABEL name="NVIDIA DCGM"
 LABEL vendor="NVIDIA"
-LABEL version="${VERSION}"
 LABEL release="N/A"
 LABEL summary="Manage NVIDIA GPUs"
 LABEL description="See summary"
 
+ARG VERSION
+LABEL version="${VERSION}"
+
 ARG DCGM_VERSION
 ARG SUB_VERSION
 
-RUN dnf clean expire-cache && dnf install -y datacenter-gpu-manager-${DCGM_VERSION} libcap
+RUN dnf clean expire-cache \
+ && dnf install --assumeyes datacenter-gpu-manager-4-cuda12-${VERSION}.$(uname -m) \
+ && dnf install --assumeyes --setopt=install_weak_deps=False libcap \
+ && dnf clean all
 
 ENV NVIDIA_VISIBLE_DEVICES=all
 # disable all constraints on the configurations required by NVIDIA container toolkit

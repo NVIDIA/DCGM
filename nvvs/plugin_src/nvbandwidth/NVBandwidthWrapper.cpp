@@ -138,7 +138,7 @@ void RetrieveCustomStats(char const * /* testName */, dcgmDiagCustomStats_t * /*
     return;
 }
 
-void RetrieveResults(char const *testName, dcgmDiagEntityResults_v1 *entityResults, void *userData)
+void RetrieveResults(char const *testName, dcgmDiagEntityResults_v2 *entityResults, void *userData)
 {
     if (testName == nullptr || userData == nullptr || entityResults == nullptr)
     {

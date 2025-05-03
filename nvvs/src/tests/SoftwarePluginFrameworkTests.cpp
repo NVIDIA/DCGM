@@ -139,7 +139,8 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
                                                    "NVML Library",
                                                    "Page Retirement/Row Remap",
                                                    "Permissions and OS-related Blocks",
-                                                   "Persistence Mode" };
+                                                   "Persistence Mode",
+                                                   "SRAM Threshold Count" };
     int i                                      = 0;
 
     for (auto &pair : testMap)
@@ -174,8 +175,10 @@ TEST_CASE("Test 2 - Init Test Name Map")
                                                    "NVML Library",
                                                    "Page Retirement/Row Remap",
                                                    "Permissions and OS-related Blocks",
-                                                   "Persistence Mode" };
-    int i                                      = 0;
+                                                   "Persistence Mode",
+                                                   "SRAM Threshold Count" };
+
+    int i = 0;
     for (auto &it : testMap)
     {
         REQUIRE(it.first == testNameVec[i]);
@@ -204,7 +207,9 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
                                                                               "NVML Library",
                                                                               "Page Retirement/Row Remap",
                                                                               "Permissions and OS-related Blocks",
-                                                                              "Persistence Mode" };
+                                                                              "Persistence Mode",
+                                                                              "SRAM Threshold Count" };
+
 
     std::vector<std::string> testNameArray;
     std::vector<std::string> tpNameArray;

@@ -39,7 +39,11 @@
 	"test_dcgm_diag_output",
 	"test_dcgmi_diag",
 	"test_dcgmi_diag_multiple_iterations",
-	"test_dcgm_pulse_test_bad_input"
+	"test_dcgm_pulse_test_bad_input",
+	"test_thermal_violations_standalone",
+	"test_silent_thermal_violations_standalone",
+	"test_nvvs_plugin_software_inforom_embedded",
+	"test_dcgm_action_stats_basics_nvbandwidth_standalone"
     ],
     "modules_to_run_independent": [
     ]

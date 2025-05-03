@@ -358,9 +358,8 @@ def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, map
             assert(foundValues == len(fieldValues))
 
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus() # Pick up existing GPUs
+@test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1)
-@test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpu_instances(1, 1)
 @test_utils.run_with_injection_gpu_compute_instances(1, 1)
 def test_dcgm_reader_wildcard_gi(handle, gpuIds, instanceIds, ciIds):
@@ -376,8 +375,12 @@ def test_dcgm_reader_wildcard_gi(handle, gpuIds, instanceIds, ciIds):
         
     for i in ciIds:
         logger.debug("Compute Instance ID: %d" % (i))
+
+    # We inject two GPUs so the offset of the second GI (and this first CI) is
+    # at least one GPU's worth of max GIs. If we injected one, and had no real
+    # GPUs, # we'd be dividing by gpuIds[0], which would be 0.
         
-    assert ciIds[0] == dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU
+    assert (ciIds[0] / gpuIds[1]) == dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU, "CIs Expected value %d, observed value: %d"% (dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU, ciIds[0] / gpuIds[1])
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_gpus(1) #Injecting compute instances only works with live ampere or injected GPUs

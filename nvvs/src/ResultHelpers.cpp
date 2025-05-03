@@ -16,7 +16,7 @@
 
 #include "ResultHelpers.h"
 
-dcgmDiagResult_t GetOverallDiagResult(dcgmDiagEntityResults_v1 const &entityResults)
+dcgmDiagResult_t GetOverallDiagResult(dcgmDiagEntityResults_v2 const &entityResults)
 {
     if (entityResults.numErrors > 0)
     {

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <DcgmError.h>
+#include <DcgmMutex.h>
 #include <DcgmRecorder.h>
 #include <DcgmUtilities.h>
 #include <Plugin.h>
@@ -29,6 +30,7 @@ namespace DcgmNs::Nvvs::Plugins::NVBandwidth
 {
 // Forward declaration
 struct NVBandwidthResult;
+
 class NVBandwidthPlugin : public Plugin
 {
 public:
@@ -45,7 +47,7 @@ public:
             unsigned int numParameters,
             dcgmDiagPluginTestParameter_t const *testParameters) override;
 
-    dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults) override;
+    dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v2 *entityResults) override;
 
     /*************************************************************************/
     /*
@@ -93,5 +95,7 @@ private:
     unsigned int m_cudaDriverMajorVersion;                     /* Cuda driver major version */
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo; // The information about each GPU
     std::string m_nvbandwidthDir;
+    std::string m_originalCudaVisibleDevices; // Store the original CUDA_VISIBLE_DEVICES value
+    DcgmMutex m_envMutex { 0 };               // Mutex for protecting environment variable operations
 };
 } //namespace DcgmNs::Nvvs::Plugins::NVBandwidth

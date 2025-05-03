@@ -1262,7 +1262,6 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlDevicePerfModes_t",
         "c_nvmlDeviceCurrentClockFreqs_t",
         "c_nvmlProcessesUtilizationInfo_t",
-        "c_nvmlEccSramErrorStatus_t",
         "c_nvmlVgpuHeterogeneousMode_t",
         "c_nvmlVgpuPlacementId_t",
         "c_nvmlVgpuPlacementList_t",
@@ -1344,19 +1343,8 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"usedGpuMemory\", c_ulonglong),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML's c_nvmlGpuFabricInfoV_t is wrong. We define correct version here.
-        print_body_line('class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):', out_file, 0)
-        print_body_line("_fields_ = [", out_file, 1)
-        print_body_line("(\"version\", c_uint),", out_file, 2)
-        print_body_line("(\"clusterUuid\", c_char * 16),", out_file, 2)
-        print_body_line("(\"status\", c_uint),", out_file, 2)
-        print_body_line("(\"cliqueId\", c_uint),", out_file, 2)
-        print_body_line("(\"state\", c_char),", out_file, 2)
-        print_body_line("(\"healthMask\", c_uint),", out_file, 2)
-        print_body_line("]\n", out_file, 1)
-
-        # PyNVML does not define c_nvmlPlatformInfo_t yet. Define separately here.
-        print_body_line('class c_nvmlPlatformInfo_t_dcgm_ver(Structure):', out_file, 0)
+        # PyNVML does not define c_nvmlPlatformInfo_v2_t. We define it here
+        print_body_line('class c_nvmlPlatformInfo_v2_t(Structure):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
         print_body_line("(\"version\", c_uint),", out_file, 2)
         print_body_line("(\"ibGuid\", c_char * 16),", out_file, 2)
@@ -1364,6 +1352,40 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"slotNumber\", c_char),", out_file, 2)
         print_body_line("(\"trayIndex\", c_char),", out_file, 2)
         print_body_line("(\"hostId\", c_char),", out_file, 2)
+        print_body_line("(\"peerType\", c_char),", out_file, 2)
+        print_body_line("(\"moduleId\", c_char),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
+        # PyNVML's c_nvmlGpuFabricInfo_t is wrong. We define correct version here.
+        print_body_line('class c_nvmlGpuFabricInfo_t_dcgm_ver(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"clusterUuid\", c_ubyte * 16),", out_file, 2)
+        print_body_line("(\"status\", c_uint),", out_file, 2)
+        print_body_line("(\"cliqueId\", c_uint32),", out_file, 2)
+        print_body_line("(\"state\", c_ubyte),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
+        # PyNVML's c_nvmlGpuFabricInfoV_t is wrong. We define correct version here.
+
+        print_body_line('class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"version\", c_uint),", out_file, 2)
+        print_body_line("(\"clusterUuid\", c_char * 16),", out_file, 2)
+        print_body_line("(\"status\", c_uint),", out_file, 2)
+        print_body_line("(\"cliqueId\", c_uint),", out_file, 2)
+        print_body_line("(\"state\", c_ubyte),", out_file, 2)
+        print_body_line("(\"healthMask\", c_uint),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
+        # PyNVML does not define c_nvmlPlatformInfo_t yet. Define separately here.
+        print_body_line('class c_nvmlPlatformInfo_v1_t(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"version\", c_uint),", out_file, 2)
+        print_body_line("(\"ibGuid\", c_char * 16),", out_file, 2)
+        print_body_line("(\"rackGuid\", c_char * 16),", out_file, 2)
+        print_body_line("(\"chassisPhysicalSlotNumber\", c_char),", out_file, 2)
+        print_body_line("(\"computeSlotIndex\", c_char),", out_file, 2)
+        print_body_line("(\"nodeIndex\", c_char),", out_file, 2)
         print_body_line("(\"peerType\", c_char),", out_file, 2)
         print_body_line("(\"moduleId\", c_char),", out_file, 2)
         print_body_line("]\n", out_file, 1)
@@ -1390,12 +1412,21 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
                 # nvmlNvLinkUtilizationControl_t in PyNVML is nvmlNvLinkUtilizationControl_t
                 # nvmlPciInfo_t in PyNVML is nvmlPciInfo_t
                 print_body_line(f"(\"{variable_name}\", {struct_name}),", out_file, 2)
+            elif struct_name == "nvmlGpuFabricInfo_t":
+                # nvmlGpuFabricInfo_t is wrong in PyNVML, use our own definition
+                print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             elif struct_name == "nvmlGpuFabricInfoV_t":
                 # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own definition
                 print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             elif struct_name == "nvmlPlatformInfo_t":
                 # nvmlPlatformInfo_t is not defined in PyNVML, add definition
-                print_body_line(f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
+                print_body_line(f"(\"{variable_name}\", c_nvmlPlatformInfo_v2_t),", out_file, 2)
+            elif struct_name == "nvmlPlatformInfo_v1_t":
+                # nvmlPlatformInfo_t is not defined in PyNVML, add definition
+                print_body_line(f"(\"{variable_name}\", c_nvmlPlatformInfo_v1_t),", out_file, 2)
+            elif struct_name == "nvmlEccSramErrorStatus_t":
+                # nvmlEccSramErrorStatus_t in PyNVML is c_nvmlEccSreamErrorStatus_v1_t
+                print_body_line(f"(\"{variable_name}\", c_nvmlEccSramErrorStatus_v1_t),", out_file, 2)
             else:
                 # other nvml structures will add c_ as prefix in PyNVML
                 # e.g. nvmlBAR1Memory_t => c_nvmlBAR1Memory_t
@@ -2488,7 +2519,12 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 # c-string
                 print_generator_source_info(out_file, 2)
                 print_body_line(f'auto {name} = node["{name}"].as<std::string>();', out_file, 1)
-                print_body_line(f'std::memcpy(&{variable_name}->{name}, {name}.data(), sizeof({variable_name}->{name}));', out_file, 1)
+                if (name == "clusterUuid") and ((struct_name == "nvmlGpuFabricInfo_t") or (struct_name == "nvmlGpuFabricInfoV_t")):
+                    print_body_line(f'NvmlInjectionUuid uuid;', out_file, 1)
+                    print_body_line(f'NvmlUuidParse({name}, uuid);', out_file, 1)
+                    print_body_line(f'std::memcpy(&{variable_name}->{name}, uuid, sizeof({variable_name}->{name}));', out_file, 1)
+                else:
+                    print_body_line(f'std::memcpy(&{variable_name}->{name}, {name}.data(), sizeof({variable_name}->{name}));', out_file, 1)
             elif "[" in member_type:
                 # custom type array
                 # for each element, we call corresponding deserializer and memcpy the result to our struct
@@ -3014,7 +3050,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         out_file.write('#include <yaml-cpp/yaml.h>\n')
         out_file.write('#include <yaml-cpp/node/node.h>\n\n')
         out_file.write('#include "NvmlLogging.h"\n')
-        out_file.write('#include "NvmlFuncReturn.h"\n\n')
+        out_file.write('#include "NvmlFuncReturn.h"\n')
+        out_file.write('#include "NvmlInjectionUtil.h"\n\n')
 
         out_file.write('namespace {\n\n')
 

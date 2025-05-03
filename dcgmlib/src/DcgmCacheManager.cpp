@@ -23,6 +23,7 @@
 #include "DcgmVgpu.hpp"
 #include "MurmurHash3.h"
 #include "dcgm_fields.h"
+#include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "nvml.h"
 #include <DcgmException.hpp>
@@ -5407,6 +5408,10 @@ bool DcgmCacheManager::IsModulePushedFieldId(unsigned int fieldId)
         case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS:
         case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
         case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER:
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS:
             return false;
         default:
             return true;
@@ -7586,6 +7591,84 @@ dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &th
 /* vGPU Index key space for gpuId */
 #define DCGMCM_START_VGPU_IDX_FOR_GPU(gpuId) ((gpuId) * DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
 #define DCGMCM_END_VGPU_IDX_FOR_GPU(gpuId)   (((gpuId) + 1) * DCGM_MAX_VGPU_INSTANCES_PER_PGPU)
+
+/**
+ * Read and cache the BER for a given field
+ *
+ * @param threadCtx The update thread context
+ * @param nvmlDevice The NVML device
+ * @param fieldId The field ID to read
+ * @param expireTime The expiration time
+ */
+dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &threadCtx,
+                                                     nvmlDevice_t const nvmlDevice,
+                                                     unsigned short const fieldId,
+                                                     timelib64_t const expireTime)
+{
+    timelib64_t now               = timelib_usecSince1970();
+    unsigned short rawNvmlFieldId = 0;
+
+    if (!m_nvmlLoaded)
+    {
+        log_error("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldId);
+        return DCGM_ST_NVML_NOT_LOADED;
+    }
+
+    switch (fieldId)
+    {
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
+            rawNvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER;
+            break;
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+            rawNvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER;
+            break;
+        default:
+            log_error("Invalid fieldId {}", fieldId);
+            return DCGM_ST_BADPARAM;
+    }
+
+    nvmlFieldValue_t fv = {};
+    fv.fieldId          = rawNvmlFieldId;
+
+    auto watchInfo = threadCtx.watchInfo;
+    auto nvmlReturn
+        = nvmlDevice == nullptr ? NVML_ERROR_INVALID_ARGUMENT : nvmlDeviceGetFieldValues(nvmlDevice, 1, &fv);
+    if (watchInfo)
+    {
+        watchInfo->lastStatus = nvmlReturn;
+    }
+    if (nvmlReturn != NVML_SUCCESS || fv.nvmlReturn != NVML_SUCCESS)
+    {
+        nvmlReturn_t nvmlErr = nvmlReturn == NVML_SUCCESS ? fv.nvmlReturn : nvmlReturn;
+        log_error("Got nvmlSt {}, nvmlRet {} from nvmlDeviceGetFieldValues for nvml fieldId {}",
+                  (int)nvmlReturn,
+                  fv.nvmlReturn,
+                  rawNvmlFieldId);
+        {
+            DcgmLockGuard lg(m_mutex);
+            AppendEntityDouble(threadCtx, NvmlErrorToDoubleValue(nvmlErr), 0, now, expireTime);
+        }
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlErr);
+    }
+
+    log_debug("Retrieved raw ber {} valueType {} nvmlReturn {} for NVML fieldId {}",
+              fv.value.ullVal,
+              fv.valueType,
+              fv.nvmlReturn,
+              rawNvmlFieldId);
+
+    // Compute the float value, details in nvbugs/5088600
+    uint64_t mantissa = NVML_NVLINK_ERROR_COUNTER_BER_GET(fv.value.ullVal, BER_MANTISSA);
+    uint64_t exponent = NVML_NVLINK_ERROR_COUNTER_BER_GET(fv.value.ullVal, BER_EXP);
+
+    double ber = mantissa * std::pow(10.0, -1.0 * static_cast<double>(exponent));
+
+    {
+        DcgmLockGuard lg(m_mutex);
+        AppendEntityDouble(threadCtx, ber, 0, timelib_usecSince1970(), expireTime);
+    }
+    return DCGM_ST_OK;
+}
 
 /*****************************************************************************/
 dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_t &threadCtx,
@@ -10839,6 +10922,32 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
              * End of memory error fields.
              */
 
+        case DCGM_FI_DEV_THRESHOLD_SRM:
+        {
+            nvmlEccSramErrorStatus_t status;
+
+            status.version = nvmlEccSramErrorStatus_v1;
+
+            nvmlReturn = (nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
+                                                 : nvmlDeviceGetSramEccErrorStatus(nvmlDevice, &status);
+
+            if (watchInfo)
+            {
+                watchInfo->lastStatus = nvmlReturn;
+            }
+
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            AppendEntityInt64(threadCtx, (long long)status.bThresholdExceeded, 0, now, expireTime);
+
+            break;
+        }
+
         case DCGM_FI_DEV_RETIRED_SBE:
         {
             nvmlPageRetirementCause_t cause = NVML_PAGE_RETIREMENT_CAUSE_MULTIPLE_SINGLE_BIT_ECC_ERRORS;
@@ -11948,6 +12057,18 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
             break;
         }
+        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+            /*
+             * These fields are not available in NVML.
+             * We need to read the raw value and convert it to a float.
+             */
+            ret = ReadAndCacheNvLinkBer(threadCtx, nvmlDevice, fieldMeta->fieldId, expireTime);
+            if (ret != DCGM_ST_OK)
+            {
+                return ret;
+            }
+            break;
         default:
             log_warning("Unimplemented fieldId: {}", (int)fieldMeta->fieldId);
             return DCGM_ST_GENERIC_ERROR;

@@ -34,18 +34,16 @@ Brokenp2p::Brokenp2p(BusGrind *bg, std::vector<PluginDevice *> &gpus, size_t siz
     }
 }
 
-#define CHECKRT(call)                                                                                         \
-    do                                                                                                        \
-    {                                                                                                         \
-        cudaError_t _status = call;                                                                           \
-        if (_status != cudaSuccess)                                                                           \
-        {                                                                                                     \
-            std::stringstream buf;                                                                            \
-            buf << "Error on line " << __LINE__ << " " << #call << ": " << cudaGetErrorName(_status) << "\n"; \
-            errstr = buf.str();                                                                               \
-            passed = false;                                                                                   \
-            goto cleanup;                                                                                     \
-        }                                                                                                     \
+#define CHECKRT(call)                                                                                                 \
+    do                                                                                                                \
+    {                                                                                                                 \
+        cudaError_t _status = call;                                                                                   \
+        if (_status != cudaSuccess)                                                                                   \
+        {                                                                                                             \
+            errStr = fmt::format("Error on line {} {} {}: {}", __FILE__, __LINE__, #call, cudaGetErrorName(_status)); \
+            passed = false;                                                                                           \
+            goto cleanup;                                                                                             \
+        }                                                                                                             \
     } while (0)
 
 void Brokenp2p::ResetCudaDevices(int cudaId1, int cudaId2)
@@ -63,7 +61,7 @@ bool Brokenp2p::PerformP2PWrite(void *bufferd1,
                                 void *hostBuf,
                                 void *expected,
                                 size_t size,
-                                std::string &errstr)
+                                std::string &errStr)
 {
     bool passed = true;
     CHECKRT(cudaMemcpyPeer(bufferd1, cudaId1, bufferd2, cudaId2, size));
@@ -76,13 +74,18 @@ cleanup:
     return passed;
 }
 
-bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errstr)
+bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr)
 {
+    std::string errStrInternal;
     cudaSetDevice(cudaId1);
     cudaError_t status = cudaDeviceEnablePeerAccess(cudaId2, 0);
     if (status != cudaSuccess)
     {
         // Peer access isn't possible - skip testing these two GPUs
+        log_info("Skipping the p2p copy test for CUDA GPUs {} and {}: can't enable peer access for GPU {}",
+                 cudaId1,
+                 cudaId2,
+                 cudaId2);
         return true;
     }
     cudaSetDevice(cudaId2);
@@ -90,6 +93,10 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errstr
     if (status != cudaSuccess)
     {
         // Peer access isn't possible - skip testing these two GPUs
+        log_info("Skipping the p2p copy test for CUDA GPUs {} and {}: can't enable peer access for GPU {}",
+                 cudaId1,
+                 cudaId2,
+                 cudaId1);
         return true;
     }
     cudaSetDevice(cudaId1);
@@ -121,21 +128,21 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errstr
 
     // Perform a small write from device 2 to device 1.
     static const int EIGHT_BYTES = 8;
-    if (PerformP2PWrite(bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, EIGHT_BYTES, errstr))
+    if (PerformP2PWrite(
+            bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, EIGHT_BYTES, errStrInternal))
     {
-        passed = PerformP2PWrite(bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, m_size, errstr);
+        passed = PerformP2PWrite(
+            bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, m_size, errStrInternal);
         if (!passed)
         {
-            std::stringstream buf;
-            buf << "Failed when attempting to perform a write of " << m_size << " bytes.";
-            errstr = buf.str();
+            errStr
+                = fmt::format("Failed when attempting to perform a write of {} bytes: '{}'.", m_size, errStrInternal);
         }
     }
     else
     {
-        std::stringstream buf;
-        buf << "Failed when attempting to perform a small write of " << EIGHT_BYTES << " bytes.";
-        errstr = buf.str();
+        errStr = fmt::format(
+            "Failed when attempting to perform a small write of {} bytes: '{}'.", EIGHT_BYTES, errStrInternal);
         passed = false;
     }
 
@@ -236,8 +243,10 @@ nvvsPluginResult_t Brokenp2p::RunTest()
             GetP2PError(m_bg, startTime, m_gpus[d2]->gpuId, memoryError, writerError);
             if (!passed)
             {
-                DCGM_LOG_DEBUG << "Memory device " << m_gpus[d1]->gpuId << " and p2p writer device "
-                               << m_gpus[d2]->gpuId << " failed: '" << errStr << "'.";
+                log_debug("Memory device {} and p2p writer device {} failed: \"{}\"",
+                          m_gpus[d1]->gpuId,
+                          m_gpus[d2]->gpuId,
+                          errStr);
                 DcgmError d1Err { m_gpus[d1]->gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(memoryError, d1Err, m_gpus[d1]->gpuId, m_gpus[d2]->gpuId, errStr.c_str());
                 m_bg->AddError(m_bg->GetPcieTestName(), d1Err);
@@ -248,8 +257,7 @@ nvvsPluginResult_t Brokenp2p::RunTest()
             }
             else
             {
-                DCGM_LOG_DEBUG << "Memory device " << m_gpus[d1]->gpuId << " and p2p writer device "
-                               << m_gpus[d2]->gpuId << " passed.";
+                log_debug("Memory device {} and p2p writer device {} passed.", m_gpus[d1]->gpuId, m_gpus[d2]->gpuId);
             }
         }
     }

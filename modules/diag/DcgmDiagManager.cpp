@@ -574,10 +574,10 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
 dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const
 {
     std::vector<std::string> args;
-    std::unique_ptr<dcgmDiagResponse_v11> responseUptr = std::make_unique<dcgmDiagResponse_v11>();
+    std::unique_ptr<dcgmDiagResponse_v12> responseUptr = std::make_unique<dcgmDiagResponse_v12>();
     DcgmDiagResponseWrapper response;
 
-    response.SetVersion11(responseUptr.get());
+    response.SetVersion(responseUptr.get());
     args.emplace_back("dummy");
     return PerformExternalCommand(args, response, stdoutStr, stderrStr);
 }
@@ -807,6 +807,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
             case dcgmDiagStatus_version1:
                 UpdateDiagStatus(data);
                 break;
+            case dcgmDiagResponse_version12:
             case dcgmDiagResponse_version11:
             case dcgmDiagResponse_version10:
             case dcgmDiagResponse_version9:
@@ -1152,6 +1153,7 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
         return { wasExecuted, DCGM_ST_OK };
     }
 
+    std::unique_ptr<dcgmDiagResponse_v12> v12;
     std::unique_ptr<dcgmDiagResponse_v11> v11;
     std::unique_ptr<dcgmDiagResponse_v10> v10;
     std::unique_ptr<dcgmDiagResponse_v9> v9;
@@ -1160,25 +1162,30 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
 
     switch (response.GetVersion())
     {
+        case dcgmDiagResponse_version12:
+            v12          = MakeUniqueZero<dcgmDiagResponse_v12>();
+            v12->version = dcgmDiagResponse_version12;
+            eudResponse.SetVersion(v12.get());
+            break;
         case dcgmDiagResponse_version11:
             v11          = MakeUniqueZero<dcgmDiagResponse_v11>();
             v11->version = dcgmDiagResponse_version11;
-            eudResponse.SetVersion11(v11.get());
+            eudResponse.SetVersion(v11.get());
             break;
         case dcgmDiagResponse_version10:
             v10          = MakeUniqueZero<dcgmDiagResponse_v10>();
             v10->version = dcgmDiagResponse_version10;
-            eudResponse.SetVersion10(v10.get());
+            eudResponse.SetVersion(v10.get());
             break;
         case dcgmDiagResponse_version9:
             v9          = MakeUniqueZero<dcgmDiagResponse_v9>();
             v9->version = dcgmDiagResponse_version9;
-            eudResponse.SetVersion9(v9.get());
+            eudResponse.SetVersion(v9.get());
             break;
         case dcgmDiagResponse_version8:
             v8          = MakeUniqueZero<dcgmDiagResponse_v8>();
             v8->version = dcgmDiagResponse_version8;
-            eudResponse.SetVersion8(v8.get());
+            eudResponse.SetVersion(v8.get());
             break;
         case dcgmDiagResponse_version7:
             log_error("dcgmDiagResponse_version7 does not support eud.");

@@ -45,8 +45,8 @@ TEST_CASE("Memory Go With Multiple Gpus")
     mem.Go(mem.GetMemoryTestName(), entityList.get(), 1, params);
 
     // We should be considering these as fake GPUs because there's no PCI device id, so nothing ran
-    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v1>();
-    dcgmDiagEntityResults_v1 &entityResults = *(pEntityResults.get());
+    auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
     dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
     CHECK(entityResults.numErrors == 0);

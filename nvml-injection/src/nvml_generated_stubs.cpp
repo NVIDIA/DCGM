@@ -4036,6 +4036,45 @@ nvmlReturn_t nvmlDeviceGetMemoryErrorCounter(nvmlDevice_t device,
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceGetSramEccErrorStatus(nvmlDevice_t device, nvmlEccSramErrorStatus_t *status)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceGetSramEccErrorStatus");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(status));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "SramEccErrorStatus", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "SramEccErrorStatus", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlDeviceSetGpuLockedClocks(nvmlDevice_t device, unsigned int minGpuClockMHz, unsigned int maxGpuClockMHz)
 {
     // The following snippet is generated from write_function

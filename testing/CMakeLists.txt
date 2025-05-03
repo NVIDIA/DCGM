@@ -49,7 +49,6 @@ target_sources(testdcgmunittests
         TestDcgmMutex.h
         TestDiagManager.cpp
         TestDiagManager.h
-        TestDiagManagerStrings.h
         TestFieldGroups.cpp
         TestFieldGroups.h
         TestGroupManager.cpp

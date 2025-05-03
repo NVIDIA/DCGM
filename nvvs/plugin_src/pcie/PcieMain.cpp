@@ -974,6 +974,8 @@ int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
     int failedTests = 0;
     std::string groupName;
 
+    log_debug("Subtest start, pinned={}", pinned);
+
     if (pinned)
     {
         groupName = PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED;
@@ -1005,6 +1007,8 @@ int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
         failedTests++;
     }
 
+    log_debug("Subtest done, failedTests={}", failedTests);
+
     if (failedTests > 0)
     {
         return 1;
@@ -1026,6 +1030,8 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
     std::barrier myBarrier(bg->gpu.size());
     std::string key;
     std::string groupName;
+
+    log_debug("Subtest start, pinned={}", pinned);
 
     if (pinned)
     {
@@ -1180,6 +1186,8 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         bg->SetGroupedStat(bg->GetPcieTestName(), groupName, key, sum);
     }
 
+    log_debug("Subtest done, failedTests={}", failedTests);
+
     if (failedTests > 0)
     {
         return 1;
@@ -1206,6 +1214,8 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
     float time_ms;
     std::string key;
     std::string groupName;
+
+    log_debug("Subtest start, pinned = {}", pinned);
 
     /* Initialize buffers to make valgrind happy */
     for (size_t i = 0; i < bg->gpu.size(); i++)
@@ -1361,6 +1371,8 @@ int outputHostDeviceLatencyMatrix(BusGrind *bg, bool pinned)
         cudaCheckError(cudaStreamDestroy, (stream2[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }
 
+    log_debug("Subtest done, Nfailures = {}", Nfailures);
+
     if (Nfailures > 0)
     {
         return 1;
@@ -1385,6 +1397,8 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
     std::vector<cudaStream_t> stream1(bg->gpu.size());
     std::string key;
     std::string groupName;
+
+    log_debug("Subtest start, p2p={}", p2p);
 
     /* Initialize buffers to make valgrind happy */
     for (size_t i = 0; i < bg->gpu.size(); i++)
@@ -1540,6 +1554,7 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
         cudaCheckError(cudaStreamDestroy, (stream1[d]), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }
 
+    log_debug("Subtest done");
     return 0;
 }
 
@@ -1574,8 +1589,15 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
             bg->m_printedConcurrentGpuErrorMessage = true;
         }
 
+        if (p2p)
+        {
+            disableP2P(bg);
+        }
+
         return 0;
     }
+
+    log_debug("Subtest start, p2p = {}", p2p);
 
     /* Initialize buffers to make valgrind happy */
     for (int i = 0; i < numGPUs; i++)
@@ -1760,6 +1782,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
     }
 
+    log_debug("Subtest done");
     return 0;
 }
 
@@ -1789,6 +1812,8 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         }
         return 0;
     }
+
+    log_debug("Subtest start, p2p = {}", p2p);
 
     /* Initialize buffers to make valgrind happy */
     for (int i = 0; i < numGPUs; i++)
@@ -1935,6 +1960,8 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         disableP2P(bg);
     }
 
+    log_debug("Subtest done");
+
     return 0;
 }
 
@@ -1950,6 +1977,8 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
     std::vector<cudaEvent_t> stop(bg->gpu.size());
     std::string key;
     std::string groupName;
+
+    log_debug("Subtest start, p2p = {}", p2p);
 
     /* Initialize buffers to make valgrind happy */
     for (size_t i = 0; i < bg->gpu.size(); i++)
@@ -2033,6 +2062,8 @@ int outputP2PLatencyMatrix(BusGrind *bg, bool p2p)
         cudaCheckError(cudaEventDestroy, (start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckError(cudaEventDestroy, (stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
     }
+
+    log_debug("Subtest done");
 
     return 0;
 }
@@ -2648,6 +2679,7 @@ NO_MORE_TESTS:
         bg_check_global_pass_fail(bg, startTime, endTime);
     }
 
+    log_debug("All subtests done");
     return 0;
 }
 

@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Note: This file is not currently used in the test suite.
+ */
+
 #ifndef TEST_DCGM_DIAG_STRINGS_H
 #define TEST_DCGM_DIAG_STRINGS_H
 

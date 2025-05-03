@@ -114,7 +114,7 @@ static unsigned int getNvsdmPlatformFieldId(unsigned int dcgmFieldId)
     return NVSDM_PLATFORM_TELEM_CTR_NONE;
 }
 
-static unsigned int GetNvsdmConnextXFeildId(unsigned int dcgmFieldId)
+static unsigned int getNvsdmConnextXFeildId(unsigned int dcgmFieldId)
 {
     switch (dcgmFieldId)
     {
@@ -140,6 +140,20 @@ static unsigned int GetNvsdmConnextXFeildId(unsigned int dcgmFieldId)
             return NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE;
     }
     return NVSDM_CONNECTX_TELEM_CTR_NONE;
+}
+
+/*************************************************************************/
+static inline bool isDcgmToNvsdmFieldAvailable(unsigned int dcgmFieldId)
+{
+    if (dcgmFieldId != DCGM_FI_DEV_NVSWITCH_DEVICE_UUID && dcgmFieldId != DCGM_FI_DEV_CONNECTX_HEALTH
+        && getNvsdmPortFieldId(dcgmFieldId) == NVSDM_PORT_TELEM_CTR_NONE
+        && getNvsdmPlatformFieldId(dcgmFieldId) == NVSDM_PLATFORM_TELEM_CTR_NONE
+        && getNvsdmConnextXFeildId(dcgmFieldId) == NVSDM_CONNECTX_TELEM_CTR_NONE)
+    {
+        log_info("DCGM fieldId {} doesn't map to any of the nvsdm field ids.", dcgmFieldId);
+        return false;
+    }
+    return true;
 }
 
 /*************************************************************************/
@@ -340,13 +354,7 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
 {
     unsigned int portId;
     nvsdmVal_t compositeNvsdmVal;
-    unsigned int nvsdmPortFieldId = getNvsdmPortFieldId(fieldId);
-    if (nvsdmPortFieldId == NVSDM_PORT_TELEM_CTR_NONE)
-    {
-        log_error("DCGM fieldId {} doesn't map to any of the nvsdm port field ids.", fieldId);
-        return DCGM_ST_UNKNOWN_FIELD;
-    }
-
+    unsigned int nvsdmPortFieldId     = getNvsdmPortFieldId(fieldId);
     param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PORT;
     param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
     compositeNvsdmVal.u64Val          = 0;
@@ -418,6 +426,13 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
     nvsdmTelem_v1_t telemValsArray[1] = {};
     param.telemValsArray              = telemValsArray;
 
+    if (!isDcgmToNvsdmFieldAvailable(fieldId))
+    {
+        /* Not yet supported from Nvsdm. */
+        BufferBlankValueForAllEntities(fieldId, buf, entities);
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
     for (auto &entity : entities)
     {
         log_debug(
@@ -440,13 +455,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
                 continue;
             }
 
-            unsigned int nvsdmPortFieldId = getNvsdmPortFieldId(fieldId);
-            if (nvsdmPortFieldId == NVSDM_PORT_TELEM_CTR_NONE)
-            {
-                log_error("DCGM fieldId {} doesn't map to any of the nvsdm port field ids.", fieldId);
-                return DCGM_ST_UNKNOWN_FIELD;
-            }
-
+            unsigned int nvsdmPortFieldId     = getNvsdmPortFieldId(fieldId);
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PORT;
             param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
             nvsdmEntityId                     = entity.entityId;
@@ -490,11 +499,6 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             }
 
             unsigned int nvsdmPlatformFieldId = getNvsdmPlatformFieldId(fieldId);
-            if (nvsdmPlatformFieldId == NVSDM_PLATFORM_TELEM_CTR_NONE)
-            {
-                log_error("DCGM fieldId {} doesn't map to any of the nvsdm platform field ids.", fieldId);
-                return DCGM_ST_UNKNOWN_FIELD;
-            }
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PLATFORM;
             param.telemValsArray[0].telemCtr  = nvsdmPlatformFieldId;
             /* TODO(DCGM-4299): Using port 0 from switch for stub testing. Revisit after nvsdm library is live. */
@@ -520,14 +524,9 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
                 continue;
             }
 
-            unsigned int const nvsdmConnectXFieldId = GetNvsdmConnextXFeildId(fieldId);
-            if (nvsdmConnectXFieldId == NVSDM_CONNECTX_TELEM_CTR_NONE)
-            {
-                log_error("DCGM fieldId {} doesn't map to any of the nvsdm ConnectX field ids.", fieldId);
-                return DCGM_ST_UNKNOWN_FIELD;
-            }
-            param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_CONNECTX;
-            param.telemValsArray[0].telemCtr  = nvsdmConnectXFieldId;
+            unsigned int const nvsdmConnectXFieldId = getNvsdmConnextXFeildId(fieldId);
+            param.telemValsArray[0].telemType       = NVSDM_TELEM_TYPE_CONNECTX;
+            param.telemValsArray[0].telemCtr        = nvsdmConnectXFieldId;
         }
         else
         {

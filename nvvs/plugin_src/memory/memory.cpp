@@ -89,6 +89,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     static char testVals[5]     = { (char)0x00, (char)0xAA, (char)0x55, (char)0xFF, (char)0x00 };
     float minAllocationPcnt     = memGlobals->testParameters->GetDouble(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE) / 100.0;
     bool memoryMismatchOccurred = false;
+    size_t targetAllocation     = 0;
 
     if (minAllocationPcnt < 0.0 || minAllocationPcnt > 1.0)
     {
@@ -131,10 +132,24 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 
     // alloc as much memory as possible
     size = freeMem;
+    targetAllocation = totalMem * minAllocationPcnt;
+    if (size < targetAllocation)
+    {
+        std::string msg
+            = fmt::format("Only {} mb of memory is free, but we need to allocate {} mb to pass this test. Skipping",
+                          freeMem / 1024 / 1024,
+                          targetAllocation / 1024 / 1024);
+        log_warning(msg);
+        memGlobals->memory->AddInfo(memGlobals->memory->GetMemoryTestName(), msg);
+        return NVVS_RESULT_SKIP;
+    }
+
+    log_debug("{} mb of {} mb memory is free", freeMem / 1024 / 1024, totalMem / 1024 / 1024);
+
     do
     {
         size = (size / 100) * 99;
-        if (size < (totalMem * minAllocationPcnt))
+        if (size < targetAllocation)
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
@@ -495,9 +510,8 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
 
     // check if this card supports ECC and be good about skipping/warning etc.
     dcgmFieldValue_v2 eccCurrentVal = {};
-    unsigned int flags              = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
     dcgmReturn_t ret
-        = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, flags);
+        = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, 0);
 
     if (ret != DCGM_ST_OK)
     {

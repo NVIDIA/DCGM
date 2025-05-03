@@ -38,6 +38,7 @@ def _generate_xid_43_with_cuda_assert(handle, busId, appTimeout, gpuId):
 @test_utils.skip_test_on_vm()
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
+@test_utils.run_only_if_mig_is_disabled()
 @test_utils.run_with_additional_fatal_kmsg_xid('43')
 @test_utils.run_with_current_system_injection_nvml()
 @test_utils.run_with_embedded_host_engine()

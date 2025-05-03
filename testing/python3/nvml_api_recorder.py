@@ -20,6 +20,7 @@ from typing import List
 import yaml
 import re
 import time
+import uuid
 
 # constant defines
 NVML_SUCCESS = 0
@@ -651,8 +652,9 @@ class NVMLThreeKeysFunc(object):
         self._value_parser = value_parser
 
 def fabric_info_parser(value):
+    dev_uuid = uuid.UUID(int=int.from_bytes(value.clusterUuid, 'big'))
     return {
-        "clusterUuid": value.clusterUuid,
+        "clusterUuid": str(dev_uuid),
         "status": value.status,
         "cliqueId": value.cliqueId,
         "state": value.state,
@@ -660,17 +662,19 @@ def fabric_info_parser(value):
 
 def nvmlDeviceGetGpuFabricInfo(device):
     import dcgm_nvml as pynvml
-    c_fabricInfo = c_nvmlGpuFabricInfo_t()
+    import nvml_injection_structs
+    c_fabricInfo = nvml_injection_structs.c_nvmlGpuFabricInfo_t_dcgm_ver()
     pynvml.nvmlDeviceGetGpuFabricInfo(device, byref(c_fabricInfo))
     return c_fabricInfo
 
 def fabric_infov_parser(value):
+    dev_uuid = uuid.UUID(int=int.from_bytes(value.clusterUuid, 'big'))
     return {
         "version": value.version,
-        "clusterUuid": value.clusterUuid,
+        "clusterUuid": str(dev_uuid),
         "status": value.status,
         "cliqueId": value.cliqueId,
-        "state": ord(value.state),
+        "state": value.state,
         "healthMask": value.healthMask,
     }
 
@@ -681,6 +685,31 @@ def nvmlDeviceGetGpuFabricInfoV(device):
     c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v2
     pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
     return c_fabricInfo
+
+def sram_ecc_error_status_parser(value):
+    return {
+        "version": value.version,
+        "aggregateUncParity": value.aggregateUncParity,
+        "aggregateUncSecDed": value.aggregateUncSecDed,
+        "aggregateCor": value.aggregateCor,
+        "volatileUncParity": value.volatileUncParity,
+        "volatileUncSecDed": value.volatileUncSecDed,
+        "volatileCor": value.volatileCor,
+        "aggregateUncBucketL2": value.aggregateUncBucketL2,
+        "aggregateUncBucketSm": value.aggregateUncBucketSm,
+        "aggregateUncBucketPcie": value.aggregateUncBucketPcie,
+        "aggregateUncBucketMcu": value.aggregateUncBucketMcu,
+        "aggregateUncBucketOther": value.aggregateUncBucketOther,
+        "bThresholdExceeded": value.bThresholdExceeded,
+    }
+
+def nvmlDeviceGetSramEccErrorStatus(device):
+    import dcgm_nvml as pynvml
+    c_sramErrStatus = pynvml.c_nvmlEccSramErrorStatus_v1_t()
+    c_sramErrStatus.version = pynvml.nvmlEccSramErrorStatus_v1
+    pynvml.nvmlDeviceGetSramEccErrorStatus(device, byref(c_sramErrStatus))
+    return c_sramErrStatus
+
 
 class NVMLApiRecorder(object):
     _attrs = {}
@@ -783,6 +812,7 @@ class NVMLApiRecorder(object):
         NVMLSimpleFunc("nvmlDeviceGetFBCSessions", fbc_sessions_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfo", fabric_info_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfoV", fabric_infov_parser),
+        NVMLSimpleFunc("nvmlDeviceGetSramEccErrorStatus", sram_ecc_error_status_parser),        
     ]
 
     # which has one device input, version and produces one output

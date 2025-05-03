@@ -55,7 +55,7 @@ TEST_CASE("Software Subtest Context")
     std::string const subtestName { "Subtest" };
 
     std::unique_ptr<dcgmDiagPluginEntityList_v1> pEntityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
-    std::unique_ptr<dcgmDiagEntityResults_v1> pEntityResults = std::make_unique<dcgmDiagEntityResults_v1>();
+    std::unique_ptr<dcgmDiagEntityResults_v2> pEntityResults = std::make_unique<dcgmDiagEntityResults_v2>();
 
     s.InitializeForEntityList(SW_PLUGIN_NAME, *pEntityList);
 
@@ -78,7 +78,7 @@ TEST_CASE("Software Subtest Context")
 
         dcgmReturn_t ret = s.GetResults(s.GetSoftwareTestName(), pEntityResults.get());
         CHECK(ret == DCGM_ST_OK);
-        dcgmDiagEntityResults_v1 const &entityResults = *pEntityResults;
+        dcgmDiagEntityResults_v2 const &entityResults = *pEntityResults;
 
         REQUIRE(entityResults.numErrors == 3);
         CHECK(entityResults.numInfo == 0);
@@ -104,7 +104,7 @@ TEST_CASE("Software Subtest Context")
 
         dcgmReturn_t ret = s.GetResults(s.GetSoftwareTestName(), pEntityResults.get());
         CHECK(ret == DCGM_ST_OK);
-        dcgmDiagEntityResults_v1 const &entityResults = *pEntityResults;
+        dcgmDiagEntityResults_v2 const &entityResults = *pEntityResults;
 
         REQUIRE(entityResults.numErrors == 1);
         CHECK(entityResults.numInfo == 0);

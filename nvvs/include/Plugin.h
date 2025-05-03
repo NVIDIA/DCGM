@@ -321,11 +321,24 @@ public:
      */
     void AddInfoVerboseForGpu(std::string const &testName, unsigned int gpuId, std::string const &info);
 
-    /*************************************************************************/
-    /*
-     * Fills in the results struct for this plugin object
+    /**************************************************************************
+     * Get results for all entities.
      *
-     * @param entityResults - the struct in which results are stored
+     * @param[in] testName Name of the test for which results are being retrieved
+     * @param[out] entityResults Pointer to a structure where the results will be stored
+     *
+     * @returns DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    virtual dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v2 *entityResults);
+
+    /**************************************************************************
+     * Get results for all entities.
+     *
+     * @deprecated Use GetResults(dcgmDiagEntityResults_v2 *) instead.
+     * @param[in] testName Name of the test for which results are being retrieved
+     * @param[out] entityResults Pointer to a structure where the results will be stored
+     *
+     * @returns DCGM_ST_OK on success, appropriate error code otherwise
      */
     virtual dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v1 *entityResults);
 
@@ -401,6 +414,23 @@ public:
 private:
 #endif
     /* Methods */
+
+    /*************************************************************************/
+    /*
+     * Fills in the results struct for this plugin object
+     * Assumes caller has verified entityResults is valid.
+     *
+     * @tparam EntityResultsType Must be either dcgmDiagEntityResults_v1 or dcgmDiagEntityResults_v2
+     * @param[in] testName Name of the test
+     * @param[out] entityResults Struct in which results are stored
+     *
+     * @return DCGM_ST_OK if successful, or error code if unsuccessful
+     *         See PluginTest::GetResults() for specific error codes
+     */
+    template <typename EntityResultsType>
+        requires std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v1>
+                 || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
+    dcgmReturn_t GetResultsImpl(std::string const &testName, EntityResultsType *entityResults);
 
     dcgmDiagPluginAttr_v1 m_pluginAttr; /* The plugin attributes assigned from nvvs */
 

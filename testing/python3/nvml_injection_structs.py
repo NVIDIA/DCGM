@@ -31,17 +31,7 @@ try:
             ("usedGpuMemory", c_ulonglong),
         ]
 
-    class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):
-        _fields_ = [
-            ("version", c_uint),
-            ("clusterUuid", c_char * 16),
-            ("status", c_uint),
-            ("cliqueId", c_uint),
-            ("state", c_char),
-            ("healthMask", c_uint),
-        ]
-
-    class c_nvmlPlatformInfo_t_dcgm_ver(Structure):
+    class c_nvmlPlatformInfo_v2_t(Structure):
         _fields_ = [
             ("version", c_uint),
             ("ibGuid", c_char * 16),
@@ -49,6 +39,36 @@ try:
             ("slotNumber", c_char),
             ("trayIndex", c_char),
             ("hostId", c_char),
+            ("peerType", c_char),
+            ("moduleId", c_char),
+        ]
+
+    class c_nvmlGpuFabricInfo_t_dcgm_ver(Structure):
+        _fields_ = [
+            ("clusterUuid", c_ubyte * 16),
+            ("status", c_uint),
+            ("cliqueId", c_uint32),
+            ("state", c_ubyte),
+        ]
+
+    class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):
+        _fields_ = [
+            ("version", c_uint),
+            ("clusterUuid", c_char * 16),
+            ("status", c_uint),
+            ("cliqueId", c_uint),
+            ("state", c_ubyte),
+            ("healthMask", c_uint),
+        ]
+
+    class c_nvmlPlatformInfo_v1_t(Structure):
+        _fields_ = [
+            ("version", c_uint),
+            ("ibGuid", c_char * 16),
+            ("rackGuid", c_char * 16),
+            ("chassisPhysicalSlotNumber", c_char),
+            ("computeSlotIndex", c_char),
+            ("nodeIndex", c_char),
             ("peerType", c_char),
             ("moduleId", c_char),
         ]
@@ -118,9 +138,11 @@ try:
             ("ProcessesUtilizationInfoPtr", c_void_p),
             # ("ProcessesUtilizationInfo", c_nvmlProcessesUtilizationInfo_t),
             ("EccSramErrorStatusPtr", c_void_p),
-            # ("EccSramErrorStatus", c_nvmlEccSramErrorStatus_t),
+            ("EccSramErrorStatus", c_nvmlEccSramErrorStatus_v1_t),
+            ("PlatformInfo_v1Ptr", c_void_p),
+            ("PlatformInfo_v1", c_nvmlPlatformInfo_v1_t),
             ("PlatformInfoPtr", c_void_p),
-            ("PlatformInfo", c_nvmlPlatformInfo_t_dcgm_ver),
+            ("PlatformInfo", c_nvmlPlatformInfo_v2_t),
             ("GpuDynamicPstatesInfoPtr", c_void_p),
             ("GpuDynamicPstatesInfo", c_nvmlGpuDynamicPstatesInfo_t),
             ("PowerValue_v2Ptr", c_void_p),
@@ -212,7 +234,7 @@ try:
             ("ConfComputeGetKeyRotationThresholdInfo_v1Ptr", c_void_p),
             # ("ConfComputeGetKeyRotationThresholdInfo_v1", c_nvmlConfComputeGetKeyRotationThresholdInfo_v1_t),
             ("GpuFabricInfoPtr", c_void_p),
-            ("GpuFabricInfo", c_nvmlGpuFabricInfo_t),
+            ("GpuFabricInfo", c_nvmlGpuFabricInfo_t_dcgm_ver),
             ("GpuFabricInfoVPtr", c_void_p),
             ("GpuFabricInfoV", c_nvmlGpuFabricInfoV_t_dcgm_ver),
             ("SystemDriverBranchInfoPtr", c_void_p),
