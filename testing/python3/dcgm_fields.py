@@ -240,8 +240,8 @@ DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION = 246 #App Clocks Violation time in usec.
 DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION = 247 #Base Clocks Violation time in usec.
 #Framebuffer usage
 DCGM_FI_DEV_FB_TOTAL            = 250 #Total framebuffer memory in MB
-DCGM_FI_DEV_FB_FREE             = 251 #Total framebuffer used in MB
-DCGM_FI_DEV_FB_USED             = 252 #Total framebuffer free in MB
+DCGM_FI_DEV_FB_FREE             = 251 #Total framebuffer free in MB
+DCGM_FI_DEV_FB_USED             = 252 #Total framebuffer used in MB
 DCGM_FI_DEV_FB_RESERVED         = 253 #Total framebuffer reserved in MB
 # C2C Link Information (Grace-Hopper)
 DCGM_FI_DEV_C2C_LINK_COUNT      = 285 # C2C Link Count
