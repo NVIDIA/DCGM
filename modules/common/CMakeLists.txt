@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(tests)
+
 target_include_directories(module_common_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(module_common_interface INTERFACE modules_interface)
 
 target_sources(module_common_objects PRIVATE
         DcgmCoreProxy.cpp
+        DcgmResourceHandle.cpp
 )
 
 target_link_libraries(module_common_objects

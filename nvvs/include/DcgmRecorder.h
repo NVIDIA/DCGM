@@ -278,6 +278,8 @@ public:
                            std::vector<DcgmError> &fatalErrorList,
                            std::vector<DcgmError> &ignoredErrorList);
 
+    int CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList);
+
     /*
      * Populates dcgmTimeseriesInfo with the current value of the specified field for the specified GPU
      * Adds an appropriate warning if we can't get the fieldId

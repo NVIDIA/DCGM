@@ -243,27 +243,50 @@ class DcgmDiag:
 
 ################# General helpers #################
 
-def check_diag_result_fail(response, entityPair, testName):
-    # Returns `True` when there is a FAIL result associated with the specified `entityPair` and `testName`, `False` otherwise.
+def find_test_in_response(response, testName):
     assert hasattr(response, 'tests') and hasattr(response, 'results'), "Response does not have tests or results"
     for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == testName:
-            break
-    assert test.name == testName, "Expected fail result for test %s but none was found" % testName
+            return test
+
+    return None
+
+def retrieve_diag_failure_message(response, entityPair, testName):
+    test = find_test_in_response(response, testName)
+    if not test:
+        return None
+    for index in test.errorIndices[:min(test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)]:
+        if response.errors[index].entity == entityPair:
+            return response.errors[index].msg
+
+    return None
+
+def check_diag_result_fail(response, entityPair, testName):
+    # Returns `True` when there is a FAIL result associated with the specified `entityPair` and `testName`, `False` otherwise.
+    test = find_test_in_response(response, testName)
+    assert test, "Expected fail result for test %s but none was found" % testName
     if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL and cur.entity == entityPair,
                    map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+        msg = retrieve_diag_failure_message(response, entityPair, testName)
+        if not msg:
+            msg = "No error was found to accompany the test failure"
+        logger.info("Test %s failed, msg: '%s'" % (testName, msg))
         return True
     return False
 
 def check_diag_result_pass(response, entityPair, testName):
     # Returns `True` when there is a PASS result associated with the specified `entityPair` and `testName`, `False` otherwise.
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
-        if test.name == testName:
-            break
-    assert test.name == testName, "Expected pass result for test %s but none was found" % testName
+    test = find_test_in_response(response, testName)
+    assert test, "Expected pass result for test %s but none was found" % testName
     if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_PASS and cur.entity == entityPair,
                map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
         return True
+
+    msg = retrieve_diag_failure_message(response, entityPair, testName)
+    if not msg:
+        msg = "No error was found to accompany the test failure"
+    logger.info("Test %s unexpectedly failed, msg: %s" % (testName, msg))
+
     return False
 
 def check_diag_result_non_passing(response, entityPair, testName):

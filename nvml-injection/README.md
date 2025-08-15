@@ -197,9 +197,9 @@ In this section, we will go through the process to show what to do to enable the
        NVMLExtraKeyFunc("nvmlDeviceGetClockInfo", range(NVML_CLOCK_COUNT), basic_type_value_parser),
        ```
 
-       It has an extra element `range(NVML_CLOCK_COUNT)` which indicates the all possibility of second parameter (i.e. 0, 1, 2, 3).
+       It has an extra element `range(NVML_CLOCK_COUNT)` which indicates the all possibility of second parameter (i.e., 0, 1, 2, 3).
 
-   * You can skip this step if PyNVML has not supported new added functions yet (i.e. we cannot find the function in PyNVML).
+   * We can skip updating `nvml_api_recorder.py` if PyNVML has not supported new added functions yet (i.e., we cannot find the function in PyNVML).
 
 4. Update YAML file to include new key
 
@@ -208,5 +208,70 @@ In this section, we will go through the process to show what to do to enable the
 5. Run program with `NVML_INJECTION_MODE` and `NVML_YAML_FILE` for testing
 
 ## Add Tests Using NVML Injection
+
+### Mock NVML APIs
+
+As an overview for NVML injection. Its goal is to let us mock the return value of NVML calls. The mocked value can be either loading from the NVML injection YAML file (e.g., `run_with_injection_nvml_using_specific_sku`), or from those that we "inject" using the `dcgmInjectNvmlDevice` API. After loading the NVML injection YAML file, the NVML APIs will return values specified in this YAML file. Once we inject values using `dcgmInjectNvmlDevice`, the returned values will be those from the injected configuration. This means, manual injection has higher priority than the YAML file.
+
+To correctly set up the `dcgmInjectNvmlDevice`, we need to refer to the `InjectionArgument.h` to see the appropriate value type and value name for the mocking target.
+For example, we can see the type (i.e., `INJECTION_NVLINKERRORCOUNTER`) and value name (i.e., `NvLinkErrorCounter`) of `nvmlNvLinkErrorCounter_t` in the segment.
+
+```c++
+InjectionArgument(nvmlNvLinkErrorCounter_t NvLinkErrorCounter)
+    : m_type(INJECTION_NVLINKERRORCOUNTER)
+{
+    memset(&m_value, 0, sizeof(m_value));
+    m_value.NvLinkErrorCounter = NvLinkErrorCounter;
+}
+```
+
+With the above information, we then can mock `nvmlDeviceGetNvLinkErrorCounter` by the following snippet
+
+```python
+def mock_nvlink_error_counter(handle, gpuId, linkId, counterType, nvmlRet, value):
+    # To set the return value, since this function returns `unsigned long long *counterValue`,
+    # we can refer to InjectionArgument.h to know that its type is INJECTION_ULONG_LONG and the value name is ULongLong.
+    injectedRet = nvml_injection.c_injectNvmlRet_t()
+    injectedRet.nvmlRet = nvmlRet
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_ULONG_LONG
+    injectedRet.values[0].value.ULongLong = value
+    injectedRet.valueCount = 1
+
+    # Set the expected extra keys (parameters) for this function.
+    # Since nvmlDeviceGetNvLinkErrorCounter has two parameters: unsigned int link and nvmlNvLinkErrorCounter_t counter.
+    # We need to create an array of size 2 for these extra keys and configure their types and expected arguments.
+    # Refer to InjectionArgument.h for the type and name details.
+    extraKeysType = nvml_injection_structs.c_injectNvmlVal_t * 2
+    extraKeys = extraKeysType()
+    extraKeys[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+    extraKeys[0].value.UInt = linkId
+    extraKeys[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_NVLINKERRORCOUNTER
+    extraKeys[1].value.NvLinkErrorCounter = counterType
+
+    # Call the dcgmInjectNvmlDevice function with the target GPU and the key "NvLinkErrorCounter" along with the parameters and the given output.
+    # After calling dcgmInjectNvmlDevice,
+    # the return value of the newly called nvmlDeviceGetNvLinkErrorCounter with the provided gpuId, link, and counter will be specified by injectedRet.
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "NvLinkErrorCounter", extraKeys, 2, injectedRet)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+```
+
+Please note that:
+
+* calling `dcgmInjectNvmlDevice` multiple times on the same API will override the injected value. We need to mock and test each field individually.
+* The injection target should not include the Get prefix. i.e., use `NvLinkErrorCounter` rather than `GetNvLinkErrorCounter`. This enhances flexibility when calling a setter NVML API in our codebase. For example, as the target (i.e., `FanSpeed`) of `nvmlDeviceGetFanSpeed` and `nvmlDeviceSetFanSpeed` is the same, the setter can affect the getter.
+
+### Inject NVML Fields (`nvmlDeviceGetFieldValues`)
+
+To inject a value into a specific field of `nvmlDeviceGetFieldValues`, we can use the `inject_nvml_value` function from `testing/python3/dcgm_field_injection_helpers.py`. This function automatically converts the DCGM field to an NVML field and injects the value accordingly.
+
+For example, the following code snippet injects the value 20 into `NVML_FI_DEV_REMAPPED_FAILURE` for `gpuIds[0]`.
+
+```python
+    fieldId = dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE
+    injected_value = 20 # random non-zero number
+    inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 0)
+```
+
+### More Examples
 
 Please refer `testing/python3/tests/test_nvml_injection.py`.

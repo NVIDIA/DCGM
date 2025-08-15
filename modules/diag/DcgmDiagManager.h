@@ -108,10 +108,10 @@ public:
                                     DcgmDiagResponseWrapper &response,
                                     std::string const &fakeGpuIds               = "",
                                     std::string const &entityIds                = "",
-                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
+                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
 
     /* Should not be made public... for testing purposes only */
-    dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const;
+    dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr);
 
     /*************************************************************************/
     /*
@@ -134,24 +134,26 @@ public:
                                    unsigned int diagResponseVersion,
                                    std::string const &fakeGpuIds               = "",
                                    std::string const &entityIds                = "",
-                                   ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes) const;
+                                   ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
 
     /* perform external command - switched to public for testing*/
     dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
                                         DcgmDiagResponseWrapper &response,
                                         std::string *stdoutStr,
                                         std::string *stderrStr,
-                                        ExecuteWithServiceAccount useServiceAccount
-                                        = ExecuteWithServiceAccount::Yes) const;
+                                        ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
 
+#ifndef __DIAG_UNIT_TESTING__
 private:
+#endif
     /* variables */
     const std::string m_nvvsPath;
 
     /* Variables for ensuring only one instance of nvvs is running at a time */
-    mutable DcgmMutex m_mutex; // mutex for m_nvvsPid and m_ticket
-    mutable pid_t m_nvvsPID;   // Do not directly modify this variable. Use UpdateChildPID instead.
-    mutable uint64_t m_ticket; // Ticket used to prevent invalid updates to pid of child process.
+    mutable DcgmMutex m_mutex;                 // mutex for m_nvvsPid and m_ticket
+    pid_t m_nvvsPID;                           // Do not directly modify this variable. Use UpdateChildPID instead.
+    uint64_t m_ticket;                         // Ticket used to prevent invalid updates to pid of child process.
+    ChildProcessHandle_t m_childProcessHandle; // Handle for the spawned child process
 
     /* pointers to libdcgm callback functions */
     DcgmCoreProxy m_coreProxy;
@@ -183,14 +185,14 @@ private:
      *
      * Caller MUST ensure that m_mutex is locked by the calling thread before calling this method.
      */
-    uint64_t GetTicket() const;
+    uint64_t GetTicket();
 
     /*
      * Updates the PID of the nvvs child.
      * myTicket is used to ensure that the current thread is allowed to update the pid. (e.g. ensure another thread
      * has not modified the PID since the calling thread last updated it.)
      */
-    void UpdateChildPID(pid_t value, uint64_t myTicket) const;
+    void UpdateChildPID(pid_t value, uint64_t myTicket);
 
     /*
      * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
@@ -241,5 +243,13 @@ private:
      *
      * @param data - dcgmDiagStatus_t struct data
      */
-    void UpdateDiagStatus(std::string_view data) const;
+    void UpdateDiagStatus(std::span<std::byte> data) const;
+
+    /**
+     * Read data from a file descriptor.
+     *
+     * @param fd - the file descriptor to read from
+     * @param response - the response wrapper to update
+     */
+    dcgmReturn_t ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, DcgmDiagResponseWrapper &response);
 };

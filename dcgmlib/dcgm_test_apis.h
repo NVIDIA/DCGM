@@ -315,17 +315,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetVgpuInstanceAttributes(dcgmHandle_t pDcgmHan
                                                            dcgmVgpuInstanceAttributes_t *pDcgmVgpuInstanceAttr);
 
 /**
- * Stop a diagnostic if there is one currently running.
- *
- * @param pDcgmHandle                   IN: DCGM Handle
- *
- * @return
- *        - \ref DCGM_ST_OK                   if the call was successful
- *        - \ref DCGM_ST_BADPARAM             if a provided parameter is invalid or missing
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
-
-/**
  * This method injects a sample into the cache manager
  *
  * @param gpuId

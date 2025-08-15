@@ -140,6 +140,7 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_NVLINK),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_TEST_SKIPPED, DCGM_ERROR_CONFIG, DCGM_FR_EC_SOFTWARE_CONFIG),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_SRAM_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_MEMORY),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_NVLINK),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)
@@ -296,6 +297,18 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
                    "Verify NVML is responsive before restarting the hostengine.";
         case DCGM_ST_NVVS_NO_AVAILABLE_TEST:
             return "Requested tests were not found among possible test choices.";
+        case DCGM_ST_MNDIAG_CONNECTION_NOT_AVAILABLE:
+            return "No connection is currently authorized for multi-node diagnostic";
+        case DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED:
+            return "The connection is not authorized for multi-node diagnostic";
+        case DCGM_ST_REMOTE_SSH_CONNECTION_FAILED:
+            return "An SSH connection to a remote hostengine failed";
+        case DCGM_ST_CHILD_SPAWN_FAILED:
+            return "A child process could not be spawned";
+        case DCGM_ST_FILE_IO_ERROR:
+            return "A file operation failed";
+        case DCGM_ST_CHILD_SIGNAL_RECEIVED:
+            return "A child process received a signal";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

@@ -482,8 +482,8 @@ int main(int argc, char **argv)
         return cleanup(dcgmHandle, -1, parentPid);
     }
 
-    dcgmStartEmbeddedV2Params_v2 params {};
-    params.version  = dcgmStartEmbeddedV2Params_version2;
+    dcgmStartEmbeddedV2Params_v3 params {};
+    params.version  = dcgmStartEmbeddedV2Params_version3;
     params.opMode   = DCGM_OPERATION_MODE_AUTO;
     params.logFile  = cmdLine.GetLogFileName().c_str();
     params.severity = LoggingSeverityFromString(cmdLine.GetLogLevel().c_str(), DcgmLoggingSeverityUnspecified);
@@ -498,10 +498,10 @@ int main(int argc, char **argv)
         params.denyListCount++;
     }
 
-    auto const serviceAccount = cmdLine.GetServiceAccount();
-    params.serviceAccount     = serviceAccount.c_str();
+    auto const &serviceAccount = cmdLine.GetServiceAccount();
+    params.serviceAccount      = serviceAccount.c_str();
 
-    auto const diagHomeDir = cmdLine.GetHomeDir();
+    auto const &diagHomeDir = cmdLine.GetHomeDir();
     if (diagHomeDir.empty() == false)
     {
         setenv(DCGM_HOME_DIR_VAR_NAME, diagHomeDir.c_str(), 1);

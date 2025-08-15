@@ -33,7 +33,7 @@ class DcgmGroupConfig:
 
     Will throw an exception on error
     '''
-    def Set(self, config):
+    def Set(self, config, checkStatusErrors = True):
         status = pydcgm.DcgmStatus()
         ret = dcgm_structs.DCGM_ST_OK
 
@@ -42,8 +42,9 @@ class DcgmGroupConfig:
         except dcgm_structs.DCGMError as e:
             pass
 
-        #Throw specific errors before return error
-        status.ThrowExceptionOnErrors()
+        if checkStatusErrors:
+            #Throw specific errors before return error
+            status.ThrowExceptionOnErrors()
         #Throw an appropriate exception on error
         dcgm_structs._dcgmCheckReturn(ret)
 

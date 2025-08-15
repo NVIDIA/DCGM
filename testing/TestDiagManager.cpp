@@ -148,6 +148,19 @@ int TestDiagManager::TestPositiveDummyExecutable()
     /*  this is, in practice, really bad... ok if the only public calls made are
      *  the Perform*Execute calls directly
      */
+    DcgmCacheManager dcm;
+    dcgmReturn_t ret = dcm.Init(1, 3600.0, true);
+    if (ret != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected Init success, got %d\n", ret);
+        return -1;
+    }
+
+    DcgmGroupManager dgm { &dcm };
+    DcgmCoreCommunication dcc;
+    dcc.Init(&dcm, &dgm);
+    g_coreCallbacks.poster = &dcc;
+
     DcgmDiagManager *am = new DcgmDiagManager(g_coreCallbacks);
 
     CreateDummyScript();
@@ -818,7 +831,13 @@ int TestDiagManager::TestPopulateRunDiag()
 int TestDiagManager::TestInvalidVersion()
 {
     DcgmCacheManager dcm;
-    dcm.Init(1, 3600.0, true);
+    dcgmReturn_t ret = dcm.Init(1, 3600.0, true);
+    if (ret != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected Init success, got %d\n", ret);
+        return -1;
+    }
+
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
@@ -839,7 +858,7 @@ int TestDiagManager::TestInvalidVersion()
     ggc.header.length     = sizeof(ggc);
 
     // coverity[overrun-buffer-val]
-    dcgmReturn_t ret = g_coreCallbacks.postfunc(&ggc.header, g_coreCallbacks.poster);
+    ret = g_coreCallbacks.postfunc(&ggc.header, g_coreCallbacks.poster);
 
     if (ret != DCGM_ST_OK)
     {
@@ -879,6 +898,19 @@ int TestDiagManager::TestPerformExternalCommand()
     dcgmReturn_t result = DCGM_ST_OK;
     auto diagResponse   = MakeUniqueZero<dcgmDiagResponse_v12>();
     DcgmDiagResponseWrapper wrapper;
+
+    DcgmCacheManager dcm;
+    dcgmReturn_t ret = dcm.Init(1, 3600.0, true);
+    if (ret != DCGM_ST_OK)
+    {
+        fprintf(stderr, "Expected Init success, got %d\n", ret);
+        return -1;
+    }
+
+    DcgmGroupManager dgm { &dcm };
+    DcgmCoreCommunication dcc;
+    dcc.Init(&dcm, &dgm);
+    g_coreCallbacks.poster = &dcc;
 
     DcgmDiagManager am(g_coreCallbacks);
 

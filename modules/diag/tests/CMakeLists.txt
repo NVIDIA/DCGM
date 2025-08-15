@@ -21,6 +21,7 @@ target_sources(diagtests
     PRIVATE
         DcgmDiagResponseWrapperTests.cpp
         ../DcgmDiagResponseWrapper.cpp
+        DcgmDiagManagerTests.cpp
         ../DcgmDiagManager.cpp
 )
 
@@ -43,6 +44,7 @@ target_link_libraries(diagtests
         module_common_objects
         dcgm
         dcgm_mutex
+        mock_interface
 )
 target_link_libraries(diagtests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
 target_link_libraries(diagtests PRIVATE ${CMAKE_THREAD_LIBS_INIT})

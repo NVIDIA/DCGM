@@ -765,7 +765,7 @@ void Query::HelperDisplayWorkloadPowerProfiles(dcgmHandle_t dcgmHandle, unsigned
 
     cmdView.addDisplayParameter(ATTRIBUTE_TAG, "Enforced Profiles");
     profileMask = DcgmNs::Utils::HelperDisplayPowerBitmask(profileStatus.enforcedProfileMask);
-    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, profileMask);
+    cmdView.addDisplayParameter(ATTRIBUTE_DATA_TAG, std::move(profileMask));
     cmdView.display();
 }
 

@@ -25,7 +25,6 @@
 #include <limits.h>
 #include <stdint.h>
 
-
 /***************************************************************************************************/
 /** @defgroup dcgmReturnEnums Enums and Macros
  *  @{
@@ -181,7 +180,7 @@
  * Number of nvlink error types: @see NVML_NVLINK_ERROR_COUNT
  * TODO: update with refactor of ampere-next nvlink APIs (JIRA DCGM-2628)
  */
-#define DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS 4
+#define DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS 6
 
 /**
  * Maximum NvLink links pre-Ampere
@@ -284,6 +283,16 @@
  */
 #define DCGM_HE_PORT_NUMBER 5555
 
+/**
+ * Default socket path for DCGM Host Engine
+ */
+#define DCGM_DEFAULT_SOCKET_PATH "/tmp/nv-hostengine"
+
+/**
+ * Unix socket prefix for DCGM Host Engine
+ */
+#define DCGM_UNIX_SOCKET_PREFIX "unix://"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -379,7 +388,13 @@ typedef enum dcgmReturn_enum
     DCGM_ST_ALREADY_INITIALIZED   = -55, //!< The object is already initialized
     DCGM_ST_NVML_NOT_LOADED       = -56, //!< Cannot perform operation because NVML isn't loaded
     DCGM_ST_NVML_DRIVER_TIMEOUT   = -57, //!< Cannot perform operation because an NVML driver timeout error was detected
-    DCGM_ST_NVVS_NO_AVAILABLE_TEST = -58, //!< The NVVS returns no available tests (NVVS_ST_TEST_NOT_FOUND)
+    DCGM_ST_NVVS_NO_AVAILABLE_TEST          = -58, //!< The NVVS returns no available tests (NVVS_ST_TEST_NOT_FOUND)
+    DCGM_ST_MNDIAG_CONNECTION_NOT_AVAILABLE = -59, //!< No connection is currently authorized for mndiag
+    DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED  = -60, //!< The connection is not authorized for mndiag operations
+    DCGM_ST_REMOTE_SSH_CONNECTION_FAILED    = -61, //!< An SSH connection to a remote hostengine failed
+    DCGM_ST_CHILD_SPAWN_FAILED              = -62, //!< A child process could not be spawned
+    DCGM_ST_FILE_IO_ERROR                   = -63, //!< A file operation failed
+    DCGM_ST_CHILD_SIGNAL_RECEIVED           = -64, //!< A child process received a signal
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -495,17 +510,19 @@ typedef struct dcgm_link_s
         struct
         {
             dcgm_field_entity_group_t type : 8;  /*!< Entity Group */
-            uint32_t index                 : 32; /*!< Link Index Tx before Rx */
+            uint32_t index                 : 16; /*!< Link Index Tx before Rx */
             union
             {
-                dcgm_field_eid_t gpuId    : 16; /*!< Physical GPU ID */
-                dcgm_field_eid_t switchId : 16; /*!< Physical Switch ID */
+                dcgm_field_eid_t gpuId    : 8; /*!< Physical GPU ID */
+                dcgm_field_eid_t switchId : 8; /*!< Physical Switch ID */
             };
         } parsed;             /*!< Broken out Link identifier GPU/SW:[GPU|SW]:Index */
         dcgm_field_eid_t raw; /*!< Raw Link ID */
     };
 } dcgm_link_t;
 #pragma pack(pop)
+
+#define dcgmLink_version1 MAKE_DCGM_VERSION(dcgm_link_t, 1)
 
 /**
  * Connection options for dcgmConnect_v2 (v1)
@@ -3408,6 +3425,236 @@ typedef struct
 #define dcgmRunDiag_version10 MAKE_DCGM_VERSION(dcgmRunDiag_v10, 10)
 
 /**
+ * Maximum number of Multi Node Hosts Supported
+ */
+#define DCGM_MAX_NUM_HOSTS 72 //!< Maximum number of hosts in a multi-node diagnostic
+
+/**
+ * Multi-node diagnostic parameters structure v1
+ */
+typedef struct
+{
+    unsigned int version;
+    char hostList[DCGM_MAX_NUM_HOSTS][DCGM_MAX_STR_LENGTH];          //!< Parameters to set for specified tests
+    char testName[DCGM_MAX_STR_LENGTH];                              //!< Specified list of test names.
+    char testParms[DCGM_MAX_TEST_PARMS][DCGM_MAX_TEST_PARMS_LEN_V2]; //!< Parameters to set for specified tests
+} dcgmRunMnDiag_v1;
+
+typedef dcgmRunMnDiag_v1 dcgmRunMnDiag_t;
+
+/**
+ * Version 1 for \ref dcgmRunMnDiag_t
+ */
+#define dcgmRunMnDiag_version1 MAKE_DCGM_VERSION(dcgmRunMnDiag_v1, 1)
+#define dcgmRunMnDiag_version  dcgmRunMnDiag_version1
+
+
+#define DCGM_MN_DIAG_RESPONSE_TESTS_MAX             4  //!< The maximum number of tests that can be reported.
+#define DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX 16 //!< The maximum number of entities per host.
+#define DCGM_MN_DIAG_RESPONSE_HOSTS_MAX             72 //!< The maximum number of hosts that can be reported.
+#define DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX \
+    (DCGM_MN_DIAG_RESPONSE_HOSTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+#define DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX 32  //!< The maximum number of per-entity errors that can be reported.
+#define DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX  128 //!< The maximum number of per-entity info msgs that can be reported.
+
+#define DCGM_MN_DIAG_RESPONSE_ERRORS_MAX DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX
+#define DCGM_MN_DIAG_RESPONSE_INFO_MAX   DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX
+#define DCGM_MN_DIAG_RESPONSE_RESULTS_MAX \
+    (DCGM_MN_DIAG_RESPONSE_TESTS_MAX      \
+     * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX) //!< Maximum number of results that can be reported.
+#define DCGM_MN_DIAG_TEST_RUN_NAME_LEN 32  //!< The maximum number of characters (including '\0') used for a name
+
+/**
+ * Host information for multi-node diagnostic run.
+ *
+ * Since DCGM 4.3.
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    char hostname[DCGM_MAX_STR_LENGTH];      //!< Hostname of the node
+    char dcgmVersion[DCGM_VERSION_LEN];      //!< A string representing DCGM's version for the host
+    char driverVersion[DCGM_MAX_STR_LENGTH]; //!< A string representing the driver version for the host
+    unsigned int numEntities;                //!< Number of entities on the host
+    unsigned int
+        entityIndices[DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX]; //!< Indices into entities array for the host
+} dcgmMnDiagHosts_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagHosts_v1 dcgmMnDiagHosts_t;
+#define dcgmMnDiagHosts_version1 MAKE_DCGM_VERSION(dcgmMnDiagHosts_v1, 1)
+#define dcgmMnDiagHosts_version  dcgmMnDiagHosts_version1
+
+#define DCGM_MN_DIAG_AUX_DATA_LEN 2048
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    unsigned int version; //!< version number (dcgmMnDiagTestAuxData_version1)
+    char data[DCGM_MN_DIAG_AUX_DATA_LEN];
+} dcgmMnDiagTestAuxData_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagTestAuxData_v1 dcgmMnDiagTestAuxData_t;
+#define dcgmMnDiagTestAuxData_version1 MAKE_DCGM_VERSION(dcgmMnDiagTestAuxData_v1, 1)
+#define dcgmMnDiagTestAuxData_version  dcgmMnDiagTestAuxData_version1
+
+/**
+ * Information about each multi-node test run.
+ *
+ * Since DCGM 4.3
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    char name[DCGM_MN_DIAG_TEST_RUN_NAME_LEN];       //!< The name of the test.
+    char pluginName[DCGM_MN_DIAG_TEST_RUN_NAME_LEN]; //!< Plugin name that this test belongs to
+
+    dcgmDiagResult_t result; //!< Overall result of the plugin (PASS, FAIL, SKIP, WARN, NOT_RUN).
+
+    unsigned char numErrors;     //!< Number of errors, always 0 on PASS.
+    unsigned char numInfo;       //!< Number of info msgs.
+    unsigned char categoryIndex; //!< Index into DiagResponse.categories
+    unsigned char _unused1;      //!< padding byte for alignment
+
+    unsigned short numResults; //!< Number of entity results.
+    unsigned char _unused2[2]; //!< Padding bytes for alignment
+
+    unsigned char errorIndices[DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX]; //!< Per-entity error indices for this run.
+    unsigned char infoIndices[DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX];   //!< Per-entity info indices for this run.
+    unsigned short resultIndices[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX];    //!< Per-entity result indices for this run.
+    unsigned char _unused3[4];                                           //!< Padding bytes for alignment
+    dcgmMnDiagTestAuxData_v1 auxData;                                    //!< Auxiliary data for the test run
+} dcgmMnDiagTestRun_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagTestRun_v1 dcgmMnDiagTestRun_t;
+#define dcgmMnDiagTestRun_version1 MAKE_DCGM_VERSION(dcgmMnDiagTestRun_v1, 1)
+#define dcgmMnDiagTestRun_version  dcgmMnDiagTestRun_version1
+
+/**
+ * Additional entity details for multi-node diagnostic run.
+ *
+ * Since DCGM 4.3
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    dcgmGroupEntityPair_t entity;         //!< Entity group and entity id.
+    unsigned int hostId;                  //!< Index of the host this entity belongs to
+    char serialNum[DCGM_MAX_STR_LENGTH];  //!< Serial number (string; GPU only?)
+    char skuDeviceId[DCGM_DEVICE_ID_LEN]; //!< PCI device ID (string; GPU only?)
+    char _unusedPad1[3];
+} dcgmMnDiagEntity_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagEntity_v1 dcgmMnDiagEntity_t;
+#define dcgmMnDiagEntity_version1 MAKE_DCGM_VERSION(dcgmMnDiagEntity_v1, 1)
+#define dcgmMnDiagEntity_version  dcgmMnDiagEntity_version1
+
+
+/**
+ * Multi-node diagnostic plugin per-entity error v1
+ *
+ * Since DCGM 4.3
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    dcgmGroupEntityPair_t entity;  //!< The entity associated with the error. Use group DCGM_FE_NONE for global scope.
+    unsigned int hostId;           //!< Index of the host this error is from
+    unsigned int testId;           //!< The index of the test reporting the error.
+    unsigned int code;             //!< The error code being reported.
+    unsigned int category;         //!< The category of error reported. See dcgmErrorCategory_t in dcgm_errors.h.
+    unsigned int severity;         //!< The severity of the error reported. See dcgmErrorSeverity_t in dcgm_errors.h.
+    char msg[DCGM_ERR_MSG_LENGTH]; //!< Any message associated with the error reported by the plugin.
+} dcgmMnDiagError_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagError_v1 dcgmMnDiagError_t;
+#define dcgmMnDiagError_version1 MAKE_DCGM_VERSION(dcgmMnDiagError_v1, 1)
+#define dcgmMnDiagError_version  dcgmMnDiagError_version1
+
+/**
+ * Multi-node diagnostic plugin per-entity info v1
+ *
+ * Since DCGM 4.3
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    dcgmGroupEntityPair_t entity;  //!< The entity associated with the info. Use group DCGM_FE_NONE for global scope.
+    unsigned int hostId;           //!< The index of the host this info is from
+    unsigned int testId;           //!< The index of the test reporting the error.
+    char msg[DCGM_ERR_MSG_LENGTH]; //!< Any message associated with the error reported by the plugin.
+} dcgmMnDiagInfo_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagInfo_v1 dcgmMnDiagInfo_t;
+#define dcgmMnDiagInfo_version1 MAKE_DCGM_VERSION(dcgmMnDiagInfo_v1, 1)
+#define dcgmMnDiagInfo_version  dcgmMnDiagInfo_version1
+
+/**
+ * Multi-node diagnostic plugin per-entity result v1
+ *
+ * Since DCGM 4.3
+ * See also PluginInterface.h: dcgmDiagEntityResults_v1.
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    dcgmGroupEntityPair_t entity; //!< The entity associated with the result. Use group DCGM_FE_NONE for global scope.
+    dcgmDiagResult_t result;      //!< Result for this entity.
+    unsigned int hostId;          //!< The index of the host this info is from
+    unsigned int testId;          //!< The index of the test reporting the error.
+} dcgmMnDiagEntityResult_v1;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagEntityResult_v1 dcgmMnDiagEntityResult_t;
+#define dcgmMnDiagEntityResult_version1 MAKE_DCGM_VERSION(dcgmMnDiagEntityResult_v1, 1)
+#define dcgmMnDiagEntityResult_version  dcgmMnDiagEntityResult_version1
+
+/**
+ * Global multi-node diagnostics result structure v1
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    unsigned int version;   //!< version number (dcgmMnDiagResponse_v1)
+    unsigned char numHosts; //!< Number of hosts in this diagnostic run
+    unsigned char numTests; //!< Number of tests that were executed, 1 TEST right now
+    unsigned short
+        numErrors; //!< Number of errors generated during this test (includes per-gpu, system, and global level)
+    unsigned short
+        numInfos; //!< Number of info messages generated during this test (includes per-gpu, system, and global level)
+    unsigned short numEntities; //!< Number of entities across all hosts in this diagnostic run
+    unsigned short numResults;  //!< Number of test results for the test run
+    char _unusedPad1[2];
+
+    dcgmMnDiagHosts_v1 hosts[DCGM_MN_DIAG_RESPONSE_HOSTS_MAX];   //!< Host information for hosts in this diagnostic run
+    dcgmMnDiagTestRun_v1 tests[DCGM_MN_DIAG_RESPONSE_TESTS_MAX]; //!< Test run information for each relevant test.
+    dcgmMnDiagEntity_v1 entities[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX]; //!< Entity information for this test run
+    dcgmMnDiagError_v1 errors[DCGM_MN_DIAG_RESPONSE_ERRORS_MAX];      //!< Accumulated error messages from the test run
+    dcgmMnDiagInfo_v1 info[DCGM_MN_DIAG_RESPONSE_INFO_MAX];           //!< Information messages from the test run
+    dcgmMnDiagEntityResult_v1 results[DCGM_MN_DIAG_RESPONSE_RESULTS_MAX]; //!< Test results from the test run
+} dcgmMnDiagResponse_v1;
+#pragma GCC diagnostic pop
+/**
+ * Typedef for \ref dcgmMnDiagResponse_v1
+ */
+typedef dcgmMnDiagResponse_v1 dcgmMnDiagResponse_t;
+
+/**
+ * Version 1 for \ref dcgmMnDiagResponse_v1
+ */
+#define dcgmMnDiagResponse_version1 MAKE_DCGM_VERSION(dcgmMnDiagResponse_v1, 1)
+
+/**
+ * Latest version for \ref dcgmMndiagResponse_t
+ */
+#define dcgmMnDiagResponse_version dcgmMnDiagResponse_version1
+
+/**
  * Flags for dcgmGetEntityGroupEntities's flags parameter
  *
  * Only return entities that are supported by DCGM.
@@ -3515,6 +3762,52 @@ typedef dcgmNvLinkStatus_v4 dcgmNvLinkStatus_t;
  */
 #define dcgmNvLinkStatus_version4 MAKE_DCGM_VERSION(dcgmNvLinkStatus_v4, 4)
 
+/**
+ * Nvlink P2P link status. This mirrors nvmlGpuP2PStatus_enum.
+ */
+typedef enum dcgmNvLinkGpuP2PStatus_enum
+{
+    DvgmNvLinkP2pStatusOK = 0,               //!< O.K.
+    DcgmNvLinkP2pStatusChipsetNotSupported,  //!< Chipset not supported
+    DcgmNvLinkP2pStatusGpuNotSupported,      //!< GPU not supported
+    DcgmNvLinkP2pStatusTopologyNotSupported, //!< Topology not supported
+    DcgmNvLinkP2pStatusDisabledByRegKey,     //!< Disabled by RegKey
+    DcgmNvLinkP2pStatusNotSupported,         //!< Not supported
+    DcgmNvLinkP2pStatusUnknown               //!< Unknown
+
+} dcgmNvLinkGpuP2PStatus_t;
+
+/**
+ * P2P status of one of the NvLinks in a given system
+ */
+
+typedef struct
+{
+    dcgm_field_eid_t entityId;                                 //!< Entity ID of the GPU (gpuId)
+    dcgmNvLinkGpuP2PStatus_t linkStatus[DCGM_MAX_NUM_DEVICES]; //!< Per-GPU link states
+} dcgmNvLinkGpuLinkP2PStatus_v1;
+
+/**
+ * P2P status of all of the NvLinks in a given system.
+ *
+ * numGPUs should be 0 if it is desired to query all GPUs, or the number of
+ * gpus entries that have entityId members specifying the GPUs to query. In the
+ * former case the entityId members are filled in on exist.
+ */
+typedef struct
+{
+    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version1
+    unsigned int numGpus; //!< Number of entries in gpus[] that are populated
+    dcgmNvLinkGpuLinkP2PStatus_v1 gpus[DCGM_MAX_NUM_DEVICES]; //!< Per-GPU NvLink P2P statuses
+} dcgmNvLinkP2PStatus_v1;
+
+typedef dcgmNvLinkP2PStatus_v1 dcgmNvLinkP2PStatus_t;
+
+/**
+ * Version 1 of dcgmNvLinkP2PStatus
+ */
+#define dcgmNvLinkP2PStatus_version1 MAKE_DCGM_VERSION(dcgmNvLinkP2PStatus_v1, 1)
+
 /* Bitmask values for dcgmGetFieldIdSummary - Sync with DcgmcmSummaryType_t */
 #define DCGM_SUMMARY_MIN      0x00000001
 #define DCGM_SUMMARY_MAX      0x00000002
@@ -3564,16 +3857,17 @@ typedef dcgmFieldSummaryRequest_v1 dcgmFieldSummaryRequest_t;
  */
 typedef enum
 {
-    DcgmModuleIdCore       = 0, //!< Core DCGM - always loaded
-    DcgmModuleIdNvSwitch   = 1, //!< NvSwitch Module
-    DcgmModuleIdVGPU       = 2, //!< VGPU Module
-    DcgmModuleIdIntrospect = 3, //!< Introspection Module
-    DcgmModuleIdHealth     = 4, //!< Health Module
-    DcgmModuleIdPolicy     = 5, //!< Policy Module
-    DcgmModuleIdConfig     = 6, //!< Config Module
-    DcgmModuleIdDiag       = 7, //!< GPU Diagnostic Module
-    DcgmModuleIdProfiling  = 8, //!< Profiling Module
-    DcgmModuleIdSysmon     = 9, //!< System Monitoring Module
+    DcgmModuleIdCore       = 0,  //!< Core DCGM - always loaded
+    DcgmModuleIdNvSwitch   = 1,  //!< NvSwitch Module
+    DcgmModuleIdVGPU       = 2,  //!< VGPU Module
+    DcgmModuleIdIntrospect = 3,  //!< Introspection Module
+    DcgmModuleIdHealth     = 4,  //!< Health Module
+    DcgmModuleIdPolicy     = 5,  //!< Policy Module
+    DcgmModuleIdConfig     = 6,  //!< Config Module
+    DcgmModuleIdDiag       = 7,  //!< GPU Diagnostic Module
+    DcgmModuleIdProfiling  = 8,  //!< Profiling Module
+    DcgmModuleIdSysmon     = 9,  //!< System Monitoring Module
+    DcgmModuleIdMnDiag     = 10, //!< Multi-Node Diagnostic Module
 
     DcgmModuleIdCount //!< Always last. 1 greater than largest value above
 } dcgmModuleId_t;
@@ -3620,20 +3914,23 @@ typedef struct
 #define dcgmModuleGetStatuses_version  dcgmModuleGetStatuses_version1
 typedef dcgmModuleGetStatuses_v1 dcgmModuleGetStatuses_t;
 
+/* Freezed version of DcgmModuleIdCount for backward compatibility */
+#define DCGM_MODULE_ID_COUNT_V1 10
 /**
  * Options for dcgmStartEmbedded_v2
  *
  * Added in DCGM 2.0.0
+ * Note: size of denyList is changed from DcgmModuleIdCount to a fixed value of DCGM_MODULE_IDS_COUNT_V1
  */
 typedef struct
 {
-    unsigned int version;                     /*!< Version number. Use dcgmStartEmbeddedV2Params_version1 */
-    dcgmOperationMode_t opMode;               /*!< IN: Collect data automatically or manually when asked by the user. */
-    dcgmHandle_t dcgmHandle;                  /*!< OUT: DCGM Handle to use for API calls */
-    const char *logFile;                      /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
-    DcgmLoggingSeverity_t severity;           /*!< IN: Severity at which DCGM should log to logFile */
-    unsigned int denyListCount;               /*!< IN: Number of modules in denyList[] */
-    unsigned int denyList[DcgmModuleIdCount]; /* IN: IDs of modules to add to the denylist */
+    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version1 */
+    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int denyListCount;     /*!< IN: Number of modules in denyList[] */
+    unsigned int denyList[DCGM_MODULE_ID_COUNT_V1]; /* IN: IDs of modules to add to the denylist */
 } dcgmStartEmbeddedV2Params_v1;
 
 /**
@@ -3645,23 +3942,56 @@ typedef struct
  * Options for dcgmStartEmbeddedV2Params_v2
  *
  * Added in DCGM 2.4.0, renamed members in 3.0.0
+ * Note: size of denyList is changed from DcgmModuleIdCount to a fixed value of DCGM_MODULE_IDS_COUNT_V1
  */
 typedef struct
 {
-    unsigned int version;                     /*!< Version number. Use dcgmStartEmbeddedV2Params_version2 */
-    dcgmOperationMode_t opMode;               /*!< IN: Collect data automatically or manually when asked by the user. */
-    dcgmHandle_t dcgmHandle;                  /*!< OUT: DCGM Handle to use for API calls */
-    const char *logFile;                      /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
-    DcgmLoggingSeverity_t severity;           /*!< IN: Severity at which DCGM should log to logFile */
-    unsigned int denyListCount;               /*!< IN: Number of modules to be added to the denylist in denyList[] */
-    const char *serviceAccount;               /*!< IN: Service account for unprivileged processes */
-    unsigned int denyList[DcgmModuleIdCount]; /*!< IN: IDs of modules to be added to the denylist */
+    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version2 */
+    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int denyListCount;     /*!< IN: Number of modules to be added to the denylist in denyList[] */
+    const char *serviceAccount;     /*!< IN: Service account for unprivileged processes */
+    unsigned int denyList[DCGM_MODULE_ID_COUNT_V1]; /*!< IN: IDs of modules to be added to the denylist */
 } dcgmStartEmbeddedV2Params_v2;
 
 /**
  * Version 2 for \ref dcgmStartEmbeddedV2Params
  */
 #define dcgmStartEmbeddedV2Params_version2 MAKE_DCGM_VERSION(dcgmStartEmbeddedV2Params_v2, 2)
+
+/**
+ * This is larger than DcgmModuleIdCount so we can add modules without versioning this request
+ * Make sure to update DCGM_MODULE_ID_COUNT_V2 if you add more modules such that DcgmModuleIdCount is greater than
+ * DCGM_MODULE_ID_COUNT_V2
+ */
+#define DCGM_MODULE_ID_COUNT_V2 16
+
+/**
+ * Options for dcgmStartEmbeddedV2Params_v3
+ *
+ * Added in DCGM 4.3, expanded the size of denyList from DCGM_MODULE_ID_COUNT_V1 to DCGM_MODULE_ID_COUNT_V2
+ */
+typedef struct
+{
+    unsigned int version;           /*!< Version number. Use dcgmStartEmbeddedV2Params_version3 */
+    dcgmOperationMode_t opMode;     /*!< IN: Collect data automatically or manually when asked by the user. */
+    dcgmHandle_t dcgmHandle;        /*!< OUT: DCGM Handle to use for API calls */
+    const char *logFile;            /*!< IN: File that DCGM should log to. NULL = do not log. '-' = stdout */
+    DcgmLoggingSeverity_t severity; /*!< IN: Severity at which DCGM should log to logFile */
+    unsigned int denyListCount;     /*!< IN: Number of modules to be added to the denylist in denyList[] */
+    const char *serviceAccount;     /*!< IN: Service account for unprivileged processes */
+    unsigned int denyList[DCGM_MODULE_ID_COUNT_V2]; /*!< IN: IDs of modules to be added to the denylist */
+} dcgmStartEmbeddedV2Params_v3;
+
+/**
+ * Version 3 for \ref dcgmStartEmbeddedV2Params
+ */
+#define dcgmStartEmbeddedV2Params_version3 MAKE_DCGM_VERSION(dcgmStartEmbeddedV2Params_v3, 3)
+
+#define dcgmStartEmbeddedV2Params_version dcgmStartEmbeddedV2Params_version3
+typedef dcgmStartEmbeddedV2Params_v3 dcgmStartEmbeddedV2Params_t;
 
 /**
  * Maximum number of metric ID groups that can exist in DCGM

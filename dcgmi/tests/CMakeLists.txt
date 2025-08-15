@@ -33,6 +33,7 @@ target_sources(
     PRIVATE
         CommandLineParserTests.cpp
         TopoTests.cpp
+        TestMnDiag.cpp
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

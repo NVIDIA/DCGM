@@ -3780,44 +3780,6 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
-  - name: H20 HBM3e
-    id: 232c
-    targeted_power:
-      is_allowed: true
-      starting_matrix_dim: 1024
-      target_power: 500.0
-      use_dgemm: false
-    targeted_stress:
-      is_allowed: true
-      use_dgemm: false
-      #  Copied from sm stress target
-      target_stress: 20562
-    sm_stress:
-      is_allowed: true
-      # dcgmproftester -t 1007 measures ~27416. Multiply by .75 to get 20562
-      target_stress: 20562
-      use_dgemm: false
-    pcie:
-      is_allowed: true
-      h2d_d2h_single_pinned:
-        min_pci_generation: 3.0
-        min_pci_width: 16.0
-      h2d_d2h_single_unpinned:
-        min_pci_generation: 3.0
-        min_pci_width: 16.0
-    memory:
-      is_allowed: true
-      l1cache_size_kb_per_sm: 164.0
-    diagnostic:
-      is_allowed: true
-    memory_bandwidth:
-      is_allowed: true
-      # dcgmproftester -t 1005 measures ~2180000. Multiply by .75 to get ~1635000
-      minimum_bandwidth: 1635000
-    pulse_test:
-      is_allowed: true
-    nvbandwidth:
-      is_allowed: true
   - name: B200 DevId 20da
     id: 290120da
     targeted_power:
@@ -3900,6 +3862,7 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
+
   - name: B200 DevId 199B10DE
     id: 2901199b
     targeted_power:
@@ -3942,7 +3905,7 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
-
+      
   - name: B200 DevId 10DE
     id: 2941
     # subsystem id: 29412046
@@ -3987,6 +3950,88 @@ skus:
     nvbandwidth:
       is_allowed: true
 
+  - name: H20 HBM3e
+    id: 232c
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 500.0
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 20562
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~27416. Multiply by .75 to get 20562
+      target_stress: 20562
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      l1cache_size_kb_per_sm: 164.0
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 measures ~2180000. Multiply by .75 to get ~1635000
+      minimum_bandwidth: 1635000
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+
+  - name: H20 NVL16
+    id: 230e
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 500.00
+      max_matrix_dim: 8196
+      use_dgemv: true
+      use_dgemm: false
+      cuda_streams_per_gpu: 16
+      ops_per_requeue: 16
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 18881
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~25175. Multiply by .75 to get 18881
+      target_stress: 18881
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 3183333. Multiply by .75 to get 2387499
+      minimum_bandwidth: 2387499
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+
   - name: PG153 SKU 210
     id: 2bb5
     targeted_power:
@@ -4024,4 +4069,40 @@ skus:
     pulse_test:
       is_allowed: false
     nvbandwidth:
+      is_allowed: true
+  - name: B200
+    id: 2901
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 1000.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 36949
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~49266. Multiply by .75 to get 36949
+      target_stress: 36949
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 5430000. Multiply by .75 to get 4072500
+      minimum_bandwidth: 4072500
+    pulse_test:
       is_allowed: true

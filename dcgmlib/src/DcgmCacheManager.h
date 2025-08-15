@@ -1702,6 +1702,23 @@ public:
                                               timelib64_t now,
                                               timelib64_t expireTime);
 
+    /*************************************************************************/
+    /*
+     * Use NVML functions to determine the P2P NVLink status for a ALL GPUs
+     * to all other GPUs and return the full status for each link, not just
+     * a good/bad bitmap.
+     *
+     * If status.numGpus is non-zero the gpuId for the first status.numGpus
+     * entries is used to get the P2P link status for all GPUs to which it is
+     * connected.
+     *
+     * if status.numGpus is zero the gpuIds and P2P connection status for all
+     * GPUs is populated.
+     */
+    dcgmReturn_t CreateAllNvlinksP2PStatus(dcgmNvLinkP2PStatus_t &status);
+
+    std::string GetDriverVersion();
+
 #ifndef TEST_DCGMCACHEMANAGER
 private:
 #endif
@@ -1714,6 +1731,9 @@ private:
     /* The following are set by ReadAndCacheDriverVersions() */
     std::string m_driverVersion; /* Version string of the attached driver like "4184003" (418.40.03)
                                     so the strings can be compared. Set by AttachGpus() and protect by m_mutex. */
+
+    std::string m_driverFullVersion; /* Full version string of the attached driver like "418.40.03" */
+
     std::atomic_bool
         m_driverIsR450OrNewer; /* Is the driver r450.00 or newer? This is the driver version of nvml_11.0.h APIs */
 
@@ -2417,4 +2437,21 @@ private:
                                        nvmlDevice_t const nvmlDevice,
                                        unsigned short const fieldId,
                                        timelib64_t const expireTime);
+
+    /*************************************************************************/
+    /*
+     * Use NVML functions to determine the P2P NVLink status for a given GPU
+     * to all other GPUs.
+     */
+    dcgmReturn_t CreateNvlinkP2PStatusBitmap(nvmlDevice_t nvmlDevice, long long &p2pBitmap, nvmlReturn_t &nvmlReturn);
+
+
+    /*************************************************************************/
+    /*
+     * Use NVML functions to determine the P2P NVLink status for a given GPU
+     * to all other GPUs and return the full status for each link, not just
+     * a good/bad bitmap.
+     */
+    dcgmReturn_t CreateNvlinkP2PStatus(nvmlDevice_t nvmlDevice,
+                                       dcgmNvLinkGpuP2PStatus_t linkStatus[DCGM_MAX_NUM_DEVICES]);
 };

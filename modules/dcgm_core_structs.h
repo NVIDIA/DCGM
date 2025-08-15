@@ -88,7 +88,10 @@
 #define DCGM_CORE_SR_REMOVE_NVML_INJECTED_GPU               65 /* Remove nvml injected GPU from injection library */
 #define DCGM_CORE_SR_RESTORE_NVML_INJECTED_GPU              66 /* Restore nvml injected GPU to injection library */
 #define DCGM_CORE_SR_NVSWITCH_GET_BACKEND                   67 /* Get name for active NVSwitch backend */
+#define DCGM_CORE_SR_RESOURCE_RESERVE                       68 /* Reserve resources for a module */
+#define DCGM_CORE_SR_RESOURCE_FREE                          69 /* Free resources for a module */
 #define DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE              70 /* Get simplified GPU chip architecture */
+#define DCGM_CORE_SR_GET_NVLINK_P2P_STATUS                  71 /* Get p2p status of nvlink */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -537,6 +540,17 @@ typedef dcgm_core_msg_get_nvlink_status_v3 dcgm_core_msg_get_nvlink_status_t;
 typedef struct
 {
     dcgm_module_command_header_t header;
+    dcgmGetNvLinkP2PStatus_v1 info;
+} dcgm_core_msg_get_nvlink_p2p_status_v1;
+
+#define dcgm_core_msg_get_nvlink_p2p_status_version1 MAKE_DCGM_VERSION(dcgm_core_msg_get_nvlink_p2p_status_v1, 1)
+#define dcgm_core_msg_get_nvlink_p2p_status_version  dcgm_core_msg_get_nvlink_p2p_status_version1
+
+typedef dcgm_core_msg_get_nvlink_p2p_status_v1 dcgm_core_msg_get_nvlink_p2p_status_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
     dcgmSetNvLinkLinkState_v1 state;
     unsigned int cmdRet;
 } dcgm_core_msg_set_entity_nvlink_state_v1;
@@ -826,6 +840,7 @@ DCGM_CASSERT(dcgm_core_msg_select_topology_gpus_version1 == (long)0x1000040, 1);
 DCGM_CASSERT(dcgm_core_msg_get_all_devices_version1 == (long)0x10000a4, 1);
 DCGM_CASSERT(dcgm_core_msg_client_login_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_get_nvlink_status_version3 == (long)0x30039d8, 3);
+DCGM_CASSERT(dcgm_core_msg_get_nvlink_p2p_status_version1 == (long)0x10010a4, 1);
 DCGM_CASSERT(dcgm_core_msg_set_entity_nvlink_state_version1 == (long)0x1000034, 1);
 DCGM_CASSERT(dcgm_core_msg_fieldgroup_op_version1 == (long)0x1000230, 1);
 DCGM_CASSERT(dcgm_core_msg_pid_get_info_version1 == (long)0x1004550, 1);

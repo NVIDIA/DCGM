@@ -170,6 +170,8 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS;
         statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER;
+        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS;
 
         statFieldIds->numFieldIds = fieldCount;
     }

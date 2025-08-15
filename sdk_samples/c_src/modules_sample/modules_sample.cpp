@@ -35,6 +35,7 @@
 #define MODULE_DIAG_NAME       "Diag"
 #define MODULE_PROFILING_NAME  "Profiling"
 #define MODULE_SYSMON_NAME     "SysMon"
+#define MODULE_MNDIAG_NAME     "MnDiag"
 
 // Helper for displaying module names
 std::string moduleIdToName(dcgmModuleId_t moduleId)
@@ -63,6 +64,8 @@ std::string moduleIdToName(dcgmModuleId_t moduleId)
             return MODULE_PROFILING_NAME;
         case DcgmModuleIdSysmon:
             return MODULE_SYSMON_NAME;
+        case DcgmModuleIdMnDiag:
+            return MODULE_MNDIAG_NAME;
         // Invalid module
         case DcgmModuleIdCount:
             return "Invalid module";

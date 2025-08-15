@@ -185,7 +185,7 @@ static dcgmReturn_t DefaultTickHandler(size_t index,
 PhysicalGpu::PhysicalGpu(std::shared_ptr<DcgmProfTester> tester,
                          unsigned int gpuId,
                          const Arguments_t::Parameters &parameters)
-    : m_tester(tester)
+    : m_tester(std::move(tester))
     , m_gpuId(gpuId)
     , m_responseFn(nullptr)
 {
@@ -350,7 +350,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
         /**
          * We found a matching worker.
          */
-        foundCudaContext = cudaContext;
+        foundCudaContext = std::move(cudaContext);
 
         break;
     }
@@ -964,7 +964,7 @@ dcgmReturn_t PhysicalGpu::ProcessResponse(std::shared_ptr<DistributedCudaContext
     m_workerFinished = false;
     m_workerReported = false;
 
-    auto rtSt = (this->*m_responseFn)(worker);
+    auto rtSt = (this->*m_responseFn)(std::move(worker));
 
     return rtSt;
 }
@@ -1742,8 +1742,8 @@ dcgmReturn_t PhysicalGpu::BeginSubtest(std::string testTitle, std::string testTa
 
     m_subtestDcgmValues.clear();
     m_subtestGenValues.clear();
-    m_subtestTitle    = testTitle;
-    m_subtestTag      = testTag;
+    m_subtestTitle    = std::move(testTitle);
+    m_subtestTag      = std::move(testTag);
     m_subtestIsLinear = isLinearTest;
 
     m_subtestInProgress = true;

@@ -154,10 +154,11 @@ typedef enum dcgmError_enum
     DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE
         = 115, //!< 115 P2P copy test detected an error writing to this GPU over NVLink
     DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE
-        = 116,                    //!< 116 P2P copy test detected an error writing from this GPU over NVLink
-    DCGM_FR_TEST_SKIPPED   = 117, //!< 117 Indicates that the test was skipped
-    DCGM_FR_SRAM_THRESHOLD = 118, //!< 118 indicates SRAM Threshold Count exceeded
-    DCGM_FR_ERROR_SENTINEL = 119, //!< 119 MUST BE THE LAST ERROR CODE
+        = 116, //!< 116 P2P copy test detected an error writing from this GPU over NVLink
+    DCGM_FR_TEST_SKIPPED                   = 117, //!< 117 Indicates that the test was skipped
+    DCGM_FR_SRAM_THRESHOLD                 = 118, //!< 118 indicates SRAM Threshold Count exceeded
+    DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD = 119, //!< 119 indicates effective BER threshold exceeded
+    DCGM_FR_ERROR_SENTINEL                 = 120, //!< 120 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -273,7 +274,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // the name of the denylisted driver
 #define DCGM_FR_DENYLISTED_DRIVER_MSG "Found driver on the denylist: %s"
 // the name of the function that wasn't found
-#define DCGM_FR_NVML_LIB_BAD_MSG "Cannot get pointer to %s from libnvidia-ml.so"
+#define DCGM_FR_NVML_LIB_BAD_MSG   "Cannot get pointer to %s from libnvidia-ml.so"
 #define DCGM_FR_SRAM_THRESHOLD_MSG "SRAM Threshold Count exceeded on GPU %d: %ld"
 #define DCGM_FR_GRAPHICS_PROCESSES_MSG                                                 \
     "NVVS has detected processes with graphics contexts open running on at least one " \
@@ -403,6 +404,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
     "exceeding the limit of 100 per second."
 // error count, field name, gpu id
 #define DCGM_FR_NVLINK_ERROR_CRITICAL_MSG "Detected %ld %s NvLink errors on GPU %u's NVLink (should be 0)"
+// effective BER, gpu id
+#define DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD_MSG \
+    "Detected effective BER %.2e exceeds minimum threshold on GPU %u's NVLink."
 // gpu id, power limit, power reached
 #define DCGM_FR_ENFORCED_POWER_LIMIT_MSG                               \
     "Enforced power limit on GPU %u set to %.1f, which is too low to " \
@@ -646,10 +650,11 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT                                   \
     "Please verify your user-specified variance tolerance is set appropriately; " \
     "if so, and if errors are persistent, please run a field diagnostic."
-#define DCGM_FR_NAN_VALUE_NEXT                     TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
-#define DCGM_FR_TEST_SKIPPED_NEXT                  ""
-#define DCGM_FR_ERROR_SENTINEL_NEXT                "" /* See message inplace */
+#define DCGM_FR_NAN_VALUE_NEXT                      TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT  DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
+#define DCGM_FR_TEST_SKIPPED_NEXT                   ""
+#define DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD_NEXT TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_ERROR_SENTINEL_NEXT                 "" /* See message inplace */
 
 #ifdef __cplusplus
 extern "C" {

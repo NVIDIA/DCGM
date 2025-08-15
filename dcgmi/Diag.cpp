@@ -452,7 +452,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
             errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
                    << ". ";
         }
-        errMsg << "Return: (" << std::to_underlying(result) << ") " << "\n";
+        errMsg << "Return: (" << std::to_underlying(result) << ") : " << errorString(result) << "\n";
 
         if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
         {
@@ -852,7 +852,7 @@ bool Diag::isWhitespace(char c) const
 }
 
 /*****************************************************************************/
-std::string Diag::Sanitize(std::string sanitized)
+std::string Sanitize(std::string sanitized)
 {
     // Remove '***' and everything before it, if present
     if (size_t pos = sanitized.find("***"); pos != std::string::npos)
@@ -875,14 +875,14 @@ std::string Diag::Sanitize(std::string sanitized)
 
 /*****************************************************************************/
 /**
- * Display column-wrapped output. Use heading `name` and the content of the
+ * Display column-wrapped output. Use heading `name` and the msg content of the
  * specified `errorOrInfo`.
  */
-template <typename T>
-void Diag::DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, T const &errorOrInfo)
-    requires std::is_same_v<T, dcgmDiagError_v1> || std::is_same_v<T, dcgmDiagInfo_v1>
+void Diag::DisplayVerboseInfo(CommandOutputController &cmdView,
+                              const std::string &name,
+                              std::string_view errorOrInfoMsg)
 {
-    std::string msg { Sanitize(errorOrInfo.msg) };
+    std::string msg { Sanitize(std::string(errorOrInfoMsg)) };
     // It can only display 45 characters at a time, so split larger messages onto different lines
     for (size_t pos = 0; pos < msg.size(); pos += DATA_INFO_TAG_LEN)
     {
@@ -929,7 +929,7 @@ void Diag::HelperDisplayGlobalResult(CommandOutputController &view,
 
     for (auto const &error : errors)
     {
-        DisplayVerboseInfo(view, "Warning", error);
+        Diag::DisplayVerboseInfo(view, "Warning", error.msg);
     }
 
     if (verbose)
@@ -948,7 +948,7 @@ void Diag::HelperDisplayGlobalResult(CommandOutputController &view,
 
         for (auto const &info : infos)
         {
-            DisplayVerboseInfo(view, "Info", info);
+            Diag::DisplayVerboseInfo(view, "Info", info.msg);
         }
     }
 }
@@ -997,12 +997,12 @@ void Diag::HelperDisplayEntityResults(CommandOutputController &view,
 
         for (auto const &error : errors)
         {
-            DisplayVerboseInfo(view,
-                               fmt::format("{}: {}{}",
-                                           "Warning",
-                                           DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
-                                           result.entity.entityId),
-                               error);
+            Diag::DisplayVerboseInfo(view,
+                                     fmt::format("{}: {}{}",
+                                                 "Warning",
+                                                 DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
+                                                 result.entity.entityId),
+                                     error.msg);
         }
 
         if (verbose)
@@ -1021,12 +1021,12 @@ void Diag::HelperDisplayEntityResults(CommandOutputController &view,
 
             for (auto const &info : infos)
             {
-                DisplayVerboseInfo(view,
-                                   fmt::format("{}: {}{}",
-                                               "Info",
-                                               DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
-                                               result.entity.entityId),
-                                   info);
+                Diag::DisplayVerboseInfo(view,
+                                         fmt::format("{}: {}{}",
+                                                     "Info",
+                                                     DcgmFieldsGetEntityGroupString(result.entity.entityGroupId),
+                                                     result.entity.entityId),
+                                         info.msg);
             }
         }
     }

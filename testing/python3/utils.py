@@ -694,7 +694,7 @@ def verifyEcosystem():
     checkDmesgForProblems()
 
 def find_process_using_hostengine_port():
-    cmd = 'lsof -i -P -n | grep 5555'
+    cmd = 'lsof -i -P -n | grep -Fw 5555'
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, err_buf = p.communicate()
     out = out_buf.decode('utf-8')

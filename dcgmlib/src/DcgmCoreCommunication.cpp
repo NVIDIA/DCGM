@@ -18,6 +18,7 @@
 #include <mutex>
 #include <thread>
 
+#include <DcgmStringHelpers.h>
 #include <dcgm_module_structs.h>
 
 #include "DcgmCoreCommunication.h"
@@ -108,6 +109,30 @@ dcgmReturn_t DcgmCoreCommunication::ProcessAreAllGpuIdsSameSku(dcgm_module_comma
     qg.response.uintAnswer = m_cacheManagerPtr->AreAllGpuIdsSameSku(gpuIds);
 
     memcpy(header, &qg, sizeof(qg));
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessGetDriverVersion(dcgm_module_command_header_t *header)
+{
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreReqIdGetDriverVersion_version);
+
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    // Cast header to the actual struct type and write directly
+    auto *gdv = reinterpret_cast<dcgmCoreReqIdGetDriverVersion_t *>(header);
+
+    auto driverVersion = m_cacheManagerPtr->GetDriverVersion();
+    SafeCopyTo(gdv->driverVersion, driverVersion.c_str());
+    log_verbose("Writing driver version {} from CacheManager", driverVersion);
 
     return DCGM_ST_OK;
 }
@@ -1109,6 +1134,273 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuInstanceHierarchy(dcgm_module_c
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreCommunication::ProcessResourceReserve(dcgm_module_command_header_t *header)
+{
+    dcgmCoreResourceReserve_v1 query = {};
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (auto const ret = DcgmModule::CheckVersion(header, dcgmCoreResourceReserve_version1); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    auto token = DcgmHostEngineHandler::Instance()->ReserveResources();
+
+    if (token)
+    {
+        query.response.ret   = DCGM_ST_OK;
+        query.response.token = *token;
+    }
+    else
+    {
+        query.response.ret = DCGM_ST_IN_USE;
+    }
+
+    memcpy(header, &query, sizeof(query));
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessResourceFree(dcgm_module_command_header_t *header)
+{
+    dcgmCoreResourceFree_v1 query = {};
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (auto const ret = DcgmModule::CheckVersion(header, dcgmCoreResourceFree_version1); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    if (header->length < sizeof(query))
+    {
+        DCGM_LOG_ERROR << "Header length " << header->length << " is smaller than expected size " << sizeof(query);
+        return DCGM_ST_BADPARAM;
+    }
+    memcpy(&query, header, sizeof(query));
+
+    query.ret
+        = DcgmHostEngineHandler::Instance()->FreeResources(query.request.token) ? DCGM_ST_OK : DCGM_ST_GENERIC_ERROR;
+
+    memcpy(header, &query, sizeof(query));
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessSpawn(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessSpawn_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessSpawn_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessSpawn(query.request, query.handle, query.pid);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessStop(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessStop_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessStop_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessStop(query.handle, query.force);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessGetStatus(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessGetStatus_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessGetStatus_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessGetStatus(query.handle, query.status);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessWait(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessWait_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessWait_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessWait(query.handle, query.timeoutSec);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessDestroy(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessDestroy_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessDestroy_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessDestroy(query.handle, query.sigTermTimeoutSec);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessGetStdErrHandle(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessGetStdErrHandle_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessGetStdErrHandle_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessGetStdErrHandle(query.handle, query.fd);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessGetStdOutHandle(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessGetStdOutHandle_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessGetStdOutHandle_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessGetStdOutHandle(query.handle, query.fd);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessGetDataChannelHandle(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessGetDataChannelHandle_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessGetDataChannelHandle_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessGetDataChannelHandle(query.handle, query.fd);
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessChildProcessManagerReset(dcgm_module_command_header_t *header)
+{
+    dcgmCoreChildProcessManagerReset_t query = {};
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreChildProcessManagerReset_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&query, header, sizeof(query));
+
+    query.ret = DcgmHostEngineHandler::Instance()->ChildProcessManagerReset();
+
+    memcpy(header, &query, sizeof(query));
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_header_t *header)
 {
     dcgmReturn_t ret = DCGM_ST_OK;
@@ -1308,6 +1600,78 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqPopulateMigHierarchy:
         {
             ret = ProcessGetGpuInstanceHierarchy(header);
+            break;
+        }
+
+        case DcgmCoreReqIdResourceReserve:
+        {
+            ret = ProcessResourceReserve(header);
+            break;
+        }
+
+        case DcgmCoreReqIdResourceFree:
+        {
+            ret = ProcessResourceFree(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessSpawn:
+        {
+            ret = ProcessChildProcessSpawn(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessStop:
+        {
+            ret = ProcessChildProcessStop(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessGetStatus:
+        {
+            ret = ProcessChildProcessGetStatus(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessWait:
+        {
+            ret = ProcessChildProcessWait(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessDestroy:
+        {
+            ret = ProcessChildProcessDestroy(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessGetStdErrHandle:
+        {
+            ret = ProcessChildProcessGetStdErrHandle(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessGetStdOutHandle:
+        {
+            ret = ProcessChildProcessGetStdOutHandle(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessGetDataChannelHandle:
+        {
+            ret = ProcessChildProcessGetDataChannelHandle(header);
+            break;
+        }
+
+        case DcgmCoreReqIdGetDriverVersion:
+        {
+            ret = ProcessGetDriverVersion(header);
+            break;
+        }
+
+        case DcgmCoreReqIdChildProcessManagerReset:
+        {
+            ret = ProcessChildProcessManagerReset(header);
             break;
         }
 

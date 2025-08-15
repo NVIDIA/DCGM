@@ -22,6 +22,7 @@
 #include "DcgmHandle.h"
 #include "NvvsCommon.h" //logging functions
 #include "dcgm_test_apis.h"
+#include <DcgmStringHelpers.h>
 
 DcgmHandle::DcgmHandle()
     : m_lastReturn(DCGM_ST_OK)
@@ -106,13 +107,13 @@ dcgmReturn_t DcgmHandle::ConnectToDcgm(const std::string &dcgmHostname)
         sprintf(hostname, "127.0.0.1");
     else
     {
-        if (!strncmp(dcgmHostname.c_str(), "unix://", 7))
+        if (std::string_view(dcgmHostname).starts_with(DCGM_UNIX_SOCKET_PREFIX))
         {
             params.addressIsUnixSocket = 1;
-            snprintf(hostname, sizeof(hostname), "%s", dcgmHostname.c_str() + 7);
+            SafeCopyTo<sizeof(hostname)>(hostname, dcgmHostname.c_str() + strlen(DCGM_UNIX_SOCKET_PREFIX));
         }
         else
-            snprintf(hostname, sizeof(hostname), "%s", dcgmHostname.c_str());
+            SafeCopyTo<sizeof(hostname)>(hostname, dcgmHostname.c_str());
     }
 
     m_lastReturn = dcgmInit();

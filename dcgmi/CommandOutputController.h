@@ -56,7 +56,7 @@ public:
     template <typename T>
     void addDisplayParameter(std::string toReplace, T replaceWith)
     {
-        dcgmDisplayParameter_t value { std::move(toReplace), HelperDisplayValue(replaceWith) };
+        dcgmDisplayParameter_t value { std::move(toReplace), std::move(HelperDisplayValue(replaceWith)) };
         displayParams.push_back(std::move(value));
     }
 
@@ -83,7 +83,7 @@ public:
     /*****************************************************************************
      * Helper method to give proper output to strings
      *****************************************************************************/
-    std::string HelperDisplayValue(std::string val);
+    std::string HelperDisplayValue(std::string const &val);
 
     /*****************************************************************************
      * Helper method to give proper output Enabled/Disabled Values

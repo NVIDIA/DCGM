@@ -125,4 +125,18 @@ std::string Join(std::vector<TValue> const &values, std::string_view separator =
 
 std::vector<std::string> TokenizeStringQuoted(std::string_view str, char delimiter, std::string_view quotes = {});
 
+/*****************************************************************************/
+/**
+ * @brief Strictly converts a string to an integer
+ *
+ * Unlike std::stoi, this requires the entire string to represent a valid integer,
+ * with no extraneous characters.
+ *
+ * @param str The string to convert
+ * @return The converted integer
+ * @throws std::invalid_argument if the string isn't a valid integer
+ * @throws std::out_of_range if the number is out of range for int
+ */
+int strictStrToInt(std::string const &str);
+
 } // namespace DcgmNs

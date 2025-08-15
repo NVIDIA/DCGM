@@ -154,7 +154,7 @@ TEST_CASE("TargetedPower_wrapper: EnforcedPowerLimitTooLow(), negative test for 
 
     cpt.EnforcedPowerLimitTooLowWrapper();
 
-    auto errors = cpt.GetErrors(cpt.GetTargetedPowerTestName());
+    auto const &errors = cpt.GetErrors(cpt.GetTargetedPowerTestName());
     REQUIRE(errors.size() == 1);
 
     nvvsPluginEntityErrors_t errorsPerEntity = cpt.GetEntityErrors(cpt.GetTargetedPowerTestName());

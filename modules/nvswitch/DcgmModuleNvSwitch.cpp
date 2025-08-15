@@ -478,6 +478,7 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     timelib64_t nextUpdateTimeUsec;
     timelib64_t untilNextLinkStatusUsec;                       /* How long until our next switch status rescan */
     timelib64_t const linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
+    timelib64_t const minUpdateIntervalUsec        = 1000;     /* Minimum update interval in microseconds */
 
     /* Update link statuses every 30 seconds */
     timelib64_t now         = timelib_usecSince1970();
@@ -489,17 +490,37 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
         untilNextLinkStatusUsec    = linkStatusRescanIntervalUsec;
     }
 
-    m_nvswitchMgr.UpdateFields(nextUpdateTimeUsec);
+    m_nvswitchMgr.UpdateFields(nextUpdateTimeUsec, now);
     if (nextUpdateTimeUsec == 0)
     {
+        /*
+         * If there are no watches, returned value for nextUpdateTimeUsec will be 0. Set it equal to
+         * linkStatusRescanIntervalUsec i.e 30 seconds.
+         */
         nextUpdateTimeUsec = linkStatusRescanIntervalUsec;
+    }
+    else
+    {
+        /*
+         * Determine the absolute time of the next update, then convert to relative time.
+         * If nextUpdateTimeUsec is lower than the minimum update interval, set it to the minimum update interval.
+         */
+        nextUpdateTimeUsec = nextUpdateTimeUsec - now;
+        if (nextUpdateTimeUsec < minUpdateIntervalUsec)
+        {
+            log_info(
+                "Next update time {} usec, is below minimum update interval {} usec, setting it to minimum update interval.",
+                nextUpdateTimeUsec,
+                minUpdateIntervalUsec);
+            nextUpdateTimeUsec = minUpdateIntervalUsec;
+        }
     }
 
     /* Adjust our nextUpdateTimeUsec for whichever is sooner between when watches will
       update again or when we need to rescan links */
     nextUpdateTimeUsec = std::min(nextUpdateTimeUsec, untilNextLinkStatusUsec);
 
-    DCGM_LOG_VERBOSE << "Next update " << nextUpdateTimeUsec;
+    log_verbose("Next update in {} usec.", nextUpdateTimeUsec);
     return nextUpdateTimeUsec / 1000;
 }
 

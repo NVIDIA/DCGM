@@ -239,7 +239,7 @@ TEST_CASE("TryParseEntityList")
     SECTION("Empty input")
     {
         DcgmNs::EntityMap entityMap;
-        auto [entityList, rejectedId] = DcgmNs::TryParseEntityList(entityMap, "");
+        auto [entityList, rejectedId] = DcgmNs::TryParseEntityList(std::move(entityMap), "");
         REQUIRE(entityList.empty());
         REQUIRE(rejectedId.empty());
     }
@@ -248,7 +248,7 @@ TEST_CASE("TryParseEntityList")
     {
         DcgmNs::EntityMap entityMap;
         std::string entityId          = "gpu:0,cpu:0";
-        auto [entityList, rejectedId] = DcgmNs::TryParseEntityList(entityMap, entityId);
+        auto [entityList, rejectedId] = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
         REQUIRE(entityList.empty());
         REQUIRE(rejectedId == entityId);
     }
@@ -305,7 +305,7 @@ TEST_CASE("TryParseEntityList")
         REQUIRE(rejectedId == "cpu:1");
 
         entityId                         = "*/*/*,cpu:1";
-        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(entityMap, entityId);
+        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
         REQUIRE(entityList.empty());
         REQUIRE(rejectedId == "cpu:1");
     }
@@ -350,7 +350,7 @@ TEST_CASE("TryParseEntityList")
         REQUIRE(rejectedId == "cpu:1");
 
         entityId                         = "*/*/*,cpu:1";
-        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(entityMap, entityId);
+        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
         REQUIRE(entityList.size() == 1);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_CI);

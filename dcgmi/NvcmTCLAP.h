@@ -50,7 +50,7 @@ public:
                          bool helpAndVersion        = false)
         : CmdLine(message, delimiter, version, helpAndVersion)
     {
-        myName = name;
+        myName = std::move(name);
         if (!helpAndVersion)
         {
             TCLAP::Visitor *v = new TCLAP::HelpVisitor(this, &_output);
@@ -101,11 +101,11 @@ public:
     }
     void addDescription(std::string description)
     {
-        this->description = description;
+        this->description = std::move(description);
     }
     void addFooter(std::string footer)
     {
-        this->footer = footer;
+        this->footer = std::move(footer);
     }
 
 

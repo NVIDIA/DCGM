@@ -647,7 +647,7 @@ unsigned long getPciCorrectedErrorCount(DcgmRecorder &recorder, unsigned int gpu
     std::string devStr   = convertPciBusID(std::string(attrs.identifiers.pciBusId));
     std::string fileName = "/sys/bus/pci/devices/" + devStr + "/aer_dev_correctable";
 
-    return extractTotalErrCor(fileName);
+    return extractTotalErrCor(std::move(fileName));
 }
 
 int BusGrind::GetAERThresholdRate(SmPerfDevice *gpu)
@@ -972,7 +972,7 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
 
     if (disabledTestsStr.size() > 0)
     {
-        ParseDisableTests(disabledTestsStr);
+        ParseDisableTests(std::move(disabledTestsStr));
     }
     else
     {

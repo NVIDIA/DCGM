@@ -26,6 +26,7 @@ target_sources(dcgmlibtests
         GpmTests.cpp
         DcgmKmsgReaderTests.cpp
         DcgmClientHandlerTests.cpp
+        DcgmResourceManagerTests.cpp
 )
 
 target_link_libraries(dcgmlibtests PRIVATE

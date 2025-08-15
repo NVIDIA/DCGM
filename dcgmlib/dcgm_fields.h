@@ -357,6 +357,11 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY 63
 
 /**
+ * A bitmap of the P2P NVLINK status from this GPU to others on this host.
+ */
+#define DCGM_FI_DEV_P2P_NVLINK_STATUS 64
+
+/**
  * Compute mode for the device
  */
 #define DCGM_FI_DEV_COMPUTE_MODE 65
@@ -572,7 +577,7 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_GPU_TEMP 150
 
 /**
- * Maximum operating temperature for the memory of this GPU
+ * Maximum operating temperature for the memory of this GPU. Above this temperature slowdown will occur.
  */
 #define DCGM_FI_DEV_MEM_MAX_OP_TEMP 151
 

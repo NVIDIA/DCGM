@@ -129,10 +129,10 @@ public:
         , m_constraint(*this, shortId, constraintDescription)
         ,
 
-        m_valueArg(shortName, longName, description, required, defaultValue, &m_constraint, cmd)
+        m_valueArg(shortName, longName, description, required, std::move(defaultValue), &m_constraint, cmd)
         ,
 
-        m_checkFn(checkFn)
+        m_checkFn(std::move(checkFn))
     {}
 
     bool Check(const T &value)
@@ -214,7 +214,7 @@ public:
                std::map<std::string, bool> &longMap,
                std::function<void(ThisType &)> visitFn)
         : m_defaultValue(defaultValue)
-        , m_visitFn(visitFn)
+        , m_visitFn(std::move(visitFn))
         , m_visitor(*this)
         , m_switchArg(shortName, longName, description, cmd, defaultValue, &m_visitor)
     {

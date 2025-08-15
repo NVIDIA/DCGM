@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// NOTE: There are other RunCmdAndCollectOutput tests in ChildProcess/tests/RunCmdAndCollectOutputTests.cpp
+
 #include "DcgmUtilities.h"
 
 #include "DcgmLogging.h"
@@ -42,23 +45,59 @@
 
 std::optional<UserCredentials> GetUserCredentials(char const *userName) noexcept(false)
 {
+    constexpr size_t INITIAL_BUFFER_SIZE = 1024;
+    constexpr size_t MAX_BUFFER_SIZE     = 1024 * 1024; // 1MB
     passwd pwInfo {};
     passwd *result = nullptr;
-    std::vector<char> buffer;
-    size_t bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
-
+    std::vector<std::byte> buffer;
     int err = 0;
+
+    if (userName == nullptr)
+    {
+        fmt::print(stderr, "No username provided\n");
+        fflush(stderr);
+        return std::nullopt;
+    }
+
+    auto pwRecSizeMax = sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (pwRecSizeMax > 0 && pwRecSizeMax > static_cast<long>(MAX_BUFFER_SIZE))
+    {
+        // try with the max size, and hope for the best
+        pwRecSizeMax = static_cast<long>(MAX_BUFFER_SIZE);
+        fmt::print(stderr, "Limiting buffer size for getpwnam_r to {}\n", MAX_BUFFER_SIZE);
+        fflush(stderr);
+    }
+
+    size_t bufferSize
+        = std::min((pwRecSizeMax > 0 ? static_cast<size_t>(pwRecSizeMax) : INITIAL_BUFFER_SIZE), MAX_BUFFER_SIZE);
+
     do
     {
+        if (bufferSize > MAX_BUFFER_SIZE)
+        {
+            throw std::system_error(std::error_code(ERANGE, std::generic_category()),
+                                    "Buffer size for getpwnam_r exceeds maximum allowed");
+        }
+
         buffer.resize(bufferSize);
-        err = getpwnam_r(userName, &pwInfo, buffer.data(), buffer.size(), &result);
-        bufferSize *= 2;
-    } while (err == ERANGE);
+        err = getpwnam_r(userName, &pwInfo, std::bit_cast<char *>(buffer.data()), buffer.size(), &result);
+
+        if (err == ERANGE && bufferSize <= MAX_BUFFER_SIZE)
+        {
+            size_t const newSize = bufferSize * 2;
+            if (newSize <= bufferSize)
+            {
+                throw std::system_error(std::error_code(ERANGE, std::generic_category()),
+                                        "Buffer size for getpwnam_r exceeds maximum allowed");
+            }
+            bufferSize = newSize;
+        }
+    } while ((err == ERANGE && bufferSize <= MAX_BUFFER_SIZE) || err == EINTR);
 
     if (err != 0)
     {
         auto const msg = fmt::format("Unable to get gid/uid for user {}", userName);
-        fmt::print(stderr, "{}. Error = ", msg, err);
+        fmt::print(stderr, "{}. Error = {}\n", msg, err);
         fflush(stderr);
         throw std::system_error(std::error_code(err, std::generic_category()), msg);
     }
@@ -411,11 +450,13 @@ void *LoadFunction(void *libHandle, const std::string &funcname, const std::stri
         std::string error = dlerror();
         if (error.empty())
         {
-            log_error("Couldn't load a definition for {} from {}", funcname, libName);
+            fmt::print(stderr, "Couldn't load a definition for {} from {}\n", funcname, libName);
+            fflush(stderr);
         }
         else
         {
-            log_error("Couldn't load a definition for {} from {}: '{}'", funcname, libName, error);
+            fmt::print(stderr, "Couldn't load a definition for {} from {}: '{}'\n", funcname, libName, error);
+            fflush(stderr);
         }
     }
 
@@ -445,13 +486,15 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
         if (numa_bitmask_alloc == nullptr || numa_num_possible_nodes == nullptr || numa_bitmask_clearall == nullptr
             || numa_bitmask_setbit == nullptr || numa_bind == nullptr)
         {
-            log_error("Cannot load symbols from libnuma; not binding to NUMA nodes!");
+            fmt::print(stderr, "Cannot load symbols from libnuma; not binding to NUMA nodes!\n");
+            fflush(stderr);
             return DCGM_ST_LIBRARY_NOT_FOUND;
         }
     }
     else
     {
-        log_error("Cannot load libnuma.so: not binding to NUMA nodes!");
+        fmt::print(stderr, "Cannot load libnuma.so: not binding to NUMA nodes!\n");
+        fflush(stderr);
         return DCGM_ST_LIBRARY_NOT_FOUND;
     }
 
@@ -459,7 +502,8 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
     struct bitmask *nodemask = numa_bitmask_alloc(numa_num_possible_nodes());
     if (nodemask == nullptr)
     {
-        log_error("Cannot allocate numa bitmask: not binding to NUMA nodes!");
+        fmt::print(stderr, "Cannot allocate numa bitmask: not binding to NUMA nodes!\n");
+        fflush(stderr);
         return DCGM_ST_MEMORY;
     }
 
@@ -468,7 +512,6 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
     for (size_t i = 0; i < nodeSet.size(); i++)
     {
         unsigned long partialNodeSet = nodeSet.at(i);
-        log_debug("Binding part {} of 4 to nodes {:x}", i + 1, partialNodeSet);
 
         // Initialize j to the bit we want to start working from
         unsigned int j = 0 + i * (sizeof(partialNodeSet) * 8);
@@ -683,7 +726,7 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
         {
             if (auto result = BindToNumaNodes(*nodeSet); result != DCGM_ST_OK)
             {
-                fmt::print(stderr, "Could not bind to NUMA nodes: {}\n", errorString(result));
+                fmt::print(stderr, "Could not bind to NUMA nodes, error code {}\n", result);
                 fflush(stderr);
                 exit(EXIT_FAILURE);
             }
@@ -766,6 +809,10 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
         if (numEvents < 0)
         {
             auto const err = errno;
+            if (err == EINTR)
+            {
+                continue;
+            }
             DCGM_LOG_ERROR << "epoll_wait failed. errno " << err;
             return err;
         }
@@ -921,6 +968,56 @@ int FileHandle::Release()
     return result;
 }
 
+ssize_t FileHandle::ReadExact(std::byte *buffer, size_t size)
+{
+    if (m_fd == -1)
+    {
+        m_errno = EBADF;
+        return -1;
+    }
+    size_t totalBytesRead = 0;
+    while (totalBytesRead < size)
+    {
+        ssize_t bytesRead = read(m_fd, buffer + totalBytesRead, size - totalBytesRead);
+        if (bytesRead == 0)
+        {
+            // EOF reached
+            return 0;
+        }
+        if (bytesRead < 0)
+        {
+            m_errno = errno;
+            if (GetErrno() == EINTR)
+            {
+                continue;
+            }
+            return -1;
+        }
+        totalBytesRead += bytesRead;
+    }
+    return totalBytesRead;
+}
+
+int FileHandle::GetErrno() const
+{
+    return m_errno;
+}
+
+ssize_t FileHandle::Write(void const *buffer, size_t size)
+{
+    if (m_fd == -1)
+    {
+        m_errno = EBADF;
+        return -1;
+    }
+    auto ret = write(m_fd, buffer, size);
+    if (ret < 0)
+    {
+        m_errno = errno;
+    }
+    return ret;
+}
+
 std::unique_ptr<PipePair> PipePair::Create(PipePair::BlockingType const blockingType) noexcept
 {
     std::unique_ptr<PipePair> result = std::unique_ptr<PipePair>(new PipePair());
@@ -1027,5 +1124,27 @@ std::string HelperDisplayPowerBitmask(unsigned int const *mask)
     return ss.str();
 }
 
+std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber)
+{
+    // details in nvbugs/5088600
+    uint64_t const mantissa = NVML_NVLINK_ERROR_COUNTER_BER_GET(ber, BER_MANTISSA);
+    uint64_t const exponent = NVML_NVLINK_ERROR_COUNTER_BER_GET(ber, BER_EXP);
+    return std::make_tuple(mantissa, exponent, mantissa * std::pow(10.0, -1.0 * static_cast<double>(exponent)));
+}
+
+LogPaths GetLogFilePath(std::string_view testName)
+{
+    std::filesystem::path logDir = []() -> std::filesystem::path {
+        if (auto const *dcgmHomeDir = getenv(DCGM_HOME_DIR_VAR_NAME); dcgmHomeDir != nullptr)
+        {
+            return dcgmHomeDir;
+        }
+        return "/var/log/nvidia-dcgm";
+    }();
+
+    return { .logFileName    = logDir / fmt::format("dcgm_{}.log", testName),
+             .stdoutFileName = logDir / fmt::format("dcgm_{}_stdout.txt", testName),
+             .stderrFileName = logDir / fmt::format("dcgm_{}_stderr.txt", testName) };
+}
 
 } // namespace DcgmNs::Utils

@@ -18,7 +18,6 @@ target_link_libraries(testdcgmunittests
     PRIVATE
         ${CMAKE_THREAD_LIBS_INIT}
         ${JSONCPP_STATIC_LIBS}
-        dcgm
         dcgm_common
         dcgm_logging
         dcgm_mutex
@@ -30,6 +29,7 @@ target_link_libraries(testdcgmunittests
         module_common_interface
         module_common_objects
         modules_objects
+        dcgm
         rt
         sdk_nvml_essentials_objects
         sdk_nvml_loader
@@ -163,10 +163,11 @@ install(
         python3/dcgm_structs.py
         python3/dcgmvalue.py
         python3/DcgmDiag.py
+        python3/DcgmMnDiag.py
         python3/DcgmGroup.py
         python3/DcgmHandle.py
         python3/DcgmJsonReader.py
-        python3/DcgmLogging.py
+	    python3/DcgmLogging.py
         python3/DcgmReader.py
         python3/DcgmStatus.py
         python3/DcgmSystem.py

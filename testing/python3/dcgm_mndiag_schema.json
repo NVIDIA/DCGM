@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "DCGM Multi-Node Diagnostic": {
+      "type": "string",
+      "enum": ["DCGM Multi-Node Diagnostic"]
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "num_hosts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "num_entities": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["num_hosts", "num_entities"]
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "host_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "dcgm_version": {
+            "type": "string"
+          },
+          "driver_version": {
+            "type": "string"
+          },
+          "num_entities": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entity_group_id": {
+                  "type": "integer"
+                },
+                "entity_group": {
+                  "type": "string"
+                },
+                "entity_id": {
+                  "type": "integer"
+                },
+                "serial_num": {
+                  "type": "string"
+                },
+                "device_id": {
+                  "type": "string"
+                }
+              },
+              "required": ["entity_group_id", "entity_group", "entity_id"]
+            }
+          }
+        },
+        "required": ["host_id", "hostname", "dcgm_version", "driver_version", "num_entities", "entities"]
+      }
+    },
+    "test_categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "tests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["Pass", "Fail", "Warn", "Skip", "Not Run"]
+                },
+                "test_summary": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["Pass", "Fail", "Warn", "Skip", "Not Run"]
+                    }
+                  },
+                  "required": ["status"]
+                },
+                "mpi_error": {
+                  "type": "object",
+                  "properties": {
+                    "warning": {
+                      "type": "string"
+                    },
+                    "error_category": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["warning", "error_category"]
+                },
+                "results": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "host_id": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "entity_group_id": {
+                        "type": "integer"
+                      },
+                      "entity_group": {
+                        "type": "string"
+                      },
+                      "entity_id": {
+                        "type": "integer"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["Pass", "Fail", "Warn", "Skip", "Not Run"]
+                      },
+                      "warnings": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "warning": {
+                              "type": "string"
+                            },
+                            "error_id": {
+                              "type": "integer"
+                            },
+                            "error_category": {
+                              "type": "integer"
+                            },
+                            "error_severity": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": ["warning", "error_id", "error_category", "error_severity"]
+                        }
+                      },
+                      "info": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": ["host_id", "entity_group_id", "entity_group", "entity_id", "status"]
+                  }
+                }
+              },
+              "required": ["name", "status", "test_summary", "results"]
+            }
+          }
+        },
+        "required": ["category", "tests"]
+      }
+    },
+    "global_errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warning": {
+            "type": "string"
+          },
+          "error_id": {
+            "type": "integer"
+          },
+          "error_category": {
+            "type": "integer"
+          },
+          "error_severity": {
+            "type": "integer"
+          },
+          "host_id": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["warning", "error_id", "error_category", "error_severity", "host_id"]
+      }
+    },
+    "runtime_error": {
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "required": ["DCGM Multi-Node Diagnostic", "metadata", "hosts", "test_categories"]
+    },
+    {
+      "required": ["DCGM Multi-Node Diagnostic", "runtime_error"]
+    }
+  ]
+}

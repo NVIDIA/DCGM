@@ -998,6 +998,8 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER);
 
     return ret;
 }
@@ -1803,17 +1805,46 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
                                             long long endTime,
                                             DcgmHealthResponse &response)
 {
-    dcgmReturn_t ret                                                   = DCGM_ST_OK;
-    unsigned short fieldIds[DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS] = { 0 };
-    dcgmcm_sample_t startValue                                         = {};
-    dcgmcm_sample_t endValue                                           = {};
-    int count                                                          = 0;
+    dcgmReturn_t ret = DCGM_ST_OK;
 
+    auto tmpRet = MonitorNVLink4Fields(entityGroupId, entityId, startTime, endTime, response);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Got error {} from MonitorNVLink4Fields gpuId {}", (int)tmpRet, entityId);
+        ret = tmpRet;
+    }
+
+    tmpRet = MonitorNVLink5Fields(entityGroupId, entityId, startTime, endTime, response);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Got error {} from MonitorNVLink5Fields gpuId {}", (int)tmpRet, entityId);
+        ret = tmpRet;
+    }
+
+    tmpRet = MonitorNVLinkStatus(entityGroupId, entityId, response);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Got error {} from MonitorNVLinkStatus gpuId {}", (int)tmpRet, entityId);
+        ret = tmpRet;
+    }
+    return ret;
+}
+
+dcgmReturn_t DcgmHealthWatch::MonitorNVLink4Fields(dcgm_field_entity_group_t entityGroupId,
+                                                   dcgm_field_eid_t entityId,
+                                                   long long startTime,
+                                                   long long endTime,
+                                                   DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
     /* Various NVLink error counters to be monitored */
-    fieldIds[0] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL;
-    fieldIds[1] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL;
-    fieldIds[2] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL;
-    fieldIds[3] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL;
+    std::array constexpr fieldIds = { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL };
+    dcgmcm_sample_t startValue    = {};
+    dcgmcm_sample_t endValue      = {};
+    int count                     = 0;
 
     unsigned int oneMinuteInUsec = 60000000;
     timelib64_t now              = timelib_usecSince1970();
@@ -1826,17 +1857,11 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
 
     /* Note: Allow endTime to be in the future. 0 = blank = most recent record in time series */
 
-    for (unsigned int nvLinkField = 0; nvLinkField < DCGM_HEALTH_WATCH_NVLINK_ERROR_NUM_FIELDS; nvLinkField++)
+    for (auto const field : fieldIds)
     {
         count = 1;
-        ret   = mpCoreProxy.GetSamples(entityGroupId,
-                                     entityId,
-                                     fieldIds[nvLinkField],
-                                     &startValue,
-                                     &count,
-                                     startTime,
-                                     endTime,
-                                     DCGM_ORDER_ASCENDING);
+        ret   = mpCoreProxy.GetSamples(
+            entityGroupId, entityId, field, &startValue, &count, startTime, endTime, DCGM_ORDER_ASCENDING);
 
         if (ret != DCGM_ST_OK && ret != DCGM_ST_NO_DATA && ret != DCGM_ST_NOT_WATCHED)
             return ret;
@@ -1847,14 +1872,8 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
             continue;
 
         count = 1;
-        ret   = mpCoreProxy.GetSamples(entityGroupId,
-                                     entityId,
-                                     fieldIds[nvLinkField],
-                                     &endValue,
-                                     &count,
-                                     startTime,
-                                     endTime,
-                                     DCGM_ORDER_DESCENDING);
+        ret   = mpCoreProxy.GetSamples(
+            entityGroupId, entityId, field, &endValue, &count, startTime, endTime, DCGM_ORDER_DESCENDING);
 
         if (ret != DCGM_ST_OK && ret != DCGM_ST_NO_DATA)
             return ret;
@@ -1871,7 +1890,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
 
         if (nvLinkError >= DCGM_LIMIT_MAX_NVLINK_ERROR)
         {
-            dcgm_field_meta_p fm = DcgmFieldGetById(fieldIds[nvLinkField]);
+            dcgm_field_meta_p fm = DcgmFieldGetById(field);
             char fieldTag[128];
             dcgmHealthWatchResults_t res = DCGM_HEALTH_RESULT_WARN;
             DcgmError d { entityId };
@@ -1882,12 +1901,12 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
             }
             else
             {
-                snprintf(fieldTag, sizeof(fieldTag), "Unknown field %hu", fieldIds[nvLinkField]);
+                snprintf(fieldTag, sizeof(fieldTag), "Unknown field %hu", field);
             }
 
 
-            if ((fieldIds[nvLinkField] == DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL)
-                || (fieldIds[nvLinkField] == DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL))
+            if ((field == DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL)
+                || (field == DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL))
             {
                 // Replay and recovery errors are failures, not warnings.
                 res = DCGM_HEALTH_RESULT_FAIL;
@@ -1927,10 +1946,116 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
         }
     }
 
+    return DCGM_ST_OK;
+}
 
-    /* See if any links are down */
+dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t entityGroupId,
+                                                   dcgm_field_eid_t entityId,
+                                                   long long startTime,
+                                                   long long endTime,
+                                                   DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+    std::array constexpr fieldIds
+        = { DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER };
+    dcgmcm_sample_t startValue     = {};
+    dcgmcm_sample_t endValue       = {};
+    int count                      = 0;
+    auto constexpr oneMinuteInUsec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::minutes(1));
+    timelib64_t now                = timelib_usecSince1970();
+
+    /* Update the start and the end time if they are blank */
+    if (!startTime)
+    {
+        startTime = now - oneMinuteInUsec.count();
+    }
+
+    for (auto const field : fieldIds)
+    {
+        dcgm_field_meta_p fm = DcgmFieldGetById(field);
+        std::string fieldTag;
+        DcgmError d { entityId };
+
+        if (fm != nullptr)
+        {
+            fieldTag = fm->tag;
+        }
+        else
+        {
+            fieldTag = fmt::format("Unknown field {}", field);
+        }
+
+        count = 1;
+        ret   = mpCoreProxy.GetSamples(
+            entityGroupId, entityId, field, &startValue, &count, startTime, endTime, DCGM_ORDER_ASCENDING);
+        if (ret != DCGM_ST_OK && ret != DCGM_ST_NO_DATA && ret != DCGM_ST_NOT_WATCHED)
+        {
+            return ret;
+        }
+        /* If the field is not supported, continue with others */
+        if (ret == DCGM_ST_NO_DATA || startValue.val.i64 == DCGM_INT64_NOT_SUPPORTED
+            || DCGM_INT64_IS_BLANK(startValue.val.i64))
+        {
+            log_debug("MonitorNVLink5Fields field {} start value is not supported, ret: {}, value: {}",
+                      field,
+                      ret,
+                      startValue.val.i64);
+            continue;
+        }
+
+        count = 1;
+        ret   = mpCoreProxy.GetSamples(
+            entityGroupId, entityId, field, &endValue, &count, startTime, endTime, DCGM_ORDER_DESCENDING);
+        if (ret != DCGM_ST_OK && ret != DCGM_ST_NO_DATA)
+        {
+            return ret;
+        }
+        /* Continue with other fields if this value is BLANK or has no data  */
+        if (ret == DCGM_ST_NO_DATA || DCGM_INT64_IS_BLANK(endValue.val.i64))
+        {
+            log_debug("MonitorNVLink5Fields field {} end value is not supported", field);
+            continue;
+        }
+
+        if (field == DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS)
+        {
+            // Shouldn't see Symbol at all. Symbol means FEC didn't succeed to fix the error.
+            int64_t const nvLinkError = (startValue.val.i64 >= endValue.val.i64)
+                                            ? (startValue.val.i64 - endValue.val.i64)
+                                            : (endValue.val.i64 - startValue.val.i64);
+            if (nvLinkError >= DCGM_LIMIT_MAX_NVLINK_ERROR)
+            {
+                DcgmError d { entityId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_ERROR_CRITICAL, d, nvLinkError, fieldTag.c_str(), entityId);
+                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            }
+        }
+        else if (field == DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
+        {
+            auto const effectiveBer = endValue.val.i64;
+            // Effective BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
+            // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
+            // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
+            // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT).
+            auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(effectiveBer);
+            if (mantissa != 15 && exponent != 255)
+            {
+                DcgmError d { entityId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, d, ber, entityId);
+                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            }
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmHealthWatch::MonitorNVLinkStatus(dcgm_field_entity_group_t entityGroupId,
+                                                  dcgm_field_eid_t entityId,
+                                                  DcgmHealthResponse &response)
+{
     dcgmNvLinkLinkState_t linkStates[DCGM_NVLINK_MAX_LINKS_PER_GPU];
-    ret = mpCoreProxy.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, entityId, linkStates);
+    auto ret = mpCoreProxy.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, entityId, linkStates);
     if (ret != DCGM_ST_OK)
     {
         log_error("Got error {} from GetEntityNvLinkLinkStatus gpuId {}", (int)ret, entityId);
@@ -1945,7 +2070,6 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
         }
     }
-
     return DCGM_ST_OK;
 }
 
@@ -2027,8 +2151,8 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
         }
     }
 
-    /* See if any links are down. Only do this for the fatal case so we don't get duplicate errors for both fatal and
-     * non-fatal */
+    /* See if any links are down. Only do this for the fatal case so we don't get duplicate errors for both fatal
+     * and non-fatal */
     if (fatal)
     {
         dcgmNvLinkLinkState_t linkStates[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH];

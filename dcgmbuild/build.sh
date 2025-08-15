@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,9 +48,11 @@ fi
 export BASE_IMAGE=${BASE_IMAGE:-ubuntu:24.04}
 export TAG
 
+docker compose build dcgm-common-host-software
 for ARCHITECTURE in "${ARCHITECTURES[@]}"
 do
-  docker compose build --with-dependencies dcgmbuild-$ARCHITECTURE
+  docker compose build dcgm-toolchain-$ARCHITECTURE
+  docker compose build dcgmbuild-$ARCHITECTURE
   docker tag ${REGISTRY:-dcgm}/dcgmbuild:$TAG-$ARCHITECTURE dcgmbuild:$TAG-$ARCHITECTURE
 done
 

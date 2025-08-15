@@ -32,7 +32,7 @@ DcgmFieldGroup::DcgmFieldGroup(unsigned int fieldGroupId,
 {
     m_id       = fieldGroupId;
     m_fieldIds = fieldIds;
-    m_name     = name;
+    m_name     = std::move(name);
     m_watcher  = watcher;
 }
 

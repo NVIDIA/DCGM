@@ -84,6 +84,7 @@ private:
     dcgmReturn_t ProcessGetEntityNvLinkLinkStatus(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetSamples(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGpuIdToNvmlIndex(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessGetDriverVersion(dcgm_module_command_header_t *header);
 
     /*
      * If the response buffer isn't large enough to copy all of the samples into, then we copy by pieces and set
@@ -114,6 +115,17 @@ private:
     dcgmReturn_t ProcessGetMigIndicesForEntity(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetServiceAccount(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetGpuInstanceHierarchy(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessResourceReserve(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessResourceFree(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessSpawn(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessStop(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessGetStatus(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessWait(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessDestroy(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessGetStdErrHandle(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessGetStdOutHandle(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessGetDataChannelHandle(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessChildProcessManagerReset(dcgm_module_command_header_t *header);
 };
 
 #endif

@@ -28,38 +28,6 @@
 
 namespace
 {
-
-struct NVBandwidthLogPaths
-{
-    std::filesystem::path nvbandwidthLogFilename;
-    std::filesystem::path nvbandwidthStdoutFilename;
-};
-
-/*************************************************************************/
-/*
- * Get the DCGM log directory path
- */
-std::string GetNvbandwidthLogDir()
-{
-    if (auto const *dcgmHomeDir = getenv(DCGM_HOME_DIR_VAR_NAME); dcgmHomeDir != nullptr)
-    {
-        return dcgmHomeDir;
-    }
-    return "/var/log/nvidia-dcgm";
-}
-
-/*************************************************************************/
-/*
- * Get the log file paths for the NVBandwidth plugin
- */
-NVBandwidthLogPaths GetNvbandwidthLogFilePath(std::string_view testName)
-{
-    std::filesystem::path const logDir = GetNvbandwidthLogDir();
-
-    return { .nvbandwidthLogFilename    = logDir / fmt::format("dcgm_{}.log", testName),
-             .nvbandwidthStdoutFilename = logDir / fmt::format("dcgm_{}_stdout.txt", testName) };
-}
-
 /*************************************************************************/
 /*
  * Get the current module location
@@ -507,16 +475,15 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         return true;
     }
 
-    auto const logPaths = GetNvbandwidthLogFilePath(testName);
+    auto const logPaths = DcgmNs::Utils::GetLogFilePath(testName);
 
     {
-        std::ofstream logFile(logPaths.nvbandwidthLogFilename.string());
+        std::ofstream logFile(logPaths.logFileName.string());
         bool logToNvvsLog { false };
 
         if (!logFile.is_open())
         {
-            log_error(
-                "Failed to open log file: {}. Reason: {}", logPaths.nvbandwidthLogFilename.string(), strerror(errno));
+            log_error("Failed to open log file: {}. Reason: {}", logPaths.logFileName.string(), strerror(errno));
             logToNvvsLog = true;
         }
         else
@@ -524,9 +491,8 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
             logFile.write(stdoutStream.data(), stdoutStream.size());
             if (!logFile.good())
             {
-                log_error("Failed to write to log file: {}. Reason: {}",
-                          logPaths.nvbandwidthLogFilename.string(),
-                          strerror(errno));
+                log_error(
+                    "Failed to write to log file: {}. Reason: {}", logPaths.logFileName.string(), strerror(errno));
                 logToNvvsLog = true;
             }
         }
@@ -558,8 +524,7 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
             DcgmError d { DcgmError::GpuIdTag::Unknown };
             std::string const err = fmt::format("The NVBandwidth exited with non-zero status {}", exitCode);
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            d.SetNextSteps(
-                fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
+            d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
             AddError(testName, d);
             return true;
         }
@@ -571,8 +536,7 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         std::string const err = fmt::format("The NVBandwidth terminated with signal {}", exitCode);
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        d.SetNextSteps(
-            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
+        d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
         AddError(testName, d);
         return true;
     }
@@ -581,8 +545,7 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         std::string const err = "The NVBandwidth is being traced or otherwise can't exit";
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        d.SetNextSteps(
-            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
+        d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
         AddError(testName, d);
         return true;
     }
@@ -598,8 +561,7 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
             err += result.value().overallError.value();
         }
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        d.SetNextSteps(
-            fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.nvbandwidthLogFilename.string()));
+        d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
         AddError(testName, d);
         return true;
     }

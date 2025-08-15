@@ -65,7 +65,7 @@ dcgmReturn_t ArgumentSet_t::ProcessIntegerList(std::string argList,
         }
     }
 
-    return parsing ? callback(*this, arguments, useDefaults, argument) : DCGM_ST_OK;
+    return parsing ? callback(*this, std::move(arguments), useDefaults, argument) : DCGM_ST_OK;
 }
 
 
@@ -107,7 +107,7 @@ dcgmReturn_t ArgumentSet_t::ProcessStringList(std::string argList,
     if (parsing)
     {
         argument = std::string(argList, pos, argList.length() - pos);
-        rv       = (*callback)(*this, arguments, useDefaults, argument);
+        rv       = (*callback)(*this, std::move(arguments), useDefaults, argument);
     }
 
     return rv;
@@ -340,14 +340,14 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                     arguments->m_parameters.m_percentTolerance = false;
                 }
 
-                arguments = arguments2;
+                arguments = std::move(arguments2);
             }
         }
     }
     else
     {
         return ProcessIntegerList(m_lastFieldIds,
-                                  arguments,
+                                  std::move(arguments),
                                   useDefaults,
                                   [](ArgumentSet_t &self,
                                      std::shared_ptr<Arguments_t> arguments,
@@ -392,7 +392,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                                           arguments2->m_parameters.m_percentTolerance = false;
                                       }
 
-                                      self.m_arguments.push_back(arguments2);
+                                      self.m_arguments.push_back(std::move(arguments2));
 
                                       return DCGM_ST_OK;
                                   });
@@ -515,7 +515,7 @@ dcgmReturn_t ArgumentSet_t::Process(std::function<dcgmReturn_t(std::shared_ptr<A
 
     for (auto arguments : m_arguments)
     {
-        dcgmReturn_t rv = processor(arguments);
+        dcgmReturn_t rv = processor(std::move(arguments));
 
         if (rv != DCGM_ST_OK)
         {

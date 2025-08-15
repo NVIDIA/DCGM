@@ -763,7 +763,11 @@ void NvidiaValidationSuite::ThrowTestNotFoundExecption() const
     std::string eudTestsMsg;
     if (!eudTests.empty())
     {
-        eudTestsMsg = fmt::format("[{}] cannot find dependent package.", fmt::join(eudTests, ", "));
+        std::string flatEudTests = fmt::to_string(fmt::join(eudTests, ", "));
+        eudTestsMsg              = fmt::format(
+            "[{}] cannot find dependent package(s). Please ensure that both the [{}] dependent package and the DCGM proprietary package are installed.",
+            flatEudTests,
+            flatEudTests);
     }
     std::string errMsg
         = fmt::format("Error: requested test(s): {}{}{}", noSupportedEntityTestsMsg, notFoundTestsMsg, eudTestsMsg);
@@ -1191,7 +1195,17 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
 
                 if (pv.IsValidTestName(testName) == false)
                 {
-                    buf << "test '" << testName << "' does not match any loaded tests. Check logs for plugin failures.";
+                    buf << "test '" << testName << "' does not match any loaded tests. ";
+                    auto transformedTestName = ParameterValidator::TransformTestName(testName);
+                    if (transformedTestName == EUD_PLUGIN_NAME || transformedTestName == CPU_EUD_TEST_NAME)
+                    {
+                        buf << "Please ensure that both the [" << transformedTestName
+                            << "] dependent package and the DCGM proprietary package are installed.";
+                    }
+                    else
+                    {
+                        buf << "Check logs for plugin failures.";
+                    }
                     throw NvvsException(buf.str(), NVVS_ST_TEST_NOT_FOUND);
                 }
 
@@ -1222,7 +1236,7 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
                 }
 
                 std::string requestedName                 = m_tf->GetCompareName(testName);
-                nvvsCommon.parms[requestedName][parmName] = parmValue;
+                nvvsCommon.parms[requestedName][parmName] = std::move(parmValue);
             }
             else
             {
@@ -1457,7 +1471,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
         configFileArg = configArg.getValue();
         if (configFileArg.size() > 0)
         {
-            configFile = configFileArg;
+            configFile = std::move(configFileArg);
         }
 
         listGpus                          = listGpusArg.getValue();
@@ -1512,7 +1526,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             std::string reasonStr = clocksEventMask.getValue();
             // Make reasonStr lower case for parsing
             std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
-            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(reasonStr);
+            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
         }
         // Set bitmask for ignoring user specified clocks reasons (deprecated)
         else if (throttleMask.isSet())
@@ -1520,7 +1534,7 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             std::string reasonStr = throttleMask.getValue();
             // Make reasonStr lower case for parsing
             std::transform(reasonStr.begin(), reasonStr.end(), reasonStr.begin(), ::tolower);
-            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(reasonStr);
+            nvvsCommon.clocksEventIgnoreMask = GetClocksEventIgnoreReasonMaskFromString(std::move(reasonStr));
         }
 
         // Enable early failure checks if requested

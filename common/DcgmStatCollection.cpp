@@ -123,7 +123,7 @@ void DcgmStatCollection::Destroy()
 }
 
 /*****************************************************************************/
-mcollect_p DcgmStatCollection::GetOrCreateGroupedCollection(std::string group)
+mcollect_p DcgmStatCollection::GetOrCreateGroupedCollection(std::string const &group)
 {
     mcollect_p mc = 0;
     std::map<std::string, mcollect_p>::iterator it;
@@ -239,7 +239,7 @@ int DcgmStatCollection::CoerceAndSetFromDouble(mcollect_value_p mcValue, double 
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGlobalStat(std::string key, double value)
+int DcgmStatCollection::SetGlobalStat(std::string const &key, double value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = m_globalCollection;
@@ -255,7 +255,7 @@ int DcgmStatCollection::SetGlobalStat(std::string key, double value)
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, double value)
+int DcgmStatCollection::SetGroupedStat(std::string const &group, std::string const &key, double value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -272,7 +272,7 @@ int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, doubl
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, double value)
+int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, double value)
 {
     return SetEntityStat(SC_ENTITY_GROUP_GPU, nvmlGpuIdx, key, value);
 }
@@ -280,7 +280,7 @@ int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, dou
 /*****************************************************************************/
 int DcgmStatCollection::SetEntityStat(sc_entity_group_t entityGroupId,
                                       sc_entity_id_t entityId,
-                                      std::string key,
+                                      std::string const &key,
                                       double value)
 {
     mcollect_value_p mcValue;
@@ -329,7 +329,7 @@ int DcgmStatCollection::CoerceAndSetFromInt64(mcollect_value_p mcValue, long lon
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGlobalStat(std::string key, long long value)
+int DcgmStatCollection::SetGlobalStat(std::string const &key, long long value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = m_globalCollection;
@@ -345,7 +345,7 @@ int DcgmStatCollection::SetGlobalStat(std::string key, long long value)
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, long long value)
+int DcgmStatCollection::SetGroupedStat(std::string const &group, std::string const &key, long long value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -362,7 +362,7 @@ int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, long 
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, long long value)
+int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, long long value)
 {
     return SetEntityStat(SC_ENTITY_GROUP_GPU, nvmlGpuIdx, key, value);
 }
@@ -370,7 +370,7 @@ int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, lon
 /*****************************************************************************/
 int DcgmStatCollection::SetEntityStat(sc_entity_group_t entityGroupId,
                                       sc_entity_id_t entityId,
-                                      std::string key,
+                                      std::string const &key,
                                       long long value)
 {
     mcollect_value_p mcValue;
@@ -388,7 +388,7 @@ int DcgmStatCollection::SetEntityStat(sc_entity_group_t entityGroupId,
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::CoerceAndSetFromString(mcollect_value_p mcValue, std::string value)
+int DcgmStatCollection::CoerceAndSetFromString(mcollect_value_p mcValue, std::string const &value)
 {
     switch (mcValue->type)
     {
@@ -415,7 +415,7 @@ int DcgmStatCollection::CoerceAndSetFromString(mcollect_value_p mcValue, std::st
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGlobalStat(std::string key, std::string value)
+int DcgmStatCollection::SetGlobalStat(std::string const &key, std::string const &value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = m_globalCollection;
@@ -431,7 +431,7 @@ int DcgmStatCollection::SetGlobalStat(std::string key, std::string value)
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, std::string value)
+int DcgmStatCollection::SetGroupedStat(std::string const &group, std::string const &key, std::string const &value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -448,7 +448,7 @@ int DcgmStatCollection::SetGroupedStat(std::string group, std::string key, std::
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, std::string value)
+int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, std::string const &value)
 {
     return SetEntityStat(SC_ENTITY_GROUP_GPU, nvmlGpuIdx, key, value);
 }
@@ -456,8 +456,8 @@ int DcgmStatCollection::SetGpuStat(unsigned int nvmlGpuIdx, std::string key, std
 /*****************************************************************************/
 int DcgmStatCollection::SetEntityStat(sc_entity_group_t entityGroupId,
                                       sc_entity_id_t entityId,
-                                      std::string key,
-                                      std::string value)
+                                      std::string const &key,
+                                      std::string const &value)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -475,18 +475,18 @@ int DcgmStatCollection::SetEntityStat(sc_entity_group_t entityGroupId,
 
 /*****************************************************************************/
 int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
-                                      std::string key,
-                                      std::string value,
+                                      std::string const &key,
+                                      std::string const &value,
                                       timelib64_t timestamp)
 {
-    return AppendEntityStat(SC_ENTITY_GROUP_GPU, nvmlGpuIdx, key, value, timestamp);
+    return AppendEntityStat(SC_ENTITY_GROUP_GPU, nvmlGpuIdx, std::move(key), std::move(value), timestamp);
 }
 
 /*****************************************************************************/
 int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
                                          sc_entity_id_t entityId,
-                                         std::string key,
-                                         std::string value,
+                                         std::string const &key,
+                                         std::string const &value,
                                          timelib64_t timestamp)
 {
     mcollect_value_p mcValue;
@@ -509,7 +509,7 @@ int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGlobalStat(std::string key, std::string value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGlobalStat(std::string const &key, std::string const &value, timelib64_t timestamp)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -531,7 +531,7 @@ int DcgmStatCollection::AppendGlobalStat(std::string key, std::string value, tim
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGlobalStat(std::string key, void *value, int valueSize, timelib64_t timestamp)
+int DcgmStatCollection::AppendGlobalStat(std::string const &key, void *value, int valueSize, timelib64_t timestamp)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -553,7 +553,10 @@ int DcgmStatCollection::AppendGlobalStat(std::string key, void *value, int value
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, std::string value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGroupedStat(std::string const &group,
+                                          std::string const &key,
+                                          std::string const &value,
+                                          timelib64_t timestamp)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = 0;
@@ -575,8 +578,8 @@ int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, st
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGroupedStat(std::string group,
-                                          std::string key,
+int DcgmStatCollection::AppendGroupedStat(std::string const &group,
+                                          std::string const &key,
                                           void *value,
                                           int valueSize,
                                           timelib64_t timestamp)
@@ -602,7 +605,7 @@ int DcgmStatCollection::AppendGroupedStat(std::string group,
 
 /*****************************************************************************/
 int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
-                                      std::string key,
+                                      std::string const &key,
                                       void *value,
                                       int valueSize,
                                       timelib64_t timestamp)
@@ -613,7 +616,7 @@ int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
 /*****************************************************************************/
 int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
                                          sc_entity_id_t entityId,
-                                         std::string key,
+                                         std::string const &key,
                                          void *value,
                                          int valueSize,
                                          timelib64_t timestamp)
@@ -638,7 +641,7 @@ int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGlobalStat(std::string key, double value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGlobalStat(std::string const &key, double value, timelib64_t timestamp)
 {
     mcollect_value_p mcValue;
     mcollect_p mc = m_globalCollection;
@@ -659,7 +662,7 @@ int DcgmStatCollection::AppendGlobalStat(std::string key, double value, timelib6
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGlobalStat(std::string key, long long value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGlobalStat(std::string const &key, long long value, timelib64_t timestamp)
 {
     int st;
     mcollect_value_p mcValue;
@@ -680,7 +683,10 @@ int DcgmStatCollection::AppendGlobalStat(std::string key, long long value, timel
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, double value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGroupedStat(std::string const &group,
+                                          std::string const &key,
+                                          double value,
+                                          timelib64_t timestamp)
 {
     int st;
     mcollect_value_p mcValue;
@@ -702,7 +708,10 @@ int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, do
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, long long value, timelib64_t timestamp)
+int DcgmStatCollection::AppendGroupedStat(std::string const &group,
+                                          std::string const &key,
+                                          long long value,
+                                          timelib64_t timestamp)
 {
     int st;
     mcollect_value_p mcValue;
@@ -725,7 +734,7 @@ int DcgmStatCollection::AppendGroupedStat(std::string group, std::string key, lo
 
 /*****************************************************************************/
 int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
-                                      std::string key,
+                                      std::string const &key,
                                       double value1,
                                       double value2,
                                       timelib64_t timestamp)
@@ -736,7 +745,7 @@ int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
 /*****************************************************************************/
 int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
                                          sc_entity_id_t entityId,
-                                         std::string key,
+                                         std::string const &key,
                                          double value1,
                                          double value2,
                                          timelib64_t timestamp)
@@ -762,7 +771,7 @@ int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
 
 /*****************************************************************************/
 int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
-                                      std::string key,
+                                      std::string const &key,
                                       long long value1,
                                       long long value2,
                                       timelib64_t timestamp)
@@ -773,7 +782,7 @@ int DcgmStatCollection::AppendGpuStat(unsigned int nvmlGpuIdx,
 /*****************************************************************************/
 int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
                                          sc_entity_id_t entityId,
-                                         std::string key,
+                                         std::string const &key,
                                          long long value1,
                                          long long value2,
                                          timelib64_t timestamp)
@@ -798,7 +807,7 @@ int DcgmStatCollection::AppendEntityStat(sc_entity_group_t entityGroupId,
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::EnforceGlobalStatQuota(std::string key,
+int DcgmStatCollection::EnforceGlobalStatQuota(std::string const &key,
                                                timelib64_t oldestKeepTimestamp,
                                                int maxKeepEntries) const
 {
@@ -824,8 +833,8 @@ int DcgmStatCollection::EnforceGlobalStatQuota(std::string key,
 }
 
 /*****************************************************************************/
-int DcgmStatCollection::EnforceGroupedStatQuote(std::string group,
-                                                std::string key,
+int DcgmStatCollection::EnforceGroupedStatQuote(std::string const &group,
+                                                std::string const &key,
                                                 timelib64_t oldestKeepTimestamp,
                                                 int maxKeepEntries)
 {
@@ -855,7 +864,7 @@ int DcgmStatCollection::EnforceGroupedStatQuote(std::string group,
 /*****************************************************************************/
 int DcgmStatCollection::EnforceEntityStatQuota(sc_entity_group_t entityGroupId,
                                                sc_entity_id_t entityId,
-                                               std::string key,
+                                               std::string const &key,
                                                timelib64_t oldestKeepTimestamp,
                                                int maxKeepEntries)
 {
@@ -1068,15 +1077,14 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
         case MC_TYPE_TIMESTAMP:
         {
             if (cbData->isGlobal)
-                cbData->mergeInto->SetGlobalStat(std::string(key), (long long)value->val.i64);
+                cbData->mergeInto->SetGlobalStat(key, (long long)value->val.i64);
             else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
             {
-                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, std::string(key), (long long)value->val.i64);
+                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, key, (long long)value->val.i64);
             }
             else if (cbData->groupName.size() > 0)
             {
-                cbData->mergeInto->SetGroupedStat(
-                    std::string(cbData->groupName), std::string(key), (long long)value->val.i64);
+                cbData->mergeInto->SetGroupedStat(cbData->groupName, key, (long long)value->val.i64);
             }
             break;
         }
@@ -1084,15 +1092,14 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
         case MC_TYPE_DOUBLE:
         {
             if (cbData->isGlobal)
-                cbData->mergeInto->SetGlobalStat(std::string(key), (double)value->val.dbl);
+                cbData->mergeInto->SetGlobalStat(key, (double)value->val.dbl);
             else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
             {
-                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, std::string(key), (double)value->val.dbl);
+                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, key, (double)value->val.dbl);
             }
             else if (cbData->groupName.size() > 0)
             {
-                cbData->mergeInto->SetGroupedStat(
-                    std::string(cbData->groupName), std::string(key), (double)value->val.dbl);
+                cbData->mergeInto->SetGroupedStat(cbData->groupName, key, (double)value->val.dbl);
             }
             break;
         }
@@ -1100,15 +1107,14 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
         case MC_TYPE_STRING:
         {
             if (cbData->isGlobal)
-                cbData->mergeInto->SetGlobalStat(std::string(key), std::string(value->val.str));
+                cbData->mergeInto->SetGlobalStat(key, value->val.str);
             else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
             {
-                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, std::string(key), std::string(value->val.str));
+                cbData->mergeInto->SetGpuStat(cbData->nvmlGpuIdx, key, value->val.str);
             }
             else if (cbData->groupName.size() > 0)
             {
-                cbData->mergeInto->SetGroupedStat(
-                    std::string(cbData->groupName), std::string(key), std::string(value->val.str));
+                cbData->mergeInto->SetGroupedStat(cbData->groupName, key, value->val.str);
             }
             break;
         }
@@ -1130,12 +1136,11 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
                     case MC_TYPE_TIMESERIES_DOUBLE:
                     {
                         if (cbData->isGlobal)
-                            cbData->mergeInto->AppendGlobalStat(
-                                std::string(key), (double)entry->val.dbl, entry->usecSince1970);
+                            cbData->mergeInto->AppendGlobalStat(key, (double)entry->val.dbl, entry->usecSince1970);
                         else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
                         {
                             cbData->mergeInto->AppendGpuStat(
-                                cbData->nvmlGpuIdx, std::string(key), (double)entry->val.dbl, 0, entry->usecSince1970);
+                                cbData->nvmlGpuIdx, key, (double)entry->val.dbl, 0, entry->usecSince1970);
                         }
                         else if (cbData->groupName.size() > 0)
                         {
@@ -1154,11 +1159,8 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
                                 std::string(key), (long long)entry->val.i64, entry->usecSince1970);
                         else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
                         {
-                            cbData->mergeInto->AppendGpuStat(cbData->nvmlGpuIdx,
-                                                             std::string(key),
-                                                             (long long)entry->val.i64,
-                                                             0,
-                                                             entry->usecSince1970);
+                            cbData->mergeInto->AppendGpuStat(
+                                cbData->nvmlGpuIdx, key, (long long)entry->val.i64, 0, entry->usecSince1970);
                         }
                         else if (cbData->groupName.size() > 0)
                         {
@@ -1177,10 +1179,8 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
                                 std::string(key), std::string((char *)entry->val.ptr), entry->usecSince1970);
                         else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
                         {
-                            cbData->mergeInto->AppendGpuStat(cbData->nvmlGpuIdx,
-                                                             std::string(key),
-                                                             std::string((char *)entry->val.ptr),
-                                                             entry->usecSince1970);
+                            cbData->mergeInto->AppendGpuStat(
+                                cbData->nvmlGpuIdx, key, std::string((char *)entry->val.ptr), entry->usecSince1970);
                         }
                         else if (cbData->groupName.size() > 0)
                         {
@@ -1199,11 +1199,8 @@ static int mcollectMergeFromCB(char *key, mcollect_value_p value, void *userData
                                 std::string(key), entry->val.ptr, entry->val2.ptrSize, entry->usecSince1970);
                         else if (cbData->nvmlGpuIdx != 0xFFFFFFFF)
                         {
-                            cbData->mergeInto->AppendGpuStat(cbData->nvmlGpuIdx,
-                                                             std::string(key),
-                                                             entry->val.ptr,
-                                                             entry->val2.ptrSize,
-                                                             entry->usecSince1970);
+                            cbData->mergeInto->AppendGpuStat(
+                                cbData->nvmlGpuIdx, key, entry->val.ptr, entry->val2.ptrSize, entry->usecSince1970);
                         }
                         else if (cbData->groupName.size() > 0)
                         {
@@ -1307,7 +1304,7 @@ std::vector<unsigned int> DcgmStatCollection::GetGpuList(void)
 }
 
 /*****************************************************************************/
-mcollect_value_p DcgmStatCollection::GetGlobalStat(std::string key)
+mcollect_value_p DcgmStatCollection::GetGlobalStat(std::string const &key)
 {
     mcollect_value_p retVal = 0;
 
@@ -1319,7 +1316,7 @@ mcollect_value_p DcgmStatCollection::GetGlobalStat(std::string key)
 }
 
 /*****************************************************************************/
-mcollect_value_p DcgmStatCollection::GetGroupedStat(std::string group, std::string key)
+mcollect_value_p DcgmStatCollection::GetGroupedStat(std::string const &group, std::string const &key)
 {
     mcollect_value_p retVal = 0;
     mcollect_p mc           = 0;
@@ -1355,7 +1352,7 @@ mcollect_value_p DcgmStatCollection::GetGpuStat(unsigned int nvmlGpuIdx, std::st
 /*****************************************************************************/
 mcollect_value_p DcgmStatCollection::GetEntityStat(sc_entity_group_t entityGroupId,
                                                    sc_entity_id_t entityId,
-                                                   std::string key)
+                                                   std::string const &key)
 {
     mcollect_value_p retVal = 0;
     mcollect_p mc           = 0;

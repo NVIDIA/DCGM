@@ -287,7 +287,7 @@ TEST_CASE("InjectedNvml: Load From YAML File")
         // Remove first device, verify remaining device handles can be retrieved
         auto origDevice = GetDeviceFrom(params[0].uuid, INJECTION_UUID_KEY);
 
-        auto removedUuid = params[0].uuid;
+        auto const &removedUuid = params[0].uuid;
         nvmlReturn_t ret = injectedNvml->RemoveGpu(removedUuid);
         CHECK(ret == NVML_SUCCESS);
         verifyDeviceHandle(1, 0U);

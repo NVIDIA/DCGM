@@ -18,6 +18,7 @@
 
 #include "ChildProcess.hpp"
 
+#include <boost/asio/io_context.hpp>
 #include <boost/filesystem/path.hpp>
 #include <string>
 #include <unordered_map>
@@ -27,8 +28,6 @@
 namespace DcgmNs::Common::Subprocess
 {
 
-constexpr int DEFAULT_CHANNEL_FD = 3;
-
 class ChildProcessBuilder
 {
 public:
@@ -36,16 +35,16 @@ public:
     ChildProcessBuilder &SetRunningUser(std::string user);
     ChildProcessBuilder &AddArg(std::string arg);
     ChildProcessBuilder &AddArgs(std::vector<std::string> args);
-    ChildProcessBuilder &AddEnvironment(std::unordered_map<std::string, std::string> env);
+    ChildProcessBuilder &AddEnvironment(std::unordered_map<std::string, std::string> &&env);
     ChildProcessBuilder &SetChannelFd(int const fd);
-    ChildProcess Build();
+    ChildProcess Build(IoContext &ioContext);
 
 private:
     boost::filesystem::path m_executable;
     std::vector<std::string> m_args;
     std::unordered_map<std::string, std::string> m_environment;
     std::string m_user;
-    int m_channelFd = DEFAULT_CHANNEL_FD;
+    std::optional<int> m_channelFd;
 };
 
 } //namespace DcgmNs::Common::Subprocess

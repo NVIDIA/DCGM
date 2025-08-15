@@ -77,7 +77,7 @@ class DcgmSystemDiscovery:
             flags |= dcgm_structs.DCGM_GEGE_FLAG_ONLY_SUPPORTED
         entityIds = dcgm_agent.dcgmGetEntityGroupEntities(self._dcgmHandle.handle, entityGroupId, flags)
         return entityIds
-    
+
     '''
     Get the status of all of the NvLink links in the system.
 
@@ -85,7 +85,18 @@ class DcgmSystemDiscovery:
     '''
     def GetNvLinkLinkStatus(self):
         return dcgm_agent.dcgmGetNvLinkLinkStatus(self._dcgmHandle.handle)
-    
+
+    '''
+    Get the P2P status of all of the NvLink links in the system.
+
+    Returns a dcgm_structs.c_dcgmNvLinkP2PStatus_v1 object.
+    '''
+    def GetNvLinkP2PStatus(self):
+        inOutStatus = dcgm_structs.c_dcgmNvLinkP2PStatus_v1()
+        inOutStatus.numGpus = 0 # full retrieval.
+        dcgm_agent.dcgmGetNvLinkP2PStatus(self._dcgmHandle.handle, inOutStatus)
+        return inOutStatus
+
     '''
     From a bitmask of input gpu ids, return a bitmask of numGpus GPUs which identifies the topologically
     closest GPUs to use for a single job. DCGM will consider CPU affinities and NVLink connection speeds
@@ -117,18 +128,18 @@ class DcgmSystemIntrospectMemory:
     '''
     Class to access information about the memory usage of DCGM itself
     '''
-    
+
     def __init__(self, dcgmHandle):
         self._dcgmHandle = dcgmHandle
-    
+
     def GetForHostengine(self, waitIfNoData=True):
         '''
         Retrieve the total amount of virtual memory that the hostengine process is currently using.
         This measurement represents both the resident set size (what is currently in RAM) and
         the swapped memory that belongs to the process.
-        
+
         waitIfNoData:      wait for metadata to be updated if it's not available
-                      
+
         Returns a dcgm_structs.c_dcgmIntrospectMemory_v1 object
         Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
         '''
@@ -138,16 +149,16 @@ class DcgmSystemIntrospectCpuUtil:
     '''
     Class to access information about the CPU Utilization of DCGM
     '''
-    
+
     def __init__(self, dcgmHandle):
         self._dcgmHandle = dcgmHandle
-        
+
     def GetForHostengine(self, waitIfNoData=True):
         '''
         Get the current CPU Utilization of the hostengine process.
-        
+
         waitIfNoData:      wait for metadata to be updated if it's not available
-                      
+
         Returns a dcgm_structs.c_dcgmIntrospectCpuUtil_v1 object
         Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
         '''
@@ -187,7 +198,7 @@ class DcgmSystemModules:
     '''
     def __init__(self, dcgmHandle): 
         self._dcgmHandle = dcgmHandle
-    
+
     '''
     Denylist a module from being loaded by DCGM.
 
@@ -217,28 +228,28 @@ class DcgmSystemProfiling:
     '''
     def __init__(self, dcgmHandle): 
         self._dcgmHandle = dcgmHandle
-    
+
     '''
     Pause profiling activities in DCGM. This should be used when you are monitoring profiling fields
     from DCGM but want to be able to still run developer tools like nvprof, nsight systems, and nsight compute.
     Profiling fields start with DCGM_PROF_ and are in the field ID range 1001-1012.
-    
+
     Call this API before you launch one of those tools and Resume() after the tool has completed.
-    
+
     DCGM will save BLANK values while profiling is paused. 
     Calling this while profiling activities are already paused is fine and will be treated as a no-op.
     '''
     def Pause(self):
         return dcgm_agent.dcgmProfPause(self._dcgmHandle.handle)
-    
+
     '''
     Resume profiling activities in DCGM that were previously paused with Pause().
 
     Call this API after you have completed running other NVIDIA developer tools to reenable DCGM
     profiling metrics.
-    
+
     DCGM will save BLANK values while profiling is paused. 
-    
+
     Calling this while profiling activities have already been resumed is fine and will be treated as a no-op.
     '''
     def Resume(self):

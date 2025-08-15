@@ -650,7 +650,7 @@ public:
     FieldWorkerNvLinkRwBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId, std::string peerBusId)
         : FieldWorkerBase(cudaDevice, fieldId)
     {
-        m_peerBusId = peerBusId;
+        m_peerBusId = std::move(peerBusId);
         CUresult cuSt;
         CUdevice peerCuDevice = 0;
 

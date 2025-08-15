@@ -1,0 +1,11 @@
+{
+    "test_nodes": [
+        {
+            "hostname": "",
+            "ip": "",
+            "sku": "",
+            "hostengine_path": ""
+        }
+    ]
+}
+

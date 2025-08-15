@@ -1535,6 +1535,7 @@ void DcgmHostEngineHandler::LoadNvml()
         {
             m_nvmlLoaded = true;
         }
+        log_info("Using injected NVML");
     }
 #endif
 
@@ -1594,23 +1595,13 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     m_modules[DcgmModuleIdDiag].filename       = "libdcgmmodulediag.so.4";
     m_modules[DcgmModuleIdProfiling].filename  = "libdcgmmoduleprofiling.so.4";
     m_modules[DcgmModuleIdSysmon].filename     = "libdcgmmodulesysmon.so.4";
+    m_modules[DcgmModuleIdMnDiag].filename     = "libdcgmmodulemndiag.so.4";
 
     /* Apply the denylist that was requested before we possibly load any modules */
-    for (unsigned int i = 0; i < params.denyListCount; i++)
+    dcgmReturn_t result = ApplyModuleDenylist(params.denyList, params.denyListCount);
+    if (result != DCGM_ST_OK)
     {
-        if (params.denyList[i] == DcgmModuleIdCore)
-        {
-            DCGM_LOG_DEBUG << "Ignored denylist request for core module.";
-            continue;
-        }
-
-        if (params.denyList[i] >= DcgmModuleIdCount)
-        {
-            throw std::runtime_error("Out of range module ID given.");
-        }
-
-        DCGM_LOG_INFO << "Module " << params.denyList[i] << " was added to the denylist at start-up.";
-        m_modules[params.denyList[i]].status = DcgmModuleStatusDenylisted;
+        throw std::runtime_error("Failed to apply module denylist.");
     }
 
     LoadNvml();
@@ -4363,4 +4354,91 @@ dcgmReturn_t DcgmHostEngineHandler::ResumeModule(dcgmModuleId_t moduleId)
     module.status = DcgmModuleStatusLoaded;
 
     return DCGM_ST_OK;
+}
+
+
+std::optional<unsigned int> DcgmHostEngineHandler::ReserveResources()
+{
+    return m_resourceManager.ReserveResources();
+}
+
+bool DcgmHostEngineHandler::FreeResources(unsigned int const &token)
+{
+    return m_resourceManager.FreeResources(token);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ApplyModuleDenylist(unsigned int const *denyList, unsigned int denyListCount)
+{
+    if (denyList == nullptr)
+    {
+        log_error("Invalid parameter: denyList is nullptr");
+        return DCGM_ST_BADPARAM;
+    }
+
+    for (unsigned int i = 0; i < denyListCount; i++)
+    {
+        if (denyList[i] == DcgmModuleIdCore)
+        {
+            log_error("Ignored denylist request for core module.");
+            continue;
+        }
+
+        if (denyList[i] >= DcgmModuleIdCount)
+        {
+            log_error("Out of range module ID given: {}", denyList[i]);
+            return DCGM_ST_BADPARAM;
+        }
+
+        log_error("Module {} was added to the denylist.", denyList[i]);
+        m_modules[denyList[i]].status = DcgmModuleStatusDenylisted;
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessSpawn(dcgmChildProcessParams_t const &params,
+                                                      ChildProcessHandle_t &handle,
+                                                      int &pid)
+{
+    return m_childProcessManager.Spawn(params, handle, pid);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessStop(ChildProcessHandle_t handle, bool force)
+{
+    return m_childProcessManager.Stop(handle, force);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetStatus(ChildProcessHandle_t handle, dcgmChildProcessStatus_t &status)
+{
+    return m_childProcessManager.GetStatus(handle, status);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessWait(ChildProcessHandle_t handle, int timeoutSec)
+{
+    return m_childProcessManager.Wait(handle, timeoutSec);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessDestroy(ChildProcessHandle_t handle, int sigTermTimeoutSec)
+{
+    return m_childProcessManager.Destroy(handle, sigTermTimeoutSec);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetStdErrHandle(ChildProcessHandle_t handle, int &fd)
+{
+    return m_childProcessManager.GetStdErrHandle(handle, fd);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetStdOutHandle(ChildProcessHandle_t handle, int &fd)
+{
+    return m_childProcessManager.GetStdOutHandle(handle, fd);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetDataChannelHandle(ChildProcessHandle_t handle, int &fd)
+{
+    return m_childProcessManager.GetDataChannelHandle(handle, fd);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::ChildProcessManagerReset()
+{
+    return m_childProcessManager.Reset();
 }

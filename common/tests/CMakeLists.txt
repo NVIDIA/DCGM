@@ -34,6 +34,10 @@ target_sources(commontests
         MigTests.cpp
         CpuHelpersTests.cpp
         LsHwTests.cpp
+        FingerprintStoreTests.cpp
+        MockFileSystemOperatorTests.cpp
+        mocks/MockChildProcess.cpp
+        DcgmChildProcessManagerTests.cpp
 )
 
 target_link_libraries(commontests
@@ -49,11 +53,14 @@ target_link_libraries(commontests
         sdk_nvml_essentials_objects
         sdk_nvml_interface
         sdk_nvml_loader
+        mock_interface
         ${CMAKE_THREAD_LIBS_INIT}
         fmt::fmt
         rt
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    catch_discover_tests(commontests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(commontests
+        EXTRA_ARGS --colour-mode ansi
+        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped")
 endif()

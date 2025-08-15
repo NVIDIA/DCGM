@@ -173,7 +173,7 @@ TEST_CASE("ReadEnvXidAndUpdate")
     }
     SECTION("Set invalid format env value")
     {
-        std::unordered_set<unsigned int> testXids = defaultXids;
+        std::unordered_set<unsigned int> testXids = std::move(defaultXids);
         SetEnv(XidEnvKey, "-79, 3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);

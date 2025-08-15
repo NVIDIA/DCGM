@@ -70,6 +70,7 @@ public:
     dcgmReturn_t ProcessClientLogin(dcgm_core_msg_client_login_t &msg);
     dcgmReturn_t ProcessSetEntityNvLinkState(dcgm_core_msg_set_entity_nvlink_state_t &msg);
     dcgmReturn_t ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_t &msg);
+    dcgmReturn_t ProcessGetNvLinkP2PStatus(dcgm_core_msg_get_nvlink_p2p_status_t &msg);
     dcgmReturn_t ProcessGetDeviceWorkloadPowerProfilesInfo(dcgm_core_msg_get_workload_power_profiles_status_v1 &msg);
     dcgmReturn_t ProcessFieldgroupOp(dcgm_core_msg_fieldgroup_op_t &msg);
     dcgmReturn_t ProcessPidGetInfo(dcgm_core_msg_pid_get_info_t &msg);

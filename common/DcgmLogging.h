@@ -236,7 +236,7 @@ inline void log(format_string<TArgs...> format, TArgs &&...args)
                                                 reinterpret_cast<void *>(0),
                                                 TLogger)
                                        .ref()
-                                   << fmt::format(format.fmt, type_identity_t<TArgs>(args)...);
+                                   << fmt::format(format.fmt, type_identity_t<TArgs>(std::forward<TArgs>(args))...);
     }
 }
 

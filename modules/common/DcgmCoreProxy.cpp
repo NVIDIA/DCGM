@@ -18,6 +18,7 @@
 
 #include "DcgmCoreProxy.h"
 #include "dcgm_core_communication.h"
+#include <DcgmStringHelpers.h>
 
 
 DcgmCoreProxy::DcgmCoreProxy(const dcgmCoreCallbacks_t coreCallbacks)
@@ -92,6 +93,26 @@ bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const
 
     log_error("Error '{}' while determining if all GPUs in our list are the same SKU", errorString(ret));
     return false;
+}
+
+dcgmReturn_t DcgmCoreProxy::GetDriverVersion(std::string &driverVersion) const
+{
+    dcgmCoreReqIdGetDriverVersion_t gdv = {};
+    initializeCoreHeader(gdv.header, DcgmCoreReqIdGetDriverVersion, dcgmCoreReqIdGetDriverVersion_version, sizeof(gdv));
+
+    // coverity[overrun-buffer-val]
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gdv.header, m_coreCallbacks.poster);
+
+    if (ret == DCGM_ST_OK)
+    {
+        driverVersion = gdv.driverVersion;
+        log_verbose("Got driver version {} from core", driverVersion);
+    }
+    else
+    {
+        log_error("Error '{}' while getting driver version", errorString(ret));
+    }
+    return ret;
 }
 
 unsigned int DcgmCoreProxy::GetGpuCount(int activeOnly)
@@ -1084,4 +1105,256 @@ dcgmReturn_t DcgmCoreProxy::GetServiceAccount(std::string &serviceAccount) const
     serviceAccount     = std::string(query.response.serviceAccount, nameLen);
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreProxy::ReserveResources(unsigned int &token)
+{
+    dcgmCoreResourceReserve_t query = {};
+
+    // Initialize the header
+    initializeCoreHeader(query.header, DcgmCoreReqIdResourceReserve, dcgmCoreResourceReserve_version, sizeof(query));
+
+    // Send the request to the core
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "[CoreProxy] Got error: " << errorString(ret) << " while attempting to reserve resources.";
+        return ret;
+    }
+
+    // Check the response
+    if (query.response.ret == DCGM_ST_OK)
+    {
+        token = query.response.token;
+    }
+
+    return query.response.ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::FreeResources(unsigned int token)
+{
+    dcgmCoreResourceFree_t query = {};
+
+    // Set token
+    query.request.token = token;
+
+    // Initialize the header
+    initializeCoreHeader(query.header, DcgmCoreReqIdResourceFree, dcgmCoreResourceFree_version, sizeof(query));
+
+    // Send the request to the core
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "[CoreProxy] Got error: " << errorString(ret) << " while attempting to free resources.";
+        return ret;
+    }
+
+    return query.ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessSpawn(dcgmChildProcessParams_t const &params,
+                                              ChildProcessHandle_t &handle,
+                                              int &pid)
+{
+    dcgmCoreChildProcessSpawn_v1 query = {};
+    query.request                      = params;
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqIdChildProcessSpawn, dcgmCoreChildProcessSpawn_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        handle = query.handle;
+        pid    = query.pid;
+        ret    = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to spawn child process", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessStop(ChildProcessHandle_t handle, bool force)
+{
+    dcgmCoreChildProcessStop_v1 query = {};
+    query.handle                      = handle;
+    query.force                       = force;
+
+    initializeCoreHeader(query.header, DcgmCoreReqIdChildProcessStop, dcgmCoreChildProcessStop_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to stop child process", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessGetStatus(ChildProcessHandle_t handle, dcgmChildProcessStatus_t &status)
+{
+    dcgmCoreChildProcessGetStatus_v1 query = {};
+    query.handle                           = handle;
+    query.status                           = status;
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqIdChildProcessGetStatus, dcgmCoreChildProcessGetStatus_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        status = query.status;
+        ret    = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to get child process status", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessWait(ChildProcessHandle_t handle, int timeoutSec)
+{
+    dcgmCoreChildProcessWait_v1 query = {};
+    query.handle                      = handle;
+    query.timeoutSec                  = timeoutSec;
+
+    initializeCoreHeader(query.header, DcgmCoreReqIdChildProcessWait, dcgmCoreChildProcessWait_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to wait for child process", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessDestroy(ChildProcessHandle_t handle, int sigTermTimeoutSec)
+{
+    dcgmCoreChildProcessDestroy_v1 query = {};
+    query.handle                         = handle;
+    query.sigTermTimeoutSec              = sigTermTimeoutSec;
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqIdChildProcessDestroy, dcgmCoreChildProcessDestroy_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to destroy child process", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessGetStdErrHandle(ChildProcessHandle_t handle, int &fd)
+{
+    dcgmCoreChildProcessGetStdErrHandle_v1 query = {};
+    query.handle                                 = handle;
+    query.fd                                     = fd;
+
+    initializeCoreHeader(query.header,
+                         DcgmCoreReqIdChildProcessGetStdErrHandle,
+                         dcgmCoreChildProcessGetStdErrHandle_version1,
+                         sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        fd  = query.fd;
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to get child process stderr handle", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessGetStdOutHandle(ChildProcessHandle_t handle, int &fd)
+{
+    dcgmCoreChildProcessGetStdOutHandle_v1 query = {};
+    query.handle                                 = handle;
+    query.fd                                     = fd;
+
+    initializeCoreHeader(query.header,
+                         DcgmCoreReqIdChildProcessGetStdOutHandle,
+                         dcgmCoreChildProcessGetStdOutHandle_version1,
+                         sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        fd  = query.fd;
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to get child process stdout handle", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessGetDataChannelHandle(ChildProcessHandle_t handle, int &fd)
+{
+    dcgmCoreChildProcessGetDataChannelHandle_v1 query = {};
+    query.handle                                      = handle;
+    query.fd                                          = fd;
+
+    initializeCoreHeader(query.header,
+                         DcgmCoreReqIdChildProcessGetDataChannelHandle,
+                         dcgmCoreChildProcessGetDataChannelHandle_version1,
+                         sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        fd  = query.fd;
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to get child process data channel handle", errorString(ret));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t DcgmCoreProxy::ChildProcessManagerReset()
+{
+    dcgmCoreChildProcessManagerReset_v1 query = {};
+
+    initializeCoreHeader(
+        query.header, DcgmCoreReqIdChildProcessManagerReset, dcgmCoreChildProcessManagerReset_version1, sizeof(query));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&query.header, m_coreCallbacks.poster);
+    if (ret == DCGM_ST_OK)
+    {
+        ret = query.ret;
+    }
+    else
+    {
+        log_error("Error '{}' while attempting to reset child process manager", errorString(ret));
+    }
+
+    return ret;
 }

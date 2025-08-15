@@ -58,6 +58,11 @@ public:
     }; // StdLinesIterator
 
     /**
+     * @brief Returns true if the buffer is empty.
+     */
+    bool IsEmpty();
+
+    /**
      * @brief Writes one line into buffer.
      * @param[in] str message.
      */

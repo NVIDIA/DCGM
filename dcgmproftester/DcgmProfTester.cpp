@@ -545,7 +545,7 @@ void DcgmProfTester::ReportWorkerStarted(std::shared_ptr<DistributedCudaContext>
 {
     int fd = worker->GetReadFD();
 
-    m_dcgmCudaContexts[fd] = worker;
+    m_dcgmCudaContexts[fd] = std::move(worker);
 
     FD_SET(fd, &m_parentReadFds);
 
@@ -619,7 +619,7 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
             return DCGM_ST_GENERIC_ERROR;
         }
 
-        worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(entities, entity, cudaVisibleDevices);
+        worker = m_gpus[gpuInstance.m_gpuId]->AddSlice(std::move(entities), entity, cudaVisibleDevices);
 
         if (worker == nullptr) // Failure to add a worker slice.
         {
@@ -763,7 +763,7 @@ dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
             auto allreadyStarted = physicalGpu->AllStarted();
             auto alreadyReported = physicalGpu->AllReported();
 
-            rtSt = physicalGpu->ProcessResponse(worker);
+            rtSt = physicalGpu->ProcessResponse(std::move(worker));
 
             if (physicalGpu->WorkerReported())
             {
@@ -1054,7 +1054,7 @@ dcgmReturn_t DcgmProfTester::Process(std::function<dcgmReturn_t(std::shared_ptr<
     return m_argumentSet.Process([this, processFn](std::shared_ptr<Arguments_t> arguments) {
         m_startDcgm = !arguments->m_parameters.m_noDcgmValidation;
 
-        return processFn(arguments);
+        return processFn(std::move(arguments));
     });
 }
 
@@ -1104,9 +1104,17 @@ int main(int argc, char **argv)
         }
 
         // CUDA_VERSION_USED is defined in CMakeLists.txt file
-        int majorCudaVersionLoaded = cudaLoaded / 1000;
+        int majorCudaVersionLoaded                  = cudaLoaded / 1000;
+        const int MAX_SUPPORTED_CUDA_DRIVER_VERSION = 12;
 
-        if (majorCudaVersionLoaded != CUDA_VERSION_USED)
+        if (majorCudaVersionLoaded > MAX_SUPPORTED_CUDA_DRIVER_VERSION
+            && CUDA_VERSION_USED == MAX_SUPPORTED_CUDA_DRIVER_VERSION)
+        {
+            // Allow version 12 dcgmproftester binary to run with CUDA 13
+            std::cout << "Running version " << CUDA_VERSION_USED << " binary with CUDA driver version "
+                      << majorCudaVersionLoaded << "." << std::endl;
+        }
+        else if (majorCudaVersionLoaded != CUDA_VERSION_USED)
         {
             std::cout << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
                       << ". Installed Cuda version is " << majorCudaVersionLoaded << ".";

@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.2.3)
+project(datacenter-gpu-manager-4 VERSION 4.3.1)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -282,6 +282,7 @@ add_library(config_interface INTERFACE)
 add_library(diag_interface INTERFACE)
 add_library(health_interface INTERFACE)
 add_library(introspect_interface INTERFACE)
+add_library(mndiag_interface INTERFACE)
 add_library(module_common_interface INTERFACE)
 add_library(modules_interface INTERFACE)
 add_library(nvswitch_interface INTERFACE)
@@ -343,6 +344,7 @@ add_library(nvvs_main_objects OBJECT)
 add_library(nvvs_plugins_common_objects OBJECT)
 add_library(pluginCudaCommon_11 STATIC)
 add_library(pluginCudaCommon_12 STATIC)
+add_library(remoteconn STATIC)
 add_library(sdk_nvml_essentials_objects STATIC)
 add_library(sdk_nvml_loader STATIC)
 add_library(serialize STATIC)
@@ -350,6 +352,8 @@ add_library(transport_objects STATIC)
 
 add_library(dcgmmodulediag_common STATIC)
 add_library(dcgmmodulediag_private_static STATIC)
+add_library(dcgmmodulemndiag_common STATIC)
+add_library(dcgmmodulemndiag_private_static STATIC)
 add_library(module_common_objects STATIC)
 add_library(modules_objects STATIC)
 add_library(nvswitch_objects STATIC)
@@ -359,6 +363,7 @@ add_library(dcgmmoduleconfig SHARED)
 add_library(dcgmmodulediag SHARED)
 add_library(dcgmmodulehealth SHARED)
 add_library(dcgmmoduleintrospect SHARED)
+add_library(dcgmmodulemndiag SHARED)
 add_library(dcgmmodulenvswitch SHARED)
 add_library(dcgmmodulepolicy SHARED)
 add_library(dcgmmodulesysmon SHARED)
@@ -410,6 +415,7 @@ set_target_properties(
     dcgmmodulediag
     dcgmmodulehealth
     dcgmmoduleintrospect
+    dcgmmodulemndiag
     dcgmmodulenvswitch
     dcgmmodulepolicy
     dcgmmodulesysmon
@@ -574,6 +580,14 @@ install(
         COMPONENT Core)
 
 install(
+    TARGETS
+        dcgmmodulemndiag
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        COMPONENT Multinode
+        NAMELINK_SKIP)
+
+install(
     TARGETS nvvs
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
@@ -679,6 +693,7 @@ install(
         dcgmmodulediag
         dcgmmodulehealth
         dcgmmoduleintrospect
+        dcgmmodulemndiag
         dcgmmodulenvswitch
         dcgmmodulepolicy
         dcgmmodulesysmon

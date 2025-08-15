@@ -67,7 +67,7 @@ struct LibHandle
         return 0;
     }
 
-    LibHandle(std::string&& name) : m_name(name), m_handle(LibHandle::dlopen(NULL), &LibHandle::dlclose) {}
+    LibHandle(std::string&& name) : m_name(std::move(name)), m_handle(LibHandle::dlopen(NULL), &LibHandle::dlclose) {}
 
     void *getHandle()
     {
@@ -90,7 +90,7 @@ template <typename T> struct LoadFunc
     std::string m_name;
     std::mutex m_mutex;
 
-    LoadFunc(std::string&& name) : m_name(name) {}
+    LoadFunc(std::string&& name) : m_name(std::move(name)) {}
 
     nvsdmRet_t load()
     {

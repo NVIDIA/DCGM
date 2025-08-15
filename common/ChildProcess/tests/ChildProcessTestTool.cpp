@@ -49,10 +49,24 @@ int Stdout(int /* argc */, char *argv[])
     return 0;
 }
 
+int DelayedStdout(int /* argc */, char *argv[])
+{
+    usleep(20000);
+    std::cout << argv[0] << std::endl;
+    return 0;
+}
+
 int Stderr(int /* argc */, char *argv[])
 {
     std::cerr << argv[0] << std::endl;
-    return 0;
+    return 1;
+}
+
+int DelayedStderr(int /* argc */, char *argv[])
+{
+    usleep(20000);
+    std::cerr << argv[0] << std::endl;
+    return 1;
 }
 
 int Env(int /* argc */, char *argv[])
@@ -74,7 +88,7 @@ int FdChannel(int /* argc */, char *argv[])
 
     if (-1 == fcntl(fdChannel, F_GETFD))
     {
-        std::cerr << "Unable to get file descriptor for response channel." << std::endl;
+        std::cerr << "Unable to get file descriptor for response channel " << argv[0] << std::endl;
         return 1;
     }
 
@@ -113,8 +127,13 @@ int main(int argc, char *argv[])
     }
 
     std::unordered_map<std::string, std::pair<int, std::function<int(int, char *[])>>> handlers {
-        { "stdout", { 1, Stdout } },        { "stderr", { 1, Stderr } }, { "env", { 1, Env } },
-        { "fd-channel", { 2, FdChannel } }, { "sleep", { 1, Sleep } },
+        { "stdout", { 1, Stdout } },
+        { "stderr", { 1, Stderr } },
+        { "env", { 1, Env } },
+        { "fd-channel", { 2, FdChannel } },
+        { "sleep", { 1, Sleep } },
+        { "delayedStdout", { 1, DelayedStdout } },
+        { "delayedStderr", { 1, DelayedStderr } },
     };
 
     if (!handlers.contains(argv[1]))

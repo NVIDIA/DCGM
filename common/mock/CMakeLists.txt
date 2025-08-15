@@ -17,4 +17,6 @@ add_subdirectory(tests)
 target_include_directories(mock_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources(mock_interface INTERFACE
     DcgmLibMock.cpp
-    DcgmLibMock.h)
+    DcgmLibMock.h
+    FileHandleMock.cpp
+    FileHandleMock.h)

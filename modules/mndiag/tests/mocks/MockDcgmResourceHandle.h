@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include <DcgmResourceHandleBase.h>
+#include <DcgmResourceHandleFactoryBase.h>
+
+class DcgmCoreProxy;
+
+/**
+ * @brief Mock resource handle - creates mock resource handles with configurable return values
+ */
+class MockDcgmResourceHandle : public DcgmResourceHandleBase
+{
+public:
+    /**
+     * @brief Constructor with configurable return value
+     *
+     * @param initResult The return value for the GetInitResult method
+     */
+    explicit MockDcgmResourceHandle(dcgmReturn_t initResult = DCGM_ST_OK)
+        : m_initResult(initResult)
+    {}
+
+    dcgmReturn_t GetInitResult() override
+    {
+        return m_initResult;
+    }
+
+private:
+    dcgmReturn_t m_initResult;
+};
+
+/**
+ * @brief Mock resource handle factory - creates mock resource handles with configurable return values
+ */
+class MockDcgmResourceHandleFactory : public DcgmResourceHandleFactoryBase
+{
+public:
+    /**
+     * @brief Constructor with configurable return value
+     *
+     * @param initResult The return value for the CreateDcgmResourceHandle method
+     */
+    explicit MockDcgmResourceHandleFactory(dcgmReturn_t initResult = DCGM_ST_OK)
+        : m_initResult(initResult)
+    {}
+
+    std::unique_ptr<DcgmResourceHandleBase> CreateDcgmResourceHandle(DcgmCoreProxy & /* coreProxy */) override
+    {
+        return std::make_unique<MockDcgmResourceHandle>(m_initResult);
+    }
+
+private:
+    dcgmReturn_t m_initResult;
+};

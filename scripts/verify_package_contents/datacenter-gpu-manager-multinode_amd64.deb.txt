@@ -1,0 +1,12 @@
+./usr/
+./usr/lib/
+./usr/lib/systemd/
+./usr/lib/systemd/system-generators/
+./usr/lib/systemd/system-generators/nvidia-dcgm-multinode-diagnostics-generator.sh
+./usr/lib/x86_64-linux-gnu/
+./usr/lib/x86_64-linux-gnu/libdcgmmodulemndiag.so.<MAJORVERSION>
+./usr/lib/x86_64-linux-gnu/libdcgmmodulemndiag.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-multinode/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-multinode/copyright

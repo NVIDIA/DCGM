@@ -124,60 +124,84 @@ public:
      **/
 
     /* Global collection */
-    int SetGlobalStat(std::string key, double value);
-    int SetGlobalStat(std::string key, long long value);
-    int SetGlobalStat(std::string key, std::string value);
-    int AppendGlobalStat(std::string key, double value, timelib64_t timestamp = 0);
-    int AppendGlobalStat(std::string key, long long value, timelib64_t timestamp = 0);
-    int AppendGlobalStat(std::string key, std::string value, timelib64_t timestamp = 0);
-    int AppendGlobalStat(std::string key, void *value, int valueSize, timelib64_t timestamp = 0);
+    int SetGlobalStat(std::string const &key, double value);
+    int SetGlobalStat(std::string const &key, long long value);
+    int SetGlobalStat(std::string const &key, std::string const &value);
+    int AppendGlobalStat(std::string const &key, double value, timelib64_t timestamp = 0);
+    int AppendGlobalStat(std::string const &key, long long value, timelib64_t timestamp = 0);
+    int AppendGlobalStat(std::string const &key, std::string const &value, timelib64_t timestamp = 0);
+    int AppendGlobalStat(std::string const &key, void *value, int valueSize, timelib64_t timestamp = 0);
 
     /* Grouped collections */
-    int SetGroupedStat(std::string group, std::string key, double value);
-    int SetGroupedStat(std::string group, std::string key, long long value);
-    int SetGroupedStat(std::string group, std::string key, std::string value);
-    int AppendGroupedStat(std::string group, std::string key, double value, timelib64_t timestamp = 0);
-    int AppendGroupedStat(std::string group, std::string key, long long value, timelib64_t timestamp = 0);
-    int AppendGroupedStat(std::string group, std::string key, std::string value, timelib64_t timestamp = 0);
-    int AppendGroupedStat(std::string group, std::string key, void *value, int valueSize, timelib64_t timestamp = 0);
+    int SetGroupedStat(std::string const &group, std::string const &key, double value);
+    int SetGroupedStat(std::string const &group, std::string const &key, long long value);
+    int SetGroupedStat(std::string const &group, std::string const &key, std::string const &value);
+    int AppendGroupedStat(std::string const &group, std::string const &key, double value, timelib64_t timestamp = 0);
+    int AppendGroupedStat(std::string const &group, std::string const &key, long long value, timelib64_t timestamp = 0);
+    int AppendGroupedStat(std::string const &group,
+                          std::string const &key,
+                          std::string const &value,
+                          timelib64_t timestamp = 0);
+    int AppendGroupedStat(std::string const &group,
+                          std::string const &key,
+                          void *value,
+                          int valueSize,
+                          timelib64_t timestamp = 0);
 
     /* GPU collections (Deprecated) */
-    int SetGpuStat(unsigned int nvmlGpuIdx, std::string key, double value);
-    int SetGpuStat(unsigned int nvmlGpuIdx, std::string key, long long value);
-    int SetGpuStat(unsigned int nvmlGpuIdx, std::string key, std::string value);
-    int AppendGpuStat(unsigned int nvmlGpuIdx, std::string key, double value1, double value2, timelib64_t timestamp);
+    int SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, double value);
+    int SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, long long value);
+    int SetGpuStat(unsigned int nvmlGpuIdx, std::string const &key, std::string const &value);
     int AppendGpuStat(unsigned int nvmlGpuIdx,
-                      std::string key,
+                      std::string const &key,
+                      double value1,
+                      double value2,
+                      timelib64_t timestamp);
+    int AppendGpuStat(unsigned int nvmlGpuIdx,
+                      std::string const &key,
                       long long value1,
                       long long value2,
                       timelib64_t timestamp);
-    int AppendGpuStat(unsigned int nvmlGpuIdx, std::string key, std::string value, timelib64_t timestamp = 0);
-    int AppendGpuStat(unsigned int nvmlGpuIdx, std::string key, void *value, int valueSize, timelib64_t timestamp = 0);
+    int AppendGpuStat(unsigned int nvmlGpuIdx,
+                      std::string const &key,
+                      std::string const &value,
+                      timelib64_t timestamp = 0);
+    int AppendGpuStat(unsigned int nvmlGpuIdx,
+                      std::string const &key,
+                      void *value,
+                      int valueSize,
+                      timelib64_t timestamp = 0);
 
     /* Entity-based collections */
-    int SetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string key, double value);
-    int SetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string key, long long value);
-    int SetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string key, std::string value);
+    int SetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string const &key, double value);
+    int SetEntityStat(sc_entity_group_t entityGroupId,
+                      sc_entity_id_t entityId,
+                      std::string const &key,
+                      long long value);
+    int SetEntityStat(sc_entity_group_t entityGroupId,
+                      sc_entity_id_t entityId,
+                      std::string const &key,
+                      std::string const &value);
     int AppendEntityStat(sc_entity_group_t entityGroupId,
                          sc_entity_id_t entityId,
-                         std::string key,
+                         std::string const &key,
                          double value1,
                          double value2,
                          timelib64_t timestamp);
     int AppendEntityStat(sc_entity_group_t entityGroupId,
                          sc_entity_id_t entityId,
-                         std::string key,
+                         std::string const &key,
                          long long value1,
                          long long value2,
                          timelib64_t timestamp);
     int AppendEntityStat(sc_entity_group_t entityGroupId,
                          sc_entity_id_t entityId,
-                         std::string key,
-                         std::string value,
+                         std::string const &key,
+                         std::string const &value,
                          timelib64_t timestamp = 0);
     int AppendEntityStat(sc_entity_group_t entityGroupId,
                          sc_entity_id_t entityId,
-                         std::string key,
+                         std::string const &key,
                          void *value,
                          int valueSize,
                          timelib64_t timestamp = 0);
@@ -224,10 +248,10 @@ public:
      *  Returns a mcollect_value_p pointer on success
      *          0 on failure
      */
-    mcollect_value_p GetGlobalStat(std::string key);
-    mcollect_value_p GetGroupedStat(std::string group, std::string key);
+    mcollect_value_p GetGlobalStat(std::string const &key);
+    mcollect_value_p GetGroupedStat(std::string const &group, std::string const &key);
     mcollect_value_p GetGpuStat(unsigned int nvmlGpuIdx, std::string key); /* Deprecated */
-    mcollect_value_p GetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string key);
+    mcollect_value_p GetEntityStat(sc_entity_group_t entityGroupId, sc_entity_id_t entityId, std::string const &key);
 
     /*************************************************************************/
     /*
@@ -323,14 +347,14 @@ public:
      *         <0 on error
      *
      */
-    int EnforceGlobalStatQuota(std::string key, timelib64_t oldestKeepTimestamp, int maxKeepEntries) const;
-    int EnforceGroupedStatQuote(std::string group,
-                                std::string key,
+    int EnforceGlobalStatQuota(std::string const &key, timelib64_t oldestKeepTimestamp, int maxKeepEntries) const;
+    int EnforceGroupedStatQuote(std::string const &group,
+                                std::string const &key,
                                 timelib64_t oldestKeepTimestamp,
                                 int maxKeepEntries);
     int EnforceEntityStatQuota(sc_entity_group_t entityGroupId,
                                sc_entity_id_t entityId,
-                               std::string key,
+                               std::string const &key,
                                timelib64_t oldestKeepTimestamp,
                                int maxKeepEntries);
 
@@ -350,14 +374,14 @@ private:
      */
     int static CoerceAndSetFromDouble(mcollect_value_p mcValue, double value);
     int static CoerceAndSetFromInt64(mcollect_value_p mcValue, long long value);
-    int static CoerceAndSetFromString(mcollect_value_p mcValue, std::string value);
+    int static CoerceAndSetFromString(mcollect_value_p mcValue, std::string const &value);
 
     /*************************************************************************/
     /*
      * Helper functions to create and return top level collections
      *
      */
-    mcollect_p GetOrCreateGroupedCollection(std::string group);
+    mcollect_p GetOrCreateGroupedCollection(std::string const &group);
     mcollect_p GetOrCreateEntityCollection(sc_entity_group_t entityGroupId, sc_entity_id_t entityId);
 
     /*************************************************************************/

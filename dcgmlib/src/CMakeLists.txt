@@ -36,6 +36,7 @@ set(SRCS
     dcgm_errors.c
     dcgm_fields.cpp
     dcgm_helpers.c
+    DcgmResourceManager.cpp
 )
 
 set(INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -46,6 +47,7 @@ set(DEPS
     dcgm_thread_interface
     config_interface
     diag_interface
+    mndiag_interface
     health_interface
     introspect_interface
     module_common_interface

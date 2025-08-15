@@ -221,6 +221,20 @@ private:
                                long long startTime,
                                long long endTime,
                                DcgmHealthResponse &response);
+    dcgmReturn_t MonitorNVLink4Fields(dcgm_field_entity_group_t entityGroupId,
+                                      dcgm_field_eid_t entityId,
+                                      long long startTime,
+                                      long long endTime,
+                                      DcgmHealthResponse &response);
+    dcgmReturn_t MonitorNVLink5Fields(dcgm_field_entity_group_t entityGroupId,
+                                      dcgm_field_eid_t entityId,
+                                      long long startTime,
+                                      long long endTime,
+                                      DcgmHealthResponse &response);
+    // Monitor the status (up / down) of the NVLink links
+    dcgmReturn_t MonitorNVLinkStatus(dcgm_field_entity_group_t entityGroupId,
+                                     dcgm_field_eid_t entityId,
+                                     DcgmHealthResponse &response);
     dcgmReturn_t MonitorNvSwitchErrorCounts(bool fatal,
                                             dcgm_field_entity_group_t entityGroupId,
                                             dcgm_field_eid_t entityId,

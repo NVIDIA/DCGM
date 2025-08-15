@@ -34,6 +34,11 @@ public:
     explicit DcgmCoreProxy(dcgmCoreCallbacks_t coreCallbacks);
 
     /**
+     * Virtual destructor for proper cleanup of derived classes
+     */
+    virtual ~DcgmCoreProxy() = default;
+
+    /**
      *
      * @param[in]  activeOnly - if true, only get active GPU ids, otherwise get all visible GPU ids
      * @param[out] gpuIds - the GPU ids retrieved
@@ -44,6 +49,11 @@ public:
      * @param[in] gpuIds - the list of GPU ids to check
      */
     bool AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const;
+
+    /**
+     * @param[out] driverVersion - the full version string of the attached driver like "418.40.03"
+     */
+    dcgmReturn_t GetDriverVersion(std::string &driverVersion) const;
 
     /**
      * @param[in] activeOnly - if true, get a count of only the active GPUs, otherwise count all visible GPUs
@@ -376,6 +386,91 @@ public:
     dcgmReturn_t GetGpuInstanceHierarchy(dcgmMigHierarchy_v2 &migHierarchy);
 
     dcgmReturn_t GetServiceAccount(std::string &serviceAccount) const;
+
+    /**
+     * @brief Reserve resources for a module
+     * @param[out] token Token for the reservation, used to free resources
+     * @return DCGM_ST_OK if successful, DCGM_ST_IN_USE if resources are already reserved
+     */
+    virtual dcgmReturn_t ReserveResources(unsigned int &token);
+
+    /**
+     * @brief Free resources for a module
+     * @param[in] token Token received during resource reservation
+     * @return DCGM_ST_OK if successful, DCGM_ST_GENERIC_ERROR if resources could not be freed
+     */
+    virtual dcgmReturn_t FreeResources(unsigned int token);
+
+    /**
+     * Spawn a new child process
+     * @param params Process parameters
+     * @param handle Output handle for the spawned process
+     * @param pid Output PID of the spawned process
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessSpawn(dcgmChildProcessParams_t const &params, ChildProcessHandle_t &handle, int &pid);
+
+    /**
+     * Stop a child process
+     * @param handle Process handle
+     * @param force Whether to force stop the process
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessStop(ChildProcessHandle_t handle, bool force);
+
+    /**
+     * Get the status of a child process
+     * @param handle Process handle
+     * @param status Output status of the process
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessGetStatus(ChildProcessHandle_t handle, dcgmChildProcessStatus_t &status);
+
+    /**
+     * Wait for a child process to complete. Default is -1 (no timeout).
+     * @param handle Process handle
+     * @param timeoutSec Timeout in seconds
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessWait(ChildProcessHandle_t handle, int timeoutSec = -1);
+
+    /**
+     * Destroy a child process handle
+     * @param handle Process handle
+     * @param sigTermTimeoutSec Timeout for SIGTERM before sending SIGKILL
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessDestroy(ChildProcessHandle_t handle, int sigTermTimeoutSec = 10);
+
+    /**
+     * Get the stderr file descriptor for a child process
+     * @param handle Process handle
+     * @param fd Output file descriptor
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessGetStdErrHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Get the stdout file descriptor for a child process
+     * @param handle Process handle
+     * @param fd Output file descriptor
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessGetStdOutHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Get the data channel file descriptor for a child process
+     * @param handle Process handle
+     * @param fd Output file descriptor
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessGetDataChannelHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Reset the ChildProcessManager to clean state
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t ChildProcessManagerReset();
 
 private:
     dcgmCoreCallbacks_t m_coreCallbacks;

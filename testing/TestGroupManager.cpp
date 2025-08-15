@@ -300,7 +300,7 @@ int TestGroupManager::TestGroupManageGpus()
             goto CLEANUP;
         }
 
-        st = HelperOperationsOnGroup(pDcgmGrpManager.get(), groupId, groupName);
+        st = HelperOperationsOnGroup(pDcgmGrpManager.get(), groupId, std::move(groupName));
         if (DCGM_ST_OK != st)
         {
             retSt = 4;

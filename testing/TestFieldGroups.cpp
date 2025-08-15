@@ -158,7 +158,8 @@ int TestFieldGroups::TestFieldGroupManager(void)
     }
 
     /* Inserting a duplicate group should fail */
-    dcgmReturn = fieldGroupManager->AddFieldGroup(groupNameBefore, fieldIdsBefore, &fieldGrpHandleTemp, watcher);
+    dcgmReturn
+        = fieldGroupManager->AddFieldGroup(std::move(groupNameBefore), fieldIdsBefore, &fieldGrpHandleTemp, watcher);
     if (dcgmReturn != DCGM_ST_DUPLICATE_KEY)
     {
         std::cerr << "TestFieldGroupManager AddFieldGroup() returned " << (int)dcgmReturn << std::endl;
@@ -299,7 +300,7 @@ int TestFieldGroups::TestAddInvalidFieldId(void)
     std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_SM_CLOCK, 9999 }; /* Contains bad fieldId */
     std::string groupNameBefore          = "badfieldidgroup";
 
-    dcgmReturn = fieldGroupManager.AddFieldGroup(groupNameBefore, fieldIds, &fieldGrpHandle, watcher);
+    dcgmReturn = fieldGroupManager.AddFieldGroup(std::move(groupNameBefore), fieldIds, &fieldGrpHandle, watcher);
     if (dcgmReturn != DCGM_ST_BADPARAM)
     {
         std::cerr << "TestAddInvalidFieldId AddFieldGroup() returned unexpected " << (int)dcgmReturn

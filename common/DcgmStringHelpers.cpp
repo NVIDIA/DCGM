@@ -42,7 +42,7 @@ void dcgmTokenizeString(const std::string &src, const std::string &delimiter, st
                 prev_pos = pos + delimiter.size();
             }
 
-            tokens.push_back(token);
+            tokens.push_back(std::move(token));
         }
     }
 }
@@ -83,8 +83,13 @@ std::vector<std::string_view> Split(std::string_view value, char const separator
 }
 
 /*****************************************************************************/
-dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned int> &indices)
+dcgmReturn_t ParseRangeString(std::string const &rangeStr, std::vector<unsigned int> &indices)
 {
+    if (rangeStr.empty())
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
     auto cpuRanges = Split(rangeStr, ',');
 
     for (auto range : cpuRanges)
@@ -100,13 +105,34 @@ dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned 
             {
                 return DCGM_ST_BADPARAM;
             }
-            else if (!isdigit(rangeTokens[0].data()[0]) || !isdigit(rangeTokens[1].data()[0]))
+
+            // Validate both tokens contain only digits
+            if (!std::all_of(rangeTokens[0].begin(), rangeTokens[0].end(), ::isdigit)
+                || !std::all_of(rangeTokens[1].begin(), rangeTokens[1].end(), ::isdigit))
             {
                 return DCGM_ST_BADPARAM;
             }
 
-            start = strtoul(rangeTokens[0].data(), nullptr, 10);
-            end   = strtoul(rangeTokens[1].data(), nullptr, 10);
+            try
+            {
+                start = std::stoul(std::string(rangeTokens[0]));
+                end   = std::stoul(std::string(rangeTokens[1]));
+            }
+            catch (std::invalid_argument const &e)
+            {
+                // Handle invalid number format
+                return DCGM_ST_BADPARAM;
+            }
+            catch (std::out_of_range const &e)
+            {
+                // Handle number too large
+                return DCGM_ST_BADPARAM;
+            }
+
+            if (start > end)
+            {
+                return DCGM_ST_BADPARAM;
+            }
 
             for (unsigned int i = start; i <= end; i++)
             {
@@ -119,11 +145,29 @@ dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned 
             {
                 return DCGM_ST_BADPARAM;
             }
-            else if (!isdigit(rangeTokens[0].data()[0]))
+
+            // Validate token contains only digits
+            if (!std::all_of(rangeTokens[0].begin(), rangeTokens[0].end(), ::isdigit))
             {
                 return DCGM_ST_BADPARAM;
             }
-            indices.push_back(strtoul(rangeTokens[0].data(), nullptr, 10));
+
+            try
+            {
+                unsigned int value = std::stoul(std::string(rangeTokens[0]));
+
+                indices.push_back(value);
+            }
+            catch (std::invalid_argument const &e)
+            {
+                // Handle invalid number format
+                return DCGM_ST_BADPARAM;
+            }
+            catch (std::out_of_range const &e)
+            {
+                // Handle number too large
+                return DCGM_ST_BADPARAM;
+            }
         }
         else
         {
@@ -184,6 +228,29 @@ std::vector<std::string> TokenizeStringQuoted(std::string_view str, char delimit
     }
 
     return tokens;
+}
+
+/*****************************************************************************/
+/**
+ * @brief Strictly converts a string to an integer
+ *
+ * Unlike std::stoi, this requires the entire string to represent a valid integer,
+ * with no extraneous characters.
+ *
+ * @param str The string to convert
+ * @return The converted integer
+ * @throws std::invalid_argument if the string isn't a valid integer
+ * @throws std::out_of_range if the number is out of range for int
+ */
+int strictStrToInt(std::string const &str)
+{
+    size_t pos;
+    int result = std::stoi(str, &pos);
+    if (pos != str.length())
+    {
+        throw std::invalid_argument("extra characters after number");
+    }
+    return result;
 }
 
 } // namespace DcgmNs

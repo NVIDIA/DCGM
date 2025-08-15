@@ -394,7 +394,7 @@ void DcgmiOutputColumns::addColumn(const unsigned int width,
 {
     const DcgmiOutputColumnClass column(width, columnName, selector);
     fullWidth += 1 + width;
-    columns.push_back(column);
+    columns.push_back(std::move(column));
 }
 
 std::string DcgmiOutputColumns::str()

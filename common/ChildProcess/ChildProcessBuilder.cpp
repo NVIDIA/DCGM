@@ -48,15 +48,21 @@ ChildProcessBuilder &ChildProcessBuilder::AddArgs(std::vector<std::string> args)
     return *this;
 }
 
-ChildProcess ChildProcessBuilder::Build()
+ChildProcess ChildProcessBuilder::Build(IoContext &ioContext)
 {
-    return Create(
-        m_executable, m_args, m_environment, m_user.empty() ? std::nullopt : std::optional { m_user }, m_channelFd);
+    ChildProcess cp;
+    cp.Create(ioContext,
+              m_executable,
+              m_args,
+              m_environment,
+              m_user.empty() ? std::nullopt : std::optional { m_user },
+              m_channelFd);
+    return cp;
 }
 
-ChildProcessBuilder &ChildProcessBuilder::AddEnvironment(std::unordered_map<std::string, std::string> env)
+ChildProcessBuilder &ChildProcessBuilder::AddEnvironment(std::unordered_map<std::string, std::string> &&env)
 {
-    for (auto &pair : env)
+    for (auto &&pair : env)
     {
         m_environment.insert(std::move(pair));
     }

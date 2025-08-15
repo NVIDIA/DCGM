@@ -106,7 +106,7 @@ TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
         gpuIgnoreErrorCodeMap_t cmdLineIgnoreErrorCodesMap = { { { { DCGM_FE_GPU, 0 }, { 81 } } } };
         tp.AddString(PS_PLUGIN_NAME, "Software plugin");
         tp.AddString(PS_TEST_NAME, "Dummy test");
-        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        tp.AddString(PS_IGNORE_ERROR_CODES, std::move(configFileIgnoreErrorCodesStr));
         std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
         std::vector<unsigned int> gpuIds                      = { 0, 1 };
         ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
@@ -154,7 +154,7 @@ TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
         std::vector<unsigned int> gpuIds                               = { 0, 1 };
         ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
 
-        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = std::move(cmdLineIgnoreErrorCodesMap);
         std::string errStr
             = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
         CHECK(errStr.empty());
@@ -176,7 +176,7 @@ TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
         std::vector<unsigned int> gpuIds                      = { 0, 1 };
         ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
 
-        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = std::move(cmdLineIgnoreErrorCodesMap);
         std::string errStr
             = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
         CHECK(errStr.empty());
@@ -196,12 +196,12 @@ TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
             = { { { { DCGM_FE_GPU, 0 }, { 40 } }, { { DCGM_FE_GPU, 1 }, { 101 } } } };
         tp.AddString(PS_PLUGIN_NAME, "Software plugin");
         tp.AddString(PS_TEST_NAME, "Dummy test");
-        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        tp.AddString(PS_IGNORE_ERROR_CODES, std::move(configFileIgnoreErrorCodesStr));
         std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
         std::vector<unsigned int> gpuIds                      = { 0, 1 };
         ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);
 
-        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = cmdLineIgnoreErrorCodesMap;
+        gpuIgnoreErrorCodeMap_t localIgnoreErrorCodesMap = std::move(cmdLineIgnoreErrorCodesMap);
         std::string errStr
             = pl.SetIgnoreErrorCodesParam(parameters, cmdLineIgnoreErrorCodesStr, localIgnoreErrorCodesMap, gpuIds);
         CHECK(!errStr.empty());
@@ -217,7 +217,7 @@ TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
             = { { { { DCGM_FE_GPU, 0 }, { 40 } }, { { DCGM_FE_GPU, 1 }, { 101 } } } };
         tp.AddString(PS_PLUGIN_NAME, "Software plugin");
         tp.AddString(PS_TEST_NAME, "Dummy test");
-        tp.AddString(PS_IGNORE_ERROR_CODES, configFileIgnoreErrorCodesStr);
+        tp.AddString(PS_IGNORE_ERROR_CODES, std::move(configFileIgnoreErrorCodesStr));
         std::vector<dcgmDiagPluginTestParameter_t> parameters = tp.GetParametersAsStruct();
         std::vector<unsigned int> gpuIds                      = { 0, 1 };
         ParseIgnoreErrorCodesString(cmdLineIgnoreErrorCodesStr, cmdLineIgnoreErrorCodesMap, gpuIds);

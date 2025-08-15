@@ -347,10 +347,10 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
 /*****************************************************************************/
 dcgmReturn_t CudaWorkerThread::AttachToCudaDevice(CUdevice device)
 {
-    /* Attach to the give cuda device. Note that we need to queue this to the
+    /* Attach to the given cuda device. Note that we need to queue this to the
        worker thread because cuda contexts are per-thread in the driver API */
     using namespace DcgmNs;
-    auto const task = Enqueue(make_task("SetWorkloadAndTarget in TaskRunner",
+    auto const task = Enqueue(make_task("AttachToCudaDevice in TaskRunner",
                                         [this, device] { return AttachToCudaDeviceFromTaskThread(device); }));
     if (!task.has_value())
     {
@@ -438,7 +438,7 @@ void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, 
 void CudaWorkerThread::SetPeerByBusIdFromTaskThread(std::string peerBusId)
 {
     DCGM_LOG_DEBUG << "Set m_cudaPeerBusId to " << peerBusId;
-    m_cudaPeerBusId = peerBusId;
+    m_cudaPeerBusId = std::move(peerBusId);
 }
 
 /*****************************************************************************/

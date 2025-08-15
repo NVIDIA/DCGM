@@ -2671,7 +2671,6 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
 
     DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
     m_driverVersion   = "";
-
     std::string version(driverVersion);
 
     try
@@ -2684,6 +2683,8 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
         DCGM_LOG_WARNING << "Unable to parse driver major version. Ex: " << ex.what();
     }
 
+    m_driverFullVersion = version;
+    log_debug("The full driver version is {}", m_driverFullVersion);
     version.erase(std::remove(version.begin(), version.end(), '.'), version.end());
     if (version.empty())
     {
@@ -2693,7 +2694,7 @@ void DcgmCacheManager::ReadAndCacheDriverVersions(void)
         return;
     }
 
-    m_driverVersion = version;
+    m_driverVersion = std::move(version);
 
     if (DriverVersionIsAtLeast("45000"))
     {
@@ -4867,7 +4868,20 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
             {
                 /* Both 0s means reset application clocks */
                 nvmlReturn = nvmlDeviceResetApplicationsClocks(nvmlDevice);
-                log_debug("nvmlDeviceResetApplicationsClocks() returned {}", (int)nvmlReturn);
+                if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED)
+                {
+                    // Retry with newer APIs
+                    nvmlReturn = nvmlDeviceResetMemoryLockedClocks(nvmlDevice);
+                    if (NVML_SUCCESS != nvmlReturn)
+                    {
+                        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+                    nvmlReturn = nvmlDeviceResetGpuLockedClocks(nvmlDevice);
+                    if (NVML_SUCCESS != nvmlReturn)
+                    {
+                        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+                }
                 if (NVML_SUCCESS != nvmlReturn)
                 {
                     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -4877,10 +4891,20 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
             {
                 /* Set Memory clock and Proc clock pair via NVML */
                 nvmlReturn = nvmlDeviceSetApplicationsClocks(nvmlDevice, value->val.i64, value->val2.i64);
-                log_debug("nvmlDeviceSetApplicationsClocks({}, {}) returned {}",
-                          value->val.i64,
-                          value->val2.i64,
-                          (int)nvmlReturn);
+                if (nvmlReturn == NVML_ERROR_NOT_SUPPORTED)
+                {
+                    // Retry with newer APIs
+                    nvmlReturn = nvmlDeviceSetMemoryLockedClocks(nvmlDevice, value->val.i64, value->val.i64);
+                    if (NVML_SUCCESS != nvmlReturn)
+                    {
+                        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+                    nvmlReturn = nvmlDeviceSetGpuLockedClocks(nvmlDevice, value->val2.i64, value->val2.i64);
+                    if (NVML_SUCCESS != nvmlReturn)
+                    {
+                        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                    }
+                }
                 if (NVML_SUCCESS != nvmlReturn)
                 {
                     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -7469,6 +7493,146 @@ dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCacheManager::CreateNvlinkP2PStatusBitmap(nvmlDevice_t nvmlDevice,
+                                                           long long &p2pBitmap,
+                                                           nvmlReturn_t &nvmlReturn)
+{
+    nvmlGpuP2PStatus_t p2pStatus = NVML_P2P_STATUS_UNKNOWN;
+
+    p2pBitmap = 0;
+
+    for (unsigned int i = 0; i < m_numGpus; i++)
+    {
+        if (nvmlDevice == m_gpus[i].nvmlDevice)
+        {
+            continue;
+        }
+
+        nvmlReturn = nvmlDeviceGetP2PStatus(nvmlDevice, m_gpus[i].nvmlDevice, NVML_P2P_CAPS_INDEX_NVLINK, &p2pStatus);
+
+        if (nvmlReturn != NVML_SUCCESS)
+        {
+            log_error("nvmlDeviceGetP2PStatus returned {}", nvmlReturn);
+
+            return (DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn));
+        }
+        else if (p2pStatus == NVML_P2P_STATUS_OK)
+        {
+            p2pBitmap |= 0x1 << i;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCacheManager::CreateNvlinkP2PStatus(nvmlDevice_t nvmlDevice,
+                                                     dcgmNvLinkGpuP2PStatus_t linkStatus[DCGM_MAX_NUM_DEVICES])
+{
+    nvmlGpuP2PStatus_t p2pStatus = NVML_P2P_STATUS_UNKNOWN;
+    auto numGpus                 = m_numGpus;
+
+    if (numGpus > DCGM_MAX_NUM_DEVICES)
+    {
+        numGpus = DCGM_MAX_NUM_DEVICES;
+        log_warning(
+            "CreateNvlinkP2PStatus when too many GPUs: {}, truncating to max {}.", numGpus, DCGM_MAX_NUM_DEVICES);
+    }
+
+    for (unsigned int i = 0; i < numGpus; i++)
+    {
+        if (nvmlDevice == m_gpus[i].nvmlDevice)
+        {
+            linkStatus[i] = DcgmNvLinkP2pStatusNotSupported;
+
+            continue;
+        }
+
+        auto nvmlReturn
+            = nvmlDeviceGetP2PStatus(nvmlDevice, m_gpus[i].nvmlDevice, NVML_P2P_CAPS_INDEX_NVLINK, &p2pStatus);
+
+        if (nvmlReturn != NVML_SUCCESS)
+        {
+            log_warning("CreateNvlinkP2PStatus call to nvmlDeviceGetP2PStatus for {} to {} failed with {}.",
+                        nvmlDevice,
+                        m_gpus[i].nvmlDevice,
+                        nvmlReturn);
+            return (DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn));
+        }
+        else
+        {
+            /* The DCGM enum mirrors the NVML enum. */
+            linkStatus[i] = (dcgmNvLinkGpuP2PStatus_t)p2pStatus;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCacheManager::CreateAllNvlinksP2PStatus(dcgmNvLinkP2PStatus_t &status)
+{
+    auto numGpus      = status.numGpus;
+    auto queryAllGpus = numGpus == 0;
+
+    if (queryAllGpus || (numGpus > m_numGpus))
+    {
+        numGpus = m_numGpus; /* Zero is a wildcard for all. */
+
+        if (!queryAllGpus)
+        {
+            log_warning("CreateAllNvlinksP2PStatus called for too many GPUs: {}, truncating to max {}.",
+                        numGpus,
+                        DCGM_MAX_NUM_DEVICES);
+        }
+    }
+
+    if (numGpus > DCGM_MAX_NUM_DEVICES)
+    {
+        numGpus = DCGM_MAX_NUM_DEVICES;
+        log_warning("CreateAllNvlinksP2PStatus called when too many GPUs: {}, truncating to max {}.",
+                    numGpus,
+                    DCGM_MAX_NUM_DEVICES);
+    }
+
+    /**
+     * If we were called with a request for no GPUs, we interpreted as a request
+     * for ALL GPUs, and return both the number of GPUs for which we got data
+     * (i.e. all of them), as well as the GPU Ids of each GPU. If a number of
+     * GPUs is specified in the call, get the data for those specified.
+     */
+    for (unsigned int i = 0; i < numGpus; i++)
+    {
+        dcgm_field_eid_t entityId = queryAllGpus ? i : status.gpus[i].entityId;
+        auto nvmlDevice           = m_gpus[entityId].nvmlDevice;
+
+        auto dcgmReturn = CreateNvlinkP2PStatus(nvmlDevice, status.gpus[i].linkStatus);
+
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            status.numGpus = i;
+
+            /* Error already logged in CreateNvLinkP2PStatus. */
+            return dcgmReturn;
+        }
+
+        if (queryAllGpus)
+        {
+            status.gpus[i].entityId = entityId;
+        }
+    }
+
+    if (queryAllGpus)
+    {
+        status.numGpus = numGpus;
+    }
+
+    return DCGM_ST_OK;
+}
+
+std::string DcgmCacheManager::GetDriverVersion()
+{
+    return m_driverFullVersion;
+}
+
 dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &threadCtx,
                                                       nvmlDevice_t nvmlDevice,
                                                       dcgm_field_meta_p fieldMeta,
@@ -7657,12 +7821,10 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &thr
               fv.nvmlReturn,
               rawNvmlFieldId);
 
-    // Compute the float value, details in nvbugs/5088600
-    uint64_t mantissa = NVML_NVLINK_ERROR_COUNTER_BER_GET(fv.value.ullVal, BER_MANTISSA);
-    uint64_t exponent = NVML_NVLINK_ERROR_COUNTER_BER_GET(fv.value.ullVal, BER_EXP);
-
-    double ber = mantissa * std::pow(10.0, -1.0 * static_cast<double>(exponent));
-
+    auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(fv.value.ullVal);
+    // Cast to void to indicate intentional non-use of mantissa and exponent
+    (void)mantissa;
+    (void)exponent;
     {
         DcgmLockGuard lg(m_mutex);
         AppendEntityDouble(threadCtx, ber, 0, timelib_usecSince1970(), expireTime);
@@ -8233,6 +8395,24 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             // Store the major version in the upper 16 bits, and the minor version in the lower 16 bits
             ccc = ((long long)major << 16) | minor;
             AppendEntityInt64(threadCtx, ccc, 1, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_DEV_P2P_NVLINK_STATUS:
+        {
+            long long p2pBitmap = 0;
+            dcgmReturn_t ret    = CreateNvlinkP2PStatusBitmap(nvmlDevice, p2pBitmap, nvmlReturn);
+
+            if (ret != DCGM_ST_OK)
+            {
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
+                return ret;
+            }
+            else
+            {
+                AppendEntityInt64(threadCtx, p2pBitmap, 0, now, expireTime);
+            }
+
             break;
         }
 

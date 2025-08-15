@@ -328,10 +328,9 @@ void DcgmNvSwitchManagerBase::BufferBlankValueForAllEntities(unsigned short fiel
 }
 
 /*************************************************************************/
-dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFields(timelib64_t &nextUpdateTime)
+dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFields(timelib64_t &nextUpdateTime, timelib64_t now)
 {
     std::vector<dcgm_field_update_info_t> toUpdate;
-    timelib64_t now  = timelib_usecSince1970();
     dcgmReturn_t ret = m_watchTable.GetFieldsToUpdate(DcgmModuleIdNvSwitch, now, toUpdate, nextUpdateTime);
 
     if (ret != DCGM_ST_OK)

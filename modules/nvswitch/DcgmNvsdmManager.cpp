@@ -652,7 +652,7 @@ dcgmReturn_t DcgmNvsdmManager::DetachFromNvsdm()
 
 std::optional<NvsdmDevice> DcgmNvsdmManager::InitNvsdmDevice(nvsdmDevice_t const device)
 {
-    char name[NVSDM_INFO_ARRAY_SIZE] = "NVSDM Device";
+    char name[NVSDM_DEV_INFO_ARRAY_SIZE] = "NVSDM Device";
 
     auto nvsdmRet = m_nvsdm->nvsdmDeviceToString(device, name, sizeof(name));
     if (nvsdmRet != NVSDM_SUCCESS)
@@ -692,8 +692,18 @@ std::optional<NvsdmDevice> DcgmNvsdmManager::InitNvsdmDevice(nvsdmDevice_t const
 /*************************************************************************/
 dcgmReturn_t DcgmNvsdmManager::AttachNvsdmDevices()
 {
+    // Override the NVSDM source CA if environment variable is set
+    char *nvsdmSourceCa = std::getenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA");
+    // Validate the source CA, pass nullptr to nvsdmDiscoverTopology if invalid
+    if (nvsdmSourceCa != nullptr && !std::string_view(nvsdmSourceCa).starts_with("mlx5_"))
+    {
+        // Invalid values will be ignored and the default (nullptr) value will be used
+        log_warning("Invalid NVSDM source CA: {}", nvsdmSourceCa);
+        nvsdmSourceCa = nullptr;
+    }
+
     nvsdmDeviceIter_t iter;
-    nvsdmRet_t nvsdmRet = m_nvsdm->nvsdmDiscoverTopology(nullptr, 0);
+    nvsdmRet_t nvsdmRet = m_nvsdm->nvsdmDiscoverTopology(nvsdmSourceCa, 0);
     if (nvsdmRet != NVSDM_SUCCESS)
     {
         log_error("NVSDM returned {}", nvsdmRet);
